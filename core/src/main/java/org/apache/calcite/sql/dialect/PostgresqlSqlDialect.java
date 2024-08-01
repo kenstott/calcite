@@ -162,23 +162,37 @@ public class PostgresqlSqlDialect extends SqlDialect {
 
   @Override public void unparseCall(SqlWriter writer, SqlCall call,
       int leftPrec, int rightPrec) {
-    switch (call.getKind()) {
-    case FLOOR:
-      if (call.operandCount() != 2) {
-        super.unparseCall(writer, call, leftPrec, rightPrec);
-        return;
+    if (call.getOperator() == SqlStdOperatorTable.JSON_OBJECT) {
+      assert call.operandCount() % 2 == 1;
+      final SqlWriter.Frame frame = writer.startFunCall("json_build_object");
+      SqlWriter.Frame listFrame = writer.startList("", "");
+      for (int i = 1; i < call.operandCount(); i += 2) {
+        writer.sep(",");
+        call.operand(i).unparse(writer, leftPrec, rightPrec);
+        writer.print(",");
+        call.operand(i + 1).unparse(writer, leftPrec, rightPrec);
       }
+      writer.endList(listFrame);
+      writer.endFunCall(frame);
+    } else {
+      switch (call.getKind()) {
+      case FLOOR:
+        if (call.operandCount() != 2) {
+          super.unparseCall(writer, call, leftPrec, rightPrec);
+          return;
+        }
 
-      final SqlLiteral timeUnitNode = call.operand(1);
-      final TimeUnitRange timeUnit = timeUnitNode.getValueAs(TimeUnitRange.class);
+        final SqlLiteral timeUnitNode = call.operand(1);
+        final TimeUnitRange timeUnit = timeUnitNode.getValueAs(TimeUnitRange.class);
 
-      SqlCall call2 =
-          SqlFloorFunction.replaceTimeUnitOperand(call, timeUnit.name(),
-              timeUnitNode.getParserPosition());
-      SqlFloorFunction.unparseDatetimeFunction(writer, call2, "DATE_TRUNC", false);
-      break;
-    default:
-      super.unparseCall(writer, call, leftPrec, rightPrec);
+        SqlCall call2 =
+            SqlFloorFunction.replaceTimeUnitOperand(call, timeUnit.name(),
+                timeUnitNode.getParserPosition());
+        SqlFloorFunction.unparseDatetimeFunction(writer, call2, "DATE_TRUNC", false);
+        break;
+      default:
+        super.unparseCall(writer, call, leftPrec, rightPrec);
+      }
     }
   }
 
