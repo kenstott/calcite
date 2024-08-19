@@ -81,6 +81,7 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
     final ObjectMapper objectMapper = new ObjectMapper();
     ObjectMapper jsonMapper = new ObjectMapper();
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+//    yamlMapper.findAndRegisterModules();
     List<Object> list;
     LinkedHashMap<String, Object> jsonFieldMap = new LinkedHashMap<>(1);
     Object jsonObj = null;
