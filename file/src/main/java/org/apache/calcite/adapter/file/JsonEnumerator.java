@@ -127,7 +127,9 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
       //noinspection unchecked
       jsonFieldMap = (LinkedHashMap) jsonObj;
       //noinspection unchecked
-      list = new ArrayList(((LinkedHashMap) jsonObj).values());
+//      list = new ArrayList(((LinkedHashMap) jsonObj).values());
+      list = new ArrayList();
+      ((List)list).add(jsonFieldMap);
     } else {
       jsonFieldMap.put("line", jsonObj);
       list = new ArrayList<>();
