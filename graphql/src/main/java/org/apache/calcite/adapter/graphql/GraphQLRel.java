@@ -388,7 +388,7 @@ public interface GraphQLRel extends RelNode {
         ob.append(String.format("%s: {", KEYWORDS.get("order_by")));
         for (int i = 0; i < orderFields.size(); i++) {
           OrderByField item = orderFields.get(i);
-          ob.append(item.toHasuraFormat());
+          ob.append(item.toHasuraFormat(fieldNames));
           if (i > 0) {
             ob.append(", ");
           }

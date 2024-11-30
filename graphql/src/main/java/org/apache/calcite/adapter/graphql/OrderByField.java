@@ -2,6 +2,8 @@ package org.apache.calcite.adapter.graphql;
 
 import org.apache.calcite.rel.RelFieldCollation;
 
+import java.util.List;
+
 public class OrderByField {
   private final Integer field;
   private final RelFieldCollation.Direction direction;
@@ -14,7 +16,7 @@ public class OrderByField {
   /**
    * Converts to Hasura order_by format
    */
-  public String toHasuraFormat() {
-    return String.format("%s: %s", field, direction == RelFieldCollation.Direction.ASCENDING ? "Asc" : "Desc");
+  public String toHasuraFormat(List<String> fieldNames) {
+    return String.format("%s: %s", fieldNames.get(field), direction == RelFieldCollation.Direction.ASCENDING ? "Asc" : "Desc");
   }
 }

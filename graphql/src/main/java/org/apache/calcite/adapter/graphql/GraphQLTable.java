@@ -33,9 +33,11 @@ import graphql.schema.*;
 public class GraphQLTable extends AbstractTable implements TranslatableTable, QueryableTable {
   protected final GraphQLCalciteSchema schema;
   final GraphQLObjectType objectType;
-  @Nullable RelDataTypeFactory typeFactory;
+  @Nullable
+  RelDataTypeFactory typeFactory;
   private final String endpoint;
-  @Nullable private final String name;
+  @Nullable
+  private final String name;
   final String selectMany;
 
   private static final Logger LOGGER = LogManager.getLogger(GraphQLToEnumerableConverter.class);
@@ -43,10 +45,10 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
   /**
    * Creates a GraphQLTable.
    *
-   * @param schema The Calcite schema containing this table
+   * @param schema     The Calcite schema containing this table
    * @param objectType The GraphQL object type representing this table
-   * @param graphQL The GraphQL client instance
-   * @param endpoint The GraphQL endpoint URL
+   * @param graphQL    The GraphQL client instance
+   * @param endpoint   The GraphQL endpoint URL
    */
   public GraphQLTable(GraphQLCalciteSchema schema,
       GraphQLObjectType objectType,
@@ -114,12 +116,13 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
   /**
    * Retrieves the expression for the specified table and class from the given schema.
    *
-   * @param schema The parent schema
+   * @param schema    The parent schema
    * @param tableName The name of the table
-   * @param clazz The class representing the table
+   * @param clazz     The class representing the table
    * @return Expression representing the table
    */
-  @Override public Expression getExpression(SchemaPlus schema, String tableName,
+  @Override
+  public Expression getExpression(SchemaPlus schema, String tableName,
       Class clazz) {
     return Schemas.tableExpression(schema, getElementType(), tableName, clazz);
   }
@@ -129,12 +132,13 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
    * a specific data source.
    *
    * @param queryProvider The query provider used to create and execute queries
-   * @param schema The schema containing this table
-   * @param tableName The name of the table
-   * @param <T> Element type of the queryable
+   * @param schema        The schema containing this table
+   * @param tableName     The name of the table
+   * @param <T>           Element type of the queryable
    * @return A {@link Queryable} representing this table
    */
-  @Override public <T> Queryable<T> asQueryable(QueryProvider queryProvider,
+  @Override
+  public <T> Queryable<T> asQueryable(QueryProvider queryProvider,
       SchemaPlus schema, String tableName) {
     throw new UnsupportedOperationException();
   }
@@ -144,14 +148,15 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
    *
    * @return Type representing the elements in the table
    */
-  @Override public Type getElementType() {
+  @Override
+  public Type getElementType() {
     return Object[].class;
   }
 
   /**
    * Converts the GraphQLTable to a RelNode.
    *
-   * @param context The context for converting the table to relational expression
+   * @param context     The context for converting the table to relational expression
    * @param relOptTable The relational optimization table
    * @return The RelNode representing the GraphQLTable
    */
@@ -186,14 +191,20 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
     for (GraphQLFieldDefinition field : fieldDefinitions) {
       GraphQLType fieldType = unwrapType(field.getType());
 
-      // Skip if the field is a list of non-scalar types or a map/object type
-      if (fieldType instanceof GraphQLList
-          && !(((GraphQLList) fieldType).getWrappedType() instanceof GraphQLScalarType)
-          || fieldType instanceof GraphQLObjectType) {
+      if (fieldType instanceof GraphQLNonNull) {
+        fieldType = ((GraphQLNonNull) fieldType).getWrappedType();
+      }
+
+      if (fieldType instanceof GraphQLList) {
+        fieldType = ((GraphQLList) fieldType).getWrappedType();
+      }
+
+      // Skip if the field is not a scalar type
+      if (!(fieldType instanceof GraphQLScalarType || fieldType instanceof GraphQLEnumType)) {
         continue;
       }
 
-      RelDataType sqlType = convertGraphQLTypeToRelDataType(field.getType(), typeFactory);
+      RelDataType sqlType = convertGraphQLTypeToRelDataType(fieldType, typeFactory);
       builder.add(field.getName(), sqlType);
     }
 
@@ -223,19 +234,18 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
           ),
           false
       );
-    }
-    else if (type instanceof GraphQLList) {
+    } else if (type instanceof GraphQLList) {
       RelDataType elementType =
           convertGraphQLTypeToRelDataType(
               ((GraphQLList) type).getWrappedType(),
               typeFactory
           );
       return typeFactory.createArrayType(elementType, -1);
-    }
-    else if (type instanceof GraphQLObjectType) {
+    } else if (type instanceof GraphQLObjectType) {
       return typeFactory.createSqlType(SqlTypeName.MAP);
-    }
-    else if (type instanceof GraphQLScalarType) {
+    } else if (type instanceof GraphQLEnumType) {
+      return typeFactory.createSqlType(SqlTypeName.VARCHAR);
+    }else if (type instanceof GraphQLScalarType) {
       return mapScalarType((GraphQLScalarType) type, typeFactory);
     }
     return typeFactory.createSqlType(SqlTypeName.VARCHAR);
@@ -247,35 +257,59 @@ public class GraphQLTable extends AbstractTable implements TranslatableTable, Qu
   private RelDataType mapScalarType(GraphQLScalarType scalarType,
       RelDataTypeFactory typeFactory) {
     String name = scalarType.getName();
-    String trimmedName = name.replaceAll("\\d+$", "");
-    switch (trimmedName) {
-    case "Int":
-    case "Integer":
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
-    case "Float":
-    case "Double":
-      return typeFactory.createSqlType(SqlTypeName.FLOAT);
-    case "ID":
-    case "String":
-    case "Varchar":
+    String trimmedName = name.replaceAll("(_\\d+)$", "");
+    switch (trimmedName.toLowerCase()) {
+    case "text":
+    case "id":
+    case "string":
+    case "varchar":
       return typeFactory.createSqlType(SqlTypeName.VARCHAR);
-    case "Boolean":
+    case "int":
+    case "int4":
+    case "integer":
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    case "float":
+    case "float4":
+      return typeFactory.createSqlType(SqlTypeName.REAL);
+    case "double":
+    case "float8":
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    case "bool":
+    case "boolean":
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
-    case "List":
+    case "list":
       return typeFactory.createSqlType(SqlTypeName.ARRAY);
-    case "Map":
-    case "Object":
+    case "map":
+    case "object":
       return typeFactory.createSqlType(SqlTypeName.MAP);
-    case "Date":
+    case "date":
       return typeFactory.createSqlType(SqlTypeName.DATE);
-    case "DateTime":
-    case "Timestamp":
+    case "datetime":
+    case "timestamp":
+    case "timestamptz":
       return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
-    case "BigDecimal":
-    case "Decimal":
+    case "bigdecimal":
+    case "decimal":
       return typeFactory.createSqlType(SqlTypeName.DECIMAL);
-    case "Long":
+    case "long":
+    case "int8":
+    case "bigint":
+    case "biginteger":
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    case "byte":
+      return typeFactory.createSqlType(SqlTypeName.TINYINT);
+    case "short":
+    case "int2":
+      return typeFactory.createSqlType(SqlTypeName.SMALLINT);
+    case "binary":
+    case "bytea":
+      return typeFactory.createSqlType(SqlTypeName.BINARY);
+    case "char":
+      return typeFactory.createSqlType(SqlTypeName.CHAR);
+    case "time":
+      return typeFactory.createSqlType(SqlTypeName.TIME);
+    case "interval":
+      return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
     default:
       return typeFactory.createSqlType(SqlTypeName.ANY);
     }

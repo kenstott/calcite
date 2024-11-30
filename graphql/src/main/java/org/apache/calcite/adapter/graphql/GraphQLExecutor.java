@@ -1,26 +1,32 @@
 package org.apache.calcite.adapter.graphql;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import graphql.ExecutionResult;
 import graphql.ExecutionResultImpl;
 import graphql.language.*;
 import graphql.parser.Parser;
 import graphql.schema.*;
 import okhttp3.*;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 /**
@@ -92,7 +98,8 @@ public class GraphQLExecutor implements AutoCloseable {
                     queryField.getSelectionSet().getSelections().forEach(subSelection -> {
                       if (subSelection instanceof Field) {
                         Field subField = (Field) subSelection;
-                        GraphQLFieldDefinition subFieldDef = resultType.getFieldDefinition(subField.getName());
+                        GraphQLFieldDefinition subFieldDef =
+                            resultType.getFieldDefinition(subField.getName());
                         if (subFieldDef != null) {
                           types.put(subField.getName(), subFieldDef.getType());
                         }
@@ -119,55 +126,92 @@ public class GraphQLExecutor implements AutoCloseable {
     return GraphQLTypeUtil.unwrapAll(type) instanceof GraphQLScalarType && "Timestamp".equals(type.getName());
   }
 
+  private @Nullable Object mapType(GraphQLScalarType scalarType, JsonNode node) throws IOException {
+    String name = scalarType.getName();
+    String trimmedName = name.replaceAll("(_\\d+)$", "");
+    if (node.isNull()) {
+      return null;
+    }
+    switch (trimmedName.toLowerCase()) {
+    case "int":
+    case "int4":
+    case "integer":
+    case "byte":
+    case "short":
+    case "int2":
+      return node.asInt();
+    case "float":
+    case "float4":
+    case "double":
+    case "float8":
+    case "bigdecimal":
+    case "decimal":
+      return node.asDouble();
+    case "id":
+    case "string":
+    case "varchar":
+    case "binary":
+    case "bytea":
+    case "char":
+    case "time":
+    case "interval":
+    case "text":
+      return node.asText();
+    case "bool":
+    case "boolean":
+      return node.asBoolean();
+    case "date":
+      return Date.valueOf(node.asText());
+    case "datetime":
+    case "timestamp":
+      return Timestamp.valueOf(node.asText());
+    case "timestamptz":
+      OffsetDateTime odt = OffsetDateTime.parse(node.asText());
+      return Timestamp.from(odt.toInstant());
+    case "long":
+    case "int8":
+    case "bigint":
+    case "biginteger":
+      return node.asLong();
+    default:
+      return null;
+    }
+  }
+
   private ObjectMapper configureObjectMapper() {
     ObjectMapper mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule();
-
     module.addDeserializer(Object.class, new StdDeserializer<Object>(Object.class) {
       @Override
       public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
         String fieldName = p.getCurrentName();
-        GraphQLOutputType type = fieldTypes.get(fieldName);
-
-        try {
-          if (type != null && isDateType((GraphQLNamedOutputType) type)) {
-            String dateStr = p.getValueAsString();
-            if (dateStr != null && !dateStr.isEmpty()) {
-              try {
-                return Date.valueOf(dateStr);
-              } catch (IllegalArgumentException e) {
-                LOGGER.warn("Failed to parse date value: {}", dateStr);
-              }
-            }
-          }
-
-          if (type != null && isTimestampType((GraphQLNamedOutputType) type)) {
-            String dateStr = p.getValueAsString();
-            if (dateStr != null && !dateStr.isEmpty()) {
-              try {
-                return Timestamp.valueOf(dateStr);
-              } catch (IllegalArgumentException e) {
-                LOGGER.warn("Failed to parse timestamp value: {}", dateStr);
-              }
-            }
-          }
-        } catch(Exception ignored) {}
-
         JsonNode node = p.getCodec().readTree(p);
-        if (node.isTextual()) {
-          return node.asText();
-        } else if (node.isNumber()) {
-          return node.numberValue();
-        } else if (node.isBoolean()) {
-          return node.booleanValue();
-        } else if (node.isNull()) {
+        GraphQLOutputType type = fieldTypes.get(fieldName);
+        if (GraphQLTypeUtil.unwrapAll(type) instanceof GraphQLScalarType) {
+          GraphQLScalarType scalarType = (GraphQLScalarType) GraphQLTypeUtil.unwrapAll(type);
+          Object result = mapType(scalarType, node);
+          if (result != null) {
+            return result;
+          }
+        }
+        try {
+          if (node.isTextual()) {
+            return node.asText();
+          } else if (node.isNumber()) {
+            return node.numberValue();
+          } else if (node.isBoolean()) {
+            return node.booleanValue();
+          } else if (node.isNull()) {
+            return null;
+          } else {
+            return mapper.treeToValue(node, Object.class);
+          }
+        } catch (Exception e) {
+          System.out.println("!");
           return null;
-        } else {
-          return mapper.treeToValue(node, Object.class);
         }
       }
     });
-
     mapper.registerModule(module);
     return mapper;
   }
