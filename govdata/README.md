@@ -1,631 +1,254 @@
-# Apache Calcite Government Data Adapter
+# GovData Adapter
 
 [![Build Status](https://github.com/apache/calcite/actions/workflows/gradle.yml/badge.svg)](https://github.com/apache/calcite/actions/workflows/gradle.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-The Government Data Adapter provides unified SQL access to various government data sources through Apache Calcite. Currently supports SEC financial data and HUD/Census geographic data, with plans for additional Census demographics, IRS, Treasury, and other government datasets.
+The GovData Adapter provides unified SQL access to various U.S. government data sources through Apache Calcite, enabling cross-domain analysis of financial, economic, and geographic data.
 
-## Quick Start
+## 🎯 Overview
 
-### Basic SEC Query
+GovData transforms disparate government APIs and data formats into queryable SQL tables, allowing you to:
+
+- **Analyze SEC filings** alongside economic indicators
+- **Join financial data** with geographic boundaries  
+- **Correlate company performance** with regional employment statistics
+- **Build composite views** across multiple government data sources
+
+## ✨ How It Works: The Magic of Declarative Data Pipelines
+
+GovData is a **declarative data pipeline orchestrator**. You describe what data you want in familiar business terms, and GovData automatically:
+
+1. **Downloads** the data from government APIs
+2. **Transforms** it to optimized Parquet format
+3. **Enriches** it with metadata, comments, and foreign key relationships
+4. **Delegates** query execution to high-performance engines (DuckDB, Arrow, etc.)
+
+### Zero-Effort Data Lake Creation
+
+As one user described it: "Explain the data of interest in its native language - get a fully-formed data lake with all metadata including comments and constraints - for zero effort."
+
+```json
+// You declare what data you need:
+{
+  "dataSource": "sec",           // Which schema (sec/econ/geo)
+  "ciks": ["AAPL", "MSFT"],     // Company tickers or CIK numbers
+  "startYear": 2020,             // Date range start
+  "endYear": 2024,               // Date range end
+  "filingTypes": ["10-K", "10-Q"] // SEC filing types
+}
+
+// GovData automatically creates SQL tables with:
+// ✓ Downloaded and transformed data
+// ✓ Table comments explaining each column
+// ✓ Foreign key constraints for joins
+// ✓ Optimized storage and partitioning
+```
+
+### Collaboration Made Simple
+
+- **Personal Projects**: Use local storage for independent work
+- **Team Collaboration**: Point to a shared S3 bucket - everyone gets the same data
+- **Hybrid Approach**: Mix local and cloud storage as needed
+
+The adapter handles all the complexity - you just write SQL queries against well-documented, properly-linked tables.
+
+## 🚀 Quick Start
+
 ```java
-// Connect to SEC data
-String url = "jdbc:govdata:ciks=AAPL,MSFT&startYear=2023&endYear=2024";
-Connection conn = DriverManager.getConnection(url);
+// Connect to multiple government data sources
+String modelPath = "path/to/govdata-model.json";
+Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath);
 
-// Query financial data
+// Query across domains - e.g., companies by state with economic context
 ResultSet rs = conn.createStatement().executeQuery(
-    "SELECT cik, company_name, fiscal_year, concept, value " +
-    "FROM financial_line_items " + 
-    "WHERE concept = 'NetIncomeLoss' AND fiscal_year >= 2023");
+    "SELECT s.state_name, COUNT(DISTINCT f.cik) as companies, " +
+    "       AVG(e.unemployment_rate) as unemployment " +
+    "FROM sec.filing_metadata f " +
+    "JOIN geo.tiger_states s ON f.state_of_incorporation = s.state_code " +
+    "JOIN econ.regional_employment e ON e.state_code = s.state_code " +
+    "GROUP BY s.state_name"
+);
 ```
 
-### Model-Based Configuration
+## 📊 Supported Data Sources
 
-#### SEC Financial Data
-```json
-{
-  "version": "1.0",
-  "defaultSchema": "sec",
-  "schemas": [{
-    "name": "sec",
-    "type": "custom",
-    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-    "operand": {
-      "dataSource": "sec",
-      "directory": "/path/to/cache",
-      "ciks": ["AAPL", "MSFT", "GOOGL"],
-      "startYear": 2020,
-      "endYear": 2024
-    }
-  }]
-}
-```
+### Currently Available
 
-#### Economic Data
-```json
-{
-  "version": "1.0",
-  "defaultSchema": "econ",
-  "schemas": [{
-    "name": "econ",
-    "type": "custom",
-    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-    "operand": {
-      "dataSource": "econ",
-      "blsApiKey": "${BLS_API_KEY}",
-      "cacheDirectory": "${ECON_CACHE_DIR:/tmp/calcite-econ-cache}",
-      "updateFrequency": "daily",
-      "enabledSources": ["bls"]
-    }
-  }]
-}
-```
+| Schema | Domain | Key Tables | Data Sources |
+|--------|--------|------------|--------------|
+| **SEC** | Financial Data | `filing_metadata`, `financial_line_items`, `stock_prices` | SEC EDGAR, Yahoo Finance |
+| **ECON** | Economic Data | `employment_statistics`, `treasury_yields`, `fred_indicators` | BLS, FRED, Treasury, BEA |
+| **GEO** | Geographic Data | `tiger_states`, `tiger_counties`, `hud_zip_*` | Census TIGER, HUD |
 
-**Note**: The ECON schema uses unified date range configuration from environment variables:
-- `GOVDATA_START_YEAR` and `GOVDATA_END_YEAR` (default: last 5 years)
-- Optional override: `ECON_START_YEAR` and `ECON_END_YEAR`
+### Coming Soon
+- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters
+- **PUB**: NIH grants, NASA projects, NSF research
 
-#### Public Safety Data
-```json
-{
-  "version": "1.0",
-  "defaultSchema": "safety",
-  "schemas": [{
-    "name": "safety",
-    "type": "custom",
-    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-    "operand": {
-      "dataSource": "safety",
-      "fbiApiKey": "${FBI_API_KEY}",
-      "femaApiKey": "${FEMA_API_KEY}",
-      "nhtsaApiKey": "${NHTSA_API_KEY}",
-      "updateFrequency": "monthly",
-      "historicalDepth": "5 years",
-      "enabledSources": ["fbi", "nhtsa", "fema"],
-      "spatialAnalysis": {"enabled": true, "radiusAnalysis": ["1mi", "5mi"]}
-    }
-  }]
-}
-```
-
-#### Public Data
-```json
-{
-  "version": "1.0",
-  "defaultSchema": "pub",
-  "schemas": [{
-    "name": "pub",
-    "type": "custom",
-    "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-    "operand": {
-      "dataSource": "pub",
-      "wikipediaLanguages": ["en", "es", "fr"],
-      "osmRegions": ["us", "canada", "mexico"],
-      "wikidataEndpoint": "https://query.wikidata.org/sparql",
-      "openalexApiKey": "${OPENALEX_API_KEY}",
-      "updateFrequency": "daily",
-      "entityLinking": {
-        "enabled": true,
-        "confidenceThreshold": 0.8
-      },
-      "spatialAnalysis": {
-        "enabled": true,
-        "bufferAnalysis": ["100m", "500m", "1km"]
-      },
-      "cacheDirectory": "${PUB_CACHE_DIR:/tmp/pub-cache}"
-    }
-  }]
-}
-```
-
-## Features
-
-### SEC Financial Data
-- **10-K/10-Q/8-K Filings**: Automatic XBRL extraction and normalization
-- **Insider Trading**: Forms 3, 4, 5 ownership data
-- **Stock Prices**: Real-time and historical price integration
-- **Text Analytics**: MD&A, footnotes, risk factors extraction
-- **Earnings Transcripts**: 8-K earnings call content
-
-### Geographic and Census Data (NEW)
-- **HUD/Census Integration**: Access to geographic and demographic datasets
-- **Fair Market Rent (FMR)**: Housing cost data by metropolitan area
-- **Income Limits**: Area median income and affordability metrics
-- **Geographic Boundaries**: County, state, and metropolitan area definitions
-- **Unified Schema**: Consistent interface across government data sources
-
-### Data Processing
-- **Smart Caching**: Intelligent local storage and refresh
-- **Partitioned Storage**: Efficient Parquet organization by CIK/filing type/year  
-- **Multiple Engines**: DuckDB, Arrow, LINQ4J, Parquet execution support
-- **Text Similarity**: Vector embeddings for semantic search
-- **Constraint Metadata**: Universal support for key constraints and relationships
-
-### Company Identification
-- **CIK Registry**: 13,000+ ticker-to-CIK mappings
-- **Smart Groups**: FAANG, MAGNIFICENT7, RUSSELL2000, SP500, DJIA
-- **Flexible Input**: Support for tickers, CIKs, company names
-
-## Installation
+## 🔧 Installation
 
 ### Maven
 ```xml
 <dependency>
     <groupId>org.apache.calcite</groupId>
     <artifactId>calcite-govdata</artifactId>
-    <version>1.41.0-SNAPSHOT</version>
+    <version>${calcite.version}</version>
 </dependency>
 ```
 
 ### Gradle
-```kotlin
-implementation("org.apache.calcite:calcite-govdata:1.41.0-SNAPSHOT")
+```gradle
+implementation 'org.apache.calcite:calcite-govdata:${calcite.version}'
 ```
 
-## Data Sources
+## 🔑 Configuration
 
-### Currently Supported
-- **SEC EDGAR**: Financial filings, insider trading, earnings
-- **HUD/Census Geographic Data**: Fair Market Rent, Income Limits, Geographic boundaries
-- **Economic Data (ECON)**: BLS employment statistics, Federal Reserve indicators, Treasury yields
-- **Public Safety (SAFETY)**: FBI crime statistics, traffic safety data, emergency services, disasters
-- **Public Data (PUB)**: Wikipedia encyclopedia content, OpenStreetMap geographic data, Wikidata structured knowledge, academic research
+### Basic Model Configuration
 
-### Economic Data Sources (ECON Schema)
-The `econ` schema provides unified access to U.S. economic indicators:
+Create a `govdata-model.json` file:
 
-**Currently Implemented (BLS API):**
-- **employment_statistics**: Monthly unemployment rate, labor force participation, employment levels
-- **inflation_metrics**: Consumer Price Index (CPI) and Producer Price Index (PPI) data
-- **wage_growth**: Average hourly/weekly earnings by industry and occupation
-- **regional_employment**: State and metropolitan area employment statistics
-
-**Planned Future Integration:**
-- **Federal Reserve (FRED)**: Interest rates, GDP components, 800,000+ economic series
-- **U.S. Treasury**: Daily yield curves, auction results, federal debt statistics  
-- **Bureau of Economic Analysis (BEA)**: GDP by state/industry, trade data
-
-### Public Safety Data Sources (NEW)
-The `safety` schema provides comprehensive public safety and risk assessment data:
-- **FBI Crime Data Explorer**: NIBRS incident data, UCR summary statistics, hate crimes, arrest data
-- **NHTSA Traffic Safety**: Fatal crash analysis (FARS), vehicle safety data, traffic violations
-- **FEMA Emergency Management**: Disaster declarations, public assistance projects, hazard mitigation
-- **Local Emergency Services**: 911 call data, fire incidents, EMS responses (where available)
-
-### Public Data Sources (NEW)
-The `pub` schema provides ubiquitous public data for comprehensive knowledge intelligence:
-- **Wikipedia**: Encyclopedia articles, entity data, knowledge extraction across 300+ languages
-- **OpenStreetMap**: Buildings, transportation, amenities, detailed geographic data worldwide
-- **Wikidata**: Structured knowledge base with 45+ million entities and relationship data
-- **Academic Research**: Publications, patents, institutional data from OpenAlex and other sources
-- **Entity Resolution**: Cross-reference linking between all data sources with confidence scoring
-
-### Planned Support
-- **US Census**: Demographics, economic indicators
-- **IRS**: Tax statistics, exempt organizations
-
-## Configuration
-
-### Connection Parameters
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `ciks` | Companies (tickers/CIKs/groups) | `AAPL,MSFT,FAANG` |
-| `startYear` | Beginning year | `2020` |
-| `endYear` | Ending year | `2024` |
-| `filingTypes` | SEC filing types | `10-K,10-Q,8-K` |
-| `directory` | Cache directory | `/tmp/sec-cache` |
-| `executionEngine` | Query engine | `duckdb` |
-
-### Smart Groups
-```java
-// Use predefined groups
-String url = "jdbc:govdata:ciks=MAGNIFICENT7&startYear=2023";
-
-// Available groups: FAANG, MAGNIFICENT7, RUSSELL2000, SP500, DJIA
-```
-
-### Advanced Features
 ```json
 {
-  "operand": {
-    "ciks": ["AAPL"],
-    "textSimilarity": {
-      "enabled": true,
-      "embeddingDimension": 256,
-      "provider": "local"
+  "version": "1.0",
+  "defaultSchema": "sec",
+  "schemas": [
+    {
+      "name": "sec",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "sec",
+        "ciks": ["AAPL", "MSFT"],
+        "startYear": 2020,
+        "endYear": 2024
+      }
     },
-    "extractFootnotes": true,
-    "extractMDA": true,
-    "fetchStockPrices": true
-  }
+    {
+      "name": "econ",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "econ",
+        "blsApiKey": "${BLS_API_KEY}"
+      }
+    },
+    {
+      "name": "geo",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "geo",
+        "autoDownload": true
+      }
+    }
+  ]
 }
 ```
 
-## Table Schema
+### Environment Variables
 
-### Core Financial Tables
-- `financial_line_items` - Standardized financial facts
-- `financial_facts` - Raw XBRL data with contexts
-- `company_metadata` - Company information and identifiers
-- `management_discussion` - MD&A text extraction
-- `insider_transactions` - Forms 3/4/5 ownership data
-- `earnings_transcripts` - 8-K earnings call content
-- `stock_prices` - Daily price and volume data
-
-### Text Analytics Tables
-- `vectorized_blobs` - Document embeddings for similarity search
-- `footnotes` - Financial statement footnotes
-- `risk_factors` - Risk factor disclosures
-
-### Geographic Data Tables
-- `fair_market_rent` - HUD Fair Market Rent by area and bedroom count
-- `income_limits` - HUD Income Limits by area and household size
-- `geographic_boundaries` - County, state, and metropolitan area definitions
-- `cbsa_definitions` - Core-Based Statistical Area metadata
-
-### Public Knowledge Tables
-- `wikipedia_articles` - Encyclopedia articles with text content and metadata
-- `wikipedia_entities` - Entity information extracted from Wikipedia pages
-- `openstreetmap_buildings` - Building footprints and property information
-- `openstreetmap_transportation` - Roads, transit, and transportation infrastructure
-- `openstreetmap_amenities` - Points of interest, services, and facilities
-- `wikidata_entities` - Structured entity database with properties and relationships
-- `academic_publications` - Research papers and academic literature
-- `patent_applications` - Innovation and technology transfer data
-- `entity_relationships` - Cross-source entity linking and resolution data
-
-## Examples
-
-### Financial Analysis
-```sql
--- Revenue growth analysis
-SELECT 
-    cik, 
-    fiscal_year,
-    SUM(value) as total_revenue
-FROM financial_line_items 
-WHERE concept IN ('Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax')
-  AND cik IN ('0000320193', '0000789019')  -- Apple, Microsoft
-GROUP BY cik, fiscal_year
-ORDER BY cik, fiscal_year;
-```
-
-### Insider Trading Analysis  
-```sql
--- Recent insider transactions
-SELECT 
-    cik,
-    person_name,
-    transaction_date,
-    transaction_type,
-    shares_owned
-FROM insider_transactions 
-WHERE transaction_date >= '2024-01-01'
-  AND cik = '0000320193'  -- Apple
-ORDER BY transaction_date DESC;
-```
-
-### Text Similarity Search
-```sql
--- Find similar business descriptions
-SELECT 
-    cik,
-    company_name,
-    COSINE_SIMILARITY(embedding, target_embedding) as similarity
-FROM vectorized_blobs 
-WHERE blob_type = 'business_description'
-  AND COSINE_SIMILARITY(embedding, target_embedding) > 0.8;
-```
-
-### Geographic Data Analysis
-```sql
--- Fair Market Rent by metropolitan area
-SELECT 
-    area_name,
-    state,
-    efficiency,
-    one_bedroom,
-    two_bedroom,
-    three_bedroom,
-    four_bedroom
-FROM fair_market_rent
-WHERE metro = 1  -- Metropolitan areas only
-  AND state = 'CA'
-ORDER BY two_bedroom DESC
-LIMIT 10;
-
--- Income limits for California counties
-SELECT 
-    area_name,
-    median_income,
-    l50_1,  -- 50% AMI for 1-person household
-    l80_4   -- 80% AMI for 4-person household
-FROM income_limits
-WHERE state_alpha = 'CA'
-ORDER BY median_income DESC;
-```
-
-### Economic Data Analysis
-```sql
--- Current economic dashboard
-SELECT 
-    'Unemployment Rate' as indicator,
-    value as current_value,
-    percent_change_year as yoy_change
-FROM econ.employment_statistics
-WHERE series_id = 'LNS14000000'  -- BLS unemployment rate series
-  AND date = (SELECT MAX(date) FROM econ.employment_statistics)
-UNION ALL
-SELECT 
-    'CPI Inflation' as indicator,
-    index_value as current_value,
-    percent_change_year as yoy_change
-FROM econ.inflation_metrics
-WHERE index_type = 'CPI-U' 
-  AND item_name = 'All items'
-  AND date = (SELECT MAX(date) FROM econ.inflation_metrics);
-
--- Regional unemployment analysis
-SELECT 
-    s.state_name,
-    r.unemployment_rate,
-    r.employment_level,
-    r.labor_force,
-    r.participation_rate,
-    RANK() OVER (ORDER BY r.unemployment_rate ASC) as unemployment_rank
-FROM econ.regional_employment r
-JOIN geo.tiger_states s ON r.state_code = s.state_code
-WHERE r.date = (SELECT MAX(date) FROM econ.regional_employment)
-  AND r.area_type = 'state'
-ORDER BY r.unemployment_rate ASC;
-
--- Company performance vs. employment conditions
-SELECT 
-    f.company_name,
-    f.fiscal_year,
-    AVG(f.value) as avg_net_income,
-    e.unemployment_rate,
-    e.labor_force_participation
-FROM sec.financial_line_items f
-JOIN (
-    SELECT 
-        EXTRACT(YEAR FROM date) as year,
-        AVG(CASE WHEN series_id = 'LNS14000000' THEN value END) as unemployment_rate,
-        AVG(CASE WHEN series_id = 'LNS11300000' THEN value END) as labor_force_participation
-    FROM econ.employment_statistics
-    GROUP BY EXTRACT(YEAR FROM date)
-) e ON f.fiscal_year = e.year
-WHERE f.concept = 'NetIncomeLoss'
-GROUP BY f.company_name, f.fiscal_year, e.unemployment_rate, e.labor_force_participation;
-```
-
-### Public Safety Risk Assessment
-```sql
--- Comprehensive safety analysis for business locations
-SELECT 
-    g.county_name,
-    g.state_name,
-    s.violent_crime_rate_per_100k,
-    s.property_crime_rate_per_100k,
-    s.traffic_fatality_rate_per_100k,
-    s.disaster_risk_score,
-    s.overall_safety_score,
-    s.safety_rank_in_state,
-    e.unemployment_rate,
-    CASE 
-        WHEN s.overall_safety_score >= 8.0 THEN 'LOW RISK'
-        WHEN s.overall_safety_score >= 6.0 THEN 'MODERATE RISK'
-        ELSE 'HIGH RISK'
-    END as risk_category
-FROM safety.public_safety_index s
-JOIN geo.counties g ON s.area_code = g.county_fips
-JOIN econ.regional_employment e ON g.county_fips = e.area_code
-WHERE s.area_type = 'county' AND s.year = 2023
-ORDER BY s.overall_safety_score DESC;
-
--- Crime trend analysis by metropolitan area
-SELECT 
-    l.agency_name,
-    l.state_code,
-    COUNT(*) as total_incidents,
-    COUNT(CASE WHEN c.offense_name LIKE '%THEFT%' THEN 1 END) as theft_incidents,
-    AVG(CASE WHEN c.cleared_flag = 'Y' THEN 1.0 ELSE 0.0 END) as clearance_rate,
-    STRING_AGG(DISTINCT c.location_type, ', ') as common_locations
-FROM safety.crime_incidents c
-JOIN safety.law_enforcement_agencies l ON c.agency_ori = l.agency_ori
-WHERE c.incident_date >= '2023-01-01' AND l.population_served > 50000
-GROUP BY l.agency_ori, l.agency_name, l.state_code
-ORDER BY total_incidents DESC LIMIT 20;
-
--- Cross-domain business risk analysis
-SELECT 
-    cf.company_name,
-    cf.facility_city,
-    s.violent_crime_rate_per_100k,
-    t.fatal_crashes_per_year,
-    d.disaster_count_5year,
-    e.unemployment_rate,
-    CASE 
-        WHEN s.overall_safety_score >= 7.5 AND e.unemployment_rate <= 5.0 THEN 'PREFERRED'
-        WHEN s.overall_safety_score >= 6.0 THEN 'ACCEPTABLE'
-        ELSE 'HIGH_RISK'
-    END as location_recommendation
-FROM sec.company_facilities cf
-JOIN safety.public_safety_index s ON cf.county_fips = s.area_code
-JOIN safety.traffic_fatalities t ON cf.county_fips = t.county_fips
-JOIN safety.disaster_declarations d ON cf.county_fips = d.county_fips  
-JOIN econ.regional_employment e ON cf.county_fips = e.area_code
-WHERE cf.cik = '0000320193' AND s.year = 2023;
-```
-
-### Public Data Intelligence Analysis
-```sql
--- Enhanced company intelligence with public data
-SELECT 
-    s.company_name,
-    s.cik,
-    w.founded_date,
-    w.founder_names,
-    w.headquarters_location,
-    w.industry_description,
-    w.notable_events,
-    STRING_AGG(DISTINCT wr.related_entity, ', ') as business_relationships,
-    COUNT(DISTINCT p.patent_id) as patent_count,
-    AVG(a.citation_count) as avg_citation_impact
-FROM sec.company_metadata s
-JOIN pub.wikipedia_entities w ON s.cik = w.linked_cik
-LEFT JOIN pub.entity_relationships wr ON w.entity_id = wr.source_entity_id
-LEFT JOIN pub.patent_applications p ON w.entity_id = p.assignee_entity_id
-LEFT JOIN pub.academic_publications a ON w.entity_id = a.affiliation_entity_id
-WHERE s.cik IN ('0000320193', '0000789019')  -- Apple, Microsoft
-GROUP BY s.cik, s.company_name, w.founded_date, w.founder_names, 
-         w.headquarters_location, w.industry_description, w.notable_events;
-
--- Geographic business environment analysis
-SELECT 
-    cf.company_name,
-    cf.facility_address,
-    osm.building_type,
-    osm.nearby_amenities,
-    osm.transportation_access,
-    STRING_AGG(DISTINCT osm.amenity_type, ', ') as local_services,
-    COUNT(DISTINCT osm.restaurant_count) as dining_options,
-    AVG(osm.walkability_score) as walkability
-FROM sec.company_facilities cf
-JOIN pub.openstreetmap_buildings osm ON ST_Contains(osm.geometry, cf.location_point)
-JOIN pub.openstreetmap_amenities amen ON ST_DWithin(cf.location_point, amen.location, 500)
-WHERE cf.cik = '0000320193'
-GROUP BY cf.company_name, cf.facility_address, osm.building_type, 
-         osm.nearby_amenities, osm.transportation_access, osm.walkability_score;
-
--- Cross-domain knowledge discovery
-SELECT 
-    w.entity_name,
-    w.entity_type,
-    w.description,
-    COUNT(DISTINCT er.target_entity_id) as relationship_count,
-    STRING_AGG(DISTINCT wd.property_value, '; ') as structured_facts,
-    COSINE_SIMILARITY(w.content_embedding, target_concept.embedding) as concept_similarity
-FROM pub.wikipedia_entities w
-JOIN pub.entity_relationships er ON w.entity_id = er.source_entity_id
-JOIN pub.wikidata_entities wd ON w.wikidata_id = wd.entity_id
-CROSS JOIN (SELECT embedding FROM pub.concept_embeddings WHERE concept = 'artificial intelligence') target_concept
-WHERE w.entity_type = 'organization' 
-  AND COSINE_SIMILARITY(w.content_embedding, target_concept.embedding) > 0.8
-GROUP BY w.entity_id, w.entity_name, w.entity_type, w.description, 
-         w.content_embedding, target_concept.embedding
-ORDER BY concept_similarity DESC
-LIMIT 20;
-```
-
-## Performance
-
-### Caching Strategy
-- **Incremental Updates**: Only fetch new/changed filings
-- **Partitioned Storage**: Efficient queries by company/date
-- **Smart Refresh**: RSS-based change detection
-- **Parallel Processing**: Multi-threaded downloads and conversion
-
-### Query Optimization
-- **Push-down Predicates**: CIK, date, concept filtering to storage
-- **Columnar Storage**: Parquet format for analytical queries
-- **Vectorized Execution**: DuckDB integration for fast analytics
-- **Metadata Caching**: Pre-computed statistics and indexes
-
-## Development
-
-### Building
 ```bash
-./gradlew :govdata:build
+# Required for economic data sources
+export BLS_API_KEY=your_bls_api_key
+export FRED_API_KEY=your_fred_api_key
+export BEA_API_KEY=your_bea_api_key
+
+# Data directories (defaults to system temp)
+export GOVDATA_CACHE_DIR=/path/to/cache
+export GOVDATA_PARQUET_DIR=/path/to/parquet
+
+# Date ranges (defaults to last 5 years)
+export GOVDATA_START_YEAR=2020
+export GOVDATA_END_YEAR=2024
 ```
 
-### Testing
-```bash
-# Unit tests
-./gradlew :govdata:test
+## 💡 Key Features
 
-# Integration tests (requires network)
-./gradlew :govdata:test -PincludeTags=integration
-```
+### Cross-Domain Relationships
+- **25 Foreign Key Constraints** linking tables across schemas
+- **Geographic Integration** - Companies linked to states, economic data to regions
+- **Temporal Analysis** - Join financial filings with contemporary economic indicators
 
-### Model Development
-```bash
-# Test with custom model
-./gradlew :govdata:test --tests "*AppleNetIncomeTest*"
-```
+### Performance Optimization
+- **Intelligent Caching** - Downloaded data cached as Parquet files
+- **Partition Pruning** - Year/CIK/Filing-type partitioning for fast queries
+- **Parallel Processing** - Concurrent API downloads and conversions
+- **Storage Flexibility** - Support for local, S3, and HDFS storage
 
-## Architecture
+### Data Quality
+- **Automatic Updates** - Configurable refresh intervals
+- **Data Validation** - Schema enforcement and type checking
+- **Error Recovery** - Retry logic with exponential backoff
+- **Metadata Tracking** - Data lineage and download timestamps
 
-### Design Principles
-1. **File Adapter Foundation**: Built on Calcite's file adapter for maximum reuse
-2. **Government Data Router**: Unified entry point for multiple data sources  
-3. **Extensible Schema**: Easy addition of new government data sources
-4. **EDGAR Compliance**: Respects SEC rate limits and terms of service
-5. **Constraint Metadata Support**: Universal constraint and key relationship metadata
-6. **Unified Data Architecture**: Consistent schema patterns across all government sources
+## 📖 Documentation
 
-### Component Structure
-```
-govdata/
-├── GovDataSchemaFactory       # Main entry point and data source router
-├── GovDataDriver             # JDBC driver for connection string parsing
-├── sec/                      # SEC-specific implementation
-│   ├── SecSchemaFactory      # SEC data schema and table management
-│   ├── CikRegistry           # Ticker-to-CIK resolution
-│   ├── XbrlToParquetConverter # XBRL processing pipeline
-│   └── SecHttpStorageProvider # EDGAR-compliant HTTP client
-├── geo/                      # Geographic data implementation
-│   ├── GeoSchemaFactory      # HUD/Census data schema management
-│   ├── HudDataProvider       # HUD Fair Market Rent and Income Limits
-│   └── GeographicBoundaries  # County, state, and metro area definitions
-├── econ/                     # Economic data implementation
-│   ├── EconSchemaFactory     # Economic data schema management
-│   ├── BlsApiClient          # Bureau of Labor Statistics API integration
-│   ├── FredApiClient         # Federal Reserve Economic Data API
-│   └── TreasuryDataProvider  # Treasury yields and auction data
-├── safety/                   # Public safety data implementation
-│   ├── SafetySchemaFactory   # Public safety data schema management
-│   ├── FbiApiClient          # FBI Crime Data Explorer API integration
-│   ├── NhtsaApiClient        # NHTSA traffic safety data API
-│   ├── FemaApiClient         # FEMA disaster and emergency data
-│   └── LocalDataPortalClient # Municipal crime and emergency data
-├── pub/                      # Public data implementation
-│   ├── PubSchemaFactory      # Public data schema management
-│   ├── WikipediaApiClient    # Wikipedia REST API integration
-│   ├── OpenStreetMapClient   # OSM Overpass API and data processing
-│   ├── WikidataClient        # Wikidata SPARQL endpoint integration
-│   └── AcademicDataProvider  # OpenAlex and research database access
-└── common/                   # Shared utilities for government data
-```
+### Getting Started
+- [Installation Guide](docs/installation.md)
+- [Configuration Reference](docs/configuration/)
+- [Quick Start Tutorial](docs/tutorials/quick-start.md)
 
-## Contributing
+### Schema Documentation
+- [SEC Schema Guide](docs/schemas/sec.md) - Financial filings and XBRL data
+- [ECON Schema Guide](docs/schemas/econ.md) - Economic indicators and statistics
+- [GEO Schema Guide](docs/schemas/geo.md) - Geographic boundaries and mappings
+- [**Schema Relationships**](docs/schemas/relationships.md) - Complete ERD, foreign keys, and cross-domain query examples
 
-1. **File Issues**: Report bugs and feature requests on GitHub
-2. **Submit PRs**: Follow Apache Calcite contribution guidelines  
-3. **Add Data Sources**: Implement new government data connectors
-4. **Improve Documentation**: Help expand usage examples
+### Advanced Topics
+- [Cross-Domain Queries](docs/tutorials/cross-domain-queries.md)
+- [Performance Tuning](docs/architecture/performance.md)
+- [Storage Providers](docs/configuration/storage-providers.md)
+- [API Integration](docs/api-integration/)
 
-### Development Guidelines
-- Follow Java 8 compatibility requirements
-- Use proper JDBC testing patterns with model files
-- Respect government API rate limits and terms of service
-- Maintain SEC EDGAR compliance for financial data access
+### Development
+- [Architecture Overview](docs/architecture/overview.md)
+- [Contributing Guide](docs/development/contributing.md)
+- [Testing Guide](docs/development/testing.md)
+- [API Documentation](docs/api/)
 
-## License
+## 🔮 Roadmap
 
-Licensed under the Apache License 2.0. See [LICENSE](LICENSE) file for details.
+See our [Implementation Plan](implementation_plan_phase_2.md) for detailed roadmap.
 
-## Support
+### Near Term
+- ✅ Cross-domain foreign key constraints
+- ✅ S3/HDFS storage support
+- ✅ Expanded FRED/BEA indicators
+- 🚧 Enhanced partitioning strategy
+- 🚧 Additional virtual tables
 
-- **Documentation**: [Apache Calcite Docs](https://calcite.apache.org/)
+### Future
+- Public Safety data integration (FBI, NHTSA, FEMA)
+- Public Research data (NIH, NASA, NSF)
+- Real-time streaming updates
+- Machine learning integration
+- GraphQL API support
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/development/contributing.md) for details.
+
+### Key Areas for Contribution
+- Additional government data sources
+- Performance optimizations
+- Documentation improvements
+- Bug fixes and testing
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](../LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Apache Calcite community for the extensible SQL framework
+- U.S. government agencies for providing public data APIs
+- Contributors and users of the GovData adapter
+
+## 📞 Support
+
+- **Documentation**: [Full Documentation](docs/)
 - **Issues**: [GitHub Issues](https://github.com/apache/calcite/issues)
-- **Mailing List**: [Apache Calcite Dev List](mailto:dev@calcite.apache.org)
-- **Chat**: [Apache Calcite Slack](https://the-asf.slack.com/channels/calcite)
+- **Discussions**: [Apache Calcite Mailing Lists](https://calcite.apache.org/community/)
 
-## Related Projects
+---
 
-- [Apache Calcite](https://calcite.apache.org/) - SQL parser and query engine
-- [SEC EDGAR](https://www.sec.gov/edgar) - SEC filing database
-- [DuckDB](https://duckdb.org/) - Analytical query engine
-- [Apache Arrow](https://arrow.apache.org/) - Columnar data format
+*Part of the [Apache Calcite](https://calcite.apache.org) project*
