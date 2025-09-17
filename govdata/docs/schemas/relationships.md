@@ -1,30 +1,13 @@
-# Government Data Schema Relationships
+# Schema Relationships Guide
 
-## Schema Overview
+This document provides a comprehensive reference for all relationships between SEC, ECON, and GEO schemas, including foreign keys, the complete entity relationship diagram, and cross-schema query patterns.
 
-The Government Data adapter provides three distinct schemas:
-
-| Schema | Domain | Description | Primary Tables |
-|--------|--------|-------------|----------------|
-| **SEC** | Financial Data | SEC filings, XBRL data, stock prices | filing_metadata, financial_line_items, stock_prices |
-| **ECON** | Economic Data | BLS, Treasury, FRED, BEA, World Bank data | employment_statistics, inflation_metrics, treasury_yields, fred_indicators |
-| **GEO** | Geographic Data | Census boundaries, HUD ZIP mappings | tiger_states, tiger_counties, hud_zip_* tables |
-
-### Cross-Schema Foreign Key Constraints (Implemented)
-
-**Geographic Relationships (Format-Compatible FKs)**:
-- **SEC → GEO**: `filing_metadata.state_of_incorporation` → `tiger_states.state_code` (2-letter state codes)
-- **ECON → GEO**: `regional_employment.state_code` → `tiger_states.state_code` (2-letter state codes)
-- **ECON → GEO**: `regional_income.geo_fips` → `tiger_states.state_fips` (partial - state-level FIPS only)
-
-**Within-Schema Relationships**:
-- **ECON → ECON**: Series overlap between data sources (metadata-only, not enforced)
-- **GEO → GEO**: Geographic hierarchy FKs (counties → states, places → states)
-
-**Temporal Relationships (NOT Foreign Keys)**:
-- **SEC ↔ ECON**: Economic indicators and stock prices (use temporal joins in queries)
-- Different reporting cycles prevent direct FK constraints
-- Handled through application-level temporal correlation queries
+> **Quick Navigation**
+> - [Entity Relationship Diagram](#entity-relationship-diagram) - Visual overview of all tables and relationships
+> - [Foreign Key Reference](#foreign-key-implementation-status) - Complete list with implementation details
+> - [Query Cookbook](#query-examples-using-cross-schema-relationships) - Cross-schema query examples
+> - [Temporal Relationships](#temporal-relationships-why-not-foreign-keys) - Why some relationships aren't FKs
+> - [Performance Guide](#performance-considerations) - Optimization tips for cross-domain queries
 
 ## Entity Relationship Diagram
 
