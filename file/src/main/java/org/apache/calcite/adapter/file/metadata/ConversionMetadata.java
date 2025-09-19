@@ -540,7 +540,13 @@ public class ConversionMetadata {
             existingRecord.conversionType = metadata.conversionType;
           }
         }
-        if (existingRecord.parquetCacheFile == null) {
+        // Always update parquetCacheFile if the new one contains wildcards (glob pattern)
+        // This ensures partitioned tables get the correct glob pattern instead of single-file paths
+        if (metadata.parquetCacheFile != null && metadata.parquetCacheFile.contains("*")) {
+          LOGGER.info("Updating parquetCacheFile with glob pattern: '{}' -> '{}'",
+                     existingRecord.parquetCacheFile, metadata.parquetCacheFile);
+          existingRecord.parquetCacheFile = metadata.parquetCacheFile;
+        } else if (existingRecord.parquetCacheFile == null) {
           LOGGER.info("Setting null parquetCacheFile: null -> '{}'", metadata.parquetCacheFile);
           existingRecord.parquetCacheFile = metadata.parquetCacheFile;
         }
@@ -665,27 +671,21 @@ public class ConversionMetadata {
         @SuppressWarnings("unchecked")
         java.util.List<String> partitionFiles = (java.util.List<String>) getFilePathsMethod.invoke(table);
         if (partitionFiles != null && !partitionFiles.isEmpty()) {
-          // For partitioned tables with multiple files, store as a glob pattern
-          // DuckDB's parquet_scan() supports glob patterns directly
+          // For partitioned tables, preserve the exact file list
+          // DuckDB's parquet_scan() can handle multiple files directly as an array
+          // Format as [file1,file2,file3] for DuckDB to process
           if (partitionFiles.size() > 1) {
-            // Find the common directory path
-            java.io.File firstFile = new java.io.File(partitionFiles.get(0));
-            java.io.File parentDir = firstFile.getParentFile();
-
-            // Go up to find the root directory containing all partitions
-            while (parentDir != null && !parentDir.getName().matches(".*sales.*|.*data.*")) {
-              parentDir = parentDir.getParentFile();
+            // Store as a bracketed comma-separated list for DuckDB
+            // This format is recognized by DuckDBJdbcSchemaFactory
+            StringBuilder fileList = new StringBuilder("[");
+            for (int i = 0; i < partitionFiles.size(); i++) {
+              if (i > 0) fileList.append(",");
+              fileList.append(partitionFiles.get(i));
             }
+            fileList.append("]");
 
-            if (parentDir == null) {
-              // Fallback: use the parent of the first file's parent
-              parentDir = firstFile.getParentFile().getParentFile();
-            }
-
-            // Create a glob pattern for all parquet files
-            String globPattern = parentDir.getAbsolutePath() + "/**/*.parquet";
-            metadata.parquetCacheFile = globPattern;
-            LOGGER.info("Using glob pattern for partitioned table '{}': {}", tableName, globPattern);
+            metadata.parquetCacheFile = fileList.toString();
+            LOGGER.info("Using exact file list for partitioned table '{}': {} files", tableName, partitionFiles.size());
           } else {
             // Single partition file
             metadata.parquetCacheFile = partitionFiles.get(0);
