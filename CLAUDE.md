@@ -1,314 +1,111 @@
-## Java Practices
+# Claude Development Guidelines - Main Index
 
-- **CRITICAL**: All Java code must be Java 8 compatible - no newer language features
-- **PROHIBITED**: Text blocks (Java 15+), var keyword (Java 10+), switch expressions (Java 14+)
-- **PROHIBITED**: Record classes (Java 16+), pattern matching (Java 17+), sealed classes (Java 17+)
-- Never use the deprecated java.sql.Time, use java.sql.LocalTime instead
-- When computing day offsets from epoch, never use any Java function that might misapply a local TZ offset, for example, toLocalDate().
-- ALWAYS ask for more guidance if you are not confident in your reasoning.
+## 📁 MODULAR GUIDELINE STRUCTURE
 
-## Testing Practices
-- When testing time, data, and timestamps, always use numeric values as expectations; never use formatted values.
-- When testing timestamp with no tz, values should be stored as UTC, but read and adjusted to local TZ.
-- The test suite should be run with the default settings, unless the test is specifically designed to test a specific setting.
-- Never relax a test to pass when it should fail without asking for approval from the user.
-- **CRITICAL**: All test failures MUST be investigated and resolved with evidence-based fixes.
-- The file adapter tests are extensive and require an extended timeout to complete
-- Running all tests requires an extended timeout
+This project uses a modular guideline system for better organization and effectiveness:
 
+- **CLAUDE-CORE.md** - Essential rules, quick reference cards, and decision trees
+- **CLAUDE-TESTING.md** - Comprehensive testing guidelines and command patterns  
+- **CLAUDE-ADAPTERS.md** - Adapter-specific knowledge and debugging
+- **CLAUDE-TROUBLESHOOTING.md** - Systematic debug workflows and error patterns
 
-## Code Maintenance
+All `CLAUDE*.md` files are automatically loaded by Claude Code.
 
-- Do not add backward compatibility to code revisions unless specifically requested.
-- Breaking changes are preferred if they more faithfully represent the objective. Creating overload constructors and methods introducing unwanted defaults in order to maintain backwards compatibility should be avoided.
-- Always fix forbidden API issues, or DO NOT CREATE THEM, in Java code.
-- Always generate Java code with correct styles
-- Never unilaterally remove features. You may only simplify or improve features.
-- By default, lex is ORACLE and unquoted casing is TO_LOWER, and name generation is SMART_CASING (lower snake case).
-- Always quote reserved words that have been used as identifiers in SQL statements.
-- Always quote mixed or upper case identifiers.
-- Never quote lower case identifiers.
-- Always analyze and present a plan for code changes, then request approval to make changes.
-- **MANDATORY**: Verify all changes with tests before claiming completion.
+## 🚨 EMERGENCY QUICK REFERENCE
 
-## Verification Requirements - MANDATORY
+### Most Critical Rules
+1. **Java 8 Compatibility** - No newer language features (ZERO TOLERANCE)
+2. **Implementation Honesty** - Never claim "implemented" for stubs (ZERO TOLERANCE)  
+3. **Test Execution** - Check @Tag first, use -PincludeTags=integration (CRITICAL)
+4. **Task Completion** - No abandonment, provide verification evidence (NON-NEGOTIABLE)
 
-### Before Any "Fix" Claim
-- **REQUIRED**: Execute the exact failing scenario that prompted the fix
-- **REQUIRED**: Demonstrate the fix resolves the original issue
-- **REQUIRED**: Run all related tests to ensure no regressions
-- **PROHIBITED**: Claiming "fixed" without executing verification steps
-
-### Before Any "Implementation" Claim  
-- **REQUIRED**: Execute end-to-end test with real data
-- **REQUIRED**: Verify all public methods produce expected outputs
-- **REQUIRED**: Test error handling and edge cases
-- **PROHIBITED**: Claiming "implemented" for stub/placeholder code
-
-### Verification Evidence Required
-When claiming completion, provide:
-1. **Test execution output** showing success
-2. **Sample data** demonstrating functionality  
-3. **Command used** for verification
-4. **Expected vs actual results** comparison
-
-## Implementation Honesty Rules - CRITICAL
-
-### NEVER Claim Completion of Unimplemented Features
-- **NEVER** claim a feature is "enhanced" or "implemented" when you've only added stubs
-- **NEVER** write commit messages claiming functionality that doesn't exist
-- **NEVER** say "I've added X" when X is just empty methods or placeholder code
-- **ALWAYS** be explicit about what is actually implemented vs what is stubbed
-
-### Stub Code Rules - ZERO TOLERANCE
-- **PROHIBITED**: Any stub method without `// STUB:` comment and issue tracking
-- **REQUIRED**: All stubs must have associated TODO with specific completion criteria
-- **REQUIRED**: Stub methods must throw `UnsupportedOperationException` with descriptive message
-- **EXAMPLE**:
-  ```java
-  // STUB: Placeholder for MD&A extraction - needs NLP parsing implementation
-  // TODO: Implement using Stanford NLP or similar - tracked in issue #123
-  public List<String> extractMDAText() {
-      throw new UnsupportedOperationException("MD&A extraction not implemented - stub only");
-  }
-  ```
-- **REQUIRED**: Commit messages must reflect actual state:
-  - ❌ BAD: "feat: add text vectorization with contextual enrichment"
-  - ✅ GOOD: "feat: add stub structure for text vectorization (not implemented)"
-  - ✅ GOOD: "wip: add placeholder methods for MD&A extraction"
-
-### Completion Claims - VERIFICATION REQUIRED
-- **ONLY** claim something is complete when:
-  - It actually extracts/processes real data
-  - It has been tested with real inputs
-  - It produces meaningful outputs
-- **NEVER** claim completion when:
-  - Methods return empty lists/null
-  - Core logic is missing
-  - The feature doesn't work end-to-end
-
-### Completion Verification Checklist
-Before claiming any feature complete:
-- [ ] All methods return real data (not empty lists/nulls)
-- [ ] Core functionality tested with production-like data
-- [ ] Error cases handled appropriately
-- [ ] Integration tests pass
-- [ ] No `UnsupportedOperationException` in production paths
-
-### Required Disclosure
-When implementing features:
-1. If adding stubs: Say "I'm adding stub methods for X"
-2. If partially implementing: Say "I've implemented Y part of X, but Z is still needed"
-3. If fully implementing: Verify it works before claiming completion
-
-### Commit Message Integrity
-- Commit messages MUST accurately reflect what was done
-- Use "wip:" prefix for work-in-progress commits with stubs
-- Use "stub:" or "scaffold:" prefix when adding structure without implementation
-- Only use "feat:" when the feature actually works
-
-## Task Ordering and Completion - CRITICAL
-
-### No Task Abandonment
-- **PROHIBITED**: Moving to next task when current task has unresolved issues
-- **PROHIBITED**: Claiming "constraints" to avoid completing current work
-- **REQUIRED**: Resolve current task completely before proceeding
-- **REQUIRED**: If truly blocked, get explicit approval to defer
-
-### Task Status Transparency
-- **REQUIRED**: Explicitly state task status: "In Progress", "Blocked", "Complete"
-- **REQUIRED**: For "Blocked" status, provide specific blocker details
-- **REQUIRED**: For "Complete" status, provide verification evidence
-- **PROHIBITED**: Ambiguous status like "mostly done" or "should work"
-
-### Mandatory Status Reporting Format
-For every work session, use this exact format:
-
-**TASK STATUS REPORT**
-- **Current Task**: [specific task description]
-- **Status**: [In Progress/Blocked/Complete]
-- **Actions Taken**: [specific commands executed, files modified]
-- **Verification**: [test results, execution output, proof of functionality]
-- **Next Steps**: [if not complete, specific next actions]
-- **Blockers**: [if blocked, specific technical obstacles]
-
-## Splunk Adapter Notes
-
-- The Splunk adapter can only push down simple field references in projections. Complex expressions (CAST, arithmetic, functions) must be handled by Calcite
-- Always check RexNode types before casting - never assume all projections are RexInputRef
-- Follow JDBC adapter patterns as the reference implementation
-
-## File Adapter Notes
-
-- The duckdb engine is a special case of the parquet engine. It runs an internal parquet engine to convert everything to parquet, and then creates a duckdb catalog over those parquet files.
-- When duckdb is saying that is cannot find a "catalog", it is attempting to look up a name as a table, schema or catalog in that order. It means it exhausted all possible lookups. We always use 1 catalog: "memory"
-
-## Documentation Practices
-
-- Read the docs and stop making things up
-- the preference is for all connections to use lex = ORACLE and unquoted casing = TO_LOWER, while sql statements use unquoted identifiers (unless not possible - like mixed casing or special characters is a requirement of the use case)
-
-## Commands
-- When I ask you to "cleanup debug code", do the following: identify any uses of `System.out` or `System.err` and determine if they should be removed or added as logger debug, 2) identify tests that are clearly temp or debug, and either remove them OR organize them and tag them as unit, integration, or performance, 3) identify dead code, report it and ask for approval to remove it, and 4) identify any temp markdown files and remove them.
-- In order to determine how a value was computed, generate a stacktrace output
-- When I ask you to "run full regression tests for [adapter-name]" or "run regression tests", execute the following based on the adapter:
-  - **File adapter**: Run tests for all engine types (PARQUET, DUCKDB, LINQ4J, ARROW) using `CALCITE_FILE_ENGINE_TYPE=[engine] gtimeout 1800 ./gradlew :file:test --continue --console=plain`
-  - **Splunk adapter**: Run with `CALCITE_TEST_SPLUNK=true gtimeout 1800 ./gradlew :splunk:test --continue --console=plain`
-  - **SharePoint adapter**: Run with `SHAREPOINT_INTEGRATION_TESTS=true gtimeout 1800 ./gradlew :sharepoint-list:test --continue --console=plain`
-  - **All adapters**: Run each adapter's full test suite sequentially with appropriate environment variables and extended timeouts
-  - Always use `--continue` to run all tests even if some fail, `--console=plain` for clean output, and `gtimeout` with sufficient time (1800-3600 seconds)
-
-## Test Execution Rules - CRITICAL
-**NEVER FORGET HOW TO RUN TESTS PROPERLY**
-
-### Default Test Behavior
-- By default, `./gradlew :module:test` ONLY runs tests tagged with `@Tag("unit")`
-- Tests tagged with `@Tag("integration")` are EXCLUDED by default
-- This is configured in each module's `build.gradle.kts` file:
-```kotlin
-useJUnitPlatform {
-    includeTags("unit")  // Only unit tests by default
-}
-```
-
-### Running Different Test Categories
-1. **Unit tests only (default)**: `./gradlew :module:test`
-2. **Integration tests only**: `./gradlew :module:test -PincludeTags=integration`
-3. **Specific test by name**: `./gradlew :module:test -PincludeTags=integration --tests "*TestClassName*"`
-4. **All tests**: `./gradlew :module:test -PrunAllTests`
-5. **Multiple tags**: `./gradlew :module:test -PincludeTags=unit,integration`
-
-### Common Test Running Mistakes - DO NOT MAKE THESE
-- ❌ `./gradlew :module:test --tests "*IntegrationTest*"` - Will find 0 tests if the test has `@Tag("integration")`
-- ❌ Assuming all tests run by default - integration tests are excluded
-- ❌ Not checking the test's `@Tag` annotation before trying to run it
-- ❌ Forgetting the `-P` prefix for properties like `-PincludeTags`
-
-### Required Test Tags
-- `@Tag("unit")` - Unit tests (run by default)
-- `@Tag("integration")` - Integration tests (require `-PincludeTags=integration`)
-- `@Tag("performance")` - Performance tests (manual execution only)
-
-### Examples for SEC Adapter
+### Most Common Commands
 ```bash
-# Run unit tests only (default)
-./gradlew :sec:test
+# Unit tests (default)
+./gradlew :module:test
 
-# Run integration tests only
-./gradlew :sec:test -PincludeTags=integration
+# Integration tests  
+./gradlew :module:test -PincludeTags=integration
 
-# Run specific integration test
-./gradlew :sec:test -PincludeTags=integration --tests "*DJIANetIncomeIntegrationTest*"
-
-# Run all SEC tests
-./gradlew :sec:test -PrunAllTests
+# Specific test
+./gradlew :module:test -PincludeTags=integration --tests "*TestName*"
 ```
 
-**ALWAYS check the test's @Tag annotation first, then use the correct command pattern above.**
+### Emergency Debugging
+```bash
+# Get clean error output
+./gradlew :module:test -PincludeTags=integration --tests "*FailingTest*" --console=plain
 
-## Test Debugging Practices
+# Check DuckDB issues
+duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/to/file.parquet')"
+```
 
-## Problem Resolution Standards - CRITICAL
+## 🎯 NAVIGATION BY TASK TYPE
 
-### Root Cause Analysis Required
-- **PROHIBITED**: Surface-level fixes without understanding root cause
-- **REQUIRED**: Document investigation process and findings
-- **REQUIRED**: Trace through full execution path for failures
-- **REQUIRED**: Test fix against original failure scenario
+### When Working on Tests
+→ See **CLAUDE-TESTING.md** for:
+- Test execution patterns 
+- Tag-based system explanation
+- Debugging workflows
+- Common anti-patterns
 
-### Evidence-Based Development
-- **REQUIRED**: Use debugger/logging to understand actual program behavior
-- **REQUIRED**: Generate stack traces for complex issue analysis  
-- **REQUIRED**: Test hypotheses with isolated test cases
-- **PROHIBITED**: Guessing at solutions without evidence
+### When Working on Adapters  
+→ See **CLAUDE-ADAPTERS.md** for:
+- Environment variable setup
+- Engine-specific commands
+- Common error patterns
+- Cross-adapter patterns
 
-### Primary Debugging Approach: Fix, Don't Replace
-- **ALWAYS** debug failing tests through systematic tracing and analysis
-- **NEVER** create new tests to avoid fixing failing ones
-- **NEVER** comment out or @Disable failing tests without approval
+### When Debugging Issues
+→ See **CLAUDE-TROUBLESHOOTING.md** for:
+- Systematic investigation workflows
+- Error pattern matching
+- Debug output strategies
+- Cleanup protocols
 
-### Debugging Workflow for Failed Tests
-1. **Understand the failure**:
-   - Read the full error message and stack trace
-   - Identify the exact assertion or exception
-   - Check if the test expectations are correct
+### For Core Development Rules
+→ See **CLAUDE-CORE.md** for:
+- Essential coding standards
+- Verification requirements
+- Decision trees
+- Communication standards
 
-2. **Use tracing as primary tool**:
-   - Add debug logging at key points
-   - Generate stack traces to understand execution flow
-   - Use debugger breakpoints if necessary
-   - Print intermediate values to understand state
+## 🔧 LEGACY COMMANDS (PRESERVED)
 
-3. **Isolate issues systematically**:
-   - Simplify the test case while preserving the failure
-   - Test individual components separately
-   - Verify test data and prerequisites
+### Cleanup Debug Code
+When asked to "cleanup debug code":
+1. Identify `System.out`/`System.err` usage - remove or convert to logger debug
+2. Identify temp/debug tests - remove OR tag as unit/integration/performance  
+3. Identify dead code - report and ask for approval to remove
+4. Remove temp markdown files
 
-4. **Create isolation tests ONLY when necessary**:
-   - Only create temporary tests to isolate complex issues
-   - Mark with `@Tag("debug")` or `@Tag("temp")`
-   - Must be deleted after fixing the original test
-   - Document why isolation was needed
+### Regression Testing
+When asked to "run full regression tests":
+- **File adapter**: `CALCITE_FILE_ENGINE_TYPE=[engine] gtimeout 1800 ./gradlew :file:test --continue --console=plain`
+- **Splunk adapter**: `CALCITE_TEST_SPLUNK=true gtimeout 1800 ./gradlew :splunk:test --continue --console=plain`  
+- **SharePoint adapter**: `SHAREPOINT_INTEGRATION_TESTS=true gtimeout 1800 ./gradlew :sharepoint-list:test --continue --console=plain`
 
-### Prohibited Practices
-- Creating `TestFoo2.java` because `TestFoo.java` fails
-- Writing `testMethodNew()` instead of fixing `testMethod()`
-- Accumulating multiple versions of the same test
-- Leaving debugging artifacts in the codebase
+### Stacktrace Generation
+To determine how a value was computed: generate stacktrace output
 
-### When asked to "fix test failures":
-1. First analyze WHY the test is failing
-2. Trace through the execution path
-3. Fix the root cause in either the test or the code
-4. Only create new tests if testing additional scenarios
+## 📋 ACCOUNTABILITY STANDARDS
 
-## Temporary Test Files and Experiments
-
-### NEVER Create Files in Module Root
-- **PROHIBITED**: Creating any `.java`, `.class`, or test files in module root directories (e.g., `/sec/`)
-- **PROHIBITED**: Files like `TestRunner.java`, `TestWikipedia.java` in root
-- **PROHIBITED**: Compiled `.class` files anywhere in repository
-
-### Proper Locations for Temporary/Experimental Code
-1. **Temporary test explorations**:
-   - Create in `build/temp-tests/` (git-ignored)
-   - Tag with `@Tag("temp")` for easy identification
-   - Delete after use
-
-2. **Quick experiments**:
-   - Use `src/test/java/.../` with `@Tag("experiment")` and `@Disabled`
-   - Must follow proper package structure
-
-3. **Scratch files**:
-   - Create in personal directories outside the project
-   - Or use `/tmp/` for truly temporary files
-
-## Accountability Framework - ENFORCEMENT
-
-### Pre-Commit Checklist - MANDATORY
-Before any git commit:
+### Before Any Commit
 - [ ] All modified code builds without errors
 - [ ] All related tests pass (provide command + output)
-- [ ] No debugging artifacts left in code
+- [ ] No debugging artifacts left in code  
 - [ ] Commit message accurately describes actual changes
 - [ ] If claiming "fix", original issue scenario tested and resolved
 
-### Communication Standards
-- **PROHIBITED**: "This should work" - require "This works, verified by [command/test]"
-- **PROHIBITED**: "I think the issue is..." - require "The issue is [specific root cause], traced via [method]"  
-- **PROHIBITED**: "Let me try..." - require "I will execute [specific plan] to resolve [specific issue]"
+### Communication Requirements
+- **PROHIBITED**: "This should work" → Use: "This works, verified by [command]"
+- **PROHIBITED**: "I think..." → Use: "The issue is [root cause], traced via [method]"
+- **REQUIRED**: Evidence-based claims with verification
 
 ### Quality Gates - NON-NEGOTIABLE
 A task is ONLY complete when:
 1. **Functionality verified**: Real execution with expected inputs/outputs
-2. **Tests passing**: All unit and integration tests green  
-3. **Code quality**: No warnings, proper error handling, no debug artifacts
+2. **Tests passing**: All unit and integration tests green
+3. **Code quality**: No warnings, proper error handling, no debug artifacts  
 4. **Documentation current**: Comments and docs reflect actual behavior
 5. **Regression tested**: Related functionality still works
-
-### Escalation Protocol
-If encountering genuine blockers:
-1. Document the specific technical obstacle
-2. Show attempted solutions and their failures
-3. Request specific guidance or approve deferral
-4. **Never** abandon work without explicit approval
