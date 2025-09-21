@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -39,6 +40,8 @@ public class CacheManifest {
   
   // Default cache TTL - 24 hours for most economic data
   private static final long DEFAULT_TTL_HOURS = 24;
+  private static final long CURRENT_YEAR_TTL_HOURS = 24;  // Current year data expires daily
+  private static final long HISTORICAL_TTL_HOURS = 24 * 7;  // Historical data can be cached longer
   
   @JsonProperty("entries")
   private Map<String, CacheEntry> entries = new HashMap<>();
@@ -66,12 +69,25 @@ public class CacheManifest {
       return false;
     }
     
-    // Check if entry is stale
-    if (isStale(entry, DEFAULT_TTL_HOURS)) {
+    // Check if entry is stale - use different TTL based on whether it's current year
+    int currentYear = java.time.LocalDate.now().getYear();
+    long ttlHours = (year == currentYear) ? CURRENT_YEAR_TTL_HOURS : HISTORICAL_TTL_HOURS;
+
+    if (isStale(entry, ttlHours)) {
+      LOGGER.debug("Cache entry is stale for {} year={} (age exceeds {} hours)", dataType, year, ttlHours);
       entries.remove(key);
       return false;
     }
-    
+
+    // Log when using cached data, especially for current year
+    long ageHours = TimeUnit.MILLISECONDS.toHours(System.currentTimeMillis() - entry.cachedAt);
+    if (year == currentYear) {
+      LOGGER.info("Using cached {} data for current year {} (age: {} hours, will refresh after {} hours)",
+          dataType, year, ageHours, ttlHours);
+    } else {
+      LOGGER.debug("Using cached {} data for year {} (age: {} hours)", dataType, year, ageHours);
+    }
+
     return true;
   }
   
@@ -118,11 +134,14 @@ public class CacheManifest {
         return true;
       }
       
-      // Remove if stale
-      if (isStale(cacheEntry, DEFAULT_TTL_HOURS)) {
-        LOGGER.debug("Removing stale cache entry: {} (age: {} hours)", 
-                    cacheEntry.dataType, 
-                    TimeUnit.MILLISECONDS.toHours(System.currentTimeMillis() - cacheEntry.cachedAt));
+      // Remove if stale - use different TTL for current year vs historical data
+      int currentYear = java.time.LocalDate.now().getYear();
+      long ttlHours = (cacheEntry.year == currentYear) ? CURRENT_YEAR_TTL_HOURS : HISTORICAL_TTL_HOURS;
+      if (isStale(cacheEntry, ttlHours)) {
+        LOGGER.debug("Removing stale cache entry: {} year={} (age: {} hours, TTL: {} hours)",
+                    cacheEntry.dataType, cacheEntry.year,
+                    TimeUnit.MILLISECONDS.toHours(System.currentTimeMillis() - cacheEntry.cachedAt),
+                    ttlHours);
         return true;
       }
       
@@ -197,6 +216,7 @@ public class CacheManifest {
   /**
    * Get cache statistics.
    */
+  @JsonIgnore
   public CacheStats getStats() {
     CacheStats stats = new CacheStats();
     stats.totalEntries = entries.size();

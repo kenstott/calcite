@@ -51,5 +51,7 @@
     <!-- Also enable file adapter logging since SEC extends it -->
     <logger name="org.apache.calcite.adapter.file.FileSchemaFactory" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.FileSchema" level="DEBUG"/>
+    <!-- Enable debug logging for BeaDataDownloader to see API responses -->
+    <logger name="org.apache.calcite.adapter.govdata.econ.BeaDataDownloader" level="DEBUG"/>
   </Loggers>
 </Configuration>

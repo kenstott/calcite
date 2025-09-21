@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -62,6 +63,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
  */
 public class XbrlToParquetConverter implements FileConverter {
   private static final Logger LOGGER = Logger.getLogger(XbrlToParquetConverter.class.getName());
+  private final StorageProvider storageProvider;
+
+  public XbrlToParquetConverter(StorageProvider storageProvider) {
+    this.storageProvider = storageProvider;
+  }
 
   // HTML tag removal pattern
   private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
@@ -75,6 +81,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
   @Override public List<File> convert(File sourceFile, File targetDirectory,
       ConversionMetadata metadata) throws IOException {
+    LOGGER.info("DEBUG: XbrlToParquetConverter.convert() START for file: " + sourceFile.getAbsolutePath());
     List<File> outputFiles = new ArrayList<>();
     
     // Extract accession from metadata if available
@@ -97,10 +104,13 @@ public class XbrlToParquetConverter implements FileConverter {
       String fileName = sourceFile.getName().toLowerCase();
       if (fileName.endsWith(".htm") || fileName.endsWith(".html")) {
         // Try to parse as inline XBRL
+        LOGGER.info("Attempting to parse inline XBRL from: " + sourceFile.getName());
         doc = parseInlineXbrl(sourceFile);
         if (doc != null) {
           isInlineXbrl = true;
-          LOGGER.info("Processing inline XBRL from HTML: " + sourceFile.getName());
+          LOGGER.info("Successfully parsed inline XBRL from HTML: " + sourceFile.getName());
+        } else {
+          LOGGER.warning("Failed to parse inline XBRL from HTML: " + sourceFile.getName());
         }
       }
 
@@ -115,6 +125,7 @@ public class XbrlToParquetConverter implements FileConverter {
       
       // For inline XBRL files that failed to parse, create minimal metadata
       if (doc == null && (fileName.endsWith(".htm") || fileName.endsWith(".html"))) {
+        LOGGER.warning("Inline XBRL parsing failed, creating minimal metadata for: " + sourceFile.getName());
         // Extract metadata from the HTML file content and directory structure
         String parentPath = sourceFile.getParentFile().getAbsolutePath();
         String cik = extractCikFromPath(parentPath);
@@ -136,7 +147,7 @@ public class XbrlToParquetConverter implements FileConverter {
           // Create metadata file with extracted information
           createEnhancedMetadata(sourceFile, targetDirectory, cik, filingType, filingDate, 
               extractedAccession != null ? extractedAccession : accession, companyInfo);
-          LOGGER.info("Created metadata for inline XBRL file: " + fileName);
+          LOGGER.warning("Created minimal metadata only for inline XBRL file (skipping facts): " + fileName);
           return outputFiles; // Skip full conversion for now
         } else {
           LOGGER.warning("Could not extract minimal metadata from: " + fileName);
@@ -149,15 +160,17 @@ public class XbrlToParquetConverter implements FileConverter {
       String filingType = extractFilingType(doc, sourceFile);
       String filingDate = extractFilingDate(doc, sourceFile);
       
+      LOGGER.info("DEBUG: Extracted metadata for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
+      
       // Skip conversion if we couldn't extract required metadata
       if (cik == null || cik.equals("0000000000")) {
-        LOGGER.warning("Skipping conversion due to invalid or missing CIK: " + sourceFile.getName());
+        LOGGER.warning("DEBUG: Skipping conversion due to invalid or missing CIK: " + sourceFile.getName() + " (extracted CIK: " + cik + ")");
         return outputFiles; // Return empty list
       }
-      
+
       // Validate filing date - must be present
       if (filingDate == null) {
-        LOGGER.warning("Skipping conversion - could not extract filing date from: " + sourceFile.getName());
+        LOGGER.warning("DEBUG: Skipping conversion - could not extract filing date from: " + sourceFile.getName());
         return outputFiles; // Skip conversion
       }
       
@@ -180,8 +193,11 @@ public class XbrlToParquetConverter implements FileConverter {
       
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
       if (isInsiderForm(doc, filingType)) {
+        LOGGER.info("Processing as insider form: " + sourceFile.getName());
         return convertInsiderForm(doc, sourceFile, targetDirectory, cik, filingType, filingDate, accession);
       }
+      
+      LOGGER.info("Not an insider form, proceeding to facts extraction: " + sourceFile.getName());
       
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
@@ -200,7 +216,7 @@ public class XbrlToParquetConverter implements FileConverter {
       partitionDir.mkdirs();
       
       // Clean up macOS metadata files after creating directories
-      cleanupMacOSMetadataFilesRecursive(targetDirectory);
+      storageProvider.cleanupMacosMetadata(targetDirectory.getAbsolutePath());
 
       // Convert financial facts to Parquet
       File factsFile =
@@ -252,7 +268,7 @@ public class XbrlToParquetConverter implements FileConverter {
           " -> " + outputFiles.size() + " files");
       
       // Final cleanup of macOS metadata files in the entire target directory
-      cleanupMacOSMetadataFilesRecursive(targetDirectory);
+      storageProvider.cleanupMacosMetadata(targetDirectory.getAbsolutePath());
 
     } catch (Exception e) {
       throw new IOException("Failed to convert XBRL to Parquet", e);
@@ -499,6 +515,9 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeFactsToParquet(Document doc, File outputFile,
       String cik, String filingType, String filingDate) throws IOException {
 
+    LOGGER.info("writeFactsToParquet called for " + outputFile.getName() + 
+                " (CIK: " + cik + ", Type: " + filingType + ", Date: " + filingDate + ")");
+
     // Create Avro schema for facts
     // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
     // They are encoded in the directory structure for Hive-style partitioning
@@ -516,6 +535,7 @@ public class XbrlToParquetConverter implements FileConverter {
         .optionalBoolean("is_instant")
         .optionalString("footnote_refs")  // Footnote references if any
         .optionalString("element_id")  // Element ID for linking
+        .requiredString("type")  // Required by DuckDB for table identification
         .endRecord();
 
     // Extract all fact elements
@@ -589,30 +609,16 @@ public class XbrlToParquetConverter implements FileConverter {
           record.put("numeric_value", null);
         }
 
+        // Set type field for DuckDB table identification
+        record.put("type", "financial_line_items");
+
         records.add(record);
       }
     }
 
-    // Write to Parquet
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.toURI()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
-
-    try {
-      for (GenericRecord record : records) {
-        writer.write(record);
-      }
-    } finally {
-      writer.close();
-    }
-
+    // Use consolidated StorageProvider method for Parquet writing
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "facts");
     LOGGER.info("Wrote " + records.size() + " facts to " + outputFile);
-
-    // Clean up macOS metadata files
-    cleanupMacOSMetadataFiles(outputFile.getParentFile());
   }
 
   private void writeMetadataToParquet(Document doc, File outputFile,
@@ -634,6 +640,7 @@ public class XbrlToParquetConverter implements FileConverter {
         .optionalString("period_end_date")
         .optionalLong("sic_code")
         .optionalString("irs_number")
+        .requiredString("type")  // Required by DuckDB for table identification
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -686,28 +693,13 @@ public class XbrlToParquetConverter implements FileConverter {
     String irsNumber = extractDeiValue(doc, "EntityTaxIdentificationNumber", "IrsNumber");
     record.put("irs_number", irsNumber);
     
+    // Set type field for DuckDB table identification
+    record.put("type", "filing_metadata");
+    
     records.add(record);
     
-    // Write to Parquet
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.toURI()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
-
-    try {
-      for (GenericRecord rec : records) {
-        writer.write(rec);
-      }
-    } finally {
-      writer.close();
-    }
-
-    LOGGER.info("Wrote filing metadata to " + outputFile);
-    
-    // Clean up macOS metadata files
-    cleanupMacOSMetadataFiles(outputFile.getParentFile());
+    // Use consolidated StorageProvider method for Parquet writing
+    writeRecordsToParquet(records, schema, outputFile, "metadata");
   }
   
   private String extractDeiValue(Document doc, String... possibleTags) {
@@ -779,6 +771,7 @@ public class XbrlToParquetConverter implements FileConverter {
         .optionalString("period_instant")
         .optionalString("segment")
         .optionalString("scenario")
+        .requiredString("type")  // Required by DuckDB for table identification
         .endRecord();
 
     // Extract context elements
@@ -816,29 +809,14 @@ public class XbrlToParquetConverter implements FileConverter {
         record.put("period_instant", instants.item(0).getTextContent());
       }
 
+      // Set type field for DuckDB table identification
+      record.put("type", "filing_contexts");
+
       records.add(record);
     }
 
-    // Write to Parquet
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.toURI()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
-
-    try {
-      for (GenericRecord record : records) {
-        writer.write(record);
-      }
-    } finally {
-      writer.close();
-    }
-
-    LOGGER.info("Wrote " + records.size() + " contexts to " + outputFile);
-
-    // Clean up macOS metadata files
-    cleanupMacOSMetadataFiles(outputFile.getParentFile());
+    // Use consolidated StorageProvider method for Parquet writing
+    writeRecordsToParquet(records, schema, outputFile, "contexts");
   }
 
   @Override public String getSourceFormat() {
@@ -967,22 +945,26 @@ public class XbrlToParquetConverter implements FileConverter {
       org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html);
 
       // Look for inline XBRL elements with various namespace prefixes
-      // Try multiple selectors for different inline XBRL formats
-      org.jsoup.select.Elements ixElements = jsoupDoc.select(
-          "ix\\:nonnumeric, ix\\:nonfraction, ix\\:continuation, " +
-          "ix\\:nonNumeric, ix\\:nonFraction, " +
-          "[name^='us-gaap:'], [name^='dei:'], [name^='srt:'], " +
-          "span[contextref], div[contextref], td[contextref]"
-      );
+      // JSoup can't handle namespace prefixes in CSS selectors well, so try different approaches
+      org.jsoup.select.Elements ixElements = new org.jsoup.select.Elements();
+      
+      // Try getElementsByTag for specific inline XBRL tags
+      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonNumeric"));
+      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonFraction"));
+      ixElements.addAll(jsoupDoc.getElementsByTag("ix:continuation"));
+      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonnumeric"));
+      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonfraction"));
+      
+      // Try contextRef attributes
+      ixElements.addAll(jsoupDoc.select("[contextRef], [contextref]"));
+      
+      // Try name attributes with XBRL namespaces
+      ixElements.addAll(jsoupDoc.select("[name^='us-gaap:'], [name^='dei:'], [name^='srt:']"));
 
       if (ixElements.isEmpty()) {
-        // Try alternate inline XBRL format (HTML elements with contextRef)
-        ixElements = jsoupDoc.select("[contextRef]");
-        if (ixElements.isEmpty()) {
-          // No inline XBRL found
-          LOGGER.fine("No inline XBRL elements found in: " + htmlFile.getName());
-          return null;
-        }
+        // No inline XBRL found
+        LOGGER.fine("No inline XBRL elements found in: " + htmlFile.getName());
+        return null;
       }
 
       LOGGER.info("Found " + ixElements.size() + " inline XBRL elements in: " + htmlFile.getName());
@@ -998,35 +980,68 @@ public class XbrlToParquetConverter implements FileConverter {
       doc.appendChild(root);
 
       // Extract and convert inline XBRL facts to standard XBRL format
+      int factsAdded = 0;
+      int factsSkippedNoContextRef = 0;
+      int factsSkippedNoName = 0;
+      
       for (org.jsoup.nodes.Element ixElement : ixElements) {
         String name = ixElement.attr("name");
+        
+        // Try multiple ways to extract contextRef (case-insensitive)
         String contextRef = ixElement.attr("contextref");
         if (contextRef == null || contextRef.isEmpty()) {
           contextRef = ixElement.attr("contextRef");
         }
+        if (contextRef == null || contextRef.isEmpty()) {
+          contextRef = ixElement.attr("CONTEXTREF");
+        }
+        if (contextRef == null || contextRef.isEmpty()) {
+          // Also check for attributes with namespaces
+          for (org.jsoup.nodes.Attribute attr : ixElement.attributes()) {
+            String attrName = attr.getKey().toLowerCase();
+            if (attrName.equals("contextref") || attrName.endsWith(":contextref")) {
+              contextRef = attr.getValue();
+              break;
+            }
+          }
+        }
         
-        // Skip if no name attribute - try tag-based extraction
+        // Extract name more robustly
         if (name == null || name.isEmpty()) {
           String tagName = ixElement.tagName();
-          // For ix:nonFraction and ix:nonNumeric elements
-          if (tagName.equals("ix:nonfraction") || tagName.equals("ix:nonnumeric")) {
+          // For ix:nonFraction and ix:nonNumeric elements, try name attribute again
+          if (tagName.equals("ix:nonfraction") || tagName.equals("ix:nonnumeric") || 
+              tagName.equals("ix:nonNumeric") || tagName.equals("ix:nonFraction")) {
             name = ixElement.attr("name");
           } else if (tagName.startsWith("ix:")) {
             // Use the tag name itself as concept
             name = "us-gaap:" + tagName.substring(3);
           } else {
-            continue; // Skip elements without proper name
+            // For elements found via contextRef selector, try to extract from other attributes
+            for (org.jsoup.nodes.Attribute attr : ixElement.attributes()) {
+              String attrName = attr.getKey().toLowerCase();
+              if (attrName.equals("name") || attrName.endsWith(":name")) {
+                name = attr.getValue();
+                break;
+              }
+            }
+            
+            // If still no name, skip this element
+            if (name == null || name.isEmpty()) {
+              continue;
+            }
           }
         }
         
         if (name == null || name.isEmpty()) {
+          factsSkippedNoName++;
           continue;
         }
         
         String value = ixElement.text().trim();
         
-        // Create fact element with proper namespace
-        if (!value.isEmpty() && contextRef != null && !contextRef.isEmpty()) {
+        // Create fact element with proper namespace (more lenient - only require contextRef)
+        if (contextRef != null && !contextRef.isEmpty()) {
           // Extract namespace and local name
           String namespace = "us-gaap";
           String localName = name;
@@ -1052,13 +1067,17 @@ public class XbrlToParquetConverter implements FileConverter {
           
           fact.setTextContent(value);
           root.appendChild(fact);
+          factsAdded++;
+        } else {
+          factsSkippedNoContextRef++;
         }
       }
 
       // Extract contexts from HTML (both ix:context and xbrli:context)
-      org.jsoup.select.Elements contexts = jsoupDoc.select(
-          "ix\\:context, xbrli\\:context, [id^='c'], [id^='C']"
-      );
+      org.jsoup.select.Elements contexts = new org.jsoup.select.Elements();
+      contexts.addAll(jsoupDoc.getElementsByTag("ix:context"));
+      contexts.addAll(jsoupDoc.getElementsByTag("xbrli:context"));
+      contexts.addAll(jsoupDoc.select("[id^='c'], [id^='C']"));
       Map<String, Element> contextMap = new HashMap<>();
       for (org.jsoup.nodes.Element context : contexts) {
         Element xmlContext = doc.createElement("context");
@@ -1125,7 +1144,10 @@ public class XbrlToParquetConverter implements FileConverter {
         root.appendChild(fact);
       }
 
-      LOGGER.info("Extracted " + ixElements.size() + " inline XBRL facts from HTML");
+      LOGGER.info("Processed " + ixElements.size() + " inline XBRL elements from HTML");
+      LOGGER.info("Added " + factsAdded + " facts to XML document");
+      LOGGER.info("Skipped " + factsSkippedNoName + " elements (no name), " + 
+                  factsSkippedNoContextRef + " elements (no contextRef)");
       return doc;
 
     } catch (Exception e) {
@@ -1134,63 +1156,6 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
 
-  /**
-   * Clean up macOS metadata files (._* files) from a directory.
-   * These files are created by macOS and can cause issues with DuckDB and other tools.
-   *
-   * @param directory The directory to clean
-   */
-  private void cleanupMacOSMetadataFiles(File directory) {
-    if (directory == null || !directory.exists() || !directory.isDirectory()) {
-      return;
-    }
-
-    File[] metadataFiles = directory.listFiles((dir, name) -> name.startsWith("._"));
-    if (metadataFiles != null) {
-      for (File metadataFile : metadataFiles) {
-        if (metadataFile.delete()) {
-          LOGGER.fine("Removed macOS metadata file: " + metadataFile.getName());
-        } else {
-          LOGGER.warning("Failed to remove macOS metadata file: " + metadataFile.getAbsolutePath());
-        }
-      }
-    }
-
-    // Also clean parent directory (partition directories may have metadata files)
-    File parent = directory.getParentFile();
-    if (parent != null && parent.exists()) {
-      File[] parentMetadataFiles = parent.listFiles((dir, name) -> name.startsWith("._"));
-      if (parentMetadataFiles != null) {
-        for (File metadataFile : parentMetadataFiles) {
-          if (metadataFile.delete()) {
-            LOGGER.fine("Removed macOS metadata file from parent: " + metadataFile.getName());
-          }
-        }
-      }
-    }
-  }
-  
-  /**
-   * Recursively clean up macOS metadata files (._* files) from a directory tree.
-   * 
-   * @param directory The root directory to clean recursively
-   */
-  private void cleanupMacOSMetadataFilesRecursive(File directory) {
-    if (directory == null || !directory.exists() || !directory.isDirectory()) {
-      return;
-    }
-    
-    // Clean this directory
-    cleanupMacOSMetadataFiles(directory);
-    
-    // Recursively clean subdirectories
-    File[] subdirs = directory.listFiles(File::isDirectory);
-    if (subdirs != null) {
-      for (File subdir : subdirs) {
-        cleanupMacOSMetadataFilesRecursive(subdir);
-      }
-    }
-  }
 
   /**
    * Extract and write MD&A (Management Discussion & Analysis) to Parquet.
@@ -1242,12 +1207,12 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Wrote " + records.size() + " MD&A paragraphs to " + outputFile);
 
       // Clean up macOS metadata files in the entire partition directory
-      cleanupMacOSMetadataFiles(outputFile.getParentFile());
+      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
       // Also clean parent directories
       if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
-        cleanupMacOSMetadataFiles(outputFile.getParentFile().getParentFile());
+        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
         if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
-          cleanupMacOSMetadataFiles(outputFile.getParentFile().getParentFile().getParentFile());
+          storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
         }
       }
     }
@@ -1613,12 +1578,12 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Wrote " + records.size() + " relationships to " + outputFile);
 
       // Clean up macOS metadata files in the entire partition directory
-      cleanupMacOSMetadataFiles(outputFile.getParentFile());
+      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
       // Also clean parent directories
       if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
-        cleanupMacOSMetadataFiles(outputFile.getParentFile().getParentFile());
+        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
         if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
-          cleanupMacOSMetadataFiles(outputFile.getParentFile().getParentFile().getParentFile());
+          storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
         }
       }
     }
@@ -1701,28 +1666,30 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Generic method to write records to Parquet.
+   * Helper method to write records using StorageProvider's consolidated Parquet writing.
+   */
+  private void writeRecordsToParquet(List<GenericRecord> records, Schema schema,
+      File outputFile, String recordType) throws IOException {
+    
+    if (records.isEmpty()) {
+      LOGGER.fine("No " + recordType + " records to write for " + outputFile.getName());
+      return;
+    }
+
+    LOGGER.fine("Writing " + records.size() + " " + recordType + " records to " + outputFile.getName());
+    
+    // Use StorageProvider's consolidated Parquet writing method
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, recordType);
+    
+    LOGGER.info("Successfully wrote " + records.size() + " " + recordType + " records to " + outputFile.getName());
+  }
+  
+  /**
+   * Overloaded method for backward compatibility with existing calls.
    */
   private void writeRecordsToParquet(List<GenericRecord> records, Schema schema,
       File outputFile) throws IOException {
-
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.toURI()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
-
-    try {
-      for (GenericRecord record : records) {
-        writer.write(record);
-      }
-    } finally {
-      writer.close();
-    }
-    
-    // Clean up macOS metadata files after writing
-    cleanupMacOSMetadataFiles(outputFile.getParentFile());
+    writeRecordsToParquet(records, schema, outputFile, "records");
   }
   
   /**
@@ -1746,8 +1713,9 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<File> convertInsiderForm(Document doc, File sourceFile, File targetDirectory,
       String cik, String filingType, String filingDate, String accession) throws IOException {
+    LOGGER.info("DEBUG: convertInsiderForm() START for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
     List<File> outputFiles = new ArrayList<>();
-    
+
     try {
       // Create partition directory
       // Validate and parse year from filing date
@@ -1772,19 +1740,22 @@ public class XbrlToParquetConverter implements FileConverter {
       
       // Extract insider transactions
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
-      
+      LOGGER.info("DEBUG: Extracted " + transactions.size() + " insider transactions from " + sourceFile.getName());
+
       if (!transactions.isEmpty()) {
         // Write to Parquet - use accession for uniqueness if available
         String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
         File outputFile = new File(partitionDir,
             String.format("%s_%s_insider.parquet", cik, uniqueId));
-        
+
+        LOGGER.info("DEBUG: Writing " + transactions.size() + " transactions to parquet file: " + outputFile.getAbsolutePath());
         Schema schema = createInsiderTransactionSchema();
         writeParquetFile(transactions, schema, outputFile);
-        cleanupMacOSMetadataFiles(outputFile.getParentFile());  // Clean macOS metadata after writing
+        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
         outputFiles.add(outputFile);
-        
-        LOGGER.info("Converted Form " + filingType + " to insider transactions: " 
+        LOGGER.info("DEBUG: Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
+
+        LOGGER.info("Converted Form " + filingType + " to insider transactions: "
             + transactions.size() + " records");
       }
       
@@ -1799,7 +1770,7 @@ public class XbrlToParquetConverter implements FileConverter {
         writeInsiderVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile, accession);
         if (vectorizedFile.exists()) {
           outputFiles.add(vectorizedFile);
-          cleanupMacOSMetadataFiles(vectorizedFile.getParentFile());
+          storageProvider.cleanupMacosMetadata(vectorizedFile.getParentFile().getAbsolutePath());
         }
       } catch (Exception ve) {
         LOGGER.warning("Failed to create vectorized blobs for insider form: " + ve.getMessage());
@@ -2002,29 +1973,16 @@ public class XbrlToParquetConverter implements FileConverter {
   }
   
   /**
-   * Write Parquet file using Avro Generic Records.
+   * Write Parquet file using StorageProvider's consolidated method.
    */
-  @SuppressWarnings("deprecation")
   private void writeParquetFile(List<GenericRecord> records, Schema schema, File outputFile) 
       throws IOException {
     if (outputFile.getParentFile() != null) {
       outputFile.getParentFile().mkdirs();
     }
     
-    Path outputPath = new Path(outputFile.toURI());
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(outputPath)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (GenericRecord record : records) {
-        writer.write(record);
-      }
-    }
-    
-    // Always clean up macOS metadata files after writing
-    cleanupMacOSMetadataFiles(outputFile.getParentFile());
+    // Use StorageProvider's consolidated Parquet writing method
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "vectorized");
   }
   
   
@@ -2189,7 +2147,7 @@ public class XbrlToParquetConverter implements FileConverter {
             String.format("%s_%s_earnings.parquet", cik, filingDate));
         
         writeParquetFile(earningsRecords, earningsSchema, outputFile);
-        cleanupMacOSMetadataFiles(outputFile.getParentFile());  // Clean macOS metadata after writing
+        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
         outputFiles.add(outputFile);
         
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
@@ -2500,7 +2458,7 @@ public class XbrlToParquetConverter implements FileConverter {
     if (!records.isEmpty()) {
       writeRecordsToParquet(records, schema, outputFile);
       LOGGER.info("Wrote " + records.size() + " vectorized blobs to " + outputFile);
-      cleanupMacOSMetadataFiles(outputFile.getParentFile());
+      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
     }
   }
 
@@ -3176,30 +3134,22 @@ public class XbrlToParquetConverter implements FileConverter {
         .requiredString("filing_url")
         .endRecord();
     
-    Path path = new Path(metadataFile.toURI());
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
+    List<GenericRecord> records = new ArrayList<>();
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    record.put("filing_date", filingDate);
+    record.put("company_name", companyInfo.get("company_name"));
+    record.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
+    record.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
+    record.put("sic_code", companyInfo.get("sic_code"));
+    record.put("irs_number", companyInfo.get("irs_number"));
+    record.put("business_address", companyInfo.get("business_address"));
+    record.put("mailing_address", companyInfo.get("mailing_address"));
+    record.put("filing_url", sourceFile.getName());
+    records.add(record);
     
-    try {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
-      record.put("filing_date", filingDate);
-      record.put("company_name", companyInfo.get("company_name"));
-      record.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
-      record.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
-      record.put("sic_code", companyInfo.get("sic_code"));
-      record.put("irs_number", companyInfo.get("irs_number"));
-      record.put("business_address", companyInfo.get("business_address"));
-      record.put("mailing_address", companyInfo.get("mailing_address"));
-      record.put("filing_url", sourceFile.getName());
-      
-      writer.write(record);
-    } finally {
-      writer.close();
-    }
+    // Use consolidated StorageProvider method for Parquet writing
+    storageProvider.writeAvroParquet(metadataFile.getAbsolutePath(), schema, records, "metadata");
   }
   
   private void createMinimalMetadata(File sourceFile, File targetDirectory, String cik,
@@ -3228,31 +3178,22 @@ public class XbrlToParquetConverter implements FileConverter {
         .requiredString("filing_url")
         .endRecord();
     
-    Path path = new Path(metadataFile.toURI());
-    @SuppressWarnings("deprecation")
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build();
+    List<GenericRecord> records = new ArrayList<>();
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    record.put("filing_date", filingDate);
+    // We don't have company info from inline XBRL that failed to parse
+    record.put("company_name", null);
+    record.put("state_of_incorporation", null);
+    record.put("fiscal_year_end", null);
+    record.put("sic_code", null);
+    record.put("irs_number", null);
+    record.put("business_address", null);
+    record.put("mailing_address", null);
+    record.put("filing_url", sourceFile.getName());
+    records.add(record);
     
-    try {
-      
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
-      record.put("filing_date", filingDate);
-      // We don't have company info from inline XBRL that failed to parse
-      record.put("company_name", null);
-      record.put("state_of_incorporation", null);
-      record.put("fiscal_year_end", null);
-      record.put("sic_code", null);
-      record.put("irs_number", null);
-      record.put("business_address", null);
-      record.put("mailing_address", null);
-      record.put("filing_url", sourceFile.getName());
-      
-      writer.write(record);
-    } finally {
-      writer.close();
-    }
+    // Use consolidated StorageProvider method for Parquet writing
+    storageProvider.writeAvroParquet(metadataFile.getAbsolutePath(), schema, records, "metadata");
   }
 }

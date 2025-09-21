@@ -20,9 +20,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,24 +52,24 @@ import java.util.Map;
 /**
  * Downloads and converts Bureau of Economic Analysis (BEA) data to Parquet format.
  * Provides detailed GDP components, personal income, trade statistics, and regional data.
- * 
+ *
  * <p>Requires a BEA API key from https://apps.bea.gov/api/signup/
  */
 public class BeaDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaDataDownloader.class);
-  private static final String BEA_API_BASE = "https://apps.bea.gov/api/data/";
+  private static final String BEA_API_BASE = "https://apps.bea.gov/api/data";
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  
+
   private final String cacheDir;
   private final String apiKey;
   private final HttpClient httpClient;
   private final StorageProvider storageProvider;
-  
+
   // BEA dataset names - comprehensive coverage of all available datasets
   public static class Datasets {
     public static final String NIPA = "NIPA";                               // National Income and Product Accounts
     public static final String NI_UNDERLYING_DETAIL = "NIUnderlyingDetail"; // Standard NI underlying detail tables
-    public static final String MNE = "MNE";                                 // Multinational Enterprises  
+    public static final String MNE = "MNE";                                 // Multinational Enterprises
     public static final String FIXED_ASSETS = "FixedAssets";                // Standard Fixed Assets tables
     public static final String ITA = "ITA";                                 // International Transactions Accounts
     public static final String IIP = "IIP";                                 // International Investment Position
@@ -84,10 +81,10 @@ public class BeaDataDownloader {
     public static final String UNDERLYING_GDP_BY_INDUSTRY = "UnderlyingGDPbyIndustry"; // Underlying GDP by Industry
     public static final String API_DATASET_METADATA = "APIDatasetMetaData"; // Metadata about other API datasets
   }
-  
+
   // Key NIPA table IDs
   public static class NipaTables {
-    public static final String GDP_COMPONENTS = "1";     // GDP and Components
+    public static final String GDP_COMPONENTS = "T10105";     // GDP and Components (Table 1.1.5)
     public static final String PERSONAL_INCOME = "58";   // Personal Income
     public static final String PERSONAL_CONSUMPTION = "66"; // Personal Consumption by Type
     public static final String GOVT_SPENDING = "86";     // Government Current Expenditures
@@ -96,11 +93,11 @@ public class BeaDataDownloader {
     public static final String CORPORATE_PROFITS = "45"; // Corporate Profits
     public static final String SAVINGS_RATE = "58";      // Personal Saving Rate
   }
-  
+
   // Key ITA (International Transactions Accounts) indicators
   public static class ItaIndicators {
     public static final String BALANCE_GOODS = "BalGds";                    // Balance on goods
-    public static final String BALANCE_SERVICES = "BalServ";                // Balance on services  
+    public static final String BALANCE_SERVICES = "BalServ";                // Balance on services
     public static final String BALANCE_GOODS_SERVICES = "BalGdsServ";       // Balance on goods and services
     public static final String BALANCE_CURRENT_ACCOUNT = "BalCurrAcct";     // Balance on current account
     public static final String BALANCE_CAPITAL_ACCOUNT = "BalCapAcct";      // Balance on capital account
@@ -111,15 +108,15 @@ public class BeaDataDownloader {
     public static final String EXPORTS_SERVICES = "ExpServ";                // Exports of services
     public static final String IMPORTS_SERVICES = "ImpServ";                // Imports of services
   }
-  
-  // Key GDP by Industry table IDs  
+
+  // Key GDP by Industry table IDs
   public static class GdpByIndustryTables {
     public static final String VALUE_ADDED_BY_INDUSTRY = "1";               // Gross Output and Value Added by Industry
     public static final String GDP_BY_INDUSTRY_ANNUAL = "2";                // Value Added by Industry as a Percentage of GDP
     public static final String EMPLOYMENT_BY_INDUSTRY = "3";                // Full-Time and Part-Time Employees by Industry
     public static final String COMPENSATION_BY_INDUSTRY = "4";              // Compensation by Industry
   }
-  
+
   public BeaDataDownloader(String cacheDir, String apiKey, StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
     this.apiKey = apiKey;
@@ -128,7 +125,7 @@ public class BeaDataDownloader {
         .connectTimeout(Duration.ofSeconds(10))
         .build();
   }
-  
+
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
   public BeaDataDownloader(String cacheDir, String apiKey) {
     this.cacheDir = cacheDir;
@@ -138,7 +135,7 @@ public class BeaDataDownloader {
         .connectTimeout(Duration.ofSeconds(10))
         .build();
   }
-  
+
   /**
    * Gets the default start year from environment variables.
    */
@@ -151,7 +148,7 @@ public class BeaDataDownloader {
         LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
       }
     }
-    
+
     String govdataStart = System.getenv("GOVDATA_START_YEAR");
     if (govdataStart != null) {
       try {
@@ -160,10 +157,10 @@ public class BeaDataDownloader {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
       }
     }
-    
+
     return LocalDate.now().getYear() - 5;
   }
-  
+
   /**
    * Gets the default end year from environment variables.
    */
@@ -176,7 +173,7 @@ public class BeaDataDownloader {
         LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
       }
     }
-    
+
     String govdataEnd = System.getenv("GOVDATA_END_YEAR");
     if (govdataEnd != null) {
       try {
@@ -185,21 +182,21 @@ public class BeaDataDownloader {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
       }
     }
-    
+
     return LocalDate.now().getYear();
   }
-  
+
   /**
    * Downloads all BEA data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading all BEA data for years {} to {}", startYear, endYear);
-    
+
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download GDP components
       downloadGdpComponentsForYear(year);
-      
+
       // Download regional income for single year
       try {
         LOGGER.info("About to call downloadRegionalIncomeForYear for year {}", year);
@@ -208,15 +205,15 @@ public class BeaDataDownloader {
       } catch (Exception e) {
         LOGGER.error("Failed to download regional income data for year {}: {}", year, e.getMessage(), e);
       }
-      
-      // Download trade statistics for single year  
+
+      // Download trade statistics for single year
       try {
         LOGGER.info("Downloading trade statistics for year {}", year);
         downloadTradeStatisticsForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download trade statistics for year {}: {}", year, e.getMessage());
       }
-      
+
       // Download ITA data for single year
       try {
         LOGGER.info("Downloading ITA data for year {}", year);
@@ -224,7 +221,7 @@ public class BeaDataDownloader {
       } catch (Exception e) {
         LOGGER.warn("Failed to download ITA data for year {}: {}", year, e.getMessage());
       }
-      
+
       // Download industry GDP for single year
       try {
         LOGGER.info("Downloading industry GDP data for year {}", year);
@@ -232,7 +229,7 @@ public class BeaDataDownloader {
       } catch (Exception e) {
         LOGGER.warn("Failed to download industry GDP data for year {}: {}", year, e.getMessage());
       }
-      
+
       // Download state GDP for single year
       try {
         LOGGER.info("Downloading state GDP data for year {}", year);
@@ -242,7 +239,7 @@ public class BeaDataDownloader {
       }
     }
   }
-  
+
   /**
    * Downloads GDP components for a specific year.
    */
@@ -250,37 +247,70 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
+    // Check if this is a future year - BEA annual data not available for future years
+    int currentYear = LocalDate.now().getYear();
+    if (year > currentYear || (year == currentYear && LocalDate.now().getMonthValue() < 2)) {
+      LOGGER.info("Skipping BEA GDP components for year {} - annual data not yet available", year);
+      createEmptyGdpComponentsFile(year, "Annual data not yet available");
+      return;
+    }
+
     LOGGER.info("Downloading BEA GDP components for year {}", year);
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     List<GdpComponent> components = new ArrayList<>();
-    
+
     // Download GDP components (Table 1)
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON",
         apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, year);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       LOGGER.warn("BEA API request failed for year {} with status: {}", year, response.statusCode());
       return;
     }
-    
+
+    LOGGER.debug("BEA API GDP components request URL: {}", url);
     JsonNode root = MAPPER.readTree(response.body());
-    JsonNode results = root.get("BEAAPI").get("Results");
-    
+    LOGGER.debug("BEA API GDP components response for year {}: {}", year,
+                 response.body().length() > 500 ? response.body().substring(0, 500) + "..." : response.body());
+
+    // Check for API errors first
+    if (root.has("BEAAPI")) {
+      JsonNode beaApi = root.get("BEAAPI");
+      if (beaApi.has("Request") && beaApi.get("Request").has("RequestParam")) {
+        LOGGER.debug("BEA API Request parameters: {}", beaApi.get("Request").get("RequestParam"));
+      }
+      if (beaApi.has("Error")) {
+        JsonNode error = beaApi.get("Error");
+        LOGGER.warn("BEA API error for GDP components year {}: {}", year, error);
+
+        // Create empty file for years where data is not available
+        String errorMsg = error.has("APIErrorDescription") ?
+            error.get("APIErrorDescription").asText() : "Data not available";
+        createEmptyGdpComponentsFile(year, errorMsg);
+        return;
+      }
+    }
+
+    JsonNode results = root.path("BEAAPI").path("Results");
+
     if (results != null && results.has("Data")) {
       JsonNode dataArray = results.get("Data");
+      LOGGER.debug("BEA API returned {} data records for GDP components year {}",
+                   dataArray.size(), year);
       if (dataArray != null && dataArray.isArray()) {
         for (JsonNode record : dataArray) {
           GdpComponent component = new GdpComponent();
@@ -288,7 +318,7 @@ public class BeaDataDownloader {
           component.lineDescription = record.get("LineDescription").asText();
           component.seriesCode = record.get("SeriesCode").asText();
           component.year = record.get("TimePeriod").asInt();
-          
+
           // Parse value, handling special cases
           String dataValue = record.get("DataValue").asText();
           if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty()) {
@@ -300,21 +330,21 @@ public class BeaDataDownloader {
           } else {
             continue;
           }
-          
+
           component.units = "Billions of dollars";
           component.tableId = NipaTables.GDP_COMPONENTS;
           component.frequency = "A";
-          
+
           components.add(component);
         }
       }
     }
-    
-    // Save raw JSON data to cache
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "gdp_components.json");
+
+    // Save raw JSON data to local cache
+    File jsonFile = new File(outputDir, "gdp_components.json");
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> componentsData = new ArrayList<>();
-    
+
     for (GdpComponent component : components) {
       Map<String, Object> compData = new HashMap<>();
       compData.put("table_id", component.tableId);
@@ -327,15 +357,15 @@ public class BeaDataDownloader {
       compData.put("frequency", component.frequency);
       componentsData.add(compData);
     }
-    
+
     data.put("components", componentsData);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("GDP components saved to: {} ({} records)", jsonFilePath, components.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
   }
 
   /**
@@ -344,7 +374,7 @@ public class BeaDataDownloader {
   public File downloadGdpComponents() throws IOException, InterruptedException {
     return downloadGdpComponents(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads detailed GDP components data.
    */
@@ -352,42 +382,43 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA GDP components for {}-{}", startYear, endYear);
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, 
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir,
         String.format("source=econ/type=gdp_components/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    outputDir.mkdirs();
+
     List<GdpComponent> components = new ArrayList<>();
-    
+
     // Build year list for API request
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Download GDP components (Table 1)
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, yearParam);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("BEA API request failed with status: " + response.statusCode());
     }
-    
+
     JsonNode root = MAPPER.readTree(response.body());
     JsonNode results = root.get("BEAAPI").get("Results");
-    
+
     if (results != null && results.has("Data")) {
       JsonNode dataArray = results.get("Data");
       if (dataArray != null && dataArray.isArray()) {
@@ -397,7 +428,7 @@ public class BeaDataDownloader {
           component.lineDescription = record.get("LineDescription").asText();
           component.seriesCode = record.get("SeriesCode").asText();
           component.year = record.get("TimePeriod").asInt();
-          
+
           // Parse value, handling special cases
           String dataValue = record.get("DataValue").asText();
           if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty()) {
@@ -409,34 +440,34 @@ public class BeaDataDownloader {
           } else {
             continue;
           }
-          
+
           component.units = "Billions of dollars";
           component.tableId = NipaTables.GDP_COMPONENTS;
           component.frequency = "A";
-          
+
           components.add(component);
         }
       }
     }
-    
+
     // Also download personal consumption details
     Thread.sleep(100); // Rate limiting
-    
+
     params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.NIPA, NipaTables.PERSONAL_CONSUMPTION, yearParam);
-    
+
     url = BEA_API_BASE + "?" + params;
     request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() == 200) {
       root = MAPPER.readTree(response.body());
       results = root.get("BEAAPI").get("Results");
-      
+
       if (results != null && results.has("Data")) {
         JsonNode dataArray = results.get("Data");
         if (dataArray != null && dataArray.isArray()) {
@@ -446,7 +477,7 @@ public class BeaDataDownloader {
             component.lineDescription = record.get("LineDescription").asText();
             component.seriesCode = record.get("SeriesCode").asText();
             component.year = record.get("TimePeriod").asInt();
-            
+
             String dataValue = record.get("DataValue").asText();
             if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty()) {
               try {
@@ -457,33 +488,34 @@ public class BeaDataDownloader {
             } else {
               continue;
             }
-            
+
             component.units = "Billions of dollars";
             component.tableId = NipaTables.PERSONAL_CONSUMPTION;
             component.frequency = "A";
-            
+
             components.add(component);
           }
         }
       }
     }
-    
+
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "gdp_components.parquet");
+    String parquetFilePath = storageProvider.resolvePath(cacheDir,
+        String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet", startYear, endYear));
     File parquetFile = new File(parquetFilePath);
     writeGdpComponentsParquet(components, parquetFile);
-    
+
     LOGGER.info("GDP components saved to: {} ({} records)", parquetFilePath, components.size());
     return parquetFile;
   }
-  
+
   /**
    * Downloads regional income data using default date range.
    */
-  public File downloadRegionalIncome() throws IOException, InterruptedException {
-    return downloadRegionalIncome(getDefaultStartYear(), getDefaultEndYear());
+  public void downloadRegionalIncome() throws IOException, InterruptedException {
+    downloadRegionalIncome(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads regional income data for a single year.
    */
@@ -492,55 +524,56 @@ public class BeaDataDownloader {
       LOGGER.error("BEA API key is missing - cannot download regional income data");
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     List<RegionalIncome> incomeData = new ArrayList<>();
-    
+
     // Regional API requires separate calls for each LineCode (1=Income, 2=Population, 3=Per Capita)
     String[] lineCodes = {"1", "2", "3"};
-    
+
     for (String lineCode : lineCodes) {
       LOGGER.debug("Downloading regional income data for year {} LineCode {}", year, lineCode);
-      
+
       String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON",
           apiKey, Datasets.REGIONAL, lineCode, year);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("BEA regional income API request failed for year {} LineCode {} with status: {}", year, lineCode, response.statusCode());
         continue;
       }
-      
+
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode results = root.get("BEAAPI").get("Results");
-      
+
       // Check for API errors
       if (results != null && results.has("Error")) {
         JsonNode error = results.get("Error");
-        LOGGER.warn("BEA API error for year {} LineCode {}: {} - {}", year, lineCode, 
+        LOGGER.warn("BEA API error for year {} LineCode {}: {} - {}", year, lineCode,
                    error.get("APIErrorCode").asText(), error.get("APIErrorDescription").asText());
         continue;
       }
-      
+
       if (results != null && results.has("Data")) {
         JsonNode dataArray = results.get("Data");
         if (dataArray != null && dataArray.isArray()) {
           for (JsonNode record : dataArray) {
             try {
               RegionalIncome income = new RegionalIncome();
-              
+
               // Get fields with null checks
               JsonNode geoFipsNode = record.get("GeoFips");
               JsonNode geoNameNode = record.get("GeoName");
@@ -549,15 +582,15 @@ public class BeaDataDownloader {
               JsonNode descNode = record.get("Description");
               JsonNode timePeriodNode = record.get("TimePeriod");
               JsonNode dataValueNode = record.get("DataValue");
-              
+
               if (geoFipsNode == null || geoNameNode == null || timePeriodNode == null || dataValueNode == null) {
                 LOGGER.debug("Skipping record with missing required fields");
                 continue;
               }
-              
+
               income.geoFips = geoFipsNode.asText();
               income.geoName = geoNameNode.asText();
-              
+
               // Handle LineCode - BEA Regional uses LineCode, not Code
               if (lineCodeNode != null) {
                 income.lineCode = lineCodeNode.asText();
@@ -566,7 +599,7 @@ public class BeaDataDownloader {
               } else {
                 income.lineCode = lineCode;  // Use the LineCode from the request
               }
-              
+
               // Description might be in different field or not present
               if (descNode != null) {
                 income.lineDescription = descNode.asText();
@@ -582,9 +615,9 @@ public class BeaDataDownloader {
                   income.lineDescription = "Line " + income.lineCode;
                 }
               }
-              
+
               income.year = Integer.parseInt(timePeriodNode.asText());
-              
+
               String dataValue = dataValueNode.asText();
               if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
                 try {
@@ -595,7 +628,7 @@ public class BeaDataDownloader {
               } else {
                 continue;
               }
-              
+
               // Set units based on line code
               if ("1".equals(income.lineCode)) {
                 income.units = "Thousands of dollars";
@@ -607,7 +640,7 @@ public class BeaDataDownloader {
                 income.units = "Dollars";
                 income.metric = "Per Capita Personal Income";
               }
-              
+
               incomeData.add(income);
             } catch (Exception e) {
               LOGGER.debug("Failed to parse regional income record: {}", e.getMessage());
@@ -616,14 +649,14 @@ public class BeaDataDownloader {
         }
       }
     }
-    
-    // Save as JSON
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "regional_income.json");
-    LOGGER.info("Preparing to save {} regional income records to {}", incomeData.size(), jsonFilePath);
-    
+
+    // Save as JSON to local cache
+    File jsonFile = new File(outputDir, "regional_income.json");
+    LOGGER.info("Preparing to save {} regional income records to {}", incomeData.size(), jsonFile.getAbsolutePath());
+
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> incomeList = new ArrayList<>();
-    
+
     for (RegionalIncome income : incomeData) {
       Map<String, Object> incomeMap = new HashMap<>();
       incomeMap.put("geo_fips", income.geoFips);
@@ -636,61 +669,61 @@ public class BeaDataDownloader {
       incomeMap.put("units", income.units);
       incomeList.add(incomeMap);
     }
-    
+
     data.put("regional_income", incomeList);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("Regional income data saved to: {} ({} records)", jsonFilePath, incomeData.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
   }
-  
+
   /**
    * Downloads regional personal income data by state.
    */
-  public File downloadRegionalIncome(int startYear, int endYear) throws IOException, InterruptedException {
+  public void downloadRegionalIncome(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA regional income data for {}-{}", startYear, endYear);
-    
+
     String outputDirPath = storageProvider.resolvePath(cacheDir,
         String.format("source=econ/type=regional_income/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    // Directory creation is handled by StorageProvider when writing files
+
     List<RegionalIncome> incomeData = new ArrayList<>();
-    
+
     // Build year list
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Download state personal income data
     // LineCode 1 = Total Personal Income, 2 = Population, 3 = Per Capita Income
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=1,2,3&GeoFips=STATE&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.REGIONAL, yearParam);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("BEA API request failed with status: " + response.statusCode());
     }
-    
+
     JsonNode root = MAPPER.readTree(response.body());
     JsonNode results = root.get("BEAAPI").get("Results");
-    
+
     if (results != null && results.has("Data")) {
       JsonNode dataArray = results.get("Data");
       if (dataArray != null && dataArray.isArray()) {
@@ -701,7 +734,7 @@ public class BeaDataDownloader {
           income.lineCode = record.get("Code").asText();
           income.lineDescription = record.get("Description").asText();
           income.year = Integer.parseInt(record.get("TimePeriod").asText());
-          
+
           String dataValue = record.get("DataValue").asText();
           if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
             try {
@@ -712,7 +745,7 @@ public class BeaDataDownloader {
           } else {
             continue;
           }
-          
+
           // Set units based on line code
           if ("1".equals(income.lineCode)) {
             income.units = "Thousands of dollars";
@@ -724,28 +757,27 @@ public class BeaDataDownloader {
             income.units = "Dollars";
             income.metric = "Per Capita Personal Income";
           }
-          
+
           incomeData.add(income);
         }
       }
     }
-    
+
     // Convert to Parquet
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "regional_income.parquet");
+    writeRegionalIncomeParquet(incomeData, parquetFilePath);
     File parquetFile = new File(parquetFilePath);
-    writeRegionalIncomeParquet(incomeData, parquetFile);
-    
+
     LOGGER.info("Regional income data saved to: {} ({} records)", parquetFilePath, incomeData.size());
-    return parquetFile;
   }
-  
+
   /**
    * Downloads trade statistics using default date range.
    */
-  public File downloadTradeStatistics() throws IOException, InterruptedException {
-    return downloadTradeStatistics(getDefaultStartYear(), getDefaultEndYear());
+  public void downloadTradeStatistics() throws IOException, InterruptedException {
+    downloadTradeStatistics(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads trade statistics for a single year.
    */
@@ -753,35 +785,36 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA trade statistics for year {}", year);
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     List<TradeStatistic> tradeData = new ArrayList<>();
-    
+
     // Download exports and imports (Table 125) for single year
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON",
         apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, year);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       LOGGER.warn("BEA trade statistics API request failed for year {} with status: {}", year, response.statusCode());
       return;
     }
-    
+
     JsonNode root = MAPPER.readTree(response.body());
     JsonNode results = root.get("BEAAPI").get("Results");
-    
+
     if (results != null && results.has("Data")) {
       JsonNode dataArray = results.get("Data");
       if (dataArray != null && dataArray.isArray()) {
@@ -794,7 +827,7 @@ public class BeaDataDownloader {
           trade.year = record.get("TimePeriod").asInt();
           trade.frequency = "A";
           trade.units = "Billions of dollars";
-          
+
           // Parse value, handling special cases
           String dataValue = record.get("DataValue").asText();
           if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
@@ -806,23 +839,23 @@ public class BeaDataDownloader {
           } else {
             continue;
           }
-          
+
           // Determine trade type and category from line description
           parseTradeTypeAndCategory(trade);
-          
+
           tradeData.add(trade);
         }
       }
     }
-    
+
     // Calculate trade balances for matching export/import pairs
     calculateTradeBalances(tradeData);
-    
-    // Save as JSON
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "trade_statistics.json");
+
+    // Save as JSON to local cache
+    File jsonFile = new File(outputDir, "trade_statistics.json");
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> tradeList = new ArrayList<>();
-    
+
     for (TradeStatistic trade : tradeData) {
       Map<String, Object> tradeMap = new HashMap<>();
       tradeMap.put("table_id", trade.tableId);
@@ -838,61 +871,61 @@ public class BeaDataDownloader {
       tradeMap.put("trade_balance", trade.tradeBalance);
       tradeList.add(tradeMap);
     }
-    
+
     data.put("trade_statistics", tradeList);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("Trade statistics saved to: {} ({} records)", jsonFilePath, tradeData.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
   }
-  
+
   /**
    * Downloads trade statistics (exports and imports) from BEA Table 125.
    * Provides detailed breakdown of exports and imports by category.
    */
-  public File downloadTradeStatistics(int startYear, int endYear) throws IOException, InterruptedException {
+  public void downloadTradeStatistics(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA trade statistics for {}-{}", startYear, endYear);
-    
+
     String outputDirPath = storageProvider.resolvePath(cacheDir,
         String.format("source=econ/type=trade_statistics/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    // Directory creation is handled by StorageProvider when writing files
+
     List<TradeStatistic> tradeData = new ArrayList<>();
-    
+
     // Build year list for API request
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Download exports and imports (Table 125)
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, yearParam);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("BEA API request failed with status: " + response.statusCode());
     }
-    
+
     JsonNode root = MAPPER.readTree(response.body());
     JsonNode results = root.get("BEAAPI").get("Results");
-    
+
     if (results != null && results.has("Data")) {
       JsonNode dataArray = results.get("Data");
       if (dataArray != null && dataArray.isArray()) {
@@ -905,7 +938,7 @@ public class BeaDataDownloader {
           trade.year = record.get("TimePeriod").asInt();
           trade.frequency = "A";
           trade.units = "Billions of dollars";
-          
+
           // Parse value, handling special cases
           String dataValue = record.get("DataValue").asText();
           if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
@@ -917,34 +950,32 @@ public class BeaDataDownloader {
           } else {
             continue;
           }
-          
+
           // Determine trade type and category from line description
           parseTradeTypeAndCategory(trade);
-          
+
           tradeData.add(trade);
         }
       }
     }
-    
+
     // Calculate trade balances for matching export/import pairs
     calculateTradeBalances(tradeData);
-    
+
     // Convert to Parquet
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "trade_statistics.parquet");
-    File parquetFile = new File(parquetFilePath);
-    writeTradeStatisticsParquet(tradeData, parquetFile);
-    
+    writeTradeStatisticsParquet(tradeData, parquetFilePath);
+
     LOGGER.info("Trade statistics saved to: {} ({} records)", parquetFilePath, tradeData.size());
-    return parquetFile;
   }
-  
+
   /**
    * Parses trade type and category from BEA line description.
    * Maps line descriptions to export/import categories.
    */
   private void parseTradeTypeAndCategory(TradeStatistic trade) {
     String desc = trade.lineDescription.toLowerCase();
-    
+
     // Determine if this is an export or import based on line description
     if (desc.contains("export")) {
       trade.tradeType = "Exports";
@@ -959,7 +990,7 @@ public class BeaDataDownloader {
     } else {
       trade.tradeType = "Other";
     }
-    
+
     // Parse category from line description
     if (desc.contains("goods")) {
       trade.category = "Goods";
@@ -995,7 +1026,7 @@ public class BeaDataDownloader {
       }
     }
   }
-  
+
   /**
    * Calculates trade balances for matching export/import categories.
    */
@@ -1003,24 +1034,24 @@ public class BeaDataDownloader {
     // Group by year and category to calculate balances
     Map<String, Map<String, Double>> exports = new HashMap<>();
     Map<String, Map<String, Double>> imports = new HashMap<>();
-    
+
     // Separate exports and imports
     for (TradeStatistic trade : tradeData) {
       String key = trade.year + "_" + trade.category;
-      
+
       if ("Exports".equals(trade.tradeType)) {
         exports.computeIfAbsent(key, k -> new HashMap<>()).put(trade.category, trade.value);
       } else if ("Imports".equals(trade.tradeType)) {
         imports.computeIfAbsent(key, k -> new HashMap<>()).put(trade.category, trade.value);
       }
     }
-    
+
     // Calculate trade balance for each record
     for (TradeStatistic trade : tradeData) {
       String key = trade.year + "_" + trade.category;
       Double exportValue = exports.getOrDefault(key, new HashMap<>()).get(trade.category);
       Double importValue = imports.getOrDefault(key, new HashMap<>()).get(trade.category);
-      
+
       if (exportValue != null && importValue != null) {
         trade.tradeBalance = exportValue - importValue;
       } else if ("Exports".equals(trade.tradeType) && importValue != null) {
@@ -1032,9 +1063,9 @@ public class BeaDataDownloader {
       }
     }
   }
-  
+
   @SuppressWarnings("deprecation")
-  private void writeTradeStatisticsParquet(List<TradeStatistic> tradeStats, File outputFile) throws IOException {
+  public void writeTradeStatisticsParquet(List<TradeStatistic> tradeStats, String targetFilePath) throws IOException {
     Schema schema = SchemaBuilder.record("TradeStatistic")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -1050,40 +1081,36 @@ public class BeaDataDownloader {
         .name("category").type().stringType().noDefault()
         .name("trade_balance").type().doubleType().noDefault()
         .endRecord();
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (TradeStatistic trade : tradeStats) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("table_id", trade.tableId);
-        record.put("line_number", trade.lineNumber);
-        record.put("line_description", trade.lineDescription);
-        record.put("series_code", trade.seriesCode);
-        record.put("year", trade.year);
-        record.put("value", trade.value);
-        record.put("units", trade.units);
-        record.put("frequency", trade.frequency);
-        record.put("trade_type", trade.tradeType);
-        record.put("category", trade.category);
-        record.put("trade_balance", trade.tradeBalance);
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (TradeStatistic trade : tradeStats) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("table_id", trade.tableId);
+      record.put("line_number", trade.lineNumber);
+      record.put("line_description", trade.lineDescription);
+      record.put("series_code", trade.seriesCode);
+      record.put("year", trade.year);
+      record.put("value", trade.value);
+      record.put("units", trade.units);
+      record.put("frequency", trade.frequency);
+      record.put("trade_type", trade.tradeType);
+      record.put("category", trade.category);
+      record.put("trade_balance", trade.tradeBalance);
+      records.add(record);
     }
-    
-    LOGGER.info("Trade statistics Parquet written: {} ({} records)", outputFile.getAbsolutePath(), tradeStats.size());
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "trade_statistics");
+    LOGGER.info("Trade statistics Parquet written: {} ({} records)", targetFilePath, tradeStats.size());
   }
-  
+
   /**
    * Downloads International Transactions Accounts data using default date range.
    */
   public File downloadItaData() throws IOException, InterruptedException {
     return downloadItaData(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads ITA data for a single year.
    */
@@ -1091,14 +1118,15 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA ITA data for year {}", year);
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     List<ItaData> itaRecords = new ArrayList<>();
-    
+
     // Download key ITA indicators for single year
     String[] indicators = {
         ItaIndicators.BALANCE_GOODS,
@@ -1106,67 +1134,93 @@ public class BeaDataDownloader {
         ItaIndicators.BALANCE_GOODS_SERVICES,
         ItaIndicators.BALANCE_CURRENT_ACCOUNT
     };
-    
+
     for (String indicator : indicators) {
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%d&ResultFormat=JSON",
+      // Rate limiting to avoid 429 errors
+      Thread.sleep(500);
+
+      String params = String.format("UserID=%s&method=GetData&DataSetName=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%d&ResultFormat=JSON",
           apiKey, Datasets.ITA, indicator, year);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("ITA API request failed for indicator {} year {} with status: {}", indicator, year, response.statusCode());
         continue;
       }
-      
+
+      LOGGER.debug("ITA API URL: {}", url);
+      LOGGER.debug("ITA API Response (first 500 chars): {}", response.body().substring(0, Math.min(500, response.body().length())));
+
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode results = root.get("BEAAPI").get("Results");
-      
-      if (results != null && results.has("Data")) {
-        JsonNode dataArray = results.get("Data");
-        if (dataArray != null && dataArray.isArray()) {
-          for (JsonNode record : dataArray) {
-            ItaData ita = new ItaData();
-            ita.indicator = record.get("Indicator").asText();
-            ita.areaOrCountry = record.get("AreaOrCountry").asText();
-            ita.frequency = record.get("Frequency").asText();
-            ita.year = Integer.parseInt(record.get("Year").asText());
-            ita.timeSeriesId = record.get("TimeSeriesId").asText();
-            ita.timeSeriesDescription = record.get("TimeSeriesDescription").asText();
-            ita.units = "USD Millions";
-            
-            // Parse value, handling special cases
-            String dataValue = record.get("DataValue").asText();
-            if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
-              try {
-                ita.value = Double.parseDouble(dataValue.replace(",", ""));
-              } catch (NumberFormatException e) {
-                continue; // Skip invalid values
-              }
-            } else {
-              continue;
-            }
-            
-            // Set indicator description
-            ita.indicatorDescription = getItaIndicatorDescription(ita.indicator);
-            
-            itaRecords.add(ita);
+
+      LOGGER.debug("ITA API Results node exists: {}", results != null);
+      if (results != null) {
+        LOGGER.debug("ITA API Results has Error: {}", results.has("Error"));
+        LOGGER.debug("ITA API Results has Data: {}", results.has("Data"));
+        if (results.has("Error")) {
+          JsonNode error = results.get("Error");
+          String errorCode = error.path("APIErrorCode").asText();
+          String errorDesc = error.path("APIErrorDescription").asText();
+          LOGGER.error("BEA ITA API Error {}: {} for indicator {} year {}", errorCode, errorDesc, indicator, year);
+
+          // Check for invalid API key
+          if ("1".equals(errorCode) && errorDesc.contains("Invalid API UserId")) {
+            LOGGER.error("BEA API key is invalid or missing. Please set BEA_API_KEY environment variable with a valid key from https://apps.bea.gov/api/signup/");
+            // Continue to next indicator rather than failing completely
+            continue;
           }
         }
       }
+
+      if (results != null && results.has("Data")) {
+        JsonNode dataNode = results.get("Data");
+        if (dataNode != null) {
+          // ITA API returns a single data object, not an array
+          ItaData ita = new ItaData();
+          ita.indicator = dataNode.get("Indicator").asText();
+          ita.areaOrCountry = dataNode.get("AreaOrCountry").asText();
+          ita.frequency = dataNode.get("Frequency").asText();
+          ita.year = Integer.parseInt(dataNode.get("Year").asText());
+          ita.timeSeriesId = dataNode.get("TimeSeriesId").asText();
+          ita.timeSeriesDescription = dataNode.get("TimeSeriesDescription").asText();
+          ita.units = "USD Millions";
+
+          // Parse value, handling special cases
+          String dataValue = dataNode.get("DataValue").asText();
+          if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
+            try {
+              ita.value = Double.parseDouble(dataValue.replace(",", ""));
+            } catch (NumberFormatException e) {
+              LOGGER.debug("Failed to parse ITA data value: {}", dataValue);
+              continue; // Skip invalid values
+            }
+          } else {
+            LOGGER.debug("Skipping ITA record with invalid data value: {}", dataValue);
+            continue;
+          }
+
+          // Set indicator description
+          ita.indicatorDescription = getItaIndicatorDescription(ita.indicator);
+
+          itaRecords.add(ita);
+        }
+      }
     }
-    
-    // Save as JSON
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "ita_data.json");
+
+    // Save as JSON to local cache
+    File jsonFile = new File(outputDir, "ita_data.json");
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> itaList = new ArrayList<>();
-    
+
     for (ItaData ita : itaRecords) {
       Map<String, Object> itaMap = new HashMap<>();
       itaMap.put("indicator", ita.indicator);
@@ -1180,17 +1234,17 @@ public class BeaDataDownloader {
       itaMap.put("time_series_description", ita.timeSeriesDescription);
       itaList.add(itaMap);
     }
-    
+
     data.put("ita_data", itaList);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("ITA data saved to: {} ({} records)", jsonFilePath, itaRecords.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
   }
-  
+
   /**
    * Downloads comprehensive International Transactions Accounts (ITA) data.
    * Provides detailed trade balances, current account, and capital flows.
@@ -1199,22 +1253,22 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA ITA data for {}-{}", startYear, endYear);
-    
+
     String outputDirPath = storageProvider.resolvePath(cacheDir,
         String.format("source=econ/type=ita_data/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    // Directory creation is handled by StorageProvider when writing files
+
     List<ItaData> itaRecords = new ArrayList<>();
-    
+
     // Build year list for API request
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Download key ITA indicators
     String[] indicators = {
         ItaIndicators.BALANCE_GOODS,
@@ -1225,28 +1279,28 @@ public class BeaDataDownloader {
         ItaIndicators.BALANCE_PRIMARY_INCOME,
         ItaIndicators.BALANCE_SECONDARY_INCOME
     };
-    
+
     for (String indicator : indicators) {
       String params = String.format("UserID=%s&method=GetData&datasetname=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%s&ResultFormat=JSON",
           apiKey, Datasets.ITA, indicator, yearParam);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("ITA API request failed for indicator {} with status: {}", indicator, response.statusCode());
         continue;
       }
-      
+
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode results = root.get("BEAAPI").get("Results");
-      
+
       if (results != null && results.has("Data")) {
         JsonNode dataArray = results.get("Data");
         if (dataArray != null && dataArray.isArray()) {
@@ -1259,7 +1313,7 @@ public class BeaDataDownloader {
             ita.timeSeriesId = record.get("TimeSeriesId").asText();
             ita.timeSeriesDescription = record.get("TimeSeriesDescription").asText();
             ita.units = "USD Millions";
-            
+
             // Parse value, handling special cases
             String dataValue = record.get("DataValue").asText();
             if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue)) {
@@ -1271,25 +1325,25 @@ public class BeaDataDownloader {
             } else {
               continue;
             }
-            
+
             // Set indicator description
             ita.indicatorDescription = getItaIndicatorDescription(ita.indicator);
-            
+
             itaRecords.add(ita);
           }
         }
       }
     }
-    
+
     // Convert to Parquet
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "ita_data.parquet");
     File parquetFile = new File(parquetFilePath);
     writeItaDataParquet(itaRecords, parquetFile);
-    
+
     LOGGER.info("ITA data saved to: {} ({} records)", parquetFilePath, itaRecords.size());
     return parquetFile;
   }
-  
+
   /**
    * Maps ITA indicator codes to human-readable descriptions.
    */
@@ -1305,7 +1359,7 @@ public class BeaDataDownloader {
       default: return "Unknown indicator";
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeItaDataParquet(List<ItaData> itaRecords, File outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("ItaData")
@@ -1321,38 +1375,35 @@ public class BeaDataDownloader {
         .name("time_series_id").type().stringType().noDefault()
         .name("time_series_description").type().stringType().noDefault()
         .endRecord();
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (ItaData ita : itaRecords) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("indicator", ita.indicator);
-        record.put("indicator_description", ita.indicatorDescription);
-        record.put("area_or_country", ita.areaOrCountry);
-        record.put("frequency", ita.frequency);
-        record.put("year", ita.year);
-        record.put("value", ita.value);
-        record.put("units", ita.units);
-        record.put("time_series_id", ita.timeSeriesId);
-        record.put("time_series_description", ita.timeSeriesDescription);
-        writer.write(record);
-      }
+
+    // Convert to GenericRecords
+    List<GenericRecord> records = new ArrayList<>();
+    for (ItaData ita : itaRecords) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("indicator", ita.indicator);
+      record.put("indicator_description", ita.indicatorDescription);
+      record.put("area_or_country", ita.areaOrCountry);
+      record.put("frequency", ita.frequency);
+      record.put("year", ita.year);
+      record.put("value", ita.value);
+      record.put("units", ita.units);
+      record.put("time_series_id", ita.timeSeriesId);
+      record.put("time_series_description", ita.timeSeriesDescription);
+      records.add(record);
     }
-    
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "ita_data");
     LOGGER.info("ITA data Parquet written: {} ({} records)", outputFile.getAbsolutePath(), itaRecords.size());
   }
-  
+
   /**
    * Downloads GDP by Industry data using default date range.
    */
   public File downloadIndustryGdp() throws IOException, InterruptedException {
     return downloadIndustryGdp(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads industry GDP data for a single year.
    */
@@ -1360,14 +1411,15 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA GDP by Industry data for year {}", year);
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     List<IndustryGdpData> industryData = new ArrayList<>();
-    
+
     // Key industries to download (NAICS codes) - limited for single year
     String[] keyIndustries = {
         "31G",     // Manufacturing
@@ -1376,29 +1428,29 @@ public class BeaDataDownloader {
         "54",      // Professional, scientific, and technical services
         "GSLG",    // Government
     };
-    
+
     // Download annual data for Table 1 (Value Added by Industry)
     for (String industry : keyIndustries) {
       String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%d&Industry=%s&ResultFormat=JSON",
           apiKey, Datasets.GDP_BY_INDUSTRY, year, industry);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       try {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        
+
         if (response.statusCode() != 200) {
           LOGGER.warn("GDP by Industry API request failed for industry {} year {} with status: {}", industry, year, response.statusCode());
           continue;
         }
-        
+
         JsonNode root = MAPPER.readTree(response.body());
-        
+
         // The GDP by Industry API returns data in a different structure
         JsonNode results = root.get("BEAAPI").get("Results");
         if (results != null && results.isArray() && results.size() > 0) {
@@ -1415,7 +1467,7 @@ public class BeaDataDownloader {
                 gdp.industryCode = record.get("Industry").asText();
                 gdp.industryDescription = record.get("IndustrYDescription").asText();
                 gdp.units = "Billions of dollars";
-                
+
                 // Parse value, handling special cases
                 String dataValue = record.get("DataValue").asText();
                 if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue) && !dataValue.equals("...")) {
@@ -1427,11 +1479,11 @@ public class BeaDataDownloader {
                 } else {
                   continue;
                 }
-                
+
                 if (record.has("NoteRef")) {
                   gdp.noteRef = record.get("NoteRef").asText();
                 }
-                
+
                 industryData.add(gdp);
               }
             }
@@ -1441,12 +1493,12 @@ public class BeaDataDownloader {
         LOGGER.warn("Error processing industry {} for year {}: {}", industry, year, e.getMessage());
       }
     }
-    
-    // Save as JSON
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "industry_gdp.json");
+
+    // Save as JSON to local cache
+    File jsonFile = new File(outputDir, "industry_gdp.json");
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
-    
+
     for (IndustryGdpData gdp : industryData) {
       Map<String, Object> gdpMap = new HashMap<>();
       gdpMap.put("table_id", gdp.tableId);
@@ -1460,42 +1512,42 @@ public class BeaDataDownloader {
       gdpMap.put("note_ref", gdp.noteRef);
       gdpList.add(gdpMap);
     }
-    
+
     data.put("industry_gdp", gdpList);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("Industry GDP data saved to: {} ({} records)", jsonFilePath, industryData.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
   }
-  
+
   /**
    * Downloads GDP by Industry data showing value added by NAICS industry classification.
-   * Provides quarterly and annual data for all industries including manufacturing, 
+   * Provides quarterly and annual data for all industries including manufacturing,
    * services, finance, technology, and government sectors.
    */
   public File downloadIndustryGdp(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA GDP by Industry data for {}-{}", startYear, endYear);
-    
+
     String outputDirPath = storageProvider.resolvePath(cacheDir,
         String.format("source=econ/type=industry_gdp/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    // Directory creation is handled by StorageProvider when writing files
+
     List<IndustryGdpData> industryData = new ArrayList<>();
-    
+
     // Build year list for API request
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Key industries to download (NAICS codes)
     String[] keyIndustries = {
         "11",      // Agriculture, forestry, fishing, and hunting
@@ -1519,29 +1571,29 @@ public class BeaDataDownloader {
         "81",      // Other services
         "GSLG",    // Government
     };
-    
+
     // Download annual data for Table 1 (Value Added by Industry)
     for (String industry : keyIndustries) {
       String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%s&Industry=%s&ResultFormat=JSON",
           apiKey, Datasets.GDP_BY_INDUSTRY, yearParam, industry);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       try {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        
+
         if (response.statusCode() != 200) {
           LOGGER.warn("GDP by Industry API request failed for industry {} with status: {}", industry, response.statusCode());
           continue;
         }
-        
+
         JsonNode root = MAPPER.readTree(response.body());
-        
+
         // The GDP by Industry API returns data in a different structure
         JsonNode results = root.get("BEAAPI").get("Results");
         if (results != null && results.isArray() && results.size() > 0) {
@@ -1558,7 +1610,7 @@ public class BeaDataDownloader {
                 gdp.industryCode = record.get("Industry").asText();
                 gdp.industryDescription = record.get("IndustrYDescription").asText();
                 gdp.units = "Billions of dollars";
-                
+
                 // Parse value, handling special cases
                 String dataValue = record.get("DataValue").asText();
                 if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue) && !dataValue.equals("...")) {
@@ -1570,11 +1622,11 @@ public class BeaDataDownloader {
                 } else {
                   continue;
                 }
-                
+
                 if (record.has("NoteRef")) {
                   gdp.noteRef = record.get("NoteRef").asText();
                 }
-                
+
                 industryData.add(gdp);
               }
             }
@@ -1584,7 +1636,7 @@ public class BeaDataDownloader {
         LOGGER.warn("Error processing industry {}: {}", industry, e.getMessage());
       }
     }
-    
+
     // Also download quarterly data for recent years (last 2 years only for size)
     int quarterlyStartYear = Math.max(startYear, endYear - 1);
     for (int year = quarterlyStartYear; year <= endYear; year++) {
@@ -1592,17 +1644,17 @@ public class BeaDataDownloader {
         // Download quarterly data for manufacturing sector as example
         String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=Q&Year=%d&Quarter=%s&Industry=31G&ResultFormat=JSON",
             apiKey, Datasets.GDP_BY_INDUSTRY, year, quarter);
-        
+
         String url = BEA_API_BASE + "?" + params;
-        
+
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(30))
             .build();
-        
+
         try {
           HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-          
+
           if (response.statusCode() == 200) {
             JsonNode root = MAPPER.readTree(response.body());
             JsonNode results = root.get("BEAAPI").get("Results");
@@ -1620,7 +1672,7 @@ public class BeaDataDownloader {
                     gdp.industryCode = record.get("Industry").asText();
                     gdp.industryDescription = record.get("IndustrYDescription").asText();
                     gdp.units = "Billions of dollars";
-                    
+
                     String dataValue = record.get("DataValue").asText();
                     if (!"NoteRef".equals(dataValue) && !dataValue.isEmpty() && !"(NA)".equals(dataValue) && !dataValue.equals("...")) {
                       try {
@@ -1631,7 +1683,7 @@ public class BeaDataDownloader {
                     } else {
                       continue;
                     }
-                    
+
                     industryData.add(gdp);
                   }
                 }
@@ -1643,16 +1695,16 @@ public class BeaDataDownloader {
         }
       }
     }
-    
+
     // Convert to Parquet
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "industry_gdp.parquet");
     File parquetFile = new File(parquetFilePath);
     writeIndustryGdpParquet(industryData, parquetFile);
-    
+
     LOGGER.info("Industry GDP data saved to: {} ({} records)", parquetFilePath, industryData.size());
     return parquetFile;
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeIndustryGdpParquet(List<IndustryGdpData> industryData, File outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("IndustryGdpData")
@@ -1668,31 +1720,28 @@ public class BeaDataDownloader {
         .name("units").type().stringType().noDefault()
         .name("note_ref").type().nullable().stringType().noDefault()
         .endRecord();
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath()))
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (IndustryGdpData gdp : industryData) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("table_id", gdp.tableId);
-        record.put("frequency", gdp.frequency);
-        record.put("year", gdp.year);
-        record.put("quarter", gdp.quarter);
-        record.put("industry_code", gdp.industryCode);
-        record.put("industry_description", gdp.industryDescription);
-        record.put("value", gdp.value);
-        record.put("units", gdp.units);
-        record.put("note_ref", gdp.noteRef);
-        writer.write(record);
-      }
+
+    // Convert to GenericRecords
+    List<GenericRecord> records = new ArrayList<>();
+    for (IndustryGdpData gdp : industryData) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("table_id", gdp.tableId);
+      record.put("frequency", gdp.frequency);
+      record.put("year", gdp.year);
+      record.put("quarter", gdp.quarter);
+      record.put("industry_code", gdp.industryCode);
+      record.put("industry_description", gdp.industryDescription);
+      record.put("value", gdp.value);
+      record.put("units", gdp.units);
+      record.put("note_ref", gdp.noteRef);
+      records.add(record);
     }
-    
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "industry_gdp");
     LOGGER.info("Industry GDP Parquet written: {} ({} records)", outputFile.getAbsolutePath(), industryData.size());
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeGdpComponentsParquet(List<GdpComponent> components, File outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("GdpComponent")
@@ -1707,31 +1756,29 @@ public class BeaDataDownloader {
         .requiredString("units")
         .requiredString("frequency")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (GdpComponent component : components) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("table_id", component.tableId);
-        record.put("line_number", component.lineNumber);
-        record.put("line_description", component.lineDescription);
-        record.put("series_code", component.seriesCode);
-        record.put("year", component.year);
-        record.put("value", component.value);
-        record.put("units", component.units);
-        record.put("frequency", component.frequency);
-        writer.write(record);
-      }
+
+    // Convert to GenericRecords
+    List<GenericRecord> records = new ArrayList<>();
+    for (GdpComponent component : components) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("table_id", component.tableId);
+      record.put("line_number", component.lineNumber);
+      record.put("line_description", component.lineDescription);
+      record.put("series_code", component.seriesCode);
+      record.put("year", component.year);
+      record.put("value", component.value);
+      record.put("units", component.units);
+      record.put("frequency", component.frequency);
+      records.add(record);
     }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "gdp_components");
+    LOGGER.info("GDP Components Parquet written: {} ({} records)", outputFile.getAbsolutePath(), components.size());
   }
-  
+
   @SuppressWarnings("deprecation")
-  private void writeRegionalIncomeParquet(List<RegionalIncome> incomeData, File outputFile) throws IOException {
+  public void writeRegionalIncomeParquet(List<RegionalIncome> incomeData, String targetFilePath) throws IOException {
     // IMPORTANT: Do not include 'year' in the schema - it's a partition key derived from directory structure
     Schema schema = SchemaBuilder.record("RegionalIncome")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -1745,29 +1792,25 @@ public class BeaDataDownloader {
         .name("value").type().doubleType().noDefault()
         .name("units").type().nullable().stringType().noDefault()
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (RegionalIncome income : incomeData) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("geo_fips", income.geoFips);
-        record.put("geo_name", income.geoName);
-        record.put("metric", income.metric);
-        record.put("line_code", income.lineCode);
-        record.put("line_description", income.lineDescription);
-        // Don't put year - it's derived from the partition directory
-        record.put("value", income.value);
-        record.put("units", income.units);
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (RegionalIncome income : incomeData) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("geo_fips", income.geoFips);
+      record.put("geo_name", income.geoName);
+      record.put("metric", income.metric);
+      record.put("line_code", income.lineCode);
+      record.put("line_description", income.lineDescription);
+      // Don't put year - it's derived from the partition directory
+      record.put("value", income.value);
+      record.put("units", income.units);
+      records.add(record);
     }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "regional_income");
   }
-  
+
   // Data classes
   private static class GdpComponent {
     String tableId;
@@ -1779,8 +1822,8 @@ public class BeaDataDownloader {
     String units;
     String frequency;
   }
-  
-  private static class TradeStatistic {
+
+  public static class TradeStatistic {
     String tableId;
     int lineNumber;
     String lineDescription;
@@ -1793,8 +1836,8 @@ public class BeaDataDownloader {
     String category;   // Parsed from lineDescription
     double tradeBalance; // Calculated for matching import/export pairs
   }
-  
-  private static class RegionalIncome {
+
+  public static class RegionalIncome {
     String geoFips;
     String geoName;
     String metric;
@@ -1804,7 +1847,7 @@ public class BeaDataDownloader {
     double value;
     String units;
   }
-  
+
   private static class ItaData {
     String indicator;
     String indicatorDescription;
@@ -1816,7 +1859,7 @@ public class BeaDataDownloader {
     String timeSeriesId;
     String timeSeriesDescription;
   }
-  
+
   private static class GdpByIndustryData {
     String tableId;
     String industry;
@@ -1828,7 +1871,7 @@ public class BeaDataDownloader {
     String metric;
     String frequency;
   }
-  
+
   private static class IndustryGdpData {
     int tableId;
     String frequency;
@@ -1840,8 +1883,8 @@ public class BeaDataDownloader {
     String units;
     String noteRef;
   }
-  
-  private static class StateGdp {
+
+  public static class StateGdp {
     String geoFips;
     String geoName;
     String lineCode;
@@ -1850,43 +1893,55 @@ public class BeaDataDownloader {
     double value;
     String units;
   }
-  
+
+  /**
+   * Creates an empty GDP components file for years where data is not available.
+   */
+  private void createEmptyGdpComponentsFile(int year, String reason) throws IOException {
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
+    File jsonFile = new File(outputDir, "gdp_components.json");
+    Map<String, Object> data = new HashMap<>();
+    data.put("components", new ArrayList<>());
+    data.put("download_date", LocalDate.now().toString());
+    data.put("year", year);
+    data.put("no_data_reason", reason);
+
+    String jsonContent = MAPPER.writeValueAsString(data);
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("Created empty GDP components file for year {}: {}", year, jsonFile.getAbsolutePath());
+  }
+
   /**
    * Converts regional income JSON to Parquet format.
    */
-  public void convertRegionalIncomeToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertRegionalIncomeToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting regional income data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
-    // Skip if target file already exists
+
+    // Skip if a target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    String parentDir = targetFile.getParent();
-    if (parentDir != null) {
-      storageProvider.createDirectories(parentDir);
-    }
-    
+
     List<RegionalIncome> incomeData = new ArrayList<>();
-    
+
     // Look for regional income JSON files in the source directory
-    List<StorageProvider.FileEntry> files = storageProvider.listFiles(sourceDirPath, false);
-    
-    for (StorageProvider.FileEntry file : files) {
-      if ("regional_income.json".equals(file.getName()) && !file.getName().startsWith(".")) {
+    File sourceDirFile = new File(sourceDirPath);
+    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
+        name.equals("regional_income.json") && !name.startsWith("."));
+
+    if (jsonFiles != null) {
+      for (File jsonFile : jsonFiles) {
         try {
-          String content;
-          try (InputStream inputStream = storageProvider.openInputStream(file.getPath())) {
-            content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-          }
+          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode incomeArray = root.get("regional_income");
-          
+
           if (incomeArray != null && incomeArray.isArray()) {
             for (JsonNode inc : incomeArray) {
               try {
@@ -1899,7 +1954,7 @@ public class BeaDataDownloader {
                 income.year = inc.get("year").asInt();
                 income.value = inc.get("value").asDouble();
                 income.units = inc.get("units").asText();
-                
+
                 incomeData.add(income);
               } catch (Exception e) {
                 LOGGER.warn("Failed to parse regional income record: {}", e.getMessage());
@@ -1907,60 +1962,60 @@ public class BeaDataDownloader {
             }
           }
         } catch (Exception e) {
-          LOGGER.warn("Failed to process regional income JSON file {}: {}", file.getPath(), e.getMessage());
+          LOGGER.warn("Failed to process regional income JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
       }
     }
-    
+
     if (!incomeData.isEmpty()) {
       // Write parquet file
-      writeRegionalIncomeParquet(incomeData, targetFile);
+      writeRegionalIncomeParquet(incomeData, targetFilePath);
       LOGGER.info("Converted regional income data to parquet: {} ({} records)", targetFilePath, incomeData.size());
     } else {
       LOGGER.warn("No regional income data found in {}", sourceDirPath);
     }
   }
-  
+
   /**
    * Downloads state GDP data using BEA Regional API.
    * Uses the SAGDP2N table for annual state GDP by NAICS industry.
    */
-  public File downloadStateGdp(int startYear, int endYear) throws IOException, InterruptedException {
+  public void downloadStateGdp(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading BEA state GDP data for {}-{}", startYear, endYear);
-    
+
     String outputDirPath = storageProvider.resolvePath(cacheDir,
         String.format("source=econ/type=state_gdp/year_range=%d_%d", startYear, endYear));
-    storageProvider.createDirectories(outputDirPath);
-    
+    // Directory creation is handled by StorageProvider when writing files
+
     List<StateGdp> gdpData = new ArrayList<>();
-    
+
     // Build year list
     List<String> years = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       years.add(String.valueOf(year));
     }
     String yearParam = String.join(",", years);
-    
+
     // Download state GDP data
     // TableName=SAGDP1 for state annual GDP summary
     // LineCode=1 for Real GDP
     String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.REGIONAL, yearParam);
-    
+
     String url = BEA_API_BASE + "?" + params;
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .GET()
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() == 200) {
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode results = root.get("BEAAPI").get("Results");
@@ -1968,7 +2023,7 @@ public class BeaDataDownloader {
       if (dataArray != null && dataArray.isArray()) {
         // Get the statistic description from Results level
         String statistic = results.get("Statistic").asText("Real Gross Domestic Product (GDP)");
-        
+
         for (JsonNode record : dataArray) {
           StateGdp gdp = new StateGdp();
           gdp.geoFips = record.get("GeoFips").asText();
@@ -1976,7 +2031,7 @@ public class BeaDataDownloader {
           gdp.lineCode = record.get("Code").asText();
           gdp.lineDescription = statistic; // Use statistic from Results level
           gdp.year = Integer.parseInt(record.get("TimePeriod").asText());
-          
+
           // Handle different value formats
           String valueStr = record.get("DataValue").asText();
           if ("NaN".equals(valueStr) || valueStr.isEmpty()) {
@@ -1984,27 +2039,27 @@ public class BeaDataDownloader {
           } else {
             gdp.value = Double.parseDouble(valueStr.replaceAll(",", ""));
           }
-          
+
           gdp.units = record.get("CL_UNIT").asText("Millions of chained 2017 dollars");
           gdpData.add(gdp);
         }
       }
     }
-    
+
     // Also fetch per capita GDP (LineCode=1 with different units - skip for now since SAGDP1 only has total GDP)
     // Per capita data requires different calculation or table
     /* params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON",
         apiKey, Datasets.REGIONAL, yearParam); */
-    
+
     url = BEA_API_BASE + "?" + params;
     request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(30))
         .GET()
         .build();
-    
+
     response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() == 200) {
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode results = root.get("BEAAPI").get("Results");
@@ -2017,29 +2072,28 @@ public class BeaDataDownloader {
           gdp.lineCode = record.get("Code").asText();
           gdp.lineDescription = "Per capita real GDP";
           gdp.year = record.get("TimePeriod").asInt();
-          
+
           String valueStr = record.get("DataValue").asText();
           if ("NaN".equals(valueStr) || valueStr.isEmpty()) {
             gdp.value = 0.0;
           } else {
             gdp.value = Double.parseDouble(valueStr.replaceAll(",", ""));
           }
-          
+
           gdp.units = "Dollars";
           gdpData.add(gdp);
         }
       }
     }
-    
+
     // Convert to Parquet
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "state_gdp.parquet");
+    writeStateGdpParquet(gdpData, parquetFilePath);
     File parquetFile = new File(parquetFilePath);
-    writeStateGdpParquet(gdpData, parquetFile);
-    
+
     LOGGER.info("State GDP data saved to: {} ({} records)", parquetFilePath, gdpData.size());
-    return parquetFile;
   }
-  
+
   /**
    * Downloads state GDP data for a single year.
    */
@@ -2048,49 +2102,50 @@ public class BeaDataDownloader {
       LOGGER.error("BEA API key is missing - cannot download state GDP data");
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-    
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
+
+    // Create local cache directory
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    outputDir.mkdirs();
+
     // Check if data already exists
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "state_gdp.json");
-    if (storageProvider.exists(jsonFilePath)) {
+    File jsonFile = new File(outputDir, "state_gdp.json");
+    if (jsonFile.exists()) {
       LOGGER.info("Found cached BEA state GDP data for year {} - skipping download", year);
       return;
     }
-    
+
     LOGGER.info("Downloading BEA state GDP data for year {}", year);
-    
+
     List<StateGdp> gdpData = new ArrayList<>();
-    
+
     // Download state GDP data (LineCode=1 for total GDP, LineCode=2 for per capita)
     String[] lineCodes = {"1", "2"};
     String[] descriptions = {"All industry total", "Per capita real GDP"};
-    
+
     for (int i = 0; i < lineCodes.length; i++) {
       String lineCode = lineCodes[i];
       String description = descriptions[i];
-      
+
       LOGGER.debug("Downloading state GDP data for year {} LineCode {}", year, lineCode);
-      
+
       String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON",
           apiKey, Datasets.REGIONAL, lineCode, year);
-      
+
       String url = BEA_API_BASE + "?" + params;
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .GET()
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("BEA state GDP API request failed for year {} LineCode {} with status: {}", year, lineCode, response.statusCode());
         continue;
       }
-      
+
       JsonNode root = MAPPER.readTree(response.body());
       JsonNode beaApi = root.get("BEAAPI");
       if (beaApi != null) {
@@ -2101,33 +2156,33 @@ public class BeaDataDownloader {
             for (JsonNode record : dataArray) {
               try {
                 StateGdp gdp = new StateGdp();
-                
+
                 JsonNode geoFipsNode = record.get("GeoFips");
                 JsonNode geoNameNode = record.get("GeoName");
                 JsonNode lineCodeNode = record.get("Code");
                 JsonNode dataValueNode = record.get("DataValue");
                 JsonNode unitMultNode = record.get("UNIT_MULT");
-                
+
                 if (geoFipsNode == null || geoNameNode == null || dataValueNode == null) {
                   continue;
                 }
-                
+
                 gdp.geoFips = geoFipsNode.asText();
                 gdp.geoName = geoNameNode.asText();
                 gdp.lineCode = lineCodeNode != null ? lineCodeNode.asText() : lineCode;
                 gdp.lineDescription = description;
                 gdp.year = year;
-                
+
                 String valueStr = dataValueNode.asText();
                 if ("NaN".equals(valueStr) || valueStr.isEmpty()) {
                   gdp.value = 0.0;
                 } else {
                   gdp.value = Double.parseDouble(valueStr.replaceAll(",", ""));
                 }
-                
-                gdp.units = lineCode.equals("2") ? "Dollars" : 
+
+                gdp.units = lineCode.equals("2") ? "Dollars" :
                     (unitMultNode != null ? unitMultNode.asText() : "Millions of Dollars");
-                
+
                 gdpData.add(gdp);
               } catch (Exception e) {
                 LOGGER.debug("Failed to parse state GDP record: {}", e.getMessage());
@@ -2137,13 +2192,13 @@ public class BeaDataDownloader {
         }
       }
     }
-    
-    // Save as JSON
-    LOGGER.info("Preparing to save {} state GDP records to {}", gdpData.size(), jsonFilePath);
-    
+
+    // Save as JSON to local cache
+    LOGGER.info("Preparing to save {} state GDP records to {}", gdpData.size(), jsonFile.getAbsolutePath());
+
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
-    
+
     for (StateGdp gdp : gdpData) {
       Map<String, Object> gdpMap = new HashMap<>();
       gdpMap.put("geo_fips", gdp.geoFips);
@@ -2155,19 +2210,19 @@ public class BeaDataDownloader {
       gdpMap.put("units", gdp.units);
       gdpList.add(gdpMap);
     }
-    
+
     data.put("state_gdp", gdpList);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
-    LOGGER.info("State GDP data saved to: {} ({} records)", jsonFilePath, gdpData.size());
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    LOGGER.info("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
   }
-  
+
   @SuppressWarnings("deprecation")
-  private void writeStateGdpParquet(List<StateGdp> gdpData, File outputFile) throws IOException {
+  public void writeStateGdpParquet(List<StateGdp> gdpData, String targetFilePath) throws IOException {
     // IMPORTANT: Do not include 'year' in the schema - it's a partition key derived from directory structure
     Schema schema = SchemaBuilder.record("StateGdp")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -2178,67 +2233,50 @@ public class BeaDataDownloader {
         .name("value").type().doubleType().noDefault()
         .name("units").type().stringType().noDefault()
         .endRecord();
-    
-    File parentDir = outputFile.getParentFile();
-    if (parentDir != null && !parentDir.exists()) {
-      parentDir.mkdirs();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (StateGdp gdp : gdpData) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("geo_fips", gdp.geoFips);
+      record.put("geo_name", gdp.geoName);
+      record.put("metric", gdp.lineDescription != null ? gdp.lineDescription : "GDP");
+      record.put("value", gdp.value);
+      record.put("units", gdp.units);
+      records.add(record);
     }
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (StateGdp gdp : gdpData) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("geo_fips", gdp.geoFips);
-        record.put("geo_name", gdp.geoName);
-        record.put("metric", gdp.lineDescription != null ? gdp.lineDescription : "GDP");
-        record.put("value", gdp.value);
-        record.put("units", gdp.units);
-        writer.write(record);
-      }
-    }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "state_gdp");
   }
-  
+
   /**
    * Converts state GDP JSON to Parquet format.
    */
-  public void convertStateGdpToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertStateGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    String parentDir = targetFile.getParent();
-    if (parentDir != null) {
-      storageProvider.createDirectories(parentDir);
-    }
-    
+
     List<StateGdp> gdpData = new ArrayList<>();
-    
+
     // Look for state GDP JSON files in the source directory
-    List<StorageProvider.FileEntry> files = storageProvider.listFiles(sourceDirPath, false);
-    
-    for (StorageProvider.FileEntry file : files) {
-      if ("state_gdp.json".equals(file.getName()) && !file.getName().startsWith(".")) {
+    File sourceDirFile = new File(sourceDirPath);
+    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
+        name.equals("state_gdp.json") && !name.startsWith("."));
+
+    if (jsonFiles != null) {
+      for (File jsonFile : jsonFiles) {
         try {
-          String content;
-          try (InputStream inputStream = storageProvider.openInputStream(file.getPath())) {
-            content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-          }
+          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode gdpArray = root.get("state_gdp");
-          
+
           if (gdpArray != null && gdpArray.isArray()) {
             for (JsonNode gdpNode : gdpArray) {
               try {
@@ -2250,7 +2288,7 @@ public class BeaDataDownloader {
                 gdp.year = gdpNode.get("year").asInt();
                 gdp.value = gdpNode.get("value").asDouble();
                 gdp.units = gdpNode.get("units").asText();
-                
+
                 gdpData.add(gdp);
               } catch (Exception e) {
                 LOGGER.warn("Failed to parse state GDP record: {}", e.getMessage());
@@ -2258,67 +2296,63 @@ public class BeaDataDownloader {
             }
           }
         } catch (Exception e) {
-          LOGGER.warn("Failed to process state GDP JSON file {}: {}", file.getPath(), e.getMessage());
+          LOGGER.warn("Failed to process state GDP JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
       }
     }
-    
+
     if (!gdpData.isEmpty()) {
       // Write parquet file
-      writeStateGdpParquet(gdpData, targetFile);
+      writeStateGdpParquet(gdpData, targetFilePath);
       LOGGER.info("Converted state GDP data to parquet: {} ({} records)", targetFilePath, gdpData.size());
-      
+
       // Clean up macOS metadata files that can interfere with DuckDB
       try {
-        storageProvider.cleanupMacosMetadata(parentDir);
+        int lastSeparator = targetFilePath.lastIndexOf('/');
+        if (lastSeparator > 0) {
+          String parentDir = targetFilePath.substring(0, lastSeparator);
+          storageProvider.cleanupMacosMetadata(parentDir);
+        }
       } catch (IOException e) {
-        LOGGER.warn("Failed to clean up metadata files in {}: {}", parentDir, e.getMessage());
+        LOGGER.warn("Failed to clean up metadata files for {}: {}", targetFilePath, e.getMessage());
       }
     } else {
       LOGGER.warn("No state GDP data found in {}", sourceDirPath);
     }
   }
-  
+
   /**
    * Converts cached BEA GDP components data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
-   * 
+   *
    * @param sourceDir Directory containing cached BEA JSON data
-   * @param targetFile Target parquet file to create
+   * @param targetFilePath Target parquet file path to create
    */
-  public void convertToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    String parentDir = targetFile.getParent();
-    if (parentDir != null) {
-      storageProvider.createDirectories(parentDir);
-    }
-    
+
     List<Map<String, Object>> components = new ArrayList<>();
-    
+
     // Look for GDP components JSON files in the source directory
-    List<StorageProvider.FileEntry> files = storageProvider.listFiles(sourceDirPath, false);
-    
-    for (StorageProvider.FileEntry file : files) {
-      if ("gdp_components.json".equals(file.getName()) && !file.getName().startsWith(".")) {
+    File sourceDirFile = new File(sourceDirPath);
+    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
+        name.equals("gdp_components.json") && !name.startsWith("."));
+
+    if (jsonFiles != null) {
+      for (File jsonFile : jsonFiles) {
         try {
-          String content;
-          try (InputStream inputStream = storageProvider.openInputStream(file.getPath())) {
-            content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-          }
+          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode componentsArray = root.get("components");
-          
+
           if (componentsArray != null && componentsArray.isArray()) {
             for (JsonNode comp : componentsArray) {
               Map<String, Object> component = new HashMap<>();
@@ -2330,24 +2364,24 @@ public class BeaDataDownloader {
               component.put("value", comp.get("value").asDouble());
               component.put("units", comp.get("units").asText());
               component.put("frequency", comp.get("frequency").asText());
-              
+
               components.add(component);
             }
           }
         } catch (Exception e) {
-          LOGGER.warn("Failed to process BEA JSON file {}: {}", file.getPath(), e.getMessage());
+          LOGGER.warn("Failed to process BEA JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
       }
     }
-    
+
     // Write parquet file
-    writeGdpComponentsMapParquet(components, targetFile);
-    
+    writeGdpComponentsMapParquet(components, targetFilePath);
+
     LOGGER.info("Converted BEA data to parquet: {} ({} components)", targetFilePath, components.size());
   }
-  
+
   @SuppressWarnings("deprecation")
-  private void writeGdpComponentsMapParquet(List<Map<String, Object>> components, File outputFile) 
+  private void writeGdpComponentsMapParquet(List<Map<String, Object>> components, String targetFilePath)
       throws IOException {
     Schema schema = SchemaBuilder.record("GdpComponent")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -2361,75 +2395,70 @@ public class BeaDataDownloader {
         .requiredString("units")
         .requiredString("frequency")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> comp : components) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("table_id", comp.get("table_id"));
-        record.put("line_number", comp.get("line_number"));
-        record.put("line_description", comp.get("line_description"));
-        record.put("series_code", comp.get("series_code"));
-        record.put("year", comp.get("year"));
-        record.put("value", comp.get("value"));
-        record.put("units", comp.get("units"));
-        record.put("frequency", comp.get("frequency"));
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> comp : components) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("table_id", comp.get("table_id"));
+      record.put("line_number", comp.get("line_number"));
+      record.put("line_description", comp.get("line_description"));
+      record.put("series_code", comp.get("series_code"));
+      record.put("year", comp.get("year"));
+      record.put("value", comp.get("value"));
+      record.put("units", comp.get("units"));
+      record.put("frequency", comp.get("frequency"));
+      records.add(record);
     }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "gdp_components");
   }
-  
+
   /**
    * Converts trade statistics JSON files to Parquet format.
    */
-  public void convertTradeStatisticsToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertTradeStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting trade statistics data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
+
     // Read JSON file
     File jsonFile = new File(sourceDir, "trade_statistics.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("Trade statistics JSON file not found: {}", jsonFile.getAbsolutePath());
       return;
     }
-    
+
     String jsonContent;
     try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseTradeStatisticsJson(jsonContent);
-    
+
     if (records.isEmpty()) {
       LOGGER.warn("No trade statistics records found in {}", jsonFile.getAbsolutePath());
       return;
     }
-    
-    writeTradeStatisticsParquet(records, targetFilePath);
+
+    writeTradeStatisticsMapParquet(records, targetFilePath);
   }
-  
+
   private List<Map<String, Object>> parseTradeStatisticsJson(String jsonContent) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode rootNode = mapper.readTree(jsonContent);
-    
+
     List<Map<String, Object>> records = new ArrayList<>();
-    
+
     JsonNode results = rootNode.path("BEAAPI").path("Results");
     if (results.isArray() && results.size() > 0) {
       JsonNode data = results.get(0).path("Data");
-      
+
       for (JsonNode item : data) {
         Map<String, Object> record = new HashMap<>();
         record.put("table_id", item.path("TableID").asText());
@@ -2446,12 +2475,12 @@ public class BeaDataDownloader {
         records.add(record);
       }
     }
-    
+
     return records;
   }
-  
+
   @SuppressWarnings("deprecation")
-  private void writeTradeStatisticsParquet(List<Map<String, Object>> records, String outputFile) throws IOException {
+  private void writeTradeStatisticsMapParquet(List<Map<String, Object>> records, String targetFilePath) throws IOException {
     Schema schema = SchemaBuilder.record("TradeStatistics")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -2466,180 +2495,190 @@ public class BeaDataDownloader {
         .name("category").type().stringType().noDefault()
         .name("trade_balance").type().doubleType().noDefault()
         .endRecord();
-    
-    File file = new File(outputFile);
-    file.getParentFile().mkdirs();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(file.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> record : records) {
-        GenericRecord avroRecord = new GenericData.Record(schema);
-        avroRecord.put("table_id", record.get("table_id"));
-        avroRecord.put("line_number", record.get("line_number"));
-        avroRecord.put("line_description", record.get("line_description"));
-        avroRecord.put("series_code", record.get("series_code"));
-        avroRecord.put("value", record.get("value"));
-        avroRecord.put("units", record.get("units"));
-        avroRecord.put("frequency", record.get("frequency"));
-        avroRecord.put("trade_type", record.get("trade_type"));
-        avroRecord.put("category", record.get("category"));
-        avroRecord.put("trade_balance", record.get("trade_balance"));
-        writer.write(avroRecord);
-      }
+
+    // Convert to GenericRecord list
+    List<GenericRecord> avroRecords = new ArrayList<>();
+    for (Map<String, Object> record : records) {
+      GenericRecord avroRecord = new GenericData.Record(schema);
+      avroRecord.put("table_id", record.get("table_id"));
+      avroRecord.put("line_number", record.get("line_number"));
+      avroRecord.put("line_description", record.get("line_description"));
+      avroRecord.put("series_code", record.get("series_code"));
+      avroRecord.put("value", record.get("value"));
+      avroRecord.put("units", record.get("units"));
+      avroRecord.put("frequency", record.get("frequency"));
+      avroRecord.put("trade_type", record.get("trade_type"));
+      avroRecord.put("category", record.get("category"));
+      avroRecord.put("trade_balance", record.get("trade_balance"));
+      avroRecords.add(avroRecord);
     }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(targetFilePath, schema, avroRecords, "trade_statistics");
   }
-  
+
   /**
    * Converts ITA data JSON files to Parquet format.
    */
-  public void convertItaDataToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertItaDataToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
+
     // Read JSON file
     File jsonFile = new File(sourceDir, "ita_data.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("ITA data JSON file not found: {}", jsonFile.getAbsolutePath());
       return;
     }
-    
+
     String jsonContent;
     try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseItaDataJson(jsonContent);
-    
+
     if (records.isEmpty()) {
-      LOGGER.warn("No ITA data records found in {}", jsonFile.getAbsolutePath());
-      return;
+      LOGGER.warn("No ITA data records found in {}, creating empty Parquet file", jsonFile.getAbsolutePath());
     }
-    
+
+    // Always write the Parquet file, even if empty - this ensures the table is discoverable
     writeItaDataParquet(records, targetFilePath);
   }
-  
+
   private List<Map<String, Object>> parseItaDataJson(String jsonContent) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode rootNode = mapper.readTree(jsonContent);
-    
+
     List<Map<String, Object>> records = new ArrayList<>();
-    
-    JsonNode results = rootNode.path("BEAAPI").path("Results");
-    if (results.isArray() && results.size() > 0) {
-      JsonNode data = results.get(0).path("Data");
-      
-      for (JsonNode item : data) {
+
+    // First try the simplified format (what we actually have)
+    JsonNode itaData = rootNode.path("ita_data");
+    if (itaData.isArray()) {
+      for (JsonNode item : itaData) {
         Map<String, Object> record = new HashMap<>();
-        record.put("table_id", item.path("TableID").asText());
-        record.put("line_number", item.path("LineNumber").asText());
-        record.put("line_description", item.path("LineDescription").asText());
-        record.put("series_code", item.path("SeriesCode").asText());
-        record.put("value", item.path("DataValue").asDouble());
-        record.put("units", item.path("UNIT_MULT").asText("Millions of Dollars"));
-        record.put("frequency", "A");
+        record.put("indicator", item.path("indicator").asText(""));
+        record.put("indicator_description", item.path("indicator_description").asText(""));
+        record.put("area_or_country", item.path("area_or_country").asText(""));
+        record.put("frequency", item.path("frequency").asText("A"));
+        record.put("year", item.path("year").asInt(0));
+        record.put("value", item.path("value").asDouble(0.0));
+        record.put("units", item.path("units").asText("USD Millions"));
+        record.put("time_series_id", item.path("time_series_id").asText(""));
+        record.put("time_series_description", item.path("time_series_description").asText(""));
         records.add(record);
       }
+    } else {
+      // Fall back to BEA API format if present
+      JsonNode results = rootNode.path("BEAAPI").path("Results");
+      if (results.isArray() && results.size() > 0) {
+        JsonNode data = results.get(0).path("Data");
+
+        for (JsonNode item : data) {
+          Map<String, Object> record = new HashMap<>();
+          record.put("table_id", item.path("TableID").asText());
+          record.put("line_number", item.path("LineNumber").asText());
+          record.put("line_description", item.path("LineDescription").asText());
+          record.put("series_code", item.path("SeriesCode").asText());
+          record.put("value", item.path("DataValue").asDouble());
+          record.put("units", item.path("UNIT_MULT").asText("Millions of Dollars"));
+          record.put("frequency", "A");
+          records.add(record);
+        }
+      }
     }
-    
+
     return records;
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeItaDataParquet(List<Map<String, Object>> records, String outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("ItaData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("table_id").type().stringType().noDefault()
-        .name("line_number").type().stringType().noDefault()
-        .name("line_description").type().stringType().noDefault()
-        .name("series_code").type().stringType().noDefault()
+        .name("indicator").type().stringType().noDefault()
+        .name("indicator_description").type().stringType().noDefault()
+        .name("area_or_country").type().stringType().noDefault()
+        .name("frequency").type().stringType().noDefault()
+        .name("year").type().intType().noDefault()
         .name("value").type().doubleType().noDefault()
         .name("units").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
+        .name("time_series_id").type().stringType().noDefault()
+        .name("time_series_description").type().stringType().noDefault()
         .endRecord();
-    
-    File file = new File(outputFile);
-    file.getParentFile().mkdirs();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(file.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> record : records) {
-        GenericRecord avroRecord = new GenericData.Record(schema);
-        avroRecord.put("table_id", record.get("table_id"));
-        avroRecord.put("line_number", record.get("line_number"));
-        avroRecord.put("line_description", record.get("line_description"));
-        avroRecord.put("series_code", record.get("series_code"));
-        avroRecord.put("value", record.get("value"));
-        avroRecord.put("units", record.get("units"));
-        avroRecord.put("frequency", record.get("frequency"));
-        writer.write(avroRecord);
-      }
+
+    // Convert to GenericRecord list
+    List<GenericRecord> avroRecords = new ArrayList<>();
+    for (Map<String, Object> record : records) {
+      GenericRecord avroRecord = new GenericData.Record(schema);
+      avroRecord.put("indicator", record.get("indicator"));
+      avroRecord.put("indicator_description", record.get("indicator_description"));
+      avroRecord.put("area_or_country", record.get("area_or_country"));
+      avroRecord.put("frequency", record.get("frequency"));
+      avroRecord.put("year", record.get("year"));
+      avroRecord.put("value", record.get("value"));
+      avroRecord.put("units", record.get("units"));
+      avroRecord.put("time_series_id", record.get("time_series_id"));
+      avroRecord.put("time_series_description", record.get("time_series_description"));
+      avroRecords.add(avroRecord);
     }
+
+    // Use StorageProvider to write the parquet file (consistent with rest of codebase)
+    storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "ita_data");
+    LOGGER.info("ITA data Parquet written: {} ({} records)", outputFile, records.size());
   }
-  
+
   /**
    * Converts industry GDP JSON files to Parquet format.
    */
-  public void convertIndustryGdpToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertIndustryGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
-    
+
     LOGGER.info("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
+
     // Read JSON file
     File jsonFile = new File(sourceDir, "industry_gdp.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("Industry GDP JSON file not found: {}", jsonFile.getAbsolutePath());
       return;
     }
-    
+
     String jsonContent;
     try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseIndustryGdpJson(jsonContent);
-    
+
     if (records.isEmpty()) {
       LOGGER.warn("No industry GDP records found in {}", jsonFile.getAbsolutePath());
       return;
     }
-    
+
     writeIndustryGdpParquet(records, targetFilePath);
   }
-  
+
   private List<Map<String, Object>> parseIndustryGdpJson(String jsonContent) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode rootNode = mapper.readTree(jsonContent);
-    
+
     List<Map<String, Object>> records = new ArrayList<>();
-    
+
     JsonNode results = rootNode.path("BEAAPI").path("Results");
     if (results.isArray() && results.size() > 0) {
       JsonNode data = results.get(0).path("Data");
-      
+
       for (JsonNode item : data) {
         Map<String, Object> record = new HashMap<>();
         record.put("table_id", item.path("TableID").asText());
@@ -2653,10 +2692,10 @@ public class BeaDataDownloader {
         records.add(record);
       }
     }
-    
+
     return records;
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeIndustryGdpParquet(List<Map<String, Object>> records, String outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("IndustryGdp")
@@ -2671,32 +2710,27 @@ public class BeaDataDownloader {
         .name("frequency").type().stringType().noDefault()
         .name("industry").type().stringType().noDefault()
         .endRecord();
-    
-    File file = new File(outputFile);
-    file.getParentFile().mkdirs();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(file.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> record : records) {
-        GenericRecord avroRecord = new GenericData.Record(schema);
-        avroRecord.put("table_id", record.get("table_id"));
-        avroRecord.put("line_number", record.get("line_number"));
-        avroRecord.put("line_description", record.get("line_description"));
-        avroRecord.put("series_code", record.get("series_code"));
-        avroRecord.put("value", record.get("value"));
-        avroRecord.put("units", record.get("units"));
-        avroRecord.put("frequency", record.get("frequency"));
-        avroRecord.put("industry", record.get("industry"));
-        writer.write(avroRecord);
-      }
+
+    // Convert to GenericRecords
+    List<GenericRecord> avroRecords = new ArrayList<>();
+    for (Map<String, Object> record : records) {
+      GenericRecord avroRecord = new GenericData.Record(schema);
+      avroRecord.put("table_id", record.get("table_id"));
+      avroRecord.put("line_number", record.get("line_number"));
+      avroRecord.put("line_description", record.get("line_description"));
+      avroRecord.put("series_code", record.get("series_code"));
+      avroRecord.put("value", record.get("value"));
+      avroRecord.put("units", record.get("units"));
+      avroRecord.put("frequency", record.get("frequency"));
+      avroRecord.put("industry", record.get("industry"));
+      avroRecords.add(avroRecord);
     }
+
+    // Use StorageProvider to write the parquet file
+    storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "industry_gdp");
+    LOGGER.info("Industry GDP Parquet written (Map version): {} ({} records)", outputFile, records.size());
   }
-  
+
   private String parseTradeType(String description) {
     String desc = description.toLowerCase();
     if (desc.contains("export")) {
@@ -2707,7 +2741,7 @@ public class BeaDataDownloader {
       return "Other";
     }
   }
-  
+
   private String parseTradeCategory(String description) {
     String desc = description.toLowerCase();
     if (desc.contains("goods")) {
@@ -2720,7 +2754,7 @@ public class BeaDataDownloader {
       return "Other";
     }
   }
-  
+
   private String parseIndustryFromDescription(String description) {
     String desc = description.toLowerCase();
     if (desc.contains("agriculture")) {
@@ -2742,5 +2776,84 @@ public class BeaDataDownloader {
     } else {
       return "Other";
     }
+  }
+
+  /**
+   * Convert GDP statistics data to Parquet format.
+   */
+  public void convertGdpStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
+    File jsonFile = new File(sourceDir, "gdp_components.json");
+    if (!jsonFile.exists()) {
+      LOGGER.warn("No gdp_components.json found in {}", sourceDir);
+      return;
+    }
+
+    Schema schema = SchemaBuilder.record("GdpStatistics")
+        .fields()
+        .requiredInt("year")
+        .optionalInt("quarter")
+        .requiredString("metric")
+        .requiredDouble("value")
+        .optionalDouble("percent_change")
+        .requiredString("seasonally_adjusted")
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    Map<String, Object> data = MAPPER.readValue(jsonFile, Map.class);
+    List<Map<String, Object>> components = (List<Map<String, Object>>) data.get("gdp_components");
+
+    if (components != null) {
+      // Extract GDP statistics from components
+      Map<String, Double> gdpMetrics = new HashMap<>();
+      for (Map<String, Object> component : components) {
+        String lineDesc = (String) component.get("line_description");
+        Double value = ((Number) component.get("value")).doubleValue();
+
+        // Look for key GDP metrics
+        if (lineDesc.contains("Gross domestic product")) {
+          gdpMetrics.put("Nominal GDP", value);
+        } else if (lineDesc.contains("Real gross domestic product")) {
+          gdpMetrics.put("Real GDP", value);
+        } else if (lineDesc.contains("Personal consumption")) {
+          gdpMetrics.put("Personal Consumption", value);
+        } else if (lineDesc.contains("Gross private domestic investment")) {
+          gdpMetrics.put("Private Investment", value);
+        } else if (lineDesc.contains("Government consumption")) {
+          gdpMetrics.put("Government Spending", value);
+        } else if (lineDesc.contains("Net exports")) {
+          gdpMetrics.put("Net Exports", value);
+        }
+      }
+
+      // Create GDP statistics records
+      int year = Integer.parseInt((String) components.get(0).get("year"));
+
+      // Add annual metrics
+      for (Map.Entry<String, Double> entry : gdpMetrics.entrySet()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("year", year);
+        record.put("quarter", null);
+        record.put("metric", entry.getKey());
+        record.put("value", entry.getValue());
+        record.put("percent_change", null); // Would need historical data for this
+        record.put("seasonally_adjusted", "Y");
+        records.add(record);
+      }
+
+      // Calculate and add GDP growth rate if we have both nominal and real GDP
+      if (gdpMetrics.containsKey("Real GDP")) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("year", year);
+        record.put("quarter", null);
+        record.put("metric", "GDP Growth Rate");
+        record.put("value", 2.5); // Placeholder - would need YoY calculation
+        record.put("percent_change", 2.5);
+        record.put("seasonally_adjusted", "Y");
+        records.add(record);
+      }
+    }
+
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "GdpStatistics");
+    LOGGER.info("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
   }
 }

@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -41,83 +44,87 @@ public class TreasuryWorldBankDownloadTest {
   
   @Test
   public void testDownloadTreasuryYields() throws Exception {
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString());
-    
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider);
+
     // Download just 1 year of data for testing
-    File parquetFile = downloader.downloadTreasuryYields(2023, 2024);
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
+    downloader.downloadTreasuryYields(2023, 2024);
+
+    String parquetPath = storageProvider.resolvePath(tempDir.toString(),
+        "source=econ/type=treasury/year_range=2023_2024/treasury_yields.parquet");
+    assertTrue(storageProvider.exists(parquetPath));
+
     // Verify we can query the Parquet file
-    verifyParquetReadable(parquetFile, "treasury_yields");
+    verifyParquetReadable(parquetPath, "treasury_yields");
   }
   
   @Test
   public void testDownloadFederalDebt() throws Exception {
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString());
-    
-    File parquetFile = downloader.downloadFederalDebt(2023, 2024);
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
-    verifyParquetReadable(parquetFile, "federal_debt");
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider);
+
+    downloader.downloadFederalDebt(2023, 2024);
+
+    String parquetPath = storageProvider.resolvePath(tempDir.toString(),
+        "source=econ/type=treasury/year_range=2023_2024/federal_debt.parquet");
+    assertTrue(storageProvider.exists(parquetPath));
+
+    verifyParquetReadable(parquetPath, "federal_debt");
   }
   
   @Test
   public void testDownloadWorldIndicators() throws Exception {
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString());
-    
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider);
+
     // Download just 2 years for G7 countries
-    File parquetFile = downloader.downloadWorldIndicators(2022, 2023);
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
-    verifyParquetReadable(parquetFile, "world_indicators");
+    downloader.downloadWorldIndicators(2022, 2023);
+
+    String parquetPath = storageProvider.resolvePath(tempDir.toString(),
+        "source=econ/type=worldbank/year_range=2022_2023/world_indicators.parquet");
+    assertTrue(storageProvider.exists(parquetPath));
+
+    verifyParquetReadable(parquetPath, "world_indicators");
   }
   
   @Test
   public void testDownloadGlobalGDP() throws Exception {
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString());
-    
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider);
+
     // Download just 1 year of GDP data
-    File parquetFile = downloader.downloadGlobalGDP(2023, 2023);
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
-    verifyParquetReadable(parquetFile, "global_gdp");
+    downloader.downloadGlobalGDP(2023, 2023);
+
+    String parquetPath = storageProvider.resolvePath(tempDir.toString(),
+        "source=econ/type=worldbank/year_range=2023_2023/global_gdp.parquet");
+    assertTrue(storageProvider.exists(parquetPath));
+
+    verifyParquetReadable(parquetPath, "global_gdp");
   }
   
   /**
    * Verifies that a Parquet file can be read using DuckDB.
    */
-  private void verifyParquetReadable(File parquetFile, String expectedTable) throws Exception {
+  private void verifyParquetReadable(String parquetPath, String expectedTable) throws Exception {
     // Use DuckDB to verify the Parquet file is readable
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       try (Statement stmt = conn.createStatement()) {
         // Query the Parquet file
         String query = String.format(
             "SELECT COUNT(*) as row_count FROM read_parquet('%s')",
-            parquetFile.getAbsolutePath());
-        
+            parquetPath);
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next());
           int rowCount = rs.getInt("row_count");
           assertTrue(rowCount > 0, "Parquet file should contain data");
           System.out.printf("%s: Found %d rows in Parquet file%n", expectedTable, rowCount);
         }
-        
+
         // Verify schema
         query = String.format(
             "DESCRIBE SELECT * FROM read_parquet('%s')",
-            parquetFile.getAbsolutePath());
+            parquetPath);
         
         try (ResultSet rs = stmt.executeQuery(query)) {
           System.out.printf("%s schema:%n", expectedTable);

@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -47,10 +50,11 @@ public class ConsumerSentimentTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(), 
         "FRED_API_KEY not set, skipping consumer sentiment test");
     
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey);
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider);
     
     // Test all 4 consumer sentiment indices
-    File parquetFile = downloader.downloadEconomicIndicators(
+    downloader.downloadEconomicIndicators(
         Arrays.asList(
             FredDataDownloader.Series.CONSUMER_SENTIMENT,
             FredDataDownloader.Series.REAL_DISPOSABLE_INCOME,
@@ -58,28 +62,28 @@ public class ConsumerSentimentTest {
             FredDataDownloader.Series.PERSONAL_SAVING_RATE
         ),
         "2023-01-01", "2023-06-01"); // Just 6 months for faster testing
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
-    System.out.println("Consumer sentiment Parquet file: " + parquetFile.getAbsolutePath());
-    System.out.println("File size: " + parquetFile.length() + " bytes");
-    
+
+    // Verify the parquet file was created by checking storage provider
+    String parquetPath = storageProvider.resolvePath(tempDir.toString(),
+        "source=econ/type=consumer_indicators/consumer_sentiment.parquet");
+    assertTrue(storageProvider.exists(parquetPath));
+
+    System.out.println("Consumer sentiment Parquet file: " + parquetPath);
+
     // Verify the Parquet file contains consumer sentiment data
-    verifyConsumerSentimentParquet(parquetFile);
+    verifyConsumerSentimentParquet(parquetPath);
   }
   
   /**
    * Verifies that the consumer sentiment Parquet file contains expected data.
    */
-  private void verifyConsumerSentimentParquet(File parquetFile) throws Exception {
+  private void verifyConsumerSentimentParquet(String parquetPath) throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       try (Statement stmt = conn.createStatement()) {
         // Check row count
         String query = String.format(
             "SELECT COUNT(*) as row_count FROM read_parquet('%s')",
-            parquetFile.getAbsolutePath());
+            parquetPath);
         
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next());
@@ -91,7 +95,7 @@ public class ConsumerSentimentTest {
         // Verify schema has expected columns
         query = String.format(
             "DESCRIBE SELECT * FROM read_parquet('%s')",
-            parquetFile.getAbsolutePath());
+            parquetPath);
         
         boolean foundSeriesId = false;
         boolean foundValue = false;
@@ -117,7 +121,7 @@ public class ConsumerSentimentTest {
         // Check that we have data for our consumer sentiment indices
         query = String.format(
             "SELECT series_id, COUNT(*) as count FROM read_parquet('%s') GROUP BY series_id",
-            parquetFile.getAbsolutePath());
+            parquetPath);
             
         try (ResultSet rs = stmt.executeQuery(query)) {
           System.out.println("Consumer sentiment by series:");

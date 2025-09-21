@@ -1,0 +1,150 @@
+{
+  "partitionedTables": [
+    {
+      "name": "employment_statistics",
+      "pattern": "type=indicators/year=*/employment_statistics.parquet",
+      "comment": "U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments."
+    },
+    {
+      "name": "inflation_metrics",
+      "pattern": "type=indicators/year=*/inflation_metrics.parquet",
+      "comment": "Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates."
+    },
+    {
+      "name": "wage_growth",
+      "pattern": "type=indicators/year=*/wage_growth.parquet",
+      "comment": "Average hourly earnings, weekly earnings, and employment cost index by industry and occupation. Tracks wage growth trends and labor cost pressures."
+    },
+    {
+      "name": "regional_employment",
+      "pattern": "type=regional/year=*/regional_employment.parquet",
+      "comment": "State and metropolitan area employment statistics including unemployment rates, job growth, and labor force participation by geographic region."
+    },
+    {
+      "name": "treasury_yields",
+      "pattern": "type=timeseries/year=*/treasury_yields.parquet",
+      "comment": "Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API."
+    },
+    {
+      "name": "federal_debt",
+      "pattern": "type=timeseries/year=*/federal_debt.parquet",
+      "comment": "U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API."
+    },
+    {
+      "name": "world_indicators",
+      "pattern": "type=indicators/year=*/world_indicators.parquet",
+      "comment": "International economic indicators from World Bank for major economies. Includes GDP, inflation, unemployment, government debt, and population statistics. Enables comparison of U.S. economic performance with global peers."
+    },
+    {
+      "name": "fred_indicators",
+      "pattern": "type=indicators/year=*/fred_indicators.parquet",
+      "comment": "Federal Reserve Economic Data (FRED) time series including GDP, interest rates, monetary aggregates, and other key economic indicators."
+    },
+    {
+      "name": "gdp_components",
+      "pattern": "type=indicators/year=*/gdp_components.parquet",
+      "comment": "Detailed GDP components from BEA including consumption, investment, government spending, and net exports broken down by subcategories."
+    },
+    {
+      "name": "gdp_statistics",
+      "pattern": "type=indicators/year=*/gdp_statistics.parquet",
+      "comment": "Quarterly and annual GDP growth rates, nominal and real GDP values."
+    },
+    {
+      "name": "regional_income",
+      "pattern": "type=indicators/year=*/regional_income.parquet",
+      "comment": "State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state."
+    },
+    {
+      "name": "state_gdp",
+      "pattern": "type=indicators/year=*/state_gdp.parquet",
+      "comment": "State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table). Provides both total GDP and per capita real GDP by state across all NAICS industry sectors."
+    },
+    {
+      "name": "trade_statistics",
+      "pattern": "type=indicators/year=*/trade_statistics.parquet",
+      "comment": "Detailed U.S. export and import statistics from BEA NIPA Table T40205B. Comprehensive breakdown of goods and services trade by category with calculated trade balances."
+    },
+    {
+      "name": "ita_data",
+      "pattern": "type=indicators/year=*/ita_data.parquet",
+      "comment": "International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances."
+    },
+    {
+      "name": "industry_gdp",
+      "pattern": "type=indicators/year=*/industry_gdp.parquet",
+      "comment": "GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis."
+    }
+  ],
+  "constraints": {
+    "employment_statistics": {
+      "primaryKey": ["date", "series_id"],
+      "foreignKeys": [
+        {
+          "columns": ["series_id"],
+          "targetSchema": "econ",
+          "targetTable": "fred_indicators",
+          "targetColumns": ["series_id"]
+        }
+      ]
+    },
+    "inflation_metrics": {
+      "primaryKey": ["date", "index_type", "item_code", "area_code"],
+      "foreignKeys": [
+        {
+          "columns": ["area_code"],
+          "targetSchema": "econ",
+          "targetTable": "regional_employment",
+          "targetColumns": ["area_code"]
+        }
+      ]
+    },
+    "wage_growth": {
+      "primaryKey": ["date", "series_id", "industry_code", "occupation_code"]
+    },
+    "regional_employment": {
+      "primaryKey": ["date", "area_code"]
+    },
+    "treasury_yields": {
+      "primaryKey": ["date", "maturity_months"]
+    },
+    "federal_debt": {
+      "primaryKey": ["date", "debt_type"]
+    },
+    "world_indicators": {
+      "primaryKey": ["country_code", "indicator_code", "year"]
+    },
+    "fred_indicators": {
+      "primaryKey": ["series_id", "date"]
+    },
+    "gdp_components": {
+      "primaryKey": ["table_id", "line_number", "year"],
+      "foreignKeys": [
+        {
+          "columns": ["table_id"],
+          "targetSchema": "econ",
+          "targetTable": "fred_indicators",
+          "targetColumns": ["series_id"]
+        }
+      ]
+    },
+    "gdp_statistics": {
+      "primaryKey": ["year", "quarter", "metric"]
+    },
+    "regional_income": {
+      "primaryKey": ["geo_fips", "metric", "year"]
+    },
+    "state_gdp": {
+      "primaryKey": ["geo_fips", "line_code", "year"]
+    },
+    "trade_statistics": {
+      "primaryKey": ["year", "quarter", "category"]
+    },
+    "ita_data": {
+      "primaryKey": ["year", "quarter", "account_type"]
+    },
+    "industry_gdp": {
+      "primaryKey": ["industry_code", "year", "quarter"]
+    }
+  }
+}

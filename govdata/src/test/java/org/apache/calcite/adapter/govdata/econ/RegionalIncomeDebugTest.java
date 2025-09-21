@@ -91,7 +91,7 @@ public class RegionalIncomeDebugTest {
     System.out.println("Converting to parquet...");
     downloader.convertRegionalIncomeToParquet(
         new File(cacheDir, "source=econ/type=indicators/year=2023"),
-        parquetFile
+        parquetFile.getAbsolutePath()
     );
     
     assertTrue(parquetFile.exists(), "Parquet file should be created");

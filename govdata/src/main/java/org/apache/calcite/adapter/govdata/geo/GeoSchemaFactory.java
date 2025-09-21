@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-import org.apache.calcite.adapter.govdata.ParquetStorageHelper;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
@@ -87,6 +86,7 @@ import java.util.Map;
  */
 public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoSchemaFactory.class);
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
   // Store constraint metadata from model files
   private Map<String, Map<String, Object>> tableConstraints;
@@ -102,8 +102,19 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
 
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
-
-    LOGGER.info("Creating geographic data schema: {}", name);
+    // This method should not be called directly anymore
+    // GovDataSchemaFactory should call buildOperand() instead
+    throw new UnsupportedOperationException(
+        "GeoSchemaFactory.create() should not be called directly. " +
+        "Use GovDataSchemaFactory to create a unified schema.");
+  }
+  
+  /**
+   * Builds the operand configuration for GEO schema.
+   * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
+   */
+  public Map<String, Object> buildOperand(Map<String, Object> operand) {
+    LOGGER.info("Building GEO schema operand configuration");
     
     // Read environment variables at runtime (not static initialization)
     // Check both actual environment variables and system properties (for .env.test)
@@ -252,10 +263,8 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
     // Set the directory to the parquet directory with hive-partitioned structure
     mutableOperand.put("directory", geoParquetDir);
     
-    // Set execution engine to PARQUET (default)
-    if (!mutableOperand.containsKey("executionEngine")) {
-      mutableOperand.put("executionEngine", "PARQUET");
-    }
+    // Don't override execution engine - let GovDataSchemaFactory control it
+    // The parent factory will set it based on global configuration
     
     // Set casing conventions
     if (!mutableOperand.containsKey("tableNameCasing")) {
@@ -265,10 +274,19 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
       mutableOperand.put("columnNameCasing", "SMART_CASING");
     }
 
-    // Build table definitions for geo tables
-    List<Map<String, Object>> geoTables = buildGeoTableDefinitions(cacheDir, tigerYears);
+    // Load table definitions from geo-schema.json
+    List<Map<String, Object>> geoTables = loadGeoTableDefinitions();
     if (!geoTables.isEmpty()) {
+      // Update patterns with the actual parquet directory
+      for (Map<String, Object> table : geoTables) {
+        String pattern = (String) table.get("pattern");
+        if (pattern != null) {
+          // Convert relative pattern to absolute path
+          table.put("pattern", pattern);
+        }
+      }
       mutableOperand.put("partitionedTables", geoTables);
+      LOGGER.info("Built {} GEO table definitions from geo-schema.json", geoTables.size());
     }
 
     // Add automatic constraint definitions if enabled
@@ -281,18 +299,22 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
     Map<String, Map<String, Object>> geoConstraints = new HashMap<>();
 
     if (enableConstraints) {
-      // Define constraints for each geographic table
-      geoConstraints.putAll(defineGeoTableConstraints());
+      // Load constraints from geo-schema.json
+      geoConstraints.putAll(loadGeoTableConstraints());
     }
 
     // Merge with any constraints from model file
     if (tableConstraints != null) {
       geoConstraints.putAll(tableConstraints);
     }
+    
+    if (!geoConstraints.isEmpty()) {
+      mutableOperand.put("constraintMetadata", geoConstraints);
+    }
 
-    // Delegate to FileSchemaFactory to create the actual schema
-    LOGGER.info("Delegating to FileSchemaFactory for GEO schema creation");
-    return FileSchemaFactory.INSTANCE.create(parentSchema, name, mutableOperand);
+    // Return the configured operand for GovDataSchemaFactory to use
+    LOGGER.info("GEO schema operand configuration complete");
+    return mutableOperand;
   }
 
   /**
@@ -411,41 +433,103 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
    * Convert shapefiles to Parquet format.
    */
   private void convertShapefilesToParquet(File sourceCacheDir, String targetRelativeDir, List<Integer> years, String geoParquetDir) {
-    // Create a temporary FileSchema for StorageProvider access during data download
-    Map<String, Object> tempOperand = new HashMap<>();
-    tempOperand.put("directory", geoParquetDir);
-    tempOperand.put("executionEngine", "PARQUET");
-    tempOperand.put("tableNameCasing", "SMART_CASING");
-    tempOperand.put("columnNameCasing", "SMART_CASING");
-    
-    FileSchema tempSchema = (FileSchema) FileSchemaFactory.INSTANCE.create(null, "temp", tempOperand);
-    ParquetStorageHelper storageHelper = new ParquetStorageHelper(tempSchema);
-    
-    // Use the ShapefileToParquetConverter to convert downloaded shapefiles
-    ShapefileToParquetConverter converter = new ShapefileToParquetConverter(storageHelper);
-    
-    try {
-      LOGGER.info("Converting shapefiles to Parquet format from {} to {}", sourceCacheDir, targetRelativeDir);
-      converter.convertShapefilesToParquet(sourceCacheDir, targetRelativeDir);
-      LOGGER.info("Shapefile to Parquet conversion completed");
-    } catch (IOException e) {
-      LOGGER.error("Error converting shapefiles to Parquet", e);
-      // Fall back to creating placeholder files using StorageProvider
+    // Check if conversion is needed by examining what shapefiles exist vs what parquet files exist
+    File targetDir = new File(geoParquetDir, targetRelativeDir);
+    boolean needsConversion = false;
+
+    // List of expected table types that should be converted
+    String[] expectedTables = {"states", "counties", "places", "zctas", "census_tracts", "block_groups", "cbsa"};
+
+    for (String tableType : expectedTables) {
       for (int year : years) {
-        String yearRelativeDir = targetRelativeDir + "/year=" + year;
-        try {
-          // Create empty placeholder files via StorageProvider
-          storageHelper.createPlaceholderParquet(yearRelativeDir + "/states.parquet", "State");
-          storageHelper.createPlaceholderParquet(yearRelativeDir + "/counties.parquet", "County");
-          storageHelper.createPlaceholderParquet(yearRelativeDir + "/places.parquet", "Place");
-          LOGGER.info("Created Parquet placeholders for TIGER data year {}", year);
-        } catch (IOException ex) {
-          LOGGER.error("Error creating Parquet files via StorageProvider", ex);
+        // Check if shapefile exists for this table type and year
+        boolean shapefileExists = checkShapefileExists(sourceCacheDir, tableType, year);
+
+        // Check if corresponding parquet file exists
+        File parquetFile = new File(targetDir, "year=" + year + "/" + tableType + ".parquet");
+        boolean parquetExists = parquetFile.exists();
+
+        if (shapefileExists && !parquetExists) {
+          needsConversion = true;
+          LOGGER.info("Shapefile exists but parquet missing: {} for year {}", tableType, year);
         }
       }
     }
+
+    if (!needsConversion) {
+      LOGGER.info("All available shapefiles already converted to parquet in {}, skipping conversion", targetDir);
+      return;
+    }
+
+    try {
+      // Create StorageProvider for writing parquet files
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider =
+          org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(geoParquetDir);
+
+      // Use the ShapefileToParquetConverter to convert downloaded shapefiles
+      ShapefileToParquetConverter converter = new ShapefileToParquetConverter(storageProvider);
+
+      LOGGER.info("Converting shapefiles to Parquet format from {} to {}", sourceCacheDir, targetRelativeDir);
+      converter.convertShapefilesToParquet(sourceCacheDir, targetRelativeDir);
+      LOGGER.info("Shapefile to Parquet conversion completed");
+    } catch (Exception e) {
+      LOGGER.error("Error converting shapefiles to Parquet", e);
+      // Fallback handling moved outside since we can't use storageProvider here
+    }
   }
-  
+
+  /**
+   * Check if a shapefile exists for the given table type and year.
+   */
+  private boolean checkShapefileExists(File sourceCacheDir, String tableType, int year) {
+    // Map table types to their expected shapefile patterns
+    String shapefilePattern;
+    switch (tableType) {
+      case "states":
+        shapefilePattern = "year=" + year + "/states/tl_" + year + "_us_state.zip";
+        break;
+      case "counties":
+        shapefilePattern = "year=" + year + "/counties/tl_" + year + "_us_county.zip";
+        break;
+      case "places":
+        // Places are downloaded by state, check if any state has places
+        File placesDir = new File(sourceCacheDir, "year=" + year + "/places");
+        if (placesDir.exists()) {
+          File[] stateDirs = placesDir.listFiles(File::isDirectory);
+          return stateDirs != null && stateDirs.length > 0;
+        }
+        return false;
+      case "zctas":
+        shapefilePattern = "year=" + year + "/zctas/tl_" + year + "_us_zcta520.zip";
+        break;
+      case "census_tracts":
+        // Census tracts are downloaded by state, check if any state has tracts
+        File tractsDir = new File(sourceCacheDir, "year=" + year + "/census_tracts");
+        if (tractsDir.exists()) {
+          File[] stateDirs = tractsDir.listFiles(File::isDirectory);
+          return stateDirs != null && stateDirs.length > 0;
+        }
+        return false;
+      case "block_groups":
+        // Block groups are downloaded by state, check if any state has block groups
+        File blockGroupsDir = new File(sourceCacheDir, "year=" + year + "/block_groups");
+        if (blockGroupsDir.exists()) {
+          File[] stateDirs = blockGroupsDir.listFiles(File::isDirectory);
+          return stateDirs != null && stateDirs.length > 0;
+        }
+        return false;
+      case "cbsa":
+        shapefilePattern = "year=" + year + "/cbsa/tl_" + year + "_us_cbsa.zip";
+        break;
+      default:
+        return false;
+    }
+
+    // For simple single-file patterns, check if the file exists
+    File shapefileZip = new File(sourceCacheDir, shapefilePattern);
+    return shapefileZip.exists();
+  }
+
   /**
    * Convert CSV files to Parquet format.
    */
@@ -469,99 +553,51 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
   }
   
   /**
-   * Build table definitions for geographic tables.
+   * Load table definitions from geo-schema.json resource file.
    */
-  private List<Map<String, Object>> buildGeoTableDefinitions(String cacheDir, List<Integer> years) {
-    List<Map<String, Object>> tables = new ArrayList<>();
-    
-    // Add table definitions for each geographic data type
-    // These would point to the Parquet files in the hive-partitioned structure
-    
-    // Create partition configuration for geographic tables
-    Map<String, Object> geoPartitionConfig = new HashMap<>();
-    geoPartitionConfig.put("style", "hive");
-    List<Map<String, String>> columnDefs = new ArrayList<>();
-    
-    Map<String, String> sourceCol = new HashMap<>();
-    sourceCol.put("name", "source");
-    sourceCol.put("type", "VARCHAR");
-    columnDefs.add(sourceCol);
-    
-    Map<String, String> typeCol = new HashMap<>();
-    typeCol.put("name", "type");
-    typeCol.put("type", "VARCHAR");
-    columnDefs.add(typeCol);
-    
-    Map<String, String> yearCol = new HashMap<>();
-    yearCol.put("name", "year");
-    yearCol.put("type", "INTEGER");
-    columnDefs.add(yearCol);
-    
-    geoPartitionConfig.put("columnDefinitions", columnDefs);
-    
-    // States table
-    Map<String, Object> statesTable = new HashMap<>();
-    statesTable.put("name", "tiger_states");
-    statesTable.put("pattern", "source=geo/type=boundary/year=*/states.parquet");
-    statesTable.put("partitions", geoPartitionConfig);
-    tables.add(statesTable);
-    
-    // Counties table
-    Map<String, Object> countiesTable = new HashMap<>();
-    countiesTable.put("name", "tiger_counties");
-    countiesTable.put("pattern", "source=geo/type=boundary/year=*/counties.parquet");
-    countiesTable.put("partitions", geoPartitionConfig);
-    tables.add(countiesTable);
-    
-    // Places table
-    Map<String, Object> placesTable = new HashMap<>();
-    placesTable.put("name", "tiger_places");
-    placesTable.put("pattern", "source=geo/type=boundary/year=*/places.parquet");
-    placesTable.put("partitions", geoPartitionConfig);
-    tables.add(placesTable);
-    
-    // ZCTAs table
-    Map<String, Object> zctasTable = new HashMap<>();
-    zctasTable.put("name", "tiger_zctas");
-    zctasTable.put("pattern", "source=geo/type=boundary/year=*/zctas.parquet");
-    zctasTable.put("partitions", geoPartitionConfig);
-    tables.add(zctasTable);
-    
-    // CBSAs table
-    Map<String, Object> cbsaTable = new HashMap<>();
-    cbsaTable.put("name", "tiger_cbsa");
-    cbsaTable.put("pattern", "source=geo/type=boundary/year=*/cbsa.parquet");
-    cbsaTable.put("partitions", geoPartitionConfig);
-    tables.add(cbsaTable);
-    
-    // Census tracts table
-    Map<String, Object> tractsTable = new HashMap<>();
-    tractsTable.put("name", "tiger_census_tracts");
-    tractsTable.put("pattern", "source=geo/type=boundary/year=*/census_tracts.parquet");
-    tractsTable.put("partitions", geoPartitionConfig);
-    tables.add(tractsTable);
-    
-    // Block groups table
-    Map<String, Object> blockGroupsTable = new HashMap<>();
-    blockGroupsTable.put("name", "tiger_block_groups");
-    blockGroupsTable.put("pattern", "source=geo/type=boundary/year=*/block_groups.parquet");
-    blockGroupsTable.put("partitions", geoPartitionConfig);
-    tables.add(blockGroupsTable);
-    
-    // HUD ZIP-County crosswalk
-    Map<String, Object> hudZipCountyTable = new HashMap<>();
-    hudZipCountyTable.put("name", "hud_zip_county");
-    hudZipCountyTable.put("pattern", "source=geo/type=crosswalk/ZIP_COUNTY*.parquet");
-    tables.add(hudZipCountyTable);
-    
-    // Census demographics
-    Map<String, Object> censusTable = new HashMap<>();
-    censusTable.put("name", "census_demographics");
-    censusTable.put("pattern", "source=geo/type=demographic/year=*/census_demographics.parquet");
-    tables.add(censusTable);
-    
-    return tables;
+  private static List<Map<String, Object>> loadGeoTableDefinitions() {
+    try (InputStream is = GeoSchemaFactory.class.getResourceAsStream("/geo-schema.json")) {
+      if (is == null) {
+        throw new IllegalStateException("Could not find geo-schema.json resource file");
+      }
+
+      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      List<Map<String, Object>> tables = (List<Map<String, Object>>) schema.get("partitionedTables");
+      if (tables == null) {
+        throw new IllegalStateException("No 'partitionedTables' field found in geo-schema.json");
+      }
+      LOGGER.info("Loaded {} table definitions from geo-schema.json", tables.size());
+      for (Map<String, Object> table : tables) {
+        LOGGER.debug("  - Table: {} with pattern: {}", table.get("name"), table.get("pattern"));
+      }
+      return tables;
+    } catch (IOException e) {
+      throw new RuntimeException("Error loading geo-schema.json", e);
+    }
   }
+
+  /**
+   * Load constraint definitions from geo-schema.json resource file.
+   */
+  private static Map<String, Map<String, Object>> loadGeoTableConstraints() {
+    try (InputStream is = GeoSchemaFactory.class.getResourceAsStream("/geo-schema.json")) {
+      if (is == null) {
+        throw new IllegalStateException("Could not find geo-schema.json resource file");
+      }
+
+      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      Map<String, Map<String, Object>> constraints = (Map<String, Map<String, Object>>) schema.get("constraints");
+      if (constraints == null) {
+        LOGGER.info("No 'constraints' field found in geo-schema.json - using empty constraints");
+        return new HashMap<>();
+      }
+      LOGGER.info("Loaded constraints for {} tables from geo-schema.json", constraints.size());
+      return constraints;
+    } catch (IOException e) {
+      throw new RuntimeException("Error loading geo-schema.json", e);
+    }
+  }
+
 
   /**
    * Create mock GEO data files if they don't exist (for testing).
@@ -570,22 +606,17 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
   private void createMockGeoDataIfNeeded(String geoParquetDir, List<Integer> years) {
     try {
       // Create a temporary FileSchema for StorageProvider access
-      Map<String, Object> tempOperand = new HashMap<>();
-      tempOperand.put("directory", geoParquetDir);
-      tempOperand.put("executionEngine", "PARQUET");
-      tempOperand.put("tableNameCasing", "SMART_CASING");
-      tempOperand.put("columnNameCasing", "SMART_CASING");
-      
-      FileSchema tempSchema = (FileSchema) FileSchemaFactory.INSTANCE.create(null, "temp", tempOperand);
-      ParquetStorageHelper storageHelper = new ParquetStorageHelper(tempSchema);
-      
+      // Create StorageProvider for checking and writing parquet files
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider =
+          org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(geoParquetDir);
+
       // Check if any parquet files exist already
       String boundaryPath = BOUNDARY_TYPE + "/year=" + (years.isEmpty() ? 2024 : years.get(0)) + "/states.parquet";
-      boolean hasData = storageHelper.exists(boundaryPath);
-      
+      boolean hasData = storageProvider.exists(boundaryPath);
+
       if (!hasData && !years.isEmpty()) {
         LOGGER.info("Creating mock GEO data for testing");
-        createMockGeoParquetFiles(storageHelper, years.get(0));
+        createMockGeoParquetFiles(storageProvider, years.get(0));
       }
     } catch (Exception e) {
       LOGGER.warn("Failed to create mock GEO data: {}", e.getMessage());
@@ -596,12 +627,12 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
    * Create mock Parquet files for GEO tables using StorageProvider.
    */
   @SuppressWarnings("deprecation")
-  private void createMockGeoParquetFiles(ParquetStorageHelper storageHelper, int year) throws Exception {
+  private void createMockGeoParquetFiles(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, int year) throws Exception {
     // Create states mock data
     String yearDir = BOUNDARY_TYPE + "/year=" + year;
     String statesPath = yearDir + "/states.parquet";
     
-    if (!storageHelper.exists(statesPath)) {
+    if (!storageProvider.exists(statesPath)) {
       org.apache.avro.Schema statesSchema = org.apache.avro.SchemaBuilder.record("State")
           .fields()
           .name("state_fips").type().stringType().noDefault()
@@ -637,13 +668,13 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
       stateRecord.put("geometry", null);
       stateRecords.add(stateRecord);
       
-      storageHelper.writeParquetFile(statesPath, statesSchema, stateRecords);
+      storageProvider.writeAvroParquet(statesPath, statesSchema, stateRecords, "State");
       LOGGER.info("Created mock states file: {}", statesPath);
     }
     
     // Create counties mock data
     String countiesPath = yearDir + "/counties.parquet";
-    if (!storageHelper.exists(countiesPath)) {
+    if (!storageProvider.exists(countiesPath)) {
       org.apache.avro.Schema countiesSchema = org.apache.avro.SchemaBuilder.record("County")
           .fields()
           .name("county_fips").type().stringType().noDefault()
@@ -671,32 +702,32 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
       countyRecord.put("geometry", null);
       countyRecords.add(countyRecord);
       
-      storageHelper.writeParquetFile(countiesPath, countiesSchema, countyRecords);
+      storageProvider.writeAvroParquet(countiesPath, countiesSchema, countyRecords, "County");
       LOGGER.info("Created mock counties file: {}", countiesPath);
     }
     
     // Create other mock files with minimal data
-    createSimpleMockFile(storageHelper, yearDir + "/zctas.parquet", "ZCTA", 
+    createSimpleMockFile(storageProvider, yearDir + "/zctas.parquet", "ZCTA", 
         new String[]{"zcta", "geometry"}, 
         new Object[]{"94105", null});
     
-    createSimpleMockFile(storageHelper, yearDir + "/cbsa.parquet", "CBSA",
+    createSimpleMockFile(storageProvider, yearDir + "/cbsa.parquet", "CBSA",
         new String[]{"cbsa_code", "cbsa_name", "geometry"},
         new Object[]{"41860", "San Francisco-Oakland-Berkeley, CA", null});
     
-    createSimpleMockFile(storageHelper, yearDir + "/census_tracts.parquet", "Tract",
+    createSimpleMockFile(storageProvider, yearDir + "/census_tracts.parquet", "Tract",
         new String[]{"tract_code", "county_fips", "geometry"},
         new Object[]{"060014001", "06001", null});
     
-    createSimpleMockFile(storageHelper, yearDir + "/block_groups.parquet", "BlockGroup",
+    createSimpleMockFile(storageProvider, yearDir + "/block_groups.parquet", "BlockGroup",
         new String[]{"block_group_code", "tract_code", "geometry"},
         new Object[]{"060014001001", "060014001", null});
   }
   
   @SuppressWarnings("deprecation")
-  private void createSimpleMockFile(ParquetStorageHelper storageHelper, String relativePath, String recordName,
+  private void createSimpleMockFile(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, String relativePath, String recordName,
       String[] fieldNames, Object[] values) throws Exception {
-    if (!storageHelper.exists(relativePath)) {
+    if (!storageProvider.exists(relativePath)) {
       org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fields = 
           org.apache.avro.SchemaBuilder.record(recordName).fields();
       
@@ -715,145 +746,11 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
       List<org.apache.avro.generic.GenericRecord> records = new ArrayList<>();
       records.add(record);
       
-      storageHelper.writeParquetFile(relativePath, schema, records);
+      storageProvider.writeAvroParquet(relativePath, schema, records, recordName);
       LOGGER.info("Created mock file: {}", relativePath);
     }
   }
 
-  /**
-   * Define automatic constraint metadata for geographic tables.
-   */
-  private Map<String, Map<String, Object>> defineGeoTableConstraints() {
-    Map<String, Map<String, Object>> constraints = new HashMap<>();
-
-    // tiger_states table constraints
-    Map<String, Object> statesConstraints = new HashMap<>();
-    statesConstraints.put("primaryKey", Arrays.asList("state_fips"));
-    // state_code is unique and can be used for cross-schema FKs
-    statesConstraints.put("unique", Arrays.asList(Arrays.asList("state_code")));
-    constraints.put("tiger_states", statesConstraints);
-
-    // tiger_counties table constraints
-    Map<String, Object> countiesConstraints = new HashMap<>();
-    countiesConstraints.put("primaryKey", Arrays.asList("county_fips"));
-    // Foreign key to states
-    Map<String, Object> countyToStateFk = new HashMap<>();
-    countyToStateFk.put("columns", Arrays.asList("state_fips"));
-    countyToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    countyToStateFk.put("targetColumns", Arrays.asList("state_fips"));
-    countiesConstraints.put("foreignKeys", Arrays.asList(countyToStateFk));
-    constraints.put("tiger_counties", countiesConstraints);
-
-    // census_places table constraints
-    Map<String, Object> placesConstraints = new HashMap<>();
-    placesConstraints.put("primaryKey", Arrays.asList("place_code", "state_code"));
-    // Foreign key to states
-    Map<String, Object> placeToStateFk = new HashMap<>();
-    placeToStateFk.put("columns", Arrays.asList("state_code"));
-    placeToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    placeToStateFk.put("targetColumns", Arrays.asList("state_code"));
-    placesConstraints.put("foreignKeys", Arrays.asList(placeToStateFk));
-    constraints.put("census_places", placesConstraints);
-
-    // hud_zip_county table constraints
-    Map<String, Object> zipCountyConstraints = new HashMap<>();
-    zipCountyConstraints.put("primaryKey", Arrays.asList("zip"));
-    // Foreign key to counties
-    Map<String, Object> zipToCountyFk = new HashMap<>();
-    zipToCountyFk.put("columns", Arrays.asList("county_fips"));
-    zipToCountyFk.put("targetTable", Arrays.asList("tiger_counties"));
-    zipToCountyFk.put("targetColumns", Arrays.asList("county_fips"));
-    // Foreign key to states
-    Map<String, Object> zipCountyToStateFk = new HashMap<>();
-    zipCountyToStateFk.put("columns", Arrays.asList("state_fips"));
-    zipCountyToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    zipCountyToStateFk.put("targetColumns", Arrays.asList("state_fips"));
-    zipCountyConstraints.put("foreignKeys", Arrays.asList(zipToCountyFk, zipCountyToStateFk));
-    constraints.put("hud_zip_county", zipCountyConstraints);
-
-    // hud_zip_tract table constraints
-    Map<String, Object> zipTractConstraints = new HashMap<>();
-    zipTractConstraints.put("primaryKey", Arrays.asList("zip", "tract"));
-    // Foreign key to counties
-    Map<String, Object> tractToCountyFk = new HashMap<>();
-    tractToCountyFk.put("columns", Arrays.asList("county_fips"));
-    tractToCountyFk.put("targetTable", Arrays.asList("tiger_counties"));
-    tractToCountyFk.put("targetColumns", Arrays.asList("county_fips"));
-    // Foreign key to states
-    Map<String, Object> zipTractToStateFk = new HashMap<>();
-    zipTractToStateFk.put("columns", Arrays.asList("state_fips"));
-    zipTractToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    zipTractToStateFk.put("targetColumns", Arrays.asList("state_fips"));
-    zipTractConstraints.put("foreignKeys", Arrays.asList(tractToCountyFk, zipTractToStateFk));
-    constraints.put("hud_zip_tract", zipTractConstraints);
-
-    // hud_zip_cbsa table constraints
-    Map<String, Object> zipCbsaConstraints = new HashMap<>();
-    zipCbsaConstraints.put("primaryKey", Arrays.asList("zip", "cbsa_code"));
-    // Foreign key to states
-    Map<String, Object> zipCbsaToStateFk = new HashMap<>();
-    zipCbsaToStateFk.put("columns", Arrays.asList("state_fips"));
-    zipCbsaToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    zipCbsaToStateFk.put("targetColumns", Arrays.asList("state_fips"));
-    zipCbsaConstraints.put("foreignKeys", Arrays.asList(zipCbsaToStateFk));
-    constraints.put("hud_zip_cbsa", zipCbsaConstraints);
-
-    // tiger_zctas table constraints
-    Map<String, Object> zctasConstraints = new HashMap<>();
-    zctasConstraints.put("primaryKey", Arrays.asList("zcta5"));
-    constraints.put("tiger_zctas", zctasConstraints);
-
-    // tiger_census_tracts table constraints
-    Map<String, Object> tractsConstraints = new HashMap<>();
-    tractsConstraints.put("primaryKey", Arrays.asList("tract_geoid"));
-    // Foreign key to counties
-    Map<String, Object> tractToCountyFk2 = new HashMap<>();
-    tractToCountyFk2.put("columns", Arrays.asList("county_fips"));
-    tractToCountyFk2.put("targetTable", Arrays.asList("tiger_counties"));
-    tractToCountyFk2.put("targetColumns", Arrays.asList("county_fips"));
-    tractsConstraints.put("foreignKeys", Arrays.asList(tractToCountyFk2));
-    constraints.put("tiger_census_tracts", tractsConstraints);
-
-    // tiger_block_groups table constraints
-    Map<String, Object> blockGroupsConstraints = new HashMap<>();
-    blockGroupsConstraints.put("primaryKey", Arrays.asList("bg_geoid"));
-    // Foreign key to census tracts via tract portion of geoid
-    Map<String, Object> bgToTractFk = new HashMap<>();
-    bgToTractFk.put("columns", Arrays.asList("tract_code"));
-    bgToTractFk.put("targetTable", Arrays.asList("tiger_census_tracts"));
-    bgToTractFk.put("targetColumns", Arrays.asList("tract_code"));
-    blockGroupsConstraints.put("foreignKeys", Arrays.asList(bgToTractFk));
-    constraints.put("tiger_block_groups", blockGroupsConstraints);
-
-    // tiger_cbsa table constraints
-    Map<String, Object> cbsaConstraints = new HashMap<>();
-    cbsaConstraints.put("primaryKey", Arrays.asList("cbsa_code"));
-    constraints.put("tiger_cbsa", cbsaConstraints);
-
-    // hud_zip_cbsa_div table constraints
-    Map<String, Object> zipCbsaDivConstraints = new HashMap<>();
-    zipCbsaDivConstraints.put("primaryKey", Arrays.asList("zip", "cbsadiv"));
-    // Foreign key to parent CBSA
-    Map<String, Object> cbsaDivToCbsaFk = new HashMap<>();
-    cbsaDivToCbsaFk.put("columns", Arrays.asList("cbsa"));
-    cbsaDivToCbsaFk.put("targetTable", Arrays.asList("tiger_cbsa"));
-    cbsaDivToCbsaFk.put("targetColumns", Arrays.asList("cbsa_code"));
-    zipCbsaDivConstraints.put("foreignKeys", Arrays.asList(cbsaDivToCbsaFk));
-    constraints.put("hud_zip_cbsa_div", zipCbsaDivConstraints);
-
-    // hud_zip_congressional table constraints
-    Map<String, Object> zipCongressionalConstraints = new HashMap<>();
-    zipCongressionalConstraints.put("primaryKey", Arrays.asList("zip", "cd"));
-    // Foreign key to states
-    Map<String, Object> congressionalToStateFk = new HashMap<>();
-    congressionalToStateFk.put("columns", Arrays.asList("state_code"));
-    congressionalToStateFk.put("targetTable", Arrays.asList("tiger_states"));
-    congressionalToStateFk.put("targetColumns", Arrays.asList("state_code"));
-    zipCongressionalConstraints.put("foreignKeys", Arrays.asList(congressionalToStateFk));
-    constraints.put("hud_zip_congressional", zipCongressionalConstraints);
-
-    return constraints;
-  }
 
   @Override
   public boolean supportsConstraints() {
@@ -872,45 +769,45 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
 
   /**
    * Determine which census years to include based on the date range.
-   * 
+   *
    * Census data is collected every 10 years (decennial census) on years ending in 0.
    * This method will:
    * 1. Always include the most recent census prior to or on the end year
    * 2. Include any census years that fall within the start-end range
-   * 
+   *
    * @param startYear Start of the year range
    * @param endYear End of the year range
    * @return List of census years to include
    */
   private List<Integer> determineCensusYears(int startYear, int endYear) {
     List<Integer> censusYears = new ArrayList<>();
-    
+
     // Find the most recent census year at or before endYear
     int mostRecentCensus = (endYear / 10) * 10;
     if (mostRecentCensus > endYear) {
       mostRecentCensus -= 10;
     }
-    
+
     // Always include the most recent census
     if (mostRecentCensus >= 1990) {  // Census data available from 1990
       censusYears.add(mostRecentCensus);
     }
-    
+
     // Add any additional census years within the range
     for (int year = startYear; year < mostRecentCensus; year += 10) {
       int censusYear = (year / 10) * 10;
-      if (censusYear >= startYear && censusYear <= endYear && 
+      if (censusYear >= startYear && censusYear <= endYear &&
           censusYear >= 1990 && !censusYears.contains(censusYear)) {
         censusYears.add(censusYear);
       }
     }
-    
+
     // Sort the years
     censusYears.sort(Integer::compareTo);
-    
-    LOGGER.info("Census years to include for range {}-{}: {}", 
+
+    LOGGER.info("Census years to include for range {}-{}: {}",
         startYear, endYear, censusYears);
-    
+
     return censusYears;
   }
 }

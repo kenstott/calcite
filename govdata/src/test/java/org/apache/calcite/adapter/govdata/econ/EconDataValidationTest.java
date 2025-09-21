@@ -118,7 +118,7 @@ public class EconDataValidationTest {
       // List of expected tables
       String[] expectedTables = {
           "employment_statistics",
-          "inflation_metrics", 
+          "inflation_metrics",
           "wage_growth",
           "regional_employment",
           "treasury_yields",
@@ -126,7 +126,6 @@ public class EconDataValidationTest {
           "world_indicators",
           "fred_indicators",
           "gdp_components",
-          "consumer_price_index",
           "gdp_statistics"
       };
       

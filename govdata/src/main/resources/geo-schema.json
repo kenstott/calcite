@@ -1,0 +1,197 @@
+{
+  "partitionedTables": [
+    {
+      "name": "states",
+      "pattern": "type=boundary/year=*/states.parquet",
+      "comment": "U.S. state boundaries and attributes from TIGER/Line shapefiles. Includes state FIPS codes, names, areas, and geographic boundaries. Updated annually with official Census Bureau boundaries."
+    },
+    {
+      "name": "counties",
+      "pattern": "type=boundary/year=*/counties.parquet",
+      "comment": "U.S. county boundaries and attributes including FIPS codes, names, metropolitan statistical areas, and geographic boundaries. Contains all 3,000+ counties and county equivalents."
+    },
+    {
+      "name": "places",
+      "pattern": "type=boundary/year=*/places.parquet",
+      "comment": "Census designated places including cities, towns, and villages. Contains place boundaries, population classifications, and geographic identifiers for incorporated and census-designated places."
+    },
+    {
+      "name": "zctas",
+      "pattern": "type=boundary/year=*/zctas.parquet",
+      "comment": "ZIP Code Tabulation Areas (ZCTAs) approximating USPS ZIP Code delivery areas. Includes ZCTA boundaries and relationships to other geographic entities."
+    },
+    {
+      "name": "census_tracts",
+      "pattern": "type=boundary/year=*/census_tracts.parquet",
+      "comment": "Census tract boundaries - small statistical subdivisions of counties averaging 4,000 inhabitants. Key geography for demographic analysis and census data reporting."
+    },
+    {
+      "name": "block_groups",
+      "pattern": "type=boundary/year=*/block_groups.parquet",
+      "comment": "Census block groups - statistical divisions of census tracts, generally containing 600-3,000 people. Smallest geography for which census sample data is published."
+    },
+    {
+      "name": "cbsa",
+      "pattern": "type=boundary/year=*/cbsa.parquet",
+      "comment": "Core Based Statistical Areas including Metropolitan and Micropolitan Statistical Areas. Defines urban cores and surrounding counties with social and economic ties."
+    },
+    {
+      "name": "congressional_districts",
+      "pattern": "type=boundary/year=*/congressional_districts.parquet",
+      "comment": "U.S. Congressional district boundaries for the House of Representatives. Updated after each decennial census reapportionment and subsequent redistricting."
+    },
+    {
+      "name": "school_districts",
+      "pattern": "type=boundary/year=*/school_districts.parquet",
+      "comment": "Elementary, secondary, and unified school district boundaries. Includes district codes, names, and relationships to other geographic entities."
+    },
+    {
+      "name": "population_demographics",
+      "pattern": "type=demographic/year=*/population_demographics.parquet",
+      "comment": "Population counts and demographic characteristics by geography from Census and American Community Survey. Includes age, sex, race, ethnicity distributions."
+    },
+    {
+      "name": "housing_characteristics",
+      "pattern": "type=demographic/year=*/housing_characteristics.parquet",
+      "comment": "Housing unit counts, occupancy status, tenure, and structural characteristics by geography. Source: American Community Survey 5-year estimates."
+    },
+    {
+      "name": "economic_indicators",
+      "pattern": "type=demographic/year=*/economic_indicators.parquet",
+      "comment": "Income, poverty, employment, and economic characteristics by geography. Includes median household income, poverty rates, and employment statistics."
+    },
+    {
+      "name": "zip_county_crosswalk",
+      "pattern": "type=crosswalk/year=*/zip_county_crosswalk.parquet",
+      "comment": "ZIP Code to County crosswalk file mapping ZIP codes to counties with residential and business address ratios. Source: HUD USPS ZIP Code Crosswalk."
+    },
+    {
+      "name": "zip_cbsa_crosswalk",
+      "pattern": "type=crosswalk/year=*/zip_cbsa_crosswalk.parquet",
+      "comment": "ZIP Code to Core Based Statistical Area crosswalk mapping ZIP codes to metropolitan and micropolitan areas."
+    },
+    {
+      "name": "tract_zip_crosswalk",
+      "pattern": "type=crosswalk/year=*/tract_zip_crosswalk.parquet",
+      "comment": "Census tract to ZIP Code crosswalk for relating census geography to postal geography. Includes residential and business address ratios."
+    }
+  ],
+  "constraints": {
+    "states": {
+      "primaryKey": ["state_fips"],
+      "unique": [["state_code"], ["state_name"]]
+    },
+    "counties": {
+      "primaryKey": ["county_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetTable": "states",
+          "targetColumns": ["state_fips"]
+        }
+      ]
+    },
+    "places": {
+      "primaryKey": ["place_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetTable": "states",
+          "targetColumns": ["state_fips"]
+        }
+      ]
+    },
+    "census_tracts": {
+      "primaryKey": ["tract_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["county_fips"],
+          "targetTable": "counties",
+          "targetColumns": ["county_fips"]
+        }
+      ]
+    },
+    "block_groups": {
+      "primaryKey": ["block_group_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["tract_fips"],
+          "targetTable": "census_tracts",
+          "targetColumns": ["tract_fips"]
+        }
+      ]
+    },
+    "congressional_districts": {
+      "primaryKey": ["district_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetTable": "states",
+          "targetColumns": ["state_fips"]
+        }
+      ]
+    },
+    "school_districts": {
+      "primaryKey": ["district_id"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetTable": "states",
+          "targetColumns": ["state_fips"]
+        }
+      ]
+    },
+    "cbsa": {
+      "primaryKey": ["cbsa_code"],
+      "unique": [["cbsa_title"]]
+    },
+    "zctas": {
+      "primaryKey": ["zcta"]
+    },
+    "population_demographics": {
+      "primaryKey": ["geo_id", "year"],
+      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+    },
+    "housing_characteristics": {
+      "primaryKey": ["geo_id", "year"],
+      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+    },
+    "economic_indicators": {
+      "primaryKey": ["geo_id", "year"],
+      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+    },
+    "zip_county_crosswalk": {
+      "primaryKey": ["zip", "county_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["county_fips"],
+          "targetTable": "counties",
+          "targetColumns": ["county_fips"]
+        }
+      ],
+      "indexes": [["zip"], ["county_fips"]]
+    },
+    "zip_cbsa_crosswalk": {
+      "primaryKey": ["zip", "cbsa_code"],
+      "foreignKeys": [
+        {
+          "columns": ["cbsa_code"],
+          "targetTable": "cbsa",
+          "targetColumns": ["cbsa_code"]
+        }
+      ],
+      "indexes": [["zip"], ["cbsa_code"]]
+    },
+    "tract_zip_crosswalk": {
+      "primaryKey": ["tract_fips", "zip"],
+      "foreignKeys": [
+        {
+          "columns": ["tract_fips"],
+          "targetTable": "census_tracts",
+          "targetColumns": ["tract_fips"]
+        }
+      ],
+      "indexes": [["tract_fips"], ["zip"]]
+    }
+  }
+}

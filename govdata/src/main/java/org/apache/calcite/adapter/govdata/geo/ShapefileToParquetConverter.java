@@ -20,7 +20,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.calcite.adapter.govdata.ParquetStorageHelper;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -48,13 +47,13 @@ import java.util.Map;
 public class ShapefileToParquetConverter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShapefileToParquetConverter.class);
   
-  private final ParquetStorageHelper storageHelper;
-  
+  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+
   /**
-   * Constructor that requires a ParquetStorageHelper for StorageProvider-based writing.
+   * Constructor that requires a StorageProvider for writing parquet files.
    */
-  public ShapefileToParquetConverter(ParquetStorageHelper storageHelper) {
-    this.storageHelper = storageHelper;
+  public ShapefileToParquetConverter(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this.storageProvider = storageProvider;
   }
   
   /**
@@ -88,6 +87,15 @@ public class ShapefileToParquetConverter {
       
       // Convert ZCTAs shapefile
       convertZctasShapefile(yearDir, yearRelativePath, year);
+
+      // Convert census tracts shapefile
+      convertCensusTractsShapefile(yearDir, yearRelativePath, year);
+
+      // Convert block groups shapefile
+      convertBlockGroupsShapefile(yearDir, yearRelativePath, year);
+
+      // Convert CBSA shapefile
+      convertCbsaShapefile(yearDir, yearRelativePath, year);
     }
   }
   
@@ -150,7 +158,7 @@ public class ShapefileToParquetConverter {
       }
       
       // Write using StorageProvider pattern
-      storageHelper.writeParquetFile(outputRelativePath, schema, records);
+      storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       
       LOGGER.info("Created states parquet file: {} with {} records from real TIGER data", 
           outputRelativePath, statesData.size());
@@ -219,7 +227,7 @@ public class ShapefileToParquetConverter {
       }
       
       // Write using StorageProvider pattern
-      storageHelper.writeParquetFile(outputRelativePath, schema, records);
+      storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       
       LOGGER.info("Created counties parquet file: {} with {} records from real TIGER data", 
           outputRelativePath, countiesData.size());
@@ -292,7 +300,7 @@ public class ShapefileToParquetConverter {
       }
       
       // Write using StorageProvider pattern
-      storageHelper.writeParquetFile(outputRelativePath, schema, records);
+      storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       
       LOGGER.info("Created places parquet file: {} with {} records from real TIGER data", 
           outputRelativePath, allPlacesData.size());
@@ -371,7 +379,7 @@ public class ShapefileToParquetConverter {
       }
       
       // Write using StorageProvider pattern
-      storageHelper.writeParquetFile(outputRelativePath, schema, records);
+      storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       
       LOGGER.info("Created zctas parquet file: {} with {} records from real TIGER data", 
           outputRelativePath, zctasData.size());
@@ -420,9 +428,214 @@ public class ShapefileToParquetConverter {
       }
       
       // Write using StorageProvider pattern
-      storageHelper.writeParquetFile(outputRelativePath, schema, records);
+      storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       LOGGER.info("Converted {} records from CSV to Parquet", count);
     }
   }
-  
+
+  @SuppressWarnings("deprecation")
+  private void convertCensusTractsShapefile(File yearDir, String targetRelativePath, String year) {
+    try {
+      File tractsDir = new File(yearDir, "census_tracts");
+      if (!tractsDir.exists()) {
+        LOGGER.debug("No census_tracts directory found in {}", yearDir);
+        return;
+      }
+
+      // Create schema for census tracts
+      Schema schema = SchemaBuilder.record("CensusTract")
+          .fields()
+          .name("tract_fips").type().stringType().noDefault()
+          .name("state_fips").type().stringType().noDefault()
+          .name("county_fips").type().stringType().noDefault()
+          .name("tract_name").type().nullable().stringType().noDefault()
+          .name("land_area").type().nullable().doubleType().noDefault()
+          .name("water_area").type().nullable().doubleType().noDefault()
+          .name("geometry").type().nullable().stringType().noDefault()
+          .endRecord();
+
+      String outputRelativePath = targetRelativePath + "/census_tracts.parquet";
+
+      // Process census tracts for each state
+      List<Object[]> allTractsData = new ArrayList<>();
+
+      File[] stateDirs = tractsDir.listFiles(File::isDirectory);
+      if (stateDirs != null) {
+        for (File stateDir : stateDirs) {
+          String stateFips = stateDir.getName();
+          String expectedPrefix = "tl_" + year + "_" + stateFips + "_tract";
+
+          List<Object[]> stateTracts = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+            String tractFips = TigerShapefileParser.getStringAttribute(feature, "GEOID");
+            String stateFipsAttr = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
+            String countyFips = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
+            String tractName = TigerShapefileParser.getStringAttribute(feature, "NAME");
+            Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
+            Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
+
+            return new Object[]{
+                tractFips,      // tract_fips
+                stateFipsAttr,  // state_fips
+                countyFips,     // county_fips
+                tractName,      // tract_name
+                landArea,       // land_area
+                waterArea,      // water_area
+                TigerShapefileParser.getGeometryAttribute(feature) // geometry
+            };
+          });
+
+          allTractsData.addAll(stateTracts);
+        }
+      }
+
+      if (!allTractsData.isEmpty()) {
+        List<GenericRecord> records = convertToGenericRecords(schema, allTractsData);
+        storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
+        LOGGER.info("Created census_tracts parquet file: {} with {} records from real TIGER data",
+            outputRelativePath, records.size());
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error converting census_tracts shapefile", e);
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private void convertBlockGroupsShapefile(File yearDir, String targetRelativePath, String year) {
+    try {
+      File blockGroupsDir = new File(yearDir, "block_groups");
+      if (!blockGroupsDir.exists()) {
+        LOGGER.debug("No block_groups directory found in {}", yearDir);
+        return;
+      }
+
+      // Create schema for block groups
+      Schema schema = SchemaBuilder.record("BlockGroup")
+          .fields()
+          .name("block_group_fips").type().stringType().noDefault()
+          .name("state_fips").type().stringType().noDefault()
+          .name("county_fips").type().stringType().noDefault()
+          .name("tract_fips").type().stringType().noDefault()
+          .name("land_area").type().nullable().doubleType().noDefault()
+          .name("water_area").type().nullable().doubleType().noDefault()
+          .name("geometry").type().nullable().stringType().noDefault()
+          .endRecord();
+
+      String outputRelativePath = targetRelativePath + "/block_groups.parquet";
+
+      // Process block groups for each state
+      List<Object[]> allBlockGroupsData = new ArrayList<>();
+
+      File[] stateDirs = blockGroupsDir.listFiles(File::isDirectory);
+      if (stateDirs != null) {
+        for (File stateDir : stateDirs) {
+          String stateFips = stateDir.getName();
+          String expectedPrefix = "tl_" + year + "_" + stateFips + "_bg";
+
+          List<Object[]> stateBlockGroups = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+            String blockGroupFips = TigerShapefileParser.getStringAttribute(feature, "GEOID");
+            String stateFipsAttr = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
+            String countyFips = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
+            String tractFips = TigerShapefileParser.getStringAttribute(feature, "TRACTCE");
+            Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
+            Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
+
+            return new Object[]{
+                blockGroupFips, // block_group_fips
+                stateFipsAttr,  // state_fips
+                countyFips,     // county_fips
+                tractFips,      // tract_fips
+                landArea,       // land_area
+                waterArea,      // water_area
+                TigerShapefileParser.getGeometryAttribute(feature) // geometry
+            };
+          });
+
+          allBlockGroupsData.addAll(stateBlockGroups);
+        }
+      }
+
+      if (!allBlockGroupsData.isEmpty()) {
+        List<GenericRecord> records = convertToGenericRecords(schema, allBlockGroupsData);
+        storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
+        LOGGER.info("Created block_groups parquet file: {} with {} records from real TIGER data",
+            outputRelativePath, records.size());
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error converting block_groups shapefile", e);
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private void convertCbsaShapefile(File yearDir, String targetRelativePath, String year) {
+    try {
+      File cbsaDir = new File(yearDir, "cbsa");
+      if (!cbsaDir.exists()) {
+        LOGGER.debug("No cbsa directory found in {}", yearDir);
+        return;
+      }
+
+      // Create schema for CBSA (Core Based Statistical Areas)
+      Schema schema = SchemaBuilder.record("CBSA")
+          .fields()
+          .name("cbsa_fips").type().stringType().noDefault()
+          .name("cbsa_name").type().nullable().stringType().noDefault()
+          .name("metro_micro").type().nullable().stringType().noDefault()
+          .name("land_area").type().nullable().doubleType().noDefault()
+          .name("water_area").type().nullable().doubleType().noDefault()
+          .name("geometry").type().nullable().stringType().noDefault()
+          .endRecord();
+
+      String outputRelativePath = targetRelativePath + "/cbsa.parquet";
+      String expectedPrefix = "tl_" + year + "_us_cbsa";
+
+      List<Object[]> cbsaData = TigerShapefileParser.parseShapefile(cbsaDir, expectedPrefix, feature -> {
+        String cbsaFips = TigerShapefileParser.getStringAttribute(feature, "GEOID");
+        String cbsaName = TigerShapefileParser.getStringAttribute(feature, "NAME");
+        String metroMicro = TigerShapefileParser.getStringAttribute(feature, "LSAD");
+        Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
+        Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
+
+        return new Object[]{
+            cbsaFips,       // cbsa_fips
+            cbsaName,       // cbsa_name
+            metroMicro,     // metro_micro
+            landArea,       // land_area
+            waterArea,      // water_area
+            TigerShapefileParser.getGeometryAttribute(feature) // geometry
+        };
+      });
+
+      if (!cbsaData.isEmpty()) {
+        List<GenericRecord> records = convertToGenericRecords(schema, cbsaData);
+        storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
+        LOGGER.info("Created cbsa parquet file: {} with {} records from real TIGER data",
+            outputRelativePath, records.size());
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error converting cbsa shapefile", e);
+    }
+  }
+
+  /**
+   * Utility method to efficiently convert Object[] data to GenericRecord list.
+   * This avoids repetitive manual record creation and is more maintainable.
+   */
+  private List<GenericRecord> convertToGenericRecords(Schema schema, List<Object[]> dataList) {
+    List<GenericRecord> records = new ArrayList<>(dataList.size());
+
+    for (Object[] data : dataList) {
+      GenericRecord record = new GenericData.Record(schema);
+
+      // Automatically map array elements to schema fields in order
+      List<Schema.Field> fields = schema.getFields();
+      for (int i = 0; i < fields.size() && i < data.length; i++) {
+        record.put(fields.get(i).name(), data[i]);
+      }
+
+      records.add(record);
+    }
+
+    return records;
+  }
+
 }
