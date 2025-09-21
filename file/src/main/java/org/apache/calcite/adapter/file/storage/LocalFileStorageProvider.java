@@ -32,6 +32,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
+
 /**
  * Storage provider implementation for local filesystem access.
  */
@@ -258,6 +259,7 @@ public class LocalFileStorageProvider implements StorageProvider {
     // Copy the file, replacing if it exists
     Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
   }
+
 
   @Override
   public void cleanupMacosMetadata(String directoryPath) throws IOException {

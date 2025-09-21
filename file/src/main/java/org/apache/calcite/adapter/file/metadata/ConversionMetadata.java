@@ -540,15 +540,25 @@ public class ConversionMetadata {
             existingRecord.conversionType = metadata.conversionType;
           }
         }
-        // Always update parquetCacheFile if the new one contains wildcards (glob pattern)
-        // This ensures partitioned tables get the correct glob pattern instead of single-file paths
-        if (metadata.parquetCacheFile != null && metadata.parquetCacheFile.contains("*")) {
-          LOGGER.info("Updating parquetCacheFile with glob pattern: '{}' -> '{}'",
-                     existingRecord.parquetCacheFile, metadata.parquetCacheFile);
-          existingRecord.parquetCacheFile = metadata.parquetCacheFile;
-        } else if (existingRecord.parquetCacheFile == null) {
+        // Update parquetCacheFile logic: preserve exact file lists over glob patterns
+        // Only update if existing has null/glob and new has exact list, or existing is null
+        if (existingRecord.parquetCacheFile == null) {
           LOGGER.info("Setting null parquetCacheFile: null -> '{}'", metadata.parquetCacheFile);
           existingRecord.parquetCacheFile = metadata.parquetCacheFile;
+        } else if (metadata.parquetCacheFile != null &&
+                   !metadata.parquetCacheFile.contains("*") &&
+                   existingRecord.parquetCacheFile.contains("*")) {
+          // Replace glob pattern with exact file list
+          LOGGER.info("Replacing glob pattern with exact file list: '{}' -> '{}'",
+                     existingRecord.parquetCacheFile, metadata.parquetCacheFile);
+          existingRecord.parquetCacheFile = metadata.parquetCacheFile;
+        } else if (metadata.parquetCacheFile != null &&
+                   metadata.parquetCacheFile.contains("*") &&
+                   existingRecord.parquetCacheFile != null &&
+                   !existingRecord.parquetCacheFile.contains("*")) {
+          // Keep existing exact file list, don't overwrite with glob pattern
+          LOGGER.info("Preserving exact file list over glob pattern: keeping '{}', ignoring '{}'",
+                     existingRecord.parquetCacheFile, metadata.parquetCacheFile);
         }
         if (existingRecord.etag == null) {
           LOGGER.info("Setting null etag: null -> '{}'", metadata.etag);

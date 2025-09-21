@@ -150,6 +150,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           baseConfigDirectory.getAbsolutePath(), baseDirectory.getAbsolutePath());
     }
 
+    // Extract schema comment from operand
+    String comment = (String) operand.get("comment");
+
     // Schema-specific sourceDirectory operand (for reading source files)
     // Support both "directory" and "sourceDirectory" for backward compatibility
     final String directory = (String) operand.get("directory") != null
@@ -222,6 +225,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get partitioned tables configuration
     @SuppressWarnings("unchecked") List<Map<String, Object>> partitionedTables =
         (List<Map<String, Object>>) operand.get("partitionedTables");
+
+    // Get table constraints configuration
+    @SuppressWarnings("unchecked") Map<String, Map<String, Object>> operandTableConstraints =
+        (Map<String, Map<String, Object>>) operand.get("tableConstraints");
 
     // Get storage provider configuration
     String storageType = (String) operand.get("storageType");
@@ -327,6 +334,18 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
                 directoryFile != null ? directoryFile.isDirectory() : false,
                 storageType);
 
+    // Prepare constraint metadata - used for both DuckDB and regular FileSchema
+    // Support both instance field (from setTableConstraints) and operand
+    Map<String, Map<String, Object>> constraintsToPass = this.tableConstraints;
+    LOGGER.info("FileSchemaFactory: instance tableConstraints = {}",
+        this.tableConstraints != null ? this.tableConstraints.size() + " tables" : "null");
+    LOGGER.info("FileSchemaFactory: operand tableConstraints = {}",
+        operandTableConstraints != null ? operandTableConstraints.size() + " tables" : "null");
+    if (operandTableConstraints != null && !operandTableConstraints.isEmpty()) {
+      // Operand constraints take precedence
+      constraintsToPass = operandTableConstraints;
+    }
+
     // Check if we're using DuckDB engine
     boolean isDuckDB = engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.DUCKDB;
     LOGGER.info("[FileSchemaFactory] ==> DuckDB analysis for schema '{}': ", name);
@@ -360,7 +379,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, directoryFile, baseConfigDirectory, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
+
+      // Set constraint metadata on FileSchema if available
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for DuckDB", constraintsToPass.size());
+        fileSchema.setConstraintMetadata(constraintsToPass);
+      }
 
       // Force initialization to run conversions and populate the FileSchema for DuckDB
       LOGGER.info("DuckDB: About to call fileSchema.getTableMap() for table discovery");
@@ -400,16 +425,25 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, directoryFile, recursive, fileSchema);
       LOGGER.info("FileSchemaFactory: DuckDB JDBC schema created successfully");
 
-      // Register the DuckDB JDBC schema with the parent so SQL queries can find the tables
+      // Wrap the schema with constraint metadata if available
+      Schema schemaToRegister = duckdbSchema;
+      if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Wrapping DuckDB schema with constraint metadata for {} tables",
+                    constraintsToPass.size());
+        schemaToRegister = new ConstraintAwareJdbcSchema(duckdbSchema, constraintsToPass);
+      }
+
+      // Register the schema with the parent so SQL queries can find the tables
       // This is critical for Calcite's SQL validator to see the tables
       // Note: Schema uniqueness already validated at method start
-      parentSchema.add(name, duckdbSchema);
-      LOGGER.info("FileSchemaFactory: Registered DuckDB JDBC schema '{}' with parent schema for SQL validation", name);
+      parentSchema.add(name, schemaToRegister);
+      LOGGER.info("FileSchemaFactory: Registered {} schema '{}' with parent schema for SQL validation",
+                  schemaToRegister.getClass().getSimpleName(), name);
 
       // Add metadata schemas as sibling schemas
       addMetadataSchemas(parentSchema);
 
-      return duckdbSchema;
+      return schemaToRegister;
     }
 
     // Otherwise use regular FileSchema
@@ -421,15 +455,19 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     FileSchema fileSchema =
         new FileSchema(parentSchema, name, directoryFile, baseDirectory, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
-        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache);
-    
-    // Pass constraint metadata to FileSchema if available
-    if (tableConstraints != null && !tableConstraints.isEmpty()) {
-      fileSchema.setConstraintMetadata(tableConstraints);
+        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
+
+    // Pass constraint metadata to FileSchema BEFORE table discovery
+    // This ensures tables are created with constraint configuration available
+    if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
+      LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema BEFORE table discovery", constraintsToPass.size());
+      fileSchema.setConstraintMetadata(constraintsToPass);
+    } else {
+      LOGGER.info("FileSchemaFactory: No constraints to pass to FileSchema");
     }
 
-    // Force table discovery to populate the schema before creating metadata schemas
-    LOGGER.debug("FileSchemaFactory: About to call fileSchema.getTableMap() for table discovery");
+    // Force table discovery to populate the schema - tables will now be created with constraints
+    LOGGER.debug("FileSchemaFactory: About to call fileSchema.getTableMap() for table discovery (constraints already set)");
     Map<String, Table> tableMap = fileSchema.getTableMap();
     LOGGER.info("FileSchemaFactory: FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
 
