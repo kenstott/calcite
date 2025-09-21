@@ -47,6 +47,9 @@ import java.util.Map;
 
 import static org.apache.calcite.util.Static.RESOURCE;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Deviant implementation of {@link SqlValidatorScope} for the top of the scope
  * stack.
@@ -56,7 +59,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
  */
 class EmptyScope implements SqlValidatorScope {
   //~ Instance fields --------------------------------------------------------
-
+  
+  private static final Logger LOGGER = LoggerFactory.getLogger(EmptyScope.class);
   protected final SqlValidatorImpl validator;
 
   //~ Constructors -----------------------------------------------------------
@@ -93,11 +97,16 @@ class EmptyScope implements SqlValidatorScope {
 
   @Override public void resolveTable(List<String> names, SqlNameMatcher nameMatcher,
       Path path, Resolved resolved) {
+    LOGGER.info("=== EmptyScope.resolveTable ===");
+    LOGGER.info("Names to resolve: {}", names);
+    LOGGER.info("Schema paths: {}", validator.catalogReader.getSchemaPaths());
+    
     final List<Resolve> imperfectResolves = new ArrayList<>();
     final List<Resolve> resolves = ((ResolvedImpl) resolved).resolves;
 
     // Look in the default schema, then default catalog, then root schema.
     for (List<String> schemaPath : validator.catalogReader.getSchemaPaths()) {
+      LOGGER.info("Searching schema path: {}", schemaPath);
       resolve_(validator.catalogReader.getRootSchema(), names, schemaPath,
           nameMatcher, path, resolved);
       for (Resolve resolve : resolves) {
@@ -125,6 +134,10 @@ class EmptyScope implements SqlValidatorScope {
     CalciteSchema schema = rootSchema;
     SqlValidatorNamespace namespace = null;
     List<String> remainingNames = concat;
+    
+    LOGGER.info("resolve_: schemaNames={}, names={}, concat={}", schemaNames, names, concat);
+    LOGGER.info("Starting with schema: {} (available tables: {})", 
+        schema.name, schema.getTableNames());
     for (String schemaName : concat) {
       if (schema == rootSchema
           && nameMatcher.matches(schemaName, schema.name)) {
@@ -134,6 +147,7 @@ class EmptyScope implements SqlValidatorScope {
       final CalciteSchema subSchema =
           schema.getSubSchema(schemaName, nameMatcher.isCaseSensitive());
       if (subSchema != null) {
+        LOGGER.info("Found sub-schema: {} (available tables: {})", subSchema.name, subSchema.getTableNames());
         path = path.plus(null, -1, subSchema.name, StructKind.NONE);
         remainingNames = Util.skip(remainingNames);
         schema = subSchema;
@@ -148,6 +162,7 @@ class EmptyScope implements SqlValidatorScope {
                 nameMatcher.isCaseSensitive());
       }
       if (entry != null) {
+        LOGGER.info("Found table: {} in schema: {}", entry.name, schema.name);
         path = path.plus(null, -1, entry.name, StructKind.NONE);
         remainingNames = Util.skip(remainingNames);
         final Table table = entry.getTable();
@@ -164,6 +179,9 @@ class EmptyScope implements SqlValidatorScope {
         namespace = new TableNamespace(validator, table2);
         resolved.found(namespace, false, this, path, remainingNames);
         return;
+      } else {
+        LOGGER.info("Table '{}' NOT found in schema: {} (available: {})", 
+            schemaName, schema.name, schema.getTableNames());
       }
       // neither sub-schema nor table
       if (namespace != null

@@ -37,12 +37,17 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Namespace whose contents are defined by the type of an
  * {@link org.apache.calcite.sql.SqlIdentifier identifier}.
  */
 public class IdentifierNamespace extends AbstractNamespace {
   //~ Instance fields --------------------------------------------------------
+  
+  private static final Logger LOGGER = LoggerFactory.getLogger(IdentifierNamespace.class);
 
   private final SqlIdentifier id;
   private final SqlValidatorScope parentScope;
@@ -107,13 +112,32 @@ public class IdentifierNamespace extends AbstractNamespace {
   }
 
   private SqlValidatorNamespace resolveImpl(SqlIdentifier id) {
+    LOGGER.info("=== RESOLVING TABLE IDENTIFIER ===");
+    LOGGER.info("Identifier: {}", id);
+    LOGGER.info("ID names: {}", id.names);
+    
     final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
     final SqlValidatorScope.ResolvedImpl resolved =
         new SqlValidatorScope.ResolvedImpl();
     final List<String> names = SqlIdentifier.toStar(id.names);
+    
+    LOGGER.info("Names to resolve: {}", names);
+    LOGGER.info("Case sensitive: {}", nameMatcher.isCaseSensitive());
+    LOGGER.info("Parent scope: {}", parentScope.getClass().getSimpleName());
+    
     try {
       parentScope.resolveTable(names, nameMatcher,
           SqlValidatorScope.Path.EMPTY, resolved);
+      LOGGER.info("Resolved count: {}", resolved.count());
+      if (resolved.count() > 0) {
+        LOGGER.info("Resolved items:");
+        for (int i = 0; i < resolved.resolves.size(); i++) {
+          SqlValidatorScope.Resolve resolve = resolved.resolves.get(i);
+          LOGGER.info("  [{}] Path: {}, Remaining: {}, Namespace: {}", 
+              i, resolve.path.stepNames(), resolve.remainingNames, 
+              resolve.namespace.getClass().getSimpleName());
+        }
+      }
     } catch (CyclicDefinitionException e) {
       if (e.depth == 1) {
         throw validator.newValidationError(id,
@@ -134,6 +158,15 @@ public class IdentifierNamespace extends AbstractNamespace {
       // If we're case sensitive, we'll shortly try again and give an error
       // then.
       if (!nameMatcher.isCaseSensitive()) {
+        LOGGER.error("=== TABLE RESOLUTION FAILURE (Case Insensitive) ===");
+        LOGGER.error("Identifier: {}", id);
+        LOGGER.error("Names list: {}", names);
+        LOGGER.error("Resolved count: {}", resolved.count());
+        LOGGER.error("Remaining names: {}", resolve.remainingNames);
+        LOGGER.error("Path step names: {}", resolve.path.stepNames());
+        LOGGER.error("Error: Object '{}' not found within '{}'", 
+            resolve.remainingNames.get(0), 
+            SqlIdentifier.getString(resolve.path.stepNames()));
         throw validator.newValidationError(id,
             RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
                 SqlIdentifier.getString(resolve.path.stepNames())));
@@ -174,6 +207,16 @@ public class IdentifierNamespace extends AbstractNamespace {
                     SqlIdentifier.getString(prefix), next));
           }
         } else {
+          LOGGER.error("=== TABLE RESOLUTION FAILURE (Case Sensitive Liberal Match) ===");
+          LOGGER.error("Identifier: {}", id);
+          LOGGER.error("Names list: {}", names);
+          LOGGER.error("Liberal resolved count: {}", resolved.count());
+          LOGGER.error("Previous resolve was: {}", previousResolve);
+          LOGGER.error("Current resolve remaining names: {}", resolve.remainingNames);
+          LOGGER.error("Current resolve path step names: {}", resolve.path.stepNames());
+          LOGGER.error("Error: Object '{}' not found within '{}'", 
+              resolve.remainingNames.get(0), 
+              SqlIdentifier.getString(resolve.path.stepNames()));
           throw validator.newValidationError(id,
               RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
                   SqlIdentifier.getString(resolve.path.stepNames())));
