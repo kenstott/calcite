@@ -20,9 +20,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,7 +41,9 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Downloads and converts U.S. Treasury data to Parquet format.
@@ -60,14 +59,45 @@ public class TreasuryDataDownloader {
   
   private final String cacheDir;
   private final HttpClient httpClient;
-  
-  public TreasuryDataDownloader(String cacheDir) {
+  private final CacheManifest cacheManifest;
+  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+
+  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
+    this.storageProvider = storageProvider;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
+    this.cacheManifest = CacheManifest.load(cacheDir);
   }
   
+  /**
+   * Creates metadata map for Parquet file with table and column comments.
+   *
+   * @param tableComment The comment for the table
+   * @param columnComments Map of column names to their comments
+   * @return Map of metadata key-value pairs
+   */
+  private Map<String, String> createParquetMetadata(String tableComment,
+      Map<String, String> columnComments) {
+    Map<String, String> metadata = new HashMap<>();
+
+    // Add table-level comments
+    if (tableComment != null && !tableComment.isEmpty()) {
+      metadata.put("parquet.meta.table.comment", tableComment);
+      metadata.put("parquet.meta.comment", tableComment); // Also set generic comment
+    }
+
+    // Add column-level comments
+    if (columnComments != null && !columnComments.isEmpty()) {
+      for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+        metadata.put("parquet.meta.column." + entry.getKey() + ".comment", entry.getValue());
+      }
+    }
+
+    return metadata;
+  }
+
   /**
    * Downloads all Treasury data for the specified year range.
    */
@@ -155,7 +185,29 @@ public class TreasuryDataDownloader {
     for (int year = startYear; year <= endYear; year++) {
       Path outputDir = Paths.get(cacheDir, "source=econ", "type=timeseries", "year=" + year);
       Files.createDirectories(outputDir);
-      
+
+      // Check cache manifest first
+      Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("type", "treasury_yields");
+      cacheParams.put("year", String.valueOf(year));
+
+      File jsonFile = new File(outputDir.toFile(), "treasury_yields.json");
+
+      if (cacheManifest.isCached("treasury_yields", year, cacheParams)) {
+        LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
+        lastFile = jsonFile;
+        continue;
+      }
+
+      // Check if file exists but not in manifest - update manifest
+      if (jsonFile.exists()) {
+        LOGGER.info("Found existing treasury yields file for year {} - updating manifest", year);
+        cacheManifest.markCached("treasury_yields", year, cacheParams, jsonFile.getAbsolutePath(), 0L);
+        cacheManifest.save(cacheDir);
+        lastFile = jsonFile;
+        continue;
+      }
+
       // Fetch data from Treasury API for this year
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
@@ -178,9 +230,12 @@ public class TreasuryDataDownloader {
       }
       
       // Save raw JSON data to cache directory
-      File jsonFile = new File(outputDir.toFile(), "treasury_yields.json");
       Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
-      
+
+      // Mark as cached in manifest
+      cacheManifest.markCached("treasury_yields", year, cacheParams, jsonFile.getAbsolutePath(), response.body().length());
+      cacheManifest.save(cacheDir);
+
       LOGGER.info("Treasury yields raw data saved for year {}: {}", year, jsonFile);
       lastFile = jsonFile;
     }
@@ -206,7 +261,29 @@ public class TreasuryDataDownloader {
     for (int year = startYear; year <= endYear; year++) {
       Path outputDir = Paths.get(cacheDir, "source=econ", "type=timeseries", "year=" + year);
       Files.createDirectories(outputDir);
-      
+
+      // Check cache manifest first
+      Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("type", "federal_debt");
+      cacheParams.put("year", String.valueOf(year));
+
+      File jsonFile = new File(outputDir.toFile(), "federal_debt.json");
+
+      if (cacheManifest.isCached("federal_debt", year, cacheParams)) {
+        LOGGER.info("Found cached federal debt for year {} - skipping download", year);
+        lastFile = jsonFile;
+        continue;
+      }
+
+      // Check if file exists but not in manifest - update manifest
+      if (jsonFile.exists()) {
+        LOGGER.info("Found existing federal debt file for year {} - updating manifest", year);
+        cacheManifest.markCached("federal_debt", year, cacheParams, jsonFile.getAbsolutePath(), 0L);
+        cacheManifest.save(cacheDir);
+        lastFile = jsonFile;
+        continue;
+      }
+
       // Fetch debt to the penny data for this year
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
@@ -229,9 +306,12 @@ public class TreasuryDataDownloader {
       }
       
       // Save raw JSON data to cache directory
-      File jsonFile = new File(outputDir.toFile(), "federal_debt.json");
       Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
-      
+
+      // Mark as cached in manifest
+      cacheManifest.markCached("federal_debt", year, cacheParams, jsonFile.getAbsolutePath(), response.body().length());
+      cacheManifest.save(cacheDir);
+
       LOGGER.info("Federal debt raw data saved for year {}: {}", year, jsonFile);
       lastFile = jsonFile;
     }
@@ -278,8 +358,7 @@ public class TreasuryDataDownloader {
     }
   }
   
-  @SuppressWarnings("deprecation")
-  private void writeTreasuryYieldsParquet(List<TreasuryYield> yields, File outputFile) throws IOException {
+  private void writeTreasuryYieldsParquet(List<TreasuryYield> yields, String targetFilePath) throws IOException {
     Schema schema = SchemaBuilder.record("TreasuryYield")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -288,31 +367,24 @@ public class TreasuryDataDownloader {
         .requiredString("maturity_label")
         .requiredDouble("yield_percent")
         .requiredString("yield_type")
-        .requiredString("source")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (TreasuryYield yield : yields) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("date", yield.date);
-        record.put("maturity_months", yield.maturityMonths);
-        record.put("maturity_label", yield.maturityLabel);
-        record.put("yield_percent", yield.avgInterestRate);
-        record.put("yield_type", yield.securityType);
-        record.put("source", "Treasury Direct");
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (TreasuryYield yield : yields) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("date", yield.date);
+      record.put("maturity_months", yield.maturityMonths);
+      record.put("maturity_label", yield.maturityLabel);
+      record.put("yield_percent", yield.avgInterestRate);
+      record.put("yield_type", yield.securityType);
+      records.add(record);
     }
+
+    // Write parquet file using StorageProvider's native parquet writer
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "TreasuryYield");
   }
-  
-  @SuppressWarnings("deprecation")
-  private void writeFederalDebtParquet(List<FederalDebt> debtRecords, File outputFile) throws IOException {
+
+  private void writeFederalDebtParquet(List<FederalDebt> debtRecords, String targetFilePath) throws IOException {
     Schema schema = SchemaBuilder.record("FederalDebt")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -324,28 +396,25 @@ public class TreasuryDataDownloader {
         .requiredDouble("debt_held_by_public")
         .requiredDouble("intragovernmental_holdings")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (FederalDebt debt : debtRecords) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("date", debt.date);
-        record.put("debt_type", debt.debtType);
-        record.put("amount_billions", debt.totalDebt);
-        record.put("percent_of_gdp", null); // Would need GDP data to calculate
-        record.put("holder_category", debt.holderCategory);
-        record.put("debt_held_by_public", debt.debtHeldByPublic);
-        record.put("intragovernmental_holdings", debt.intragovDebt);
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (FederalDebt debt : debtRecords) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("date", debt.date);
+      record.put("debt_type", debt.debtType);
+      record.put("amount_billions", debt.totalDebt);
+      record.put("percent_of_gdp", null); // Would need GDP data to calculate
+      record.put("holder_category", debt.holderCategory);
+      record.put("debt_held_by_public", debt.debtHeldByPublic);
+      record.put("intragovernmental_holdings", debt.intragovDebt);
+      records.add(record);
     }
+
+    // Write parquet file using StorageProvider's native parquet writer
+    storageProvider.writeAvroParquet(targetFilePath, schema, records, "FederalDebt");
   }
-  
+
+
   // Data classes
   private static class TreasuryYield {
     String date;
@@ -372,17 +441,14 @@ public class TreasuryDataDownloader {
    * @param sourceDir Directory containing cached Treasury JSON data
    * @param targetFile Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, File targetFile) throws IOException {
-    LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDir, targetFile);
-    
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDir, targetFilePath);
+
     // Skip if target file already exists
-    if (targetFile.exists()) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFile);
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    targetFile.getParentFile().mkdirs();
     
     List<TreasuryYield> yields = new ArrayList<>();
     
@@ -417,27 +483,24 @@ public class TreasuryDataDownloader {
     }
     
     // Create parquet file
-    writeTreasuryYieldsParquet(yields, targetFile);
-    LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFile, yields.size());
+    writeTreasuryYieldsParquet(yields, targetFilePath);
+    LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
   }
   
   /**
    * Converts cached federal debt data to Parquet format.
-   * 
+   *
    * @param sourceDir Directory containing cached federal debt JSON data
-   * @param targetFile Target parquet file to create
+   * @param targetFilePath Target parquet file path to create
    */
-  public void convertFederalDebtToParquet(File sourceDir, File targetFile) throws IOException {
-    LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDir, targetFile);
-    
+  public void convertFederalDebtToParquet(File sourceDir, String targetFilePath) throws IOException {
+    LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDir, targetFilePath);
+
     // Skip if target file already exists
-    if (targetFile.exists()) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFile);
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    targetFile.getParentFile().mkdirs();
     
     List<FederalDebt> debtRecords = new ArrayList<>();
     
@@ -484,7 +547,7 @@ public class TreasuryDataDownloader {
     }
     
     // Create parquet file
-    writeFederalDebtParquet(debtRecords, targetFile);
-    LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFile, debtRecords.size());
+    writeFederalDebtParquet(debtRecords, targetFilePath);
+    LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFilePath, debtRecords.size());
   }
 }

@@ -20,9 +20,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,7 +57,9 @@ public class WorldBankDataDownloader {
   
   private final String cacheDir;
   private final HttpClient httpClient;
-  
+  private final CacheManifest cacheManifest;
+  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+
   // Key economic indicators to download
   public static class Indicators {
     public static final String GDP_CURRENT_USD = "NY.GDP.MKTP.CD";  // GDP (current US$)
@@ -92,13 +91,42 @@ public class WorldBankDataDownloader {
     );
   }
   
-  public WorldBankDataDownloader(String cacheDir) {
+  public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
+    this.storageProvider = storageProvider;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
+    this.cacheManifest = CacheManifest.load(cacheDir);
   }
-  
+
+  /**
+   * Creates metadata map for Parquet file with table and column comments.
+   *
+   * @param tableComment The comment for the table
+   * @param columnComments Map of column names to their comments
+   * @return Map of metadata key-value pairs
+   */
+  private Map<String, String> createParquetMetadata(String tableComment,
+      Map<String, String> columnComments) {
+    Map<String, String> metadata = new HashMap<>();
+
+    // Add table-level comments
+    if (tableComment != null && !tableComment.isEmpty()) {
+      metadata.put("parquet.meta.table.comment", tableComment);
+      metadata.put("parquet.meta.comment", tableComment); // Also set generic comment
+    }
+
+    // Add column-level comments
+    if (columnComments != null && !columnComments.isEmpty()) {
+      for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+        metadata.put("parquet.meta.column." + entry.getKey() + ".comment", entry.getValue());
+      }
+    }
+
+    return metadata;
+  }
+
   /**
    * Gets the default start year from environment variables.
    */
@@ -275,9 +303,31 @@ public class WorldBankDataDownloader {
     Path outputDir = Paths.get(cacheDir, "source=econ", "type=world_indicators",
         String.format("year_range=%d_%d", startYear, endYear));
     Files.createDirectories(outputDir);
-    
+
+    // Check cache manifest first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "world_indicators");
+    cacheParams.put("start_year", String.valueOf(startYear));
+    cacheParams.put("end_year", String.valueOf(endYear));
+
+    String parquetFilePath = storageProvider.resolvePath(outputDir.toString(), "world_indicators.parquet");
+    File parquetFile = new File(parquetFilePath); // For return value compatibility
+
+    if (cacheManifest.isCached("world_indicators", startYear, cacheParams)) {
+      LOGGER.info("Found cached world indicators for {}-{} - skipping download", startYear, endYear);
+      return parquetFile;
+    }
+
+    // Check if file exists but not in manifest - update manifest
+    if (parquetFile.exists()) {
+      LOGGER.info("Found existing world indicators file for {}-{} - updating manifest", startYear, endYear);
+      cacheManifest.markCached("world_indicators", startYear, cacheParams, parquetFile.getAbsolutePath(), 0L);
+      cacheManifest.save(cacheDir);
+      return parquetFile;
+    }
+
     List<WorldIndicator> indicators = new ArrayList<>();
-    
+
     // Download key indicators for major economies
     List<String> indicatorCodes = Arrays.asList(
         Indicators.GDP_CURRENT_USD,
@@ -341,9 +391,12 @@ public class WorldBankDataDownloader {
     }
     
     // Convert to Parquet
-    File parquetFile = new File(outputDir.toFile(), "world_indicators.parquet");
-    writeWorldIndicatorsParquet(indicators, parquetFile);
-    
+    writeWorldIndicatorsParquet(indicators, parquetFilePath);
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("world_indicators", startYear, cacheParams, parquetFile.getAbsolutePath(), parquetFile.length());
+    cacheManifest.save(cacheDir);
+
     LOGGER.info("World indicators saved to: {} ({} records)", parquetFile, indicators.size());
     return parquetFile;
   }
@@ -364,9 +417,31 @@ public class WorldBankDataDownloader {
     Path outputDir = Paths.get(cacheDir, "source=econ", "type=global_gdp",
         String.format("year_range=%d_%d", startYear, endYear));
     Files.createDirectories(outputDir);
-    
+
+    // Check cache manifest first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "global_gdp");
+    cacheParams.put("start_year", String.valueOf(startYear));
+    cacheParams.put("end_year", String.valueOf(endYear));
+
+    String parquetFilePath = storageProvider.resolvePath(outputDir.toString(), "global_gdp.parquet");
+    File parquetFile = new File(parquetFilePath); // For return value compatibility
+
+    if (cacheManifest.isCached("global_gdp", startYear, cacheParams)) {
+      LOGGER.info("Found cached global GDP for {}-{} - skipping download", startYear, endYear);
+      return parquetFile;
+    }
+
+    // Check if file exists but not in manifest - update manifest
+    if (parquetFile.exists()) {
+      LOGGER.info("Found existing global GDP file for {}-{} - updating manifest", startYear, endYear);
+      cacheManifest.markCached("global_gdp", startYear, cacheParams, parquetFile.getAbsolutePath(), 0L);
+      cacheManifest.save(cacheDir);
+      return parquetFile;
+    }
+
     List<WorldIndicator> gdpData = new ArrayList<>();
-    
+
     // Download GDP data for all countries
     String url = String.format("%scountry/all/indicator/%s?format=json&date=%d:%d&per_page=20000",
         WORLD_BANK_API_BASE, Indicators.GDP_CURRENT_USD, startYear, endYear);
@@ -405,15 +480,17 @@ public class WorldBankDataDownloader {
     }
     
     // Convert to Parquet
-    File parquetFile = new File(outputDir.toFile(), "global_gdp.parquet");
-    writeWorldIndicatorsParquet(gdpData, parquetFile);
-    
+    writeWorldIndicatorsParquet(gdpData, parquetFilePath);
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("global_gdp", startYear, cacheParams, parquetFile.getAbsolutePath(), parquetFile.length());
+    cacheManifest.save(cacheDir);
+
     LOGGER.info("Global GDP data saved to: {} ({} records)", parquetFile, gdpData.size());
     return parquetFile;
   }
   
-  @SuppressWarnings("deprecation")
-  private void writeWorldIndicatorsParquet(List<WorldIndicator> indicators, File outputFile) throws IOException {
+  private void writeWorldIndicatorsParquet(List<WorldIndicator> indicators, String targetPath) throws IOException {
     Schema schema = SchemaBuilder.record("WorldIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -421,34 +498,29 @@ public class WorldBankDataDownloader {
         .requiredString("country_name")
         .requiredString("indicator_code")
         .requiredString("indicator_name")
-        .requiredInt("year")
         .requiredDouble("value")
         .optionalString("unit")
         .optionalString("scale")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (WorldIndicator indicator : indicators) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("country_code", indicator.countryCode);
-        record.put("country_name", indicator.countryName);
-        record.put("indicator_code", indicator.indicatorCode);
-        record.put("indicator_name", indicator.indicatorName);
-        record.put("year", indicator.year);
-        record.put("value", indicator.value);
-        record.put("unit", indicator.unit);
-        record.put("scale", indicator.scale);
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (WorldIndicator indicator : indicators) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("country_code", indicator.countryCode);
+      record.put("country_name", indicator.countryName);
+      record.put("indicator_code", indicator.indicatorCode);
+      record.put("indicator_name", indicator.indicatorName);
+      record.put("value", indicator.value);
+      record.put("unit", indicator.unit);
+      record.put("scale", indicator.scale);
+      records.add(record);
     }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
   }
-  
+
+
   // Data class
   private static class WorldIndicator {
     String countryCode;
@@ -468,17 +540,16 @@ public class WorldBankDataDownloader {
    * @param sourceDir Directory containing cached World Bank JSON data
    * @param targetFile Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, File targetFile) throws IOException {
-    LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFile);
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFilePath);
     
     // Skip if target file already exists
-    if (targetFile.exists()) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFile);
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    targetFile.getParentFile().mkdirs();
+
+    // Directories are created automatically by StorageProvider when writing files
     
     List<Map<String, Object>> indicators = new ArrayList<>();
     
@@ -515,13 +586,12 @@ public class WorldBankDataDownloader {
     }
     
     // Write parquet file
-    writeWorldIndicatorsMapParquet(indicators, targetFile);
+    writeWorldIndicatorsMapParquet(indicators, targetFilePath);
     
-    LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFile, indicators.size());
+    LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFilePath, indicators.size());
   }
   
-  @SuppressWarnings("deprecation")
-  private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, File outputFile) 
+  private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)
       throws IOException {
     Schema schema = SchemaBuilder.record("WorldIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -530,31 +600,25 @@ public class WorldBankDataDownloader {
         .requiredString("country_name")
         .requiredString("indicator_code")
         .requiredString("indicator_name")
-        .requiredInt("year")
         .requiredDouble("value")
         .optionalString("unit")
         .optionalString("scale")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> ind : indicators) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("country_code", ind.get("country_code"));
-        record.put("country_name", ind.get("country_name"));
-        record.put("indicator_code", ind.get("indicator_code"));
-        record.put("indicator_name", ind.get("indicator_name"));
-        record.put("year", ind.get("year"));
-        record.put("value", ind.get("value"));
-        record.put("unit", ind.get("unit"));
-        record.put("scale", ind.get("scale"));
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> ind : indicators) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("country_code", ind.get("country_code"));
+      record.put("country_name", ind.get("country_name"));
+      record.put("indicator_code", ind.get("indicator_code"));
+      record.put("indicator_name", ind.get("indicator_name"));
+      record.put("value", ind.get("value"));
+      record.put("unit", ind.get("unit"));
+      record.put("scale", ind.get("scale"));
+      records.add(record);
     }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
   }
 }

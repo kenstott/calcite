@@ -20,9 +20,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,11 +27,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -44,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -69,7 +67,8 @@ public class FredDataDownloader {
   private final String cacheDir;
   private final String apiKey;
   private final HttpClient httpClient;
-  private final StorageProvider storageProvider;
+  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+  private final CacheManifest cacheManifest;
   
   // Key FRED series IDs for economic indicators
   public static class Series {
@@ -167,23 +166,48 @@ public class FredDataDownloader {
       Series.PERSONAL_SAVING_RATE
   );
   
-  public FredDataDownloader(String cacheDir, String apiKey, StorageProvider storageProvider) {
+  public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
     this.apiKey = apiKey;
     this.storageProvider = storageProvider;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
+    this.cacheManifest = CacheManifest.load(cacheDir);
   }
-  
-  // Temporary compatibility constructor - creates LocalFileStorageProvider internally
-  public FredDataDownloader(String cacheDir, String apiKey) {
-    this.cacheDir = cacheDir;
-    this.apiKey = apiKey;
-    this.storageProvider = org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir);
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
+
+  /**
+   * Writes records to parquet using the StorageProvider pattern.
+   */
+  private void writeParquetFile(String targetPath, Schema schema, List<GenericRecord> records) throws IOException {
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  /**
+   * Creates metadata map for Parquet file with table and column comments.
+   *
+   * @param tableComment The comment for the table
+   * @param columnComments Map of column names to their comments
+   * @return Map of metadata key-value pairs
+   */
+  private Map<String, String> createParquetMetadata(String tableComment,
+      Map<String, String> columnComments) {
+    Map<String, String> metadata = new HashMap<>();
+
+    // Add table-level comments
+    if (tableComment != null && !tableComment.isEmpty()) {
+      metadata.put("parquet.meta.table.comment", tableComment);
+      metadata.put("parquet.meta.comment", tableComment); // Also set generic comment
+    }
+
+    // Add column-level comments
+    if (columnComments != null && !columnComments.isEmpty()) {
+      for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+        metadata.put("parquet.meta.column." + entry.getKey() + ".comment", entry.getValue());
+      }
+    }
+
+    return metadata;
   }
   
   /**
@@ -264,13 +288,26 @@ public class FredDataDownloader {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
     }
     
-    String outputDirPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
-    storageProvider.createDirectories(outputDirPath);
-    
-    // Check if data already exists
-    String jsonFilePath = storageProvider.resolvePath(outputDirPath, "fred_indicators.json");
-    if (storageProvider.exists(jsonFilePath)) {
+    String outputDirPath = "source=econ/type=indicators/year=" + year;
+    // Directories are created automatically by StorageProvider when writing files
+
+    // Check cache manifest first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "fred_indicators");
+    cacheParams.put("year", String.valueOf(year));
+
+    String jsonFilePath = outputDirPath + "/fred_indicators.json";
+
+    if (cacheManifest.isCached("fred_indicators", year, cacheParams)) {
       LOGGER.info("Found cached FRED data for year {} - skipping download", year);
+      return;
+    }
+
+    // Check if file exists but not in manifest - update manifest
+    if (storageProvider.exists(jsonFilePath)) {
+      LOGGER.info("Found existing FRED file for year {} - updating manifest", year);
+      cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, 0L);
+      cacheManifest.save(cacheDir);
       return;
     }
     
@@ -353,8 +390,15 @@ public class FredDataDownloader {
     data.put("year", year);
     
     String jsonContent = MAPPER.writeValueAsString(data);
-    storageProvider.writeFile(jsonFilePath, jsonContent.getBytes(StandardCharsets.UTF_8));
-    
+    // Save raw JSON data to local cache directory
+    File jsonFile = new File(cacheDir, jsonFilePath);
+    jsonFile.getParentFile().mkdirs();
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, jsonContent.length());
+    cacheManifest.save(cacheDir);
+
     LOGGER.info("FRED indicators saved to: {} ({} observations)", jsonFilePath, observations.size());
   }
 
@@ -377,10 +421,9 @@ public class FredDataDownloader {
     
     LOGGER.info("Downloading {} FRED series from {} to {}", seriesIds.size(), startDate, endDate);
     
-    String outputDirPath = storageProvider.resolvePath(cacheDir, 
-        String.format("source=econ/type=fred_indicators/date_range=%s_%s", 
-            startDate.substring(0, 10), endDate.substring(0, 10)));
-    storageProvider.createDirectories(outputDirPath);
+    String outputDirPath = String.format("source=econ/type=fred_indicators/date_range=%s_%s",
+            startDate.substring(0, 10), endDate.substring(0, 10));
+    // Directories are created automatically by StorageProvider when writing files
     
     List<FredObservation> observations = new ArrayList<>();
     Map<String, FredSeriesInfo> seriesInfoMap = new HashMap<>();
@@ -457,7 +500,7 @@ public class FredDataDownloader {
     // Convert to Parquet format
     String parquetFileName = String.format("fred_indicators_%s_%s.parquet", 
         startDate.substring(0, 10), endDate.substring(0, 10));
-    String parquetPath = storageProvider.resolvePath(outputDirPath, parquetFileName);
+    String parquetPath = outputDirPath + "/" + parquetFileName;
     convertToParquet(observations, parquetPath);
     
     // For compatibility, return a File representing the Parquet file
@@ -521,7 +564,7 @@ public class FredDataDownloader {
     }
     
     File targetFile = new File(targetFilePath);
-    writeFredIndicatorsParquet(mapObservations, targetFile);
+    writeFredIndicatorsParquet(mapObservations, targetFilePath);
     LOGGER.info("Converted FRED indicators to parquet: {} ({} observations)", targetFilePath, observations.size());
   }
   
@@ -554,9 +597,8 @@ public class FredDataDownloader {
    * @param sourceDir Directory containing cached FRED JSON data
    * @param targetFile Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, File targetFile) throws IOException {
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    String targetFilePath = targetFile.getAbsolutePath();
     
     LOGGER.info("Converting FRED data from {} to parquet: {}", sourceDirPath, targetFilePath);
     
@@ -565,25 +607,20 @@ public class FredDataDownloader {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
-    // Ensure target directory exists
-    String parentDir = targetFile.getParent();
-    if (parentDir != null) {
-      storageProvider.createDirectories(parentDir);
-    }
-    
+
+    // Directories are created automatically by StorageProvider when writing files
+
     List<Map<String, Object>> observations = new ArrayList<>();
-    
+
     // Look for FRED indicators JSON files in the source directory
-    List<StorageProvider.FileEntry> files = storageProvider.listFiles(sourceDirPath, false);
-    
-    for (StorageProvider.FileEntry file : files) {
-      if ("fred_indicators.json".equals(file.getName()) && !file.getName().startsWith(".")) {
+    // We use direct file operations since these are JSON cache files
+    File sourceDirFile = new File(cacheDir, sourceDir.getName());
+    File[] files = sourceDirFile.listFiles((dir, name) -> name.equals("fred_indicators.json"));
+
+    if (files != null) {
+      for (File file : files) {
         try {
-          String content;
-          try (InputStream inputStream = storageProvider.openInputStream(file.getPath())) {
-            content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-          }
+          String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode obsArray = root.get("observations");
           
@@ -607,13 +644,13 @@ public class FredDataDownloader {
     }
     
     // Write parquet file
-    writeFredIndicatorsParquet(observations, targetFile);
+    writeFredIndicatorsParquet(observations, targetFilePath);
     
     LOGGER.info("Converted FRED data to parquet: {} ({} observations)", targetFilePath, observations.size());
   }
   
   @SuppressWarnings("deprecation")
-  private void writeFredIndicatorsParquet(List<Map<String, Object>> observations, File outputFile) 
+  private void writeFredIndicatorsParquet(List<Map<String, Object>> observations, String targetPath)
       throws IOException {
     Schema schema = SchemaBuilder.record("FredIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -625,24 +662,20 @@ public class FredDataDownloader {
         .requiredString("units")
         .requiredString("frequency")
         .endRecord();
-    
-    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputFile.getAbsolutePath());
-    
-    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-        .withSchema(schema)
-        .withCompressionCodec(CompressionCodecName.SNAPPY)
-        .build()) {
-      
-      for (Map<String, Object> obs : observations) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("series_id", obs.get("series_id"));
-        record.put("series_name", obs.get("series_name"));
-        record.put("date", obs.get("date"));
-        record.put("value", obs.get("value"));
-        record.put("units", obs.get("units"));
-        record.put("frequency", obs.get("frequency"));
-        writer.write(record);
-      }
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> obs : observations) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("series_id", obs.get("series_id"));
+      record.put("series_name", obs.get("series_name"));
+      record.put("date", obs.get("date"));
+      record.put("value", obs.get("value"));
+      record.put("units", obs.get("units"));
+      record.put("frequency", obs.get("frequency"));
+      records.add(record);
     }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, "FredIndicator");
   }
 }

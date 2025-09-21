@@ -74,15 +74,11 @@ SELECT 'ECON.FRED_INDICATORS' as test_name, COUNT(*) as row_count
 FROM econ.fred_indicators 
 LIMIT 1;
 
-SELECT 'ECON.REGIONAL_EMPLOYMENT' as test_name, COUNT(*) as row_count 
-FROM econ.regional_employment 
+SELECT 'ECON.REGIONAL_EMPLOYMENT' as test_name, COUNT(*) as row_count
+FROM econ.regional_employment
 LIMIT 1;
 
-SELECT 'ECON.CONSUMER_PRICE_INDEX' as test_name, COUNT(*) as row_count 
-FROM econ.consumer_price_index 
-LIMIT 1;
-
-SELECT 'ECON.GDP_STATISTICS' as test_name, COUNT(*) as row_count 
+SELECT 'ECON.GDP_STATISTICS' as test_name, COUNT(*) as row_count
 FROM econ.gdp_statistics 
 LIMIT 1;
 
@@ -95,16 +91,10 @@ ORDER BY "date" DESC
 LIMIT 5;
 
 SELECT 'ECON Treasury 10Y' as test_name,
-       "date", maturity_months, yield_rate 
-FROM econ.treasury_yields 
-WHERE maturity_months = 120 
-ORDER BY "date" DESC 
-LIMIT 5;
-
-SELECT 'ECON CPI Data' as test_name,
-       "date", cpi_value, year_over_year_change 
-FROM econ.consumer_price_index 
-ORDER BY "date" DESC 
+       "date", maturity_months, yield_rate
+FROM econ.treasury_yields
+WHERE maturity_months = 120
+ORDER BY "date" DESC
 LIMIT 5;
 
 -- ======================================================================

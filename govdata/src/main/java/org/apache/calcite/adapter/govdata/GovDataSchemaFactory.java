@@ -18,6 +18,8 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgreSqlCatalogSchema;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.pub.PubSchemaFactory;
@@ -41,7 +43,7 @@ import java.util.Map;
 /**
  * Government Data Schema Factory - Uber factory for government data sources.
  *
- * <p>This factory routes to specialized factories based on the 'dataSource' 
+ * <p>This factory routes to specialized factories based on the 'dataSource'
  * parameter. Supported data sources:
  * <ul>
  *   <li>sec - Securities and Exchange Commission (EDGAR filings)</li>
@@ -69,163 +71,305 @@ import java.util.Map;
  *       "endYear": 2023
  *     }
  *   }]
- * }
+ *
  * </pre>
  */
 public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(GovDataSchemaFactory.class);
-  
+
+  // Unified storage provider for all government data sources
+  private StorageProvider storageProvider;
+
   // Store constraint metadata to pass to sub-factories
   private Map<String, Map<String, Object>> tableConstraints;
   private List<JsonTable> tableDefinitions;
-  
+
   // Track schemas created in this model for cross-domain constraint detection
   private final Map<String, Schema> createdSchemas = new HashMap<>();
   private final Map<String, String> schemaDataSources = new HashMap<>();
 
-  @Override public Schema create(SchemaPlus parentSchema, String name, 
+  @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
-    
+
+    // Initialize storage provider based on configuration
+    initializeStorageProvider(operand);
+
+    // Get the data source
     String dataSource = (String) operand.get("dataSource");
-    
-    // Default to SEC for backward compatibility if no dataSource specified
+
     if (dataSource == null) {
       dataSource = "sec";
       LOGGER.info("No dataSource specified, defaulting to 'sec'");
     }
-    
-    LOGGER.info("Creating government data schema for source: {}", dataSource);
-    
-    // Don't add metadata schemas here - FileSchemaFactory will add them
-    // Adding them in both places causes circular references and stack overflow
-    // addMetadataSchemas(parentSchema);
-    
+
+    LOGGER.info("Creating unified government data schema for source: {}", dataSource);
+
+    // Build the unified operand for FileSchemaFactory
+    Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, operand);
+
+    // Track this schema for cross-domain constraint detection
+    schemaDataSources.put(name.toUpperCase(), dataSource.toUpperCase());
+
+    // Create ONE FileSchema with the unified operand
+    LOGGER.info("Creating single FileSchema with unified operand for {} data", dataSource);
+    Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(
+        parentSchema, name, unifiedOperand);
+
+    createdSchemas.put(name.toUpperCase(), schema);
+    return schema;
+  }
+
+  /**
+   * Build unified operand by delegating to the appropriate sub-schema factory.
+   * The sub-schema factory only builds configuration, doesn't create a schema.
+   */
+  private Map<String, Object> buildUnifiedOperand(String dataSource, Map<String, Object> operand) {
     switch (dataSource.toLowerCase()) {
       case "sec":
       case "edgar":
-        return createSecSchema(parentSchema, name, operand);
-      
+        return buildSecOperand(operand);
+
       case "geo":
       case "geographic":
-        return createGeoSchema(parentSchema, name, operand);
-      
+        return buildGeoOperand(operand);
+
       case "econ":
       case "economic":
       case "economy":
-        return createEconSchema(parentSchema, name, operand);
-      
+        return buildEconOperand(operand);
+
       case "safety":
       case "crime":
       case "publicsafety":
       case "public_safety":
-        return createSafetySchema(parentSchema, name, operand);
-      
+        return buildSafetyOperand(operand);
+
       case "pub":
       case "public":
       case "wikipedia":
       case "osm":
       case "openstreetmap":
-        return createPubSchema(parentSchema, name, operand);
-      
+        return buildPubOperand(operand);
+
       case "census":
         throw new UnsupportedOperationException(
             "Census data source not yet implemented. Coming soon!");
-        
+
       case "irs":
         throw new UnsupportedOperationException(
             "IRS data source not yet implemented. Coming soon!");
-        
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ, safety, pub, census (future), irs (future)");
     }
   }
-  
+
   /**
-   * Creates SEC/EDGAR schema using the specialized SEC factory.
+   * Build operand for SEC/EDGAR data using the specialized SEC factory.
    */
-  private Schema createSecSchema(SchemaPlus parentSchema, String name, 
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to SecSchemaFactory for SEC/EDGAR data");
-    
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "SEC");
-    
-    SecSchemaFactory factory = new SecSchemaFactory();
-    
+  private Map<String, Object> buildSecOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand for SEC/EDGAR data");
+
+    // Delegate to SecSchemaFactory to build the operand
+    SecSchemaFactory secFactory = new SecSchemaFactory();
+    return secFactory.buildOperand(operand, storageProvider);
+  }
+
+  /**
+   * Build operand for Geographic data using the specialized Geo factory.
+   */
+  private Map<String, Object> buildGeoOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand for Geographic data");
+
+    GeoSchemaFactory geoFactory = new GeoSchemaFactory();
+
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
     if (tableConstraints != null) {
       allConstraints.putAll(tableConstraints);
     }
-    
+
+    // Add cross-domain constraints if other schemas exist
+    if (schemaDataSources.containsValue("ECON")) {
+      LOGGER.debug("ECON schema exists - regional economic analysis available");
+    }
+    if (schemaDataSources.containsValue("SEC")) {
+      LOGGER.debug("SEC schema exists - geographic business analysis available");
+    }
+
+    if (!allConstraints.isEmpty() && tableDefinitions != null) {
+      geoFactory.setTableConstraints(allConstraints, tableDefinitions);
+    }
+
+    // Get the operand configuration from GeoSchemaFactory
+    return geoFactory.buildOperand(operand);
+  }
+
+  /**
+   * Build operand for Public Safety data using the specialized Safety factory.
+   */
+  private Map<String, Object> buildSafetyOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand for Public Safety data");
+
+    // TODO: Refactor SafetySchemaFactory to have buildOperand method
+    // For now, throw an exception to indicate this needs implementation
+    throw new UnsupportedOperationException(
+        "SafetySchemaFactory needs to be refactored to support buildOperand pattern");
+  }
+
+  /**
+   * Build operand for Public data using the specialized Pub factory.
+   */
+  private Map<String, Object> buildPubOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand for Public data");
+
+    // TODO: Refactor PubSchemaFactory to have buildOperand method
+    // For now, throw an exception to indicate this needs implementation
+    throw new UnsupportedOperationException(
+        "PubSchemaFactory needs to be refactored to support buildOperand pattern");
+  }
+
+  /**
+   * Initialize the storage provider based on operand configuration.
+   * Uses the same auto-detection logic as FileSchemaFactory.
+   */
+  private void initializeStorageProvider(Map<String, Object> operand) {
+    if (storageProvider != null) {
+      return; // Already initialized
+    }
+
+    // Get explicit storage type configuration
+    String storageType = (String) operand.get("storageType");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> storageConfig = (Map<String, Object>) operand.get("storageConfig");
+
+    // Auto-detect storage type from directory path (same logic as FileSchemaFactory)
+    if (storageType == null) {
+      String directory = (String) operand.get("directory");
+      if (directory != null) {
+        if (directory.startsWith("s3://")) {
+          storageType = "s3";
+          LOGGER.info("Auto-detected S3 storage from directory path: {}", directory);
+        } else if (directory.startsWith("http://") || directory.startsWith("https://")) {
+          storageType = "http";
+          LOGGER.info("Auto-detected HTTP storage from directory path: {}", directory);
+        } else if (directory.startsWith("hdfs://")) {
+          storageType = "hdfs";
+          LOGGER.info("Auto-detected HDFS storage from directory path: {}", directory);
+        }
+      }
+    }
+
+    // Auto-detect from baseDirectory if still not determined
+    if (storageType == null) {
+      Object baseDirObj = operand.get("baseDirectory");
+      if (baseDirObj instanceof String) {
+        String baseDirStr = (String) baseDirObj;
+        if (baseDirStr.startsWith("s3://")) {
+          storageType = "s3";
+          LOGGER.info("Auto-detected S3 storage from baseDirectory path: {}", baseDirStr);
+        } else if (baseDirStr.startsWith("hdfs://")) {
+          storageType = "hdfs";
+          LOGGER.info("Auto-detected HDFS storage from baseDirectory path: {}", baseDirStr);
+        }
+      }
+    }
+
+    // Create the appropriate storage provider using the factory
+    if (storageType != null) {
+      storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
+      LOGGER.debug("Initialized {} StorageProvider", storageType);
+    } else {
+      // Default to local file storage
+      storageProvider = StorageProviderFactory.createFromType("local", null);
+      LOGGER.debug("Initialized default LocalFileStorageProvider");
+    }
+  }
+
+  // Keep the old methods temporarily until we fully migrate
+  /**
+   * Creates SEC/EDGAR schema using the specialized SEC factory.
+   * @deprecated Use buildSecOperand instead
+   */
+  private Schema createSecSchema(SchemaPlus parentSchema, String name,
+      Map<String, Object> operand) {
+    LOGGER.debug("Delegating to SecSchemaFactory for SEC/EDGAR data");
+
+    // Track this schema for cross-domain constraint detection
+    schemaDataSources.put(name.toUpperCase(), "SEC");
+
+    SecSchemaFactory factory = new SecSchemaFactory();
+
+    // Build constraint metadata including cross-domain constraints
+    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
+    if (tableConstraints != null) {
+      allConstraints.putAll(tableConstraints);
+    }
+
     // Add cross-domain constraints if GEO schema exists
     if (schemaDataSources.containsValue("GEO")) {
       Map<String, Map<String, Object>> crossDomainConstraints = defineCrossDomainConstraintsForSec();
       allConstraints.putAll(crossDomainConstraints);
     }
-    
+
     if (!allConstraints.isEmpty() && tableDefinitions != null) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
-    
+
     Schema schema = factory.create(parentSchema, name, operand);
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
   }
-  
+
   /**
    * Creates Geographic data schema using the specialized Geo factory.
    */
   private Schema createGeoSchema(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     LOGGER.debug("Delegating to GeoSchemaFactory for geographic data");
-    
+
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), "GEO");
-    
+
     GeoSchemaFactory factory = new GeoSchemaFactory();
-    
+
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
     if (tableConstraints != null) {
       allConstraints.putAll(tableConstraints);
     }
-    
+
     // Add cross-domain constraints if SEC schema exists
     if (schemaDataSources.containsValue("SEC")) {
       // GEO doesn't have outgoing FKs to SEC, but we track it for completeness
       LOGGER.debug("SEC schema exists - cross-domain relationships available");
     }
-    
+
     if (!allConstraints.isEmpty() && tableDefinitions != null) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
-    
+
     Schema schema = factory.create(parentSchema, name, operand);
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
   }
-  
+
   /**
-   * Creates Economic data schema using the specialized Econ factory.
+   * Build operand for Economic data using the specialized Econ factory.
    */
-  private Schema createEconSchema(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to EconSchemaFactory for economic data");
-    
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "ECON");
-    
+  private Map<String, Object> buildEconOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand from EconSchemaFactory for economic data");
+
     EconSchemaFactory factory = new EconSchemaFactory();
-    
+
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
     if (tableConstraints != null) {
       allConstraints.putAll(tableConstraints);
     }
-    
+
     // Add cross-domain constraints if SEC or GEO schemas exist
     if (schemaDataSources.containsValue("SEC")) {
       LOGGER.debug("SEC schema exists - economic/financial correlations available");
@@ -235,34 +379,33 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       Map<String, Map<String, Object>> crossDomainConstraints = defineCrossDomainConstraintsForEcon();
       allConstraints.putAll(crossDomainConstraints);
     }
-    
+
     if (!allConstraints.isEmpty() && tableDefinitions != null) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
-    
-    Schema schema = factory.create(parentSchema, name, operand);
-    createdSchemas.put(name.toUpperCase(), schema);
-    return schema;
+
+    // Get the operand configuration from EconSchemaFactory
+    return factory.buildOperand(operand, storageProvider);
   }
-  
+
   /**
    * Creates Public Safety data schema using the specialized Safety factory.
    */
   private Schema createSafetySchema(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     LOGGER.debug("Delegating to SafetySchemaFactory for public safety data");
-    
+
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), "SAFETY");
-    
+
     SafetySchemaFactory factory = new SafetySchemaFactory();
-    
+
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
     if (tableConstraints != null) {
       allConstraints.putAll(tableConstraints);
     }
-    
+
     // Add cross-domain constraints if other schemas exist
     if (schemaDataSources.containsValue("SEC")) {
       LOGGER.debug("SEC schema exists - business risk assessment available");
@@ -273,34 +416,34 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (schemaDataSources.containsValue("ECON")) {
       LOGGER.debug("ECON schema exists - socioeconomic crime correlations available");
     }
-    
+
     if (!allConstraints.isEmpty() && tableDefinitions != null) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
-    
+
     Schema schema = factory.create(parentSchema, name, operand);
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
   }
-  
+
   /**
    * Creates Public data schema using the specialized Pub factory.
    */
   private Schema createPubSchema(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     LOGGER.debug("Delegating to PubSchemaFactory for public data");
-    
+
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), "PUB");
-    
+
     PubSchemaFactory factory = new PubSchemaFactory();
-    
+
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
     if (tableConstraints != null) {
       allConstraints.putAll(tableConstraints);
     }
-    
+
     // Add cross-domain constraints if other schemas exist
     if (schemaDataSources.containsValue("SEC")) {
       LOGGER.debug("SEC schema exists - corporate intelligence enhancement available");
@@ -314,40 +457,40 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (schemaDataSources.containsValue("SAFETY")) {
       LOGGER.debug("SAFETY schema exists - contextual safety analysis available");
     }
-    
+
     if (!allConstraints.isEmpty() && tableDefinitions != null) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
-    
+
     Schema schema = factory.create(parentSchema, name, operand);
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
   }
-  
+
   @Override
   public boolean supportsConstraints() {
     // Enable constraint support for all government data sources
     return true;
   }
-  
+
   @Override
   public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
-    LOGGER.debug("Received constraint metadata for {} tables", 
+    LOGGER.debug("Received constraint metadata for {} tables",
         tableConstraints != null ? tableConstraints.size() : 0);
   }
-  
+
   /**
    * Defines cross-domain foreign key constraints from SEC tables to GEO tables.
    * These are automatically added when both SEC and GEO schemas are present in the model.
-   * 
+   *
    * @return Map of table names to their cross-domain constraint definitions
    */
   private Map<String, Map<String, Object>> defineCrossDomainConstraintsForSec() {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
-    
+
     // Find the GEO schema name
     String geoSchemaName = null;
     for (Map.Entry<String, String> entry : schemaDataSources.entrySet()) {
@@ -356,40 +499,40 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         break;
       }
     }
-    
+
     if (geoSchemaName == null) {
       return constraints;
     }
-    
+
     // Define FK from filing_metadata.state_of_incorporation to tiger_states.state_code
     Map<String, Object> filingMetadataConstraints = new HashMap<>();
     Map<String, Object> stateIncorpFK = new HashMap<>();
     stateIncorpFK.put("columns", Arrays.asList("state_of_incorporation"));
     stateIncorpFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
     stateIncorpFK.put("targetColumns", Arrays.asList("state_code"));
-    
+
     filingMetadataConstraints.put("foreignKeys", Arrays.asList(stateIncorpFK));
     constraints.put("filing_metadata", filingMetadataConstraints);
-    
-    LOGGER.info("Added cross-domain FK constraint: filing_metadata.state_of_incorporation -> {}.tiger_states.state_code", 
+
+    LOGGER.info("Added cross-domain FK constraint: filing_metadata.state_of_incorporation -> {}.tiger_states.state_code",
         geoSchemaName);
-    
+
     // Future: Add more cross-domain constraints as needed
     // e.g., insider_transactions.insider_state -> tiger_states.state_code
     // e.g., company locations -> census_places
-    
+
     return constraints;
   }
-  
+
   /**
    * Defines cross-domain foreign key constraints from ECON tables to GEO tables.
    * These are automatically added when both ECON and GEO schemas are present in the model.
-   * 
+   *
    * @return Map of table names to their cross-domain constraint definitions
    */
   private Map<String, Map<String, Object>> defineCrossDomainConstraintsForEcon() {
     Map<String, Map<String, Object>> constraints = new HashMap<>();
-    
+
     // Find the GEO schema name
     String geoSchemaName = null;
     for (Map.Entry<String, String> entry : schemaDataSources.entrySet()) {
@@ -398,64 +541,64 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         break;
       }
     }
-    
+
     if (geoSchemaName == null) {
       return constraints;
     }
-    
+
     // regional_employment.state_code -> tiger_states.state_code (2-letter codes)
     Map<String, Object> regionalEmploymentConstraints = new HashMap<>();
     List<Map<String, Object>> regionalEmploymentFks = new ArrayList<>();
-    
+
     Map<String, Object> regionalEmploymentToStatesFK = new HashMap<>();
     regionalEmploymentToStatesFK.put("columns", Arrays.asList("state_code"));
     regionalEmploymentToStatesFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
     regionalEmploymentToStatesFK.put("targetColumns", Arrays.asList("state_code"));
     regionalEmploymentFks.add(regionalEmploymentToStatesFK);
-    
+
     regionalEmploymentConstraints.put("foreignKeys", regionalEmploymentFks);
     constraints.put("regional_employment", regionalEmploymentConstraints);
-    
-    LOGGER.info("Added cross-domain FK constraint: regional_employment.state_code -> {}.tiger_states.state_code", 
+
+    LOGGER.info("Added cross-domain FK constraint: regional_employment.state_code -> {}.tiger_states.state_code",
         geoSchemaName);
-    
+
     // regional_income.geo_fips -> tiger_states.state_fips (FIPS codes)
     // NOTE: This is a partial FK - only valid when geo_fips contains 2-digit state codes
     Map<String, Object> regionalIncomeConstraints = new HashMap<>();
     List<Map<String, Object>> regionalIncomeFks = new ArrayList<>();
-    
+
     Map<String, Object> regionalIncomeToStatesFK = new HashMap<>();
     regionalIncomeToStatesFK.put("columns", Arrays.asList("geo_fips"));
     regionalIncomeToStatesFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
     regionalIncomeToStatesFK.put("targetColumns", Arrays.asList("state_fips"));
     regionalIncomeFks.add(regionalIncomeToStatesFK);
-    
+
     regionalIncomeConstraints.put("foreignKeys", regionalIncomeFks);
     constraints.put("regional_income", regionalIncomeConstraints);
-    
-    LOGGER.info("Added cross-domain FK constraint: regional_income.geo_fips -> {}.tiger_states.state_fips (partial FK for state-level data)", 
+
+    LOGGER.info("Added cross-domain FK constraint: regional_income.geo_fips -> {}.tiger_states.state_fips (partial FK for state-level data)",
         geoSchemaName);
-    
+
     // state_gdp.geo_fips -> tiger_states.state_fips (FIPS codes)
     Map<String, Object> stateGdpConstraints = new HashMap<>();
     List<Map<String, Object>> stateGdpFks = new ArrayList<>();
-    
+
     Map<String, Object> stateGdpToStatesFK = new HashMap<>();
     stateGdpToStatesFK.put("columns", Arrays.asList("geo_fips"));
     stateGdpToStatesFK.put("targetSchema", geoSchemaName);
     stateGdpToStatesFK.put("targetTable", "tiger_states");
     stateGdpToStatesFK.put("targetColumns", Arrays.asList("state_fips"));
     stateGdpFks.add(stateGdpToStatesFK);
-    
+
     stateGdpConstraints.put("foreignKeys", stateGdpFks);
     constraints.put("state_gdp", stateGdpConstraints);
-    
-    LOGGER.info("Added cross-domain FK constraint: state_gdp.geo_fips -> {}.tiger_states.state_fips", 
+
+    LOGGER.info("Added cross-domain FK constraint: state_gdp.geo_fips -> {}.tiger_states.state_fips",
         geoSchemaName);
-    
+
     return constraints;
   }
-  
+
   /**
    * Adds metadata schemas (information_schema, pg_catalog, and metadata) to the parent schema.
    * This provides SQL-standard access to table and column metadata including comments.
@@ -467,28 +610,28 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     while (rootSchema.getParentSchema() != null) {
       rootSchema = rootSchema.getParentSchema();
     }
-    
+
     // Only add metadata schemas if they don't already exist
     if (rootSchema.subSchemas().get("information_schema") == null) {
       LOGGER.debug("Adding information_schema to root");
       InformationSchema informationSchema = new InformationSchema(rootSchema, "CALCITE");
       rootSchema.add("information_schema", informationSchema);
     }
-    
+
     // Add PostgreSQL catalog schema for schema comments
     if (rootSchema.subSchemas().get("pg_catalog") == null) {
       LOGGER.debug("Adding pg_catalog schema to root for PostgreSQL compatibility");
       PostgreSqlCatalogSchema pgCatalog = new PostgreSqlCatalogSchema(rootSchema, "CALCITE");
       rootSchema.add("pg_catalog", pgCatalog);
     }
-    
+
     // Legacy metadata schema for backward compatibility
     if (rootSchema.subSchemas().get("metadata") == null) {
       LOGGER.debug("Adding metadata schema to root");
       InformationSchema metadataSchema = new InformationSchema(rootSchema, "CALCITE");
       rootSchema.add("metadata", metadataSchema);
     }
-    
+
     // Don't add reference to metadata schema at current level - it causes circular references
     // when FileSchemaFactory also adds metadata schemas. The metadata schemas are already
     // accessible from the root level.

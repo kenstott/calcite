@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -47,15 +50,17 @@ public class TradeStatisticsTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(), 
         "BEA_API_KEY not set, skipping trade statistics test");
     
-    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    BeaDataDownloader downloader = new BeaDataDownloader(apiKey, tempDir.toString(), storageProvider);
     
     // Test trade statistics for a 3-year period for faster testing
-    File parquetFile = downloader.downloadTradeStatistics(2021, 2023);
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
+    downloader.downloadTradeStatistics(2021, 2023);
+
+    // Find the created parquet file
+    File parquetFile = new File(tempDir.toFile(), "trade_statistics.parquet");
+    assertTrue(parquetFile.exists(), "Trade statistics parquet file should be created");
+    assertTrue(parquetFile.length() > 0, "Trade statistics parquet file should not be empty");
+
     System.out.println("Trade statistics Parquet file: " + parquetFile.getAbsolutePath());
     System.out.println("File size: " + parquetFile.length() + " bytes");
     

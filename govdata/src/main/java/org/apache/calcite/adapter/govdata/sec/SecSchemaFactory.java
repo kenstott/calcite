@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
@@ -75,6 +76,7 @@ import java.time.Year;
  */
 public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
+  private StorageProvider storageProvider;
 
   // Standard SEC data cache directory - XBRL files are immutable, cache forever
   // These are populated at runtime from environment variables or system properties
@@ -482,12 +484,38 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
   }
 
   @Override public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-    LOGGER.debug("SecSchemaFactory.create() called with operand: {}", operand);
-    LOGGER.debug("SecSchemaFactory.create() called");
-    LOGGER.debug("Operand: {}", operand);
+    // This method should not be called directly anymore
+    // GovDataSchemaFactory should call buildOperand() instead
+    throw new UnsupportedOperationException(
+        "SecSchemaFactory.create() should not be called directly. " +
+        "Use GovDataSchemaFactory to create a unified schema.");
+  }
+  
+  /**
+   * Builds the operand configuration for SEC schema without creating a FileSchema instance.
+   * This method is called by GovDataSchemaFactory to get SEC-specific configuration
+   * that will be merged into a unified FileSchema.
+   * 
+   * @param operand The base operand from the model file
+   * @return Modified operand with SEC-specific configuration
+   */
+  public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
+    LOGGER.debug("SecSchemaFactory.buildOperand() called with operand: {}", operand);
+    
+    // Store the storage provider for later use
+    this.storageProvider = storageProvider;
+    LOGGER.info("SEC buildOperand: storageProvider set to {}", storageProvider);
 
     // Create mutable copy of operand to allow modifications
     Map<String, Object> mutableOperand = new HashMap<>(operand);
+    
+    // Check auto-download setting (default true like ECON)
+    Boolean autoDownload = (Boolean) operand.get("autoDownload");
+    if (autoDownload == null) {
+      autoDownload = true;  // Default to true like ECON
+      LOGGER.info("autoDownload not specified, defaulting to true");
+    }
+    mutableOperand.put("autoDownload", autoDownload);
 
     // Load and apply defaults before processing
     Map<String, Object> defaults = loadDefaults();
@@ -518,10 +546,11 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Handle SEC data download if configured
+    LOGGER.info("SEC buildOperand: checking download with autoDownload={}", mutableOperand.get("autoDownload"));
     LOGGER.debug("About to check shouldDownloadData");
     LOGGER.debug("Checking shouldDownloadData...");
     if (shouldDownloadData(mutableOperand)) {
-      LOGGER.debug("shouldDownloadData = true, calling downloadSecData");
+      LOGGER.info("SEC: shouldDownloadData = true, calling downloadSecData");
       // Get base directory from operand
       if (configuredDir != null) {
         File baseDir = new File(configuredDir);
@@ -535,7 +564,8 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
       // We need to wait for them to complete before creating the FileSchema
       waitForAllConversions();
     } else {
-      LOGGER.debug("shouldDownloadData = false");
+      LOGGER.info("SEC: shouldDownloadData = false, skipping download (autoDownload={}, useMockData={})",
+                  mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
     }
 
     // Pre-define partitioned tables using the partitionedTables format
@@ -722,8 +752,8 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
     mutableOperand.put("partitionedTables", partitionedTables);
 
     // Set the directory for FileSchemaFactory to search
-    File parquetDir = new File(cacheHome, "sec-parquet");
-    mutableOperand.put("directory", parquetDir.getAbsolutePath());
+    // Use the unified SEC_PARQUET_DIR directly
+    mutableOperand.put("directory", SEC_PARQUET_DIR);
 
     LOGGER.info("Pre-defined {} partitioned table patterns", partitionedTables.size());
 
@@ -744,17 +774,13 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
         LOGGER.warn("DEBUG: No .parquet files found in " + secParquetDir.getAbsolutePath());
       }
     } else {
-      // Parquet dir doesn't exist yet, use the base cache directory
-      mutableOperand.put("directory", cacheHome);
-      LOGGER.info("SEC parquet directory not ready yet, using base: {}", cacheHome);
+      // Parquet dir doesn't exist yet, but still use SEC_PARQUET_DIR path
+      // FileSchemaFactory will handle the non-existent directory
+      LOGGER.info("SEC parquet directory doesn't exist yet: {}", SEC_PARQUET_DIR);
     }
 
-    // Use parquet for SEC adapter, but pass through original engine to FileSchema
-    String originalEngine = (String) operand.get("executionEngine");
-    mutableOperand.put("executionEngine", "parquet");
-    if (originalEngine != null) {
-      mutableOperand.put("secExecutionEngine", originalEngine);
-    }
+    // Don't set execution engine - let GovDataSchemaFactory control it
+    // The parent factory will set it based on global configuration
 
     // Preserve text similarity configuration if present, or enable it by default
     // This ensures COSINE_SIMILARITY and other vector functions are registered
@@ -778,10 +804,6 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
         rssMonitor.start();
       }
     }
-
-    // Now delegate to FileSchemaFactory to create the actual schema
-    // with our pre-defined tables and configured directory
-    LOGGER.info("Delegating to FileSchemaFactory with modified operand");
 
     // Merge default constraints with provided constraints
     Map<String, Map<String, Object>> allConstraints = defineSecTableConstraints();
@@ -808,35 +830,13 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Add constraint metadata to operand if we have any
     if (!allConstraints.isEmpty()) {
-      LOGGER.debug("Adding constraint metadata for {} tables to FileSchemaFactory operand", allConstraints.size());
+      LOGGER.debug("Adding constraint metadata for {} tables to operand", allConstraints.size());
       mutableOperand.put("tableConstraints", allConstraints);
     }
 
-    // Check if text similarity is enabled before creating schema
-    boolean similarityEnabled = mutableOperand.containsKey("textSimilarity") &&
-        mutableOperand.get("textSimilarity") instanceof Map &&
-        Boolean.TRUE.equals(((Map<?,?>)mutableOperand.get("textSimilarity")).get("enabled"));
-
-    if (similarityEnabled) {
-      // Register the functions on the parent schema BEFORE creating the FileSchema
-      // This ensures they're available in the schema resolution chain
-      try {
-        LOGGER.info("Registering text similarity functions on parent schema before FileSchema creation");
-        org.apache.calcite.adapter.file.similarity.SimilarityFunctions.registerFunctions(parentSchema);
-      } catch (Exception e) {
-        LOGGER.warn("Failed to register similarity functions on parent schema: " + e.getMessage());
-      }
-    }
-
-    Schema fileSchema = FileSchemaFactory.INSTANCE.create(parentSchema, name, mutableOperand);
-
-    // The FileSchemaFactory should have already registered functions if textSimilarity is enabled
-    // The functions should be available through both parent schema and FileSchema registration
-    if (similarityEnabled) {
-      LOGGER.info("Text similarity enabled - functions should be available through FileSchemaFactory registration");
-    }
-
-    return fileSchema;
+    // Return the configured operand for GovDataSchemaFactory to use
+    LOGGER.info("SEC schema operand configuration complete");
+    return mutableOperand;
   }
 
 
@@ -1256,7 +1256,7 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
           }
         }
         // Clean up macOS metadata files after writing
-        cleanupMacOSMetadataFilesRecursive(cikDir);
+        storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
         LOGGER.info("Downloaded submissions metadata for CIK " + normalizedCik);
       } finally {
         rateLimiter.release();
@@ -1780,7 +1780,12 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
       for (File xbrlFile : xbrlFilesToConvert) {
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
           try {
-            XbrlToParquetConverter converter = new XbrlToParquetConverter();
+            // Use the storageProvider that was passed from GovDataSchemaFactory
+            if (this.storageProvider == null) {
+              LOGGER.error("StorageProvider is null - cannot convert XBRL to Parquet");
+              throw new IllegalStateException("StorageProvider not initialized - must be provided by GovDataSchemaFactory");
+            }
+            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider);
 
             // Extract accession number from file path (parent directory name)
             // Path is like: /sec-data/0000789019/000078901922000007/ownership.xml
@@ -1795,9 +1800,16 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
             metadata.recordConversion(xbrlFile, record);
 
             // The converter now properly extracts metadata from the XML content itself
+            LOGGER.info("DEBUG: Starting conversion of " + xbrlFile.getAbsolutePath() + " to parquet in " + secParquetDir.getAbsolutePath());
             List<File> outputFiles = converter.convert(xbrlFile, secParquetDir, metadata);
-            LOGGER.info("Converted " + xbrlFile.getName() + " to " +
-                outputFiles.size() + " Parquet files");
+            LOGGER.info("DEBUG: Conversion completed for " + xbrlFile.getName() + " - created " + outputFiles.size() + " parquet files");
+            if (outputFiles.isEmpty()) {
+              LOGGER.warn("DEBUG: No parquet files created for " + xbrlFile.getName());
+            } else {
+              for (File outputFile : outputFiles) {
+                LOGGER.info("DEBUG: Created parquet file: " + outputFile.getAbsolutePath());
+              }
+            }
 
             // Add to manifest after successful conversion
             addToManifest(xbrlFile.getParentFile().getParentFile().getParentFile(), xbrlFile);
@@ -1811,7 +1823,7 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
               // Non-fatal: Another thread is processing this file, skip it
               LOGGER.debug("Skipping " + xbrlFile.getName() + " - already being processed by another thread");
             } else {
-              LOGGER.info("Failed to convert " + xbrlFile.getName() + ": " + e.getMessage());
+              LOGGER.error("DEBUG: Failed to convert {} - Exception: {}", xbrlFile.getName(), e.getMessage(), e);
             }
           }
           int completed = completedConversions.incrementAndGet();
@@ -2206,39 +2218,12 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
       return;
     }
 
-    int totalDeleted = 0;
     try {
-      totalDeleted = cleanupMacOSMetadataFilesRecursive(directory);
-      if (totalDeleted > 0) {
-        LOGGER.info("Bulk cleanup: Removed " + totalDeleted + " macOS metadata files from " + directory.getAbsolutePath());
-      }
+      storageProvider.cleanupMacosMetadata(directory.getAbsolutePath());
+      LOGGER.info("Bulk cleanup: Removed macOS metadata files from " + directory.getAbsolutePath());
     } catch (Exception e) {
       LOGGER.debug("Error during bulk macOS metadata cleanup: " + e.getMessage());
     }
   }
 
-  /**
-   * Recursively delete macOS metadata files (._* files).
-   * @return Number of files deleted
-   */
-  private int cleanupMacOSMetadataFilesRecursive(File directory) {
-    int deleted = 0;
-
-    File[] files = directory.listFiles();
-    if (files != null) {
-      for (File file : files) {
-        if (file.isDirectory()) {
-          // Recurse into subdirectories
-          deleted += cleanupMacOSMetadataFilesRecursive(file);
-        } else if (file.getName().startsWith("._")) {
-          // Delete macOS metadata file
-          if (file.delete()) {
-            deleted++;
-          }
-        }
-      }
-    }
-
-    return deleted;
-  }
 }

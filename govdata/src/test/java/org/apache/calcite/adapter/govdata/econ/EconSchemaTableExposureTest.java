@@ -29,7 +29,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
@@ -43,16 +45,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 @Tag("integration")
 public class EconSchemaTableExposureTest {
-  
+
   @BeforeAll
   static void setUp() {
     TestEnvironmentLoader.ensureLoaded();
   }
-  
+
   @Test
   public void testAllTablesAreQueryable() throws Exception {
     // Create model JSON using GovDataSchemaFactory
-    String modelJson = 
+    String modelJson =
         "{"
         + "  \"version\": \"1.0\","
         + "  \"defaultSchema\": \"econ\","
@@ -68,16 +70,16 @@ public class EconSchemaTableExposureTest {
         + "    }"
         + "  ]"
         + "}";
-    
+
     // Write model file
     Path modelFile = Files.createTempFile("model", ".json");
     Files.write(modelFile, modelJson.getBytes());
-    
+
     // Connect and query
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     Set<String> expectedTables = new HashSet<>();
     expectedTables.add("employment_statistics");
     expectedTables.add("inflation_metrics");
@@ -93,20 +95,24 @@ public class EconSchemaTableExposureTest {
     expectedTables.add("trade_statistics");
     expectedTables.add("ita_data");
     expectedTables.add("industry_gdp");
-    
+
     try (Connection conn = DriverManager.getConnection(
         "jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
-      
+
       // Test each table by sampling data and checking for rows
+      List<String> failedTables = new ArrayList<>();
+      List<String> emptyTables = new ArrayList<>();
+      List<String> successfulTables = new ArrayList<>();
+
       for (String table : expectedTables) {
         String query = "SELECT COUNT(*) as row_count FROM econ." + table;
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next(), "COUNT query should work for " + table);
           int rowCount = rs.getInt("row_count");
           System.out.println("Table " + table + " has " + rowCount + " rows");
-          
+
           // Verify the table has actual data
           if (rowCount > 0) {
             // Sample a few rows to ensure data is accessible
@@ -114,23 +120,39 @@ public class EconSchemaTableExposureTest {
             try (ResultSet sampleRs = stmt.executeQuery(sampleQuery)) {
               assertTrue(sampleRs.next(), "Table " + table + " should have accessible sample data");
               System.out.println("✅ Table " + table + " is queryable with " + rowCount + " rows");
+              successfulTables.add(table);
+            } catch (Exception sampleEx) {
+              System.out.println("❌ Table " + table + " failed SELECT * query: " + sampleEx.getMessage());
+              failedTables.add(table + " (SELECT failed after COUNT returned " + rowCount + " rows)");
             }
           } else {
             System.out.println("⚠️  Table " + table + " exists but has no data (" + rowCount + " rows)");
+            emptyTables.add(table);
           }
         } catch (Exception e) {
-          fail("Table " + table + " is not queryable: " + e.getMessage());
+          System.out.println("❌ Table " + table + " failed completely: " + e.getMessage());
+          failedTables.add(table + " (COUNT query failed)");
         }
       }
-      
-      System.out.println("✅ All " + expectedTables.size() + " ECON tables are exposed and testable!");
+
+      // Report summary
+      System.out.println("\n=== SUMMARY ===");
+      System.out.println("Successful tables (" + successfulTables.size() + "): " + successfulTables);
+      System.out.println("Empty tables (" + emptyTables.size() + "): " + emptyTables);
+      System.out.println("Failed tables (" + failedTables.size() + "): " + failedTables);
+
+      if (!failedTables.isEmpty()) {
+        fail("The following tables are not queryable: " + failedTables);
+      }
+
+      System.out.println("\n✅ All " + expectedTables.size() + " ECON tables are exposed and testable!");
     }
   }
-  
+
   @Test
   public void testStateGdpTableExists() throws Exception {
     // Create model JSON
-    String modelJson = 
+    String modelJson =
         "{"
         + "  \"version\": \"1.0\","
         + "  \"defaultSchema\": \"econ\","
@@ -146,34 +168,34 @@ public class EconSchemaTableExposureTest {
         + "    }"
         + "  ]"
         + "}";
-    
+
     Path modelFile = Files.createTempFile("model", ".json");
     Files.write(modelFile, modelJson.getBytes());
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     try (Connection conn = DriverManager.getConnection(
         "jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
-      
+
       // Simple test - just try to query state_gdp table
       String query = "SELECT COUNT(*) as row_count FROM econ.state_gdp";
-      
+
       try (ResultSet rs = stmt.executeQuery(query)) {
         assertTrue(rs.next(), "Query should return a result");
         int rowCount = rs.getInt("row_count");
         System.out.println("✅ state_gdp table contains " + rowCount + " rows");
-        
+
         if (rowCount > 0) {
           // If data exists, show a sample
           query = "SELECT geo_fips, geo_name, line_code, line_description, year, value, units "
               + "FROM econ.state_gdp LIMIT 3";
-          
+
           try (ResultSet rs2 = stmt.executeQuery(query)) {
             while (rs2.next()) {
-              System.out.println("✅ Sample: " + rs2.getString("geo_fips") + " (" + rs2.getString("geo_name") + "), " 
+              System.out.println("✅ Sample: " + rs2.getString("geo_fips") + " (" + rs2.getString("geo_name") + "), "
                   + rs2.getString("line_description") + ", " + rs2.getInt("year") + ": " + rs2.getDouble("value"));
             }
           }

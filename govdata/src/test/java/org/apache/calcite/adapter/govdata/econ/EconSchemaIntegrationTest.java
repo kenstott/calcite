@@ -21,6 +21,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -118,7 +121,8 @@ public class EconSchemaIntegrationTest {
     
     if (fredKey != null) {
       // Create FRED indicators file
-      FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredKey);
+      StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
+      FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredKey, storageProvider);
       // Download just one day of data for testing
       try {
         // Use the default series list for a minimal download
@@ -139,7 +143,8 @@ public class EconSchemaIntegrationTest {
     }
     
     if (beaKey != null) {
-      BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, beaKey);
+      StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
+      BeaDataDownloader beaDownloader = new BeaDataDownloader(beaKey, cacheDir, storageProvider);
       
       // Try to download each BEA dataset
       try {
@@ -155,12 +160,12 @@ public class EconSchemaIntegrationTest {
       }
       
       try {
-        File tradeFile = beaDownloader.downloadTradeStatistics(2022, 2023);
-        if (tradeFile != null && tradeFile.exists()) {
-          File targetDir = new File(parquetDir, "source=econ/type=trade/year_range=2022_2023");
-          targetDir.mkdirs();
-          Files.copy(tradeFile.toPath(), 
-                     new File(targetDir, "trade_statistics.parquet").toPath());
+        beaDownloader.downloadTradeStatistics(2022, 2023);
+        // Check if the file was created in the storage provider directory
+        File targetDir = new File(parquetDir, "source=econ/type=trade/year_range=2022_2023");
+        File tradeFile = new File(targetDir, "trade_statistics.parquet");
+        if (tradeFile.exists()) {
+          // File already created in the correct location
         }
       } catch (Exception e) {
         // Ignore

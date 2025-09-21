@@ -21,6 +21,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -41,6 +44,10 @@ public class BlsDataDownloadTest {
   
   @TempDir
   Path tempDir;
+
+  private StorageProvider createStorageProvider() {
+    return StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+  }
   
   @BeforeAll
   public static void setUp() {
@@ -58,7 +65,7 @@ public class BlsDataDownloadTest {
       return;
     }
     
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString());
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
     
     // Download just 2 years of data for testing
     File parquetFile = downloader.downloadEmploymentStatistics(2023, 2024);
@@ -78,7 +85,7 @@ public class BlsDataDownloadTest {
       return;
     }
     
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString());
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
     
     File parquetFile = downloader.downloadInflationMetrics(2023, 2024);
     
@@ -96,7 +103,7 @@ public class BlsDataDownloadTest {
       return;
     }
     
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString());
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
     
     File parquetFile = downloader.downloadWageGrowth(2023, 2024);
     
@@ -114,7 +121,7 @@ public class BlsDataDownloadTest {
       return;
     }
     
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString());
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
     
     File parquetFile = downloader.downloadRegionalEmployment(2023, 2024);
     

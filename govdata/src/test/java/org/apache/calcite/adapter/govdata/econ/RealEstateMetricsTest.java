@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -47,10 +50,11 @@ public class RealEstateMetricsTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(), 
         "FRED_API_KEY not set, skipping real estate metrics test");
     
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey);
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider);
     
     // Test all 4 real estate metrics
-    File parquetFile = downloader.downloadEconomicIndicators(
+    downloader.downloadEconomicIndicators(
         Arrays.asList(
             FredDataDownloader.Series.BUILDING_PERMITS,
             FredDataDownloader.Series.MEDIAN_HOME_PRICE,
@@ -58,14 +62,15 @@ public class RealEstateMetricsTest {
             FredDataDownloader.Series.SINGLE_UNIT_HOUSING_STARTS
         ),
         "2023-01-01", "2023-06-01"); // Just 6 months for faster testing
-    
-    assertNotNull(parquetFile);
-    assertTrue(parquetFile.exists());
-    assertTrue(parquetFile.length() > 0);
-    
+
+    // The data is now written to storage provider, find the parquet file
+    File parquetFile = new File(tempDir.toFile(), "fred_indicators.parquet");
+    assertTrue(parquetFile.exists(), "Parquet file should be created");
+    assertTrue(parquetFile.length() > 0, "Parquet file should not be empty");
+
     System.out.println("Real estate metrics Parquet file: " + parquetFile.getAbsolutePath());
     System.out.println("File size: " + parquetFile.length() + " bytes");
-    
+
     // Verify the Parquet file contains real estate data
     verifyRealEstateMetricsParquet(parquetFile);
   }
