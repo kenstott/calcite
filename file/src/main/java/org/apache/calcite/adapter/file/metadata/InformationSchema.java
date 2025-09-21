@@ -34,11 +34,14 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.type.SqlTypeName;
-
-import com.google.common.collect.ImmutableMap;
+import org.apache.calcite.rel.RelReferentialConstraint;
+import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.mapping.IntPair;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableMap;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -360,8 +363,8 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  // Empty tables for constraints (file adapter doesn't have these)
-  private class TableConstraintsTable extends EmptyTable {
+  // Table for constraint metadata
+  private class TableConstraintsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -375,9 +378,88 @@ public class InformationSchema extends AbstractSchema {
           .add("INITIALLY_DEFERRED", SqlTypeName.VARCHAR)
           .build();
     }
+
+    @Override public Enumerable<Object[]> scan(DataContext root) {
+      List<Object[]> rows = new ArrayList<>();
+
+      // Iterate through all schemas
+      for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
+        if (schema != null) {
+          // Iterate through all tables in the schema
+          for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            Table table = schema.tables().get(tableName);
+            if (table != null) {
+              LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
+                          tableName, schemaName, table.getClass().getSimpleName());
+              // Get table statistics which contain constraint information
+              Statistic statistic = table.getStatistic();
+              LOGGER.info("  - statistic: {}, keys: {}, referentialConstraints: {}",
+                          statistic != null ? statistic.getClass().getSimpleName() : "null",
+                          statistic != null && statistic.getKeys() != null ? statistic.getKeys().size() : "null",
+                          statistic != null && statistic.getReferentialConstraints() != null ?
+                              statistic.getReferentialConstraints().size() : "null");
+              if (statistic != null) {
+                // Extract primary keys
+                List<ImmutableBitSet> keys = statistic.getKeys();
+                if (keys != null) {
+                  int keyIndex = 0;
+                  for (ImmutableBitSet key : keys) {
+                    String constraintName = (keyIndex == 0)
+                        ? "PK_" + tableName.toUpperCase()
+                        : "UK_" + tableName.toUpperCase() + "_" + keyIndex;
+
+                    rows.add(new Object[]{
+                        catalogName,                    // CONSTRAINT_CATALOG
+                        schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                        constraintName,                  // CONSTRAINT_NAME
+                        catalogName,                    // TABLE_CATALOG
+                        schemaName.toUpperCase(),       // TABLE_SCHEMA
+                        tableName,                       // TABLE_NAME
+                        (keyIndex == 0) ? "PRIMARY KEY" : "UNIQUE", // CONSTRAINT_TYPE
+                        "NO",                           // IS_DEFERRABLE
+                        "NO"                            // INITIALLY_DEFERRED
+                    });
+                    keyIndex++;
+                  }
+                }
+
+                // Extract foreign keys
+                List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
+                if (foreignKeys != null) {
+                  int fkIndex = 0;
+                  for (RelReferentialConstraint fk : foreignKeys) {
+                    String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
+
+                    rows.add(new Object[]{
+                        catalogName,                    // CONSTRAINT_CATALOG
+                        schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                        constraintName,                  // CONSTRAINT_NAME
+                        catalogName,                    // TABLE_CATALOG
+                        schemaName.toUpperCase(),       // TABLE_SCHEMA
+                        tableName,                       // TABLE_NAME
+                        "FOREIGN KEY",                  // CONSTRAINT_TYPE
+                        "NO",                           // IS_DEFERRABLE
+                        "NO"                            // INITIALLY_DEFERRED
+                    });
+                    fkIndex++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return Linq4j.asEnumerable(rows);
+    }
+
+    @Override public Statistic getStatistic() {
+      return Statistics.UNKNOWN;
+    }
   }
 
-  private class KeyColumnUsageTable extends EmptyTable {
+  private class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -391,9 +473,105 @@ public class InformationSchema extends AbstractSchema {
           .add("POSITION_IN_UNIQUE_CONSTRAINT", SqlTypeName.INTEGER)
           .build();
     }
+
+    @Override public Enumerable<Object[]> scan(DataContext root) {
+      List<Object[]> rows = new ArrayList<>();
+
+      // Iterate through all schemas
+      for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
+        if (schema != null) {
+          // Iterate through all tables in the schema
+          for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            Table table = schema.tables().get(tableName);
+            if (table != null) {
+              // Get column names for the table
+              RelDataType rowType = table.getRowType(root.getTypeFactory());
+              List<String> columnNames = new ArrayList<>();
+              for (RelDataTypeField field : rowType.getFieldList()) {
+                columnNames.add(field.getName());
+              }
+
+              // Get table statistics which contain constraint information
+              Statistic statistic = table.getStatistic();
+              if (statistic != null) {
+                // Extract primary and unique keys
+                List<ImmutableBitSet> keys = statistic.getKeys();
+                if (keys != null) {
+                  int keyIndex = 0;
+                  for (ImmutableBitSet key : keys) {
+                    String constraintName = (keyIndex == 0)
+                        ? "PK_" + tableName.toUpperCase()
+                        : "UK_" + tableName.toUpperCase() + "_" + keyIndex;
+
+                    // Add a row for each column in the key
+                    int ordinalPosition = 1;
+                    for (int columnIndex : key) {
+                      if (columnIndex < columnNames.size()) {
+                        rows.add(new Object[]{
+                            catalogName,                    // CONSTRAINT_CATALOG
+                            schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                            constraintName,                  // CONSTRAINT_NAME
+                            catalogName,                    // TABLE_CATALOG
+                            schemaName.toUpperCase(),       // TABLE_SCHEMA
+                            tableName,                       // TABLE_NAME
+                            columnNames.get(columnIndex),   // COLUMN_NAME
+                            ordinalPosition,                 // ORDINAL_POSITION
+                            null                            // POSITION_IN_UNIQUE_CONSTRAINT
+                        });
+                        ordinalPosition++;
+                      }
+                    }
+                    keyIndex++;
+                  }
+                }
+
+                // Extract foreign keys
+                List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
+                if (foreignKeys != null) {
+                  int fkIndex = 0;
+                  for (RelReferentialConstraint fk : foreignKeys) {
+                    String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
+
+                    // Add a row for each column in the foreign key
+                    int ordinalPosition = 1;
+                    for (IntPair pair : fk.getColumnPairs()) {
+                      int columnIndex = pair.source;
+                      if (columnIndex < columnNames.size()) {
+                        Integer positionInUnique = pair.target + 1;
+
+                        rows.add(new Object[]{
+                            catalogName,                    // CONSTRAINT_CATALOG
+                            schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                            constraintName,                  // CONSTRAINT_NAME
+                            catalogName,                    // TABLE_CATALOG
+                            schemaName.toUpperCase(),       // TABLE_SCHEMA
+                            tableName,                       // TABLE_NAME
+                            columnNames.get(columnIndex),   // COLUMN_NAME
+                            ordinalPosition,                 // ORDINAL_POSITION
+                            positionInUnique                // POSITION_IN_UNIQUE_CONSTRAINT
+                        });
+                        ordinalPosition++;
+                      }
+                    }
+                    fkIndex++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return Linq4j.asEnumerable(rows);
+    }
+
+    @Override public Statistic getStatistic() {
+      return Statistics.UNKNOWN;
+    }
   }
 
-  private class ReferentialConstraintsTable extends EmptyTable {
+  private class ReferentialConstraintsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -406,6 +584,64 @@ public class InformationSchema extends AbstractSchema {
           .add("UPDATE_RULE", SqlTypeName.VARCHAR)
           .add("DELETE_RULE", SqlTypeName.VARCHAR)
           .build();
+    }
+
+    @Override public Enumerable<Object[]> scan(DataContext root) {
+      List<Object[]> rows = new ArrayList<>();
+
+      // Iterate through all schemas
+      for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
+        if (schema != null) {
+          // Iterate through all tables in the schema
+          for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            Table table = schema.tables().get(tableName);
+            if (table != null) {
+              LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
+                          tableName, schemaName, table.getClass().getSimpleName());
+              // Get table statistics which contain constraint information
+              Statistic statistic = table.getStatistic();
+              if (statistic != null) {
+                // Extract foreign keys
+                List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
+                if (foreignKeys != null) {
+                  int fkIndex = 0;
+                  for (RelReferentialConstraint fk : foreignKeys) {
+                    String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
+
+                    // Get referenced table info
+                    String referencedSchema = schemaName.toUpperCase(); // Assume same schema
+                    List<String> qualifiedName = fk.getTargetQualifiedName();
+                    String referencedTable = qualifiedName.get(qualifiedName.size() - 1);
+
+                    // Generate name for the referenced constraint (primary key)
+                    String uniqueConstraintName = "PK_" + referencedTable.toUpperCase();
+
+                    rows.add(new Object[]{
+                        catalogName,                    // CONSTRAINT_CATALOG
+                        schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                        constraintName,                  // CONSTRAINT_NAME
+                        catalogName,                    // UNIQUE_CONSTRAINT_CATALOG
+                        referencedSchema,                // UNIQUE_CONSTRAINT_SCHEMA
+                        uniqueConstraintName,            // UNIQUE_CONSTRAINT_NAME
+                        "FULL",                          // MATCH_OPTION
+                        "NO ACTION",                     // UPDATE_RULE
+                        "NO ACTION"                      // DELETE_RULE
+                    });
+                    fkIndex++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return Linq4j.asEnumerable(rows);
+    }
+
+    @Override public Statistic getStatistic() {
+      return Statistics.UNKNOWN;
     }
   }
 

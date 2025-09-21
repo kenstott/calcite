@@ -80,7 +80,7 @@ public class PartitionedTableTest {
     String engineStr = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     assumeFalse(engineStr != null && ("LINQ4J".equalsIgnoreCase(engineStr) || "ARROW".equalsIgnoreCase(engineStr)),
         "Skipping partitioned table test for " + engineStr + " engine (not supported)");
-    
+
     tempDir = java.nio.file.Files.createTempDirectory("partitioned-test-").toFile();
     avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
     // Clear any static caches that might interfere with test isolation
@@ -94,13 +94,13 @@ public class PartitionedTableTest {
     Sources.clearFileCache();
     System.gc();
     Thread.sleep(100);
-    
+
     // Clean up temp directory
     if (tempDir != null && tempDir.exists()) {
       deleteDirectory(tempDir);
     }
   }
-  
+
   private void deleteDirectory(File dir) {
     if (dir.isDirectory()) {
       File[] files = dir.listFiles();
@@ -172,7 +172,6 @@ public class PartitionedTableTest {
 
     // Create schema configuration with no partition config
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put(
         "partitionedTables", java.util.Arrays.asList(

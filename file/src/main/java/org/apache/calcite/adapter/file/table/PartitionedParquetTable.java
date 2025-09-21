@@ -27,7 +27,9 @@ import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelProtoDataType;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
@@ -41,10 +43,12 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,11 +61,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * Table implementation for partitioned Parquet datasets.
  * Represents multiple Parquet files as a single logical table.
  */
-public class PartitionedParquetTable extends AbstractTable implements ScannableTable {
+public class PartitionedParquetTable extends AbstractTable implements ScannableTable, CommentableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedParquetTable.class);
 
   private final List<String> filePaths;
@@ -71,11 +77,15 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   private List<String> partitionColumns;
   private List<String> addedPartitionColumns;  // Partition columns actually added to schema
   private Map<String, String> partitionColumnTypes;
+  private Map<String, String> columnTypes;  // Column types from Parquet file
+  private List<String> parquetColumnNames;  // Column names from Parquet file
   private String customRegex;
   private List<PartitionedTableConfig.ColumnMapping> columnMappings;
   private Map<String, Object> constraintConfig;
   private String schemaName;
   private String tableName;
+  private String tableComment;
+  private Map<String, String> columnComments;
 
   public PartitionedParquetTable(List<String> filePaths,
                                  PartitionDetector.PartitionInfo partitionInfo,
@@ -141,6 +151,93 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     if (partitionColumnTypes != null && !partitionColumnTypes.isEmpty()) {
       LOGGER.debug("Partition column types: {}", partitionColumnTypes);
     }
+
+    // Extract comments from Parquet metadata
+    extractComments();
+  }
+
+  /**
+   * Extract table and column comments from Parquet file metadata.
+   */
+  private void extractComments() {
+    if (filePaths == null || filePaths.isEmpty()) {
+      LOGGER.debug("No files to extract comments from");
+      return;
+    }
+
+    try {
+      // Read metadata from the first Parquet file
+      String firstFile = filePaths.get(0);
+      Configuration conf = new Configuration();
+      Path path = new Path(firstFile);
+
+      // Read Parquet metadata
+      @SuppressWarnings("deprecation")
+      ParquetMetadata metadata = ParquetFileReader.readFooter(conf, path);
+      FileMetaData fileMetaData = metadata.getFileMetaData();
+
+      // Extract table comment from file key-value metadata
+      Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
+      if (keyValueMetaData != null) {
+        // Look for table comment in various possible keys
+        tableComment = keyValueMetaData.get("table.comment");
+        if (tableComment == null) {
+          tableComment = keyValueMetaData.get("comment");
+        }
+        if (tableComment == null) {
+          tableComment = keyValueMetaData.get("description");
+        }
+
+        if (tableComment != null) {
+          LOGGER.debug("Found table comment: {}", tableComment);
+        }
+      }
+
+      // Extract column comments from schema
+      MessageType schema = fileMetaData.getSchema();
+      columnComments = new LinkedHashMap<>();
+
+      // Extract column names from Parquet schema for constraint mapping
+      parquetColumnNames = new ArrayList<>();
+
+      for (Type field : schema.getFields()) {
+        String fieldName = field.getName();
+        parquetColumnNames.add(fieldName);
+
+        // Try to get comment from field's original type (if it has one)
+        String fieldComment = null;
+
+        // Check if there's a column-specific comment in key-value metadata
+        if (keyValueMetaData != null) {
+          fieldComment = keyValueMetaData.get("column." + fieldName + ".comment");
+          if (fieldComment == null) {
+            fieldComment = keyValueMetaData.get(fieldName + ".comment");
+          }
+        }
+
+        // Store the comment if found
+        if (fieldComment != null) {
+          columnComments.put(fieldName, fieldComment);
+          LOGGER.debug("Found comment for column '{}': {}", fieldName, fieldComment);
+        }
+      }
+
+      // Add partition columns to the column names list
+      if (partitionColumns != null && !partitionColumns.isEmpty()) {
+        parquetColumnNames.addAll(partitionColumns);
+      }
+
+      LOGGER.debug("Extracted {} column names from Parquet schema (including {} partition columns)",
+          parquetColumnNames.size(),
+          partitionColumns != null ? partitionColumns.size() : 0);
+      LOGGER.debug("Comment extraction complete. Table comment: {}, Column comments: {}",
+          tableComment != null ? "present" : "absent", columnComments.size());
+
+    } catch (Exception e) {
+      // Log but don't fail - comments are optional metadata
+      LOGGER.warn("Failed to extract comments from Parquet file: {}", e.getMessage());
+      LOGGER.debug("Comment extraction error details:", e);
+    }
   }
 
   /**
@@ -153,21 +250,31 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
   @Override
   public Statistic getStatistic() {
+    LOGGER.debug("getStatistic called for table '{}': constraintConfig={}", tableName,
+        constraintConfig != null ? constraintConfig.keySet() : "null");
     if (constraintConfig == null || constraintConfig.isEmpty()) {
       // No constraints configured, return default
       return Statistics.UNKNOWN;
     }
 
-    // Build the table configuration with name for constraint metadata
+    // Build the table configuration with "constraints" key as expected by TableConstraints.fromConfig
     Map<String, Object> tableConfig = new LinkedHashMap<>();
-    tableConfig.putAll(constraintConfig);
-    
-    // Get column names from row type
+    tableConfig.put("constraints", constraintConfig);  // Wrap in "constraints" key
+
+    // Use the column names extracted from Parquet schema during initialization
     List<String> columnNames = new ArrayList<>();
-    // We'll need to get column names differently since we can't instantiate JavaTypeFactory
-    // For now, return the statistic without column name resolution
-    // This can be enhanced later when we have access to a proper type factory
-    
+    if (parquetColumnNames != null && !parquetColumnNames.isEmpty()) {
+      columnNames.addAll(parquetColumnNames);
+      LOGGER.debug("Using {} column names from Parquet schema for constraints in table '{}'",
+                   columnNames.size(), tableName);
+    } else if (columnTypes != null && !columnTypes.isEmpty()) {
+      // Fallback to columnTypes map if parquetColumnNames not available
+      columnNames.addAll(columnTypes.keySet());
+      LOGGER.debug("Got {} column names from columnTypes for table '{}'", columnNames.size(), tableName);
+    } else {
+      LOGGER.warn("No column names available for table '{}' - constraints won't work", tableName);
+    }
+
     // Create statistic with constraints, passing schema and table names
     return TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
   }
@@ -618,5 +725,18 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     @Override public void close() {
       closeCurrentReader();
     }
+  }
+
+  // CommentableTable implementation
+
+  @Override public @Nullable String getTableComment() {
+    return tableComment;
+  }
+
+  @Override public @Nullable String getColumnComment(String columnName) {
+    if (columnComments == null) {
+      return null;
+    }
+    return columnComments.get(columnName);
   }
 }

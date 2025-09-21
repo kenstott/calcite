@@ -602,9 +602,14 @@ public class DuckDBJdbcSchemaFactory {
 
           if (sql != null) {
             try {
+              LOGGER.info("=== EXECUTING DuckDB DDL ===");
+              LOGGER.info("🎯 Table: {}.{}", duckdbSchema, tableName);
+              LOGGER.info("🔍 ParquetPath: {}", parquetPath);
+              LOGGER.info("📝 SQL: {}", sql);
+              LOGGER.info("⚙️ About to execute SQL statement...");
               conn.createStatement().execute(sql);
               viewCount++;
-              LOGGER.debug("Successfully created view: {}.{}", duckdbSchema, tableName);
+              LOGGER.info("✅ SUCCESS: Created DuckDB view: {}.{}", duckdbSchema, tableName);
 
               // Add diagnostic logging to see what DuckDB interprets from the Parquet file
               try (Statement debugStmt = conn.createStatement();
@@ -621,12 +626,22 @@ public class DuckDBJdbcSchemaFactory {
                 LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
               }
             } catch (SQLException e) {
-              LOGGER.warn("Failed to create view for table '{}': {}", tableName, e.getMessage());
+              LOGGER.error("✗ FAILED to create DuckDB view for table '{}'", tableName);
+              LOGGER.error("✗ SQL that failed: {}", sql);
+              LOGGER.error("✗ Error details: {}", e.getMessage());
+              LOGGER.error("✗ SQL State: {}", e.getSQLState());
+              LOGGER.error("✗ Error Code: {}", e.getErrorCode());
+              // Log the full stack trace for debugging
+              e.printStackTrace();
             }
           }
         } else {
-          LOGGER.debug("Skipping registry entry - no table name or suitable path. Table: {}, Path: {}",
-                      tableName, parquetPath);
+          LOGGER.warn("❌ SKIPPING table - no suitable path found");
+          LOGGER.warn("❌ Table name: '{}'", tableName);
+          LOGGER.warn("❌ ParquetPath: '{}'", parquetPath);
+          LOGGER.warn("❌ Record sourceFile: '{}'", record.getSourceFile());
+          LOGGER.warn("❌ Record convertedFile: '{}'", record.getConvertedFile());
+          LOGGER.warn("❌ Record parquetCacheFile: '{}'", record.getParquetCacheFile());
         }
       }
     }

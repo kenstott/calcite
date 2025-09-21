@@ -49,6 +49,7 @@ import org.apache.calcite.adapter.file.table.GlobParquetTable;
 import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.ParquetTranslatableTable;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
+import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
@@ -111,7 +112,7 @@ import java.util.regex.Pattern;
  *       across multiple FileSchema instances may cause conflicts</li>
  * </ul>
  */
-public class FileSchema extends AbstractSchema {
+public class FileSchema extends AbstractSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileSchema.class);
   private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
@@ -201,6 +202,7 @@ public class FileSchema extends AbstractSchema {
   private final @Nullable Boolean flatten;
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
   private final boolean primeCache;
+  private final @Nullable String comment;
   // Cache directories use schema name for stable, predictable paths
 
   // Track refreshable tables for periodic refresh (needed for DUCKDB)
@@ -251,7 +253,7 @@ public class FileSchema extends AbstractSchema {
     this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
         recursive, materializations, views, partitionedTables, refreshInterval,
         tableNameCasing, columnNameCasing, storageType, storageConfig, flatten,
-        csvTypeInference, primeCache);
+        csvTypeInference, primeCache, null);
   }
 
   /**
@@ -294,6 +296,54 @@ public class FileSchema extends AbstractSchema {
       @Nullable Boolean flatten,
       @Nullable Map<String, Object> csvTypeInference,
       boolean primeCache) {
+    this(parentSchema, name, sourceDirectory, userConfiguredBaseDirectory, directoryPattern,
+        tables, engineConfig, recursive, materializations, views, partitionedTables,
+        refreshInterval, tableNameCasing, columnNameCasing, storageType, storageConfig,
+        flatten, csvTypeInference, primeCache, null);
+  }
+
+  /**
+   * Creates a file schema with all features including storage provider support and schema comment.
+   * This constructor accepts both sourceDirectory, userConfiguredBaseDirectory, and comment.
+   *
+   * @param parentSchema    Parent schema
+   * @param name            Schema name
+   * @param sourceDirectory Source directory to look for files, or null
+   * @param userConfiguredBaseDirectory User-configured base directory for .aperio location from model.json, or null
+   * @param directoryPattern Directory pattern for file discovery, or null
+   * @param tables          List containing table identifiers, or null
+   * @param engineConfig    Execution engine configuration
+   * @param recursive       Whether to recursively scan subdirectories
+   * @param materializations List of materialized view definitions, or null
+   * @param views           List of view definitions, or null
+   * @param partitionedTables List of partitioned table definitions, or null
+   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
+   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
+   * @param storageConfig   Storage-specific configuration, or null
+   * @param flatten         Whether to flatten JSON/YAML structures, or null
+   * @param csvTypeInference CSV type inference configuration, or null
+   * @param primeCache      Whether to prime statistics cache on initialization (default true)
+   * @param comment         Schema comment for documentation, or null
+   */
+  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
+      @Nullable File userConfiguredBaseDirectory,
+      @Nullable String directoryPattern,
+      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
+      boolean recursive,
+      @Nullable List<Map<String, Object>> materializations,
+      @Nullable List<Map<String, Object>> views,
+      @Nullable List<Map<String, Object>> partitionedTables,
+      @Nullable String refreshInterval,
+      String tableNameCasing,
+      String columnNameCasing,
+      @Nullable String storageType,
+      @Nullable Map<String, Object> storageConfig,
+      @Nullable Boolean flatten,
+      @Nullable Map<String, Object> csvTypeInference,
+      boolean primeCache,
+      @Nullable String comment) {
     this.tables =
         tables == null ? ImmutableList.of()
             : ImmutableList.copyOf(tables);
@@ -357,6 +407,7 @@ public class FileSchema extends AbstractSchema {
     this.flatten = flatten;
     this.csvTypeInferenceConfig = CsvTypeInferrer.TypeInferenceConfig.fromMap(csvTypeInference);
     this.primeCache = primeCache;
+    this.comment = comment;
 
     // Schema name is used for cache directory naming to ensure stable, predictable paths
     LOGGER.debug("FileSchema created with name: {}", name);
@@ -1970,7 +2021,41 @@ public class FileSchema extends AbstractSchema {
 
     // Note: partitioned tables are already processed above, before views/materialized views
 
-    tableCache = builder.build();
+    // DEBUG: Log what's in the builder before final build
+    try {
+      Map<String, Table> previewTables = builder.build();
+      LOGGER.info("=== FINAL TABLE BUILDER CONTENTS BEFORE CACHE ===");
+      LOGGER.info("Total tables in builder: {}", previewTables.size());
+      for (Map.Entry<String, Table> entry : previewTables.entrySet()) {
+        LOGGER.info("  Table: '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
+      }
+      LOGGER.info("=== END BUILDER CONTENTS ===");
+      
+      // Debug: Log what tables we have before final build
+      LOGGER.info("=== BEFORE FINAL BUILD ===");
+      LOGGER.info("Preview tables count: {}", previewTables.size());
+      for (Map.Entry<String, Table> entry : previewTables.entrySet()) {
+        LOGGER.info("  Table '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
+      }
+      LOGGER.info("=== END BEFORE FINAL BUILD ===");
+      
+      // Rebuild the builder since build() consumes it
+      ImmutableMap.Builder<String, Table> newBuilder = ImmutableMap.builder();
+      newBuilder.putAll(previewTables);
+      tableCache = newBuilder.build();
+      
+      // Debug: Log final table cache contents
+      LOGGER.info("=== FINAL TABLE CACHE ===");
+      LOGGER.info("Final tableCache count: {}", tableCache.size());
+      for (Map.Entry<String, Table> entry : tableCache.entrySet()) {
+        LOGGER.info("  Final table '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
+      }
+      LOGGER.info("=== END FINAL TABLE CACHE ===");
+    } catch (Exception builderException) {
+      LOGGER.error("Exception during final table cache build: {}", builderException.getMessage(), builderException);
+      throw builderException;
+    }
+    
     LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}",
                 tableCache.size(), name, tableCache.keySet());
     if (tableCache.isEmpty()) {
@@ -3445,9 +3530,13 @@ public class FileSchema extends AbstractSchema {
         // Create the partitioned table - use refreshable version if interval configured
         Table table;
         if (this.refreshInterval != null) {
-          // Extract constraint configuration if present
-          @SuppressWarnings("unchecked")
-          Map<String, Object> constraintConfig = (Map<String, Object>) partTableConfig.get("constraints");
+          // Get constraint configuration from FileSchema's constraint metadata
+          Map<String, Object> constraintConfig = getTableConstraints(config.getName());
+          if (constraintConfig != null) {
+            LOGGER.info("Found constraint config for table '{}': {}", config.getName(), constraintConfig.keySet());
+          } else {
+            LOGGER.debug("No constraint config found for table '{}'", config.getName());
+          }
           // Use refreshable version that can discover new partitions
           RefreshablePartitionedParquetTable refreshableTable =
               new RefreshablePartitionedParquetTable(config.getName(),
@@ -3458,9 +3547,8 @@ public class FileSchema extends AbstractSchema {
           table = refreshableTable;
         } else {
           // Use standard version
-          // Extract constraint configuration if present
-          @SuppressWarnings("unchecked")
-          Map<String, Object> constraintConfig = (Map<String, Object>) partTableConfig.get("constraints");
+          // Get constraint configuration from FileSchema's constraint metadata
+          Map<String, Object> constraintConfig = getTableConstraints(config.getName());
           table =
               new PartitionedParquetTable(matchingFiles, partitionInfo,
                   engineConfig, columnTypes, null, null, constraintConfig, name, config.getName());
@@ -3473,9 +3561,20 @@ public class FileSchema extends AbstractSchema {
         }
 
         // Storage provider config explicitly defines table name - use as-is
-        builder.put(config.getName(), table);
-        alreadyProcessed.add(config.getName());
-        LOGGER.info("Added partitioned table '{}' to builder, matchingFiles.size: {}", config.getName(), matchingFiles.size());
+        try {
+          LOGGER.info("=== ADDING PARTITIONED TABLE TO BUILDER ===");
+          LOGGER.info("Table name: '{}'", config.getName());
+          LOGGER.info("Table class: {}", table.getClass().getName());
+          LOGGER.info("Table toString: {}", table.toString());
+          LOGGER.info("MatchingFiles count: {}", matchingFiles.size());
+          
+          builder.put(config.getName(), table);
+          alreadyProcessed.add(config.getName());
+          LOGGER.info("✓ SUCCESS: Added partitioned table '{}' to builder, matchingFiles.size: {}", config.getName(), matchingFiles.size());
+        } catch (Exception builderEx) {
+          LOGGER.error("✗ FAILED: Exception adding partitioned table '{}' to builder: {}", config.getName(), builderEx.getMessage(), builderEx);
+          throw builderEx; // Re-throw to maintain error handling
+        }
 
         // Record table metadata for comprehensive tracking (same as other table types)
         // Use the first file as representative source for partitioned tables
@@ -3521,6 +3620,8 @@ public class FileSchema extends AbstractSchema {
       return result;
     }
 
+    LOGGER.info("findMatchingFiles: sourceDirectory={}, pattern={}", sourceDirectory.getAbsolutePath(), pattern);
+
     try {
       Path basePath = sourceDirectory.toPath();
       PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
@@ -3549,6 +3650,7 @@ public class FileSchema extends AbstractSchema {
           if (matcher.matches(relativePath) ||
               (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
             result.add(file.toString());
+            LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", file, relativePath);
           }
           return FileVisitResult.CONTINUE;
         }
@@ -3559,6 +3661,7 @@ public class FileSchema extends AbstractSchema {
       e.printStackTrace();
     }
 
+    LOGGER.info("findMatchingFiles: Found {} files matching pattern: {}", result.size(), pattern);
     return result;
   }
 
@@ -4510,20 +4613,38 @@ public class FileSchema extends AbstractSchema {
    */
   public void setConstraintMetadata(Map<String, Map<String, Object>> constraintMetadata) {
     this.constraintMetadata = constraintMetadata;
-    LOGGER.debug("Received constraint metadata for {} tables", constraintMetadata.size());
-    
+    LOGGER.info("FileSchema.setConstraintMetadata: Received constraint metadata for {} tables", constraintMetadata.size());
+    for (String tableName : constraintMetadata.keySet()) {
+      LOGGER.info("  - Constraint config for table: '{}'", tableName);
+      Map<String, Object> config = constraintMetadata.get(tableName);
+      if (config != null) {
+        LOGGER.info("    Keys in config: {}", config.keySet());
+      }
+    }
+
     // Tables will use this metadata when getStatistic() is called
     // This enables query optimization and JDBC metadata support
   }
   
   /**
    * Gets constraint metadata for a specific table.
-   * 
+   *
    * @param tableName The table name
    * @return Constraint metadata or null if none defined
    */
   public Map<String, Object> getTableConstraints(String tableName) {
-    return constraintMetadata.get(tableName);
+    Map<String, Object> result = constraintMetadata.get(tableName);
+    if (result != null) {
+      LOGGER.info("getTableConstraints('{}') -> found constraint config", tableName);
+    } else {
+      LOGGER.info("getTableConstraints('{}') -> not found (available tables: {})",
+                  tableName, constraintMetadata.keySet());
+    }
+    return result;
+  }
+
+  @Override public @Nullable String getComment() {
+    return comment;
   }
 
 }

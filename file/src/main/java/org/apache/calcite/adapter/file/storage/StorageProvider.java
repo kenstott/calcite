@@ -205,6 +205,72 @@ public interface StorageProvider {
     }
   }
 
+
+  /**
+   * Writes Avro GenericRecords to a Parquet file using modern ParquetWriter API.
+   * This is a consolidated method that all adapters can use for Parquet writing.
+   * 
+   * @param path The file path where the Parquet file should be written
+   * @param schema The Avro schema for the records
+   * @param records The list of GenericRecords to write
+   * @param recordType Descriptive name for logging (e.g., "facts", "metadata")
+   * @throws IOException If an I/O error occurs
+   * @throws UnsupportedOperationException If this storage provider is read-only
+   */
+  @SuppressWarnings("deprecation")
+  default void writeAvroParquet(String path, org.apache.avro.Schema schema,
+                               java.util.List<org.apache.avro.generic.GenericRecord> records,
+                               String recordType) throws IOException {
+    java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+        .info("DEBUG: writeAvroParquet() START - path: " + path + ", recordType: " + recordType + ", recordCount: " + records.size());
+
+    if (records.isEmpty()) {
+      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+          .info("DEBUG: writeAvroParquet() - No records to write, skipping");
+      return; // Nothing to write
+    }
+
+    // Create temporary file for writing with more unique name - use a UUID for maximum uniqueness
+    String uniqueId = java.util.UUID.randomUUID().toString();
+    java.io.File tempFile = java.io.File.createTempFile(recordType.toLowerCase() + "_" + uniqueId + "_", ".parquet");
+    // Delete the temp file immediately so ParquetWriter can create it fresh
+    tempFile.delete();
+    try {
+      // Use modern ParquetWriter API with try-with-resources
+      try (org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer = 
+           org.apache.parquet.avro.AvroParquetWriter
+               .<org.apache.avro.generic.GenericRecord>builder(
+                   new org.apache.hadoop.fs.Path(tempFile.toURI()))
+               .withSchema(schema)
+               .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
+               .build()) {
+        
+        for (org.apache.avro.generic.GenericRecord record : records) {
+          writer.write(record);
+        }
+      }
+
+      // Use StorageProvider to move temp file to final location
+      byte[] parquetData = java.nio.file.Files.readAllBytes(tempFile.toPath());
+      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+          .info("DEBUG: writeAvroParquet() - Writing " + parquetData.length + " bytes to final location: " + path);
+      writeFile(path, parquetData);
+      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+          .info("DEBUG: writeAvroParquet() COMPLETED successfully - path: " + path);
+      
+    } finally {
+      // Clean up temp file
+      if (tempFile.exists() && !tempFile.delete()) {
+        // Log warning but don't fail the operation
+        System.err.println("Warning: Could not delete temporary file: " + tempFile.getAbsolutePath());
+      }
+    }
+    
+    // Clean up macOS metadata files after writing
+    String parentDir = java.nio.file.Paths.get(path).getParent().toString();
+    cleanupMacosMetadata(parentDir);
+  }
+
   /**
    * Clean up macOS metadata files in the specified directory.
    * Removes files like ._*, .DS_Store, *.crc, *~, *.tmp that can interfere 
