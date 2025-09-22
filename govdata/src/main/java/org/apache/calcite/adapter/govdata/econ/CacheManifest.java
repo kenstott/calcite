@@ -41,7 +41,7 @@ public class CacheManifest {
   // Default cache TTL - 24 hours for most economic data
   private static final long DEFAULT_TTL_HOURS = 24;
   private static final long CURRENT_YEAR_TTL_HOURS = 24;  // Current year data expires daily
-  private static final long HISTORICAL_TTL_HOURS = 24 * 7;  // Historical data can be cached longer
+  private static final long HISTORICAL_TTL_HOURS = Long.MAX_VALUE / (1000 * 60 * 60);  // Prior year data never expires (immutable)
   
   @JsonProperty("entries")
   private Map<String, CacheEntry> entries = new HashMap<>();
