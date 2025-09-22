@@ -16,8 +16,15 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,31 +78,97 @@ public class HudCrosswalkFetcher {
   private final String token;
   private final File cacheDir;
   private final ObjectMapper objectMapper;
+  private final StorageProvider storageProvider;
   
   public HudCrosswalkFetcher(String username, String password, File cacheDir) {
-    this(username, password, null, cacheDir);
+    this(username, password, null, cacheDir, null);
   }
-  
+
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir) {
+    this(username, password, token, cacheDir, null);
+  }
+
+  public HudCrosswalkFetcher(String username, String password, File cacheDir,
+      StorageProvider storageProvider) {
+    this(username, password, null, cacheDir, storageProvider);
+  }
+
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      StorageProvider storageProvider) {
     this.username = username;
     this.password = password;
     this.token = token;
     this.cacheDir = cacheDir;
     this.objectMapper = new ObjectMapper();
-    
+    this.storageProvider = storageProvider;
+
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
     }
-    
+
     LOGGER.info("HUD crosswalk fetcher initialized with cache directory: {}", cacheDir);
+  }
+
+  /**
+   * Download all HUD crosswalk data for the specified year range (matching ECON pattern).
+   */
+  public void downloadAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Downloading all HUD crosswalk data for years {} to {}", startYear, endYear);
+
+    // HUD releases data quarterly, we'll download Q2 (mid-year) data for each year
+    for (int year = startYear; year <= endYear; year++) {
+      // Create year-specific cache directory
+      File yearCacheDir = new File(cacheDir, "year=" + year);
+      if (!yearCacheDir.exists()) {
+        yearCacheDir.mkdirs();
+      }
+
+      try {
+        // Try Q2 first, fallback to Q1 if not available
+        String[] quarters = {"2", "1", "3", "4"};
+        boolean downloaded = false;
+
+        for (String quarter : quarters) {
+          try {
+            LOGGER.info("Attempting to download HUD crosswalk files for {}Q{}", year, quarter);
+
+            // Download all crosswalk types for this quarter
+            downloadZipToCountyForYear(quarter, year);
+            downloadZipToTractForYear(quarter, year);
+            downloadZipToCbsaForYear(quarter, year);
+
+            downloaded = true;
+            LOGGER.info("Successfully downloaded HUD crosswalk files for {}Q{}", year, quarter);
+            break; // Stop after first successful quarter
+
+          } catch (Exception e) {
+            LOGGER.debug("Failed to download HUD data for {}Q{}: {}", year, quarter, e.getMessage());
+          }
+        }
+
+        if (!downloaded) {
+          LOGGER.warn("No HUD crosswalk data available for year {}", year);
+        }
+
+      } catch (Exception e) {
+        LOGGER.error("Error downloading HUD crosswalk data for year {}", year, e);
+      }
+    }
+
+    LOGGER.info("HUD crosswalk data download completed for years {} to {}", startYear, endYear);
   }
   
   /**
-   * Download the latest ZIP to County crosswalk file.
+   * Download ZIP to County crosswalk file for a specific year and quarter.
    */
-  public File downloadZipToCounty(String quarter, int year) throws IOException {
+  private File downloadZipToCountyForYear(String quarter, int year) throws IOException {
+    File yearDir = new File(cacheDir, "year=" + year);
     String filename = String.format("ZIP_COUNTY_%dQ%s.csv", year, quarter);
-    File outputFile = new File(cacheDir, filename);
+    File outputFile = new File(yearDir, filename);
+
+    if (!yearDir.exists()) {
+      yearDir.mkdirs();
+    }
     
     if (outputFile.exists()) {
       LOGGER.info("ZIP to County crosswalk already exists: {}", outputFile);
@@ -115,11 +188,12 @@ public class HudCrosswalkFetcher {
   }
   
   /**
-   * Download the latest ZIP to Census Tract crosswalk file.
+   * Download ZIP to Census Tract crosswalk file for a specific year and quarter.
    */
-  public File downloadZipToTract(String quarter, int year) throws IOException {
+  private File downloadZipToTractForYear(String quarter, int year) throws IOException {
+    File yearDir = new File(cacheDir, "year=" + year);
     String filename = String.format("ZIP_TRACT_%dQ%s.csv", year, quarter);
-    File outputFile = new File(cacheDir, filename);
+    File outputFile = new File(yearDir, filename);
     
     if (outputFile.exists()) {
       LOGGER.info("ZIP to Tract crosswalk already exists: {}", outputFile);
@@ -139,11 +213,12 @@ public class HudCrosswalkFetcher {
   }
   
   /**
-   * Download the latest ZIP to CBSA (Metro Area) crosswalk file.
+   * Download ZIP to CBSA (Metro Area) crosswalk file for a specific year and quarter.
    */
-  public File downloadZipToCbsa(String quarter, int year) throws IOException {
+  private File downloadZipToCbsaForYear(String quarter, int year) throws IOException {
+    File yearDir = new File(cacheDir, "year=" + year);
     String filename = String.format("ZIP_CBSA_%dQ%s.csv", year, quarter);
-    File outputFile = new File(cacheDir, filename);
+    File outputFile = new File(yearDir, filename);
     
     if (outputFile.exists()) {
       LOGGER.info("ZIP to CBSA crosswalk already exists: {}", outputFile);
@@ -163,6 +238,21 @@ public class HudCrosswalkFetcher {
   }
   
   /**
+   * Backward compatibility methods - delegate to year-specific versions.
+   */
+  public File downloadZipToCounty(String quarter, int year) throws IOException {
+    return downloadZipToCountyForYear(quarter, year);
+  }
+
+  public File downloadZipToTract(String quarter, int year) throws IOException {
+    return downloadZipToTractForYear(quarter, year);
+  }
+
+  public File downloadZipToCbsa(String quarter, int year) throws IOException {
+    return downloadZipToCbsaForYear(quarter, year);
+  }
+
+  /**
    * Download all crosswalk files for the latest available quarter.
    */
   public void downloadLatestCrosswalk() throws IOException {
@@ -170,17 +260,17 @@ public class HudCrosswalkFetcher {
     // Q2 2024 data is confirmed available
     String quarter = "2";
     int year = 2024;
-    
+
     LOGGER.info("Downloading HUD crosswalk files for {}Q{}", year, quarter);
-    
+
     try {
-      downloadZipToCounty(quarter, year);
-      downloadZipToTract(quarter, year);
-      downloadZipToCbsa(quarter, year);
-      
+      downloadZipToCountyForYear(quarter, year);
+      downloadZipToTractForYear(quarter, year);
+      downloadZipToCbsaForYear(quarter, year);
+
       // Also download the congressional district crosswalk if available
       downloadZipToCongressionalDistrict(quarter, year);
-      
+
       LOGGER.info("Successfully downloaded all HUD crosswalk files");
     } catch (Exception e) {
       LOGGER.error("Error downloading HUD crosswalk files", e);
@@ -359,6 +449,169 @@ public class HudCrosswalkFetcher {
     @Override public String toString() {
       return String.format("Crosswalk[zip=%s, geo=%s, city=%s, state=%s, res=%.3f, bus=%.3f, tot=%.3f]",
           zip, geoCode, city, state, resRatio, busRatio, totRatio);
+    }
+  }
+
+  /**
+   * Convert HUD crosswalk CSV data to Parquet format (matching ECON pattern).
+   */
+  @SuppressWarnings("deprecation")
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    LOGGER.info("Converting HUD crosswalk data from {} to parquet: {}", sourceDir, targetFilePath);
+
+    // Skip if target file already exists
+    if (storageProvider != null && storageProvider.exists(targetFilePath)) {
+      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      return;
+    }
+
+    // Determine which type of crosswalk to convert based on the target file name
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+
+    if (fileName.contains("zip_county")) {
+      convertZipCountyCrosswalkToParquet(sourceDir, targetFilePath);
+    } else if (fileName.contains("zip_cbsa")) {
+      convertZipCbsaCrosswalkToParquet(sourceDir, targetFilePath);
+    } else if (fileName.contains("tract_zip")) {
+      convertTractZipCrosswalkToParquet(sourceDir, targetFilePath);
+    } else {
+      LOGGER.warn("Unknown crosswalk type for conversion: {}", fileName);
+    }
+  }
+
+  /**
+   * Convert ZIP to County crosswalk CSV to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertZipCountyCrosswalkToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for ZIP-County crosswalk
+    Schema schema = SchemaBuilder.record("ZipCountyCrosswalk")
+        .fields()
+        .name("zip").type().stringType().noDefault()
+        .name("county_fips").type().stringType().noDefault()
+        .name("res_ratio").type().doubleType().noDefault()
+        .name("bus_ratio").type().doubleType().noDefault()
+        .name("oth_ratio").type().doubleType().noDefault()
+        .name("tot_ratio").type().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Find the CSV file in the source directory
+    File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_COUNTY") && name.endsWith(".csv"));
+    if (csvFiles != null && csvFiles.length > 0) {
+      List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
+
+      for (CrosswalkRecord cr : crosswalkRecords) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("zip", cr.zip);
+        record.put("county_fips", cr.geoCode);
+        record.put("res_ratio", cr.resRatio);
+        record.put("bus_ratio", cr.busRatio);
+        record.put("oth_ratio", cr.othRatio);
+        record.put("tot_ratio", cr.totRatio);
+        records.add(record);
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "ZipCountyCrosswalk");
+      LOGGER.info("Created ZIP-County crosswalk parquet: {} with {} records",
+          targetFilePath, records.size());
+    }
+  }
+
+  /**
+   * Convert ZIP to CBSA crosswalk CSV to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertZipCbsaCrosswalkToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for ZIP-CBSA crosswalk
+    Schema schema = SchemaBuilder.record("ZipCbsaCrosswalk")
+        .fields()
+        .name("zip").type().stringType().noDefault()
+        .name("cbsa_code").type().stringType().noDefault()
+        .name("res_ratio").type().doubleType().noDefault()
+        .name("bus_ratio").type().doubleType().noDefault()
+        .name("oth_ratio").type().doubleType().noDefault()
+        .name("tot_ratio").type().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Find the CSV file in the source directory
+    File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_CBSA") && name.endsWith(".csv"));
+    if (csvFiles != null && csvFiles.length > 0) {
+      List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
+
+      for (CrosswalkRecord cr : crosswalkRecords) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("zip", cr.zip);
+        record.put("cbsa_code", cr.geoCode);
+        record.put("res_ratio", cr.resRatio);
+        record.put("bus_ratio", cr.busRatio);
+        record.put("oth_ratio", cr.othRatio);
+        record.put("tot_ratio", cr.totRatio);
+        records.add(record);
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "ZipCbsaCrosswalk");
+      LOGGER.info("Created ZIP-CBSA crosswalk parquet: {} with {} records",
+          targetFilePath, records.size());
+    }
+  }
+
+  /**
+   * Convert Tract to ZIP crosswalk CSV to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertTractZipCrosswalkToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for Tract-ZIP crosswalk
+    Schema schema = SchemaBuilder.record("TractZipCrosswalk")
+        .fields()
+        .name("tract_fips").type().stringType().noDefault()
+        .name("zip").type().stringType().noDefault()
+        .name("res_ratio").type().doubleType().noDefault()
+        .name("bus_ratio").type().doubleType().noDefault()
+        .name("oth_ratio").type().doubleType().noDefault()
+        .name("tot_ratio").type().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Find the CSV file in the source directory (ZIP_TRACT files)
+    File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_TRACT") && name.endsWith(".csv"));
+    if (csvFiles != null && csvFiles.length > 0) {
+      List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
+
+      // For tract-zip crosswalk, we need to flip the perspective
+      for (CrosswalkRecord cr : crosswalkRecords) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("tract_fips", cr.geoCode); // geoCode is tract in ZIP_TRACT files
+        record.put("zip", cr.zip);
+        record.put("res_ratio", cr.resRatio);
+        record.put("bus_ratio", cr.busRatio);
+        record.put("oth_ratio", cr.othRatio);
+        record.put("tot_ratio", cr.totRatio);
+        records.add(record);
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "TractZipCrosswalk");
+      LOGGER.info("Created Tract-ZIP crosswalk parquet: {} with {} records",
+          targetFilePath, records.size());
     }
   }
 }
