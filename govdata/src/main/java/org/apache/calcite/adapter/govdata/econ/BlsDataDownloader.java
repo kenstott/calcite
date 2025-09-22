@@ -346,28 +346,45 @@ public class BlsDataDownloader {
    */
   public File downloadWageGrowth(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading wage growth data for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
+      // Check cache first
+      Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("type", "wage_growth");
+      cacheParams.put("year", String.valueOf(year));
+
+      if (cacheManifest.isCached("wage_growth", year, cacheParams)) {
+        LOGGER.info("Found cached wage growth data for year {} - skipping download", year);
+        String outputDirPath = "source=econ/type=indicators/year=" + year;
+        lastFile = new File(cacheDir, outputDirPath + "/wage_growth.json");
+        continue;
+      }
+
       String outputDirPath = "source=econ/type=indicators/year=" + year;
       // Directories are created automatically by StorageProvider when writing files
-    
+
     List<String> seriesIds = List.of(
         Series.AVG_HOURLY_EARNINGS,
         Series.EMPLOYMENT_COST_INDEX
     );
-    
+
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
-      
+
       // Save raw JSON data to cache directory
       String jsonFilePath = outputDirPath + "/wage_growth.json";
       // Save raw JSON data to local cache directory
       File jsonFile = new File(cacheDir, jsonFilePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-      
+
       LOGGER.info("Wage growth raw data saved for year {}: {}", year, jsonFile);
+
+      // Mark as cached in manifest
+      cacheManifest.markCached("wage_growth", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.save(cacheDir);
+
       lastFile = jsonFile;
     }
     
@@ -386,30 +403,47 @@ public class BlsDataDownloader {
    */
   public File downloadRegionalEmployment(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading regional employment data for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
+      // Check cache first
+      Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("type", "regional_employment");
+      cacheParams.put("year", String.valueOf(year));
+
+      if (cacheManifest.isCached("regional_employment", year, cacheParams)) {
+        LOGGER.info("Found cached regional employment data for year {} - skipping download", year);
+        String outputDirPath = "source=econ/type=regional/year=" + year;
+        lastFile = new File(cacheDir, outputDirPath + "/regional_employment.json");
+        continue;
+      }
+
       String outputDirPath = "source=econ/type=regional/year=" + year;
       // Directories are created automatically by StorageProvider when writing files
-    
+
     // Download data for major states
     List<String> seriesIds = List.of(
         Series.CA_UNEMPLOYMENT,
         Series.NY_UNEMPLOYMENT,
         Series.TX_UNEMPLOYMENT
     );
-    
+
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
-      
+
       // Save raw JSON data to cache directory
       String jsonFilePath = outputDirPath + "/regional_employment.json";
       // Save raw JSON data to local cache directory
       File jsonFile = new File(cacheDir, jsonFilePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-      
+
       LOGGER.info("Regional employment raw data saved for year {}: {}", year, jsonFile);
+
+      // Mark as cached in manifest
+      cacheManifest.markCached("regional_employment", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.save(cacheDir);
+
       lastFile = jsonFile;
     }
     
