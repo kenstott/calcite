@@ -175,6 +175,11 @@ public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
     // Set the directory for FileSchemaFactory to use
     mutableOperand.put("directory", econParquetDir);
     mutableOperand.put("partitionedTables", loadEconTableDefinitions());
+
+    // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
+    if (operand.containsKey("executionEngine")) {
+      mutableOperand.put("executionEngine", operand.get("executionEngine"));
+    }
     Map<String, Map<String, Object>> econConstraints = loadEconTableConstraints();
     if (tableConstraints != null) {
       econConstraints.putAll(tableConstraints);
