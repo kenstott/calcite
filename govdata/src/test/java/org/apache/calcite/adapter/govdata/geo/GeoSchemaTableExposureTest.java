@@ -14,15 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.calcite.adapter.govdata.econ;
+package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
-import org.apache.calcite.adapter.govdata.econ.BeaDataDownloader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -37,14 +35,13 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Simple test to verify all ECON tables are exposed and queryable.
+ * Simple test to verify all GEO tables are exposed and queryable.
  * Requires GOVDATA_CACHE_DIR and GOVDATA_PARQUET_DIR environment variables.
  */
 @Tag("integration")
-public class EconSchemaTableExposureTest {
+public class GeoSchemaTableExposureTest {
 
   @BeforeAll
   static void setUp() {
@@ -57,14 +54,14 @@ public class EconSchemaTableExposureTest {
     String modelJson =
         "{"
         + "  \"version\": \"1.0\","
-        + "  \"defaultSchema\": \"econ\","
+        + "  \"defaultSchema\": \"geo\","
         + "  \"schemas\": ["
         + "    {"
-        + "      \"name\": \"econ\","
+        + "      \"name\": \"geo\","
         + "      \"type\": \"custom\","
         + "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "      \"operand\": {"
-        + "        \"dataSource\": \"econ\","
+        + "        \"dataSource\": \"geo\","
         + "        \"executionEngine\": \"DUCKDB\""
         + "      }"
         + "    }"
@@ -81,20 +78,26 @@ public class EconSchemaTableExposureTest {
     props.setProperty("unquotedCasing", "TO_LOWER");
 
     Set<String> expectedTables = new HashSet<>();
-    expectedTables.add("employment_statistics");
-    expectedTables.add("inflation_metrics");
-    expectedTables.add("wage_growth");
-    expectedTables.add("regional_employment");
-    expectedTables.add("treasury_yields");
-    expectedTables.add("federal_debt");
-    expectedTables.add("world_indicators");
-    expectedTables.add("fred_indicators");
-    expectedTables.add("gdp_components");
-    expectedTables.add("regional_income");
-    expectedTables.add("state_gdp");
-    expectedTables.add("trade_statistics");
-    expectedTables.add("ita_data");
-    expectedTables.add("industry_gdp");
+    // Boundary tables
+    expectedTables.add("states");
+    expectedTables.add("counties");
+    expectedTables.add("places");
+    expectedTables.add("zctas");
+    expectedTables.add("census_tracts");
+    expectedTables.add("block_groups");
+    expectedTables.add("cbsa");
+    expectedTables.add("congressional_districts");
+    expectedTables.add("school_districts");
+
+    // Demographic tables
+    expectedTables.add("population_demographics");
+    expectedTables.add("housing_characteristics");
+    expectedTables.add("economic_indicators");
+
+    // Crosswalk tables
+    expectedTables.add("zip_county_crosswalk");
+    expectedTables.add("zip_cbsa_crosswalk");
+    expectedTables.add("tract_zip_crosswalk");
 
     try (Connection conn = DriverManager.getConnection(
         "jdbc:calcite:model=" + modelFile, props);
@@ -106,7 +109,7 @@ public class EconSchemaTableExposureTest {
       List<String> successfulTables = new ArrayList<>();
 
       for (String table : expectedTables) {
-        String query = "SELECT COUNT(*) as row_count FROM econ." + table;
+        String query = "SELECT COUNT(*) as row_count FROM geo." + table;
 
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next(), "COUNT query should work for " + table);
@@ -116,7 +119,7 @@ public class EconSchemaTableExposureTest {
           // Verify the table has actual data
           if (rowCount > 0) {
             // Sample a few rows to ensure data is accessible
-            String sampleQuery = "SELECT * FROM econ." + table + " LIMIT 3";
+            String sampleQuery = "SELECT * FROM geo." + table + " LIMIT 3";
             try (ResultSet sampleRs = stmt.executeQuery(sampleQuery)) {
               assertTrue(sampleRs.next(), "Table " + table + " should have accessible sample data");
               System.out.println("✅ Table " + table + " is queryable with " + rowCount + " rows");
@@ -145,36 +148,25 @@ public class EconSchemaTableExposureTest {
         fail("The following tables are not queryable: " + failedTables);
       }
 
-      System.out.println("\n✅ All " + expectedTables.size() + " ECON tables are exposed and testable!");
+      System.out.println("\n✅ All " + expectedTables.size() + " GEO tables are exposed and testable!");
     }
   }
 
   @Test
-  public void testTableConstraintsExistWithDuckDB() throws Exception {
-    testTableConstraintsWithEngine("DUCKDB");
-  }
-
-  @Test
-  public void testTableConstraintsExistWithParquet() throws Exception {
-    testTableConstraintsWithEngine("PARQUET");
-  }
-
-  private void testTableConstraintsWithEngine(String engine) throws Exception {
-    System.out.println("\n=== Testing TABLE_CONSTRAINTS with " + engine + " engine ===");
-
+  public void testTableConstraintsExist() throws Exception {
     // Create model JSON using GovDataSchemaFactory
     String modelJson =
         "{"
         + "  \"version\": \"1.0\","
-        + "  \"defaultSchema\": \"econ\","
+        + "  \"defaultSchema\": \"geo\","
         + "  \"schemas\": ["
         + "    {"
-        + "      \"name\": \"econ\","
+        + "      \"name\": \"geo\","
         + "      \"type\": \"custom\","
         + "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "      \"operand\": {"
-        + "        \"dataSource\": \"econ\","
-        + "        \"executionEngine\": \"" + engine + "\""
+        + "        \"dataSource\": \"geo\","
+        + "        \"executionEngine\": \"DUCKDB\""
         + "      }"
         + "    }"
         + "  ]"
@@ -196,10 +188,9 @@ public class EconSchemaTableExposureTest {
       // Query primary key constraints using proper SQL syntax
       String pkQuery = "SELECT \"CONSTRAINT_NAME\", \"TABLE_NAME\", \"CONSTRAINT_TYPE\" " +
                        "FROM information_schema.\"TABLE_CONSTRAINTS\" " +
-                       "WHERE \"TABLE_SCHEMA\" = 'econ' AND \"CONSTRAINT_TYPE\" = 'PRIMARY KEY'";
+                       "WHERE \"TABLE_SCHEMA\" = 'geo' AND \"CONSTRAINT_TYPE\" = 'PRIMARY KEY'";
 
       List<String> tablesWithPK = new ArrayList<>();
-      boolean informationSchemaSupported = true;
       try (ResultSet rs = stmt.executeQuery(pkQuery)) {
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME");
@@ -207,32 +198,15 @@ public class EconSchemaTableExposureTest {
           System.out.println("✅ PRIMARY KEY constraint found: " + tableName + " (" + constraintName + ")");
           tablesWithPK.add(tableName.toLowerCase());
         }
-      } catch (Exception e) {
-        System.out.println("Error querying primary key constraints: " + e.getMessage());
-        if (e.getMessage().contains("Column") && e.getMessage().contains("not found")) {
-          informationSchemaSupported = false;
-          System.out.println("information_schema.TABLE_CONSTRAINTS not supported by this engine");
-        }
       }
 
-      // If information_schema is not supported (PARQUET engine), we should stop here
-      if (!informationSchemaSupported) {
-        if ("PARQUET".equals(engine)) {
-          System.out.println("\n✅ PARQUET engine correctly rejected information_schema queries");
-          System.out.println("   This is expected behavior - PARQUET engine does not support information_schema");
-          return; // Test passes - PARQUET correctly doesn't support information_schema
-        } else {
-          fail("Unexpected: " + engine + " engine does not support information_schema");
-        }
-      }
-
-      // Query foreign key constraints (only if information_schema is supported)
+      // Query foreign key constraints
       String fkQuery = "SELECT rc.\"CONSTRAINT_NAME\", tc.\"TABLE_NAME\" " +
                        "FROM information_schema.\"REFERENTIAL_CONSTRAINTS\" rc " +
                        "JOIN information_schema.\"TABLE_CONSTRAINTS\" tc " +
                        "ON rc.\"CONSTRAINT_SCHEMA\" = tc.\"TABLE_SCHEMA\" " +
                        "AND rc.\"CONSTRAINT_NAME\" = tc.\"CONSTRAINT_NAME\" " +
-                       "WHERE rc.\"CONSTRAINT_SCHEMA\" = 'econ'";
+                       "WHERE rc.\"CONSTRAINT_SCHEMA\" = 'geo'";
 
       List<String> tablesWithFK = new ArrayList<>();
       try (ResultSet rs = stmt.executeQuery(fkQuery)) {
@@ -242,22 +216,18 @@ public class EconSchemaTableExposureTest {
           System.out.println("✅ FOREIGN KEY constraint found: " + tableName + " (" + constraintName + ")");
           tablesWithFK.add(tableName.toLowerCase());
         }
-      } catch (Exception e) {
-        System.out.println("Error querying foreign key constraints: " + e.getMessage());
       }
 
       // Query all constraints for summary
       String allQuery = "SELECT \"CONSTRAINT_NAME\", \"TABLE_NAME\", \"CONSTRAINT_TYPE\" " +
                         "FROM information_schema.\"TABLE_CONSTRAINTS\" " +
-                        "WHERE \"TABLE_SCHEMA\" = 'econ'";
+                        "WHERE \"TABLE_SCHEMA\" = 'geo'";
 
       int totalConstraints = 0;
       try (ResultSet rs = stmt.executeQuery(allQuery)) {
         while (rs.next()) {
           totalConstraints++;
         }
-      } catch (Exception e) {
-        System.out.println("Error counting total constraints: " + e.getMessage());
       }
 
       // Report summary
@@ -266,33 +236,31 @@ public class EconSchemaTableExposureTest {
       System.out.println("Tables with PRIMARY KEY constraints: " + tablesWithPK.size() + " " + tablesWithPK);
       System.out.println("Tables with FOREIGN KEY constraints: " + tablesWithFK.size() + " " + tablesWithFK);
 
-      // Verify we found constraint information (even if 0, that's useful information)
-      System.out.println("Constraint verification completed - found " + totalConstraints + " constraints");
+      // Note: Currently, constraint metadata from schema JSON files is not yet exposed through
+      // DuckDB's information_schema. The test passes successfully if:
+      // 1. The queries execute without errors (confirming information_schema is available)
+      // 2. We can query the constraint tables (even if no constraints are found yet)
 
-      // Engine-specific expectations for DUCKDB (PARQUET already handled above)
-      if ("DUCKDB".equals(engine)) {
-        // DUCKDB supports information_schema queries
-        // Note: Constraint metadata from schema JSON is not yet populated in DuckDB's information_schema
-        System.out.println("✅ information_schema.TABLE_CONSTRAINTS is accessible with DUCKDB engine!");
-        System.out.println("   Note: Constraint metadata from schema JSON files is not yet exposed.");
-      }
+      System.out.println("\n✅ information_schema.TABLE_CONSTRAINTS is accessible with DUCKDB engine!");
+      System.out.println("   Note: Constraint metadata from schema JSON files is not yet exposed.");
+      System.out.println("   This will be implemented in a future enhancement.");
     }
   }
 
   @Test
-  public void testStateGdpTableExists() throws Exception {
+  public void testStatesTableExists() throws Exception {
     // Create model JSON
     String modelJson =
         "{"
         + "  \"version\": \"1.0\","
-        + "  \"defaultSchema\": \"econ\","
+        + "  \"defaultSchema\": \"geo\","
         + "  \"schemas\": ["
         + "    {"
-        + "      \"name\": \"econ\","
+        + "      \"name\": \"geo\","
         + "      \"type\": \"custom\","
         + "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "      \"operand\": {"
-        + "        \"dataSource\": \"econ\","
+        + "        \"dataSource\": \"geo\","
         + "        \"executionEngine\": \"DUCKDB\""
         + "      }"
         + "    }"
@@ -310,28 +278,145 @@ public class EconSchemaTableExposureTest {
         "jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
-      // Simple test - just try to query state_gdp table
-      String query = "SELECT COUNT(*) as row_count FROM econ.state_gdp";
+      // Simple test - just try to query states table
+      String query = "SELECT COUNT(*) as row_count FROM geo.states";
 
       try (ResultSet rs = stmt.executeQuery(query)) {
         assertTrue(rs.next(), "Query should return a result");
         int rowCount = rs.getInt("row_count");
-        System.out.println("✅ state_gdp table contains " + rowCount + " rows");
+        System.out.println("✅ states table contains " + rowCount + " rows");
 
         if (rowCount > 0) {
           // If data exists, show a sample
-          query = "SELECT geo_fips, geo_name, metric, \"year\", \"value\", units "
-              + "FROM econ.state_gdp LIMIT 3";
+          query = "SELECT state_fips, state_code, state_name "
+              + "FROM geo.states LIMIT 3";
 
           try (ResultSet rs2 = stmt.executeQuery(query)) {
             while (rs2.next()) {
-              System.out.println("✅ Sample: " + rs2.getString("geo_fips") + " (" + rs2.getString("geo_name") + "), "
-                  + rs2.getString("metric") + ", " + rs2.getInt("year") + ": " + rs2.getDouble("value"));
+              System.out.println("✅ Sample: " + rs2.getString("state_fips") + " - "
+                  + rs2.getString("state_code") + " (" + rs2.getString("state_name") + ")");
             }
           }
         }
       } catch (Exception e) {
-        System.out.println("❌ state_gdp table query failed: " + e.getMessage());
+        System.out.println("❌ states table query failed: " + e.getMessage());
+        throw e;
+      }
+    }
+  }
+
+  @Test
+  public void testCountiesTableExists() throws Exception {
+    // Create model JSON
+    String modelJson =
+        "{"
+        + "  \"version\": \"1.0\","
+        + "  \"defaultSchema\": \"geo\","
+        + "  \"schemas\": ["
+        + "    {"
+        + "      \"name\": \"geo\","
+        + "      \"type\": \"custom\","
+        + "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
+        + "      \"operand\": {"
+        + "        \"dataSource\": \"geo\","
+        + "        \"executionEngine\": \"DUCKDB\""
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    Path modelFile = Files.createTempFile("model", ".json");
+    Files.write(modelFile, modelJson.getBytes());
+
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+
+    try (Connection conn = DriverManager.getConnection(
+        "jdbc:calcite:model=" + modelFile, props);
+         Statement stmt = conn.createStatement()) {
+
+      // Simple test - just try to query counties table
+      String query = "SELECT COUNT(*) as row_count FROM geo.counties";
+
+      try (ResultSet rs = stmt.executeQuery(query)) {
+        assertTrue(rs.next(), "Query should return a result");
+        int rowCount = rs.getInt("row_count");
+        System.out.println("✅ counties table contains " + rowCount + " rows");
+
+        if (rowCount > 0) {
+          // If data exists, show a sample
+          query = "SELECT county_fips, state_fips, county_name "
+              + "FROM geo.counties LIMIT 3";
+
+          try (ResultSet rs2 = stmt.executeQuery(query)) {
+            while (rs2.next()) {
+              System.out.println("✅ Sample: " + rs2.getString("county_fips") + " - "
+                  + rs2.getString("county_name") + " (State: " + rs2.getString("state_fips") + ")");
+            }
+          }
+        }
+      } catch (Exception e) {
+        System.out.println("❌ counties table query failed: " + e.getMessage());
+        throw e;
+      }
+    }
+  }
+
+  @Test
+  public void testZipCountyCrosswalkTableExists() throws Exception {
+    // Create model JSON
+    String modelJson =
+        "{"
+        + "  \"version\": \"1.0\","
+        + "  \"defaultSchema\": \"geo\","
+        + "  \"schemas\": ["
+        + "    {"
+        + "      \"name\": \"geo\","
+        + "      \"type\": \"custom\","
+        + "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
+        + "      \"operand\": {"
+        + "        \"dataSource\": \"geo\","
+        + "        \"executionEngine\": \"DUCKDB\""
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    Path modelFile = Files.createTempFile("model", ".json");
+    Files.write(modelFile, modelJson.getBytes());
+
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+
+    try (Connection conn = DriverManager.getConnection(
+        "jdbc:calcite:model=" + modelFile, props);
+         Statement stmt = conn.createStatement()) {
+
+      // Simple test - just try to query zip_county_crosswalk table
+      String query = "SELECT COUNT(*) as row_count FROM geo.zip_county_crosswalk";
+
+      try (ResultSet rs = stmt.executeQuery(query)) {
+        assertTrue(rs.next(), "Query should return a result");
+        int rowCount = rs.getInt("row_count");
+        System.out.println("✅ zip_county_crosswalk table contains " + rowCount + " rows");
+
+        if (rowCount > 0) {
+          // If data exists, show a sample
+          query = "SELECT zip, county_fips, res_ratio, bus_ratio, tot_ratio "
+              + "FROM geo.zip_county_crosswalk LIMIT 3";
+
+          try (ResultSet rs2 = stmt.executeQuery(query)) {
+            while (rs2.next()) {
+              System.out.println("✅ Sample: ZIP " + rs2.getString("zip") + " -> County "
+                  + rs2.getString("county_fips") + " (Res: " + rs2.getDouble("res_ratio")
+                  + ", Bus: " + rs2.getDouble("bus_ratio") + ", Tot: " + rs2.getDouble("tot_ratio") + ")");
+            }
+          }
+        }
+      } catch (Exception e) {
+        System.out.println("❌ zip_county_crosswalk table query failed: " + e.getMessage());
         throw e;
       }
     }
