@@ -16,8 +16,15 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,24 +78,138 @@ public class CensusApiClient {
   private final ObjectMapper objectMapper;
   private final Semaphore rateLimiter;
   private final AtomicLong lastRequestTime;
+  private final StorageProvider storageProvider;
   
   public CensusApiClient(String apiKey, File cacheDir) {
-    this(apiKey, cacheDir, new ArrayList<>());
+    this(apiKey, cacheDir, new ArrayList<>(), null);
   }
-  
+
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears) {
+    this(apiKey, cacheDir, censusYears, null);
+  }
+
+  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+      StorageProvider storageProvider) {
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
     this.censusYears = censusYears;
     this.objectMapper = new ObjectMapper();
     this.rateLimiter = new Semaphore(MAX_REQUESTS_PER_SECOND);
     this.lastRequestTime = new AtomicLong(0);
-    
+    this.storageProvider = storageProvider;
+
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
     }
-    
+
     LOGGER.info("Census API client initialized with cache directory: {}", cacheDir);
+  }
+
+  /**
+   * Download all Census data for the specified year range (matching ECON pattern).
+   */
+  public void downloadAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Downloading all Census data for years {} to {}", startYear, endYear);
+
+    // Download demographic data for each year
+    for (int year = startYear; year <= endYear; year++) {
+      // Create year-specific cache directory
+      File yearCacheDir = new File(cacheDir, "year=" + year);
+      if (!yearCacheDir.exists()) {
+        yearCacheDir.mkdirs();
+      }
+
+      try {
+        // Download population demographics
+        downloadPopulationDemographics(year);
+
+        // Download housing characteristics
+        downloadHousingCharacteristics(year);
+
+        // Download economic indicators
+        downloadEconomicIndicators(year);
+      } catch (Exception e) {
+        LOGGER.error("Error downloading Census data for year {}", year, e);
+      }
+    }
+
+    LOGGER.info("Census data download completed for years {} to {}", startYear, endYear);
+  }
+
+  /**
+   * Download population demographics for a specific year.
+   */
+  private void downloadPopulationDemographics(int year) throws IOException {
+    String variables = Variables.TOTAL_POPULATION + "," +
+                      Variables.MALE_POPULATION + "," +
+                      Variables.FEMALE_POPULATION;
+
+    // Download state-level data
+    JsonNode stateData = getAcsData(year, variables, "state:*");
+    saveJsonToYearCache(year, "population_demographics_states.json", stateData);
+
+    // Download county-level data for selected states
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      JsonNode countyData = getAcsData(year, variables, "county:*&in=state:" + state);
+      saveJsonToYearCache(year, "population_demographics_county_" + state + ".json", countyData);
+    }
+  }
+
+  /**
+   * Download housing characteristics for a specific year.
+   */
+  private void downloadHousingCharacteristics(int year) throws IOException {
+    String variables = Variables.TOTAL_HOUSING_UNITS + "," +
+                      Variables.OCCUPIED_HOUSING_UNITS + "," +
+                      Variables.VACANT_HOUSING_UNITS + "," +
+                      Variables.MEDIAN_HOME_VALUE;
+
+    // Download state-level data
+    JsonNode stateData = getAcsData(year, variables, "state:*");
+    saveJsonToYearCache(year, "housing_characteristics_states.json", stateData);
+
+    // Download county-level data for selected states
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      JsonNode countyData = getAcsData(year, variables, "county:*&in=state:" + state);
+      saveJsonToYearCache(year, "housing_characteristics_county_" + state + ".json", countyData);
+    }
+  }
+
+  /**
+   * Download economic indicators for a specific year.
+   */
+  private void downloadEconomicIndicators(int year) throws IOException {
+    String variables = Variables.MEDIAN_HOUSEHOLD_INCOME + "," +
+                      Variables.PER_CAPITA_INCOME + "," +
+                      Variables.LABOR_FORCE + "," +
+                      Variables.EMPLOYED + "," +
+                      Variables.UNEMPLOYED;
+
+    // Download state-level data
+    JsonNode stateData = getAcsData(year, variables, "state:*");
+    saveJsonToYearCache(year, "economic_indicators_states.json", stateData);
+
+    // Download county-level data for selected states
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      JsonNode countyData = getAcsData(year, variables, "county:*&in=state:" + state);
+      saveJsonToYearCache(year, "economic_indicators_county_" + state + ".json", countyData);
+    }
+  }
+
+  /**
+   * Save JSON data to year-specific cache directory.
+   */
+  private void saveJsonToYearCache(int year, String filename, JsonNode data) throws IOException {
+    File yearDir = new File(cacheDir, "year=" + year);
+    if (!yearDir.exists()) {
+      yearDir.mkdirs();
+    }
+    File jsonFile = new File(yearDir, filename);
+    objectMapper.writeValue(jsonFile, data);
+    LOGGER.debug("Saved Census data to {}", jsonFile);
   }
   
   /**
@@ -112,8 +233,9 @@ public class CensusApiClient {
     }
     
     // Build API URL
+    // Note: Do not URL-encode geography parameter as it contains & characters that Census API expects
     String url = String.format("%s/%d/acs/acs5?get=%s&for=%s&key=%s",
-        BASE_URL, year, variables, URLEncoder.encode(geography, "UTF-8"), apiKey);
+        BASE_URL, year, variables, geography, apiKey);
     
     // Make API request with rate limiting
     JsonNode response = makeApiRequest(url);
@@ -147,8 +269,9 @@ public class CensusApiClient {
     
     // Build API URL
     String dataset = (year == 2020) ? "dec/dhc" : "dec/sf1";
+    // Note: Do not URL-encode geography parameter as it contains & characters that Census API expects
     String url = String.format("%s/%d/%s?get=%s&for=%s&key=%s",
-        BASE_URL, year, dataset, variables, URLEncoder.encode(geography, "UTF-8"), apiKey);
+        BASE_URL, year, dataset, variables, geography, apiKey);
     
     // Make API request with rate limiting
     JsonNode response = makeApiRequest(url);
@@ -331,5 +454,260 @@ public class CensusApiClient {
     public static final String HIGH_SCHOOL_GRADUATE = "B15003_017E";
     public static final String BACHELORS_DEGREE = "B15003_022E";
     public static final String GRADUATE_DEGREE = "B15003_024E";
+  }
+
+  /**
+   * Convert Census JSON data to Parquet format (matching ECON pattern).
+   */
+  @SuppressWarnings("deprecation")
+  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    LOGGER.info("Converting Census data from {} to parquet: {}", sourceDir, targetFilePath);
+
+    // Skip if target file already exists
+    if (storageProvider != null && storageProvider.exists(targetFilePath)) {
+      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      return;
+    }
+
+    // Determine which type of data to convert based on the target file name
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+
+    if (fileName.contains("population_demographics")) {
+      convertPopulationDemographicsToParquet(sourceDir, targetFilePath);
+    } else if (fileName.contains("housing_characteristics")) {
+      convertHousingCharacteristicsToParquet(sourceDir, targetFilePath);
+    } else if (fileName.contains("economic_indicators")) {
+      convertEconomicIndicatorsToParquet(sourceDir, targetFilePath);
+    } else {
+      LOGGER.warn("Unknown Census data type for conversion: {}", fileName);
+    }
+  }
+
+  /**
+   * Convert population demographics JSON to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertPopulationDemographicsToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for population demographics
+    Schema schema = SchemaBuilder.record("PopulationDemographics")
+        .fields()
+        .name("geo_id").type().stringType().noDefault()
+        .name("year").type().intType().noDefault()
+        .name("total_population").type().nullable().longType().noDefault()
+        .name("male_population").type().nullable().longType().noDefault()
+        .name("female_population").type().nullable().longType().noDefault()
+        .name("state_fips").type().nullable().stringType().noDefault()
+        .name("county_fips").type().nullable().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Extract year from source directory
+    String yearStr = sourceDir.getName().replace("year=", "");
+    int year = Integer.parseInt(yearStr);
+
+    // Read and convert state-level data
+    File stateFile = new File(sourceDir, "population_demographics_states.json");
+    if (stateFile.exists()) {
+      JsonNode data = objectMapper.readTree(stateFile);
+      for (int i = 1; i < data.size(); i++) { // Skip header row
+        JsonNode row = data.get(i);
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("geo_id", row.get(row.size() - 1).asText()); // Last column is usually state FIPS
+        record.put("year", year);
+        record.put("total_population", row.get(0).asLong(0L));
+        record.put("male_population", row.get(1).asLong(0L));
+        record.put("female_population", row.get(2).asLong(0L));
+        record.put("state_fips", row.get(row.size() - 1).asText());
+        record.put("county_fips", null);
+        records.add(record);
+      }
+    }
+
+    // Read and convert county-level data
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      File countyFile = new File(sourceDir, "population_demographics_county_" + state + ".json");
+      if (countyFile.exists()) {
+        JsonNode data = objectMapper.readTree(countyFile);
+        for (int i = 1; i < data.size(); i++) { // Skip header row
+          JsonNode row = data.get(i);
+          GenericRecord record = new GenericData.Record(schema);
+          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFips);
+          record.put("year", year);
+          record.put("total_population", row.get(0).asLong(0L));
+          record.put("male_population", row.get(1).asLong(0L));
+          record.put("female_population", row.get(2).asLong(0L));
+          record.put("state_fips", state);
+          record.put("county_fips", countyFips);
+          records.add(record);
+        }
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "PopulationDemographics");
+      LOGGER.info("Created population demographics parquet: {} with {} records",
+          targetFilePath, records.size());
+    }
+  }
+
+  /**
+   * Convert housing characteristics JSON to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertHousingCharacteristicsToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for housing characteristics
+    Schema schema = SchemaBuilder.record("HousingCharacteristics")
+        .fields()
+        .name("geo_id").type().stringType().noDefault()
+        .name("year").type().intType().noDefault()
+        .name("total_housing_units").type().nullable().longType().noDefault()
+        .name("occupied_units").type().nullable().longType().noDefault()
+        .name("vacant_units").type().nullable().longType().noDefault()
+        .name("median_home_value").type().nullable().doubleType().noDefault()
+        .name("state_fips").type().nullable().stringType().noDefault()
+        .name("county_fips").type().nullable().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Extract year from source directory
+    String yearStr = sourceDir.getName().replace("year=", "");
+    int year = Integer.parseInt(yearStr);
+
+    // Read and convert state-level data
+    File stateFile = new File(sourceDir, "housing_characteristics_states.json");
+    if (stateFile.exists()) {
+      JsonNode data = objectMapper.readTree(stateFile);
+      for (int i = 1; i < data.size(); i++) { // Skip header row
+        JsonNode row = data.get(i);
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("geo_id", row.get(row.size() - 1).asText());
+        record.put("year", year);
+        record.put("total_housing_units", row.get(0).asLong(0L));
+        record.put("occupied_units", row.get(1).asLong(0L));
+        record.put("vacant_units", row.get(2).asLong(0L));
+        record.put("median_home_value", row.get(3).asDouble(0.0));
+        record.put("state_fips", row.get(row.size() - 1).asText());
+        record.put("county_fips", null);
+        records.add(record);
+      }
+    }
+
+    // Read and convert county-level data
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      File countyFile = new File(sourceDir, "housing_characteristics_county_" + state + ".json");
+      if (countyFile.exists()) {
+        JsonNode data = objectMapper.readTree(countyFile);
+        for (int i = 1; i < data.size(); i++) { // Skip header row
+          JsonNode row = data.get(i);
+          GenericRecord record = new GenericData.Record(schema);
+          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFips);
+          record.put("year", year);
+          record.put("total_housing_units", row.get(0).asLong(0L));
+          record.put("occupied_units", row.get(1).asLong(0L));
+          record.put("vacant_units", row.get(2).asLong(0L));
+          record.put("median_home_value", row.get(3).asDouble(0.0));
+          record.put("state_fips", state);
+          record.put("county_fips", countyFips);
+          records.add(record);
+        }
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "HousingCharacteristics");
+      LOGGER.info("Created housing characteristics parquet: {} with {} records",
+          targetFilePath, records.size());
+    }
+  }
+
+  /**
+   * Convert economic indicators JSON to Parquet.
+   */
+  @SuppressWarnings("deprecation")
+  private void convertEconomicIndicatorsToParquet(File sourceDir, String targetFilePath)
+      throws IOException {
+
+    // Create Avro schema for economic indicators
+    Schema schema = SchemaBuilder.record("EconomicIndicators")
+        .fields()
+        .name("geo_id").type().stringType().noDefault()
+        .name("year").type().intType().noDefault()
+        .name("median_household_income").type().nullable().doubleType().noDefault()
+        .name("per_capita_income").type().nullable().doubleType().noDefault()
+        .name("labor_force").type().nullable().longType().noDefault()
+        .name("employed").type().nullable().longType().noDefault()
+        .name("unemployed").type().nullable().longType().noDefault()
+        .name("state_fips").type().nullable().stringType().noDefault()
+        .name("county_fips").type().nullable().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Extract year from source directory
+    String yearStr = sourceDir.getName().replace("year=", "");
+    int year = Integer.parseInt(yearStr);
+
+    // Read and convert state-level data
+    File stateFile = new File(sourceDir, "economic_indicators_states.json");
+    if (stateFile.exists()) {
+      JsonNode data = objectMapper.readTree(stateFile);
+      for (int i = 1; i < data.size(); i++) { // Skip header row
+        JsonNode row = data.get(i);
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("geo_id", row.get(row.size() - 1).asText());
+        record.put("year", year);
+        record.put("median_household_income", row.get(0).asDouble(0.0));
+        record.put("per_capita_income", row.get(1).asDouble(0.0));
+        record.put("labor_force", row.get(2).asLong(0L));
+        record.put("employed", row.get(3).asLong(0L));
+        record.put("unemployed", row.get(4).asLong(0L));
+        record.put("state_fips", row.get(row.size() - 1).asText());
+        record.put("county_fips", null);
+        records.add(record);
+      }
+    }
+
+    // Read and convert county-level data
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    for (String state : stateFips) {
+      File countyFile = new File(sourceDir, "economic_indicators_county_" + state + ".json");
+      if (countyFile.exists()) {
+        JsonNode data = objectMapper.readTree(countyFile);
+        for (int i = 1; i < data.size(); i++) { // Skip header row
+          JsonNode row = data.get(i);
+          GenericRecord record = new GenericData.Record(schema);
+          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFips);
+          record.put("year", year);
+          record.put("median_household_income", row.get(0).asDouble(0.0));
+          record.put("per_capita_income", row.get(1).asDouble(0.0));
+          record.put("labor_force", row.get(2).asLong(0L));
+          record.put("employed", row.get(3).asLong(0L));
+          record.put("unemployed", row.get(4).asLong(0L));
+          record.put("state_fips", state);
+          record.put("county_fips", countyFips);
+          records.add(record);
+        }
+      }
+    }
+
+    // Write to Parquet
+    if (storageProvider != null && !records.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, schema, records, "EconomicIndicators");
+      LOGGER.info("Created economic indicators parquet: {} with {} records",
+          targetFilePath, records.size());
+    }
   }
 }

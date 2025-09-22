@@ -774,17 +774,121 @@ public class BlsDataDownloader {
   }
   
   private String getStateCode(String seriesId) {
-    if (seriesId.contains("ST06")) return "CA";
-    if (seriesId.contains("ST36")) return "NY";
-    if (seriesId.contains("ST48")) return "TX";
+    // LASST series: LASST + state FIPS code (2 digits) + ...
+    // Extract state FIPS code from positions 5-6 (0-indexed)
+    if (seriesId.startsWith("LASST") && seriesId.length() > 6) {
+      String fips = seriesId.substring(5, 7);
+      switch (fips) {
+        case "01": return "AL";
+        case "02": return "AK";
+        case "04": return "AZ";
+        case "05": return "AR";
+        case "06": return "CA";
+        case "08": return "CO";
+        case "09": return "CT";
+        case "10": return "DE";
+        case "11": return "DC";
+        case "12": return "FL";
+        case "13": return "GA";
+        case "15": return "HI";
+        case "16": return "ID";
+        case "17": return "IL";
+        case "18": return "IN";
+        case "19": return "IA";
+        case "20": return "KS";
+        case "21": return "KY";
+        case "22": return "LA";
+        case "23": return "ME";
+        case "24": return "MD";
+        case "25": return "MA";
+        case "26": return "MI";
+        case "27": return "MN";
+        case "28": return "MS";
+        case "29": return "MO";
+        case "30": return "MT";
+        case "31": return "NE";
+        case "32": return "NV";
+        case "33": return "NH";
+        case "34": return "NJ";
+        case "35": return "NM";
+        case "36": return "NY";
+        case "37": return "NC";
+        case "38": return "ND";
+        case "39": return "OH";
+        case "40": return "OK";
+        case "41": return "OR";
+        case "42": return "PA";
+        case "44": return "RI";
+        case "45": return "SC";
+        case "46": return "SD";
+        case "47": return "TN";
+        case "48": return "TX";
+        case "49": return "UT";
+        case "50": return "VT";
+        case "51": return "VA";
+        case "53": return "WA";
+        case "54": return "WV";
+        case "55": return "WI";
+        case "56": return "WY";
+        default: return "US";
+      }
+    }
     return "US";
   }
   
   private String getStateName(String stateCode) {
     switch (stateCode) {
+      case "AL": return "Alabama";
+      case "AK": return "Alaska";
+      case "AZ": return "Arizona";
+      case "AR": return "Arkansas";
       case "CA": return "California";
+      case "CO": return "Colorado";
+      case "CT": return "Connecticut";
+      case "DE": return "Delaware";
+      case "DC": return "District of Columbia";
+      case "FL": return "Florida";
+      case "GA": return "Georgia";
+      case "HI": return "Hawaii";
+      case "ID": return "Idaho";
+      case "IL": return "Illinois";
+      case "IN": return "Indiana";
+      case "IA": return "Iowa";
+      case "KS": return "Kansas";
+      case "KY": return "Kentucky";
+      case "LA": return "Louisiana";
+      case "ME": return "Maine";
+      case "MD": return "Maryland";
+      case "MA": return "Massachusetts";
+      case "MI": return "Michigan";
+      case "MN": return "Minnesota";
+      case "MS": return "Mississippi";
+      case "MO": return "Missouri";
+      case "MT": return "Montana";
+      case "NE": return "Nebraska";
+      case "NV": return "Nevada";
+      case "NH": return "New Hampshire";
+      case "NJ": return "New Jersey";
+      case "NM": return "New Mexico";
       case "NY": return "New York";
+      case "NC": return "North Carolina";
+      case "ND": return "North Dakota";
+      case "OH": return "Ohio";
+      case "OK": return "Oklahoma";
+      case "OR": return "Oregon";
+      case "PA": return "Pennsylvania";
+      case "RI": return "Rhode Island";
+      case "SC": return "South Carolina";
+      case "SD": return "South Dakota";
+      case "TN": return "Tennessee";
       case "TX": return "Texas";
+      case "UT": return "Utah";
+      case "VT": return "Vermont";
+      case "VA": return "Virginia";
+      case "WA": return "Washington";
+      case "WV": return "West Virginia";
+      case "WI": return "Wisconsin";
+      case "WY": return "Wyoming";
       default: return "United States";
     }
   }
@@ -942,8 +1046,13 @@ public class BlsDataDownloader {
   private void convertRegionalEmploymentToParquet(File sourceDir, String targetPath) throws IOException {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
 
+    // Regional employment data is in type=regional subdirectory, not type=indicators
+    // Adjust path to look in the regional directory
+    File regionalDir = new File(sourceDir.getParentFile().getParentFile(),
+        "type=regional/year=" + sourceDir.getName().replace("year=", ""));
+
     // Look for regional employment JSON files
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("regional_employment.json"));
+    File[] jsonFiles = regionalDir.listFiles((dir, name) -> name.equals("regional_employment.json"));
     if (jsonFiles != null) {
       for (File jsonFile : jsonFiles) {
         try {
@@ -975,6 +1084,7 @@ public class BlsDataDownloader {
     }
 
     // Write to parquet using regional employment schema
+    LOGGER.info("Converting regional employment data with {} series to parquet", seriesData.size());
     writeRegionalEmploymentParquet(seriesData, targetPath);
     LOGGER.info("Converted BLS regional employment data to parquet: {}", targetPath);
   }
