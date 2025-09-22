@@ -64,6 +64,7 @@ public class BeaDataDownloader {
   private final String apiKey;
   private final HttpClient httpClient;
   private final StorageProvider storageProvider;
+  private final CacheManifest cacheManifest;
 
   // BEA dataset names - comprehensive coverage of all available datasets
   public static class Datasets {
@@ -124,6 +125,7 @@ public class BeaDataDownloader {
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
+    this.cacheManifest = CacheManifest.load(cacheDir);
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
@@ -134,6 +136,7 @@ public class BeaDataDownloader {
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
+    this.cacheManifest = CacheManifest.load(cacheDir);
   }
 
   /**
@@ -256,10 +259,29 @@ public class BeaDataDownloader {
       return;
     }
 
+    // Check cache before downloading
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "gdp_components");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("gdp_components", year, cacheParams)) {
+      LOGGER.info("Found cached GDP components for year {} - skipping download", year);
+      return;
+    }
+
+    // Check if file exists and update manifest
+    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File jsonFile = new File(outputDir, "gdp_components.json");
+    if (jsonFile.exists() && jsonFile.length() > 100) {  // Check file has real data
+      LOGGER.info("Found existing GDP components file for year {} - updating manifest", year);
+      cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.save(cacheDir);
+      return;
+    }
+
     LOGGER.info("Downloading BEA GDP components for year {}", year);
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     List<GdpComponent> components = new ArrayList<>();
@@ -341,7 +363,7 @@ public class BeaDataDownloader {
     }
 
     // Save raw JSON data to local cache
-    File jsonFile = new File(outputDir, "gdp_components.json");
+    // jsonFile already defined above at line 274
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> componentsData = new ArrayList<>();
 
@@ -366,6 +388,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   /**
@@ -525,6 +551,16 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check cache first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "regional_income");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("regional_income", year, cacheParams)) {
+      LOGGER.info("Found cached regional income data for year {} - skipping download", year);
+      return;
+    }
+
     LOGGER.info("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
 
     // Create local cache directory
@@ -678,6 +714,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("regional_income", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   /**
@@ -786,6 +826,16 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check cache first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "trade_statistics");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("trade_statistics", year, cacheParams)) {
+      LOGGER.info("Found cached trade statistics for year {} - skipping download", year);
+      return;
+    }
+
     LOGGER.info("Downloading BEA trade statistics for year {}", year);
 
     // Create local cache directory
@@ -880,6 +930,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("trade_statistics", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   /**
@@ -1119,6 +1173,16 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check cache first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "ita_data");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("ita_data", year, cacheParams)) {
+      LOGGER.info("Found cached ITA data for year {} - skipping download", year);
+      return;
+    }
+
     LOGGER.info("Downloading BEA ITA data for year {}", year);
 
     // Create local cache directory
@@ -1243,6 +1307,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("ita_data", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   /**
@@ -1412,6 +1480,16 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check cache first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "industry_gdp");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("industry_gdp", year, cacheParams)) {
+      LOGGER.info("Found cached industry GDP data for year {} - skipping download", year);
+      return;
+    }
+
     LOGGER.info("Downloading BEA GDP by Industry data for year {}", year);
 
     // Create local cache directory
@@ -1521,6 +1599,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("industry_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   /**
@@ -2103,6 +2185,16 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check cache first
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "state_gdp");
+    cacheParams.put("year", String.valueOf(year));
+
+    if (cacheManifest.isCached("state_gdp", year, cacheParams)) {
+      LOGGER.info("Found cached state GDP data for year {} - skipping download", year);
+      return;
+    }
+
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
@@ -2110,7 +2202,9 @@ public class BeaDataDownloader {
     // Check if data already exists
     File jsonFile = new File(outputDir, "state_gdp.json");
     if (jsonFile.exists()) {
-      LOGGER.info("Found cached BEA state GDP data for year {} - skipping download", year);
+      LOGGER.info("Found existing state GDP file for year {} - updating manifest", year);
+      cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -2219,6 +2313,10 @@ public class BeaDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.info("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    cacheManifest.save(cacheDir);
   }
 
   @SuppressWarnings("deprecation")
@@ -2800,9 +2898,10 @@ public class BeaDataDownloader {
 
     List<GenericRecord> records = new ArrayList<>();
     Map<String, Object> data = MAPPER.readValue(jsonFile, Map.class);
-    List<Map<String, Object>> components = (List<Map<String, Object>>) data.get("gdp_components");
+    // The field is "components" not "gdp_components"
+    List<Map<String, Object>> components = (List<Map<String, Object>>) data.get("components");
 
-    if (components != null) {
+    if (components != null && !components.isEmpty()) {
       // Extract GDP statistics from components
       Map<String, Double> gdpMetrics = new HashMap<>();
       for (Map<String, Object> component : components) {
@@ -2826,7 +2925,8 @@ public class BeaDataDownloader {
       }
 
       // Create GDP statistics records
-      int year = Integer.parseInt((String) components.get(0).get("year"));
+      // Year is stored as Integer in the JSON
+      int year = ((Number) components.get(0).get("year")).intValue();
 
       // Add annual metrics
       for (Map.Entry<String, Double> entry : gdpMetrics.entrySet()) {
