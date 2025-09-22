@@ -135,40 +135,48 @@ public class ConstraintAwareJdbcSchema implements Schema {
   private static class ConstraintAwareJdbcTable implements Table {
     private final JdbcTable delegate;
     private final Map<String, Object> constraintConfig;
-    private final Statistic statistic;
+    private Statistic statistic;  // Non-final to allow lazy initialization
 
     public ConstraintAwareJdbcTable(JdbcTable delegate, Map<String, Object> constraintConfig) {
       this.delegate = delegate;
       this.constraintConfig = constraintConfig;
-
-      Statistic tempStatistic;
-      try {
-        // Build statistic with constraints
-        Map<String, Object> tableConfig = new LinkedHashMap<>();
-        tableConfig.put("constraints", constraintConfig);
-
-        // Get column names - we'll extract them when getRowType is first called
-        List<String> columnNames = new ArrayList<>();
-
-        // Log the constraint config for debugging
-        LOGGER.debug("Creating ConstraintAwareJdbcTable with constraint config: {}", constraintConfig);
-
-        // For now, create statistic with empty column names
-        // TableConstraints will handle this gracefully
-        tempStatistic = TableConstraints.fromConfig(tableConfig, columnNames, null);
-        LOGGER.info("Created ConstraintAwareJdbcTable with {} keys and {} referential constraints",
-                    tempStatistic.getKeys() != null ? tempStatistic.getKeys().size() : 0,
-                    tempStatistic.getReferentialConstraints() != null ? tempStatistic.getReferentialConstraints().size() : 0);
-      } catch (Exception e) {
-        LOGGER.error("Error creating ConstraintAwareJdbcTable: {}", e.getMessage(), e);
-        // Fall back to unknown statistics if there's an error
-        tempStatistic = org.apache.calcite.schema.Statistics.UNKNOWN;
-      }
-      this.statistic = tempStatistic;
+      // Delay statistic creation until we have column names
+      this.statistic = null;
     }
 
     @Override
     public Statistic getStatistic() {
+      if (statistic == null) {
+        // Lazily create the statistic when first requested
+        try {
+          // Build statistic with constraints
+          Map<String, Object> tableConfig = new LinkedHashMap<>();
+          tableConfig.put("constraints", constraintConfig);
+
+          // Get column names from the row type
+          RelDataTypeFactory typeFactory = new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+              org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+          RelDataType rowType = delegate.getRowType(typeFactory);
+          List<String> columnNames = new ArrayList<>();
+          for (org.apache.calcite.rel.type.RelDataTypeField field : rowType.getFieldList()) {
+            columnNames.add(field.getName());
+          }
+
+          LOGGER.debug("Creating statistic for table with {} columns: {}",
+                       columnNames.size(), columnNames);
+
+          // Create statistic with actual column names
+          statistic = TableConstraints.fromConfig(tableConfig, columnNames, null);
+          LOGGER.info("Created statistic with {} keys and {} referential constraints",
+                      statistic.getKeys() != null ? statistic.getKeys().size() : 0,
+                      statistic.getReferentialConstraints() != null ?
+                          statistic.getReferentialConstraints().size() : 0);
+        } catch (Exception e) {
+          LOGGER.error("Error creating statistic: {}", e.getMessage(), e);
+          // Fall back to unknown statistics if there's an error
+          statistic = org.apache.calcite.schema.Statistics.UNKNOWN;
+        }
+      }
       return statistic;
     }
 

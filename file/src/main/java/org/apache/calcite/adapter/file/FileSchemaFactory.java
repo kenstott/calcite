@@ -477,6 +477,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     SchemaPlus schemaPlus = parentSchema.add(name, fileSchema);
     LOGGER.info("FileSchemaFactory: Registered FileSchema '{}' with parent schema for metadata visibility", name);
 
+    // Add metadata schemas (information_schema, pg_catalog) for PARQUET engine
+    // This allows SQL queries against information_schema.TABLE_CONSTRAINTS
+    if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
+      LOGGER.info("FileSchemaFactory: Adding metadata schemas for PARQUET engine");
+      addMetadataSchemas(parentSchema);
+    }
+
     // Register text similarity functions if enabled
     @SuppressWarnings("unchecked") 
     Map<String, Object> textSimilarity = (Map<String, Object>) operand.get("textSimilarity");

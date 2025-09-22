@@ -386,9 +386,26 @@ public class InformationSchema extends AbstractSchema {
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
+          // Get the unwrapped schema to check its actual type
+          Schema unwrappedSchema = schema.unwrap(Schema.class);
+
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
-            Table table = schema.tables().get(tableName);
+            Table table;
+
+            // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
+            // to get the ConstraintAwareJdbcTable wrapper with constraint metadata
+            if (unwrappedSchema != null &&
+                unwrappedSchema.getClass().getName().contains("ConstraintAwareJdbcSchema")) {
+              // Use the schema's getTable method to get the wrapped table
+              @SuppressWarnings("deprecation")
+              Table wrappedTable = unwrappedSchema.getTable(tableName);
+              table = wrappedTable;
+            } else {
+              // Normal path for other schema types
+              table = schema.tables().get(tableName);
+            }
+
             if (table != null) {
               LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
                           tableName, schemaName, table.getClass().getSimpleName());
@@ -593,9 +610,26 @@ public class InformationSchema extends AbstractSchema {
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
+          // Get the unwrapped schema to check its actual type
+          Schema unwrappedSchema = schema.unwrap(Schema.class);
+
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
-            Table table = schema.tables().get(tableName);
+            Table table;
+
+            // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
+            // to get the ConstraintAwareJdbcTable wrapper with constraint metadata
+            if (unwrappedSchema != null &&
+                unwrappedSchema.getClass().getName().contains("ConstraintAwareJdbcSchema")) {
+              // Use the schema's getTable method to get the wrapped table
+              @SuppressWarnings("deprecation")
+              Table wrappedTable = unwrappedSchema.getTable(tableName);
+              table = wrappedTable;
+            } else {
+              // Normal path for other schema types
+              table = schema.tables().get(tableName);
+            }
+
             if (table != null) {
               LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
                           tableName, schemaName, table.getClass().getSimpleName());
