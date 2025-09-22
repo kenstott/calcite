@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata;
 
-import org.apache.calcite.adapter.file.metadata.InformationSchema;
-import org.apache.calcite.adapter.file.metadata.PostgreSqlCatalogSchema;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
@@ -204,7 +202,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Get the operand configuration from GeoSchemaFactory
-    return geoFactory.buildOperand(operand);
+    return geoFactory.buildOperand(operand, storageProvider);
   }
 
   /**
@@ -599,41 +597,4 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     return constraints;
   }
 
-  /**
-   * Adds metadata schemas (information_schema, pg_catalog, and metadata) to the parent schema.
-   * This provides SQL-standard access to table and column metadata including comments.
-   * Includes PostgreSQL-compatible pg_catalog for schema comments.
-   */
-  private void addMetadataSchemas(SchemaPlus parentSchema) {
-    // Find root schema
-    SchemaPlus rootSchema = parentSchema;
-    while (rootSchema.getParentSchema() != null) {
-      rootSchema = rootSchema.getParentSchema();
-    }
-
-    // Only add metadata schemas if they don't already exist
-    if (rootSchema.subSchemas().get("information_schema") == null) {
-      LOGGER.debug("Adding information_schema to root");
-      InformationSchema informationSchema = new InformationSchema(rootSchema, "CALCITE");
-      rootSchema.add("information_schema", informationSchema);
-    }
-
-    // Add PostgreSQL catalog schema for schema comments
-    if (rootSchema.subSchemas().get("pg_catalog") == null) {
-      LOGGER.debug("Adding pg_catalog schema to root for PostgreSQL compatibility");
-      PostgreSqlCatalogSchema pgCatalog = new PostgreSqlCatalogSchema(rootSchema, "CALCITE");
-      rootSchema.add("pg_catalog", pgCatalog);
-    }
-
-    // Legacy metadata schema for backward compatibility
-    if (rootSchema.subSchemas().get("metadata") == null) {
-      LOGGER.debug("Adding metadata schema to root");
-      InformationSchema metadataSchema = new InformationSchema(rootSchema, "CALCITE");
-      rootSchema.add("metadata", metadataSchema);
-    }
-
-    // Don't add reference to metadata schema at current level - it causes circular references
-    // when FileSchemaFactory also adds metadata schemas. The metadata schemas are already
-    // accessible from the root level.
-  }
 }
