@@ -117,7 +117,12 @@ public class TableConstraints {
     // Extract from primary key
     Object primaryKey = constraints.get("primaryKey");
     if (primaryKey instanceof List) {
-      allColumns.addAll((List<String>) primaryKey);
+      @SuppressWarnings("unchecked")
+      List<String> pkColumns = (List<String>) primaryKey;
+      allColumns.addAll(pkColumns);
+    } else if (primaryKey instanceof String) {
+      // Handle single column primary key
+      allColumns.add((String) primaryKey);
     }
     
     // Extract from unique keys
@@ -129,11 +134,15 @@ public class TableConstraints {
     }
     
     // Extract from foreign keys
-    List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) constraints.get("foreignKeys");
-    if (foreignKeys != null) {
+    Object foreignKeysObj = constraints.get("foreignKeys");
+    if (foreignKeysObj instanceof List) {
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) foreignKeysObj;
       for (Map<String, Object> fk : foreignKeys) {
-        List<String> columns = (List<String>) fk.get("columns");
-        if (columns != null) {
+        Object columnsObj = fk.get("columns");
+        if (columnsObj instanceof List) {
+          @SuppressWarnings("unchecked")
+          List<String> columns = (List<String>) columnsObj;
           allColumns.addAll(columns);
         }
       }
@@ -221,9 +230,38 @@ public class TableConstraints {
 
     for (Map<String, Object> fkDef : fkList) {
       // Extract foreign key definition
-      List<String> sourceColumns = (List<String>) fkDef.get("columns");
-      List<String> targetTable = (List<String>) fkDef.get("targetTable");
-      List<String> targetColumns = (List<String>) fkDef.get("targetColumns");
+      Object columnsObj = fkDef.get("columns");
+      Object targetTableObj = fkDef.get("targetTable");
+      Object targetColumnsObj = fkDef.get("targetColumns");
+
+      // Handle columns (should be List<String>)
+      List<String> sourceColumns = null;
+      if (columnsObj instanceof List) {
+        sourceColumns = (List<String>) columnsObj;
+      }
+
+      // Handle targetTable (can be String or List<String>)
+      List<String> targetTable = null;
+      if (targetTableObj instanceof String) {
+        // If targetSchema is specified separately, use it
+        String targetSchema = (String) fkDef.get("targetSchema");
+        if (targetSchema != null) {
+          targetTable = List.of(targetSchema, (String) targetTableObj);
+        } else if (schemaName != null) {
+          // Default to same schema as source table
+          targetTable = List.of(schemaName, (String) targetTableObj);
+        } else {
+          targetTable = List.of((String) targetTableObj);
+        }
+      } else if (targetTableObj instanceof List) {
+        targetTable = (List<String>) targetTableObj;
+      }
+
+      // Handle targetColumns (should be List<String>)
+      List<String> targetColumns = null;
+      if (targetColumnsObj instanceof List) {
+        targetColumns = (List<String>) targetColumnsObj;
+      }
 
       if (sourceColumns == null || targetTable == null || targetColumns == null) {
         continue; // Skip invalid FK definition
