@@ -226,8 +226,8 @@ public interface StorageProvider {
 
     if (records.isEmpty()) {
       java.util.logging.Logger.getLogger(StorageProvider.class.getName())
-          .info("DEBUG: writeAvroParquet() - No records to write, skipping");
-      return; // Nothing to write
+          .info("DEBUG: writeAvroParquet() - No records to write, creating empty parquet file");
+      // Don't return - we still want to create an empty file with the schema
     }
 
     // Create temporary file for writing with more unique name - use a UUID for maximum uniqueness
