@@ -304,9 +304,11 @@ public class FredDataDownloader {
     }
 
     // Check if file exists but not in manifest - update manifest
-    if (storageProvider.exists(jsonFilePath)) {
+    File jsonFile = new File(cacheDir, jsonFilePath);
+    if (jsonFile.exists()) {
       LOGGER.info("Found existing FRED file for year {} - updating manifest", year);
-      cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, 0L);
+      long fileSize = jsonFile.length();
+      cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, fileSize);
       cacheManifest.save(cacheDir);
       return;
     }
@@ -391,7 +393,7 @@ public class FredDataDownloader {
     
     String jsonContent = MAPPER.writeValueAsString(data);
     // Save raw JSON data to local cache directory
-    File jsonFile = new File(cacheDir, jsonFilePath);
+    jsonFile = new File(cacheDir, jsonFilePath);
     jsonFile.getParentFile().mkdirs();
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
