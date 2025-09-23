@@ -234,11 +234,13 @@ public class BlsDataDownloader {
       }
 
       // Check if file exists but not in manifest - update manifest
-      if (storageProvider.exists(jsonFilePath)) {
+      File jsonFile = new File(cacheDir, jsonFilePath);
+      if (jsonFile.exists()) {
         LOGGER.info("Found existing employment statistics file for year {} - updating manifest", year);
-        cacheManifest.markCached("employment_statistics", year, cacheParams, jsonFilePath, 0L);
+        long fileSize = jsonFile.length();
+        cacheManifest.markCached("employment_statistics", year, cacheParams, jsonFilePath, fileSize);
         cacheManifest.save(cacheDir);
-        lastFile = new File(jsonFilePath);
+        lastFile = jsonFile;
         continue;
       }
 
@@ -248,12 +250,12 @@ public class BlsDataDownloader {
         Series.EMPLOYMENT_LEVEL,
         Series.LABOR_FORCE_PARTICIPATION
     );
-    
+
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
-      
+
       // Save raw JSON data to cache directory
       // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, jsonFilePath);
+      jsonFile = new File(cacheDir, jsonFilePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
 
@@ -301,11 +303,13 @@ public class BlsDataDownloader {
       }
 
       // Check if file exists but not in manifest - update manifest
-      if (storageProvider.exists(jsonFilePath)) {
+      File jsonFile = new File(cacheDir, jsonFilePath);
+      if (jsonFile.exists()) {
         LOGGER.info("Found existing inflation metrics file for year {} - updating manifest", year);
-        cacheManifest.markCached("inflation_metrics", year, cacheParams, jsonFilePath, 0L);
+        long fileSize = jsonFile.length();
+        cacheManifest.markCached("inflation_metrics", year, cacheParams, jsonFilePath, fileSize);
         cacheManifest.save(cacheDir);
-        lastFile = new File(jsonFilePath);
+        lastFile = jsonFile;
         continue;
       }
 
@@ -314,12 +318,12 @@ public class BlsDataDownloader {
         Series.CPI_CORE,
         Series.PPI_FINAL_DEMAND
     );
-    
+
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
-      
+
       // Save raw JSON data to cache directory
       // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, jsonFilePath);
+      jsonFile = new File(cacheDir, jsonFilePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
 
