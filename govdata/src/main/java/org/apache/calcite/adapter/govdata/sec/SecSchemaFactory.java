@@ -20,7 +20,7 @@ import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.model.JsonTable;
-import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -74,7 +74,7 @@ import java.time.Year;
  * <p>This factory leverages the file adapter's FileConversionManager for XBRL
  * processing and HtmlToJsonConverter for HTML table extraction.
  */
-public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
+public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
 
@@ -146,30 +146,9 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
   // Constraint metadata support
   private Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
 
-  /**
-   * Returns true to enable constraint metadata support in SEC adapter.
-   * This allows model files to define primary keys, foreign keys, and unique keys
-   * for SEC tables to support query optimization and JDBC metadata.
-   */
   @Override
-  public boolean supportsConstraints() {
-    return true;
-  }
-
-  /**
-   * Receives constraint metadata from ModelHandler for tables defined in model files.
-   * The constraints are stored and later used by the FileSchemaFactory to provide
-   * table statistics and constraint metadata.
-   */
-  @Override
-  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints, List<JsonTable> tableDefinitions) {
-    LOGGER.debug("Received constraint metadata for {} tables", tableConstraints.size());
-    this.tableConstraints = new HashMap<>(tableConstraints);
-
-    // Log constraints for debugging
-    for (Map.Entry<String, Map<String, Object>> entry : tableConstraints.entrySet()) {
-      LOGGER.debug("Table '{}' has constraints: {}", entry.getKey(), entry.getValue());
-    }
+  public String getSchemaResourceName() {
+    return "/sec-schema.json";
   }
 
   private synchronized void initializeExecutors() {
@@ -483,13 +462,6 @@ public class SecSchemaFactory implements ConstraintCapableSchemaFactory {
     return constraints;
   }
 
-  @Override public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-    // This method should not be called directly anymore
-    // GovDataSchemaFactory should call buildOperand() instead
-    throw new UnsupportedOperationException(
-        "SecSchemaFactory.create() should not be called directly. " +
-        "Use GovDataSchemaFactory to create a unified schema.");
-  }
   
   /**
    * Builds the operand configuration for SEC schema without creating a FileSchema instance.

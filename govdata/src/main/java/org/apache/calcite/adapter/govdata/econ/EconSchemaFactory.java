@@ -17,19 +17,14 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
-import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -63,10 +58,9 @@ import java.util.Map;
  * }
  * </pre>
  */
-public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
+public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
   private Map<String, Map<String, Object>> tableConstraints;
 
   /**
@@ -77,15 +71,8 @@ public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("Building ECON schema operand configuration");
 
     // Read environment variables at runtime (not static initialization)
-    // Check both actual environment variables and system properties (for tests)
-    String govdataCacheDir = System.getenv("GOVDATA_CACHE_DIR");
-    if (govdataCacheDir == null) {
-      govdataCacheDir = System.getProperty("GOVDATA_CACHE_DIR");
-    }
-    String govdataParquetDir = System.getenv("GOVDATA_PARQUET_DIR");
-    if (govdataParquetDir == null) {
-      govdataParquetDir = System.getProperty("GOVDATA_PARQUET_DIR");
-    }
+    String govdataCacheDir = getGovDataCacheDir();
+    String govdataParquetDir = getGovDataParquetDir();
 
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -174,13 +161,13 @@ public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Set the directory for FileSchemaFactory to use
     mutableOperand.put("directory", econParquetDir);
-    mutableOperand.put("partitionedTables", loadEconTableDefinitions());
+    mutableOperand.put("partitionedTables", loadTableDefinitions());
 
     // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
     if (operand.containsKey("executionEngine")) {
       mutableOperand.put("executionEngine", operand.get("executionEngine"));
     }
-    Map<String, Map<String, Object>> econConstraints = loadEconTableConstraints();
+    Map<String, Map<String, Object>> econConstraints = loadTableConstraints();
     if (tableConstraints != null) {
       econConstraints.putAll(tableConstraints);
     }
@@ -197,54 +184,11 @@ public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
     return mutableOperand;
   }
 
-  @Override public Schema create(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    // This method should not be called directly anymore
-    // GovDataSchemaFactory should call buildOperand() instead
-    throw new UnsupportedOperationException(
-        "EconSchemaFactory.create() should not be called directly. " +
-        "Use GovDataSchemaFactory to create a unified schema.");
+  @Override
+  public String getSchemaResourceName() {
+    return "/econ-schema.json";
   }
 
-  /**
-   * Get configured start year from operand or environment.
-   */
-  private Integer getConfiguredStartYear(Map<String, Object> operand) {
-    Integer year = (Integer) operand.get("startYear");
-    if (year != null) return year;
-
-    String envYear = System.getenv("GOVDATA_START_YEAR");
-    if (envYear != null) {
-      try {
-        return Integer.parseInt(envYear);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", envYear);
-      }
-    }
-
-    // Default to 5 years ago
-    return java.time.Year.now().getValue() - 5;
-  }
-
-  /**
-   * Get configured end year from operand or environment.
-   */
-  private Integer getConfiguredEndYear(Map<String, Object> operand) {
-    Integer year = (Integer) operand.get("endYear");
-    if (year != null) return year;
-
-    String envYear = System.getenv("GOVDATA_END_YEAR");
-    if (envYear != null) {
-      try {
-        return Integer.parseInt(envYear);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", envYear);
-      }
-    }
-
-    // Default to current year
-    return java.time.Year.now().getValue();
-  }
 
   /**
    * Download economic data from various sources following GEO pattern.
@@ -422,54 +366,7 @@ public class EconSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("ECON data download completed");
   }
 
-  /**
-   * Load table definitions from JSON resource file.
-   */
-  private static List<Map<String, Object>> loadEconTableDefinitions() {
-    try (InputStream is = EconSchemaFactory.class.getResourceAsStream("/econ-schema.json")) {
-      if (is == null) {
-        throw new IllegalStateException("Could not find econ-schema.json resource file");
-      }
 
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
-      List<Map<String, Object>> tables = (List<Map<String, Object>>) schema.get("partitionedTables");
-      if (tables == null) {
-        throw new IllegalStateException("No 'partitionedTables' field found in econ-schema.json");
-      }
-      LOGGER.info("Loaded {} table definitions from econ-schema.json", tables.size());
-      for (Map<String, Object> table : tables) {
-        LOGGER.debug("  - Table: {} with pattern: {}", table.get("name"), table.get("pattern"));
-      }
-      return tables;
-    } catch (IOException e) {
-      throw new RuntimeException("Error loading econ-schema.json", e);
-    }
-  }
-
-  /**
-   * Load constraint definitions from JSON resource file.
-   */
-  private static Map<String, Map<String, Object>> loadEconTableConstraints() {
-    try (InputStream is = EconSchemaFactory.class.getResourceAsStream("/econ-schema.json")) {
-      if (is == null) {
-        throw new IllegalStateException("Could not find econ-schema.json resource file");
-      }
-
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
-      Map<String, Map<String, Object>> constraints = (Map<String, Map<String, Object>>) schema.get("constraints");
-      if (constraints == null) {
-        throw new IllegalStateException("No 'constraints' field found in econ-schema.json");
-      }
-      LOGGER.info("Loaded constraints for {} tables from econ-schema.json", constraints.size());
-      return constraints;
-    } catch (IOException e) {
-      throw new RuntimeException("Error loading econ-schema.json", e);
-    }
-  }
-
-  @Override public boolean supportsConstraints() {
-    return true;
-  }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {

@@ -16,10 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class SecSchemaFactoryTest {
+
+  @BeforeAll
+  static void setUp() {
+    TestEnvironmentLoader.ensureLoaded();
+  }
 
   @Test public void testFactoryIsFound() throws Exception {
     // Try to load the factory using the same mechanism Calcite uses

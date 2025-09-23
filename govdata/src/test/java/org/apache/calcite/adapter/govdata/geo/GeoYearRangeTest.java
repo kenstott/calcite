@@ -100,8 +100,10 @@ public class GeoYearRangeTest {
     operand.put("enabledSources", new String[]{"tiger"});
     operand.put("autoDownload", false);
 
-    // Create schema through factory
-    org.apache.calcite.schema.Schema schema = factory.create(null, "geo", operand);
+    // Create schema through GovDataSchemaFactory
+    org.apache.calcite.adapter.govdata.GovDataSchemaFactory govDataFactory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
+    operand.put("dataSource", "geo");
+    org.apache.calcite.schema.Schema schema = govDataFactory.create(null, "geo", operand);
     
     assertNotNull(schema, "Schema should be created");
     assertTrue(schema instanceof GeoSchema, "Should be GeoSchema instance");
@@ -115,8 +117,10 @@ public class GeoYearRangeTest {
     operand.put("enabledSources", new String[]{"tiger"});
     operand.put("autoDownload", false);
 
-    // Create schema through factory - should still work
-    org.apache.calcite.schema.Schema schema = factory.create(null, "geo", operand);
+    // Create schema through GovDataSchemaFactory - should still work
+    org.apache.calcite.adapter.govdata.GovDataSchemaFactory govDataFactory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
+    operand.put("dataSource", "geo");
+    org.apache.calcite.schema.Schema schema = govDataFactory.create(null, "geo", operand);
     
     assertNotNull(schema, "Schema should be created with backward compatibility");
     assertTrue(schema instanceof GeoSchema, "Should be GeoSchema instance");

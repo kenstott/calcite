@@ -1,0 +1,163 @@
+{
+  "partitionedTables": [
+    {
+      "name": "financial_line_items",
+      "pattern": "type=filings/year=*/financial_line_items.parquet",
+      "comment": "XBRL financial statement data including balance sheet, income statement, and cash flow line items from SEC filings. Includes quarterly and annual data with standard GAAP classifications."
+    },
+    {
+      "name": "filing_metadata",
+      "pattern": "type=filings/year=*/filing_metadata.parquet",
+      "comment": "SEC filing metadata including form types (10-K, 10-Q, 8-K), company information, filing dates, and document URLs. Core reference table for all SEC data."
+    },
+    {
+      "name": "filing_contexts",
+      "pattern": "type=filings/year=*/filing_contexts.parquet",
+      "comment": "XBRL context metadata defining reporting periods, business segments, and dimensional qualifiers for financial data. Links financial facts to their reporting context."
+    },
+    {
+      "name": "mda_sections",
+      "pattern": "type=filings/year=*/mda_sections.parquet",
+      "comment": "Management Discussion and Analysis (MD&A) sections extracted from 10-K and 10-Q filings. Contains management narrative about company performance and outlook."
+    },
+    {
+      "name": "xbrl_relationships",
+      "pattern": "type=filings/year=*/xbrl_relationships.parquet",
+      "comment": "XBRL calculation and presentation linkbase relationships showing how financial concepts relate to each other in SEC filings."
+    },
+    {
+      "name": "insider_transactions",
+      "pattern": "type=ownership/year=*/insider_transactions.parquet",
+      "comment": "Form 4 insider trading transactions by company officers, directors, and shareholders. Includes buy/sell transactions with prices and volumes."
+    },
+    {
+      "name": "earnings_transcripts",
+      "pattern": "type=disclosures/year=*/earnings_transcripts.parquet",
+      "comment": "Quarterly earnings call transcripts with management presentations and Q&A sessions. Extracted from earnings webcast transcripts and calls."
+    },
+    {
+      "name": "stock_prices",
+      "pattern": "type=market/year=*/stock_prices.parquet",
+      "comment": "Daily stock price data including open, high, low, close, and volume for SEC-reporting companies. Historical equity market data."
+    },
+    {
+      "name": "vectorized_blobs",
+      "pattern": "type=vectors/year=*/vectorized_blobs.parquet",
+      "comment": "Text embeddings and vector representations of SEC filing content for semantic search and analysis. Optional table for AI/ML applications."
+    }
+  ],
+  "constraints": {
+    "financial_line_items": {
+      "primaryKey": ["filing_id", "context_id", "concept_id"],
+      "foreignKeys": [
+        {
+          "columns": ["filing_id"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["filing_id"]
+        },
+        {
+          "columns": ["context_id"],
+          "targetTable": "filing_contexts",
+          "targetColumns": ["context_id"]
+        }
+      ],
+      "indexes": [
+        ["concept_name"],
+        ["year", "quarter"],
+        ["cik"]
+      ]
+    },
+    "filing_metadata": {
+      "primaryKey": ["filing_id"],
+      "unique": [
+        ["cik", "form_type", "filing_date", "period_end_date"]
+      ],
+      "indexes": [
+        ["cik"],
+        ["form_type"],
+        ["filing_date"],
+        ["year"],
+        ["state_of_incorporation"]
+      ]
+    },
+    "filing_contexts": {
+      "primaryKey": ["context_id"],
+      "foreignKeys": [
+        {
+          "columns": ["filing_id"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["filing_id"]
+        }
+      ],
+      "indexes": [
+        ["period_start_date", "period_end_date"],
+        ["instant_date"],
+        ["segment"]
+      ]
+    },
+    "mda_sections": {
+      "primaryKey": ["filing_id", "section_sequence"],
+      "foreignKeys": [
+        {
+          "columns": ["filing_id"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["filing_id"]
+        }
+      ],
+      "indexes": [
+        ["cik"],
+        ["year"]
+      ]
+    },
+    "xbrl_relationships": {
+      "primaryKey": ["filing_id", "from_concept", "to_concept", "relationship_type"],
+      "foreignKeys": [
+        {
+          "columns": ["filing_id"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["filing_id"]
+        }
+      ],
+      "indexes": [
+        ["from_concept"],
+        ["to_concept"],
+        ["relationship_type"]
+      ]
+    },
+    "insider_transactions": {
+      "primaryKey": ["cik", "transaction_date", "transaction_id"],
+      "indexes": [
+        ["cik"],
+        ["ticker"],
+        ["transaction_date"],
+        ["transaction_type"],
+        ["insider_name"]
+      ]
+    },
+    "earnings_transcripts": {
+      "primaryKey": ["cik", "transcript_date", "transcript_id"],
+      "indexes": [
+        ["cik"],
+        ["ticker"],
+        ["transcript_date"],
+        ["year", "quarter"]
+      ]
+    },
+    "stock_prices": {
+      "primaryKey": ["ticker", "price_date"],
+      "indexes": [
+        ["ticker"],
+        ["price_date"],
+        ["year"]
+      ]
+    },
+    "vectorized_blobs": {
+      "primaryKey": ["source_table", "source_id", "blob_type"],
+      "indexes": [
+        ["source_table"],
+        ["blob_type"],
+        ["timestamp"]
+      ]
+    }
+  }
+}

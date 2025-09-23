@@ -68,8 +68,9 @@ public class GeoSchemaFactoryTest {
 
   @Test
   public void testGeoSchemaCreation() throws Exception {
-    // Create schema using the factory
-    GeoSchemaFactory factory = new GeoSchemaFactory();
+    // Create schema using the GovDataSchemaFactory
+    org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
+    operand.put("dataSource", "geo");
 
     Connection conn = DriverManager.getConnection("jdbc:calcite:");
     CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
