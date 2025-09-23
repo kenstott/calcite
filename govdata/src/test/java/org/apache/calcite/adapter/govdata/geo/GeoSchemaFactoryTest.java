@@ -21,6 +21,7 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
@@ -54,10 +55,21 @@ public class GeoSchemaFactoryTest {
 
   @BeforeEach
   public void setUp() {
+    // Set system properties for the interface methods to use
+    System.setProperty("GOVDATA_CACHE_DIR", tempDir.getAbsolutePath() + "/cache");
+    System.setProperty("GOVDATA_PARQUET_DIR", tempDir.getAbsolutePath() + "/parquet");
+
     operand = new HashMap<>();
     operand.put("dataSource", "geo");
     operand.put("cacheDir", tempDir.getAbsolutePath());
     operand.put("autoDownload", false); // Disable auto-download for unit tests
+  }
+
+  @AfterEach
+  public void tearDown() {
+    // Clean up system properties
+    System.clearProperty("GOVDATA_CACHE_DIR");
+    System.clearProperty("GOVDATA_PARQUET_DIR");
   }
 
   @Test
