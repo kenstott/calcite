@@ -79,40 +79,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private StorageProvider storageProvider;
 
   // Standard SEC data cache directory - XBRL files are immutable, cache forever
-  // These are populated at runtime from environment variables or system properties
-  private static String GOVDATA_CACHE_DIR;
-  private static String GOVDATA_PARQUET_DIR;
-  private static String SEC_RAW_DIR;
-  private static String SEC_PARQUET_DIR;
-  
-  static {
-    LOGGER.debug("SecSchemaFactory class loaded");
-    initializeDirectories();
-  }
-  
-  private static void initializeDirectories() {
-    // Check both environment variables and system properties (for tests)
-    GOVDATA_CACHE_DIR = System.getenv("GOVDATA_CACHE_DIR");
-    if (GOVDATA_CACHE_DIR == null) {
-      GOVDATA_CACHE_DIR = System.getProperty("GOVDATA_CACHE_DIR");
-    }
-    
-    GOVDATA_PARQUET_DIR = System.getenv("GOVDATA_PARQUET_DIR");
-    if (GOVDATA_PARQUET_DIR == null) {
-      GOVDATA_PARQUET_DIR = System.getProperty("GOVDATA_PARQUET_DIR");
-    }
-    
-    if (GOVDATA_CACHE_DIR == null || GOVDATA_CACHE_DIR.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable or system property must be set");
-    }
-    if (GOVDATA_PARQUET_DIR == null || GOVDATA_PARQUET_DIR.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable or system property must be set");
-    }
-    
-    // SEC data directories
-    SEC_RAW_DIR = GOVDATA_CACHE_DIR + "/sec";
-    SEC_PARQUET_DIR = GOVDATA_PARQUET_DIR + "/source=sec";
-  }
+  // These are now accessed at runtime via interface methods
 
   // Parallel processing configuration
   private static final int DOWNLOAD_THREADS = 3; // Reduced to 3 concurrent downloads for better rate limiting
@@ -128,13 +95,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private ExecutorService downloadExecutor;
   private ExecutorService conversionExecutor;
   private final Semaphore rateLimiter = new Semaphore(1); // One permit, released every 125ms
-  private final ConcurrentLinkedQueue<CompletableFuture<Void>> downloadFutures = new ConcurrentLinkedQueue<>();
+  private final ConcurrentLinkedQueue<CompletableFuture<Void>> filingProcessingFutures = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<CompletableFuture<Void>> conversionFutures = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<FilingToDownload> retryQueue = new ConcurrentLinkedQueue<>();
   private final List<File> scheduledForReconversion = new ArrayList<>();
   private final Set<String> downloadedInThisCycle = java.util.concurrent.ConcurrentHashMap.newKeySet();
-  private final AtomicInteger totalDownloads = new AtomicInteger(0);
-  private final AtomicInteger completedDownloads = new AtomicInteger(0);
+  private final AtomicInteger totalFilingsToProcess = new AtomicInteger(0);
+  private final AtomicInteger completedFilingProcessing = new AtomicInteger(0);
   private final AtomicInteger totalConversions = new AtomicInteger(0);
   private final AtomicInteger completedConversions = new AtomicInteger(0);
   private final AtomicInteger rateLimitHits = new AtomicInteger(0);
@@ -499,22 +466,37 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     this.currentOperand = mutableOperand; // Store for table auto-discovery
 
+    // Get cache directories from interface methods
+    String govdataCacheDir = getGovDataCacheDir();
+    String govdataParquetDir = getGovDataParquetDir();
+
+    // Check required environment variables
+    if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
+      throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
+    }
+    if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
+      throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
+    }
+
+    // SEC data directories
+    String secRawDir = govdataCacheDir + "/sec";
+    String secParquetDir = govdataParquetDir + "/source=sec";
+
     // Determine cache directory
-    // First check for GOVDATA_PARQUET_DIR environment variable
     String configuredDir = (String) mutableOperand.get("directory");
     if (configuredDir == null) {
       configuredDir = (String) mutableOperand.get("cacheDirectory");
     }
-    
+
     // Use GOVDATA_PARQUET_DIR if available, otherwise fall back to configured or default
     String cacheHome;
-    if (GOVDATA_CACHE_DIR != null && GOVDATA_PARQUET_DIR != null) {
+    if (govdataCacheDir != null && govdataParquetDir != null) {
       // Raw XBRL data goes to GOVDATA_CACHE_DIR/sec
       // Parquet data goes to GOVDATA_PARQUET_DIR/source=sec
-      cacheHome = SEC_RAW_DIR; // For raw XBRL data
-      LOGGER.info("Using unified govdata directories - cache: {}, parquet: {}/source=sec", GOVDATA_CACHE_DIR, GOVDATA_PARQUET_DIR);
+      cacheHome = secRawDir; // For raw XBRL data
+      LOGGER.info("Using unified govdata directories - cache: {}, parquet: {}/source=sec", govdataCacheDir, govdataParquetDir);
     } else {
-      cacheHome = configuredDir != null ? configuredDir : SEC_RAW_DIR;
+      cacheHome = configuredDir != null ? configuredDir : secRawDir;
     }
 
     // Handle SEC data download if configured
@@ -724,31 +706,31 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     mutableOperand.put("partitionedTables", partitionedTables);
 
     // Set the directory for FileSchemaFactory to search
-    // Use the unified SEC_PARQUET_DIR directly
-    mutableOperand.put("directory", SEC_PARQUET_DIR);
+    // Use the unified secParquetDir directly
+    mutableOperand.put("directory", secParquetDir);
 
     LOGGER.info("Pre-defined {} partitioned table patterns", partitionedTables.size());
 
     // Ensure the parquet directory exists
-    File secParquetDir = new File(SEC_PARQUET_DIR);
+    File secParquetDirFile = new File(secParquetDir);
 
-    if (secParquetDir.exists() && secParquetDir.isDirectory()) {
-      LOGGER.info("Using SEC parquet cache directory: {}", secParquetDir.getAbsolutePath());
+    if (secParquetDirFile.exists() && secParquetDirFile.isDirectory()) {
+      LOGGER.info("Using SEC parquet cache directory: {}", secParquetDirFile.getAbsolutePath());
 
       // Debug: List all .parquet files
       LOGGER.info("DEBUG: Listing all .parquet files in directory:");
-      File[] parquetFiles = secParquetDir.listFiles((dir, fileName) -> fileName.endsWith(".parquet"));
+      File[] parquetFiles = secParquetDirFile.listFiles((dir, fileName) -> fileName.endsWith(".parquet"));
       if (parquetFiles != null && parquetFiles.length > 0) {
         for (File f : parquetFiles) {
           LOGGER.info("DEBUG: Found table file: " + f.getName() + " (size=" + f.length() + ")");
         }
       } else {
-        LOGGER.warn("DEBUG: No .parquet files found in " + secParquetDir.getAbsolutePath());
+        LOGGER.warn("DEBUG: No .parquet files found in " + secParquetDirFile.getAbsolutePath());
       }
     } else {
-      // Parquet dir doesn't exist yet, but still use SEC_PARQUET_DIR path
+      // Parquet dir doesn't exist yet, but still use secParquetDir path
       // FileSchemaFactory will handle the non-existent directory
-      LOGGER.info("SEC parquet directory doesn't exist yet: {}", SEC_PARQUET_DIR);
+      LOGGER.info("SEC parquet directory doesn't exist yet: {}", secParquetDir);
     }
 
     // Don't set execution engine - let GovDataSchemaFactory control it
@@ -827,10 +809,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void waitForAllConversions() {
     try {
       // Wait for download futures if any are still running
-      if (!downloadFutures.isEmpty()) {
-        LOGGER.info("Waiting for {} downloads to complete...", downloadFutures.size());
+      if (!filingProcessingFutures.isEmpty()) {
+        LOGGER.info("Waiting for {} filing tasks to complete...", filingProcessingFutures.size());
         CompletableFuture<Void> allDownloads =
-            CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture[0]));
+            CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
         allDownloads.get(45, TimeUnit.MINUTES);
         LOGGER.info("All downloads completed");
       }
@@ -977,8 +959,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   private void createMockParquetFiles(File baseDir) {
     try {
+      // Get parquet directory from interface method
+      String govdataParquetDir = getGovDataParquetDir();
+      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
+
       // Create parquet directory structure for mock data
-      File secParquetDir = new File(SEC_PARQUET_DIR);
+      File secParquetDir = new File(secParquetDirPath);
       secParquetDir.mkdirs();
 
       // Create directories and minimal Parquet files for each table pattern
@@ -1104,7 +1090,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (configuredDir == null) {
         configuredDir = (String) operand.get("cacheDirectory");
       }
-      String cacheHome = configuredDir != null ? configuredDir : SEC_RAW_DIR;
+      // Get cache directories from interface methods
+      String govdataCacheDir = getGovDataCacheDir();
+      String secRawDir = govdataCacheDir != null ? govdataCacheDir + "/sec" : null;
+      String cacheHome = configuredDir != null ? configuredDir : secRawDir;
 
       // XBRL files are immutable - once downloaded, they never change
       // Use configured cache directory
@@ -1156,13 +1145,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Wait for all downloads to complete before proceeding to conversion
-      if (!downloadFutures.isEmpty()) {
-        LOGGER.info("Waiting for " + downloadFutures.size() + " download tasks to complete...");
+      if (!filingProcessingFutures.isEmpty()) {
+        LOGGER.info("Waiting for " + filingProcessingFutures.size() + " filing tasks to complete...");
         CompletableFuture<Void> allDownloads =
-            CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture[0]));
+            CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
         try {
           allDownloads.get(45, TimeUnit.MINUTES); // Wait up to 45 minutes for downloads
-          LOGGER.info("All downloads completed: " + completedDownloads.get() + " files");
+          LOGGER.info("All filing processing completed: " + completedFilingProcessing.get() + " files (from cache or downloaded)");
         } catch (Exception e) {
           LOGGER.warn("Some downloads may have failed: " + e.getMessage());
         }
@@ -1283,8 +1272,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Download filings in parallel with rate limiting
-      totalDownloads.addAndGet(filingsToDownload.size());
-      LOGGER.info("Scheduling " + filingsToDownload.size() + " filings for download for CIK " + normalizedCik);
+      totalFilingsToProcess.addAndGet(filingsToDownload.size());
+      LOGGER.info("Scheduling " + filingsToDownload.size() + " filings for processing (cache check/download) for CIK " + normalizedCik);
 
       for (FilingToDownload filing : filingsToDownload) {
         // Create unique key for deduplication
@@ -1298,12 +1287,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
           downloadFilingDocumentWithRateLimit(provider, filing);
-          int completed = completedDownloads.incrementAndGet();
+          int completed = completedFilingProcessing.incrementAndGet();
           if (completed % 10 == 0) {
-            LOGGER.info("Download progress: " + completed + "/" + totalDownloads.get() + " filings");
+            LOGGER.info("Processing progress: " + completed + "/" + totalFilingsToProcess.get() + " filings (checking cache and downloading if needed)");
           }
         }, downloadExecutor);
-        downloadFutures.add(future);
+        filingProcessingFutures.add(future);
       }
 
     } catch (Exception e) {
@@ -1471,7 +1460,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Check if Parquet conversion was successful
       boolean needParquetReprocessing = false;
       String year = String.valueOf(java.time.LocalDate.parse(filingDate).getYear());
-      File parquetDir = new File(cikDir.getParentFile().getParentFile(), "sec-parquet");
+      // Use the unified GOVDATA_PARQUET_DIR location where files are actually written
+      String govdataParquetDir = getGovDataParquetDir();
+      File parquetDir = new File(govdataParquetDir, "source=sec");
       File cikParquetDir = new File(parquetDir, "cik=" + cik);
       // Need to include filing_type in the path
       File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
@@ -1480,17 +1471,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Check for the appropriate parquet file based on form type
       // Forms 3/4/5 create _insider.parquet files, others create _facts.parquet files
       String filenameSuffix = isInsiderForm ? "insider" : "facts";
-      File parquetFile = new File(yearDir, String.format("%s_%s_%s.parquet", cik, filingDate, filenameSuffix));
+      // Parquet files use accession without hyphens (accessionClean is already defined above)
+      File parquetFile = new File(yearDir, String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
 
       if (!parquetFile.exists() || parquetFile.length() == 0) {
         needParquetReprocessing = true;
-        LOGGER.debug("Missing or empty Parquet file: " + parquetFile.getPath());
+        LOGGER.info("Missing or empty Parquet file: " + parquetFile.getPath());
       }
 
       // Also check for vectorized file if text similarity is enabled
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
-        File vectorizedFile = new File(yearDir, String.format("%s_%s_vectorized.parquet", cik, filingDate));
+        File vectorizedFile = new File(yearDir, String.format("%s_%s_vectorized.parquet", cik, accessionClean));
         if (!vectorizedFile.exists() || vectorizedFile.length() == 0) {
           needParquetReprocessing = true;
           LOGGER.debug("Missing or empty vectorized Parquet file: " + vectorizedFile.getPath());
@@ -1555,12 +1547,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                              header.contains("<ix:") ||
                              header.contains("iXBRL");
               if (hasInlineXbrl) {
-                LOGGER.info("HTML file contains inline XBRL (iXBRL), skipping separate XBRL download: " + primaryDoc);
+                LOGGER.info("HTML file contains inline XBRL (iXBRL), will process HTML file directly: " + primaryDoc);
                 // Create marker to avoid checking XBRL in future
                 if (!xbrlNotFoundMarker.exists()) {
                   xbrlNotFoundMarker.createNewFile();
                 }
-                return; // No need to download separate XBRL
+                // Continue processing - HTML file will be included in conversion process
               }
             }
           }
@@ -1697,8 +1689,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       // baseDir is already the sec-data directory, don't nest another level
       File secRawDir = baseDir;
+      // Get parquet directory from interface method
+      String govdataParquetDir = getGovDataParquetDir();
+      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
       // Parquet directory uses unified GOVDATA_PARQUET_DIR structure
-      File secParquetDir = new File(SEC_PARQUET_DIR);
+      File secParquetDir = new File(secParquetDirPath);
       secParquetDir.mkdirs();
 
       LOGGER.info("DEBUG: secRawDir=" + secRawDir.getAbsolutePath() + " exists=" + secRawDir.exists());
@@ -1849,7 +1844,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void createSecFilingsTable(File baseDir, Map<String, Object> operand) {
     try {
       File secRawDir = new File(baseDir, "sec-raw");
-      File secParquetDir = new File(SEC_PARQUET_DIR);
+      // Get parquet directory from interface method
+      String govdataParquetDir = getGovDataParquetDir();
+      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
+      File secParquetDir = new File(secParquetDirPath);
       secParquetDir.mkdirs();
 
       if (!secRawDir.exists() || !secRawDir.isDirectory()) {
@@ -2086,10 +2084,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadStockPrices(File baseDir, List<String> ciks, int startYear, int endYear) {
     try {
-      File parquetDir = new File(baseDir.getParentFile(), "sec-parquet");
+      // Use the parquet directory for stock prices - same as other SEC data
+      String govdataParquetDir = getGovDataParquetDir();
+      String basePath = govdataParquetDir + "/source=sec";
 
       // Build list of ticker-CIK pairs
-      List<YahooFinanceDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
+      List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
       Set<String> processedTickers = new HashSet<>();
 
       for (String cik : ciks) {
@@ -2109,7 +2109,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // This was actually a ticker, use it
             String ticker = cik.toUpperCase();
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new YahooFinanceDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           } else {
@@ -2119,7 +2119,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Add all tickers for this CIK
           for (String ticker : tickers) {
             if (!processedTickers.contains(ticker)) {
-              tickerCikPairs.add(new YahooFinanceDownloader.TickerCikPair(ticker, normalizedCik));
+              tickerCikPairs.add(new AlphaVantageDownloader.TickerCikPair(ticker, normalizedCik));
               processedTickers.add(ticker);
             }
           }
@@ -2127,9 +2127,28 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       if (!tickerCikPairs.isEmpty()) {
-        LOGGER.info("Downloading stock prices for {} tickers", tickerCikPairs.size());
-        YahooFinanceDownloader downloader = new YahooFinanceDownloader();
-        downloader.downloadStockPrices(parquetDir, tickerCikPairs, startYear, endYear);
+        // Get Alpha Vantage API key from environment
+        String apiKey = System.getenv("ALPHA_VANTAGE_KEY");
+
+        // If not found in system env, try TestEnvironmentLoader (for tests)
+        if (apiKey == null || apiKey.isEmpty()) {
+          try {
+            Class<?> testEnvClass = Class.forName("org.apache.calcite.adapter.govdata.TestEnvironmentLoader");
+            java.lang.reflect.Method getEnvMethod = testEnvClass.getMethod("getEnv", String.class);
+            apiKey = (String) getEnvMethod.invoke(null, "ALPHA_VANTAGE_KEY");
+          } catch (Exception e) {
+            // TestEnvironmentLoader not available or error accessing it
+          }
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+          LOGGER.warn("ALPHA_VANTAGE_KEY not found in environment, skipping stock price download");
+          return;
+        }
+
+        LOGGER.info("Downloading stock prices for {} tickers using Alpha Vantage", tickerCikPairs.size());
+        AlphaVantageDownloader downloader = new AlphaVantageDownloader(apiKey, storageProvider);
+        downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
       } else {
         LOGGER.info("No tickers found for stock price download");
       }

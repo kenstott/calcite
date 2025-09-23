@@ -110,16 +110,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     LOGGER.info("Building GEO schema operand configuration");
     
-    // Read environment variables at runtime (not static initialization)
-    // Check both actual environment variables and system properties (for .env.test)
-    String govdataCacheDir = System.getenv("GOVDATA_CACHE_DIR");
-    if (govdataCacheDir == null) {
-      govdataCacheDir = System.getProperty("GOVDATA_CACHE_DIR");
-    }
-    String govdataParquetDir = System.getenv("GOVDATA_PARQUET_DIR");
-    if (govdataParquetDir == null) {
-      govdataParquetDir = System.getProperty("GOVDATA_PARQUET_DIR");
-    }
+    // Get cache directories from interface methods
+    String govdataCacheDir = getGovDataCacheDir();
+    String govdataParquetDir = getGovDataParquetDir();
     
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
