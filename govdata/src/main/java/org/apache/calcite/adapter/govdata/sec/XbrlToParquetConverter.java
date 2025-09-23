@@ -557,12 +557,17 @@ public class XbrlToParquetConverter implements FileConverter {
           // Inline XBRL: concept is in the 'name' attribute
           concept = element.getAttribute("name");
           // Remove namespace prefix if present (e.g., "us-gaap:NetIncomeLoss" -> "NetIncomeLoss")
-          if (concept.contains(":")) {
+          if (concept != null && concept.contains(":")) {
             concept = concept.substring(concept.indexOf(":") + 1);
           }
         } else {
           // Regular XBRL: concept is the element's local name
           concept = element.getLocalName();
+        }
+
+        // Skip if concept is null or empty
+        if (concept == null || concept.isEmpty()) {
+          continue;
         }
         record.put("concept", concept);
         record.put("context_ref", element.getAttribute("contextRef"));
@@ -572,9 +577,10 @@ public class XbrlToParquetConverter implements FileConverter {
         String rawValue = element.getTextContent().trim();
 
         // For TextBlocks and narrative content, preserve more formatting
-        boolean isTextBlock = concept.contains("TextBlock") ||
+        boolean isTextBlock = concept != null && (
+                             concept.contains("TextBlock") ||
                              concept.contains("Disclosure") ||
-                             concept.contains("Policy");
+                             concept.contains("Policy"));
 
         String cleanValue;
         String fullText = null;
@@ -1492,7 +1498,7 @@ public class XbrlToParquetConverter implements FileConverter {
   private String extractConceptName(Element element) {
     if (element.hasAttribute("name")) {
       String concept = element.getAttribute("name");
-      if (concept.contains(":")) {
+      if (concept != null && concept.contains(":")) {
         concept = concept.substring(concept.indexOf(":") + 1);
       }
       return concept;
