@@ -16,7 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -43,6 +45,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class SecSchemaFactoryDefaultsTest {
+
+  @BeforeAll
+  static void setUp() {
+    TestEnvironmentLoader.ensureLoaded();
+  }
 
   private String testDataDir;
 
@@ -106,7 +113,7 @@ public class SecSchemaFactoryDefaultsTest {
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, props);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE table_schema = 'SEC'")) {
+         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE \"TABLE_SCHEMA\" = 'SEC'")) {
 
       assertNotNull(rs, "ResultSet should not be null");
       // Verify that the schema was created successfully (basic smoke test)
@@ -147,7 +154,7 @@ public class SecSchemaFactoryDefaultsTest {
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, props);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE table_schema = 'SEC'")) {
+         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE \"TABLE_SCHEMA\" = 'SEC'")) {
 
       assertNotNull(rs, "ResultSet should not be null");
       // Environment variable substitution should work
@@ -187,7 +194,7 @@ public class SecSchemaFactoryDefaultsTest {
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, props);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE table_schema = 'SEC'")) {
+         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE \"TABLE_SCHEMA\" = 'SEC'")) {
 
       assertNotNull(rs, "ResultSet should not be null");
       // Default filing types should be applied
@@ -227,7 +234,7 @@ public class SecSchemaFactoryDefaultsTest {
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, props);
          Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE table_schema = 'SEC'")) {
+         ResultSet rs = stmt.executeQuery("SELECT * FROM information_schema.tables WHERE \"TABLE_SCHEMA\" = 'SEC'")) {
 
       assertNotNull(rs, "ResultSet should not be null");
       // Text similarity defaults should be applied

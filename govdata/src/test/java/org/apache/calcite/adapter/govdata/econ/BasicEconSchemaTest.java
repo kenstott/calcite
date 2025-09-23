@@ -68,7 +68,8 @@ public class BasicEconSchemaTest {
       operand.put("startYear", 2023);
       operand.put("endYear", 2024);
       
-      EconSchemaFactory factory = new EconSchemaFactory();
+      org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
+      operand.put("dataSource", "econ");
       rootSchema.add("econ", factory.create(rootSchema, "econ", operand));
       
       // Check if we can query metadata
@@ -102,7 +103,8 @@ public class BasicEconSchemaTest {
       operand.put("startYear", 2023);
       operand.put("endYear", 2024);
       
-      EconSchemaFactory factory = new EconSchemaFactory();
+      org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
+      operand.put("dataSource", "econ");
       rootSchema.add("econ", factory.create(rootSchema, "econ", operand));
       
       // Check for expected tables

@@ -170,8 +170,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private Map<String, Object> buildSecOperand(Map<String, Object> operand) {
     LOGGER.debug("Building operand for SEC/EDGAR data");
 
-    // Delegate to SecSchemaFactory to build the operand
-    SecSchemaFactory secFactory = new SecSchemaFactory();
+    GovDataSubSchemaFactory secFactory = new org.apache.calcite.adapter.govdata.sec.SecSchemaFactory();
+
+    // Get the operand configuration from SecSchemaFactory
     return secFactory.buildOperand(operand, storageProvider);
   }
 
@@ -181,7 +182,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private Map<String, Object> buildGeoOperand(Map<String, Object> operand) {
     LOGGER.debug("Building operand for Geographic data");
 
-    GeoSchemaFactory geoFactory = new GeoSchemaFactory();
+    GovDataSubSchemaFactory geoFactory = new GeoSchemaFactory();
 
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
@@ -197,7 +198,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.debug("SEC schema exists - geographic business analysis available");
     }
 
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
+    if (!allConstraints.isEmpty() && tableDefinitions != null && geoFactory.supportsConstraints()) {
       geoFactory.setTableConstraints(allConstraints, tableDefinitions);
     }
 
@@ -286,73 +287,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
   }
 
-  // Keep the old methods temporarily until we fully migrate
-  /**
-   * Creates SEC/EDGAR schema using the specialized SEC factory.
-   * @deprecated Use buildSecOperand instead
-   */
-  private Schema createSecSchema(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to SecSchemaFactory for SEC/EDGAR data");
-
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "SEC");
-
-    SecSchemaFactory factory = new SecSchemaFactory();
-
-    // Build constraint metadata including cross-domain constraints
-    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
-    if (tableConstraints != null) {
-      allConstraints.putAll(tableConstraints);
-    }
-
-    // Add cross-domain constraints if GEO schema exists
-    if (schemaDataSources.containsValue("GEO")) {
-      Map<String, Map<String, Object>> crossDomainConstraints = defineCrossDomainConstraintsForSec();
-      allConstraints.putAll(crossDomainConstraints);
-    }
-
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
-      factory.setTableConstraints(allConstraints, tableDefinitions);
-    }
-
-    Schema schema = factory.create(parentSchema, name, operand);
-    createdSchemas.put(name.toUpperCase(), schema);
-    return schema;
-  }
-
-  /**
-   * Creates Geographic data schema using the specialized Geo factory.
-   */
-  private Schema createGeoSchema(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to GeoSchemaFactory for geographic data");
-
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "GEO");
-
-    GeoSchemaFactory factory = new GeoSchemaFactory();
-
-    // Build constraint metadata including cross-domain constraints
-    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
-    if (tableConstraints != null) {
-      allConstraints.putAll(tableConstraints);
-    }
-
-    // Add cross-domain constraints if SEC schema exists
-    if (schemaDataSources.containsValue("SEC")) {
-      // GEO doesn't have outgoing FKs to SEC, but we track it for completeness
-      LOGGER.debug("SEC schema exists - cross-domain relationships available");
-    }
-
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
-      factory.setTableConstraints(allConstraints, tableDefinitions);
-    }
-
-    Schema schema = factory.create(parentSchema, name, operand);
-    createdSchemas.put(name.toUpperCase(), schema);
-    return schema;
-  }
+  // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
 
   /**
    * Build operand for Economic data using the specialized Econ factory.
@@ -360,7 +295,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private Map<String, Object> buildEconOperand(Map<String, Object> operand) {
     LOGGER.debug("Building operand from EconSchemaFactory for economic data");
 
-    EconSchemaFactory factory = new EconSchemaFactory();
+    GovDataSubSchemaFactory factory = new EconSchemaFactory();
 
     // Build constraint metadata including cross-domain constraints
     Map<String, Map<String, Object>> allConstraints = new HashMap<>();
@@ -378,7 +313,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       allConstraints.putAll(crossDomainConstraints);
     }
 
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
+    if (!allConstraints.isEmpty() && tableDefinitions != null && factory.supportsConstraints()) {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
 
@@ -386,84 +321,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     return factory.buildOperand(operand, storageProvider);
   }
 
-  /**
-   * Creates Public Safety data schema using the specialized Safety factory.
-   */
-  private Schema createSafetySchema(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to SafetySchemaFactory for public safety data");
-
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "SAFETY");
-
-    SafetySchemaFactory factory = new SafetySchemaFactory();
-
-    // Build constraint metadata including cross-domain constraints
-    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
-    if (tableConstraints != null) {
-      allConstraints.putAll(tableConstraints);
-    }
-
-    // Add cross-domain constraints if other schemas exist
-    if (schemaDataSources.containsValue("SEC")) {
-      LOGGER.debug("SEC schema exists - business risk assessment available");
-    }
-    if (schemaDataSources.containsValue("GEO")) {
-      LOGGER.debug("GEO schema exists - spatial crime/safety analysis available");
-    }
-    if (schemaDataSources.containsValue("ECON")) {
-      LOGGER.debug("ECON schema exists - socioeconomic crime correlations available");
-    }
-
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
-      factory.setTableConstraints(allConstraints, tableDefinitions);
-    }
-
-    Schema schema = factory.create(parentSchema, name, operand);
-    createdSchemas.put(name.toUpperCase(), schema);
-    return schema;
-  }
-
-  /**
-   * Creates Public data schema using the specialized Pub factory.
-   */
-  private Schema createPubSchema(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    LOGGER.debug("Delegating to PubSchemaFactory for public data");
-
-    // Track this schema for cross-domain constraint detection
-    schemaDataSources.put(name.toUpperCase(), "PUB");
-
-    PubSchemaFactory factory = new PubSchemaFactory();
-
-    // Build constraint metadata including cross-domain constraints
-    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
-    if (tableConstraints != null) {
-      allConstraints.putAll(tableConstraints);
-    }
-
-    // Add cross-domain constraints if other schemas exist
-    if (schemaDataSources.containsValue("SEC")) {
-      LOGGER.debug("SEC schema exists - corporate intelligence enhancement available");
-    }
-    if (schemaDataSources.containsValue("GEO")) {
-      LOGGER.debug("GEO schema exists - geographic context enrichment available");
-    }
-    if (schemaDataSources.containsValue("ECON")) {
-      LOGGER.debug("ECON schema exists - economic research correlation available");
-    }
-    if (schemaDataSources.containsValue("SAFETY")) {
-      LOGGER.debug("SAFETY schema exists - contextual safety analysis available");
-    }
-
-    if (!allConstraints.isEmpty() && tableDefinitions != null) {
-      factory.setTableConstraints(allConstraints, tableDefinitions);
-    }
-
-    Schema schema = factory.create(parentSchema, name, operand);
-    createdSchemas.put(name.toUpperCase(), schema);
-    return schema;
-  }
+  // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
 
   @Override
   public boolean supportsConstraints() {

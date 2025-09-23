@@ -18,10 +18,8 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.FileSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
-import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -84,7 +82,7 @@ import java.util.Map;
  * }
  * </pre>
  */
-public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
+public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoSchemaFactory.class);
   private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
@@ -100,13 +98,9 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
   private static final String DEMOGRAPHIC_TYPE = "type=demographic";  // Census API data
   private static final String CROSSWALK_TYPE = "type=crosswalk";  // HUD data
 
-  @Override public Schema create(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
-    // This method should not be called directly anymore
-    // GovDataSchemaFactory should call buildOperand() instead
-    throw new UnsupportedOperationException(
-        "GeoSchemaFactory.create() should not be called directly. " +
-        "Use GovDataSchemaFactory to create a unified schema.");
+  @Override
+  public String getSchemaResourceName() {
+    return "/geo-schema.json";
   }
   
   /**
@@ -290,7 +284,7 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Load table definitions from geo-schema.json
-    List<Map<String, Object>> geoTables = loadGeoTableDefinitions();
+    List<Map<String, Object>> geoTables = loadTableDefinitions();
     if (!geoTables.isEmpty()) {
       // Update patterns with the actual parquet directory
       for (Map<String, Object> table : geoTables) {
@@ -315,7 +309,7 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
 
     if (enableConstraints) {
       // Load constraints from geo-schema.json
-      geoConstraints.putAll(loadGeoTableConstraints());
+      geoConstraints.putAll(loadTableConstraints());
     }
 
     // Merge with any constraints from model file
@@ -470,26 +464,6 @@ public class GeoSchemaFactory implements ConstraintCapableSchemaFactory {
   /**
    * Load table definitions from geo-schema.json resource file.
    */
-  private static List<Map<String, Object>> loadGeoTableDefinitions() {
-    try (InputStream is = GeoSchemaFactory.class.getResourceAsStream("/geo-schema.json")) {
-      if (is == null) {
-        throw new IllegalStateException("Could not find geo-schema.json resource file");
-      }
-
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
-      List<Map<String, Object>> tables = (List<Map<String, Object>>) schema.get("partitionedTables");
-      if (tables == null) {
-        throw new IllegalStateException("No 'partitionedTables' field found in geo-schema.json");
-      }
-      LOGGER.info("Loaded {} table definitions from geo-schema.json", tables.size());
-      for (Map<String, Object> table : tables) {
-        LOGGER.debug("  - Table: {} with pattern: {}", table.get("name"), table.get("pattern"));
-      }
-      return tables;
-    } catch (IOException e) {
-      throw new RuntimeException("Error loading geo-schema.json", e);
-    }
-  }
 
   /**
    * Load constraint definitions from geo-schema.json resource file.

@@ -50,8 +50,8 @@ public class SecSchemaFactory implements SchemaFactory {
     // Ensure dataSource is set to "sec" for backward compatibility
     operand.put("dataSource", "sec");
     
-    // Delegate to the new SEC schema factory
-    return new org.apache.calcite.adapter.govdata.sec.SecSchemaFactory()
+    // Delegate to the unified GovDataSchemaFactory with SEC data source
+    return new org.apache.calcite.adapter.govdata.GovDataSchemaFactory()
         .create(parentSchema, name, operand);
   }
 }
