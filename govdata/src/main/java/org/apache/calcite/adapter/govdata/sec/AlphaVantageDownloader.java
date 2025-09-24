@@ -145,10 +145,21 @@ public class AlphaVantageDownloader {
   }
 
   private void downloadTickerData(String basePath, TickerCikPair pair, int startYear, int endYear) {
+    LOGGER.debug("downloadTickerData called with basePath: {}", basePath);
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = String.format("stock_prices/ticker=%s/year=%d/%s_prices.parquet",
-          pair.ticker.toUpperCase(), year, pair.ticker.toLowerCase());
-      String fullPath = basePath + "/" + relativePath;
+      // Build the path - ensure it's absolute
+      File baseDir = new File(basePath);
+      LOGGER.debug("baseDir: {}, absolute: {}", baseDir, baseDir.getAbsolutePath());
+      File stockPricesDir = new File(baseDir, "stock_prices");
+      LOGGER.debug("stockPricesDir: {}, absolute: {}", stockPricesDir, stockPricesDir.getAbsolutePath());
+      File tickerDir = new File(stockPricesDir, String.format("ticker=%s", pair.ticker.toUpperCase()));
+      File yearDir = new File(tickerDir, String.format("year=%d", year));
+      LOGGER.debug("yearDir: {}, absolute: {}", yearDir, yearDir.getAbsolutePath());
+      yearDir.mkdirs();
+
+      File parquetFile = new File(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
+      String fullPath = parquetFile.getAbsolutePath();
+      LOGGER.debug("parquetFile fullPath: {}", fullPath);
 
       // Check if data already exists
       try {
@@ -230,6 +241,21 @@ public class AlphaVantageDownloader {
     // Extract time series data
     JsonNode timeSeries = root.get("Time Series (Daily)");
     if (timeSeries == null) {
+      // Check for error message
+      JsonNode errorMsg = root.get("Error Message");
+      if (errorMsg != null) {
+        throw new IOException("API Error: " + errorMsg.asText());
+      }
+      JsonNode infoMsg = root.get("Information");
+      if (infoMsg != null) {
+        throw new IOException("API Info: " + infoMsg.asText());
+      }
+      JsonNode noteMsg = root.get("Note");
+      if (noteMsg != null) {
+        throw new IOException("API Note (likely rate limit): " + noteMsg.asText());
+      }
+      // Log the response to understand what we're getting
+      LOGGER.warn("Unexpected API response format. Keys in response: {}", root.fieldNames());
       throw new IOException("No time series data in response");
     }
 
