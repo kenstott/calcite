@@ -2086,6 +2086,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       // Use the parquet directory for stock prices - same as other SEC data
       String govdataParquetDir = getGovDataParquetDir();
+      if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
+        LOGGER.warn("GOVDATA_PARQUET_DIR not set, skipping stock price download");
+        return;
+      }
       String basePath = govdataParquetDir + "/source=sec";
 
       // Build list of ticker-CIK pairs
@@ -2125,6 +2129,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           }
         }
       }
+
+      LOGGER.info("DEBUG downloadStockPrices: govdataParquetDir={}, basePath={}", govdataParquetDir, basePath);
+      LOGGER.info("STOCK DOWNLOAD STARTING NOW WITH basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
         // Get Alpha Vantage API key from environment
