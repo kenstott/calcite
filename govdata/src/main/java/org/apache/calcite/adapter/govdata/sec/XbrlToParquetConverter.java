@@ -64,9 +64,15 @@ import javax.xml.parsers.DocumentBuilderFactory;
 public class XbrlToParquetConverter implements FileConverter {
   private static final Logger LOGGER = Logger.getLogger(XbrlToParquetConverter.class.getName());
   private final StorageProvider storageProvider;
+  private final boolean enableVectorization;
 
   public XbrlToParquetConverter(StorageProvider storageProvider) {
+    this(storageProvider, false);
+  }
+
+  public XbrlToParquetConverter(StorageProvider storageProvider, boolean enableVectorization) {
     this.storageProvider = storageProvider;
+    this.enableVectorization = enableVectorization;
   }
 
   // HTML tag removal pattern
@@ -254,12 +260,14 @@ public class XbrlToParquetConverter implements FileConverter {
         outputFiles.add(relationshipsFile);
       }
 
-      // Create vectorized blobs with contextual enrichment
-      File vectorizedFile =
-          new File(partitionDir, String.format("%s_%s_vectorized.parquet", cik, filingDate));
-      writeVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile);
-      if (vectorizedFile.exists()) {
-        outputFiles.add(vectorizedFile);
+      // Create vectorized blobs with contextual enrichment if enabled
+      if (enableVectorization) {
+        File vectorizedFile =
+            new File(partitionDir, String.format("%s_%s_vectorized.parquet", cik, filingDate));
+        writeVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile);
+        if (vectorizedFile.exists()) {
+          outputFiles.add(vectorizedFile);
+        }
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
@@ -542,11 +550,44 @@ public class XbrlToParquetConverter implements FileConverter {
     List<GenericRecord> records = new ArrayList<>();
     NodeList allElements = doc.getElementsByTagName("*");
 
+    LOGGER.info("Found " + allElements.getLength() + " total XML elements in document");
+
+    int elementsWithContextRef = 0;
+
     for (int i = 0; i < allElements.getLength(); i++) {
       Element element = (Element) allElements.item(i);
 
-      // Skip non-fact elements
-      if (element.hasAttribute("contextRef")) {
+      // Identify potential fact elements more broadly
+      // Original approach: only elements with contextRef
+      boolean isFactElement = element.hasAttribute("contextRef");
+
+      // Enhanced approach for 2024-01-01 filings: also check elements that look like financial facts
+      if (!isFactElement) {
+        // Check if element has financial-related attributes or naming patterns
+        String tagName = element.getTagName();
+        String localName = element.getLocalName();
+
+        // Look for XBRL fact patterns without contextRef
+        if (tagName != null && (
+            // Common financial concept namespaces
+            tagName.contains("us-gaap:") ||
+            tagName.contains("dei:") ||
+            tagName.contains("gaap:") ||
+            // Or has numeric content that could be a fact
+            (element.getTextContent() != null &&
+             element.getTextContent().trim().matches("^[0-9,.-]+$")) ||
+            // Or has a 'name' attribute (inline XBRL without contextRef)
+            element.hasAttribute("name")
+        )) {
+          isFactElement = true;
+        }
+      }
+
+      if (isFactElement) {
+        if (element.hasAttribute("contextRef")) {
+          elementsWithContextRef++;
+        }
+
         GenericRecord record = new GenericData.Record(schema);
         // Partition columns (cik, filing_type) are NOT added - they're in the directory path
         record.put("filing_date", filingDate);
@@ -561,8 +602,15 @@ public class XbrlToParquetConverter implements FileConverter {
             concept = concept.substring(concept.indexOf(":") + 1);
           }
         } else {
-          // Regular XBRL: concept is the element's local name
+          // Regular XBRL: concept is the element's local name or tag name
           concept = element.getLocalName();
+          if (concept == null) {
+            concept = element.getTagName();
+            // Remove namespace prefix if present
+            if (concept != null && concept.contains(":")) {
+              concept = concept.substring(concept.indexOf(":") + 1);
+            }
+          }
         }
 
         // Skip if concept is null or empty
@@ -622,9 +670,29 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    LOGGER.info("Found " + elementsWithContextRef + " elements with contextRef attributes");
+    LOGGER.info("Extracted " + records.size() + " valid fact records (including enhanced extraction for elements without contextRef)");
+
+    if (records.isEmpty()) {
+      LOGGER.warning("No facts extracted from XBRL document for " + filingDate + " despite enhanced extraction - document may not contain recognizable financial facts");
+    }
+
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "facts");
-    LOGGER.info("Wrote " + records.size() + " facts to " + outputFile);
+    try {
+      LOGGER.info("Writing facts to parquet file: " + outputFile.getAbsolutePath());
+      storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "facts");
+
+      // Verify file was created successfully
+      if (outputFile.exists() && outputFile.length() > 0) {
+        LOGGER.info("Successfully wrote " + records.size() + " facts to " + outputFile.getName() +
+                    " (" + outputFile.length() + " bytes)");
+      } else {
+        throw new IOException("Facts parquet file was not created successfully or is empty: " + outputFile.getAbsolutePath());
+      }
+    } catch (Exception e) {
+      LOGGER.severe("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getMessage());
+      throw new IOException("Failed to write facts to parquet: " + e.getMessage(), e);
+    }
   }
 
   private void writeMetadataToParquet(Document doc, File outputFile,
@@ -1768,18 +1836,20 @@ public class XbrlToParquetConverter implements FileConverter {
       // Create vectorized blobs for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
-      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-      File vectorizedFile = new File(partitionDir,
-          String.format("%s_%s_vectorized.parquet", cik, uniqueId));
-      
-      try {
-        writeInsiderVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile, accession);
-        if (vectorizedFile.exists()) {
-          outputFiles.add(vectorizedFile);
-          storageProvider.cleanupMacosMetadata(vectorizedFile.getParentFile().getAbsolutePath());
+      if (enableVectorization) {
+        String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+        File vectorizedFile = new File(partitionDir,
+            String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+
+        try {
+          writeInsiderVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile, accession);
+          if (vectorizedFile.exists()) {
+            outputFiles.add(vectorizedFile);
+            storageProvider.cleanupMacosMetadata(vectorizedFile.getParentFile().getAbsolutePath());
+          }
+        } catch (Exception ve) {
+          LOGGER.warning("Failed to create vectorized blobs for insider form: " + ve.getMessage());
         }
-      } catch (Exception ve) {
-        LOGGER.warning("Failed to create vectorized blobs for insider form: " + ve.getMessage());
       }
       
     } catch (Exception e) {
