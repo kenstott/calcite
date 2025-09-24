@@ -687,9 +687,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     Map<String, Object> stockPrices = new HashMap<>();
     stockPrices.put("name", "stock_prices");
-    stockPrices.put("pattern", "stock_prices/ticker=*/year=*/[!.]*_prices.parquet");
+    stockPrices.put("pattern", "stock_prices/ticker=*/year=*/[!.]*.parquet");
     stockPrices.put("partitions", stockPricesPartitionConfig);
     partitionedTables.add(stockPrices);
+
+    // Define company_info as a single file (non-partitioned but in partitionedTables for consistency)
+    Map<String, Object> companyInfo = new HashMap<>();
+    companyInfo.put("name", "company_info");
+    companyInfo.put("pattern", "[!.]company_info.parquet");
+    // No partitions config needed - this is a single file
+    partitionedTables.add(companyInfo);
 
     // Add vectorized_blobs table when text similarity is enabled
     Map<String, Object> textSimilarityConfig = (Map<String, Object>) operand.get("textSimilarity");
@@ -1468,15 +1475,29 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
       File yearDir = new File(filingTypeDir, "year=" + year);
 
-      // Check for the appropriate parquet file based on form type
-      // Forms 3/4/5 create _insider.parquet files, others create _facts.parquet files
-      String filenameSuffix = isInsiderForm ? "insider" : "facts";
+      // Check for ALL required parquet files that XbrlToParquetConverter creates
       // Parquet files use accession without hyphens (accessionClean is already defined above)
-      File parquetFile = new File(yearDir, String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
 
-      if (!parquetFile.exists() || parquetFile.length() == 0) {
+      // Always required files:
+      File metadataFile = new File(yearDir, String.format("%s_%s_metadata.parquet", cik, accessionClean));
+      File contextsFile = new File(yearDir, String.format("%s_%s_contexts.parquet", cik, accessionClean));
+
+      // Primary data file (facts for most forms, insider for forms 3/4/5)
+      String filenameSuffix = isInsiderForm ? "insider" : "facts";
+      File primaryFile = new File(yearDir, String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
+
+      // Check all required files
+      if (!metadataFile.exists() || metadataFile.length() == 0) {
         needParquetReprocessing = true;
-        LOGGER.info("Missing or empty Parquet file: " + parquetFile.getPath());
+        LOGGER.info("Missing or empty metadata Parquet file: " + metadataFile.getPath());
+      }
+      if (!contextsFile.exists() || contextsFile.length() == 0) {
+        needParquetReprocessing = true;
+        LOGGER.info("Missing or empty contexts Parquet file: " + contextsFile.getPath());
+      }
+      if (!primaryFile.exists() || primaryFile.length() == 0) {
+        needParquetReprocessing = true;
+        LOGGER.info("Missing or empty primary Parquet file: " + primaryFile.getPath());
       }
 
       // Also check for vectorized file if text similarity is enabled
@@ -1496,6 +1517,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       if (needParquetReprocessing) {
         LOGGER.info("Parquet reprocessing needed for: " + form + " " + filingDate);
+        // Clean up any existing partial parquet files to ensure clean conversion
+        cleanupPartialParquetFiles(yearDir, cik, accessionClean);
         // Force reprocessing by treating as if we need XBRL (even if files exist)
         // This ensures the conversion will run again
         needXbrl = true;
@@ -1752,7 +1775,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               LOGGER.error("StorageProvider is null - cannot convert XBRL to Parquet");
               throw new IllegalStateException("StorageProvider not initialized - must be provided by GovDataSchemaFactory");
             }
-            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider);
+            // Check if text similarity is enabled from operand
+            Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+            boolean enableVectorization = textSimilarityConfig != null &&
+                Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+
+            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
             // Extract accession number from file path (parent directory name)
             // Path is like: /sec-data/0000789019/000078901922000007/ownership.xml
@@ -2221,6 +2249,35 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Bulk cleanup: Removed macOS metadata files from " + directory.getAbsolutePath());
     } catch (Exception e) {
       LOGGER.debug("Error during bulk macOS metadata cleanup: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Clean up partial parquet files for a filing to ensure clean conversion.
+   * Deletes all existing parquet files with the given cik and accession prefix.
+   */
+  private void cleanupPartialParquetFiles(File yearDir, String cik, String accessionClean) {
+    if (!yearDir.exists()) {
+      return;
+    }
+
+    String prefix = cik + "_" + accessionClean + "_";
+    File[] parquetFiles = yearDir.listFiles((dir, name) ->
+        name.startsWith(prefix) && name.endsWith(".parquet"));
+
+    if (parquetFiles != null && parquetFiles.length > 0) {
+      LOGGER.info("Cleaning up {} partial parquet files for filing {}", parquetFiles.length, accessionClean);
+      for (File file : parquetFiles) {
+        try {
+          if (file.delete()) {
+            LOGGER.debug("Deleted partial parquet file: {}", file.getPath());
+          } else {
+            LOGGER.warn("Failed to delete partial parquet file: {}", file.getPath());
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Error deleting partial parquet file {}: {}", file.getPath(), e.getMessage());
+        }
+      }
     }
   }
 
