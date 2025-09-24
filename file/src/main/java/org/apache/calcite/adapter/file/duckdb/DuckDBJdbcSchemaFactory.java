@@ -572,7 +572,7 @@ public class DuckDBJdbcSchemaFactory {
             fileArray.append("]");
 
             sql =
-                              String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s)", duckdbSchema, tableName, fileArray.toString());
+                              String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s, hive_partitioning = true)", duckdbSchema, tableName, fileArray.toString());
             LOGGER.info("Creating DuckDB view for multiple files: \"{}.{}\" -> {} files", duckdbSchema, tableName, files.length);
           } else if (isGlobPattern) {
             // Glob pattern - DuckDB's parquet_scan supports glob patterns directly

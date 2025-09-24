@@ -63,7 +63,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
   private Map<String, Map<String, Object>> tableConstraints;
 
-  /**
+/**
    * Build the operand configuration for ECON schema without creating the FileSchema.
    * This method is called by GovDataSchemaFactory to collect table definitions.
    */
