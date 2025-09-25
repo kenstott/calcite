@@ -231,19 +231,20 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         for (int year = startYear; year <= endYear; year++) {
           // Convert employment statistics
           String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/employment_statistics.parquet");
-          blsDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), employmentParquetPath);
+          String cacheYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          blsDownloader.convertToParquet(new File(cacheYearPath), employmentParquetPath);
 
           // Convert inflation metrics
           String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/inflation_metrics.parquet");
-          blsDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), inflationParquetPath);
+          blsDownloader.convertToParquet(new File(cacheYearPath), inflationParquetPath);
 
           // Convert wage growth
           String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/wage_growth.parquet");
-          blsDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), wageParquetPath);
+          blsDownloader.convertToParquet(new File(cacheYearPath), wageParquetPath);
 
           // Convert regional employment
           String regionalParquetPath = storageProvider.resolvePath(parquetDir, "type=regional/year=" + year + "/regional_employment.parquet");
-          blsDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), regionalParquetPath);
+          blsDownloader.convertToParquet(new File(cacheYearPath), regionalParquetPath);
         }
 
         LOGGER.info("BLS data download completed");
@@ -264,7 +265,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
-          fredDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), fredParquetPath);
+          String cacheFredYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          fredDownloader.convertToParquet(new File(cacheFredYearPath), fredParquetPath);
         }
 
         LOGGER.info("FRED data download completed");
@@ -285,11 +287,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/treasury_yields.parquet");
-          treasuryDownloader.convertToParquet(new File(cacheDir, "source=econ/type=timeseries/year=" + year), yieldsParquetPath);
+          String cacheTimeseriesYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=timeseries/year=" + year);
+          treasuryDownloader.convertToParquet(new File(cacheTimeseriesYearPath), yieldsParquetPath);
 
           // Convert federal debt data to parquet
           String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/federal_debt.parquet");
-          treasuryDownloader.convertFederalDebtToParquet(new File(cacheDir, "source=econ/type=timeseries/year=" + year), debtParquetPath);
+          treasuryDownloader.convertFederalDebtToParquet(new File(cacheTimeseriesYearPath), debtParquetPath);
         }
 
         LOGGER.info("Treasury data download completed");
@@ -307,33 +310,35 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Download all BEA data for the year range
         beaDownloader.downloadAll(startYear, endYear);
 
-        // Convert to parquet files for each year
+        // Convert to parquet files for each year using StorageProvider
         for (int year = startYear; year <= endYear; year++) {
-          // Convert GDP components
+          String cacheIndicatorsYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+
+          // Convert GDP components using StorageProvider
           String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
-          beaDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), gdpParquetPath);
+          beaDownloader.convertToParquet(new File(cacheIndicatorsYearPath), gdpParquetPath);
 
-          // Create gdp_statistics table (GDP growth rates from BEA)
+          // Create gdp_statistics table (GDP growth rates from BEA) using StorageProvider
           String gdpStatsParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_statistics.parquet");
-          beaDownloader.convertGdpStatisticsToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), gdpStatsParquetPath);
+          beaDownloader.convertGdpStatisticsToParquet(new File(cacheIndicatorsYearPath), gdpStatsParquetPath);
 
-          // Convert regional income - use the specific converter method
+          // Convert regional income using StorageProvider
           String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
-          beaDownloader.convertRegionalIncomeToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), regionalIncomeParquetPath);
+          beaDownloader.convertRegionalIncomeToParquet(new File(cacheIndicatorsYearPath), regionalIncomeParquetPath);
 
-          // Convert State GDP data
+          // Convert State GDP data using StorageProvider
           String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
-          beaDownloader.convertStateGdpToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), stateGdpParquetPath);
+          beaDownloader.convertStateGdpToParquet(new File(cacheIndicatorsYearPath), stateGdpParquetPath);
 
-          // Convert BEA trade statistics, ITA data, and industry GDP data
+          // Convert BEA trade statistics, ITA data, and industry GDP data using StorageProvider
           String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
-          beaDownloader.convertTradeStatisticsToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), tradeParquetPath);
+          beaDownloader.convertTradeStatisticsToParquet(new File(cacheIndicatorsYearPath), tradeParquetPath);
 
           String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/ita_data.parquet");
-          beaDownloader.convertItaDataToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), itaParquetPath);
+          beaDownloader.convertItaDataToParquet(new File(cacheIndicatorsYearPath), itaParquetPath);
 
           String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/industry_gdp.parquet");
-          beaDownloader.convertIndustryGdpToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), industryGdpParquetPath);
+          beaDownloader.convertIndustryGdpToParquet(new File(cacheIndicatorsYearPath), industryGdpParquetPath);
         }
 
         LOGGER.info("BEA data download completed");
@@ -354,7 +359,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
-          worldBankDownloader.convertToParquet(new File(cacheDir, "source=econ/type=indicators/year=" + year), worldParquetPath);
+          String cacheWorldBankYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          worldBankDownloader.convertToParquet(new File(cacheWorldBankYearPath), worldParquetPath);
         }
 
         LOGGER.info("World Bank data download completed");

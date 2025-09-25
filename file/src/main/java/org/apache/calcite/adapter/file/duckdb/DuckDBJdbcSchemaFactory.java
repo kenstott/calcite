@@ -626,11 +626,33 @@ public class DuckDBJdbcSchemaFactory {
                 LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
               }
             } catch (SQLException e) {
-              LOGGER.error("✗ FAILED to create DuckDB view for table '{}'", tableName);
-              LOGGER.error("✗ SQL that failed: {}", sql);
-              LOGGER.error("✗ Error details: {}", e.getMessage());
-              LOGGER.error("✗ SQL State: {}", e.getSQLState());
-              LOGGER.error("✗ Error Code: {}", e.getErrorCode());
+              LOGGER.error("═══════════════════════════════════════════════════════════════");
+              LOGGER.error("🚨 CRITICAL: DuckDB VIEW CREATION FAILED 🚨");
+              LOGGER.error("═══════════════════════════════════════════════════════════════");
+              LOGGER.error("❌ Table: {}.{}", duckdbSchema, tableName);
+              LOGGER.error("❌ SQL Statement: {}", sql);
+              LOGGER.error("❌ SQLException Message: {}", e.getMessage());
+              LOGGER.error("❌ SQL State: {}", e.getSQLState());
+              LOGGER.error("❌ Error Code: {}", e.getErrorCode());
+
+              // Extra debugging for financial_line_items specifically
+              if ("financial_line_items".equals(tableName)) {
+                LOGGER.error("🔥 FINANCIAL_LINE_ITEMS SPECIFIC DEBUG INFO:");
+                LOGGER.error("🔥 Parquet path: {}", parquetPath);
+                LOGGER.error("🔥 Is multiple files: {}", isMultiFileList);
+                LOGGER.error("🔥 Is glob pattern: {}", isGlobPattern);
+                if (isMultiFileList && parquetPath.contains(",")) {
+                  String fileList = parquetPath.substring(1, parquetPath.length() - 1);
+                  String[] fileArray = fileList.split(",");
+                  LOGGER.error("🔥 File count: {}", fileArray.length);
+                  LOGGER.error("🔥 First few files:");
+                  for (int i = 0; i < Math.min(5, fileArray.length); i++) {
+                    LOGGER.error("🔥   File {}: {}", i + 1, fileArray[i].trim());
+                  }
+                }
+              }
+
+              LOGGER.error("═══════════════════════════════════════════════════════════════");
               // Log the full stack trace for debugging
               e.printStackTrace();
             }
