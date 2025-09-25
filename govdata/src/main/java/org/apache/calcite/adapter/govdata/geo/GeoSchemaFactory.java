@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.FileSchemaFactory;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 
@@ -208,6 +209,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     
     Boolean autoDownload = (Boolean) mutableOperand.getOrDefault("autoDownload", true);
 
+    // GEO data TTL configuration (in days) - default 90 days for quarterly boundary updates
+    Integer geoCacheTtlDays = (Integer) mutableOperand.getOrDefault("geoCacheTtlDays", 365);
+    if (geoCacheTtlDays < 1) {
+      geoCacheTtlDays = 90; // Ensure minimum 1 day TTL
+    }
+
     // Create cache directory structure
     File cacheRoot = new File(cacheDir);
     if (!cacheRoot.exists()) {
@@ -240,6 +247,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("  Enabled sources: {}", String.join(", ", enabledSources));
     LOGGER.info("  Year range: {} - {}", startYear, endYear);
     LOGGER.info("  Auto-download: {}", autoDownload);
+    LOGGER.info("  GEO cache TTL: {} days", geoCacheTtlDays);
     LOGGER.info("  Census API key: {}", censusApiKey != null ? "configured" : "not configured");
     LOGGER.info("  HUD credentials: {}", hudUsername != null ? "configured" : "not configured");
     LOGGER.info("  HUD token: {}", hudToken != null ? "configured" : "not configured");
@@ -249,7 +257,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Auto-download enabled for GEO data");
       try {
         downloadGeoData(mutableOperand, cacheDir, geoParquetDir, censusApiKey, hudUsername, hudPassword, hudToken,
-            enabledSources, tigerYears, censusYears, storageProvider);
+            enabledSources, tigerYears, censusYears, geoCacheTtlDays, storageProvider);
       } catch (Exception e) {
         LOGGER.error("Error downloading GEO data", e);
         // Continue even if download fails - existing data may be available
@@ -324,129 +332,265 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadGeoData(Map<String, Object> operand, String cacheDir, String geoParquetDir, String censusApiKey,
       String hudUsername, String hudPassword, String hudToken, String[] enabledSources,
-      List<Integer> tigerYears, List<Integer> censusYears, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) throws IOException {
-    
+      List<Integer> tigerYears, List<Integer> censusYears, Integer geoCacheTtlDays,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) throws IOException {
+
     // cacheDir should already have tilde expanded from create() method
-    LOGGER.info("Downloading geographic data to: {}", cacheDir);
-    
+    LOGGER.info("Checking geographic data cache: {}", geoParquetDir);
+
+    // Set up TTL configuration for all GEO data sources
+    long geoDataTtlMillis = geoCacheTtlDays * 24L * 60 * 60 * 1000; // Convert days to milliseconds
+    long currentTime = System.currentTimeMillis();
+
     // Download TIGER data if enabled
     if (Arrays.asList(enabledSources).contains("tiger") && !tigerYears.isEmpty()) {
-      // Use simple cache directory structure for raw data downloads
-      File tigerCacheDir = new File(cacheDir, "tiger");
-      TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider);
-      
-      try {
-        LOGGER.info("Downloading TIGER/Line data for years: {}", tigerYears);
-        // Use the new downloadAll pattern matching ECON standard
-        int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
-        int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
-        tigerDownloader.downloadAll(startYear, endYear);
 
-        LOGGER.info("TIGER download completed, starting Parquet conversion for years: {}", tigerYears);
+      // Check if TIGER parquet files already exist for all years - following SEC pattern with TTL
 
-        // Convert shapefiles to Parquet for each year
-        for (int year : tigerYears) {
-          LOGGER.info("Converting TIGER data for year {}", year);
-          String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
+      boolean allTigerFilesCached = true;
+      for (int year : tigerYears) {
+        String[] tigerFiles = {"states.parquet", "counties.parquet", "places.parquet", "zctas.parquet",
+            "census_tracts.parquet", "block_groups.parquet", "cbsa.parquet", "congressional_districts.parquet", "school_districts.parquet"};
 
-          String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
+        for (String filename : tigerFiles) {
+          String parquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/" + filename);
+          try {
+            if (!storageProvider.exists(parquetPath)) {
+              allTigerFilesCached = false;
+              LOGGER.info("Missing TIGER parquet file: {}", parquetPath);
+              break;
+            } else {
+              StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+              if (metadata.getSize() == 0) {
+                allTigerFilesCached = false;
+                LOGGER.info("Empty TIGER parquet file: {}", parquetPath);
+                break;
+              }
 
-          String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
-
-          String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
-
-          String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
-
-          String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
-
-          String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
-
-          String congressionalParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/congressional_districts.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
-
-          String schoolParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/school_districts.parquet");
-          tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+              // Check TTL - GEO data expires after 90 days
+              long fileAge = currentTime - metadata.getLastModified();
+              if (fileAge > geoDataTtlMillis) {
+                allTigerFilesCached = false;
+                LOGGER.info("Expired TIGER parquet file (age: {} days): {}",
+                    fileAge / (24 * 60 * 60 * 1000), parquetPath);
+                break;
+              }
+            }
+          } catch (IOException e) {
+            allTigerFilesCached = false;
+            LOGGER.info("Cannot access TIGER parquet file: {}", parquetPath);
+            break;
+          }
         }
-        
-      } catch (Exception e) {
-        LOGGER.error("Error downloading TIGER data", e);
+        if (!allTigerFilesCached) break;
+      }
+
+      if (allTigerFilesCached) {
+        LOGGER.info("TIGER data already fully cached for years: {}", tigerYears);
+      } else {
+        // Use simple cache directory structure for raw data downloads
+        File tigerCacheDir = new File(cacheDir, "tiger");
+        TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider);
+
+        try {
+          LOGGER.info("Downloading TIGER/Line data for years: {}", tigerYears);
+          // Use the new downloadAll pattern matching ECON standard
+          int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
+          int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
+          tigerDownloader.downloadAll(startYear, endYear);
+
+          LOGGER.info("TIGER download completed, starting Parquet conversion for years: {}", tigerYears);
+
+          // Convert shapefiles to Parquet for each year
+          for (int year : tigerYears) {
+            LOGGER.info("Converting TIGER data for year {}", year);
+            String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
+
+            String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
+
+            String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
+
+            String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
+
+            String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
+
+            String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
+
+            String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
+
+            String congressionalParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/congressional_districts.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
+
+            String schoolParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/school_districts.parquet");
+            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+          }
+
+        } catch (Exception e) {
+          LOGGER.error("Error downloading TIGER data", e);
+        }
       }
     }
     
     // Download HUD crosswalk data if enabled
-    if (Arrays.asList(enabledSources).contains("hud") && 
+    if (Arrays.asList(enabledSources).contains("hud") &&
         (hudUsername != null || hudToken != null)) {
-      // Use simple cache directory structure for raw data downloads
-      File hudCacheDir = new File(cacheDir, "hud");
-      File crosswalkParquetDir = new File(geoParquetDir, CROSSWALK_TYPE);
-      HudCrosswalkFetcher hudFetcher;
 
-      if (hudToken != null && !hudToken.isEmpty()) {
-        hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider);
-      } else {
-        hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudCacheDir, storageProvider);
-      }
-      
-      try {
-        LOGGER.info("Downloading HUD-USPS crosswalk data");
-        // Use the new downloadAll pattern matching ECON standard
-        int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
-        int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
-        hudFetcher.downloadAll(startYear, endYear);
+      // Check if HUD crosswalk parquet files already exist with TTL validation
+      boolean allHudFilesCached = true;
+      for (int year : tigerYears) {
+        String[] hudFiles = {"zip_county_crosswalk.parquet", "zip_cbsa_crosswalk.parquet", "tract_zip_crosswalk.parquet"};
 
-        // Convert to Parquet for each year
-        for (int year : tigerYears) {
-          String zipCountyPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_county_crosswalk.parquet");
-          hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCountyPath);
+        for (String filename : hudFiles) {
+          String parquetPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/" + filename);
+          try {
+            if (!storageProvider.exists(parquetPath)) {
+              allHudFilesCached = false;
+              LOGGER.info("Missing HUD crosswalk parquet file: {}", parquetPath);
+              break;
+            } else {
+              StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+              if (metadata.getSize() == 0) {
+                allHudFilesCached = false;
+                LOGGER.info("Empty HUD crosswalk parquet file: {}", parquetPath);
+                break;
+              }
 
-          String zipCbsaPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_cbsa_crosswalk.parquet");
-          hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCbsaPath);
-
-          String tractZipPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/tract_zip_crosswalk.parquet");
-          hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), tractZipPath);
+              // Check TTL - HUD crosswalk data expires after 90 days
+              long fileAge = currentTime - metadata.getLastModified();
+              if (fileAge > geoDataTtlMillis) {
+                allHudFilesCached = false;
+                LOGGER.info("Expired HUD crosswalk parquet file (age: {} days): {}",
+                    fileAge / (24 * 60 * 60 * 1000), parquetPath);
+                break;
+              }
+            }
+          } catch (IOException e) {
+            allHudFilesCached = false;
+            LOGGER.info("Cannot access HUD crosswalk parquet file: {}", parquetPath);
+            break;
+          }
         }
-        
-      } catch (Exception e) {
-        LOGGER.error("Error downloading HUD crosswalk data", e);
+        if (!allHudFilesCached) break;
+      }
+
+      if (allHudFilesCached) {
+        LOGGER.info("HUD crosswalk data already fully cached for years: {}", tigerYears);
+      } else {
+        // Use simple cache directory structure for raw data downloads
+        File hudCacheDir = new File(cacheDir, "hud");
+        File crosswalkParquetDir = new File(geoParquetDir, CROSSWALK_TYPE);
+        HudCrosswalkFetcher hudFetcher;
+
+        if (hudToken != null && !hudToken.isEmpty()) {
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider);
+        } else {
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudCacheDir, storageProvider);
+        }
+
+        try {
+          LOGGER.info("Downloading HUD-USPS crosswalk data");
+          // Use the new downloadAll pattern matching ECON standard
+          int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
+          int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
+          hudFetcher.downloadAll(startYear, endYear);
+
+          // Convert to Parquet for each year
+          for (int year : tigerYears) {
+            String zipCountyPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_county_crosswalk.parquet");
+            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCountyPath);
+
+            String zipCbsaPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_cbsa_crosswalk.parquet");
+            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCbsaPath);
+
+            String tractZipPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/tract_zip_crosswalk.parquet");
+            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), tractZipPath);
+          }
+
+        } catch (Exception e) {
+          LOGGER.error("Error downloading HUD crosswalk data", e);
+        }
       }
     }
     
     // Download Census API data if enabled
-    if (Arrays.asList(enabledSources).contains("census") && 
+    if (Arrays.asList(enabledSources).contains("census") &&
         censusApiKey != null && !censusYears.isEmpty()) {
-      // Use simple cache directory structure for raw data downloads
-      File censusCacheDir = new File(cacheDir, "census");
-      File demographicParquetDir = new File(geoParquetDir, DEMOGRAPHIC_TYPE);
-      CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, censusYears, storageProvider);
-      
-      try {
-        LOGGER.info("Downloading Census demographic data for years: {}", censusYears);
-        // Use the new downloadAll pattern matching ECON standard
-        int startYear = censusYears.isEmpty() ? 2020 : censusYears.get(0);
-        int endYear = censusYears.isEmpty() ? 2020 : censusYears.get(censusYears.size() - 1);
-        censusClient.downloadAll(startYear, endYear);
 
-        // Convert to Parquet for each year
-        for (int year : censusYears) {
-          String populationPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/population_demographics.parquet");
-          censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), populationPath);
+      // Check if Census demographic parquet files already exist with TTL validation
+      boolean allCensusFilesCached = true;
+      for (int year : censusYears) {
+        String[] censusFiles = {"population_demographics.parquet", "housing_characteristics.parquet", "economic_indicators.parquet"};
 
-          String housingPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/housing_characteristics.parquet");
-          censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), housingPath);
+        for (String filename : censusFiles) {
+          String parquetPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/" + filename);
+          try {
+            if (!storageProvider.exists(parquetPath)) {
+              allCensusFilesCached = false;
+              LOGGER.info("Missing Census demographic parquet file: {}", parquetPath);
+              break;
+            } else {
+              StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+              if (metadata.getSize() == 0) {
+                allCensusFilesCached = false;
+                LOGGER.info("Empty Census demographic parquet file: {}", parquetPath);
+                break;
+              }
 
-          String economicPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/economic_indicators.parquet");
-          censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), economicPath);
+              // Check TTL - Census demographic data expires after configured TTL
+              long fileAge = currentTime - metadata.getLastModified();
+              if (fileAge > geoDataTtlMillis) {
+                allCensusFilesCached = false;
+                LOGGER.info("Expired Census demographic parquet file (age: {} days): {}",
+                    fileAge / (24 * 60 * 60 * 1000), parquetPath);
+                break;
+              }
+            }
+          } catch (IOException e) {
+            allCensusFilesCached = false;
+            LOGGER.info("Cannot access Census demographic parquet file: {}", parquetPath);
+            break;
+          }
         }
-        
-      } catch (Exception e) {
-        LOGGER.error("Error downloading Census data", e);
+        if (!allCensusFilesCached) break;
+      }
+
+      if (allCensusFilesCached) {
+        LOGGER.info("Census demographic data already fully cached for years: {}", censusYears);
+      } else {
+        // Use simple cache directory structure for raw data downloads
+        File censusCacheDir = new File(cacheDir, "census");
+        File demographicParquetDir = new File(geoParquetDir, DEMOGRAPHIC_TYPE);
+        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, censusYears, storageProvider);
+
+        try {
+          LOGGER.info("Downloading Census demographic data for years: {}", censusYears);
+          // Use the new downloadAll pattern matching ECON standard
+          int startYear = censusYears.isEmpty() ? 2020 : censusYears.get(0);
+          int endYear = censusYears.isEmpty() ? 2020 : censusYears.get(censusYears.size() - 1);
+          censusClient.downloadAll(startYear, endYear);
+
+          // Convert to Parquet for each year
+          for (int year : censusYears) {
+            String populationPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/population_demographics.parquet");
+            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), populationPath);
+
+            String housingPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/housing_characteristics.parquet");
+            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), housingPath);
+
+            String economicPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/economic_indicators.parquet");
+            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), economicPath);
+          }
+
+        } catch (Exception e) {
+          LOGGER.error("Error downloading Census data", e);
+        }
       }
     }
   }

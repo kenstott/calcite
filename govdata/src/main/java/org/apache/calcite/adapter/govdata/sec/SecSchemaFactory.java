@@ -28,9 +28,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -323,10 +320,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     Map<String, Object> filingMetadata = new HashMap<>();
     filingMetadata.put("primaryKey", Arrays.asList("cik", "filing_type", "year", "accession_number"));
     filingMetadata.put("unique", Arrays.asList(Arrays.asList("accession_number")));
-    
+
     // Cross-domain FK to GEO schema is now handled in GovDataSchemaFactory.defineCrossDomainConstraintsForSec()
     // This ensures it's only added when both SEC and GEO schemas are present
-    
+
     constraints.put("filing_metadata", filingMetadata);
 
     // footnotes table
@@ -341,7 +338,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Note: Relationships to financial_line_items and xbrl_relationships are conceptual
     // since footnotes reference concepts rather than specific line items
     // These are better handled as JOIN queries using the referenced_concept field
-    
+
     footnotes.put("foreignKeys", Arrays.asList(footnotesFilingFK));
     constraints.put("footnotes", footnotes);
 
@@ -386,11 +383,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Note: Relationships to mda_sections, footnotes, and earnings_transcripts are handled
     // via the source_table and source_id fields which contain the table name and row identifier
-    
+
     vectorizedBlobs.put("foreignKeys", Arrays.asList(vectorizedFilingFK));
     constraints.put("vectorized_blobs", vectorizedBlobs);
 
-    // mda_sections table 
+    // mda_sections table
     Map<String, Object> mdaSections = new HashMap<>();
     mdaSections.put("primaryKey", Arrays.asList("cik", "filing_type", "year", "accession_number", "section_id"));
 
@@ -429,25 +426,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return constraints;
   }
 
-  
+
   /**
    * Builds the operand configuration for SEC schema without creating a FileSchema instance.
    * This method is called by GovDataSchemaFactory to get SEC-specific configuration
    * that will be merged into a unified FileSchema.
-   * 
+   *
    * @param operand The base operand from the model file
    * @return Modified operand with SEC-specific configuration
    */
   public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
     LOGGER.debug("SecSchemaFactory.buildOperand() called with operand: {}", operand);
-    
+
     // Store the storage provider for later use
     this.storageProvider = storageProvider;
     LOGGER.info("SEC buildOperand: storageProvider set to {}", storageProvider);
 
     // Create mutable copy of operand to allow modifications
     Map<String, Object> mutableOperand = new HashMap<>(operand);
-    
+
     // Check auto-download setting (default true like ECON)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
     if (autoDownload == null) {
@@ -455,6 +452,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("autoDownload not specified, defaulting to true");
     }
     mutableOperand.put("autoDownload", autoDownload);
+
+    // Check stockPriceTtlHours setting (default 24 hours)
+    Integer stockPriceTtlHours = (Integer) operand.get("stockPriceTtlHours");
+    if (stockPriceTtlHours == null) {
+      stockPriceTtlHours = 24;  // Default to 24 hours
+      LOGGER.info("stockPriceTtlHours not specified, defaulting to 24 hours");
+    }
+    mutableOperand.put("stockPriceTtlHours", stockPriceTtlHours);
 
     // Load and apply defaults before processing
     Map<String, Object> defaults = loadDefaults();
@@ -582,19 +587,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     filingMetadata.put("name", "filing_metadata");
     filingMetadata.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_metadata.parquet");
     filingMetadata.put("partitions", partitionConfig);
-    
+
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
       // Primary key: (cik, filing_type, year, accession_number)
       constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year", "accession_number"));
       constraints.put("unique", Arrays.asList(Arrays.asList("accession_number")));
-      
+
       // Cross-domain FK to GEO schema is now handled in GovDataSchemaFactory.defineCrossDomainConstraintsForSec()
       // This ensures it's only added when both SEC and GEO schemas are present
-      
+
       filingMetadata.put("constraints", constraints);
     }
-    
+
     partitionedTables.add(filingMetadata);
 
     // Define filing_contexts as a partitioned table with constraints
@@ -964,118 +969,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  private void createMockParquetFiles(File baseDir) {
-    try {
-      // Get parquet directory from interface method
-      String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
-
-      // Create parquet directory structure for mock data
-      File secParquetDir = new File(secParquetDirPath);
-      secParquetDir.mkdirs();
-
-      // Create directories and minimal Parquet files for each table pattern
-      // We need at least one file matching each pattern for the table to be discovered
-
-      // Create financial_line_items mock file
-      File financialDir = new File(secParquetDir, "cik=0000000001/filing_type=10K/year=2023");
-      financialDir.mkdirs();
-      File financialFile = new File(financialDir, "0000000001_2023-12-31_facts.parquet");
-      createMinimalParquetFile(financialFile);
-
-      // Create filing_contexts mock file
-      File contextsFile = new File(financialDir, "0000000001_2023-12-31_contexts.parquet");
-      createMinimalParquetFile(contextsFile);
-
-      // Create footnotes mock file
-      File footnotesFile = new File(financialDir, "0000000001_2023-12-31_footnotes.parquet");
-      createMinimalParquetFile(footnotesFile);
-
-      // Create labels mock file
-      File labelsFile = new File(financialDir, "0000000001_2023-12-31_labels.parquet");
-      createMinimalParquetFile(labelsFile);
-
-      // Create presentations mock file
-      File presentationsFile = new File(financialDir, "0000000001_2023-12-31_presentations.parquet");
-      createMinimalParquetFile(presentationsFile);
-
-      // Create company_info mock file (non-partitioned)
-      File companyFile = new File(secParquetDir, "company_info.parquet");
-      createMinimalParquetFile(companyFile);
-
-      LOGGER.info("Created mock Parquet files in: {}", secParquetDir);
-    } catch (Exception e) {
-      LOGGER.error("Failed to create mock Parquet files", e);
-    }
-  }
-
-  private void createMinimalParquetFile(File file) {
-    try {
-      // Create a minimal Parquet file with proper schema
-      // Using Avro schema to create the Parquet file
-      org.apache.avro.Schema schema = org.apache.avro.Schema.createRecord("MockRecord", "", "", false);
-      List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
-
-      // Add minimal fields based on the table type
-      if (file.getName().contains("facts")) {
-        // financial_line_items table fields
-        // NOTE: Don't include partition columns (cik, filing_type, year) as they come from the path
-        fields.add(new org.apache.avro.Schema.Field("filing_date",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("concept",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("context_ref",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("value",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.DOUBLE), null, null));
-        fields.add(new org.apache.avro.Schema.Field("label",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("units",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("decimals",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT), null, null));
-      } else if (file.getName().contains("contexts")) {
-        // filing_contexts table fields
-        // NOTE: Don't include partition columns (cik, filing_type, year) as they come from the path
-        fields.add(new org.apache.avro.Schema.Field("filing_date",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("context_id",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("entity",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("segment",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("period",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-        fields.add(new org.apache.avro.Schema.Field("instant",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-      } else {
-        // Default minimal schema
-        fields.add(new org.apache.avro.Schema.Field("id",
-            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), null, null));
-      }
-
-      schema.setFields(fields);
-
-      // Write empty Parquet file with schema
-      org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
-      org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(file.getAbsolutePath());
-      org.apache.parquet.io.OutputFile outputFile = org.apache.parquet.hadoop.util.HadoopOutputFile.fromPath(path, conf);
-      org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer =
-          org.apache.parquet.avro.AvroParquetWriter.<org.apache.avro.generic.GenericRecord>builder(outputFile)
-              .withSchema(schema)
-              .withConf(conf)
-              .build();
-
-      // Close immediately - we just need the file with schema
-      writer.close();
-
-      LOGGER.debug("Created mock Parquet file: {}", file);
-    } catch (Exception e) {
-      LOGGER.error("Failed to create mock Parquet file: " + file, e);
-    }
-  }
-
   /**
    * Public static method to trigger SEC data download from external components like RSS monitor.
    */
@@ -1086,7 +979,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   private void downloadSecData(Map<String, Object> operand) {
     LOGGER.info("Starting SEC data download");
-    LOGGER.info("downloadSecData() called - STARTING SEC DATA DOWNLOAD");
+    LOGGER.info("downloadSecData() called - STretun ARTING SEC DATA DOWNLOAD");
 
     // Clear download tracking for new cycle
     downloadedInThisCycle.clear();
@@ -1122,7 +1015,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("DEBUG: Calling createSecTablesFromXbrl for mock data");
         LOGGER.info("DEBUG: baseDir=" + baseDir.getAbsolutePath());
         // Create minimal mock Parquet files so tables are discovered
-        createMockParquetFiles(baseDir);
+        downloadStockPrices(baseDir, Arrays.asList("320187", "51143", "789019"), 2021, 2024);
         LOGGER.info("DEBUG: Mock data mode - created mock Parquet files");
 
         // Also create mock stock prices if enabled
@@ -1475,38 +1368,49 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
       File yearDir = new File(filingTypeDir, "year=" + year);
 
-      // Check for ALL required parquet files that XbrlToParquetConverter creates
+      // Check for required parquet files based on form type
       // Parquet files use accession without hyphens (accessionClean is already defined above)
-
-      // Always required files:
-      File metadataFile = new File(yearDir, String.format("%s_%s_metadata.parquet", cik, accessionClean));
-      File contextsFile = new File(yearDir, String.format("%s_%s_contexts.parquet", cik, accessionClean));
 
       // Primary data file (facts for most forms, insider for forms 3/4/5)
       String filenameSuffix = isInsiderForm ? "insider" : "facts";
-      File primaryFile = new File(yearDir, String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
+      String primaryParquetPath = storageProvider.resolvePath(yearDir.getPath(), String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
 
-      // Check all required files
-      if (!metadataFile.exists() || metadataFile.length() == 0) {
+      // Check primary file (always required)
+      try {
+        StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
+        if (primaryMetadata.getSize() == 0) {
+          needParquetReprocessing = true;
+          LOGGER.info("Empty primary Parquet file: " + primaryParquetPath);
+        }
+      } catch (IOException e) {
         needParquetReprocessing = true;
-        LOGGER.info("Missing or empty metadata Parquet file: " + metadataFile.getPath());
-      }
-      if (!contextsFile.exists() || contextsFile.length() == 0) {
-        needParquetReprocessing = true;
-        LOGGER.info("Missing or empty contexts Parquet file: " + contextsFile.getPath());
-      }
-      if (!primaryFile.exists() || primaryFile.length() == 0) {
-        needParquetReprocessing = true;
-        LOGGER.info("Missing or empty primary Parquet file: " + primaryFile.getPath());
+        LOGGER.info("Missing primary Parquet file: " + primaryParquetPath);
       }
 
-      // Also check for vectorized file if text similarity is enabled
+      // Currently, no forms generate metadata.parquet or contexts.parquet files
+      // The XBRL processor only generates primary files (facts.parquet for financial forms, insider.parquet for insider forms)
+      // Removed incorrect file checking logic that was causing unnecessary reprocessing
+
+      // Also check for vectorized file if text similarity is enabled and form supports vectorization
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
-        File vectorizedFile = new File(yearDir, String.format("%s_%s_vectorized.parquet", cik, accessionClean));
-        if (!vectorizedFile.exists() || vectorizedFile.length() == 0) {
-          needParquetReprocessing = true;
-          LOGGER.debug("Missing or empty vectorized Parquet file: " + vectorizedFile.getPath());
+        // Only check for vectorized files on forms that actually generate them
+        boolean formSupportsVectorization = supportsVectorization(form);
+        if (formSupportsVectorization) {
+          // Use StorageProvider for vectorized parquet file access
+          String vectorizedPath = storageProvider.resolvePath(yearDir.getAbsolutePath(),
+              String.format("%s_%s_vectorized.parquet", cik, accessionClean));
+          try {
+            StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
+            if (vectorizedMetadata.getSize() == 0) {
+              needParquetReprocessing = true;
+              LOGGER.debug("Empty vectorized Parquet file: " + vectorizedPath);
+            }
+          } catch (IOException e) {
+            // File doesn't exist or can't be accessed
+            needParquetReprocessing = true;
+            LOGGER.debug("Missing or inaccessible vectorized Parquet file: " + vectorizedPath);
+          }
         }
       }
 
@@ -1962,23 +1866,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Write consolidated SEC filings table
-      File outputFile = new File(secParquetDir, "sec_filings.parquet");
-      @SuppressWarnings("deprecation")
-      ParquetWriter<GenericRecord> writer = AvroParquetWriter
-          .<GenericRecord>builder(new org.apache.hadoop.fs.Path(outputFile.toURI()))
-          .withSchema(schema)
-          .withCompressionCodec(CompressionCodecName.SNAPPY)
-          .build();
-
-      try {
-        for (GenericRecord record : allRecords) {
-          writer.write(record);
-        }
-      } finally {
-        writer.close();
-      }
-
-      LOGGER.info("Created SEC filings table with " + allRecords.size() + " records: " + outputFile);
+      String outputFilePath = storageProvider.resolvePath(secParquetDir.getPath(), "sec_filings.parquet");
+      // Use StorageProvider for parquet writing
+      storageProvider.writeAvroParquet(outputFilePath, schema, allRecords, "sec_filings");
+      LOGGER.info("Created SEC filings table with " + allRecords.size() + " records: " + outputFilePath);
 
     } catch (Exception e) {
       LOGGER.warn("Failed to create SEC filings table: " + e.getMessage());
@@ -2036,14 +1927,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           File yearDir = new File(tickerDir, "year=" + year);
           yearDir.mkdirs();
 
-          File parquetFile = new File(yearDir, ticker + "_" + year + "_prices.parquet");
-          LOGGER.info("About to create/check file: {}", parquetFile.getAbsolutePath());
+          String parquetFilePath = storageProvider.resolvePath(yearDir.getPath(), ticker + "_" + year + "_prices.parquet");
+          LOGGER.info("About to create/check file: {}", parquetFilePath);
           LOGGER.info("Parent directory exists: {}, isDirectory: {}", yearDir.exists(), yearDir.isDirectory());
-          if (!parquetFile.exists()) {
-            createMockPriceParquetFile(parquetFile, ticker, normalizedCik, year);
-            LOGGER.info("Created mock stock price file: {}, exists now: {}", parquetFile.getAbsolutePath(), parquetFile.exists());
-          } else {
-            LOGGER.info("Mock stock price file already exists: {}", parquetFile.getAbsolutePath());
+          try {
+            StorageProvider.FileMetadata parquetMetadata = storageProvider.getMetadata(parquetFilePath);
+            LOGGER.info("Mock stock price file already exists: {}", parquetFilePath);
+          } catch (IOException e) {
+            createMockPriceParquetFileViaStorageProvider(parquetFilePath, ticker, normalizedCik, year);
+            LOGGER.info("Created mock stock price file: {}", parquetFilePath);
           }
         }
       }
@@ -2107,8 +1999,56 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+  private void createMockPriceParquetFileViaStorageProvider(String parquetPath, String ticker, String cik, int year)
+      throws IOException {
+    // Note: ticker and year are partition columns from directory structure,
+    // so they are NOT in the Parquet file. CIK is included as a regular column for joins.
+    String schemaString = "{"
+        + "\"type\": \"record\","
+        + "\"name\": \"StockPrice\","
+        + "\"fields\": ["
+        + "{\"name\": \"cik\", \"type\": \"string\"},"
+        + "{\"name\": \"date\", \"type\": \"string\"},"
+        + "{\"name\": \"open\", \"type\": [\"null\", \"double\"], \"default\": null},"
+        + "{\"name\": \"high\", \"type\": [\"null\", \"double\"], \"default\": null},"
+        + "{\"name\": \"low\", \"type\": [\"null\", \"double\"], \"default\": null},"
+        + "{\"name\": \"close\", \"type\": [\"null\", \"double\"], \"default\": null},"
+        + "{\"name\": \"adj_close\", \"type\": [\"null\", \"double\"], \"default\": null},"
+        + "{\"name\": \"volume\", \"type\": [\"null\", \"long\"], \"default\": null}"
+        + "]"
+        + "}";
+
+    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse(schemaString);
+
+    // Create records using StorageProvider approach
+    java.util.List<org.apache.avro.generic.GenericRecord> records = new java.util.ArrayList<>();
+    double basePrice = 100.0 + (ticker.hashCode() % 100);
+
+    for (int month = 1; month <= 3; month++) { // Just 3 months of data for testing
+      String date = String.format("%04d-%02d-%02d", year, month, 15);
+
+      org.apache.avro.generic.GenericRecord record =
+          new org.apache.avro.generic.GenericData.Record(schema);
+      // Include CIK as regular column, ticker and year come from directory structure
+      record.put("cik", cik);
+      record.put("date", date);
+      record.put("open", basePrice + month);
+      record.put("high", basePrice + month + 2);
+      record.put("low", basePrice + month - 1);
+      record.put("close", basePrice + month + 1);
+      record.put("adj_close", basePrice + month + 0.5);
+      record.put("volume", 1000000L * month);
+
+      records.add(record);
+    }
+
+    // Use StorageProvider to write parquet file
+    storageProvider.writeAvroParquet(parquetPath, schema, records, "stock_prices");
+  }
+
   /**
    * Downloads stock prices for all configured CIKs.
+   * Implements daily caching - stock prices are only downloaded once per day.
    */
   private void downloadStockPrices(File baseDir, List<String> ciks, int startYear, int endYear) {
     try {
@@ -2119,6 +2059,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
       String basePath = govdataParquetDir + "/source=sec";
+
+      // Check if stock prices are already cached and up-to-date (daily refresh)
+      if (areStockPricesCached(basePath, ciks, startYear, endYear)) {
+        LOGGER.info("Stock prices already cached and up-to-date, skipping download");
+        return;
+      }
 
       // Build list of ticker-CIK pairs
       List<AlphaVantageDownloader.TickerCikPair> tickerCikPairs = new ArrayList<>();
@@ -2195,6 +2141,93 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
+   * Checks if stock prices are already cached and up-to-date.
+   * Uses smart TTL logic: current year data uses configurable TTL, historical years are immutable.
+   */
+  private boolean areStockPricesCached(String basePath, List<String> ciks, int startYear, int endYear) {
+    try {
+      // Get TTL configuration from operand (default 24 hours)
+      Integer stockPriceTtlHours = (Integer) currentOperand.get("stockPriceTtlHours");
+      if (stockPriceTtlHours == null) {
+        stockPriceTtlHours = 24;
+      }
+      long ttlMillis = stockPriceTtlHours * 60 * 60 * 1000L;
+      long currentTime = System.currentTimeMillis();
+
+      // Determine current year for TTL logic
+      int currentYear = java.time.Year.now().getValue();
+      LOGGER.debug("Current year: {}, TTL hours: {}", currentYear, stockPriceTtlHours);
+
+      // Check each CIK for cached stock prices
+      for (String cik : ciks) {
+        // Normalize CIK to 10 digits with leading zeros
+        String normalizedCik = cik.trim();
+        while (normalizedCik.length() < 10) {
+          normalizedCik = "0" + normalizedCik;
+        }
+
+        // Get ticker symbols for this CIK
+        List<String> tickers = CikRegistry.getTickersForCik(normalizedCik);
+        if (tickers.isEmpty()) {
+          // Try to resolve the CIK as a ticker first (same logic as downloadStockPrices)
+          List<String> resolvedCiks = CikRegistry.resolveCiks(cik);
+          if (!resolvedCiks.isEmpty() && !cik.equals(resolvedCiks.get(0))) {
+            // This was actually a ticker, use it
+            tickers = Arrays.asList(cik.toUpperCase());
+          } else {
+            // Default fallback - use the CIK as ticker
+            tickers = Arrays.asList(cik.toUpperCase());
+          }
+        }
+
+        // Check each ticker for each year
+        for (String ticker : tickers) {
+          for (int year = startYear; year <= endYear; year++) {
+            String stockPriceDir = basePath + "/stock_prices";
+            String parquetPath = storageProvider.resolvePath(stockPriceDir,
+                String.format("ticker=%s/year=%d/%s_%d.parquet", ticker, year, ticker, year));
+
+            try {
+              StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+
+              // Smart TTL logic: current year uses TTL, historical years are immutable
+              if (year == currentYear) {
+                // Current year data: check TTL
+                long fileAge = currentTime - metadata.getLastModified();
+                if (fileAge > ttlMillis) {
+                  LOGGER.info("Current year ({}) stock price file is older than {} hours: {}",
+                      year, stockPriceTtlHours, parquetPath);
+                  return false;
+                }
+                LOGGER.debug("Current year ({}) stock price file is within TTL: {}", year, parquetPath);
+              } else {
+                // Historical year data: considered immutable, just check existence and non-empty
+                LOGGER.debug("Historical year ({}) stock price file exists and is immutable: {}", year, parquetPath);
+              }
+
+              // Check if file has content (applies to both current and historical years)
+              if (metadata.getSize() == 0) {
+                LOGGER.info("Stock price file is empty: {}", parquetPath);
+                return false;
+              }
+
+            } catch (Exception e) {
+              // File doesn't exist or can't be accessed
+              LOGGER.info("Stock price file not cached or accessible: {}", parquetPath);
+              return false;
+            }
+          }
+        }
+      }
+
+      return true; // All stock price files are cached and fresh
+    } catch (Exception e) {
+      LOGGER.warn("Error checking stock price cache: " + e.getMessage());
+      return false; // Assume not cached if we can't check
+    }
+  }
+
+  /**
    * Extract and resolve company identifiers from schema operand.
    *
    * <p>Automatically resolves identifiers using CikRegistry:
@@ -2256,6 +2289,32 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Clean up partial parquet files for a filing to ensure clean conversion.
    * Deletes all existing parquet files with the given cik and accession prefix.
    */
+  /**
+   * Check if a form type supports vectorization when text similarity is enabled.
+   *
+   * @param form The SEC form type (e.g., "3", "4", "5", "10-K", "10-Q", "8-K", "DEF 14A")
+   * @return true if the form generates vectorized files, false otherwise
+   */
+  private boolean supportsVectorization(String form) {
+    if (form == null) return false;
+
+    // Insider forms (3, 4, 5) generate vectorized files
+    if ("3".equals(form) || "4".equals(form) || "5".equals(form)) {
+      return true;
+    }
+
+    // Financial forms (10-K, 10-Q, 8-K, 8-K/A) generate vectorized files
+    if ("10K".equals(form) || "10-K".equals(form) ||
+        "10Q".equals(form) || "10-Q".equals(form) ||
+        "8K".equals(form) || "8-K".equals(form) ||
+        "8KA".equals(form) || "8-K/A".equals(form)) {
+      return true;
+    }
+
+    // Other forms (DEF 14A, S-1, etc.) do not generate vectorized files
+    return false;
+  }
+
   private void cleanupPartialParquetFiles(File yearDir, String cik, String accessionClean) {
     if (!yearDir.exists()) {
       return;
