@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class UnifiedGovDataComprehensiveTest {
 
   /**
-   * SEC schema expected tables (8 total).
+   * SEC schema expected tables (9 total).
    */
   private static final Set<String> SEC_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
       "financial_line_items",
@@ -60,7 +60,7 @@ public class UnifiedGovDataComprehensiveTest {
       "insider_transactions",
       "earnings_transcripts",
       "stock_prices",
-      // "vectorized_blobs", // Requires textSimilarity configuration
+      "vectorized_blobs", // Now enabled with textSimilarity configuration
       "company_info"
   ));
 
@@ -130,7 +130,11 @@ public class UnifiedGovDataComprehensiveTest {
         "        \"startYear\": 2021," +
         "        \"endYear\": 2025," +
         "        \"autoDownload\": true," +
-        "        \"fetchStockPrices\": true" +
+        "        \"fetchStockPrices\": true," +
+        "        \"textSimilarity\": {" +
+        "          \"enabled\": true," +
+        "          \"embeddingModel\": \"text-embedding-ada-002\"" +
+        "        }" +
         "      }" +
         "    }," +
         "    {" +
@@ -197,7 +201,7 @@ public class UnifiedGovDataComprehensiveTest {
       if (!overallSuccess) {
         fail("Comprehensive test failed. See summary above for details.");
       } else {
-        System.out.println("\n✅ ALL TESTS PASSED - All 38 tables across SEC, ECON, and GEO are fully functional!");
+        System.out.println("\n✅ ALL TESTS PASSED - All 39 tables across SEC, ECON, and GEO are fully functional!");
       }
     }
   }
