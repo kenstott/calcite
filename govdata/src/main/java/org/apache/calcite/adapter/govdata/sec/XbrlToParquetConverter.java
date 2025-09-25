@@ -63,6 +63,10 @@ import javax.xml.parsers.DocumentBuilderFactory;
  */
 public class XbrlToParquetConverter implements FileConverter {
   private static final Logger LOGGER = Logger.getLogger(XbrlToParquetConverter.class.getName());
+
+  // Global lock for complete single-threading of all vectorization operations to ensure 100% thread safety
+  private static final Object GLOBAL_VECTORIZATION_LOCK = new Object();
+
   private final StorageProvider storageProvider;
   private final boolean enableVectorization;
 
@@ -1746,8 +1750,7 @@ public class XbrlToParquetConverter implements FileConverter {
       File outputFile, String recordType) throws IOException {
     
     if (records.isEmpty()) {
-      LOGGER.fine("No " + recordType + " records to write for " + outputFile.getName());
-      return;
+      LOGGER.fine("No " + recordType + " records to write for " + outputFile.getName() + " - creating empty file with schema");
     }
 
     LOGGER.fine("Writing " + records.size() + " " + recordType + " records to " + outputFile.getName());
@@ -2051,14 +2054,16 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Write Parquet file using StorageProvider's consolidated method.
    */
-  private void writeParquetFile(List<GenericRecord> records, Schema schema, File outputFile) 
+  private void writeParquetFile(List<GenericRecord> records, Schema schema, File outputFile)
       throws IOException {
-    if (outputFile.getParentFile() != null) {
-      outputFile.getParentFile().mkdirs();
+    // Complete single-threading of all vectorization operations to ensure 100% thread safety
+    synchronized (GLOBAL_VECTORIZATION_LOCK) {
+      if (outputFile.getParentFile() != null) {
+        outputFile.getParentFile().mkdirs();
+      }
+
+      storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "vectorized");
     }
-    
-    // Use StorageProvider's consolidated Parquet writing method
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "vectorized");
   }
   
   
