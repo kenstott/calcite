@@ -56,7 +56,7 @@ public class UnifiedGovDataComprehensiveTest {
       "filing_metadata",
       "filing_contexts",
       "mda_sections",
-      // "xbrl_relationships", // Shelved - requires enhanced iXBRL parsing
+      "xbrl_relationships", // Enhanced to support inline XBRL relationship extraction
       "insider_transactions",
       "earnings_transcripts",
       "stock_prices",
