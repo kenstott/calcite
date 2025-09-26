@@ -155,7 +155,48 @@ public class EconDataDownloadTest {
 
     verifyParquetReadable(parquetPath, "fred_indicators");
   }
-  
+
+  @Test
+  public void testFredCustomSeriesPartitioning() throws Exception {
+    String apiKey = System.getenv("FRED_API_KEY");
+    assumeTrue(apiKey != null && !apiKey.isEmpty() && !"demo".equals(apiKey),
+        "FRED_API_KEY not set or is demo key, skipping FRED custom series test");
+
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, createStorageProvider());
+
+    // Test individual series download
+    downloader.downloadSeries("UNRATE", 2023, 2024);
+
+    // Test series conversion to parquet
+    String targetPath = tempDir.toString() + "/test_unrate.parquet";
+    downloader.convertSeriesToParquet("UNRATE", targetPath, null);
+
+    // Verify file exists and is readable
+    assertTrue(new File(targetPath).exists(), "UNRATE parquet file should exist");
+    verifyParquetReadable(targetPath, "fred_indicators");
+
+    // Test FredSeriesGroup functionality
+    FredSeriesGroup treasuryGroup = new FredSeriesGroup("treasuries",
+        Arrays.asList("DGS10", "DGS30"),
+        FredSeriesGroup.PartitionStrategy.AUTO, null);
+
+    assertTrue(treasuryGroup.matchesSeries("DGS10"), "Should match DGS10");
+    assertTrue(treasuryGroup.matchesSeries("DGS30"), "Should match DGS30");
+    assertNotNull(treasuryGroup.getTableName(), "Should generate table name");
+
+    // Test partition analyzer
+    FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
+    FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(treasuryGroup,
+        Arrays.asList("UNRATE", "DGS10", "DGS30"));
+
+    assertNotNull(analysis, "Analysis should not be null");
+    System.out.println("Partition analysis result: " + analysis);
+
+    // Should recommend year partitioning for AUTO strategy
+    assertTrue(analysis.getPartitionFields().contains("year"),
+        "AUTO strategy should include year partitioning");
+  }
+
   @Test
   public void testBeaGdpComponents() throws Exception {
     String apiKey = System.getenv("BEA_API_KEY");

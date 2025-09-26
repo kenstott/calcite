@@ -65,7 +65,7 @@ public class UnifiedGovDataComprehensiveTest {
   ));
 
   /**
-   * ECON schema expected tables (17 total).
+   * ECON schema expected tables (18 total).
    */
   private static final Set<String> ECON_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
       "employment_statistics",
@@ -85,7 +85,9 @@ public class UnifiedGovDataComprehensiveTest {
       "industry_gdp",
       // Custom FRED series tables
       "fred_treasuries",
-      "fred_employment_indicators"
+      "fred_employment_indicators",
+      // FRED catalog table
+      "fred_data_series_catalog"
   ));
 
   /**
