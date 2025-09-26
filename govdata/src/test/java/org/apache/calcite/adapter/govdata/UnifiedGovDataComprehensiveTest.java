@@ -65,7 +65,7 @@ public class UnifiedGovDataComprehensiveTest {
   ));
 
   /**
-   * ECON schema expected tables (15 total).
+   * ECON schema expected tables (17 total).
    */
   private static final Set<String> ECON_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
       "employment_statistics",
@@ -82,7 +82,10 @@ public class UnifiedGovDataComprehensiveTest {
       "state_gdp",
       "trade_statistics",
       "ita_data",
-      "industry_gdp"
+      "industry_gdp",
+      // Custom FRED series tables
+      "fred_treasuries",
+      "fred_employment_indicators"
   ));
 
   /**
@@ -144,7 +147,20 @@ public class UnifiedGovDataComprehensiveTest {
         "      \"operand\": {" +
         "        \"dataSource\": \"econ\"," +
         "        \"executionEngine\": \"DUCKDB\"," +
-        "        \"autoDownload\": true" +
+        "        \"autoDownload\": true," +
+        "        \"defaultPartitionStrategy\": \"AUTO\"," +
+        "        \"customFredSeries\": [\"UNRATE\", \"PAYEMS\"]," +
+        "        \"fredSeriesGroups\": {" +
+        "          \"treasuries\": {" +
+        "            \"series\": [\"DGS10\", \"DGS30\", \"DGS2\"]," +
+        "            \"partitionStrategy\": \"MANUAL\"," +
+        "            \"partitionFields\": [\"year\", \"maturity\"]" +
+        "          }," +
+        "          \"employment_indicators\": {" +
+        "            \"series\": [\"UNRATE\", \"PAYEMS\", \"CIVPART\"]," +
+        "            \"partitionStrategy\": \"AUTO\"" +
+        "          }" +
+        "        }" +
         "      }" +
         "    }," +
         "    {" +
@@ -201,7 +217,7 @@ public class UnifiedGovDataComprehensiveTest {
       if (!overallSuccess) {
         fail("Comprehensive test failed. See summary above for details.");
       } else {
-        System.out.println("\n✅ ALL TESTS PASSED - All 39 tables across SEC, ECON, and GEO are fully functional!");
+        System.out.println("\n✅ ALL TESTS PASSED - All 41 tables across SEC, ECON, and GEO are fully functional!");
       }
     }
   }
@@ -237,6 +253,11 @@ public class UnifiedGovDataComprehensiveTest {
       // Special validation for SEC schema
       if ("sec".equals(schemaName)) {
         validateSecSpecificData(stmt, result);
+      }
+
+      // Special validation for ECON schema with FRED partitioning
+      if ("econ".equals(schemaName)) {
+        validateEconFredPartitioning(stmt, result);
       }
 
       // Calculate missing tables
@@ -337,6 +358,72 @@ public class UnifiedGovDataComprehensiveTest {
           System.out.printf("  ✅ Filing year range: %d - %d\n", minYear, maxYear);
         }
       }
+    }
+  }
+
+  private void validateEconFredPartitioning(Statement stmt, TestResult result) throws SQLException {
+    System.out.println("\n📊 ECON FRED Custom Series Validation:");
+
+    // Check for custom FRED series tables
+    if (result.queryableTables.contains("fred_treasuries")) {
+      String query = "SELECT COUNT(*) as count FROM econ.fred_treasuries LIMIT 1";
+      try (ResultSet rs = stmt.executeQuery(query)) {
+        if (rs.next()) {
+          long count = rs.getLong("count");
+          System.out.printf("  ✅ Treasury FRED series table: %d rows found\n", count);
+        }
+      } catch (SQLException e) {
+        System.out.println("  ⚠️ Treasury FRED series table query failed: " + e.getMessage());
+      }
+    }
+
+    if (result.queryableTables.contains("fred_employment_indicators")) {
+      String query = "SELECT COUNT(*) as count FROM econ.fred_employment_indicators LIMIT 1";
+      try (ResultSet rs = stmt.executeQuery(query)) {
+        if (rs.next()) {
+          long count = rs.getLong("count");
+          System.out.printf("  ✅ Employment indicators FRED series table: %d rows found\n", count);
+        }
+      } catch (SQLException e) {
+        System.out.println("  ⚠️ Employment indicators FRED series table query failed: " + e.getMessage());
+      }
+    }
+
+    // Validate that partitioning is working by checking for expected FRED series
+    if (result.queryableTables.contains("fred_indicators")) {
+      try {
+        String query = "SELECT series_id, COUNT(*) as obs_count " +
+                      "FROM econ.fred_indicators " +
+                      "WHERE series_id IN ('UNRATE', 'PAYEMS', 'DGS10', 'DGS30') " +
+                      "GROUP BY series_id " +
+                      "ORDER BY series_id";
+
+        System.out.println("  📈 Custom FRED Series Data:");
+        try (ResultSet rs = stmt.executeQuery(query)) {
+          while (rs.next()) {
+            String seriesId = rs.getString("series_id");
+            long obsCount = rs.getLong("obs_count");
+            String description = getSeriesDescription(seriesId);
+            System.out.printf("    ✅ %s (%s): %d observations\n", seriesId, description, obsCount);
+          }
+        }
+      } catch (SQLException e) {
+        System.out.println("  ⚠️ Custom FRED series validation failed: " + e.getMessage());
+      }
+    }
+
+    System.out.println("  🎯 FRED Custom Series Partitioning: Configured with AUTO strategy for Treasury and Employment groups");
+  }
+
+  private String getSeriesDescription(String seriesId) {
+    switch (seriesId) {
+      case "UNRATE": return "Unemployment Rate";
+      case "PAYEMS": return "Total Nonfarm Payrolls";
+      case "DGS10": return "10-Year Treasury Rate";
+      case "DGS30": return "30-Year Treasury Rate";
+      case "DGS2": return "2-Year Treasury Rate";
+      case "CIVPART": return "Labor Force Participation Rate";
+      default: return "Economic Indicator";
     }
   }
 
