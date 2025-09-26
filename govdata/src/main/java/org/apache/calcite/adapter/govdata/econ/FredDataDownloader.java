@@ -63,6 +63,10 @@ public class FredDataDownloader {
   private static final String FRED_API_BASE = "https://api.stlouisfed.org/fred/";
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
+
+  // FRED API pagination limits
+  private static final int MAX_OBSERVATIONS_PER_REQUEST = 100000; // FRED default limit
+  private static final int FRED_API_DELAY_MS = 100; // Small delay between requests
   
   private final String cacheDir;
   private final String apiKey;
@@ -382,32 +386,12 @@ public class FredDataDownloader {
       }
       
       LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
-      
-      String url = FRED_API_BASE + "series/observations"
-          + "?series_id=" + seriesId
-          + "&api_key=" + apiKey
-          + "&file_type=json"
-          + "&observation_start=" + startDate
-          + "&observation_end=" + endDate;
-      
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(30))
-          .build();
-      
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
-      if (response.statusCode() != 200) {
-        LOGGER.warn("FRED API request failed for series {} with status: {}", 
-            seriesId, response.statusCode());
-        continue;
-      }
-      
-      JsonNode root = MAPPER.readTree(response.body());
-      JsonNode obsArray = root.get("observations");
-      
-      if (obsArray != null && obsArray.isArray()) {
-        for (JsonNode obs : obsArray) {
+
+      try {
+        // Use paginated observations fetching
+        List<JsonNode> seriesObservations = fetchSeriesObservationsPaginated(seriesId, startDate, endDate);
+
+        for (JsonNode obs : seriesObservations) {
           String valueStr = obs.get("value").asText();
           if (!".".equals(valueStr)) { // FRED uses "." for missing values
             Map<String, Object> observation = new HashMap<>();
@@ -419,14 +403,14 @@ public class FredDataDownloader {
             observation.put("frequency", info.frequency);
             observation.put("seasonal_adjustment", info.seasonalAdjustment);
             observation.put("last_updated", info.lastUpdated);
-            
+
             observations.add(observation);
           }
         }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to fetch observations for series {}: {}", seriesId, e.getMessage());
+        continue;
       }
-      
-      // Small delay to be respectful to the API
-      Thread.sleep(100);
     }
     
     // Save raw JSON data to cache
@@ -494,32 +478,12 @@ public class FredDataDownloader {
       }
       
       LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
-      
-      String url = FRED_API_BASE + "series/observations"
-          + "?series_id=" + seriesId
-          + "&api_key=" + apiKey
-          + "&file_type=json"
-          + "&observation_start=" + startDate
-          + "&observation_end=" + endDate;
-      
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(30))
-          .build();
-      
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
-      if (response.statusCode() != 200) {
-        LOGGER.warn("FRED API request failed for series {} with status: {}", 
-            seriesId, response.statusCode());
-        continue;
-      }
-      
-      JsonNode root = MAPPER.readTree(response.body());
-      JsonNode obsArray = root.get("observations");
-      
-      if (obsArray != null && obsArray.isArray()) {
-        for (JsonNode obs : obsArray) {
+
+      try {
+        // Use paginated observations fetching
+        List<JsonNode> seriesObservations = fetchSeriesObservationsPaginated(seriesId, startDate, endDate);
+
+        for (JsonNode obs : seriesObservations) {
           String valueStr = obs.get("value").asText();
           if (!".".equals(valueStr)) { // FRED uses "." for missing values
             FredObservation observation = new FredObservation();
@@ -531,14 +495,14 @@ public class FredDataDownloader {
             observation.frequency = info.frequency;
             observation.seasonalAdjustment = info.seasonalAdjustment;
             observation.lastUpdated = info.lastUpdated;
-            
+
             observations.add(observation);
           }
         }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to fetch observations for series {}: {}", seriesId, e.getMessage());
+        continue;
       }
-      
-      // Small delay to be respectful to the API
-      Thread.sleep(100);
     }
     
     LOGGER.info("FRED indicators data collected: {} observations", observations.size());
@@ -554,6 +518,77 @@ public class FredDataDownloader {
     return new File(parquetPath);
   }
   
+  /**
+   * Fetches observations for a FRED series with automatic pagination handling.
+   * The FRED API may return large datasets that need to be fetched in chunks.
+   */
+  private List<JsonNode> fetchSeriesObservationsPaginated(String seriesId, String startDate, String endDate)
+      throws IOException, InterruptedException {
+    List<JsonNode> allObservations = new ArrayList<>();
+    int offset = 0;
+    boolean hasMoreData = true;
+    int requestCount = 0;
+
+    LOGGER.debug("Fetching observations for series {} with pagination", seriesId);
+
+    while (hasMoreData) {
+      String url = FRED_API_BASE + "series/observations"
+          + "?series_id=" + seriesId
+          + "&api_key=" + apiKey
+          + "&file_type=json"
+          + "&observation_start=" + startDate
+          + "&observation_end=" + endDate
+          + "&limit=" + MAX_OBSERVATIONS_PER_REQUEST
+          + "&offset=" + offset;
+
+      HttpRequest request = HttpRequest.newBuilder()
+          .uri(URI.create(url))
+          .timeout(Duration.ofSeconds(30))
+          .build();
+
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      requestCount++;
+
+      if (response.statusCode() != 200) {
+        throw new IOException("FRED API request failed for series " + seriesId
+            + " with status: " + response.statusCode() + ", body: " + response.body());
+      }
+
+      JsonNode root = MAPPER.readTree(response.body());
+      JsonNode obsArray = root.get("observations");
+
+      if (obsArray != null && obsArray.isArray() && obsArray.size() > 0) {
+        for (JsonNode obs : obsArray) {
+          allObservations.add(obs);
+        }
+
+        // Check if we got the maximum number of results, indicating more data might be available
+        hasMoreData = obsArray.size() == MAX_OBSERVATIONS_PER_REQUEST;
+        offset += obsArray.size();
+
+        // Log progress for large datasets
+        if (requestCount > 1) {
+          LOGGER.debug("Series {} pagination: {} observations fetched in {} requests",
+              seriesId, allObservations.size(), requestCount);
+        }
+      } else {
+        hasMoreData = false;
+      }
+
+      // Add small delay between requests to be respectful to API
+      if (hasMoreData) {
+        Thread.sleep(FRED_API_DELAY_MS);
+      }
+    }
+
+    if (requestCount > 1) {
+      LOGGER.info("Series {} required {} paginated requests to fetch {} observations",
+          seriesId, requestCount, allObservations.size());
+    }
+
+    return allObservations;
+  }
+
   /**
    * Gets metadata information for a FRED series.
    */
@@ -777,46 +812,25 @@ public class FredDataDownloader {
 
     LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
 
-    String url = FRED_API_BASE + "series/observations"
-        + "?series_id=" + seriesId
-        + "&api_key=" + apiKey
-        + "&file_type=json"
-        + "&observation_start=" + startDate
-        + "&observation_end=" + endDate;
-
-    HttpRequest request = HttpRequest.newBuilder()
-        .uri(URI.create(url))
-        .timeout(Duration.ofSeconds(30))
-        .build();
-
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-    if (response.statusCode() != 200) {
-      throw new IOException("FRED API request failed for series " + seriesId
-          + " with status: " + response.statusCode());
-    }
-
-    JsonNode root = MAPPER.readTree(response.body());
-    JsonNode obsArray = root.get("observations");
+    // Use paginated observations fetching
+    List<JsonNode> allObservations = fetchSeriesObservationsPaginated(seriesId, startDate, endDate);
 
     List<Map<String, Object>> observations = new ArrayList<>();
 
-    if (obsArray != null && obsArray.isArray()) {
-      for (JsonNode obs : obsArray) {
-        String valueStr = obs.get("value").asText();
-        if (!".".equals(valueStr)) { // FRED uses "." for missing values
-          Map<String, Object> observation = new HashMap<>();
-          observation.put("series_id", seriesId);
-          observation.put("series_name", info.title != null ? info.title : "");
-          observation.put("date", obs.get("date").asText());
-          observation.put("value", Double.parseDouble(valueStr));
-          observation.put("units", info.units != null ? info.units : "");
-          observation.put("frequency", info.frequency != null ? info.frequency : "");
-          observation.put("seasonal_adjustment", info.seasonalAdjustment != null ? info.seasonalAdjustment : "");
-          observation.put("last_updated", info.lastUpdated != null ? info.lastUpdated : "");
+    for (JsonNode obs : allObservations) {
+      String valueStr = obs.get("value").asText();
+      if (!".".equals(valueStr)) { // FRED uses "." for missing values
+        Map<String, Object> observation = new HashMap<>();
+        observation.put("series_id", seriesId);
+        observation.put("series_name", info.title != null ? info.title : "");
+        observation.put("date", obs.get("date").asText());
+        observation.put("value", Double.parseDouble(valueStr));
+        observation.put("units", info.units != null ? info.units : "");
+        observation.put("frequency", info.frequency != null ? info.frequency : "");
+        observation.put("seasonal_adjustment", info.seasonalAdjustment != null ? info.seasonalAdjustment : "");
+        observation.put("last_updated", info.lastUpdated != null ? info.lastUpdated : "");
 
-          observations.add(observation);
-        }
+        observations.add(observation);
       }
     }
 
