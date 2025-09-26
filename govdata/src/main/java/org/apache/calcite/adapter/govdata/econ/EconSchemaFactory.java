@@ -238,7 +238,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
 
     // Download BLS data if enabled
-    if (enabledSources.contains("bls") && !blsApiKey.isEmpty()) {
+    if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
         LOGGER.info("Downloading BLS data for years {}-{}", startYear, endYear);
         BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, storageProvider);
@@ -398,6 +398,23 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       } catch (Exception e) {
         LOGGER.error("Error downloading World Bank data", e);
       }
+    }
+
+    // Download FRED series catalog if FRED API key is available
+    LOGGER.info("FRED catalog download check: fredApiKey={}, isEmpty={}",
+        fredApiKey != null ? "configured" : "null",
+        fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
+    if (fredApiKey != null && !fredApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Downloading FRED series catalog");
+        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir);
+        catalogDownloader.downloadCatalog();
+        LOGGER.info("FRED catalog download completed");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading FRED catalog", e);
+      }
+    } else {
+      LOGGER.warn("Skipping FRED catalog download - API key not available");
     }
 
     LOGGER.info("ECON data download completed");

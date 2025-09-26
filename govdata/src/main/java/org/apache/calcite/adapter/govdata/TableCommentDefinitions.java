@@ -494,8 +494,11 @@ public final class TableCommentDefinitions {
     // fred_indicators table
     ECON_TABLE_COMMENTS.put("fred_indicators",
         "Federal Reserve Economic Data (FRED) time series covering 800,000+ economic indicators. "
-        + "Includes interest rates, monetary aggregates, exchange rates, commodity prices, and "
-        + "economic activity measures. Primary source for U.S. economic time series data.");
+        + "Includes comprehensive coverage of Fed policy tools (EFFR, DFEDTARU, DFEDTARL), financial "
+        + "conditions indices (NFCI, STLFSI), complete Treasury yield curve (DGS30, DGS5, DGS2, "
+        + "T10Y2Y, T10Y3M), credit market spreads (BAMLH0A0HYM2, BAMLC0A1CAAAEY), international "
+        + "exchange rates, commodity prices, and economic activity measures. Standardized format "
+        + "across all federal data sources for comprehensive economic analysis.");
     
     Map<String, String> fredIndicatorsCols = new HashMap<>();
     fredIndicatorsCols.put("series_id", "FRED series identifier (DFF, GDP, UNRATE, etc.)");
