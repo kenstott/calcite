@@ -135,10 +135,41 @@ public class FredDataDownloader {
     public static final String REAL_DISPOSABLE_INCOME = "DSPIC96";          // Real Disposable Personal Income
     public static final String CONSUMER_CONFIDENCE = "CSCICP03USM665S";     // Consumer Confidence Index
     public static final String PERSONAL_SAVING_RATE = "PSAVERT";            // Personal Saving Rate
+
+    // Fed Policy & Financial Conditions (Phase 1)
+    public static final String CHICAGO_FED_FINANCIAL_CONDITIONS = "NFCI";   // Chicago Fed Financial Conditions Index
+    public static final String FED_FUNDS_UPPER_TARGET = "DFEDTARU";         // Federal Funds Upper Target Rate
+    public static final String EFFECTIVE_FED_FUNDS_RATE = "EFFR";           // Effective Federal Funds Rate (Daily)
+    public static final String STLOUIS_FED_FINANCIAL_STRESS = "STLFSI";     // St. Louis Fed Financial Stress Index
+
+    // Enhanced Credit Markets (Phase 1)
+    public static final String HIGH_YIELD_CORPORATE_SPREADS = "BAMLH0A0HYM2"; // High Yield Corporate Bond Spreads
+    public static final String AAA_CORPORATE_BOND_YIELD = "BAMLC0A1CAAAEY"; // AAA Corporate Bond Yield
+    public static final String MORTGAGE_RATE_15Y = "MORTGAGE15US";          // 15-Year Fixed Mortgage Rate
+
+    // International/Commodities (Phase 1)
+    public static final String WTI_CRUDE_OIL = "DCOILWTICO";               // WTI Crude Oil Price
+
+    // Complete Treasury Yield Curve (Phase 2)
+    public static final String THIRTY_YEAR_TREASURY = "DGS30";             // 30-Year Treasury Rate
+    public static final String FIVE_YEAR_TREASURY = "DGS5";               // 5-Year Treasury Rate
+    public static final String TWO_YEAR_TREASURY = "DGS2";                // 2-Year Treasury Rate
+    public static final String YIELD_CURVE_10Y2Y = "T10Y2Y";              // 10-Year minus 2-Year Treasury Spread
+    public static final String YIELD_CURVE_10Y3M = "T10Y3M";              // 10-Year minus 3-Month Treasury Spread
+
+    // International & Advanced Indicators (Phase 3)
+    public static final String USD_JPY_EXCHANGE_RATE = "DEXJPUS";          // US/Japan Foreign Exchange Rate
+    public static final String USD_CAD_EXCHANGE_RATE = "DEXCAUS";          // US/Canada Foreign Exchange Rate
+    public static final String USD_EUR_EXCHANGE_RATE = "DEXUSEU";          // US/Euro Foreign Exchange Rate
+    public static final String RECESSION_PROBABILITIES = "RECPROUSM156N";  // Smoothed US Recession Probabilities
+    public static final String MEDIAN_HOUSEHOLD_INCOME = "MEHOINUSA672N";  // Real Median Household Income
+    public static final String TOTAL_VEHICLE_SALES = "TOTALSA";            // Total Vehicle Sales
+    public static final String BUILDING_PERMITS_NEW = "PERMIT";            // New Private Housing Units Authorized
   }
   
   // Default series to download if none specified
   public static final List<String> DEFAULT_SERIES = Arrays.asList(
+      // Core Economic Indicators
       Series.FED_FUNDS_RATE,
       Series.TEN_YEAR_TREASURY,
       Series.REAL_GDP,
@@ -149,6 +180,19 @@ public class FredDataDownloader {
       Series.INDUSTRIAL_PRODUCTION,
       Series.SP500,
       Series.DOLLAR_INDEX,
+      // Phase 1 Additions - Fed Policy & Financial Conditions
+      Series.CHICAGO_FED_FINANCIAL_CONDITIONS,
+      Series.EFFECTIVE_FED_FUNDS_RATE,
+      Series.HIGH_YIELD_CORPORATE_SPREADS,
+      Series.WTI_CRUDE_OIL,
+      // Enhanced Treasury Curve
+      Series.THIRTY_YEAR_TREASURY,
+      Series.FIVE_YEAR_TREASURY,
+      Series.TWO_YEAR_TREASURY,
+      Series.YIELD_CURVE_10Y2Y,
+      // International Context
+      Series.USD_JPY_EXCHANGE_RATE,
+      Series.USD_EUR_EXCHANGE_RATE,
       // Banking Indicators
       Series.COMMERCIAL_BANK_DEPOSITS,
       Series.BANK_CREDIT,
@@ -679,5 +723,244 @@ public class FredDataDownloader {
 
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, "FredIndicator");
+  }
+
+  /**
+   * Download a specific FRED series for a date range.
+   *
+   * @param seriesId FRED series identifier
+   * @param startYear Start year (inclusive)
+   * @param endYear End year (inclusive)
+   */
+  public void downloadSeries(String seriesId, int startYear, int endYear)
+      throws IOException, InterruptedException {
+
+    if (apiKey == null || apiKey.isEmpty()) {
+      throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
+    }
+
+    LOGGER.info("Downloading FRED series {} for years {} to {}", seriesId, startYear, endYear);
+
+    String startDate = startYear + "-01-01";
+    String endDate = endYear + "-12-31";
+    String outputDirPath = String.format("source=econ/type=custom_fred/series=%s", seriesId);
+
+    // Check if we already have this data cached
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("type", "custom_fred_series");
+    cacheParams.put("series_id", seriesId);
+    cacheParams.put("start_year", String.valueOf(startYear));
+    cacheParams.put("end_year", String.valueOf(endYear));
+
+    String jsonFilePath = outputDirPath + "/" + seriesId + "_" + startYear + "_" + endYear + ".json";
+
+    if (cacheManifest.isCached("custom_fred_series", startYear, cacheParams)) {
+      LOGGER.info("Found cached FRED series {} data - skipping download", seriesId);
+      return;
+    }
+
+    // Check if file exists but not in manifest
+    File jsonFile = new File(cacheDir, jsonFilePath);
+    if (jsonFile.exists()) {
+      LOGGER.info("Found existing FRED series {} file - updating manifest", seriesId);
+      long fileSize = jsonFile.length();
+      cacheManifest.markCached("custom_fred_series", startYear, cacheParams, jsonFilePath, fileSize);
+      cacheManifest.save(cacheDir);
+      return;
+    }
+
+    // Get series info first
+    FredSeriesInfo info = getSeriesInfo(seriesId);
+    if (info == null) {
+      throw new IOException("Could not retrieve series info for " + seriesId);
+    }
+
+    LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
+
+    String url = FRED_API_BASE + "series/observations"
+        + "?series_id=" + seriesId
+        + "&api_key=" + apiKey
+        + "&file_type=json"
+        + "&observation_start=" + startDate
+        + "&observation_end=" + endDate;
+
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .timeout(Duration.ofSeconds(30))
+        .build();
+
+    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() != 200) {
+      throw new IOException("FRED API request failed for series " + seriesId
+          + " with status: " + response.statusCode());
+    }
+
+    JsonNode root = MAPPER.readTree(response.body());
+    JsonNode obsArray = root.get("observations");
+
+    List<Map<String, Object>> observations = new ArrayList<>();
+
+    if (obsArray != null && obsArray.isArray()) {
+      for (JsonNode obs : obsArray) {
+        String valueStr = obs.get("value").asText();
+        if (!".".equals(valueStr)) { // FRED uses "." for missing values
+          Map<String, Object> observation = new HashMap<>();
+          observation.put("series_id", seriesId);
+          observation.put("series_name", info.title != null ? info.title : "");
+          observation.put("date", obs.get("date").asText());
+          observation.put("value", Double.parseDouble(valueStr));
+          observation.put("units", info.units != null ? info.units : "");
+          observation.put("frequency", info.frequency != null ? info.frequency : "");
+          observation.put("seasonal_adjustment", info.seasonalAdjustment != null ? info.seasonalAdjustment : "");
+          observation.put("last_updated", info.lastUpdated != null ? info.lastUpdated : "");
+
+          observations.add(observation);
+        }
+      }
+    }
+
+    // Save raw JSON data to cache
+    Map<String, Object> data = new HashMap<>();
+    data.put("series_id", seriesId);
+
+    // Convert info to serializable map with null-safe handling
+    Map<String, String> seriesInfoMap = new HashMap<>();
+    seriesInfoMap.put("id", info.id != null ? info.id : "");
+    seriesInfoMap.put("title", info.title != null ? info.title : "");
+    seriesInfoMap.put("units", info.units != null ? info.units : "");
+    seriesInfoMap.put("frequency", info.frequency != null ? info.frequency : "");
+    seriesInfoMap.put("seasonal_adjustment", info.seasonalAdjustment != null ? info.seasonalAdjustment : "");
+    seriesInfoMap.put("last_updated", info.lastUpdated != null ? info.lastUpdated : "");
+    data.put("series_info", seriesInfoMap);
+
+    data.put("observations", observations);
+    data.put("download_date", LocalDate.now().toString());
+    data.put("start_year", startYear);
+    data.put("end_year", endYear);
+
+    String jsonContent = MAPPER.writeValueAsString(data);
+
+    // Save to cache
+    jsonFile.getParentFile().mkdirs();
+    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("custom_fred_series", startYear, cacheParams, jsonFilePath, jsonContent.length());
+    cacheManifest.save(cacheDir);
+
+    LOGGER.info("FRED series {} saved to: {} ({} observations)", seriesId, jsonFilePath, observations.size());
+  }
+
+  /**
+   * Convert a specific FRED series to Parquet format with optional partitioning.
+   *
+   * @param seriesId FRED series identifier
+   * @param targetPath Target parquet file path
+   * @param partitionFields List of partition fields (can be null for no partitioning)
+   */
+  public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields)
+      throws IOException {
+
+    LOGGER.debug("Converting FRED series {} to parquet: {}", seriesId, targetPath);
+
+    // Skip if target file already exists
+    if (storageProvider.exists(targetPath)) {
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetPath);
+      return;
+    }
+
+    // Find the cached JSON file for this series
+    // Look for any JSON file containing this series
+    File cacheRoot = new File(cacheDir);
+    List<Map<String, Object>> observations = new ArrayList<>();
+
+    // Search through cache directory structure
+    if (!findAndLoadSeriesData(cacheRoot, seriesId, observations)) {
+      LOGGER.warn("No cached data found for FRED series: {}", seriesId);
+      return;
+    }
+
+    if (observations.isEmpty()) {
+      LOGGER.warn("No observations found for FRED series: {}", seriesId);
+      return;
+    }
+
+    // Filter observations for this specific series (in case cache contains multiple series)
+    List<Map<String, Object>> seriesObservations = new ArrayList<>();
+    for (Map<String, Object> obs : observations) {
+      if (seriesId.equals(obs.get("series_id"))) {
+        seriesObservations.add(obs);
+      }
+    }
+
+    // Create target directory
+    File targetFile = new File(targetPath);
+    targetFile.getParentFile().mkdirs();
+
+    // Write parquet file
+    writeFredIndicatorsParquet(seriesObservations, targetPath);
+
+    LOGGER.info("Converted FRED series {} to parquet: {} ({} observations)",
+        seriesId, targetPath, seriesObservations.size());
+  }
+
+  /**
+   * Recursively search for and load series data from cache files.
+   */
+  private boolean findAndLoadSeriesData(File directory, String seriesId, List<Map<String, Object>> observations) {
+    if (!directory.exists() || !directory.isDirectory()) {
+      return false;
+    }
+
+    boolean found = false;
+    File[] files = directory.listFiles();
+    if (files != null) {
+      for (File file : files) {
+        if (file.isDirectory()) {
+          // Recurse into subdirectories
+          if (findAndLoadSeriesData(file, seriesId, observations)) {
+            found = true;
+          }
+        } else if (file.getName().endsWith(".json")) {
+          try {
+            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            JsonNode root = MAPPER.readTree(content);
+
+            // Check if this file contains our series
+            JsonNode obsArray = root.get("observations");
+            if (obsArray != null && obsArray.isArray()) {
+              boolean hasOurSeries = false;
+              for (JsonNode obs : obsArray) {
+                if (seriesId.equals(obs.get("series_id").asText())) {
+                  hasOurSeries = true;
+                  break;
+                }
+              }
+
+              if (hasOurSeries) {
+                // Load all observations from this file
+                for (JsonNode obs : obsArray) {
+                  Map<String, Object> observation = new HashMap<>();
+                  observation.put("series_id", obs.get("series_id").asText());
+                  observation.put("series_name", obs.get("series_name").asText());
+                  observation.put("date", obs.get("date").asText());
+                  observation.put("value", obs.get("value").asDouble());
+                  observation.put("units", obs.get("units").asText());
+                  observation.put("frequency", obs.get("frequency").asText());
+
+                  observations.add(observation);
+                }
+                found = true;
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Failed to process cache file {}: {}", file.getPath(), e.getMessage());
+          }
+        }
+      }
+    }
+
+    return found;
   }
 }
