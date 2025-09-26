@@ -37,8 +37,15 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -259,7 +266,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // Extract and write XBRL relationships
       File relationshipsFile =
           new File(partitionDir, String.format("%s_%s_relationships.parquet", cik, filingDate));
-      writeRelationshipsToParquet(doc, relationshipsFile, cik, filingType, filingDate);
+      writeRelationshipsToParquet(doc, relationshipsFile, cik, filingType, filingDate, sourceFile);
       if (relationshipsFile.exists()) {
         outputFiles.add(relationshipsFile);
       }
@@ -1581,9 +1588,30 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Write XBRL relationships to Parquet.
    * Captures presentation, calculation, and definition linkbases.
+   *
+   * NOTE: Modern SEC filings use inline XBRL (iXBRL) where relationships are not embedded
+   * in the main document but are provided in separate linkbase files (*.xml) referenced
+   * from the XSD schema. Since we currently only download the main HTML filing document,
+   * we cannot extract relationships from inline XBRL filings. This would require:
+   * 1. Downloading the XSD schema file referenced in the document
+   * 2. Parsing the XSD to find linkbase file references
+   * 3. Downloading and parsing each linkbase file (calculation, presentation, definition)
+   *
+   * For now, this method will create empty relationship files for inline XBRL to satisfy
+   * cache validation requirements.
+   *
+   * TODO: Implement full linkbase download functionality:
+   * - Extract XSD href from: <link:schemaRef xlink:type="simple" xlink:href="aapl-20230930.xsd">
+   * - Download XSD from: https://www.sec.gov/Archives/edgar/data/{CIK}/{ACCESSION}/{XSD_FILE}
+   * - Parse XSD for linkbaseRef elements pointing to linkbase files
+   * - Download each linkbase file (e.g., aapl-20230930_cal.xml, aapl-20230930_pre.xml)
+   * - Parse linkbase XML for arc elements defining relationships
+   * - Convert relationships to Parquet records with proper linkbase_type classification
    */
   private void writeRelationshipsToParquet(Document doc, File outputFile,
-      String cik, String filingType, String filingDate) throws IOException {
+      String cik, String filingType, String filingDate, File sourceFile) throws IOException {
+
+    LOGGER.fine(String.format("Starting relationship extraction for CIK %s filing type %s", cik, filingType));
 
     // Create schema for relationships
     Schema schema = SchemaBuilder.record("XbrlRelationship")
@@ -1600,9 +1628,12 @@ public class XbrlToParquetConverter implements FileConverter {
 
     List<GenericRecord> records = new ArrayList<>();
 
-    // Look for linkbase arcs in the document
-    // These define relationships between concepts
-    NodeList arcs = doc.getElementsByTagNameNS("*", "arc");
+    // Only extract traditional arc relationships if document was successfully parsed
+    if (doc != null) {
+      // Look for linkbase arcs in the document
+      // These define relationships between concepts
+      NodeList arcs = doc.getElementsByTagNameNS("*", "arc");
+    LOGGER.fine(String.format("Found %d arc elements in document", arcs.getLength()));
     for (int i = 0; i < arcs.getLength(); i++) {
       Element arc = (Element) arcs.item(i);
 
@@ -1646,23 +1677,37 @@ public class XbrlToParquetConverter implements FileConverter {
 
       records.add(record);
     }
+    }
 
     // Also extract relationships from inline XBRL if present
-    extractInlineXBRLRelationships(doc, schema, records, filingDate);
+    int beforeInlineCount = records.size();
+    extractInlineXBRLRelationships(doc, schema, records, filingDate, sourceFile);
+    int inlineRelationships = records.size() - beforeInlineCount;
+    LOGGER.fine(String.format("Extracted %d relationships from inline XBRL", inlineRelationships));
 
-    // Only write file if we found relationships
+    // Always write the parquet file, even if empty, to satisfy cache validation
     if (!records.isEmpty()) {
       writeRecordsToParquet(records, schema, outputFile);
-      LOGGER.info("Wrote " + records.size() + " relationships to " + outputFile);
+      LOGGER.info(String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
+          records.size(), beforeInlineCount, inlineRelationships, outputFile));
+    } else {
+      // Create an empty parquet file to indicate that relationship extraction was completed
+      // This is important for cache validation - without this file, the system will think
+      // the filing hasn't been fully processed and will attempt to reprocess it
+      // NOTE: Inline XBRL filings will typically have empty relationship files since
+      // relationships are in separate linkbase files that we don't currently download
+      LOGGER.fine(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
+      writeRecordsToParquet(records, schema, outputFile); // Write empty records list
+      LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputFile));
+    }
 
-      // Clean up macOS metadata files in the entire partition directory
-      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
-      // Also clean parent directories
-      if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
-        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
-        if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
-          storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
-        }
+    // Clean up macOS metadata files in the entire partition directory
+    storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
+    // Also clean parent directories
+    if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
+      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
+      if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
+        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
       }
     }
   }
@@ -1699,47 +1744,450 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract relationships from inline XBRL structure.
    */
   private void extractInlineXBRLRelationships(Document doc, Schema schema,
-      List<GenericRecord> records, String filingDate) {
+      List<GenericRecord> records, String filingDate, File sourceFile) {
+
+    LOGGER.info("Starting inline XBRL relationship extraction");
+
+    // First, try to download and parse external linkbase files
+    // These contain the actual relationship definitions for inline XBRL
+    try {
+      downloadAndParseLinkbases(sourceFile, schema, records, filingDate);
+    } catch (Exception e) {
+      LOGGER.info("Failed to download/parse linkbase files: " + e.getMessage());
+    }
 
     // In inline XBRL, relationships are often implicit in the document structure
-    // We can infer parent-child relationships from nesting
+    // We extract multiple types of relationships:
+    // 1. Parent-child from nesting
+    // 2. Calculation relationships from summation contexts
+    // 3. Dimensional relationships
 
-    NodeList allElements = doc.getElementsByTagName("*");
-    Map<String, String> parentMap = new HashMap<>();
+    // Track unique relationships to avoid duplicates
+    Set<String> processedRelationships = new HashSet<>();
 
-    for (int i = 0; i < allElements.getLength(); i++) {
-      Element element = (Element) allElements.item(i);
+    // Look for ix:nonNumeric and ix:nonFraction elements that define structure
+    NodeList ixElements = doc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "*");
+    LOGGER.fine(String.format("Found %d inline XBRL elements", ixElements.getLength()));
 
-      if (element.hasAttribute("contextRef")) {
-        String concept = extractConceptName(element);
+    // Extract relationships from table structures (common in inline XBRL)
+    NodeList tables = doc.getElementsByTagName("table");
+    for (int t = 0; t < tables.getLength(); t++) {
+      Element table = (Element) tables.item(t);
 
-        // Check if this element has a parent with contextRef
-        Element parent = (Element) element.getParentNode();
-        while (parent != null && !parent.hasAttribute("contextRef")) {
-          if (parent.getParentNode() instanceof Element) {
-            parent = (Element) parent.getParentNode();
-          } else {
-            parent = null;
-          }
-        }
+      // Look for XBRL concepts within table rows
+      NodeList rows = table.getElementsByTagName("tr");
+      String lastParentConcept = null;
 
-        if (parent != null) {
-          String parentConcept = extractConceptName(parent);
-          if (!concept.equals(parentConcept)) {
-            // Create implicit parent-child relationship
-            GenericRecord record = new GenericData.Record(schema);
-            record.put("filing_date", filingDate);
-            record.put("linkbase_type", "presentation");
-            record.put("arc_role", "parent-child-implicit");
-            record.put("from_concept", parentConcept);
-            record.put("to_concept", concept);
-            record.put("weight", null);
-            record.put("order", i);  // Use document order
-            record.put("preferred_label", null);
-            records.add(record);
+      for (int r = 0; r < rows.getLength(); r++) {
+        NodeList cells = ((Element) rows.item(r)).getElementsByTagName("*");
+
+        for (int c = 0; c < cells.getLength(); c++) {
+          Element cell = (Element) cells.item(c);
+
+          if (cell.hasAttribute("contextRef") || cell.hasAttribute("name")) {
+            String concept = extractConceptName(cell);
+            if (concept != null) {
+              // Check if this appears to be a child of the previous concept
+              if (lastParentConcept != null && !concept.equals(lastParentConcept)) {
+                String relationshipKey = lastParentConcept + "->" + concept;
+
+                if (!processedRelationships.contains(relationshipKey)) {
+                  GenericRecord record = new GenericData.Record(schema);
+                  record.put("filing_date", filingDate);
+                  record.put("linkbase_type", "presentation");
+                  record.put("arc_role", "table-structure");
+                  record.put("from_concept", cleanConceptName(lastParentConcept));
+                  record.put("to_concept", cleanConceptName(concept));
+                  record.put("weight", null);
+                  record.put("order", r * 100 + c);  // Row-column based ordering
+                  record.put("preferred_label", cell.getAttribute("preferredLabel"));
+                  records.add(record);
+                  processedRelationships.add(relationshipKey);
+                }
+              }
+
+              // Update parent if this looks like a section header
+              if (cell.getTagName().matches("th|h\\d") ||
+                  cell.getAttribute("class").contains("header")) {
+                lastParentConcept = concept;
+              }
+            }
           }
         }
       }
+    }
+
+    // Extract calculation relationships from elements with calculation attributes
+    NodeList allElements = doc.getElementsByTagName("*");
+    for (int i = 0; i < allElements.getLength(); i++) {
+      Element element = (Element) allElements.item(i);
+
+      // Look for calculation weight indicators
+      if (element.hasAttribute("calculationWeight") ||
+          element.hasAttribute("data-calculation-parent")) {
+        String concept = extractConceptName(element);
+        String parentConcept = element.getAttribute("data-calculation-parent");
+        String weight = element.getAttribute("calculationWeight");
+
+        if (concept != null && parentConcept != null && !parentConcept.isEmpty()) {
+          String relationshipKey = parentConcept + "-calc->" + concept;
+
+          if (!processedRelationships.contains(relationshipKey)) {
+            GenericRecord record = new GenericData.Record(schema);
+            record.put("filing_date", filingDate);
+            record.put("linkbase_type", "calculation");
+            record.put("arc_role", "summation-item");
+            record.put("from_concept", cleanConceptName(parentConcept));
+            record.put("to_concept", cleanConceptName(concept));
+            record.put("weight", weight.isEmpty() ? 1.0 : Double.parseDouble(weight));
+            record.put("order", i);
+            record.put("preferred_label", element.getAttribute("preferredLabel"));
+            records.add(record);
+            processedRelationships.add(relationshipKey);
+          }
+        }
+      }
+    }
+
+    LOGGER.fine(String.format("Extracted %d unique inline XBRL relationships", processedRelationships.size()));
+  }
+
+  /**
+   * Download and parse linkbase files referenced from inline XBRL schema.
+   */
+  private void downloadAndParseLinkbases(File htmlFile, Schema schema,
+      List<GenericRecord> records, String filingDate) throws Exception {
+
+    LOGGER.info("Looking for linkbase references in inline XBRL document");
+
+    // Parse the HTML file to look for schema references
+    LOGGER.info("Parsing HTML file for schema references: " + htmlFile.getAbsolutePath());
+    Document doc;
+    try {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      doc = builder.parse(htmlFile);
+      LOGGER.info("Successfully parsed HTML file, proceeding with schema reference search");
+    } catch (Exception e) {
+      LOGGER.info("Failed to parse HTML file: " + e.getMessage());
+      return;
+    }
+
+    // Find schemaRef element that points to XSD file
+    // First try with the correct linkbase namespace
+    NodeList schemaRefs = doc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", "schemaRef");
+    LOGGER.info("Found " + schemaRefs.getLength() + " schemaRef elements in linkbase namespace");
+
+    if (schemaRefs.getLength() == 0) {
+      // Try with prefixed tag name (more common in inline XBRL)
+      schemaRefs = doc.getElementsByTagName("link:schemaRef");
+      LOGGER.info("Found " + schemaRefs.getLength() + " link:schemaRef elements");
+    }
+    if (schemaRefs.getLength() == 0) {
+      // Try looking inside ix:references elements
+      NodeList references = doc.getElementsByTagName("ix:references");
+      LOGGER.info("Found " + references.getLength() + " ix:references elements");
+      for (int i = 0; i < references.getLength(); i++) {
+        Element referencesEl = (Element) references.item(i);
+        NodeList childSchemaRefs = referencesEl.getElementsByTagName("link:schemaRef");
+        LOGGER.info("Found " + childSchemaRefs.getLength() + " link:schemaRef children in ix:references[" + i + "]");
+        if (childSchemaRefs.getLength() > 0) {
+          schemaRefs = childSchemaRefs;
+          break;
+        }
+      }
+    }
+
+    if (schemaRefs.getLength() == 0) {
+      LOGGER.info("No schemaRef found in inline XBRL - no linkbases to download");
+      return;
+    }
+
+    Element schemaRef = (Element) schemaRefs.item(0);
+    String xsdHref = schemaRef.getAttribute("xlink:href");
+    if (xsdHref == null || xsdHref.isEmpty()) {
+      xsdHref = schemaRef.getAttribute("href");
+    }
+
+    if (xsdHref == null || xsdHref.isEmpty()) {
+      LOGGER.fine("No XSD href found in schemaRef");
+      return;
+    }
+
+    LOGGER.info("Found XSD reference: " + xsdHref);
+
+    // Extract base URL from source file path or document URL
+    String baseUrl = extractBaseUrl(htmlFile, xsdHref);
+    if (baseUrl == null) {
+      LOGGER.warning("Could not determine base URL for linkbase downloads");
+      return;
+    }
+
+    // Download and parse XSD to find linkbase references
+    String xsdUrl = resolveUrl(baseUrl, xsdHref);
+    LOGGER.info("Downloading XSD from: " + xsdUrl);
+
+    String xsdContent = downloadFile(xsdUrl);
+    if (xsdContent == null) {
+      LOGGER.warning("Failed to download XSD file from: " + xsdUrl);
+      return;
+    }
+
+    // Parse XSD to find linkbaseRef elements
+    DocumentBuilderFactory xsdFactory = DocumentBuilderFactory.newInstance();
+    xsdFactory.setNamespaceAware(true);
+    DocumentBuilder xsdBuilder = xsdFactory.newDocumentBuilder();
+    Document xsdDoc = xsdBuilder.parse(new ByteArrayInputStream(xsdContent.getBytes(StandardCharsets.UTF_8)));
+
+    // Find linkbaseRef elements
+    NodeList linkbaseRefs = xsdDoc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", "linkbaseRef");
+    if (linkbaseRefs.getLength() == 0) {
+      linkbaseRefs = xsdDoc.getElementsByTagName("link:linkbaseRef");
+    }
+
+    LOGGER.info("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
+
+    // Process each linkbase file
+    for (int i = 0; i < linkbaseRefs.getLength(); i++) {
+      Element linkbaseRef = (Element) linkbaseRefs.item(i);
+      String linkbaseHref = linkbaseRef.getAttribute("xlink:href");
+      if (linkbaseHref == null || linkbaseHref.isEmpty()) {
+        linkbaseHref = linkbaseRef.getAttribute("href");
+      }
+
+      if (linkbaseHref == null || linkbaseHref.isEmpty()) {
+        continue;
+      }
+
+      String role = linkbaseRef.getAttribute("xlink:role");
+      if (role == null || role.isEmpty()) {
+        role = linkbaseRef.getAttribute("role");
+      }
+
+      // Determine linkbase type from role
+      String linkbaseType = determineLinkbaseTypeFromRole(role);
+
+      LOGGER.info("Processing " + linkbaseType + " linkbase: " + linkbaseHref);
+
+      // Download linkbase file
+      String linkbaseUrl = resolveUrl(baseUrl, linkbaseHref);
+      String linkbaseContent = downloadFile(linkbaseUrl);
+
+      if (linkbaseContent == null) {
+        LOGGER.warning("Failed to download linkbase from: " + linkbaseUrl);
+        continue;
+      }
+
+      // Parse linkbase and extract relationships
+      try {
+        DocumentBuilderFactory linkbaseFactory = DocumentBuilderFactory.newInstance();
+        linkbaseFactory.setNamespaceAware(true);
+        DocumentBuilder linkbaseBuilder = linkbaseFactory.newDocumentBuilder();
+        Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
+        extractLinkbaseRelationships(linkbaseDoc, schema, records, filingDate, linkbaseType);
+      } catch (Exception e) {
+        LOGGER.warning("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Extract relationships from a linkbase document.
+   */
+  private void extractLinkbaseRelationships(Document linkbaseDoc, Schema schema,
+      List<GenericRecord> records, String filingDate, String linkbaseType) {
+
+    // Find arc elements in the linkbase
+    NodeList arcs = linkbaseDoc.getElementsByTagName("*");
+    int relationshipCount = 0;
+
+    for (int i = 0; i < arcs.getLength(); i++) {
+      Element element = (Element) arcs.item(i);
+      String tagName = element.getTagName();
+
+      // Look for arc elements (calculationArc, presentationArc, definitionArc, etc.)
+      if (tagName.endsWith("Arc") || tagName.contains(":arc")) {
+        String from = element.getAttribute("xlink:from");
+        String to = element.getAttribute("xlink:to");
+
+        if (from == null || from.isEmpty()) {
+          from = element.getAttribute("from");
+        }
+        if (to == null || to.isEmpty()) {
+          to = element.getAttribute("to");
+        }
+
+        if (from != null && !from.isEmpty() && to != null && !to.isEmpty()) {
+          GenericRecord record = new GenericData.Record(schema);
+          record.put("filing_date", filingDate);
+          record.put("linkbase_type", linkbaseType);
+
+          // Get arc role
+          String arcRole = element.getAttribute("xlink:arcrole");
+          if (arcRole == null || arcRole.isEmpty()) {
+            arcRole = element.getAttribute("arcrole");
+          }
+          record.put("arc_role", arcRole);
+
+          // Clean concept names
+          record.put("from_concept", cleanConceptName(from));
+          record.put("to_concept", cleanConceptName(to));
+
+          // Get weight for calculation linkbase
+          String weight = element.getAttribute("weight");
+          if (weight != null && !weight.isEmpty()) {
+            try {
+              record.put("weight", Double.parseDouble(weight));
+            } catch (NumberFormatException e) {
+              record.put("weight", null);
+            }
+          } else {
+            record.put("weight", null);
+          }
+
+          // Get order for presentation linkbase
+          String order = element.getAttribute("order");
+          if (order != null && !order.isEmpty()) {
+            try {
+              record.put("order", Integer.parseInt(order));
+            } catch (NumberFormatException e) {
+              record.put("order", null);
+            }
+          } else {
+            record.put("order", null);
+          }
+
+          // Get preferred label
+          String preferredLabel = element.getAttribute("preferredLabel");
+          record.put("preferred_label", preferredLabel);
+
+          records.add(record);
+          relationshipCount++;
+        }
+      }
+    }
+
+    LOGGER.info("Extracted " + relationshipCount + " relationships from " + linkbaseType + " linkbase");
+  }
+
+  /**
+   * Determine linkbase type from role URI.
+   */
+  private String determineLinkbaseTypeFromRole(String role) {
+    if (role == null) return "unknown";
+
+    if (role.contains("calculation")) {
+      return "calculation";
+    } else if (role.contains("presentation")) {
+      return "presentation";
+    } else if (role.contains("definition")) {
+      return "definition";
+    } else if (role.contains("label")) {
+      return "label";
+    } else if (role.contains("reference")) {
+      return "reference";
+    }
+
+    return "other";
+  }
+
+  /**
+   * Extract base URL from file path or filing information.
+   */
+  private String extractBaseUrl(File htmlFile, String xsdHref) {
+    // Try to extract CIK and accession from file path
+    // File path pattern: /path/to/cache/sec/sec-data/{CIK}/{ACCESSION_NUMBER}/filename.htm
+    String filePath = htmlFile.getAbsolutePath();
+
+    // Look for SEC EDGAR file path pattern
+    Pattern pathPattern = Pattern.compile("/sec-data/([0-9]+)/([^/]+)/[^/]+\\.htm");
+    Matcher pathMatcher = pathPattern.matcher(filePath);
+
+    if (pathMatcher.find()) {
+      String cik = pathMatcher.group(1);
+      String accession = pathMatcher.group(2);
+      // Convert accession number to EDGAR format (remove dashes if present)
+      String edgarAccession = accession.replace("-", "");
+      return "https://www.sec.gov/Archives/edgar/data/" + cik + "/" + edgarAccession + "/";
+    }
+
+    // Try to read the HTML file and look for EDGAR URLs in content
+    try {
+      String content = new String(Files.readAllBytes(htmlFile.toPath()));
+
+      // Look for EDGAR URLs in HTML content or comments
+      Pattern urlPattern = Pattern.compile("https?://[^\\s\"']+edgar/data/[0-9]+/[^\\s\"'/]+/");
+      Matcher urlMatcher = urlPattern.matcher(content);
+      if (urlMatcher.find()) {
+        return urlMatcher.group();
+      }
+
+    } catch (Exception e) {
+      LOGGER.fine("Could not read HTML file to extract base URL: " + e.getMessage());
+    }
+
+    // Default to SEC EDGAR base URL structure
+    // This is a fallback - in production we'd need better context
+    return "https://www.sec.gov/Archives/edgar/data/";
+  }
+
+  /**
+   * Resolve relative URL against base URL.
+   */
+  private String resolveUrl(String baseUrl, String relativeUrl) {
+    if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
+      return relativeUrl;
+    }
+
+    if (!baseUrl.endsWith("/")) {
+      baseUrl += "/";
+    }
+
+    if (relativeUrl.startsWith("/")) {
+      // Absolute path - extract base domain
+      try {
+        URI baseUri = URI.create(baseUrl);
+        return baseUri.getScheme() + "://" + baseUri.getHost() + relativeUrl;
+      } catch (Exception e) {
+        return baseUrl + relativeUrl;
+      }
+    }
+
+    return baseUrl + relativeUrl;
+  }
+
+  /**
+   * Download file from URL.
+   */
+  private String downloadFile(String urlString) {
+    try {
+      URI uri = URI.create(urlString);
+      URL url = uri.toURL();
+      HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+      conn.setRequestMethod("GET");
+      conn.setConnectTimeout(10000);
+      conn.setReadTimeout(10000);
+      conn.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; CalciteGovDataAdapter/1.0)");
+
+      int responseCode = conn.getResponseCode();
+      if (responseCode != HttpURLConnection.HTTP_OK) {
+        LOGGER.warning("HTTP " + responseCode + " for URL: " + urlString);
+        return null;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+        StringBuilder content = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+          content.append(line).append("\n");
+        }
+        return content.toString();
+      }
+    } catch (Exception e) {
+      LOGGER.warning("Failed to download " + urlString + ": " + e.getMessage());
+      return null;
     }
   }
 
@@ -1819,22 +2267,26 @@ public class XbrlToParquetConverter implements FileConverter {
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
       LOGGER.info("DEBUG: Extracted " + transactions.size() + " insider transactions from " + sourceFile.getName());
 
+      // Always write insider.parquet file (even if empty) to indicate processing completed
+      // This prevents unnecessary reprocessing during cache validation
+      String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+      File outputFile = new File(partitionDir,
+          String.format("%s_%s_insider.parquet", cik, uniqueId));
+
       if (!transactions.isEmpty()) {
-        // Write to Parquet - use accession for uniqueness if available
-        String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-        File outputFile = new File(partitionDir,
-            String.format("%s_%s_insider.parquet", cik, uniqueId));
-
         LOGGER.info("DEBUG: Writing " + transactions.size() + " transactions to parquet file: " + outputFile.getAbsolutePath());
-        Schema schema = createInsiderTransactionSchema();
-        writeParquetFile(transactions, schema, outputFile);
-        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
-        outputFiles.add(outputFile);
-        LOGGER.info("DEBUG: Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
-
-        LOGGER.info("Converted Form " + filingType + " to insider transactions: "
-            + transactions.size() + " records");
+      } else {
+        LOGGER.info("DEBUG: Creating empty insider parquet file (no transactions found): " + outputFile.getAbsolutePath());
       }
+
+      Schema schema = createInsiderTransactionSchema();
+      writeParquetFile(transactions, schema, outputFile);
+      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
+      outputFiles.add(outputFile);
+      LOGGER.info("DEBUG: Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
+
+      LOGGER.info("Converted Form " + filingType + " to insider transactions: "
+          + transactions.size() + " records");
       
       // Create vectorized blobs for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms

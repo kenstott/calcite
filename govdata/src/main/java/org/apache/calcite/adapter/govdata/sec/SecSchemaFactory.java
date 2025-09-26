@@ -1387,9 +1387,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Missing primary Parquet file: " + primaryParquetPath);
       }
 
-      // Currently, no forms generate metadata.parquet or contexts.parquet files
-      // The XBRL processor only generates primary files (facts.parquet for financial forms, insider.parquet for insider forms)
-      // Removed incorrect file checking logic that was causing unnecessary reprocessing
+      // Check for relationships file (now always generated, even if empty)
+      if (!isInsiderForm) {
+        String relationshipsParquetPath = storageProvider.resolvePath(yearDir.getPath(),
+            String.format("%s_%s_relationships.parquet", cik, accessionClean));
+        try {
+          StorageProvider.FileMetadata relationshipsMetadata = storageProvider.getMetadata(relationshipsParquetPath);
+          // Note: relationships file can be empty (0 bytes is ok) as long as it exists
+          // The file is created even when no relationships are found to indicate processing completed
+        } catch (IOException e) {
+          needParquetReprocessing = true;
+          LOGGER.info("Missing relationships Parquet file: " + relationshipsParquetPath);
+        }
+      }
+
+      // Note: Currently, no forms generate metadata.parquet or contexts.parquet files
+      // The XBRL processor generates: facts.parquet (financial), insider.parquet (insider forms),
+      // relationships.parquet (financial), and optionally vectorized.parquet
 
       // Also check for vectorized file if text similarity is enabled and form supports vectorization
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");

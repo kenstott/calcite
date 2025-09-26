@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +64,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
   private Map<String, Map<String, Object>> tableConstraints;
+  private List<String> customFredSeries;
+  private Map<String, Object> fredSeriesGroups;
 
 /**
    * Build the operand configuration for ECON schema without creating the FileSchema.
@@ -145,6 +148,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> fredSeriesGroups = (Map<String, Object>) operand.get("fredSeriesGroups");
+
+    // Store configuration for table definition generation
+    this.customFredSeries = customFredSeries;
+    this.fredSeriesGroups = fredSeriesGroups;
 
     String defaultPartitionStrategy = (String) operand.get("defaultPartitionStrategy");
     if (defaultPartitionStrategy == null) {
@@ -665,6 +672,101 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
     return null;
+  }
+
+  /**
+   * Override loadTableDefinitions to add custom FRED table definitions dynamically.
+   * This combines static table definitions from econ-schema.json with dynamically
+   * generated table definitions for custom FRED series.
+   */
+  @Override
+  public List<Map<String, Object>> loadTableDefinitions() {
+    // Start with base table definitions from econ-schema.json
+    List<Map<String, Object>> tables = new ArrayList<>(GovDataSubSchemaFactory.super.loadTableDefinitions());
+
+    LOGGER.info("Loaded {} base table definitions from econ-schema.json", tables.size());
+
+    // Add custom FRED table definitions if operand is available
+    List<Map<String, Object>> customTables = generateCustomFredTableDefinitions();
+    if (!customTables.isEmpty()) {
+      tables.addAll(customTables);
+      LOGGER.info("Added {} custom FRED table definitions", customTables.size());
+    }
+
+    LOGGER.info("Total ECON table definitions: {}", tables.size());
+    return tables;
+  }
+
+  /**
+   * Generate table definitions for custom FRED series based on configuration.
+   * This is called during schema setup to discover custom tables dynamically.
+   */
+  private List<Map<String, Object>> generateCustomFredTableDefinitions() {
+    List<Map<String, Object>> customTables = new ArrayList<>();
+
+    LOGGER.info("generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
+        fredSeriesGroups != null ? fredSeriesGroups.size() : "null",
+        customFredSeries != null ? customFredSeries.size() : "null");
+
+    if (fredSeriesGroups != null) {
+      LOGGER.info("Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
+
+      for (Map.Entry<String, Object> entry : fredSeriesGroups.entrySet()) {
+        String groupName = entry.getKey();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> groupConfig = (Map<String, Object>) entry.getValue();
+
+        // Get table name from group configuration
+        String tableName = (String) groupConfig.get("tableName");
+        if (tableName == null) {
+          // Generate table name from group name
+          tableName = "fred_" + groupName.toLowerCase().replaceAll("[^a-z0-9_]", "_");
+        }
+
+        Map<String, Object> tableDefinition = new HashMap<>();
+        tableDefinition.put("name", tableName);
+        tableDefinition.put("pattern", "type=custom/year=*/" + tableName + ".parquet");
+
+        String comment = (String) groupConfig.get("comment");
+        if (comment == null) {
+          comment = "Custom FRED series group '" + groupName + "' with partitioned time-series data.";
+        }
+        tableDefinition.put("comment", comment);
+
+        customTables.add(tableDefinition);
+        LOGGER.debug("Generated table definition for FRED group '{}' -> table '{}'", groupName, tableName);
+      }
+    }
+
+    // Handle ungrouped custom series
+    if (customFredSeries != null && !customFredSeries.isEmpty()) {
+      LOGGER.info("Generating table definitions from {} ungrouped custom FRED series", customFredSeries.size());
+
+      // Group series by expected table name
+      Map<String, List<String>> seriesByTable = new HashMap<>();
+      for (String seriesId : customFredSeries) {
+        String tableName = getTableNameForSeries(seriesId);
+        seriesByTable.computeIfAbsent(tableName, k -> new ArrayList<>()).add(seriesId);
+      }
+
+      for (Map.Entry<String, List<String>> tableEntry : seriesByTable.entrySet()) {
+        String tableName = tableEntry.getKey();
+        List<String> seriesIds = tableEntry.getValue();
+
+        Map<String, Object> tableDefinition = new HashMap<>();
+        tableDefinition.put("name", tableName);
+        tableDefinition.put("pattern", "type=custom/year=*/" + tableName + ".parquet");
+        tableDefinition.put("comment", "Custom FRED series table containing " + seriesIds.size() +
+            " series: " + String.join(", ", seriesIds) + ". Partitioned by year for time-series analysis.");
+
+        customTables.add(tableDefinition);
+        LOGGER.debug("Generated table definition for ungrouped series -> table '{}' with {} series",
+            tableName, seriesIds.size());
+      }
+    }
+
+    LOGGER.info("Generated {} custom FRED table definitions", customTables.size());
+    return customTables;
   }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,

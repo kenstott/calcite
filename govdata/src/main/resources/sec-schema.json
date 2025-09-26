@@ -60,24 +60,12 @@
           "targetTable": "filing_contexts",
           "targetColumns": ["context_id"]
         }
-      ],
-      "indexes": [
-        ["concept_name"],
-        ["year", "quarter"],
-        ["cik"]
       ]
     },
     "filing_metadata": {
       "primaryKey": ["filing_id"],
       "unique": [
         ["cik", "form_type", "filing_date", "period_end_date"]
-      ],
-      "indexes": [
-        ["cik"],
-        ["form_type"],
-        ["filing_date"],
-        ["year"],
-        ["state_of_incorporation"]
       ]
     },
     "filing_contexts": {
@@ -88,11 +76,6 @@
           "targetTable": "filing_metadata",
           "targetColumns": ["filing_id"]
         }
-      ],
-      "indexes": [
-        ["period_start_date", "period_end_date"],
-        ["instant_date"],
-        ["segment"]
       ]
     },
     "mda_sections": {
@@ -103,61 +86,29 @@
           "targetTable": "filing_metadata",
           "targetColumns": ["filing_id"]
         }
-      ],
-      "indexes": [
-        ["cik"],
-        ["year"]
       ]
     },
     "xbrl_relationships": {
-      "primaryKey": ["filing_id", "from_concept", "to_concept", "relationship_type"],
+      "primaryKey": ["cik", "filing_date", "linkbase_type", "from_concept", "to_concept", "arc_role"],
       "foreignKeys": [
         {
-          "columns": ["filing_id"],
+          "columns": ["cik"],
           "targetTable": "filing_metadata",
-          "targetColumns": ["filing_id"]
+          "targetColumns": ["cik"]
         }
-      ],
-      "indexes": [
-        ["from_concept"],
-        ["to_concept"],
-        ["relationship_type"]
       ]
     },
     "insider_transactions": {
-      "primaryKey": ["cik", "transaction_date", "transaction_id"],
-      "indexes": [
-        ["cik"],
-        ["ticker"],
-        ["transaction_date"],
-        ["transaction_type"],
-        ["insider_name"]
-      ]
+      "primaryKey": ["cik", "filing_date", "transaction_date", "reporting_person_cik", "security_title", "shares_transacted", "transaction_code"]
     },
     "earnings_transcripts": {
-      "primaryKey": ["cik", "transcript_date", "transcript_id"],
-      "indexes": [
-        ["cik"],
-        ["ticker"],
-        ["transcript_date"],
-        ["year", "quarter"]
-      ]
+      "primaryKey": ["cik", "transcript_date", "transcript_id"]
     },
     "stock_prices": {
-      "primaryKey": ["ticker", "price_date"],
-      "indexes": [
-        ["ticker"],
-        ["price_date"],
-        ["year"]
-      ]
+      "primaryKey": ["cik", "date"]
     },
     "vectorized_blobs": {
-      "primaryKey": ["source_table", "source_id", "blob_type"],
-      "indexes": [
-        ["source_table"],
-        ["blob_type"],
-        ["timestamp"]
-      ]
+      "primaryKey": ["source_table", "source_id", "blob_type"]
     }
   }
 }
