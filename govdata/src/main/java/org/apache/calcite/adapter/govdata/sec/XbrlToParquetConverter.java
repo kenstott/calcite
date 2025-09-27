@@ -140,34 +140,38 @@ public class XbrlToParquetConverter implements FileConverter {
         doc = builder.parse(sourceFile);
       }
       
-      // For inline XBRL files that failed to parse, create minimal metadata
+      // For inline XBRL files that failed initial parse, try specialized inline XBRL parsing
       if (doc == null && (fileName.endsWith(".htm") || fileName.endsWith(".html"))) {
-        LOGGER.warning("Inline XBRL parsing failed, creating minimal metadata for: " + sourceFile.getName());
-        // Extract metadata from the HTML file content and directory structure
-        String parentPath = sourceFile.getParentFile().getAbsolutePath();
-        String cik = extractCikFromPath(parentPath);
-        String filingType = extractFilingTypeFromPath(sourceFile);
-        
-        // Extract filing date from the HTML content
-        String filingDate = extractFilingDateFromHtml(sourceFile);
-        if (filingDate == null) {
-          // Fallback to filename extraction
-          filingDate = extractFilingDateFromFilename(fileName);
+        LOGGER.info("Standard XML parsing failed for HTML file, attempting inline XBRL extraction: " + sourceFile.getName());
+        try {
+          // Parse as HTML and extract inline XBRL elements
+          doc = parseInlineXbrl(sourceFile);
+          if (doc != null) {
+            LOGGER.info("Successfully extracted inline XBRL data from: " + fileName);
+          }
+        } catch (Exception e) {
+          LOGGER.warning("Inline XBRL extraction failed: " + e.getMessage());
+          // Get the full stack trace for debugging
+          java.io.StringWriter sw = new java.io.StringWriter();
+          e.printStackTrace(new java.io.PrintWriter(sw));
+          String fullStackTrace = sw.toString();
+
+          // Track the actual exception with stack trace
+          trackParsingError(sourceFile, "inline_xbrl_extraction_exception",
+              "Exception: " + e.getClass().getName() + " - " + e.getMessage() + "\nStack trace:\n" + fullStackTrace);
         }
-        
-        String extractedAccession = extractAccessionFromPath(parentPath);
-        
-        if (cik != null && filingType != null && filingDate != null) {
-          // Also try to extract company info from HTML
-          Map<String, String> companyInfo = extractCompanyInfoFromHtml(sourceFile);
-          
-          // Create metadata file with extracted information
-          createEnhancedMetadata(sourceFile, targetDirectory, cik, filingType, filingDate, 
-              extractedAccession != null ? extractedAccession : accession, companyInfo);
-          LOGGER.warning("Created minimal metadata only for inline XBRL file (skipping facts): " + fileName);
-          return outputFiles; // Skip full conversion for now
-        } else {
-          LOGGER.warning("Could not extract minimal metadata from: " + fileName);
+
+        // If still no document, don't create minimal parquet files
+        // Let the parsing failure be properly reported and track for offline review
+        if (doc == null) {
+          LOGGER.warning("Failed to extract XBRL data from inline XBRL file - parsing error for: " + fileName);
+
+          // Only track generic failure if we didn't already track the exception
+          // (this happens when parseInlineXbrl returns null without throwing)
+          trackParsingError(sourceFile, "inline_xbrl_returned_null",
+              "parseInlineXbrl() returned null without throwing an exception");
+
+          // Return empty output files list to indicate failure
           return outputFiles;
         }
       }
@@ -1022,29 +1026,61 @@ public class XbrlToParquetConverter implements FileConverter {
    * Inline XBRL uses ix: namespace tags embedded in HTML.
    */
   private Document parseInlineXbrl(File htmlFile) {
+    LOGGER.info("parseInlineXbrl START for: " + htmlFile.getAbsolutePath());
     try {
       // Read HTML file
+      LOGGER.info("Reading HTML file...");
       String html = new String(Files.readAllBytes(htmlFile.toPath()));
+      LOGGER.info("HTML file size: " + html.length() + " bytes");
 
-      // Parse with Jsoup
-      org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html);
+      // Parse with Jsoup - use XML parser to preserve namespace prefixes
+      LOGGER.info("Calling Jsoup.parse with XML parser for namespace support...");
+      org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html, "", org.jsoup.parser.Parser.xmlParser());
+      LOGGER.info("Jsoup.parse completed");
+      // XML syntax already set by xmlParser
 
-      // Look for inline XBRL elements with various namespace prefixes
-      // JSoup can't handle namespace prefixes in CSS selectors well, so try different approaches
+      // Look for inline XBRL elements - JSoup handles namespace prefixes as part of the tag name
       org.jsoup.select.Elements ixElements = new org.jsoup.select.Elements();
-      
-      // Try getElementsByTag for specific inline XBRL tags
-      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonNumeric"));
-      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonFraction"));
-      ixElements.addAll(jsoupDoc.getElementsByTag("ix:continuation"));
-      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonnumeric"));
-      ixElements.addAll(jsoupDoc.getElementsByTag("ix:nonfraction"));
-      
-      // Try contextRef attributes
-      ixElements.addAll(jsoupDoc.select("[contextRef], [contextref]"));
-      
-      // Try name attributes with XBRL namespaces
-      ixElements.addAll(jsoupDoc.select("[name^='us-gaap:'], [name^='dei:'], [name^='srt:']"));
+
+      // Collect all ix: prefixed elements (these are inline XBRL elements)
+      // Use pipe notation for namespace selectors in XML mode
+      try {
+        LOGGER.info("Trying selector with pipe notation: ix|nonNumeric, ix|nonFraction");
+        ixElements.addAll(jsoupDoc.select("ix|nonNumeric, ix|nonFraction"));
+      } catch (Exception e) {
+        LOGGER.warning("Selector with pipe notation failed: " + e.getMessage());
+      }
+
+      // Also try lowercase variants
+      if (ixElements.isEmpty()) {
+        try {
+          LOGGER.info("Trying lowercase selectors");
+          ixElements.addAll(jsoupDoc.select("ix|nonnumeric, ix|nonfraction"));
+        } catch (Exception e) {
+          LOGGER.warning("Lowercase selector failed: " + e.getMessage());
+        }
+      }
+
+      // Debug: Log what we're finding
+      LOGGER.info("DEBUG: Initial selector found " + ixElements.size() + " elements");
+
+      // Debug: Check what tag names JSoup is seeing
+      int debugCount = 0;
+      for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
+        if (elem.tagName().startsWith("ix:") && debugCount < 5) {
+          LOGGER.info("DEBUG: Found tag with name: " + elem.tagName());
+          debugCount++;
+        }
+      }
+
+      // Also look for elements with contextRef attribute (case insensitive)
+      for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
+        if (elem.hasAttr("contextRef") || elem.hasAttr("contextref")) {
+          if (elem.tagName().startsWith("ix:")) {
+            ixElements.add(elem);
+          }
+        }
+      }
 
       if (ixElements.isEmpty()) {
         // No inline XBRL found
@@ -1210,34 +1246,24 @@ public class XbrlToParquetConverter implements FileConverter {
         root.appendChild(xmlContext);
       }
 
-      // Extract facts from inline XBRL elements
-      for (org.jsoup.nodes.Element ixElement : ixElements) {
-        String tagName = ixElement.tagName();
-        String concept = ixElement.attr("name");
-        if (concept.isEmpty()) {
-          continue;
-        }
+      // Log the summary
+      LOGGER.info("Processed inline XBRL from " + htmlFile.getName());
+      LOGGER.info("  Found " + ixElements.size() + " inline XBRL elements");
+      LOGGER.info("  Added " + factsAdded + " facts to XML document");
+      LOGGER.info("  Skipped " + factsSkippedNoName + " elements (no name), " +
+                  factsSkippedNoContextRef + " elements (no contextRef)");
 
-        // Create fact element
-        Element fact = doc.createElement(concept.replace(":", "_"));
-        fact.setAttribute("contextRef", ixElement.attr("contextRef"));
-        fact.setAttribute("unitRef", ixElement.attr("unitRef"));
-        fact.setAttribute("decimals", ixElement.attr("decimals"));
-        fact.setAttribute("scale", ixElement.attr("scale"));
-        fact.setTextContent(ixElement.text());
-
-        root.appendChild(fact);
+      if (factsAdded == 0) {
+        LOGGER.warning("No valid facts extracted from inline XBRL in " + htmlFile.getName());
+        return null;
       }
 
-      LOGGER.info("Processed " + ixElements.size() + " inline XBRL elements from HTML");
-      LOGGER.info("Added " + factsAdded + " facts to XML document");
-      LOGGER.info("Skipped " + factsSkippedNoName + " elements (no name), " + 
-                  factsSkippedNoContextRef + " elements (no contextRef)");
       return doc;
 
     } catch (Exception e) {
-      LOGGER.info("Could not parse inline XBRL from HTML: " + e.getMessage());
-      return null;
+      LOGGER.warning("Exception in parseInlineXbrl: " + e.getMessage());
+      // Re-throw to let caller handle and track with full stack trace
+      throw new RuntimeException("Failed to parse inline XBRL from " + htmlFile.getName(), e);
     }
   }
 
@@ -2292,7 +2318,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
       if (enableVectorization) {
-        String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+        // Reuse uniqueId from above
         File vectorizedFile = new File(partitionDir,
             String.format("%s_%s_vectorized.parquet", cik, uniqueId));
 
@@ -2388,7 +2414,7 @@ public class XbrlToParquetConverter implements FileConverter {
     NodeList holdings = doc.getElementsByTagName("nonDerivativeHolding");
     for (int i = 0; i < holdings.getLength(); i++) {
       Element holding = (Element) holdings.item(i);
-      
+
       GenericRecord record = new GenericData.Record(schema);
       record.put("cik", cik);
       record.put("filing_date", filingDate);
@@ -2399,25 +2425,150 @@ public class XbrlToParquetConverter implements FileConverter {
       record.put("is_officer", isOfficer);
       record.put("is_ten_percent_owner", isTenPercentOwner);
       record.put("officer_title", officerTitle);
-      
+
       // Holding details (no transaction)
       record.put("transaction_date", null);
       record.put("transaction_code", "H"); // H for holding
       record.put("security_title", getElementText(holding, "securityTitle", "value"));
       record.put("shares_transacted", null);
       record.put("price_per_share", null);
-      
+
       String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
       record.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
-      
+
       record.put("acquired_disposed_code", null);
-      
+
       String ownership = getElementText(holding, "directOrIndirectOwnership", "value");
       record.put("ownership_type", ownership);
-      
+
       String natureOfOwnership = getElementText(holding, "natureOfOwnership", "value");
       record.put("footnotes", natureOfOwnership);
-      
+
+      records.add(record);
+    }
+
+    // Extract derivative transactions (options, warrants, etc.)
+    NodeList derivTrans = doc.getElementsByTagName("derivativeTransaction");
+    for (int i = 0; i < derivTrans.getLength(); i++) {
+      Element trans = (Element) derivTrans.item(i);
+
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("cik", cik);
+      record.put("filing_date", filingDate);
+      record.put("filing_type", filingType);
+      record.put("reporting_person_cik", reportingPersonCik);
+      record.put("reporting_person_name", reportingPersonName);
+      record.put("is_director", isDirector);
+      record.put("is_officer", isOfficer);
+      record.put("is_ten_percent_owner", isTenPercentOwner);
+      record.put("officer_title", officerTitle);
+
+      // Transaction details for derivatives
+      record.put("transaction_date", getElementText(trans, "transactionDate", "value"));
+      record.put("transaction_code", getElementText(trans, "transactionCode"));
+
+      // For derivatives, append " (Derivative)" to distinguish from non-derivative
+      String secTitle = getElementText(trans, "securityTitle", "value");
+      record.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant (Derivative)");
+
+      String shares = getElementText(trans, "transactionShares", "value");
+      record.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
+
+      // For derivatives, use conversion/exercise price if available
+      String price = getElementText(trans, "transactionPricePerShare", "value");
+      if (price == null || price.isEmpty()) {
+        price = getElementText(trans, "conversionOrExercisePrice", "value");
+      }
+      record.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+
+      String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
+      record.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
+
+      String acquiredDisposed = getElementText(trans, "transactionAcquiredDisposedCode", "value");
+      record.put("acquired_disposed_code", acquiredDisposed);
+
+      String ownership = getElementText(trans, "directOrIndirectOwnership", "value");
+      record.put("ownership_type", ownership);
+
+      // Extract footnotes if any
+      NodeList footnoteIds = trans.getElementsByTagName("footnoteId");
+      StringBuilder footnotes = new StringBuilder();
+      for (int j = 0; j < footnoteIds.getLength(); j++) {
+        String id = ((Element) footnoteIds.item(j)).getAttribute("id");
+        String footnoteText = getFootnoteText(doc, id);
+        if (footnoteText != null) {
+          if (footnotes.length() > 0) footnotes.append(" | ");
+          footnotes.append(footnoteText);
+        }
+      }
+
+      // Also add exercise date and expiration date if available
+      String exerciseDate = getElementText(trans, "exerciseDate", "value");
+      String expirationDate = getElementText(trans, "expirationDate", "value");
+      if (exerciseDate != null || expirationDate != null) {
+        if (footnotes.length() > 0) footnotes.append(" | ");
+        if (exerciseDate != null) footnotes.append("Exercise: ").append(exerciseDate);
+        if (expirationDate != null) {
+          if (exerciseDate != null) footnotes.append(", ");
+          footnotes.append("Expires: ").append(expirationDate);
+        }
+      }
+
+      record.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
+
+      records.add(record);
+    }
+
+    // Extract derivative holdings
+    NodeList derivHoldings = doc.getElementsByTagName("derivativeHolding");
+    for (int i = 0; i < derivHoldings.getLength(); i++) {
+      Element holding = (Element) derivHoldings.item(i);
+
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("cik", cik);
+      record.put("filing_date", filingDate);
+      record.put("filing_type", filingType);
+      record.put("reporting_person_cik", reportingPersonCik);
+      record.put("reporting_person_name", reportingPersonName);
+      record.put("is_director", isDirector);
+      record.put("is_officer", isOfficer);
+      record.put("is_ten_percent_owner", isTenPercentOwner);
+      record.put("officer_title", officerTitle);
+
+      // Holding details for derivatives
+      record.put("transaction_date", null);
+      record.put("transaction_code", "H"); // H for holding
+
+      String secTitle = getElementText(holding, "securityTitle", "value");
+      record.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant Holding (Derivative)");
+
+      record.put("shares_transacted", null);
+
+      // For derivative holdings, get conversion/exercise price
+      String price = getElementText(holding, "conversionOrExercisePrice", "value");
+      record.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+
+      String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
+      record.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
+
+      record.put("acquired_disposed_code", null);
+
+      String ownership = getElementText(holding, "directOrIndirectOwnership", "value");
+      record.put("ownership_type", ownership);
+
+      // Add expiration date info to footnotes
+      StringBuilder footnotes = new StringBuilder();
+      String expirationDate = getElementText(holding, "expirationDate", "value");
+      if (expirationDate != null) {
+        footnotes.append("Expires: ").append(expirationDate);
+      }
+      String natureOfOwnership = getElementText(holding, "natureOfOwnership", "value");
+      if (natureOfOwnership != null) {
+        if (footnotes.length() > 0) footnotes.append(" | ");
+        footnotes.append(natureOfOwnership);
+      }
+      record.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
+
       records.add(record);
     }
     
@@ -3728,5 +3879,36 @@ public class XbrlToParquetConverter implements FileConverter {
     
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(metadataFile.getAbsolutePath(), schema, records, "metadata");
+  }
+
+  /**
+   * Track parsing errors to a file for offline review.
+   * This helps identify which documents are failing to parse and why.
+   */
+  private void trackParsingError(File sourceFile, String errorType, String errorMessage) {
+    try {
+      // Create error log file in /tmp for easy access
+      File errorLogFile = new File("/tmp/xbrl_parsing_errors.log");
+
+      // Format: timestamp | file_path | error_type | error_message
+      String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+      String logEntry = String.format("%s | %s | %s | %s%n",
+          timestamp,
+          sourceFile.getAbsolutePath(),
+          errorType,
+          errorMessage);
+
+      // Append to file
+      java.nio.file.Files.write(
+          errorLogFile.toPath(),
+          logEntry.getBytes(),
+          java.nio.file.StandardOpenOption.CREATE,
+          java.nio.file.StandardOpenOption.APPEND);
+
+      LOGGER.fine("Tracked parsing error to: " + errorLogFile.getAbsolutePath());
+
+    } catch (IOException e) {
+      LOGGER.warning("Failed to track parsing error: " + e.getMessage());
+    }
   }
 }

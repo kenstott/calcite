@@ -1666,9 +1666,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 name.endsWith(".htm") || name.endsWith(".html")));
 
             if (xbrlFiles != null) {
+              LOGGER.info("Found " + xbrlFiles.length + " XBRL/HTML files in " + accessionDir.getName());
               for (File xbrlFile : xbrlFiles) {
+                LOGGER.info("  Adding for conversion: " + xbrlFile.getName());
                 xbrlFilesToConvert.add(xbrlFile);
               }
+            } else {
+              LOGGER.info("No XBRL/HTML files found in " + accessionDir.getName());
             }
           }
         }
