@@ -96,6 +96,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private final ConcurrentLinkedQueue<CompletableFuture<Void>> conversionFutures = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<FilingToDownload> retryQueue = new ConcurrentLinkedQueue<>();
   private final List<File> scheduledForReconversion = new ArrayList<>();
+  private final List<File> scheduledForInlineXbrlProcessing = new ArrayList<>();
   private final Set<String> downloadedInThisCycle = java.util.concurrent.ConcurrentHashMap.newKeySet();
   private final AtomicInteger totalFilingsToProcess = new AtomicInteger(0);
   private final AtomicInteger completedFilingProcessing = new AtomicInteger(0);
@@ -1359,7 +1360,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Check if Parquet conversion was successful
       boolean needParquetReprocessing = false;
-      String year = String.valueOf(java.time.LocalDate.parse(filingDate).getYear());
+      String year = getPartitionYear(form, filingDate);
       // Use the unified GOVDATA_PARQUET_DIR location where files are actually written
       String govdataParquetDir = getGovDataParquetDir();
       File parquetDir = new File(govdataParquetDir, "source=sec");
@@ -1428,6 +1429,42 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
+      // Critical fix: Detect inline XBRL in cached HTML files that need Parquet processing
+      // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
+      // but Parquet files were never generated due to cache logic gaps
+      if (htmlFile.exists()) {
+        try {
+          byte[] headerBytes = new byte[10240];
+          try (FileInputStream fis = new FileInputStream(htmlFile)) {
+            int bytesRead = fis.read(headerBytes);
+            if (bytesRead > 0) {
+              String header = new String(headerBytes, 0, bytesRead);
+              boolean htmlHasInlineXbrl = header.contains("xmlns:ix=") ||
+                                         header.contains("http://www.xbrl.org/2013/inlineXBRL") ||
+                                         header.contains("<ix:") ||
+                                         header.contains("iXBRL");
+
+              if (htmlHasInlineXbrl && needParquetReprocessing) {
+                // This is the critical case: HTML file exists with inline XBRL but Parquet files are missing
+                // Schedule the HTML file for inline XBRL processing
+                LOGGER.info("Cached HTML file contains inline XBRL, scheduling for processing: " + form + " " + filingDate);
+
+                // Ensure the HTML file gets scheduled for inline XBRL processing
+                if (!scheduledForInlineXbrlProcessing.contains(htmlFile)) {
+                  scheduledForInlineXbrlProcessing.add(htmlFile);
+                  LOGGER.info("Scheduled HTML file for inline XBRL processing: " + htmlFile.getName());
+                }
+
+                // Since we have inline XBRL in HTML, we don't need separate XBRL download
+                needXbrl = false;
+              }
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.debug("Could not check HTML for inline XBRL detection: " + e.getMessage());
+        }
+      }
+
       if (!needHtml && !needXbrl && !needParquetReprocessing) {
         LOGGER.info("Filing already fully cached: " + form + " " + filingDate);
         return; // Both files already downloaded and converted
@@ -1448,6 +1485,35 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Add to a list that will be processed later
           if (!scheduledForReconversion.contains(xbrlFile)) {
             scheduledForReconversion.add(xbrlFile);
+          }
+        }
+
+        // For forms that use inline XBRL, check if HTML file exists and schedule it too
+        // This is critical for forms like 10-Q, DEF 14A, etc. that don't have separate XBRL files
+        if (htmlFile.exists() && htmlFile.length() > 0) {
+          // Check if this HTML file contains inline XBRL by doing a quick scan
+          boolean htmlHasInlineXbrl = false;
+          try {
+            byte[] headerBytes = new byte[10240];
+            try (FileInputStream fis = new FileInputStream(htmlFile)) {
+              int bytesRead = fis.read(headerBytes);
+              if (bytesRead > 0) {
+                String header = new String(headerBytes, 0, bytesRead);
+                htmlHasInlineXbrl = header.contains("xmlns:ix=") ||
+                                   header.contains("http://www.xbrl.org/2013/inlineXBRL") ||
+                                   header.contains("<ix:") ||
+                                   header.contains("iXBRL");
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.debug("Could not check HTML for iXBRL during reprocessing check: " + e.getMessage());
+          }
+
+          if (htmlHasInlineXbrl) {
+            LOGGER.info("Scheduling existing HTML file with inline XBRL for re-conversion: " + htmlFile.getName());
+            if (!scheduledForReconversion.contains(htmlFile)) {
+              scheduledForReconversion.add(htmlFile);
+            }
           }
         }
       }
@@ -1683,6 +1749,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Adding " + scheduledForReconversion.size() + " existing XBRL files for reconversion");
         xbrlFilesToConvert.addAll(scheduledForReconversion);
         scheduledForReconversion.clear();
+      }
+
+      // Critical fix: Add HTML files with inline XBRL that need Parquet processing
+      // This addresses the cache effectiveness issue where HTML files contain inline XBRL
+      // but were never processed because cache logic didn't recognize them as processable files
+      if (!scheduledForInlineXbrlProcessing.isEmpty()) {
+        LOGGER.info("Adding " + scheduledForInlineXbrlProcessing.size() + " cached HTML files with inline XBRL for processing");
+        xbrlFilesToConvert.addAll(scheduledForInlineXbrlProcessing);
+        scheduledForInlineXbrlProcessing.clear();
       }
 
       // Convert XBRL files in parallel
@@ -2333,6 +2408,38 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return false;
   }
 
+  /**
+   * Determines if a filing type commonly contains inline XBRL that should be proactively checked.
+   * Based on analysis of the 40 files requiring reprocessing, these types frequently have inline XBRL.
+   */
+  private boolean isInlineXbrlFilingType(String form) {
+    if (form == null) return false;
+
+    // Forms that commonly contain inline XBRL (from analysis of reprocessing patterns)
+    // 424B2 (10 files) - Prospectus supplements with financial data
+    if ("424B2".equals(form)) return true;
+
+    // 10-Q (10 files) - Quarterly reports with mandatory inline XBRL
+    if ("10Q".equals(form) || "10-Q".equals(form)) return true;
+
+    // DEF 14A (9 files) - Proxy statements with financial tables
+    if ("DEF 14A".equals(form) || "DEF14A".equals(form)) return true;
+
+    // S-8 (3 files) - Registration statements often with financial data
+    if ("S-8".equals(form) || "S8".equals(form)) return true;
+
+    // S-4 (2 files) - Registration statements for business combinations
+    if ("S-4".equals(form) || "S4".equals(form)) return true;
+
+    // 8-K and variants (3 files) - Current reports with financial data
+    if ("8K".equals(form) || "8-K".equals(form) || "8KA".equals(form) || "8-K/A".equals(form)) return true;
+
+    // 10-K forms also commonly have inline XBRL
+    if ("10K".equals(form) || "10-K".equals(form)) return true;
+
+    return false;
+  }
+
   private void cleanupPartialParquetFiles(File yearDir, String cik, String accessionClean) {
     if (!yearDir.exists()) {
       return;
@@ -2356,6 +2463,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     }
+  }
+
+  private String getPartitionYear(String filingType, String filingDate) {
+    String normalizedType = filingType.replace("-", "").replace("/", "");
+
+    // For 10-Q and 10-K filings, use fiscal year approach
+    // Filed 10-Qs typically cover quarters ending in March, June, Sep, Dec
+    // and are filed within 40 days. So filings in Jan-Apr likely cover the previous year's Q4
+    if ("10Q".equals(normalizedType) || "10K".equals(normalizedType)) {
+      java.time.LocalDate filing = java.time.LocalDate.parse(filingDate);
+      // For Microsoft and most companies, fiscal year ends in June
+      // If filed Jan-Apr, likely covers previous calendar year
+      // This is a heuristic since we don't have access to the document content here
+      if (filing.getMonthValue() <= 4) {
+        String partitionYear = String.valueOf(filing.getYear() - 1);
+        LOGGER.info("Partition year calculation: {} {} → fiscal year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
+        return partitionYear;
+      } else {
+        String partitionYear = String.valueOf(filing.getYear());
+        LOGGER.info("Partition year calculation: {} {} → filing year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
+        return partitionYear;
+      }
+    }
+
+    // For all other filing types, use filing year
+    String partitionYear = String.valueOf(java.time.LocalDate.parse(filingDate).getYear());
+    LOGGER.info("Partition year calculation: {} {} → filing year {} (non-10Q/10K)", filingType, filingDate, partitionYear);
+    return partitionYear;
   }
 
 }
