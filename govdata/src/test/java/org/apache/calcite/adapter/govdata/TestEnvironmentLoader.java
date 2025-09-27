@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -31,6 +34,7 @@ import java.util.Map;
  * This ensures all tests have consistent access to configuration.
  */
 public class TestEnvironmentLoader {
+  private static final Logger LOGGER = LoggerFactory.getLogger(TestEnvironmentLoader.class);
   private static final Map<String, String> ENV_VARS = new HashMap<>();
   private static boolean loaded = false;
 
@@ -63,7 +67,7 @@ public class TestEnvironmentLoader {
     }
 
     if (envFile == null || !envFile.exists()) {
-      System.err.println("Warning: .env.test file not found. Tests may fail if they require environment variables.");
+      LOGGER.warn("Warning: .env.test file not found. Tests may fail if they require environment variables.");
       loaded = true;
       return;
     }
@@ -93,11 +97,11 @@ public class TestEnvironmentLoader {
         }
       }
       
-      System.out.println("Loaded " + ENV_VARS.size() + " environment variables from .env.test");
+      LOGGER.info("Loaded {} environment variables from .env.test", ENV_VARS.size());
       loaded = true;
-      
+
     } catch (IOException e) {
-      System.err.println("Warning: Failed to load .env.test file: " + e.getMessage());
+      LOGGER.warn("Warning: Failed to load .env.test file: {}", e.getMessage());
       loaded = true;
     }
   }

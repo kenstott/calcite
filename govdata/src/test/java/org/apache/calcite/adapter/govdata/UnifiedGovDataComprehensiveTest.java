@@ -19,6 +19,8 @@ package org.apache.calcite.adapter.govdata;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -47,6 +49,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Tag("integration")
 public class UnifiedGovDataComprehensiveTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(UnifiedGovDataComprehensiveTest.class);
 
   /**
    * SEC schema expected tables (9 total).
@@ -186,10 +190,10 @@ public class UnifiedGovDataComprehensiveTest {
     props.setProperty("unquotedCasing", "TO_LOWER");
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
-      System.out.println("\n" + "=".repeat(80));
-      System.out.println(" UNIFIED GOVERNMENT DATA COMPREHENSIVE TEST");
-      System.out.println(" Testing SEC (MSFT + AAPL, 2021-2025), ECON, and GEO schemas");
-      System.out.println("=".repeat(80));
+      LOGGER.info("\n{}", createRepeatedString("=", 80));
+      LOGGER.info(" UNIFIED GOVERNMENT DATA COMPREHENSIVE TEST");
+      LOGGER.info(" Testing SEC (MSFT + AAPL, 2021-2025), ECON, and GEO schemas");
+      LOGGER.info("{}", "=".repeat(80));
 
       Map<String, TestResult> results = new HashMap<>();
 
@@ -219,16 +223,16 @@ public class UnifiedGovDataComprehensiveTest {
       if (!overallSuccess) {
         fail("Comprehensive test failed. See summary above for details.");
       } else {
-        System.out.println("\n✅ ALL TESTS PASSED - All 41 tables across SEC, ECON, and GEO are fully functional!");
+        LOGGER.info("\n✅ ALL TESTS PASSED - All {} tables across SEC, ECON, and GEO are fully functional!", 41);
       }
     }
   }
 
   private TestResult validateSchema(Connection conn, String schemaName, Set<String> expectedTables)
       throws SQLException {
-    System.out.println("\n" + "=".repeat(60));
-    System.out.println(" VALIDATING " + schemaName.toUpperCase() + " SCHEMA");
-    System.out.println("=".repeat(60));
+    LOGGER.info("\n{}", "=".repeat(60));
+    LOGGER.info(" VALIDATING {} SCHEMA", schemaName.toUpperCase());
+    LOGGER.info("{}", "=".repeat(60));
 
     TestResult result = new TestResult(schemaName);
 
@@ -237,12 +241,12 @@ public class UnifiedGovDataComprehensiveTest {
       List<String> discoveredTables = discoverTables(stmt, schemaName);
       result.discoveredTables = new HashSet<>(discoveredTables);
 
-      System.out.println("\n📊 Table Discovery:");
-      System.out.println("  Expected: " + expectedTables.size() + " tables");
-      System.out.println("  Discovered: " + discoveredTables.size() + " tables");
+      LOGGER.info("\n📊 Table Discovery:");
+      LOGGER.info("  Expected: {} tables", expectedTables.size());
+      LOGGER.info("  Discovered: {} tables", discoveredTables.size());
 
       // Test each table
-      System.out.println("\n🔍 Testing Table Queries:");
+      LOGGER.info("\n🔍 Testing Table Queries:");
       for (String tableName : discoveredTables) {
         boolean querySuccess = testTable(stmt, schemaName, tableName, result);
         if (querySuccess) {
@@ -313,19 +317,19 @@ public class UnifiedGovDataComprehensiveTest {
       result.tableCounts.put(tableName, rowCount);
 
       String status = rowCount > 0 ? "✅" : "⚠️";
-      System.out.printf("  %s %s.%s - %d rows (sampled %d)\n",
+      LOGGER.info("  {} {}.{} - {} rows (sampled {})",
                         status, schemaName, tableName, rowCount, sampleRows);
 
       return true;
     } catch (SQLException e) {
-      System.out.printf("  ❌ %s.%s - FAILED: %s\n",
+      LOGGER.error("  ❌ {}.{} - FAILED: {}",
                         schemaName, tableName, e.getMessage());
       return false;
     }
   }
 
   private void validateSecSpecificData(Statement stmt, TestResult result) throws SQLException {
-    System.out.println("\n🏢 SEC-Specific Validation (MSFT & AAPL):");
+    LOGGER.info("\n🏢 SEC-Specific Validation (MSFT & AAPL):");
 
     // Check for Microsoft and Apple data in financial_line_items
     if (result.queryableTables.contains("financial_line_items")) {
@@ -340,7 +344,7 @@ public class UnifiedGovDataComprehensiveTest {
           String cik = rs.getString("cik");
           long count = rs.getLong("filing_count");
           String company = cik.equals("0000789019") ? "Microsoft" : "Apple";
-          System.out.printf("  ✅ %s (CIK %s): %d line items found\n", company, cik, count);
+          LOGGER.info("  ✅ {} (CIK {}): {} line items found", company, cik, count);
         }
       }
     }
@@ -357,14 +361,14 @@ public class UnifiedGovDataComprehensiveTest {
         if (rs.next()) {
           int minYear = rs.getInt("min_year");
           int maxYear = rs.getInt("max_year");
-          System.out.printf("  ✅ Filing year range: %d - %d\n", minYear, maxYear);
+          LOGGER.info("  ✅ Filing year range: {} - {}", minYear, maxYear);
         }
       }
     }
   }
 
   private void validateEconFredPartitioning(Statement stmt, TestResult result) throws SQLException {
-    System.out.println("\n📊 ECON FRED Custom Series Validation:");
+    LOGGER.info("\n📊 ECON FRED Custom Series Validation:");
 
     // Check for custom FRED series tables
     if (result.queryableTables.contains("fred_treasuries")) {
@@ -372,10 +376,10 @@ public class UnifiedGovDataComprehensiveTest {
       try (ResultSet rs = stmt.executeQuery(query)) {
         if (rs.next()) {
           long count = rs.getLong("count");
-          System.out.printf("  ✅ Treasury FRED series table: %d rows found\n", count);
+          LOGGER.info("  ✅ Treasury FRED series table: {} rows found", count);
         }
       } catch (SQLException e) {
-        System.out.println("  ⚠️ Treasury FRED series table query failed: " + e.getMessage());
+        LOGGER.warn("  ⚠️ Treasury FRED series table query failed: {}", e.getMessage());
       }
     }
 
@@ -384,10 +388,10 @@ public class UnifiedGovDataComprehensiveTest {
       try (ResultSet rs = stmt.executeQuery(query)) {
         if (rs.next()) {
           long count = rs.getLong("count");
-          System.out.printf("  ✅ Employment indicators FRED series table: %d rows found\n", count);
+          LOGGER.info("  ✅ Employment indicators FRED series table: {} rows found", count);
         }
       } catch (SQLException e) {
-        System.out.println("  ⚠️ Employment indicators FRED series table query failed: " + e.getMessage());
+        LOGGER.warn("  ⚠️ Employment indicators FRED series table query failed: {}", e.getMessage());
       }
     }
 
@@ -400,21 +404,21 @@ public class UnifiedGovDataComprehensiveTest {
                       "GROUP BY series_id " +
                       "ORDER BY series_id";
 
-        System.out.println("  📈 Custom FRED Series Data:");
+        LOGGER.info("  📈 Custom FRED Series Data:");
         try (ResultSet rs = stmt.executeQuery(query)) {
           while (rs.next()) {
             String seriesId = rs.getString("series_id");
             long obsCount = rs.getLong("obs_count");
             String description = getSeriesDescription(seriesId);
-            System.out.printf("    ✅ %s (%s): %d observations\n", seriesId, description, obsCount);
+            LOGGER.info("    ✅ {} ({}): {} observations", seriesId, description, obsCount);
           }
         }
       } catch (SQLException e) {
-        System.out.println("  ⚠️ Custom FRED series validation failed: " + e.getMessage());
+        LOGGER.warn("  ⚠️ Custom FRED series validation failed: {}", e.getMessage());
       }
     }
 
-    System.out.println("  🎯 FRED Custom Series Partitioning: Configured with AUTO strategy for Treasury and Employment groups");
+    LOGGER.info("  🎯 FRED Custom Series Partitioning: Configured with AUTO strategy for Treasury and Employment groups");
   }
 
   private String getSeriesDescription(String seriesId) {
@@ -430,15 +434,15 @@ public class UnifiedGovDataComprehensiveTest {
   }
 
   private boolean testCrossSchemaQueries(Connection conn) {
-    System.out.println("\n" + "=".repeat(60));
-    System.out.println(" CROSS-SCHEMA QUERY TESTS");
-    System.out.println("=".repeat(60));
+    LOGGER.info("\n{}", "=".repeat(60));
+    LOGGER.info(" CROSS-SCHEMA QUERY TESTS");
+    LOGGER.info("{}", "=".repeat(60));
 
     boolean allSuccess = true;
 
     try (Statement stmt = conn.createStatement()) {
       // Test 1: Join SEC companies with state GDP data
-      System.out.println("\n📈 Test 1: Companies with State Economic Data");
+      LOGGER.info("\n📈 Test 1: Companies with State Economic Data");
       String query1 =
           "SELECT COUNT(*) as cnt " +
           "FROM (SELECT DISTINCT cik FROM sec.filing_metadata WHERE cik IN ('0000789019', '0000320193')) s " +
@@ -447,15 +451,15 @@ public class UnifiedGovDataComprehensiveTest {
       try (ResultSet rs = stmt.executeQuery(query1)) {
         if (rs.next()) {
           long count = rs.getLong("cnt");
-          System.out.println("  ✅ Cross-join SEC companies with state GDP: " + count + " combinations");
+          LOGGER.info("  ✅ Cross-join SEC companies with state GDP: {} combinations", count);
         }
       } catch (SQLException e) {
-        System.out.println("  ❌ Failed: " + e.getMessage());
+        LOGGER.error("  ❌ Failed: {}", e.getMessage());
         allSuccess = false;
       }
 
       // Test 2: Geographic and economic data combination
-      System.out.println("\n🗺️ Test 2: Geographic Regions with Economic Indicators");
+      LOGGER.info("\n🗺️ Test 2: Geographic Regions with Economic Indicators");
       String query2 =
           "SELECT COUNT(*) as cnt " +
           "FROM (SELECT state_fips FROM geo.states LIMIT 10) g " +
@@ -464,15 +468,15 @@ public class UnifiedGovDataComprehensiveTest {
       try (ResultSet rs = stmt.executeQuery(query2)) {
         if (rs.next()) {
           long count = rs.getLong("cnt");
-          System.out.println("  ✅ States with GDP components: " + count + " combinations");
+          LOGGER.info("  ✅ States with GDP components: {} combinations", count);
         }
       } catch (SQLException e) {
-        System.out.println("  ❌ Failed: " + e.getMessage());
+        LOGGER.error("  ❌ Failed: {}", e.getMessage());
         allSuccess = false;
       }
 
     } catch (SQLException e) {
-      System.out.println("❌ Cross-schema query setup failed: " + e.getMessage());
+      LOGGER.error("❌ Cross-schema query setup failed: {}", e.getMessage());
       allSuccess = false;
     }
 
@@ -480,25 +484,25 @@ public class UnifiedGovDataComprehensiveTest {
   }
 
   private void printSchemaResult(TestResult result, Set<String> expectedTables) {
-    System.out.println("\n📊 " + result.schemaName.toUpperCase() + " Schema Summary:");
-    System.out.println("  Total Expected: " + expectedTables.size());
-    System.out.println("  Total Discovered: " + result.discoveredTables.size());
-    System.out.println("  Successfully Queried: " + result.queryableTables.size());
-    System.out.println("  Failed Queries: " + result.failedTables.size());
+    LOGGER.info("\n📊 {} Schema Summary:", result.schemaName.toUpperCase());
+    LOGGER.info("  Total Expected: {}", expectedTables.size());
+    LOGGER.info("  Total Discovered: {}", result.discoveredTables.size());
+    LOGGER.info("  Successfully Queried: {}", result.queryableTables.size());
+    LOGGER.info("  Failed Queries: {}", result.failedTables.size());
 
     if (!result.missingTables.isEmpty()) {
-      System.out.println("  ⚠️ Missing Tables: " + result.missingTables);
+      LOGGER.warn("  ⚠️ Missing Tables: {}", result.missingTables);
     }
 
     double successRate = result.discoveredTables.isEmpty() ? 0 :
         (double) result.queryableTables.size() / result.discoveredTables.size() * 100;
-    System.out.printf("  Success Rate: %.1f%%\n", successRate);
+    LOGGER.info("  Success Rate: {:.1f}%", successRate);
   }
 
   private void printComprehensiveSummary(Map<String, TestResult> results, boolean crossSchemaSuccess) {
-    System.out.println("\n" + "=".repeat(80));
-    System.out.println(" COMPREHENSIVE TEST SUMMARY");
-    System.out.println("=".repeat(80));
+    LOGGER.info("\n{}", createRepeatedString("=", 80));
+    LOGGER.info(" COMPREHENSIVE TEST SUMMARY");
+    LOGGER.info("{}", "=".repeat(80));
 
     int totalExpected = SEC_EXPECTED_TABLES.size() + ECON_EXPECTED_TABLES.size() + GEO_EXPECTED_TABLES.size();
     int totalDiscovered = 0;
@@ -511,45 +515,45 @@ public class UnifiedGovDataComprehensiveTest {
       totalFailed += result.failedTables.size();
     }
 
-    System.out.println("\n📊 Overall Statistics:");
-    System.out.printf("  Total Expected Tables: %d (SEC: %d, ECON: %d, GEO: %d)\n",
+    LOGGER.info("\n📊 Overall Statistics:");
+    LOGGER.info("  Total Expected Tables: {} (SEC: {}, ECON: {}, GEO: {})",
                       totalExpected, SEC_EXPECTED_TABLES.size(),
                       ECON_EXPECTED_TABLES.size(), GEO_EXPECTED_TABLES.size());
-    System.out.printf("  Total Discovered: %d\n", totalDiscovered);
-    System.out.printf("  Total Queryable: %d\n", totalQueryable);
-    System.out.printf("  Total Failed: %d\n", totalFailed);
+    LOGGER.info("  Total Discovered: {}", totalDiscovered);
+    LOGGER.info("  Total Queryable: {}", totalQueryable);
+    LOGGER.info("  Total Failed: {}", totalFailed);
 
-    System.out.println("\n🎯 Schema Results:");
+    LOGGER.info("\n🎯 Schema Results:");
     for (Map.Entry<String, TestResult> entry : results.entrySet()) {
       TestResult result = entry.getValue();
       String status = result.isFullySuccessful() ? "✅ PASS" : "❌ FAIL";
-      System.out.printf("  %s - %s (Discovered: %d/%d, Queryable: %d/%d)\n",
+      LOGGER.info("  {} - {} (Discovered: {}/{}, Queryable: {}/{})",
                         entry.getKey(), status,
                         result.discoveredTables.size(), getExpectedCount(entry.getKey()),
                         result.queryableTables.size(), result.discoveredTables.size());
     }
 
-    System.out.println("\n🔗 Cross-Schema Queries: " + (crossSchemaSuccess ? "✅ PASS" : "❌ FAIL"));
+    LOGGER.info("\n🔗 Cross-Schema Queries: {}", crossSchemaSuccess ? "✅ PASS" : "❌ FAIL");
 
     // Overall test result
     boolean allPassed = totalFailed == 0 && totalDiscovered == totalExpected && crossSchemaSuccess;
-    System.out.println("\n" + "=".repeat(80));
+    LOGGER.info("\n{}", createRepeatedString("=", 80));
     if (allPassed) {
-      System.out.println(" ✅ COMPREHENSIVE TEST: PASSED");
-      System.out.println(" All " + totalExpected + " tables across 3 schemas are fully functional!");
+      LOGGER.info(" ✅ COMPREHENSIVE TEST: PASSED");
+      LOGGER.info(" All {} tables across 3 schemas are fully functional!", totalExpected);
     } else {
-      System.out.println(" ❌ COMPREHENSIVE TEST: FAILED");
+      LOGGER.error(" ❌ COMPREHENSIVE TEST: FAILED");
       if (totalDiscovered < totalExpected) {
-        System.out.println(" Missing " + (totalExpected - totalDiscovered) + " tables from discovery");
+        LOGGER.error(" Missing {} tables from discovery", totalExpected - totalDiscovered);
       }
       if (totalFailed > 0) {
-        System.out.println(" " + totalFailed + " tables failed to query");
+        LOGGER.error(" {} tables failed to query", totalFailed);
       }
       if (!crossSchemaSuccess) {
-        System.out.println(" Cross-schema queries failed");
+        LOGGER.error(" Cross-schema queries failed");
       }
     }
-    System.out.println("=".repeat(80));
+    LOGGER.info("{}", "=".repeat(80));
   }
 
   private int getExpectedCount(String schema) {
@@ -579,5 +583,13 @@ public class UnifiedGovDataComprehensiveTest {
     boolean isFullySuccessful() {
       return failedTables.isEmpty() && missingTables.isEmpty();
     }
+  }
+
+  private static String createRepeatedString(String str, int count) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < count; i++) {
+      sb.append(str);
+    }
+    return sb.toString();
   }
 }
