@@ -61,12 +61,12 @@ Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath)
 
 // Query across domains - e.g., companies by state with economic context
 ResultSet rs = conn.createStatement().executeQuery(
-    "SELECT s.state_name, COUNT(DISTINCT f.cik) as companies, " +
-    "       AVG(e.unemployment_rate) as unemployment " +
-    "FROM sec.filing_metadata f " +
-    "JOIN geo.tiger_states s ON f.state_of_incorporation = s.state_code " +
-    "JOIN econ.regional_employment e ON e.state_code = s.state_code " +
-    "GROUP BY s.state_name"
+    "SELECT s.name as state_name, COUNT(DISTINCT f.cik) as companies, " +
+    "       AVG(fo.value) as avg_metric " +
+    "FROM sec.facts f " +
+    "JOIN geo.census_states s ON f.state_of_incorporation = s.statefp " +
+    "JOIN econ.fred_observations fo ON fo.series_id = 'GDP' " +
+    "GROUP BY s.name"
 );
 ```
 
@@ -76,13 +76,13 @@ ResultSet rs = conn.createStatement().executeQuery(
 
 | Schema | Domain | Key Tables | Data Sources |
 |--------|--------|------------|--------------|
-| **SEC** | Financial Data | `filing_metadata`, `financial_line_items`, `stock_prices` | SEC EDGAR, Yahoo Finance |
-| **ECON** | Economic Data | `employment_statistics`, `treasury_yields`, `fred_indicators` | BLS, FRED, Treasury, BEA |
-| **GEO** | Geographic Data | `tiger_states`, `tiger_counties`, `hud_zip_*` | Census TIGER, HUD |
+| **SEC** | Financial Data | `facts`, `insider`, `text_blocks`, `stock_prices` | SEC EDGAR, Yahoo Finance |
+| **ECON** | Economic Data | `fred_data_series_catalog`, `fred_observations`, `bea_nipa_*` | BLS, FRED, Treasury, BEA |
+| **GEO** | Geographic Data | `census_states`, `census_counties`, `hud_zip_county_*` | Census TIGER, HUD |
 
-### Coming Soon
-- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters
-- **PUB**: NIH grants, NASA projects, NSF research
+### Future Planned
+- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters (not yet implemented)
+- **PUB**: NIH grants, NASA projects, NSF research (not yet implemented)
 
 ## 🔧 Installation
 
@@ -151,6 +151,7 @@ Create a `govdata-model.json` file:
 export BLS_API_KEY=your_bls_api_key
 export FRED_API_KEY=your_fred_api_key
 export BEA_API_KEY=your_bea_api_key
+export ALPHA_VANTAGE_KEY=your_alpha_vantage_key
 
 # Data directories (defaults to system temp)
 export GOVDATA_CACHE_DIR=/path/to/cache
@@ -159,20 +160,25 @@ export GOVDATA_PARQUET_DIR=/path/to/parquet
 # Date ranges (defaults to last 5 years)
 export GOVDATA_START_YEAR=2020
 export GOVDATA_END_YEAR=2024
+
+# Additional configuration
+export SEC_API_KEY=your_sec_api_key  # Optional for rate limit increases
+export CENSUS_API_KEY=your_census_api_key  # Optional for enhanced access
 ```
 
 ## 💡 Key Features
 
 ### Cross-Domain Relationships
-- **25 Foreign Key Constraints** linking tables across schemas
-- **Geographic Integration** - Companies linked to states, economic data to regions
-- **Temporal Analysis** - Join financial filings with contemporary economic indicators
+- **Automatic Foreign Key Detection** - Cross-schema constraints when multiple schemas are configured
+- **Geographic Integration** - Companies linked to states via `state_of_incorporation` → `statefp`
+- **Temporal Analysis** - Join financial filings with contemporary economic indicators by date ranges
 
 ### Performance Optimization
 - **Intelligent Caching** - Downloaded data cached as Parquet files
 - **Partition Pruning** - Year/CIK/Filing-type partitioning for fast queries
 - **Parallel Processing** - Concurrent API downloads and conversions
 - **Storage Flexibility** - Support for local, S3, and HDFS storage
+- **Engine Delegation** - Configurable execution engines (DuckDB, Parquet, LINQ4J, Arrow)
 
 ### Data Quality
 - **Automatic Updates** - Configurable refresh intervals
