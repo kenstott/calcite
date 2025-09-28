@@ -35,14 +35,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Downloads XBRL filings from SEC EDGAR.
  * This implementation downloads actual documents from SEC EDGAR API.
  */
 public class EdgarDownloader {
-  private static final Logger LOGGER = Logger.getLogger(EdgarDownloader.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(EdgarDownloader.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
 
@@ -110,7 +111,7 @@ public class EdgarDownloader {
         // Fetch submissions metadata
         JsonNode submissions = fetchSubmissions(cik);
         if (submissions == null) {
-          LOGGER.warning("Could not fetch submissions for CIK " + cik);
+          LOGGER.warn("Could not fetch submissions for CIK " + cik);
           continue;
         }
 
@@ -121,7 +122,7 @@ public class EdgarDownloader {
         LOGGER.info("Downloaded " + cikFiles.size() + " files for CIK " + cik);
 
       } catch (Exception e) {
-        LOGGER.warning("Error processing CIK " + cik + ": " + e.getMessage());
+        LOGGER.warn("Error processing CIK " + cik + ": " + e.getMessage());
       }
     }
 
@@ -135,7 +136,7 @@ public class EdgarDownloader {
   private JsonNode fetchSubmissions(String cik) throws IOException {
     String url = String.format(Locale.ROOT, SUBMISSIONS_URL, cik);
 
-    LOGGER.fine("Fetching submissions from: " + url);
+    LOGGER.debug("Fetching submissions from: " + url);
 
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("GET");
@@ -158,7 +159,7 @@ public class EdgarDownloader {
         return MAPPER.readTree(reader);
       }
     } else {
-      LOGGER.warning("Failed to fetch submissions: HTTP " + responseCode);
+      LOGGER.warn("Failed to fetch submissions: HTTP " + responseCode);
       return null;
     }
   }
@@ -174,7 +175,7 @@ public class EdgarDownloader {
     // Get recent filings
     JsonNode recent = submissions.path("filings").path("recent");
     if (recent.isMissingNode()) {
-      LOGGER.warning("No recent filings found for CIK " + cik);
+      LOGGER.warn("No recent filings found for CIK " + cik);
       return downloadedFiles;
     }
 
@@ -185,7 +186,7 @@ public class EdgarDownloader {
     JsonNode primaryDocuments = recent.path("primaryDocument");
 
     if (!forms.isArray()) {
-      LOGGER.warning("Invalid filings structure for CIK " + cik);
+      LOGGER.warn("Invalid filings structure for CIK " + cik);
       return downloadedFiles;
     }
 
@@ -260,7 +261,7 @@ public class EdgarDownloader {
 
     // Skip if already downloaded (EDGAR filings are immutable)
     if (localFile.exists() && localFile.length() > 100) {
-      LOGGER.fine("Already cached: " + localFile.getName());
+      LOGGER.debug("Already cached: " + localFile.getName());
       return localFile;
     }
 
@@ -279,7 +280,7 @@ public class EdgarDownloader {
       String url =
           String.format(Locale.ROOT, XBRL_URL, cikNoLeadingZeros, accessionNoDash, xbrlDoc);
 
-      LOGGER.fine("Trying: " + url);
+      LOGGER.debug("Trying: " + url);
 
       try {
         HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
@@ -315,7 +316,7 @@ public class EdgarDownloader {
           }
         } else if (responseCode == 429) {
           // Rate limited
-          LOGGER.warning("Rate limited by SEC. Waiting 60 seconds...");
+          LOGGER.warn("Rate limited by SEC. Waiting 60 seconds...");
           try {
             Thread.sleep(60000);
           } catch (InterruptedException e) {
@@ -323,11 +324,11 @@ public class EdgarDownloader {
           }
         }
       } catch (Exception e) {
-        LOGGER.fine("Failed to download " + xbrlDoc + ": " + e.getMessage());
+        LOGGER.debug("Failed to download " + xbrlDoc + ": " + e.getMessage());
       }
     }
 
-    LOGGER.fine("Could not find XBRL document for " + formType + " " + filingDate);
+    LOGGER.debug("Could not find XBRL document for " + formType + " " + filingDate);
     return null;
   }
 }

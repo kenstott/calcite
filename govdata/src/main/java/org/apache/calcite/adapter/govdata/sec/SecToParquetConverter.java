@@ -35,7 +35,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -51,7 +52,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * </ul>
  */
 public class SecToParquetConverter {
-  private static final Logger LOGGER = Logger.getLogger(SecToParquetConverter.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecToParquetConverter.class);
 
   private final File sourceDirectory;
   private final File targetDirectory;
@@ -139,7 +140,7 @@ public class SecToParquetConverter {
    */
   public int processAllSecFiles() throws IOException {
     if (!sourceDirectory.exists() || !sourceDirectory.isDirectory()) {
-      LOGGER.warning("XBRL source directory does not exist: " + sourceDirectory);
+      LOGGER.warn("XBRL source directory does not exist: " + sourceDirectory);
       return 0;
     }
 
@@ -158,7 +159,7 @@ public class SecToParquetConverter {
         processSecFile(secFile);
         processed++;
       } catch (Exception e) {
-        LOGGER.warning("Failed to process XBRL file " + secFile.getName() + ": " + e.getMessage());
+        LOGGER.warn("Failed to process XBRL file " + secFile.getName() + ": " + e.getMessage());
       }
     }
 
@@ -169,7 +170,9 @@ public class SecToParquetConverter {
    * Process a single XBRL file and convert to partitioned Parquet.
    */
   public void processSecFile(File secFile) throws Exception {
-    LOGGER.fine("Processing XBRL file: " + secFile.getName());
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Processing XBRL file: {}", secFile.getName());
+    }
 
     // Parse XBRL document
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -227,7 +230,7 @@ public class SecToParquetConverter {
     } else {
       // If filename doesn't match expected pattern, skip the file
       // Don't create invalid partitions with default values
-      LOGGER.warning("Filename doesn't match expected pattern, will skip partition creation: " + filename);
+      LOGGER.warn("Filename doesn't match expected pattern, will skip partition creation: " + filename);
       metadata.cik = null;  // Will check this later and skip if null
       metadata.filingDate = null;
       metadata.filingType = "UNKNOWN";
@@ -419,7 +422,7 @@ public class SecToParquetConverter {
 
     // Skip if we don't have valid metadata for partitioning
     if (metadata.cik == null || metadata.filingDate == null) {
-      LOGGER.warning("Skipping partition creation due to invalid metadata: CIK=" + metadata.cik + ", date=" + metadata.filingDate);
+      LOGGER.warn("Skipping partition creation due to invalid metadata: CIK=" + metadata.cik + ", date=" + metadata.filingDate);
       return;
     }
 
@@ -456,7 +459,9 @@ public class SecToParquetConverter {
       }
     }
 
-    LOGGER.fine("Wrote " + records.size() + " records to " + outputFile.getAbsolutePath());
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Wrote {} records to {}", records.size(), outputFile.getAbsolutePath());
+    }
   }
 
   /**

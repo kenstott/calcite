@@ -441,7 +441,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Store the storage provider for later use
     this.storageProvider = storageProvider;
-    LOGGER.info("SEC buildOperand: storageProvider set to {}", storageProvider);
+    LOGGER.debug("SEC buildOperand: storageProvider set to {}", storageProvider);
 
     // Create mutable copy of operand to allow modifications
     Map<String, Object> mutableOperand = new HashMap<>(operand);
@@ -450,7 +450,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
     if (autoDownload == null) {
       autoDownload = true;  // Default to true like ECON
-      LOGGER.info("autoDownload not specified, defaulting to true");
+      LOGGER.debug("autoDownload not specified, defaulting to true");
     }
     mutableOperand.put("autoDownload", autoDownload);
 
@@ -458,7 +458,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     Integer stockPriceTtlHours = (Integer) operand.get("stockPriceTtlHours");
     if (stockPriceTtlHours == null) {
       stockPriceTtlHours = 24;  // Default to 24 hours
-      LOGGER.info("stockPriceTtlHours not specified, defaulting to 24 hours");
+      LOGGER.debug("stockPriceTtlHours not specified, defaulting to 24 hours");
     }
     mutableOperand.put("stockPriceTtlHours", stockPriceTtlHours);
 
@@ -506,11 +506,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Handle SEC data download if configured
-    LOGGER.info("SEC buildOperand: checking download with autoDownload={}", mutableOperand.get("autoDownload"));
+    LOGGER.debug("SEC buildOperand: checking download with autoDownload={}", mutableOperand.get("autoDownload"));
     LOGGER.debug("About to check shouldDownloadData");
     LOGGER.debug("Checking shouldDownloadData...");
     if (shouldDownloadData(mutableOperand)) {
-      LOGGER.info("SEC: shouldDownloadData = true, calling downloadSecData");
+      LOGGER.debug("SEC: shouldDownloadData = true, calling downloadSecData");
       // Get base directory from operand
       if (configuredDir != null) {
         File baseDir = new File(configuredDir);
@@ -524,7 +524,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // We need to wait for them to complete before creating the FileSchema
       waitForAllConversions();
     } else {
-      LOGGER.info("SEC: shouldDownloadData = false, skipping download (autoDownload={}, useMockData={})",
+      LOGGER.debug("SEC: shouldDownloadData = false, skipping download (autoDownload={}, useMockData={})",
                   mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
     }
 
@@ -712,7 +712,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       vectorizedBlobsTable.put("pattern", "cik=*/filing_type=*/year=*/*_vectorized.parquet");
       vectorizedBlobsTable.put("partitions", partitionConfig);
       partitionedTables.add(vectorizedBlobsTable);
-      LOGGER.info("Added vectorized_blobs table configuration for text similarity");
+      LOGGER.debug("Added vectorized_blobs table configuration for text similarity");
     }
 
     // Add partitioned tables to operand
@@ -722,7 +722,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Use the unified secParquetDir directly
     mutableOperand.put("directory", secParquetDir);
 
-    LOGGER.info("Pre-defined {} partitioned table patterns", partitionedTables.size());
+    LOGGER.debug("Pre-defined {} partitioned table patterns", partitionedTables.size());
 
     // Ensure the parquet directory exists
     File secParquetDirFile = new File(secParquetDir);
@@ -731,14 +731,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Using SEC parquet cache directory: {}", secParquetDirFile.getAbsolutePath());
 
       // Debug: List all .parquet files
-      LOGGER.info("DEBUG: Listing all .parquet files in directory:");
-      File[] parquetFiles = secParquetDirFile.listFiles((dir, fileName) -> fileName.endsWith(".parquet"));
-      if (parquetFiles != null && parquetFiles.length > 0) {
-        for (File f : parquetFiles) {
-          LOGGER.info("DEBUG: Found table file: " + f.getName() + " (size=" + f.length() + ")");
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("DEBUG: Listing all .parquet files in directory:");
+        File[] parquetFiles = secParquetDirFile.listFiles((dir, fileName) -> fileName.endsWith(".parquet"));
+        if (parquetFiles != null && parquetFiles.length > 0) {
+          for (File f : parquetFiles) {
+            LOGGER.debug("DEBUG: Found table file: {} (size={})", f.getName(), f.length());
+          }
+        } else {
+          LOGGER.warn("DEBUG: No .parquet files found in {}", secParquetDirFile.getAbsolutePath());
         }
-      } else {
-        LOGGER.warn("DEBUG: No .parquet files found in " + secParquetDirFile.getAbsolutePath());
       }
     } else {
       // Parquet dir doesn't exist yet, but still use secParquetDir path
@@ -760,7 +762,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Ensure it's enabled even if config exists but disabled
       textSimConfig.put("enabled", true);
     }
-    LOGGER.info("Text similarity functions configuration: " + textSimConfig);
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Text similarity functions configuration: {}", textSimConfig);
+    }
 
     // Start RSS monitor if configured
     Map<String, Object> refreshConfig = (Map<String, Object>) mutableOperand.get("refreshMonitoring");
@@ -897,7 +901,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
           pw.println(manifestKey);
         }
-        LOGGER.debug("Added to manifest after Parquet conversion: " + manifestKey + " (vectorized=" + hasVectorized + ")");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Added to manifest after Parquet conversion: {} (vectorized={})", manifestKey, hasVectorized);
+        }
       }
     } catch (Exception e) {
       LOGGER.debug("Could not update manifest: " + e.getMessage());
@@ -910,14 +916,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (manifestFile.exists()) {
       try {
         long count = Files.lines(manifestFile.toPath()).count();
-        LOGGER.info("Manifest already exists with {} entries", count);
+        LOGGER.debug("Manifest already exists with {} entries", count);
         return;
       } catch (Exception e) {
         LOGGER.warn("Could not read manifest: " + e.getMessage());
       }
     }
 
-    LOGGER.info("Building manifest from existing files...");
+    LOGGER.debug("Building manifest from existing files...");
     Set<String> processedFilings = new HashSet<>();
 
     File secCacheDir = new File(baseDirectory, "sec-cache");
@@ -963,7 +969,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         for (String filing : processedFilings) {
           pw.println(filing);
         }
-        LOGGER.info("Created manifest with {} existing filings", processedFilings.size());
+        LOGGER.debug("Created manifest with {} existing filings", processedFilings.size());
       } catch (Exception e) {
         LOGGER.warn("Could not create manifest: " + e.getMessage());
       }
@@ -980,7 +986,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   private void downloadSecData(Map<String, Object> operand) {
     LOGGER.info("Starting SEC data download");
-    LOGGER.info("downloadSecData() called - STretun ARTING SEC DATA DOWNLOAD");
+    LOGGER.debug("downloadSecData() called - STretun ARTING SEC DATA DOWNLOAD");
 
     // Clear download tracking for new cycle
     downloadedInThisCycle.clear();
@@ -1013,16 +1019,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         List<String> ciks = getCiksFromConfig(operand);
         int startYear = (Integer) operand.getOrDefault("startYear", 2020);
         int endYear = (Integer) operand.getOrDefault("endYear", 2023);
-        LOGGER.info("DEBUG: Calling createSecTablesFromXbrl for mock data");
-        LOGGER.info("DEBUG: baseDir=" + baseDir.getAbsolutePath());
+        LOGGER.debug("DEBUG: Calling createSecTablesFromXbrl for mock data");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("DEBUG: baseDir={}", baseDir.getAbsolutePath());
+        }
         // Create minimal mock Parquet files so tables are discovered
         downloadStockPrices(baseDir, Arrays.asList("320187", "51143", "789019"), 2021, 2024);
-        LOGGER.info("DEBUG: Mock data mode - created mock Parquet files");
+        LOGGER.debug("DEBUG: Mock data mode - created mock Parquet files");
 
         // Also create mock stock prices if enabled
         boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
         if (fetchStockPrices) {
-          LOGGER.info("Creating mock stock prices for testing");
+          LOGGER.debug("Creating mock stock prices for testing");
           createMockStockPrices(baseDir, ciks, startYear, endYear);
         }
 
@@ -1047,12 +1055,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Wait for all downloads to complete before proceeding to conversion
       if (!filingProcessingFutures.isEmpty()) {
-        LOGGER.info("Waiting for " + filingProcessingFutures.size() + " filing tasks to complete...");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Waiting for {} filing tasks to complete...", filingProcessingFutures.size());
+        }
         CompletableFuture<Void> allDownloads =
             CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
         try {
           allDownloads.get(45, TimeUnit.MINUTES); // Wait up to 45 minutes for downloads
-          LOGGER.info("All filing processing completed: " + completedFilingProcessing.get() + " files (from cache or downloaded)");
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("All filing processing completed: {} files (from cache or downloaded)", completedFilingProcessing.get());
+          }
         } catch (Exception e) {
           LOGGER.warn("Some downloads may have failed: " + e.getMessage());
         }
@@ -1068,7 +1080,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean isTestMode = testModeObj != null && testModeObj;
       if (fetchStockPrices) {
         if (isTestMode) {
-          LOGGER.info("Creating mock stock prices for testing (testMode=true)");
+          LOGGER.debug("Creating mock stock prices for testing (testMode=true)");
           createMockStockPrices(baseDir, ciks, startYear, endYear);
         } else {
           LOGGER.info("Downloading stock prices for configured CIKs");
@@ -1119,7 +1131,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
         // Clean up macOS metadata files after writing
         storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
-        LOGGER.info("Downloaded submissions metadata for CIK " + normalizedCik);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Downloaded submissions metadata for CIK {}", normalizedCik);
+        }
       } finally {
         rateLimiter.release();
       }
@@ -1174,7 +1188,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Download filings in parallel with rate limiting
       totalFilingsToProcess.addAndGet(filingsToDownload.size());
-      LOGGER.info("Scheduling " + filingsToDownload.size() + " filings for processing (cache check/download) for CIK " + normalizedCik);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Scheduling {} filings for processing (cache check/download) for CIK {}", filingsToDownload.size(), normalizedCik);
+      }
 
       for (FilingToDownload filing : filingsToDownload) {
         // Create unique key for deduplication
@@ -1182,7 +1198,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Skip if already scheduled for download in this cycle
         if (!downloadedInThisCycle.add(filingKey)) {
-          LOGGER.debug("Skipping duplicate download task for: " + filing.form + " " + filing.filingDate);
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Skipping duplicate download task for: {} {}", filing.form, filing.filingDate);
+          }
           continue;
         }
 
@@ -1190,7 +1208,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           downloadFilingDocumentWithRateLimit(provider, filing);
           int completed = completedFilingProcessing.incrementAndGet();
           if (completed % 10 == 0) {
-            LOGGER.info("Processing progress: " + completed + "/" + totalFilingsToProcess.get() + " filings (checking cache and downloading if needed)");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Processing progress: {}/{} filings (checking cache and downloading if needed)", completed, totalFilingsToProcess.get());
+            }
           }
         }, downloadExecutor);
         filingProcessingFutures.add(future);
@@ -1299,10 +1319,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
 
           if (isProcessed && (!needsVectorized || hasVectorized)) {
-            LOGGER.debug("Filing fully processed (in manifest), skipping: " + form + " " + filingDate);
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Filing fully processed (in manifest), skipping: {} {}", form, filingDate);
+            }
             return;
           } else if (isProcessed && needsVectorized && !hasVectorized) {
-            LOGGER.debug("Filing needs vectorization, will reprocess: " + form + " " + filingDate);
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Filing needs vectorization, will reprocess: {} {}", form, filingDate);
+            }
             // Continue with processing to add vectorized files
           }
         } catch (Exception e) {
@@ -1381,11 +1405,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
         if (primaryMetadata.getSize() == 0) {
           needParquetReprocessing = true;
-          LOGGER.info("Empty primary Parquet file: " + primaryParquetPath);
+          LOGGER.debug("Empty primary Parquet file: " + primaryParquetPath);
         }
       } catch (IOException e) {
         needParquetReprocessing = true;
-        LOGGER.info("Missing primary Parquet file: " + primaryParquetPath);
+        LOGGER.debug("Missing primary Parquet file: " + primaryParquetPath);
       }
 
       // Check for relationships file (now always generated, even if empty)
@@ -1398,7 +1422,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // The file is created even when no relationships are found to indicate processing completed
         } catch (IOException e) {
           needParquetReprocessing = true;
-          LOGGER.info("Missing relationships Parquet file: " + relationshipsParquetPath);
+          LOGGER.debug("Missing relationships Parquet file: " + relationshipsParquetPath);
         }
       }
 
@@ -1447,12 +1471,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               if (htmlHasInlineXbrl && needParquetReprocessing) {
                 // This is the critical case: HTML file exists with inline XBRL but Parquet files are missing
                 // Schedule the HTML file for inline XBRL processing
-                LOGGER.info("Cached HTML file contains inline XBRL, scheduling for processing: " + form + " " + filingDate);
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("Cached HTML file contains inline XBRL, scheduling for processing: {} {}", form, filingDate);
+                }
 
                 // Ensure the HTML file gets scheduled for inline XBRL processing
                 if (!scheduledForInlineXbrlProcessing.contains(htmlFile)) {
                   scheduledForInlineXbrlProcessing.add(htmlFile);
-                  LOGGER.info("Scheduled HTML file for inline XBRL processing: " + htmlFile.getName());
+                  if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Scheduled HTML file for inline XBRL processing: {}", htmlFile.getName());
+                  }
                 }
 
                 // Since we have inline XBRL in HTML, we don't need separate XBRL download
@@ -1466,12 +1494,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       if (!needHtml && !needXbrl && !needParquetReprocessing) {
-        LOGGER.info("Filing already fully cached: " + form + " " + filingDate);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Filing already fully cached: {} {}", form, filingDate);
+        }
         return; // Both files already downloaded and converted
       }
 
       if (needParquetReprocessing) {
-        LOGGER.info("Parquet reprocessing needed for: " + form + " " + filingDate);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Parquet reprocessing needed for: {} {}", form, filingDate);
+        }
         // Clean up any existing partial parquet files to ensure clean conversion
         cleanupPartialParquetFiles(yearDir, cik, accessionClean);
         // Force reprocessing by treating as if we need XBRL (even if files exist)
@@ -1481,7 +1513,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // If XBRL file already exists, we need to schedule it for conversion
         // since it won't be downloaded again
         if (xbrlFile.exists() && xbrlFile.length() > 0) {
-          LOGGER.info("Scheduling existing XBRL file for re-conversion: " + xbrlFile.getName());
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Scheduling existing XBRL file for re-conversion: {}", xbrlFile.getName());
+          }
           // Add to a list that will be processed later
           if (!scheduledForReconversion.contains(xbrlFile)) {
             scheduledForReconversion.add(xbrlFile);
@@ -1510,7 +1544,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           }
 
           if (htmlHasInlineXbrl) {
-            LOGGER.info("Scheduling existing HTML file with inline XBRL for re-conversion: " + htmlFile.getName());
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Scheduling existing HTML file with inline XBRL for re-conversion: {}", htmlFile.getName());
+            }
             if (!scheduledForReconversion.contains(htmlFile)) {
               scheduledForReconversion.add(htmlFile);
             }
@@ -1532,9 +1568,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               fos.write(buffer, 0, bytesRead);
             }
           }
-          LOGGER.info("Downloaded HTML filing: " + form + " " + filingDate + " (" + primaryDoc + ")");
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Downloaded HTML filing: {} {} ({})", form, filingDate, primaryDoc);
+          }
         } catch (Exception e) {
-          LOGGER.info("Could not download HTML: " + e.getMessage());
+          LOGGER.debug("Could not download HTML: " + e.getMessage());
           return; // Can't proceed without HTML
         }
       }
@@ -1554,7 +1592,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                              header.contains("<ix:") ||
                              header.contains("iXBRL");
               if (hasInlineXbrl) {
-                LOGGER.info("HTML file contains inline XBRL (iXBRL), will process HTML file directly: " + primaryDoc);
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("HTML file contains inline XBRL (iXBRL), will process HTML file directly: {}", primaryDoc);
+                }
                 // Create marker to avoid checking XBRL in future
                 if (!xbrlNotFoundMarker.exists()) {
                   xbrlNotFoundMarker.createNewFile();
@@ -1572,7 +1612,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (needXbrl && !hasInlineXbrl) {
         // Check if we already know this XBRL doesn't exist
         if (xbrlNotFoundMarker.exists()) {
-          LOGGER.debug("Skipping XBRL download - already marked as not found: " + xbrlDoc);
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Skipping XBRL download - already marked as not found: {}", xbrlDoc);
+          }
         } else {
           if (isInsiderForm) {
             // For Forms 3/4/5, download the .txt file and extract the XML
@@ -1601,7 +1643,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 try (FileWriter writer = new FileWriter(xbrlFile)) {
                   writer.write(xmlContent);
                 }
-                LOGGER.info("Extracted ownership XML for Form " + form + " " + filingDate);
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("Extracted ownership XML for Form {} {}", form, filingDate);
+                }
               } else {
                 LOGGER.warn("Could not find ownershipDocument in Form " + form + " .txt file");
                 xbrlNotFoundMarker.createNewFile();
@@ -1628,13 +1672,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   fos.write(buffer, 0, bytesRead);
                 }
               }
-              LOGGER.info("Downloaded XBRL filing: " + form + " " + filingDate + " (" + xbrlDoc + ")");
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Downloaded XBRL filing: {} {} ({})", form, filingDate, xbrlDoc);
+              }
             } catch (Exception e) {
               // XBRL doesn't exist for this filing - create marker to avoid retrying
-              LOGGER.info("XBRL not available for " + form + " " + filingDate + ", will use HTML with inline XBRL");
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("XBRL not available for {} {}, will use HTML with inline XBRL", form, filingDate);
+              }
               try {
                 xbrlNotFoundMarker.createNewFile();
-                LOGGER.debug("Created .notfound marker for: " + xbrlDoc);
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("Created .notfound marker for: {}", xbrlDoc);
+                }
               } catch (IOException ioe) {
                 LOGGER.debug("Could not create .notfound marker: " + ioe.getMessage());
               }
@@ -1663,7 +1713,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Check if file already exists - XBRL files are immutable
     if (outputFile.exists() && outputFile.length() > 0) {
-      LOGGER.info("Inline XBRL filing already cached: " + form + " " + filingDate + " (" + primaryDoc + ")");
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Inline XBRL filing already cached: {} {} ({})", form, filingDate, primaryDoc);
+      }
       return;
     }
 
@@ -1680,7 +1732,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    LOGGER.info("Downloaded inline XBRL (HTML): " + form + " " + filingDate + " (" + primaryDoc + ")");
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Downloaded inline XBRL (HTML): {} {} ({})", form, filingDate, primaryDoc);
+    }
   }
 
   private void createSecTablesFromXbrl(File baseDir, List<String> ciks, int startYear, int endYear) {
@@ -1688,10 +1742,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     initializeExecutors();
 
     LOGGER.debug("Creating SEC tables from XBRL data");
-    LOGGER.info("DEBUG: createSecTablesFromXbrl START");
-    LOGGER.info("DEBUG: baseDir=" + baseDir.getAbsolutePath());
-    LOGGER.info("DEBUG: ciks.size()=" + ciks.size());
-    LOGGER.info("DEBUG: startYear=" + startYear + ", endYear=" + endYear);
+    LOGGER.debug("DEBUG: createSecTablesFromXbrl START");
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("DEBUG: baseDir={}", baseDir.getAbsolutePath());
+      LOGGER.debug("DEBUG: ciks.size()={}", ciks.size());
+      LOGGER.debug("DEBUG: startYear={}, endYear={}", startYear, endYear);
+    }
 
     try {
       // baseDir is already the sec-data directory, don't nest another level
@@ -1703,8 +1759,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File secParquetDir = new File(secParquetDirPath);
       secParquetDir.mkdirs();
 
-      LOGGER.info("DEBUG: secRawDir=" + secRawDir.getAbsolutePath() + " exists=" + secRawDir.exists());
-      LOGGER.info("DEBUG: secParquetDir=" + secParquetDir.getAbsolutePath() + " exists=" + secParquetDir.exists());
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("DEBUG: secRawDir={} exists={}", secRawDir.getAbsolutePath(), secRawDir.exists());
+        LOGGER.debug("DEBUG: secParquetDir={} exists={}", secParquetDir.getAbsolutePath(), secParquetDir.exists());
+      }
       LOGGER.info("Processing XBRL files from " + secRawDir + " to create Parquet tables");
 
       // Collect all XBRL files to convert
@@ -1716,7 +1774,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         File cikDir = new File(secRawDir, normalizedCik);
 
         if (!cikDir.exists()) {
-          LOGGER.info("No data directory found for CIK " + normalizedCik);
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("No data directory found for CIK {}", normalizedCik);
+          }
           continue;
         }
 
@@ -1732,13 +1792,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 name.endsWith(".htm") || name.endsWith(".html")));
 
             if (xbrlFiles != null) {
-              LOGGER.info("Found " + xbrlFiles.length + " XBRL/HTML files in " + accessionDir.getName());
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Found {} XBRL/HTML files in {}", xbrlFiles.length, accessionDir.getName());
+                for (File xbrlFile : xbrlFiles) {
+                  LOGGER.debug("  Adding for conversion: {}", xbrlFile.getName());
+                }
+              }
               for (File xbrlFile : xbrlFiles) {
-                LOGGER.info("  Adding for conversion: " + xbrlFile.getName());
                 xbrlFilesToConvert.add(xbrlFile);
               }
             } else {
-              LOGGER.info("No XBRL/HTML files found in " + accessionDir.getName());
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("No XBRL/HTML files found in {}", accessionDir.getName());
+              }
             }
           }
         }
@@ -1746,7 +1812,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Add any files scheduled for reconversion (missing Parquet files)
       if (!scheduledForReconversion.isEmpty()) {
-        LOGGER.info("Adding " + scheduledForReconversion.size() + " existing XBRL files for reconversion");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Adding {} existing XBRL files for reconversion", scheduledForReconversion.size());
+        }
         xbrlFilesToConvert.addAll(scheduledForReconversion);
         scheduledForReconversion.clear();
       }
@@ -1755,7 +1823,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // This addresses the cache effectiveness issue where HTML files contain inline XBRL
       // but were never processed because cache logic didn't recognize them as processable files
       if (!scheduledForInlineXbrlProcessing.isEmpty()) {
-        LOGGER.info("Adding " + scheduledForInlineXbrlProcessing.size() + " cached HTML files with inline XBRL for processing");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Adding {} cached HTML files with inline XBRL for processing", scheduledForInlineXbrlProcessing.size());
+        }
         xbrlFilesToConvert.addAll(scheduledForInlineXbrlProcessing);
         scheduledForInlineXbrlProcessing.clear();
       }
@@ -1792,14 +1862,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             metadata.recordConversion(xbrlFile, record);
 
             // The converter now properly extracts metadata from the XML content itself
-            LOGGER.info("DEBUG: Starting conversion of " + xbrlFile.getAbsolutePath() + " to parquet in " + secParquetDir.getAbsolutePath());
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("DEBUG: Starting conversion of {} to parquet in {}", xbrlFile.getAbsolutePath(), secParquetDir.getAbsolutePath());
+            }
             List<File> outputFiles = converter.convert(xbrlFile, secParquetDir, metadata);
-            LOGGER.info("DEBUG: Conversion completed for " + xbrlFile.getName() + " - created " + outputFiles.size() + " parquet files");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("DEBUG: Conversion completed for {} - created {} parquet files", xbrlFile.getName(), outputFiles.size());
+            }
             if (outputFiles.isEmpty()) {
               LOGGER.warn("DEBUG: No parquet files created for " + xbrlFile.getName());
             } else {
               for (File outputFile : outputFiles) {
-                LOGGER.info("DEBUG: Created parquet file: " + outputFile.getAbsolutePath());
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("DEBUG: Created parquet file: {}", outputFile.getAbsolutePath());
+                }
               }
             }
 
@@ -1807,20 +1883,26 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             addToManifest(xbrlFile.getParentFile().getParentFile().getParentFile(), xbrlFile);
           } catch (java.nio.channels.OverlappingFileLockException e) {
             // Non-fatal: Another thread is processing this file, skip it
-            LOGGER.debug("Skipping " + xbrlFile.getName() + " - already being processed by another thread");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Skipping {} - already being processed by another thread", xbrlFile.getName());
+            }
           } catch (Exception e) {
             // Check if the cause is an OverlappingFileLockException
             Throwable cause = e.getCause();
             if (cause instanceof java.nio.channels.OverlappingFileLockException) {
               // Non-fatal: Another thread is processing this file, skip it
-              LOGGER.debug("Skipping " + xbrlFile.getName() + " - already being processed by another thread");
+              if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Skipping {} - already being processed by another thread", xbrlFile.getName());
+            }
             } else {
               LOGGER.error("DEBUG: Failed to convert {} - Exception: {}", xbrlFile.getName(), e.getMessage(), e);
             }
           }
           int completed = completedConversions.incrementAndGet();
           if (completed % 10 == 0) {
-            LOGGER.info("Conversion progress: " + completed + "/" + totalConversions.get() + " files");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Conversion progress: {}/{} files", completed, totalConversions.get());
+            }
           }
         }, conversionExecutor);
         conversionFutures.add(future);
@@ -1836,12 +1918,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Bulk cleanup of macOS metadata files at the end of processing
       cleanupAllMacOSMetadataFiles(secParquetDir);
 
-      LOGGER.info("DEBUG: Checking what was created in secParquetDir after conversion");
+      LOGGER.debug("DEBUG: Checking what was created in secParquetDir after conversion");
       File[] afterConversion = secParquetDir.listFiles();
       if (afterConversion != null) {
-        LOGGER.info("DEBUG: Found " + afterConversion.length + " items in secParquetDir");
-        for (File f : afterConversion) {
-          LOGGER.info("DEBUG: - " + f.getName() + " (isDir=" + f.isDirectory() + ", size=" + f.length() + ")");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("DEBUG: Found {} items in secParquetDir", afterConversion.length);
+          for (File f : afterConversion) {
+            LOGGER.debug("DEBUG: - {} (isDir={}, size={})", f.getName(), f.isDirectory(), f.length());
+          }
         }
       }
 
@@ -2000,7 +2084,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // We need to create files in sec-parquet/stock_prices
       File parquetDir = new File(baseDir.getParentFile(), "sec-parquet");
       File stockPricesDir = new File(parquetDir, "stock_prices");
-      LOGGER.info("Creating mock stock prices in: {}", stockPricesDir.getAbsolutePath());
+      LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir.getAbsolutePath());
 
       // For each CIK, create mock price data
       for (String cik : ciks) {
@@ -2021,14 +2105,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           yearDir.mkdirs();
 
           String parquetFilePath = storageProvider.resolvePath(yearDir.getPath(), ticker + "_" + year + "_prices.parquet");
-          LOGGER.info("About to create/check file: {}", parquetFilePath);
-          LOGGER.info("Parent directory exists: {}, isDirectory: {}", yearDir.exists(), yearDir.isDirectory());
+          LOGGER.debug("About to create/check file: {}", parquetFilePath);
+          LOGGER.debug("Parent directory exists: {}, isDirectory: {}", yearDir.exists(), yearDir.isDirectory());
           try {
             StorageProvider.FileMetadata parquetMetadata = storageProvider.getMetadata(parquetFilePath);
-            LOGGER.info("Mock stock price file already exists: {}", parquetFilePath);
+            LOGGER.debug("Mock stock price file already exists: {}", parquetFilePath);
           } catch (IOException e) {
             createMockPriceParquetFileViaStorageProvider(parquetFilePath, ticker, normalizedCik, year);
-            LOGGER.info("Created mock stock price file: {}", parquetFilePath);
+            LOGGER.debug("Created mock stock price file: {}", parquetFilePath);
           }
         }
       }
@@ -2197,7 +2281,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      LOGGER.info("DEBUG downloadStockPrices: govdataParquetDir={}, basePath={}", govdataParquetDir, basePath);
+      LOGGER.debug("DEBUG downloadStockPrices: govdataParquetDir={}, basePath={}", govdataParquetDir, basePath);
       LOGGER.info("STOCK DOWNLOAD STARTING NOW WITH basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
@@ -2288,7 +2372,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 // Current year data: check TTL
                 long fileAge = currentTime - metadata.getLastModified();
                 if (fileAge > ttlMillis) {
-                  LOGGER.info("Current year ({}) stock price file is older than {} hours: {}",
+                  LOGGER.debug("Current year ({}) stock price file is older than {} hours: {}",
                       year, stockPriceTtlHours, parquetPath);
                   return false;
                 }
@@ -2300,13 +2384,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
               // Check if file has content (applies to both current and historical years)
               if (metadata.getSize() == 0) {
-                LOGGER.info("Stock price file is empty: {}", parquetPath);
+                LOGGER.debug("Stock price file is empty: {}", parquetPath);
                 return false;
               }
 
             } catch (Exception e) {
               // File doesn't exist or can't be accessed
-              LOGGER.info("Stock price file not cached or accessible: {}", parquetPath);
+              LOGGER.debug("Stock price file not cached or accessible: {}", parquetPath);
               return false;
             }
           }
@@ -2450,7 +2534,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         name.startsWith(prefix) && name.endsWith(".parquet"));
 
     if (parquetFiles != null && parquetFiles.length > 0) {
-      LOGGER.info("Cleaning up {} partial parquet files for filing {}", parquetFiles.length, accessionClean);
+      LOGGER.debug("Cleaning up {} partial parquet files for filing {}", parquetFiles.length, accessionClean);
       for (File file : parquetFiles) {
         try {
           if (file.delete()) {
@@ -2478,18 +2562,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // This is a heuristic since we don't have access to the document content here
       if (filing.getMonthValue() <= 4) {
         String partitionYear = String.valueOf(filing.getYear() - 1);
-        LOGGER.info("Partition year calculation: {} {} → fiscal year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
+        LOGGER.debug("Partition year calculation: {} {} → fiscal year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
         return partitionYear;
       } else {
         String partitionYear = String.valueOf(filing.getYear());
-        LOGGER.info("Partition year calculation: {} {} → filing year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
+        LOGGER.debug("Partition year calculation: {} {} → filing year {} (filed month {})", filingType, filingDate, partitionYear, filing.getMonthValue());
         return partitionYear;
       }
     }
 
     // For all other filing types, use filing year
     String partitionYear = String.valueOf(java.time.LocalDate.parse(filingDate).getYear());
-    LOGGER.info("Partition year calculation: {} {} → filing year {} (non-10Q/10K)", filingType, filingDate, partitionYear);
+    LOGGER.debug("Partition year calculation: {} {} → filing year {} (non-10Q/10K)", filingType, filingDate, partitionYear);
     return partitionYear;
   }
 

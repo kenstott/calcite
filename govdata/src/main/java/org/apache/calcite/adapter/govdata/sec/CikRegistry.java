@@ -28,7 +28,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Registry of common CIK aliases loaded from cik-registry.json.
@@ -47,7 +48,7 @@ import java.util.logging.Logger;
  * </ul>
  */
 public class CikRegistry {
-  private static final Logger LOGGER = Logger.getLogger(CikRegistry.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(CikRegistry.class);
 
   // Registry data loaded from file
   private static Map<String, String> TICKER_TO_CIK = new HashMap<>();
@@ -70,7 +71,7 @@ public class CikRegistry {
     try {
       // First, always load the default registry from classpath
       loadRegistryFromResource();
-      LOGGER.fine("Loaded default CIK registry from classpath");
+      LOGGER.debug("Loaded default CIK registry from classpath");
 
       // Then check for custom registry file to extend/override
       String registryPath = System.getenv("XBRL_CIK_REGISTRY");
@@ -89,7 +90,7 @@ public class CikRegistry {
 
       initialized = true;
     } catch (Exception e) {
-      LOGGER.warning("Failed to load CIK registry, using hardcoded defaults: " + e.getMessage());
+      LOGGER.warn("Failed to load CIK registry, using hardcoded defaults: " + e.getMessage());
       // Fall back to hardcoded values
       initializeHardcodedDefaults();
       initialized = true;
@@ -253,7 +254,7 @@ public class CikRegistry {
         String ticker = entry.getKey().toUpperCase();
         String cik = entry.getValue().asText();
         TICKER_TO_CIK.put(ticker, cik);
-        LOGGER.fine("Added/overrode ticker: " + ticker + " -> " + cik);
+        LOGGER.debug("Added/overrode ticker: " + ticker + " -> " + cik);
       });
     }
 
@@ -267,7 +268,7 @@ public class CikRegistry {
         if (groupData.has("alias")) {
           // It's an alias
           GROUP_ALIASES.put(groupName, groupData.get("alias").asText());
-          LOGGER.fine("Added/overrode group alias: " + groupName);
+          LOGGER.debug("Added/overrode group alias: " + groupName);
         } else if (groupData.has("members")) {
           // It's a group definition - resolve any references
           List<String> members = new ArrayList<>();
@@ -278,7 +279,7 @@ public class CikRegistry {
             members.addAll(resolved);
           });
           GROUP_TO_CIKS.put(groupName, members);
-          LOGGER.fine("Added/overrode group: " + groupName + " with " + members.size() + " members");
+          LOGGER.debug("Added/overrode group: " + groupName + " with " + members.size() + " members");
         }
       });
     }
@@ -298,7 +299,7 @@ public class CikRegistry {
               members.addAll(resolved);
             });
             GROUP_TO_CIKS.put(entry.getKey(), members);
-            LOGGER.fine("Added custom group: " + entry.getKey() + " with " + members.size() + " members");
+            LOGGER.debug("Added custom group: " + entry.getKey() + " with " + members.size() + " members");
           }
         }
       });
@@ -478,9 +479,9 @@ public class CikRegistry {
             return allCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch all EDGAR filers: " + e.getMessage());
+          LOGGER.error("Failed to fetch all EDGAR filers: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_SP500_CONSTITUENTS":
@@ -492,9 +493,9 @@ public class CikRegistry {
             return sp500Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch S&P 500 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch S&P 500 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_RUSSELL2000_CONSTITUENTS":
@@ -506,9 +507,9 @@ public class CikRegistry {
             return russell2000Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch Russell 2000 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch Russell 2000 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_RUSSELL1000_CONSTITUENTS":
@@ -520,9 +521,9 @@ public class CikRegistry {
             return russell1000Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch Russell 1000 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch Russell 1000 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_RUSSELL3000_CONSTITUENTS":
@@ -534,9 +535,9 @@ public class CikRegistry {
             return russell3000Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch Russell 3000 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch Russell 3000 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_DJIA_CONSTITUENTS":
@@ -548,9 +549,9 @@ public class CikRegistry {
             return djiaCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch DJIAA constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch DJIAA constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_NASDAQ100_CONSTITUENTS":
@@ -562,9 +563,9 @@ public class CikRegistry {
             return nasdaq100Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch NASDAQ-100 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch NASDAQ-100 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_NYSE_LISTED":
@@ -576,9 +577,9 @@ public class CikRegistry {
             return nyseCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch NYSE-listed companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch NYSE-listed companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_NASDAQ_LISTED":
@@ -590,9 +591,9 @@ public class CikRegistry {
             return nasdaqCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch NASDAQ-listed companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch NASDAQ-listed companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_WILSHIRE5000_CONSTITUENTS":
@@ -604,9 +605,9 @@ public class CikRegistry {
             return wilshire5000Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch Wilshire 5000 constituents: " + e.getMessage());
+          LOGGER.error("Failed to fetch Wilshire 5000 constituents: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_FTSE100_US_LISTED":
@@ -618,9 +619,9 @@ public class CikRegistry {
             return ftse100Ciks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch FTSE 100 US-listed companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch FTSE 100 US-listed companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_GLOBAL_MEGA_CAP":
@@ -632,9 +633,9 @@ public class CikRegistry {
             return megaCapCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch global mega-cap companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch global mega-cap companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_US_LARGE_CAP":
@@ -646,9 +647,9 @@ public class CikRegistry {
             return largeCapCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch US large-cap companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch US large-cap companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_US_MID_CAP":
@@ -660,9 +661,9 @@ public class CikRegistry {
             return midCapCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch US mid-cap companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch US mid-cap companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_US_SMALL_CAP":
@@ -674,9 +675,9 @@ public class CikRegistry {
             return smallCapCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch US small-cap companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch US small-cap companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       case "_US_MICRO_CAP":
@@ -688,13 +689,13 @@ public class CikRegistry {
             return microCapCiks;
           }
         } catch (Exception e) {
-          LOGGER.severe("Failed to fetch US micro-cap companies: " + e.getMessage());
+          LOGGER.error("Failed to fetch US micro-cap companies: " + e.getMessage());
         }
-        LOGGER.warning("Returning empty list for " + marker);
+        LOGGER.warn("Returning empty list for " + marker);
         return Collections.emptyList();
 
       default:
-        LOGGER.warning("Unknown special marker: " + marker);
+        LOGGER.warn("Unknown special marker: " + marker);
         return Collections.emptyList();
     }
   }

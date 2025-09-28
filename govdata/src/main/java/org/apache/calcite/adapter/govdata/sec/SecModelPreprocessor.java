@@ -23,7 +23,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Preprocessor for XBRL model files that adds smart defaults.
@@ -48,7 +49,7 @@ import java.util.logging.Logger;
  * </pre>
  */
 public class SecModelPreprocessor {
-  private static final Logger LOGGER = Logger.getLogger(SecModelPreprocessor.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecModelPreprocessor.class);
   private static final String XBRL_FACTORY = "org.apache.calcite.adapter.sec.SecEmbeddingSchemaFactory";
 
   /**
@@ -85,7 +86,7 @@ public class SecModelPreprocessor {
     // Add version if not present
     if (!model.has("version")) {
       model.put("version", "1.0");
-      LOGGER.fine("Added default version: 1.0");
+      LOGGER.debug("Added default version: 1.0");
     }
 
     // Process schemas
@@ -104,13 +105,13 @@ public class SecModelPreprocessor {
           // Ensure name is XBRL
           if (name.isEmpty()) {
             schema.put("name", "XBRL");
-            LOGGER.fine("Added default schema name: XBRL");
+            LOGGER.debug("Added default schema name: XBRL");
           }
 
           // Add factory if not present
           if (!schema.has("factory")) {
             schema.put("factory", XBRL_FACTORY);
-            LOGGER.fine("Added default factory: " + XBRL_FACTORY);
+            LOGGER.debug("Added default factory: " + XBRL_FACTORY);
           }
         }
       }
@@ -118,7 +119,7 @@ public class SecModelPreprocessor {
       // Add defaultSchema if we have an XBRL schema and no default specified
       if (hasSecSchema && !model.has("defaultSchema")) {
         model.put("defaultSchema", "XBRL");
-        LOGGER.fine("Added defaultSchema: XBRL");
+        LOGGER.debug("Added defaultSchema: XBRL");
       }
     }
 

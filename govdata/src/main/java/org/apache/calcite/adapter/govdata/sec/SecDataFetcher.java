@@ -49,7 +49,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -66,7 +67,7 @@ import java.util.stream.Collectors;
  * - sec.testMode: Test mode behavior, fails fast (default: false)
  */
 public class SecDataFetcher {
-  private static final Logger LOGGER = Logger.getLogger(SecDataFetcher.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecDataFetcher.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   // Configuration for fallback behavior
@@ -121,7 +122,7 @@ public class SecDataFetcher {
       try {
         refreshExpiredCaches();
       } catch (Exception e) {
-        LOGGER.warning("Error in periodic cache refresh: " + e.getMessage());
+        LOGGER.warn("Error in periodic cache refresh: " + e.getMessage());
       }
     }, 1, 1, TimeUnit.HOURS);
     // Initialize cache directory
@@ -131,7 +132,7 @@ public class SecDataFetcher {
     try {
       Files.createDirectories(CACHE_DIR);
     } catch (IOException e) {
-      LOGGER.warning("Failed to create cache directory: " + e.getMessage());
+      LOGGER.warn("Failed to create cache directory: " + e.getMessage());
     }
   }
 
@@ -144,12 +145,14 @@ public class SecDataFetcher {
     if (cached != null && cached.isExpired(ttl)) {
       // Check if refresh is already in progress
       if (!REFRESH_FUTURES.containsKey(cacheKey)) {
-        LOGGER.info("Triggering background refresh for " + cacheKey);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Triggering background refresh for {}", cacheKey);
+        }
         Future<?> future = REFRESH_EXECUTOR.submit(() -> {
           try {
             refreshCache(cacheKey);
           } catch (Exception e) {
-            LOGGER.warning("Background refresh failed for " + cacheKey + ": " + e.getMessage());
+            LOGGER.warn("Background refresh failed for " + cacheKey + ": " + e.getMessage());
           } finally {
             REFRESH_FUTURES.remove(cacheKey);
           }
@@ -163,7 +166,9 @@ public class SecDataFetcher {
    * Refresh a specific cache entry.
    */
   private static void refreshCache(String cacheKey) {
-    LOGGER.info("Refreshing cache for " + cacheKey);
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Refreshing cache for {}", cacheKey);
+    }
     try {
       switch (cacheKey) {
         case "_ALL_EDGAR_FILERS":
@@ -264,7 +269,7 @@ public class SecDataFetcher {
           break;
       }
     } catch (Exception e) {
-      LOGGER.severe("Failed to refresh cache for " + cacheKey + ": " + e.getMessage());
+      LOGGER.error("Failed to refresh cache for " + cacheKey + ": " + e.getMessage());
     }
   }
 
@@ -279,9 +284,11 @@ public class SecDataFetcher {
     File cacheFile = CACHE_DIR.resolve(cacheKey + ".json").toFile();
     try {
       saveToDisk(cacheFile, newCache);
-      LOGGER.info("Updated cache for " + cacheKey + " with " + data.size() + " entries from " + source);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Updated cache for {} with {} entries from {}", cacheKey, data.size(), source);
+      }
     } catch (Exception e) {
-      LOGGER.warning("Failed to save " + cacheKey + " to disk: " + e.getMessage());
+      LOGGER.warn("Failed to save " + cacheKey + " to disk: " + e.getMessage());
     }
   }
 
@@ -297,7 +304,9 @@ public class SecDataFetcher {
       Duration ttl = cacheKey.contains("ALL") ? CACHE_TTL_ALL : CACHE_TTL_INDEX;
 
       if (cached.isExpired(ttl) && !REFRESH_FUTURES.containsKey(cacheKey)) {
-        LOGGER.info("Periodic refresh triggered for expired cache: " + cacheKey);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Periodic refresh triggered for expired cache: {}", cacheKey);
+        }
         triggerBackgroundRefreshIfNeeded(cacheKey, ttl);
       }
     }
@@ -335,9 +344,13 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_ALL)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-        LOGGER.info("Returning " + cached.ciks.size() + " CIKs from stale cache while refreshing in background");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Returning {} CIKs from stale cache while refreshing in background", cached.ciks.size());
+        }
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " CIKs from memory cache");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Returning {} CIKs from memory cache", cached.ciks.size());
+        }
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -353,19 +366,25 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_ALL)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " CIKs from expired disk cache, refreshing in background");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Loaded {} CIKs from expired disk cache, refreshing in background", diskCached.ciks.size());
+            }
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " CIKs from disk cache");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Loaded {} CIKs from disk cache", diskCached.ciks.size());
+            }
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load cache from disk: " + e.getMessage());
       }
     }
 
     // No cache exists at all - must fetch synchronously (only happens on first use)
-    LOGGER.info("No cache exists for " + cacheKey + ", fetching synchronously...");
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("No cache exists for {}, fetching synchronously...", cacheKey);
+    }
     LOGGER.info("Fetching all EDGAR filers from SEC API...");
     try {
       List<String> ciks = fetchAllEdgarFilersFromSEC();
@@ -379,11 +398,11 @@ public class SecDataFetcher {
       return new ArrayList<>(ciks);
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch SEC data: " + e.getMessage());
+      LOGGER.error("Failed to fetch SEC data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale cache due to fetch failure");
+        LOGGER.warn("Returning stale cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -486,9 +505,11 @@ public class SecDataFetcher {
       writer.write("  ]\n");
       writer.write("}\n");
 
-      LOGGER.fine("Saved " + data.ciks.size() + " CIKs to disk cache");
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Saved {} CIKs to disk cache", data.ciks.size());
+      }
     } catch (IOException e) {
-      LOGGER.warning("Failed to save cache to disk: " + e.getMessage());
+      LOGGER.warn("Failed to save cache to disk: " + e.getMessage());
     }
   }
 
@@ -505,9 +526,13 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " S&P 500 CIKs from stale cache while refreshing");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Returning {} S&P 500 CIKs from stale cache while refreshing", cached.ciks.size());
+        }
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " S&P 500 CIKs from memory cache");
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Returning {} S&P 500 CIKs from memory cache", cached.ciks.size());
+        }
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -523,14 +548,18 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " S&P 500 CIKs from expired disk cache");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Loaded {} S&P 500 CIKs from expired disk cache", diskCached.ciks.size());
+            }
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " S&P 500 CIKs from disk cache");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Loaded {} S&P 500 CIKs from disk cache", diskCached.ciks.size());
+            }
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load S&P 500 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load S&P 500 cache from disk: " + e.getMessage());
       }
     }
 
@@ -544,7 +573,7 @@ public class SecDataFetcher {
           throw new DataFetchException("Failed to fetch S&P 500 from Wikipedia - no data returned");
         }
         // Fallback to hardcoded list if Wikipedia fails and fallback is enabled
-        LOGGER.warning("PRIMARY FETCH FAILED: Wikipedia returned no S&P 500 data, using hardcoded fallback");
+        LOGGER.warn("PRIMARY FETCH FAILED: Wikipedia returned no S&P 500 data, using hardcoded fallback");
         ciks = getHardcodedSP500CIKs();
       }
 
@@ -557,11 +586,11 @@ public class SecDataFetcher {
       return new ArrayList<>(ciks);
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch S&P 500 data: " + e.getMessage());
+      LOGGER.error("Failed to fetch S&P 500 data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale S&P 500 cache due to fetch failure");
+        LOGGER.warn("Returning stale S&P 500 cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -569,7 +598,7 @@ public class SecDataFetcher {
       if (TEST_MODE || !FALLBACK_ENABLED) {
         throw new RuntimeException("Failed to fetch S&P 500 data and fallback disabled", e);
       }
-      LOGGER.warning("FALLBACK: All S&P 500 fetch methods failed, using hardcoded data as last resort");
+      LOGGER.warn("FALLBACK: All S&P 500 fetch methods failed, using hardcoded data as last resort");
       return getHardcodedSP500CIKs();
     }
   }
@@ -593,7 +622,7 @@ public class SecDataFetcher {
       conn.setReadTimeout(30000);
 
       if (conn.getResponseCode() != 200) {
-        LOGGER.warning("Wikipedia returned status " + conn.getResponseCode());
+        LOGGER.warn("Wikipedia returned status " + conn.getResponseCode());
         return ciks;
       }
 
@@ -674,10 +703,12 @@ public class SecDataFetcher {
         }
       }
 
-      LOGGER.info("Parsed " + ciks.size() + " S&P 500 companies from Wikipedia");
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Parsed {} S&P 500 companies from Wikipedia", ciks.size());
+      }
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch from Wikipedia: " + e.getMessage());
+      LOGGER.warn("Failed to fetch from Wikipedia: " + e.getMessage());
     }
 
     return ciks;
@@ -799,15 +830,15 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " DJIA CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " DJIA CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " DJIA CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " DJIA CIKs from memory cache");
       }
 
       // Ensure we have all 30 DJIA companies
       List<String> ciks = new ArrayList<>(cached.ciks);
       if (ciks.size() < 30 && ciks.size() >= 27) {
-        LOGGER.info("Adding missing CIKs to memory cached data (found " + ciks.size() + "/30)");
+        LOGGER.debug("Adding missing CIKs to memory cached data (found " + ciks.size() + "/30)");
         if (!ciks.contains("0001018724")) {
           ciks.add("0001018724"); // Amazon
         }
@@ -835,26 +866,26 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " DJIA CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " DJIA CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " DJIA CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " DJIA CIKs from disk cache");
           }
 
           // Ensure we have all 30 DJIA companies
           List<String> ciks = new ArrayList<>(diskCached.ciks);
           if (ciks.size() < 30 && ciks.size() >= 27) {
-            LOGGER.info("Adding missing CIKs to cached data (found " + ciks.size() + "/30)");
+            LOGGER.debug("Adding missing CIKs to cached data (found " + ciks.size() + "/30)");
             if (!ciks.contains("0001018724")) {
               ciks.add("0001018724"); // Amazon
-              LOGGER.info("Added Amazon CIK");
+              LOGGER.debug("Added Amazon CIK");
             }
             if (!ciks.contains("0000858877")) {
               ciks.add("0000858877"); // Cisco
-              LOGGER.info("Added Cisco CIK");
+              LOGGER.debug("Added Cisco CIK");
             }
             if (!ciks.contains("0001045810")) {
               ciks.add("0001045810"); // NVIDIA
-              LOGGER.info("Added NVIDIA CIK");
+              LOGGER.debug("Added NVIDIA CIK");
             }
             // Update cache with complete list
             CachedData updatedCache = new CachedData(ciks, diskCached.source);
@@ -864,7 +895,7 @@ public class SecDataFetcher {
           return ciks;
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load DJIA cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load DJIA cache from disk: " + e.getMessage());
       }
     }
 
@@ -878,7 +909,7 @@ public class SecDataFetcher {
           throw new DataFetchException("Failed to fetch DJIA from Wikipedia - no data returned");
         }
         // Fallback to hardcoded list if Wikipedia fails and fallback is enabled
-        LOGGER.warning("PRIMARY FETCH FAILED: Wikipedia returned no DJIA data, using hardcoded fallback");
+        LOGGER.warn("PRIMARY FETCH FAILED: Wikipedia returned no DJIA data, using hardcoded fallback");
         ciks = getHardcodedDJIACIKs();
       }
 
@@ -891,11 +922,11 @@ public class SecDataFetcher {
       return new ArrayList<>(ciks);
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch DJIA data: " + e.getMessage());
+      LOGGER.error("Failed to fetch DJIA data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale DJIA cache due to fetch failure");
+        LOGGER.warn("Returning stale DJIA cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -903,7 +934,7 @@ public class SecDataFetcher {
       if (TEST_MODE || !FALLBACK_ENABLED) {
         throw new RuntimeException("Failed to fetch DJIA data and fallback disabled", e);
       }
-      LOGGER.warning("FALLBACK: All DJIA fetch methods failed, using hardcoded data as last resort");
+      LOGGER.warn("FALLBACK: All DJIA fetch methods failed, using hardcoded data as last resort");
       return getHardcodedDJIACIKs();
     }
   }
@@ -974,39 +1005,39 @@ public class SecDataFetcher {
             String cik = tickerToCik.get(ticker);
             if (cik != null && !ciks.contains(cik)) {
               ciks.add(cik);
-              LOGGER.info("Mapped DJIA ticker " + ticker + " to CIK " + cik);
+              LOGGER.debug("Mapped DJIA ticker " + ticker + " to CIK " + cik);
             } else if (cik == null) {
-              LOGGER.warning("Could not find CIK for DJIA ticker: " + ticker);
+              LOGGER.warn("Could not find CIK for DJIA ticker: " + ticker);
             }
           }
         }
       }
 
-      LOGGER.info("Fetched " + ciks.size() + " DJIA constituents from Wikipedia using JDBC");
+      LOGGER.debug("Fetched " + ciks.size() + " DJIA constituents from Wikipedia using JDBC");
 
       // Small fix: Handle a few tickers that Wikipedia has but SEC ticker mapping might miss
       // This ensures we get all 30 DJIA companies from Wikipedia
       if (ciks.size() < 30 && ciks.size() >= 27) {
-        LOGGER.info("Adding missing CIKs for tickers not found in SEC mapping (found " + ciks.size() + "/30)");
+        LOGGER.debug("Adding missing CIKs for tickers not found in SEC mapping (found " + ciks.size() + "/30)");
         // These are common mismatches between Wikipedia tickers and SEC ticker mapping
         if (!ciks.contains("0001018724") && !ciks.contains("AMZN")) {
           ciks.add("0001018724"); // Amazon - sometimes AMZN not in SEC ticker mapping
-          LOGGER.info("Added Amazon CIK for missing ticker mapping");
+          LOGGER.debug("Added Amazon CIK for missing ticker mapping");
         }
         if (!ciks.contains("0000858877") && !ciks.contains("CSCO")) {
           ciks.add("0000858877"); // Cisco - sometimes CSCO not in SEC ticker mapping
-          LOGGER.info("Added Cisco CIK for missing ticker mapping");
+          LOGGER.debug("Added Cisco CIK for missing ticker mapping");
         }
         if (!ciks.contains("0001045810") && !ciks.contains("NVDA")) {
           ciks.add("0001045810"); // NVIDIA - sometimes NVDA not in SEC ticker mapping
-          LOGGER.info("Added NVIDIA CIK for missing ticker mapping");
+          LOGGER.debug("Added NVIDIA CIK for missing ticker mapping");
         }
       }
 
       return ciks;
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch DJIA from Wikipedia: " + e.getMessage());
+      LOGGER.warn("Failed to fetch DJIA from Wikipedia: " + e.getMessage());
       e.printStackTrace();
       return ciks;
     }
@@ -1065,9 +1096,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " Russell 2000 CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 2000 CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " Russell 2000 CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 2000 CIKs from memory cache");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -1083,14 +1114,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 2000 CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 2000 CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 2000 CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 2000 CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load Russell 2000 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load Russell 2000 cache from disk: " + e.getMessage());
       }
     }
 
@@ -1114,11 +1145,11 @@ public class SecDataFetcher {
       return new ArrayList<>(ciks);
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch Russell 2000 data: " + e.getMessage());
+      LOGGER.error("Failed to fetch Russell 2000 data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale Russell 2000 cache due to fetch failure");
+        LOGGER.warn("Returning stale Russell 2000 cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -1139,11 +1170,11 @@ public class SecDataFetcher {
       ciks = fetchRussell2000FromIShares();
 
       if (!ciks.isEmpty()) {
-        LOGGER.info("Successfully fetched " + ciks.size() + " Russell 2000 CIKs from iShares");
+        LOGGER.debug("Successfully fetched " + ciks.size() + " Russell 2000 CIKs from iShares");
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch from iShares: " + e.getMessage());
+      LOGGER.warn("Failed to fetch from iShares: " + e.getMessage());
     }
 
     // If iShares fails, return empty list (will fall back to hardcoded)
@@ -1165,7 +1196,7 @@ public class SecDataFetcher {
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.info("NASDAQ approach failed: " + e.getMessage());
+      LOGGER.debug("NASDAQ approach failed: " + e.getMessage());
     }
 
     // Try fetching from financial data aggregators that list Russell 2000 components
@@ -1175,7 +1206,7 @@ public class SecDataFetcher {
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.info("Aggregator approach failed: " + e.getMessage());
+      LOGGER.debug("Aggregator approach failed: " + e.getMessage());
     }
 
     return ciks;
@@ -1191,11 +1222,11 @@ public class SecDataFetcher {
     try {
       ciks = fetchRussell2000FromLLM();
       if (!ciks.isEmpty() && ciks.size() >= 1500) {
-        LOGGER.info("Successfully fetched " + ciks.size() + " Russell 2000 companies from LLM");
+        LOGGER.debug("Successfully fetched " + ciks.size() + " Russell 2000 companies from LLM");
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch Russell 2000 from LLM: " + e.getMessage());
+      LOGGER.warn("Failed to fetch Russell 2000 from LLM: " + e.getMessage());
     }
 
     // Fallback: Try to get all small-cap companies from SEC that would likely be in Russell 2000
@@ -1231,11 +1262,11 @@ public class SecDataFetcher {
 
       if (uniqueCiks.size() >= 1000) {
         ciks.addAll(uniqueCiks);
-        LOGGER.info("Identified " + ciks.size() + " potential Russell 2000 companies from SEC data");
+        LOGGER.debug("Identified " + ciks.size() + " potential Russell 2000 companies from SEC data");
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch from SEC ticker data: " + e.getMessage());
+      LOGGER.warn("Failed to fetch from SEC ticker data: " + e.getMessage());
     }
 
     // Fallback to a comprehensive list of known Russell 2000 tickers
@@ -1291,7 +1322,7 @@ public class SecDataFetcher {
     }
 
     ciks.addAll(uniqueCiks);
-    LOGGER.info("Mapped " + ciks.size() + " Russell 2000 tickers to CIKs from sample list");
+    LOGGER.debug("Mapped " + ciks.size() + " Russell 2000 tickers to CIKs from sample list");
 
     return ciks;
   }
@@ -1368,9 +1399,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " Russell 1000 CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 1000 CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " Russell 1000 CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 1000 CIKs from memory cache");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -1386,14 +1417,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 1000 CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 1000 CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 1000 CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 1000 CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load Russell 1000 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load Russell 1000 cache from disk: " + e.getMessage());
       }
     }
 
@@ -1416,11 +1447,11 @@ public class SecDataFetcher {
       return new ArrayList<>(ciks);
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch Russell 1000 data: " + e.getMessage());
+      LOGGER.error("Failed to fetch Russell 1000 data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale Russell 1000 cache due to fetch failure");
+        LOGGER.warn("Returning stale Russell 1000 cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -1443,9 +1474,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " Russell 3000 CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 3000 CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " Russell 3000 CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Russell 3000 CIKs from memory cache");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -1461,14 +1492,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 3000 CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 3000 CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Russell 3000 CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Russell 3000 CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (IOException e) {
-        LOGGER.warning("Failed to load Russell 3000 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load Russell 3000 cache from disk: " + e.getMessage());
       }
     }
 
@@ -1480,7 +1511,7 @@ public class SecDataFetcher {
 
       if (ciks.isEmpty()) {
         // Fallback: Russell 3000 = Russell 1000 + Russell 2000
-        LOGGER.warning("LLM fetch failed, using fallback Russell 1000 + Russell 2000 combination");
+        LOGGER.warn("LLM fetch failed, using fallback Russell 1000 + Russell 2000 combination");
         Set<String> russell3000 = new HashSet<>();
 
         // Get Russell 1000
@@ -1503,11 +1534,11 @@ public class SecDataFetcher {
       return ciks;
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch Russell 3000 data: " + e.getMessage());
+      LOGGER.error("Failed to fetch Russell 3000 data: " + e.getMessage());
 
       // Try to return stale cache if available
       if (cached != null) {
-        LOGGER.warning("Returning stale Russell 3000 cache due to fetch failure");
+        LOGGER.warn("Returning stale Russell 3000 cache due to fetch failure");
         return new ArrayList<>(cached.ciks);
       }
 
@@ -1525,11 +1556,11 @@ public class SecDataFetcher {
     try {
       ciks = fetchRussell1000FromLLM();
       if (!ciks.isEmpty() && ciks.size() >= 800) {
-        LOGGER.info("Successfully fetched " + ciks.size() + " Russell 1000 companies from LLM");
+        LOGGER.debug("Successfully fetched " + ciks.size() + " Russell 1000 companies from LLM");
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch from LLM: " + e.getMessage());
+      LOGGER.warn("Failed to fetch from LLM: " + e.getMessage());
     }
 
     // Fallback to approximation method
@@ -1565,10 +1596,10 @@ public class SecDataFetcher {
         ciks = ciks.subList(0, 1000);
       }
 
-      LOGGER.info("Identified " + ciks.size() + " Russell 1000 companies");
+      LOGGER.debug("Identified " + ciks.size() + " Russell 1000 companies");
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch Russell 1000: " + e.getMessage());
+      LOGGER.warn("Failed to fetch Russell 1000: " + e.getMessage());
     }
 
     return ciks;
@@ -1597,18 +1628,18 @@ public class SecDataFetcher {
         List<String> pageCiks = fetchRussellPageFromLLM("Russell 1000", startRank, endRank, companiesPerRequest);
         allCiks.addAll(pageCiks);
 
-        LOGGER.info("Fetched page " + page + "/" + totalRequests + ": " + pageCiks.size() + " companies");
+        LOGGER.debug("Fetched page " + page + "/" + totalRequests + ": " + pageCiks.size() + " companies");
 
         // Small delay between requests to be respectful
         Thread.sleep(1000);
 
       } catch (Exception e) {
-        LOGGER.warning("Failed to fetch Russell 1000 page " + page + ": " + e.getMessage());
+        LOGGER.warn("Failed to fetch Russell 1000 page " + page + ": " + e.getMessage());
         // Continue with other pages
       }
     }
 
-    LOGGER.info("Total Russell 1000 companies fetched from LLM: " + allCiks.size());
+    LOGGER.debug("Total Russell 1000 companies fetched from LLM: " + allCiks.size());
     return allCiks;
   }
 
@@ -1635,18 +1666,18 @@ public class SecDataFetcher {
         List<String> pageCiks = fetchRussellPageFromLLM("Russell 2000", startRank, endRank, companiesPerRequest);
         allCiks.addAll(pageCiks);
 
-        LOGGER.info("Fetched Russell 2000 page " + page + "/" + totalRequests + ": " + pageCiks.size() + " companies");
+        LOGGER.debug("Fetched Russell 2000 page " + page + "/" + totalRequests + ": " + pageCiks.size() + " companies");
 
         // Small delay between requests to be respectful
         Thread.sleep(1000);
 
       } catch (Exception e) {
-        LOGGER.warning("Failed to fetch Russell 2000 page " + page + ": " + e.getMessage());
+        LOGGER.warn("Failed to fetch Russell 2000 page " + page + ": " + e.getMessage());
         // Continue with other pages
       }
     }
 
-    LOGGER.info("Total Russell 2000 companies fetched from LLM: " + allCiks.size());
+    LOGGER.debug("Total Russell 2000 companies fetched from LLM: " + allCiks.size());
     return allCiks;
   }
 
@@ -1697,9 +1728,9 @@ public class SecDataFetcher {
         try (BufferedReader errorReader =
             new BufferedReader(new InputStreamReader(conn.getErrorStream()))) {
           String errorResponse = errorReader.lines().collect(Collectors.joining("\n"));
-          LOGGER.warning("LLM API returned status " + responseCode + ": " + errorResponse);
+          LOGGER.warn("LLM API returned status " + responseCode + ": " + errorResponse);
         } catch (Exception e) {
-          LOGGER.warning("LLM API returned status " + responseCode);
+          LOGGER.warn("LLM API returned status " + responseCode);
         }
         return ciks;
       }
@@ -1741,7 +1772,7 @@ public class SecDataFetcher {
       }
 
     } catch (Exception e) {
-      LOGGER.warning("Error calling LLM API for " + indexName + " page " + startRank + "-" + endRank + ": " + e.getMessage());
+      LOGGER.warn("Error calling LLM API for " + indexName + " page " + startRank + "-" + endRank + ": " + e.getMessage());
       throw new IOException("Failed to fetch " + indexName + " page from LLM", e);
     }
 
@@ -1768,22 +1799,22 @@ public class SecDataFetcher {
         int startRank = (page - 1) * companiesPerRequest + 1;
         int endRank = page * companiesPerRequest;
 
-        LOGGER.info("Fetching Russell 3000 page " + page + " (ranks " + startRank + "-" + endRank + ")...");
+        LOGGER.debug("Fetching Russell 3000 page " + page + " (ranks " + startRank + "-" + endRank + ")...");
 
         List<String> pageCiks = fetchRussellPageFromLLM("Russell 3000", startRank, endRank, companiesPerRequest);
         allCiks.addAll(pageCiks);
 
-        LOGGER.info("Page " + page + " returned " + pageCiks.size() + " CIKs (total so far: " + allCiks.size() + ")");
+        LOGGER.debug("Page " + page + " returned " + pageCiks.size() + " CIKs (total so far: " + allCiks.size() + ")");
 
         // Small delay between requests to be respectful
         Thread.sleep(1000);
       } catch (Exception e) {
-        LOGGER.warning("Error fetching Russell 3000 page " + page + ": " + e.getMessage());
+        LOGGER.warn("Error fetching Russell 3000 page " + page + ": " + e.getMessage());
         // Continue with other pages even if one fails
       }
     }
 
-    LOGGER.info("Fetched total of " + allCiks.size() + " Russell 3000 CIKs from LLM");
+    LOGGER.debug("Fetched total of " + allCiks.size() + " Russell 3000 CIKs from LLM");
     return allCiks;
   }
 
@@ -1799,9 +1830,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded("_NASDAQ100_CONSTITUENTS", CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " NASDAQ-100 CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " NASDAQ-100 CIKs from stale cache while refreshing");
       } else {
-        LOGGER.info("Using cached NASDAQ-100 data with " + cached.ciks.size() + " companies");
+        LOGGER.debug("Using cached NASDAQ-100 data with " + cached.ciks.size() + " companies");
       }
       return cached.ciks;
     }
@@ -1815,15 +1846,15 @@ public class SecDataFetcher {
       if (!ciks.isEmpty()) {
         // Cache the data for 1 day
         NASDAQ100_CACHE.put("nasdaq100", new CachedData(ciks, "LLM API"));
-        LOGGER.info("Successfully cached " + ciks.size() + " NASDAQ-100 CIKs from LLM");
+        LOGGER.debug("Successfully cached " + ciks.size() + " NASDAQ-100 CIKs from LLM");
         return ciks;
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch NASDAQ-100 from LLM: " + e.getMessage());
+      LOGGER.warn("Failed to fetch NASDAQ-100 from LLM: " + e.getMessage());
     }
 
     // Fallback: Use known NASDAQ-100 companies from QQQ ETF approximation
-    LOGGER.warning("Using fallback NASDAQ-100 approximation");
+    LOGGER.warn("Using fallback NASDAQ-100 approximation");
     ciks = getApproximateNasdaq100();
     if (!ciks.isEmpty()) {
       // Cache with shorter TTL since it's approximation
@@ -1845,14 +1876,14 @@ public class SecDataFetcher {
 
     // NASDAQ-100 has ~102 companies, we can fetch all in one request
     try {
-      LOGGER.info("Fetching NASDAQ-100 from LLM API...");
+      LOGGER.debug("Fetching NASDAQ-100 from LLM API...");
 
       List<String> ciks = fetchRussellPageFromLLM("NASDAQ-100", 1, 102, 102);
       allCiks.addAll(ciks);
 
-      LOGGER.info("Fetched " + allCiks.size() + " NASDAQ-100 CIKs from LLM");
+      LOGGER.debug("Fetched " + allCiks.size() + " NASDAQ-100 CIKs from LLM");
     } catch (Exception e) {
-      LOGGER.warning("Error fetching NASDAQ-100 from LLM: " + e.getMessage());
+      LOGGER.warn("Error fetching NASDAQ-100 from LLM: " + e.getMessage());
       throw new IOException("Failed to fetch NASDAQ-100 from LLM", e);
     }
 
@@ -1888,9 +1919,9 @@ public class SecDataFetcher {
         }
       }
 
-      LOGGER.info("Built approximate NASDAQ-100 with " + ciks.size() + " companies");
+      LOGGER.debug("Built approximate NASDAQ-100 with " + ciks.size() + " companies");
     } catch (Exception e) {
-      LOGGER.warning("Failed to build approximate NASDAQ-100: " + e.getMessage());
+      LOGGER.warn("Failed to build approximate NASDAQ-100: " + e.getMessage());
     }
 
     return ciks;
@@ -1909,9 +1940,9 @@ public class SecDataFetcher {
       // Add known mid-cap companies to approximate Russell 1000
       // This would ideally come from a data provider
 
-      LOGGER.info("Using approximate Russell 1000 with " + ciks.size() + " companies");
+      LOGGER.debug("Using approximate Russell 1000 with " + ciks.size() + " companies");
     } catch (Exception e) {
-      LOGGER.warning("Failed to build approximate Russell 1000: " + e.getMessage());
+      LOGGER.warn("Failed to build approximate Russell 1000: " + e.getMessage());
     }
 
     return ciks;
@@ -1931,9 +1962,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_ALL)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-        LOGGER.info("Returning " + cached.ciks.size() + " NYSE-listed CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " NYSE-listed CIKs from stale cache while refreshing");
       } else {
-        LOGGER.info("Using cached NYSE-listed data with " + cached.ciks.size() + " companies");
+        LOGGER.debug("Using cached NYSE-listed data with " + cached.ciks.size() + " companies");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -1949,14 +1980,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_ALL)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " NYSE-listed CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " NYSE-listed CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " NYSE-listed CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " NYSE-listed CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to load NYSE cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load NYSE cache from disk: " + e.getMessage());
       }
     }
 
@@ -1968,7 +1999,7 @@ public class SecDataFetcher {
 
       if (ciks.isEmpty()) {
         // Fallback to LLM for major NYSE companies
-        LOGGER.warning("NASDAQ screener failed, using LLM fallback for major NYSE companies");
+        LOGGER.warn("NASDAQ screener failed, using LLM fallback for major NYSE companies");
         ciks = fetchNYSEFromLLM();
       }
 
@@ -1977,10 +2008,10 @@ public class SecDataFetcher {
         CachedData newCache = new CachedData(ciks, "NASDAQ Screener/NYSE");
         memoryCache.put(cacheKey, newCache);
         saveToDisk(cacheFile, newCache);
-        LOGGER.info("Successfully cached " + ciks.size() + " NYSE-listed CIKs");
+        LOGGER.debug("Successfully cached " + ciks.size() + " NYSE-listed CIKs");
       }
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch NYSE listings: " + e.getMessage());
+      LOGGER.error("Failed to fetch NYSE listings: " + e.getMessage());
     }
 
     return ciks;
@@ -2034,12 +2065,12 @@ public class SecDataFetcher {
           }
         }
 
-        LOGGER.info("Fetched " + ciks.size() + " NYSE CIKs from NASDAQ screener");
+        LOGGER.debug("Fetched " + ciks.size() + " NYSE CIKs from NASDAQ screener");
       } else {
-        LOGGER.warning("Failed to fetch NYSE listings from NASDAQ screener: HTTP " + response.statusCode());
+        LOGGER.warn("Failed to fetch NYSE listings from NASDAQ screener: HTTP " + response.statusCode());
       }
     } catch (Exception e) {
-      LOGGER.warning("Error fetching NYSE from NASDAQ screener: " + e.getMessage());
+      LOGGER.warn("Error fetching NYSE from NASDAQ screener: " + e.getMessage());
       throw new IOException("Failed to fetch NYSE listings", e);
     }
 
@@ -2080,11 +2111,11 @@ public class SecDataFetcher {
 
         Thread.sleep(1000); // Rate limiting
       } catch (Exception e) {
-        LOGGER.warning("Error fetching NYSE page " + page + " from LLM: " + e.getMessage());
+        LOGGER.warn("Error fetching NYSE page " + page + " from LLM: " + e.getMessage());
       }
     }
 
-    LOGGER.info("Fetched " + allCiks.size() + " major NYSE CIKs from LLM fallback");
+    LOGGER.debug("Fetched " + allCiks.size() + " major NYSE CIKs from LLM fallback");
     return allCiks;
   }
 
@@ -2155,9 +2186,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_ALL)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-        LOGGER.info("Returning " + cached.ciks.size() + " NASDAQ-listed CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " NASDAQ-listed CIKs from stale cache while refreshing");
       } else {
-        LOGGER.info("Using cached NASDAQ-listed data with " + cached.ciks.size() + " companies");
+        LOGGER.debug("Using cached NASDAQ-listed data with " + cached.ciks.size() + " companies");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -2173,14 +2204,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_ALL)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_ALL);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " NASDAQ-listed CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " NASDAQ-listed CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " NASDAQ-listed CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " NASDAQ-listed CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to load NASDAQ cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load NASDAQ cache from disk: " + e.getMessage());
       }
     }
 
@@ -2192,7 +2223,7 @@ public class SecDataFetcher {
 
       if (ciks.isEmpty()) {
         // Fallback to LLM for major NASDAQ companies
-        LOGGER.warning("NASDAQ screener failed, using LLM fallback for major NASDAQ companies");
+        LOGGER.warn("NASDAQ screener failed, using LLM fallback for major NASDAQ companies");
         ciks = fetchNASDAQFromLLM();
       }
 
@@ -2201,10 +2232,10 @@ public class SecDataFetcher {
         CachedData newCache = new CachedData(ciks, "NASDAQ Screener/NASDAQ");
         memoryCache.put(cacheKey, newCache);
         saveToDisk(cacheFile, newCache);
-        LOGGER.info("Successfully cached " + ciks.size() + " NASDAQ-listed CIKs");
+        LOGGER.debug("Successfully cached " + ciks.size() + " NASDAQ-listed CIKs");
       }
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch NASDAQ listings: " + e.getMessage());
+      LOGGER.error("Failed to fetch NASDAQ listings: " + e.getMessage());
     }
 
     return ciks;
@@ -2258,12 +2289,12 @@ public class SecDataFetcher {
           }
         }
 
-        LOGGER.info("Fetched " + ciks.size() + " NASDAQ CIKs from NASDAQ screener");
+        LOGGER.debug("Fetched " + ciks.size() + " NASDAQ CIKs from NASDAQ screener");
       } else {
-        LOGGER.warning("Failed to fetch NASDAQ listings from NASDAQ screener: HTTP " + response.statusCode());
+        LOGGER.warn("Failed to fetch NASDAQ listings from NASDAQ screener: HTTP " + response.statusCode());
       }
     } catch (Exception e) {
-      LOGGER.warning("Error fetching NASDAQ from NASDAQ screener: " + e.getMessage());
+      LOGGER.warn("Error fetching NASDAQ from NASDAQ screener: " + e.getMessage());
       throw new IOException("Failed to fetch NASDAQ listings", e);
     }
 
@@ -2303,11 +2334,11 @@ public class SecDataFetcher {
 
         Thread.sleep(1000); // Rate limiting
       } catch (Exception e) {
-        LOGGER.warning("Error fetching NASDAQ page " + page + " from LLM: " + e.getMessage());
+        LOGGER.warn("Error fetching NASDAQ page " + page + " from LLM: " + e.getMessage());
       }
     }
 
-    LOGGER.info("Fetched " + allCiks.size() + " major NASDAQ CIKs from LLM fallback");
+    LOGGER.debug("Fetched " + allCiks.size() + " major NASDAQ CIKs from LLM fallback");
     return allCiks;
   }
 
@@ -2327,9 +2358,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " Wilshire 5000 CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " Wilshire 5000 CIKs from stale cache while refreshing");
       } else {
-        LOGGER.info("Using cached Wilshire 5000 data with " + cached.ciks.size() + " companies");
+        LOGGER.debug("Using cached Wilshire 5000 data with " + cached.ciks.size() + " companies");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -2345,14 +2376,14 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Wilshire 5000 CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Wilshire 5000 CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " Wilshire 5000 CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " Wilshire 5000 CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to load Wilshire 5000 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load Wilshire 5000 cache from disk: " + e.getMessage());
       }
     }
 
@@ -2364,30 +2395,30 @@ public class SecDataFetcher {
 
       if (ciks.isEmpty() || ciks.size() < 3000) {
         // Fallback: Combine NYSE and NASDAQ listings (approximation of Wilshire 5000)
-        LOGGER.info("Using fallback: combining NYSE and NASDAQ listings for Wilshire 5000");
+        LOGGER.debug("Using fallback: combining NYSE and NASDAQ listings for Wilshire 5000");
         Set<String> wilshire5000Set = new HashSet<>();
 
         // Get all NYSE-listed companies
         List<String> nyseCiks = fetchNYSEListedCompanies();
         wilshire5000Set.addAll(nyseCiks);
-        LOGGER.info("Added " + nyseCiks.size() + " NYSE companies");
+        LOGGER.debug("Added " + nyseCiks.size() + " NYSE companies");
 
         // Get all NASDAQ-listed companies
         List<String> nasdaqCiks = fetchNASDAQListedCompanies();
         wilshire5000Set.addAll(nasdaqCiks);
-        LOGGER.info("Added " + nasdaqCiks.size() + " NASDAQ companies");
+        LOGGER.debug("Added " + nasdaqCiks.size() + " NASDAQ companies");
 
         // Also include Russell 3000 to ensure major companies are included
         try {
           List<String> russell3000 = fetchRussell3000Constituents();
           wilshire5000Set.addAll(russell3000);
-          LOGGER.info("Added Russell 3000 companies");
+          LOGGER.debug("Added Russell 3000 companies");
         } catch (Exception e) {
-          LOGGER.warning("Could not add Russell 3000 to Wilshire 5000: " + e.getMessage());
+          LOGGER.warn("Could not add Russell 3000 to Wilshire 5000: " + e.getMessage());
         }
 
         ciks = new ArrayList<>(wilshire5000Set);
-        LOGGER.info("Combined total: " + ciks.size() + " unique companies for Wilshire 5000");
+        LOGGER.debug("Combined total: " + ciks.size() + " unique companies for Wilshire 5000");
       }
 
       if (!ciks.isEmpty()) {
@@ -2395,10 +2426,10 @@ public class SecDataFetcher {
         CachedData newCache = new CachedData(ciks, "LLM/Exchange Combination");
         memoryCache.put(cacheKey, newCache);
         saveToDisk(cacheFile, newCache);
-        LOGGER.info("Successfully cached " + ciks.size() + " Wilshire 5000 CIKs");
+        LOGGER.debug("Successfully cached " + ciks.size() + " Wilshire 5000 CIKs");
       }
     } catch (Exception e) {
-      LOGGER.severe("Failed to fetch Wilshire 5000 data: " + e.getMessage());
+      LOGGER.error("Failed to fetch Wilshire 5000 data: " + e.getMessage());
     }
 
     return ciks;
@@ -2426,7 +2457,7 @@ public class SecDataFetcher {
         int startRank = (page - 1) * companiesPerRequest + 1;
         int endRank = page * companiesPerRequest;
 
-        LOGGER.info("Fetching Wilshire 5000 page " + page + " (ranks " + startRank + "-" + endRank + ")...");
+        LOGGER.debug("Fetching Wilshire 5000 page " + page + " (ranks " + startRank + "-" + endRank + ")...");
 
         String prompt =
           String.format("Generate a JSON array of %d companies from the Wilshire 5000 Total Market Index, ranked %d to %d. " +
@@ -2439,17 +2470,17 @@ public class SecDataFetcher {
         List<String> pageCiks = fetchPageFromLLM(prompt);
         allCiks.addAll(pageCiks);
 
-        LOGGER.info("Page " + page + " returned " + pageCiks.size() + " CIKs (total so far: " + allCiks.size() + ")");
+        LOGGER.debug("Page " + page + " returned " + pageCiks.size() + " CIKs (total so far: " + allCiks.size() + ")");
 
         // Small delay between requests to be respectful
         Thread.sleep(1000);
       } catch (Exception e) {
-        LOGGER.warning("Error fetching Wilshire 5000 page " + page + ": " + e.getMessage());
+        LOGGER.warn("Error fetching Wilshire 5000 page " + page + ": " + e.getMessage());
         // Continue with other pages even if one fails
       }
     }
 
-    LOGGER.info("Fetched total of " + allCiks.size() + " Wilshire 5000 CIKs from LLM");
+    LOGGER.debug("Fetched total of " + allCiks.size() + " Wilshire 5000 CIKs from LLM");
     return allCiks;
   }
 
@@ -2467,9 +2498,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " FTSE 100 US-listed CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " FTSE 100 US-listed CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " FTSE 100 US-listed CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " FTSE 100 US-listed CIKs from memory cache");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -2485,19 +2516,21 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " FTSE 100 US-listed CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " FTSE 100 US-listed CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " FTSE 100 US-listed CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " FTSE 100 US-listed CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to load FTSE 100 cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load FTSE 100 cache from disk: " + e.getMessage());
       }
     }
 
     // No cache exists - must fetch synchronously
-    LOGGER.info("No cache exists for " + cacheKey + ", fetching synchronously...");
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("No cache exists for {}, fetching synchronously...", cacheKey);
+    }
     List<String> ciks = fetchFTSE100USListedFromLLM();
 
     if (!ciks.isEmpty()) {
@@ -2505,7 +2538,7 @@ public class SecDataFetcher {
       CachedData newCache = new CachedData(ciks, "LLM API");
       memoryCache.put(cacheKey, newCache);
       saveToDisk(cacheFile, newCache);
-      LOGGER.info("Successfully cached " + ciks.size() + " FTSE 100 US-listed CIKs");
+      LOGGER.debug("Successfully cached " + ciks.size() + " FTSE 100 US-listed CIKs");
     }
 
     return ciks;
@@ -2535,9 +2568,9 @@ public class SecDataFetcher {
       List<String> ciks = fetchPageFromLLM(prompt);
       allCiks.addAll(ciks);
 
-      LOGGER.info("Fetched " + allCiks.size() + " FTSE 100 US-listed CIKs from LLM");
+      LOGGER.debug("Fetched " + allCiks.size() + " FTSE 100 US-listed CIKs from LLM");
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch FTSE 100 from LLM: " + e.getMessage());
+      LOGGER.warn("Failed to fetch FTSE 100 from LLM: " + e.getMessage());
       // Use fallback
       return getFallbackFTSE100USListed();
     }
@@ -2596,9 +2629,9 @@ public class SecDataFetcher {
         }
       }
 
-      LOGGER.info("Built fallback FTSE 100 US-listed with " + ciks.size() + " companies");
+      LOGGER.debug("Built fallback FTSE 100 US-listed with " + ciks.size() + " companies");
     } catch (Exception e) {
-      LOGGER.warning("Failed to build fallback FTSE 100 US-listed: " + e.getMessage());
+      LOGGER.warn("Failed to build fallback FTSE 100 US-listed: " + e.getMessage());
     }
 
     return ciks;
@@ -2660,9 +2693,9 @@ public class SecDataFetcher {
       // If cache exists but is expired, trigger background refresh
       if (cached.isExpired(CACHE_TTL_INDEX)) {
         triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-        LOGGER.info("Returning " + cached.ciks.size() + " " + description + " CIKs from stale cache while refreshing");
+        LOGGER.debug("Returning " + cached.ciks.size() + " " + description + " CIKs from stale cache while refreshing");
       } else {
-        LOGGER.fine("Returning " + cached.ciks.size() + " " + description + " CIKs from memory cache");
+        LOGGER.debug("Returning " + cached.ciks.size() + " " + description + " CIKs from memory cache");
       }
       return new ArrayList<>(cached.ciks);
     }
@@ -2678,19 +2711,19 @@ public class SecDataFetcher {
           // If disk cache is expired, trigger background refresh but still return data
           if (diskCached.isExpired(CACHE_TTL_INDEX)) {
             triggerBackgroundRefreshIfNeeded(cacheKey, CACHE_TTL_INDEX);
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " " + description + " CIKs from expired disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " " + description + " CIKs from expired disk cache");
           } else {
-            LOGGER.info("Loaded " + diskCached.ciks.size() + " " + description + " CIKs from disk cache");
+            LOGGER.debug("Loaded " + diskCached.ciks.size() + " " + description + " CIKs from disk cache");
           }
           return new ArrayList<>(diskCached.ciks);
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to load " + description + " cache from disk: " + e.getMessage());
+        LOGGER.warn("Failed to load " + description + " cache from disk: " + e.getMessage());
       }
     }
 
     // No cache exists - must fetch synchronously
-    LOGGER.info("No cache exists for " + cacheKey + ", fetching " + description + " companies synchronously...");
+    LOGGER.debug("No cache exists for " + cacheKey + ", fetching " + description + " companies synchronously...");
     List<String> ciks = fetchMarketCapFromLLM(minMarketCap, maxMarketCap, description);
 
     if (!ciks.isEmpty()) {
@@ -2698,7 +2731,7 @@ public class SecDataFetcher {
       CachedData newCache = new CachedData(ciks, "LLM API/Market Data");
       memoryCache.put(cacheKey, newCache);
       saveToDisk(cacheFile, newCache);
-      LOGGER.info("Successfully cached " + ciks.size() + " " + description + " CIKs");
+      LOGGER.debug("Successfully cached " + ciks.size() + " " + description + " CIKs");
     }
 
     return ciks;
@@ -2753,13 +2786,13 @@ public class SecDataFetcher {
             Thread.sleep(1000); // Rate limiting between pages
           }
         } catch (Exception e) {
-          LOGGER.warning("Error fetching " + description + " page " + page + ": " + e.getMessage());
+          LOGGER.warn("Error fetching " + description + " page " + page + ": " + e.getMessage());
         }
       }
 
-      LOGGER.info("Fetched " + allCiks.size() + " " + description + " CIKs from LLM");
+      LOGGER.debug("Fetched " + allCiks.size() + " " + description + " CIKs from LLM");
     } catch (Exception e) {
-      LOGGER.warning("Failed to fetch " + description + " from LLM: " + e.getMessage());
+      LOGGER.warn("Failed to fetch " + description + " from LLM: " + e.getMessage());
       return getFallbackMarketCapCompanies(minMarketCap, maxMarketCap);
     }
 
@@ -2834,9 +2867,9 @@ public class SecDataFetcher {
         }
       }
 
-      LOGGER.info("Built fallback market cap list with " + ciks.size() + " companies");
+      LOGGER.debug("Built fallback market cap list with " + ciks.size() + " companies");
     } catch (Exception e) {
-      LOGGER.warning("Failed to build fallback market cap companies: " + e.getMessage());
+      LOGGER.warn("Failed to build fallback market cap companies: " + e.getMessage());
     }
 
     return ciks;
@@ -2851,7 +2884,7 @@ public class SecDataFetcher {
       // This already fetches all tickers from SEC
       return fetchTickerToCikMap();
     } catch (IOException e) {
-      LOGGER.severe("Failed to fetch all EDGAR tickers: " + e.getMessage());
+      LOGGER.error("Failed to fetch all EDGAR tickers: " + e.getMessage());
       return new HashMap<>();
     }
   }
@@ -2869,12 +2902,12 @@ public class SecDataFetcher {
             try {
               Files.delete(path);
             } catch (IOException e) {
-              LOGGER.warning("Failed to delete cache file: " + path);
+              LOGGER.warn("Failed to delete cache file: " + path);
             }
           });
-      LOGGER.info("Cache cleared successfully");
+      LOGGER.debug("Cache cleared successfully");
     } catch (IOException e) {
-      LOGGER.warning("Failed to clear cache: " + e.getMessage());
+      LOGGER.warn("Failed to clear cache: " + e.getMessage());
     }
   }
 

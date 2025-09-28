@@ -23,7 +23,8 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * JDBC driver for XBRL adapter.
@@ -49,7 +50,7 @@ import java.util.logging.Logger;
  * </pre>
  */
 public class SecDriver extends Driver {
-  private static final Logger LOGGER = Logger.getLogger(SecDriver.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecDriver.class);
 
   static {
     new SecDriver().register();
@@ -73,11 +74,11 @@ public class SecDriver extends Driver {
     // Set default lex and unquotedCasing if not specified
     if (!secInfo.containsKey("lex")) {
       secInfo.setProperty("lex", "ORACLE");
-      LOGGER.fine("Using default lex=ORACLE");
+      LOGGER.debug("Using default lex=ORACLE");
     }
     if (!secInfo.containsKey("unquotedCasing")) {
       secInfo.setProperty("unquotedCasing", "TO_LOWER");
-      LOGGER.fine("Using default unquotedCasing=TO_LOWER");
+      LOGGER.debug("Using default unquotedCasing=TO_LOWER");
     }
 
     // Parse the XBRL-specific URL format
@@ -168,7 +169,7 @@ public class SecDriver extends Driver {
     // Convert to inline model URL
     String calciteUrl = "jdbc:calcite:model=inline:" + modelJson.toString();
 
-    LOGGER.fine("Transformed XBRL URL to: " + calciteUrl);
+    LOGGER.debug("Transformed XBRL URL to: " + calciteUrl);
 
     return calciteUrl;
   }
@@ -202,7 +203,7 @@ public class SecDriver extends Driver {
               }
             }
           } catch (IOException e) {
-            LOGGER.fine("Could not preprocess model file: " + e.getMessage());
+            LOGGER.debug("Could not preprocess model file: " + e.getMessage());
           }
         }
       }
