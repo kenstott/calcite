@@ -202,16 +202,16 @@ public class BeaDataDownloader {
 
       // Download regional income for single year
       try {
-        LOGGER.info("About to call downloadRegionalIncomeForYear for year {}", year);
+        LOGGER.debug("About to call downloadRegionalIncomeForYear for year {}", year);
         downloadRegionalIncomeForYear(year);
-        LOGGER.info("Successfully completed downloadRegionalIncomeForYear for year {}", year);
+        LOGGER.debug("Successfully completed downloadRegionalIncomeForYear for year {}", year);
       } catch (Exception e) {
         LOGGER.error("Failed to download regional income data for year {}: {}", year, e.getMessage(), e);
       }
 
       // Download trade statistics for single year
       try {
-        LOGGER.info("Downloading trade statistics for year {}", year);
+        LOGGER.debug("Downloading trade statistics for year {}", year);
         downloadTradeStatisticsForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download trade statistics for year {}: {}", year, e.getMessage());
@@ -219,7 +219,7 @@ public class BeaDataDownloader {
 
       // Download ITA data for single year
       try {
-        LOGGER.info("Downloading ITA data for year {}", year);
+        LOGGER.debug("Downloading ITA data for year {}", year);
         downloadItaDataForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download ITA data for year {}: {}", year, e.getMessage());
@@ -227,7 +227,7 @@ public class BeaDataDownloader {
 
       // Download industry GDP for single year
       try {
-        LOGGER.info("Downloading industry GDP data for year {}", year);
+        LOGGER.debug("Downloading industry GDP data for year {}", year);
         downloadIndustryGdpForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download industry GDP data for year {}: {}", year, e.getMessage());
@@ -235,7 +235,7 @@ public class BeaDataDownloader {
 
       // Download state GDP for single year
       try {
-        LOGGER.info("Downloading state GDP data for year {}", year);
+        LOGGER.debug("Downloading state GDP data for year {}", year);
         downloadStateGdpForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download state GDP data for year {}: {}", year, e.getMessage());
@@ -254,7 +254,7 @@ public class BeaDataDownloader {
     // Check if this is a future year - BEA annual data not available for future years
     int currentYear = LocalDate.now().getYear();
     if (year > currentYear || (year == currentYear && LocalDate.now().getMonthValue() < 2)) {
-      LOGGER.info("Skipping BEA GDP components for year {} - annual data not yet available", year);
+      LOGGER.debug("Skipping BEA GDP components for year {} - annual data not yet available", year);
       createEmptyGdpComponentsFile(year, "Annual data not yet available");
       return;
     }
@@ -265,7 +265,7 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("gdp_components", year, cacheParams)) {
-      LOGGER.info("Found cached GDP components for year {} - skipping download", year);
+      LOGGER.debug("Found cached GDP components for year {} - skipping download", year);
       return;
     }
 
@@ -273,13 +273,13 @@ public class BeaDataDownloader {
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
     File jsonFile = new File(outputDir, "gdp_components.json");
     if (jsonFile.exists() && jsonFile.length() > 100) {  // Check file has real data
-      LOGGER.info("Found existing GDP components file for year {} - updating manifest", year);
+      LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
       cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
       cacheManifest.save(cacheDir);
       return;
     }
 
-    LOGGER.info("Downloading BEA GDP components for year {}", year);
+    LOGGER.debug("Downloading BEA GDP components for year {}", year);
 
     // Create local cache directory
     outputDir.mkdirs();
@@ -387,7 +387,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
+    LOGGER.debug("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -531,7 +531,7 @@ public class BeaDataDownloader {
     File parquetFile = new File(parquetFilePath);
     writeGdpComponentsParquet(components, parquetFile);
 
-    LOGGER.info("GDP components saved to: {} ({} records)", parquetFilePath, components.size());
+    LOGGER.debug("GDP components saved to: {} ({} records)", parquetFilePath, components.size());
     return parquetFile;
   }
 
@@ -557,11 +557,11 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("regional_income", year, cacheParams)) {
-      LOGGER.info("Found cached regional income data for year {} - skipping download", year);
+      LOGGER.debug("Found cached regional income data for year {} - skipping download", year);
       return;
     }
 
-    LOGGER.info("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
+    LOGGER.debug("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
 
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
@@ -688,7 +688,7 @@ public class BeaDataDownloader {
 
     // Save as JSON to local cache
     File jsonFile = new File(outputDir, "regional_income.json");
-    LOGGER.info("Preparing to save {} regional income records to {}", incomeData.size(), jsonFile.getAbsolutePath());
+    LOGGER.debug("Preparing to save {} regional income records to {}", incomeData.size(), jsonFile.getAbsolutePath());
 
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> incomeList = new ArrayList<>();
@@ -713,7 +713,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
+    LOGGER.debug("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("regional_income", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -808,7 +808,7 @@ public class BeaDataDownloader {
     writeRegionalIncomeParquet(incomeData, parquetFilePath);
     File parquetFile = new File(parquetFilePath);
 
-    LOGGER.info("Regional income data saved to: {} ({} records)", parquetFilePath, incomeData.size());
+    LOGGER.debug("Regional income data saved to: {} ({} records)", parquetFilePath, incomeData.size());
   }
 
   /**
@@ -832,11 +832,11 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("trade_statistics", year, cacheParams)) {
-      LOGGER.info("Found cached trade statistics for year {} - skipping download", year);
+      LOGGER.debug("Found cached trade statistics for year {} - skipping download", year);
       return;
     }
 
-    LOGGER.info("Downloading BEA trade statistics for year {}", year);
+    LOGGER.debug("Downloading BEA trade statistics for year {}", year);
 
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
@@ -929,7 +929,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
+    LOGGER.debug("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("trade_statistics", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -1020,7 +1020,7 @@ public class BeaDataDownloader {
     String parquetFilePath = storageProvider.resolvePath(outputDirPath, "trade_statistics.parquet");
     writeTradeStatisticsParquet(tradeData, parquetFilePath);
 
-    LOGGER.info("Trade statistics saved to: {} ({} records)", parquetFilePath, tradeData.size());
+    LOGGER.debug("Trade statistics saved to: {} ({} records)", parquetFilePath, tradeData.size());
   }
 
   /**
@@ -1155,7 +1155,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file
     storageProvider.writeAvroParquet(targetFilePath, schema, records, "trade_statistics");
-    LOGGER.info("Trade statistics Parquet written: {} ({} records)", targetFilePath, tradeStats.size());
+    LOGGER.debug("Trade statistics Parquet written: {} ({} records)", targetFilePath, tradeStats.size());
   }
 
   /**
@@ -1179,11 +1179,11 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("ita_data", year, cacheParams)) {
-      LOGGER.info("Found cached ITA data for year {} - skipping download", year);
+      LOGGER.debug("Found cached ITA data for year {} - skipping download", year);
       return;
     }
 
-    LOGGER.info("Downloading BEA ITA data for year {}", year);
+    LOGGER.debug("Downloading BEA ITA data for year {}", year);
 
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
@@ -1306,7 +1306,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
+    LOGGER.debug("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("ita_data", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -1408,7 +1408,7 @@ public class BeaDataDownloader {
     File parquetFile = new File(parquetFilePath);
     writeItaDataParquet(itaRecords, parquetFile);
 
-    LOGGER.info("ITA data saved to: {} ({} records)", parquetFilePath, itaRecords.size());
+    LOGGER.debug("ITA data saved to: {} ({} records)", parquetFilePath, itaRecords.size());
     return parquetFile;
   }
 
@@ -1462,7 +1462,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file
     storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "ita_data");
-    LOGGER.info("ITA data Parquet written: {} ({} records)", outputFile.getAbsolutePath(), itaRecords.size());
+    LOGGER.debug("ITA data Parquet written: {} ({} records)", outputFile.getAbsolutePath(), itaRecords.size());
   }
 
   /**
@@ -1486,11 +1486,11 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("industry_gdp", year, cacheParams)) {
-      LOGGER.info("Found cached industry GDP data for year {} - skipping download", year);
+      LOGGER.debug("Found cached industry GDP data for year {} - skipping download", year);
       return;
     }
 
-    LOGGER.info("Downloading BEA GDP by Industry data for year {}", year);
+    LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
 
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
@@ -1598,7 +1598,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
+    LOGGER.debug("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("industry_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -1783,7 +1783,7 @@ public class BeaDataDownloader {
     File parquetFile = new File(parquetFilePath);
     writeIndustryGdpParquet(industryData, parquetFile);
 
-    LOGGER.info("Industry GDP data saved to: {} ({} records)", parquetFilePath, industryData.size());
+    LOGGER.debug("Industry GDP data saved to: {} ({} records)", parquetFilePath, industryData.size());
     return parquetFile;
   }
 
@@ -1821,7 +1821,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file
     storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "industry_gdp");
-    LOGGER.info("Industry GDP Parquet written: {} ({} records)", outputFile.getAbsolutePath(), industryData.size());
+    LOGGER.debug("Industry GDP Parquet written: {} ({} records)", outputFile.getAbsolutePath(), industryData.size());
   }
 
   @SuppressWarnings("deprecation")
@@ -1856,7 +1856,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file
     storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "gdp_components");
-    LOGGER.info("GDP Components Parquet written: {} ({} records)", outputFile.getAbsolutePath(), components.size());
+    LOGGER.debug("GDP Components Parquet written: {} ({} records)", outputFile.getAbsolutePath(), components.size());
   }
 
   @SuppressWarnings("deprecation")
@@ -1993,7 +1993,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("Created empty GDP components file for year {}: {}", year, jsonFile.getAbsolutePath());
+    LOGGER.debug("Created empty GDP components file for year {}: {}", year, jsonFile.getAbsolutePath());
   }
 
   /**
@@ -2002,11 +2002,11 @@ public class BeaDataDownloader {
   public void convertRegionalIncomeToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting regional income data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting regional income data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if a target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2052,7 +2052,7 @@ public class BeaDataDownloader {
     if (!incomeData.isEmpty()) {
       // Write parquet file
       writeRegionalIncomeParquet(incomeData, targetFilePath);
-      LOGGER.info("Converted regional income data to parquet: {} ({} records)", targetFilePath, incomeData.size());
+      LOGGER.debug("Converted regional income data to parquet: {} ({} records)", targetFilePath, incomeData.size());
     } else {
       LOGGER.warn("No regional income data found in {}", sourceDirPath);
     }
@@ -2173,7 +2173,7 @@ public class BeaDataDownloader {
     writeStateGdpParquet(gdpData, parquetFilePath);
     File parquetFile = new File(parquetFilePath);
 
-    LOGGER.info("State GDP data saved to: {} ({} records)", parquetFilePath, gdpData.size());
+    LOGGER.debug("State GDP data saved to: {} ({} records)", parquetFilePath, gdpData.size());
   }
 
   /**
@@ -2191,7 +2191,7 @@ public class BeaDataDownloader {
     cacheParams.put("year", String.valueOf(year));
 
     if (cacheManifest.isCached("state_gdp", year, cacheParams)) {
-      LOGGER.info("Found cached state GDP data for year {} - skipping download", year);
+      LOGGER.debug("Found cached state GDP data for year {} - skipping download", year);
       return;
     }
 
@@ -2202,13 +2202,13 @@ public class BeaDataDownloader {
     // Check if data already exists
     File jsonFile = new File(outputDir, "state_gdp.json");
     if (jsonFile.exists()) {
-      LOGGER.info("Found existing state GDP file for year {} - updating manifest", year);
+      LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
       cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
       cacheManifest.save(cacheDir);
       return;
     }
 
-    LOGGER.info("Downloading BEA state GDP data for year {}", year);
+    LOGGER.debug("Downloading BEA state GDP data for year {}", year);
 
     List<StateGdp> gdpData = new ArrayList<>();
 
@@ -2288,7 +2288,7 @@ public class BeaDataDownloader {
     }
 
     // Save as JSON to local cache
-    LOGGER.info("Preparing to save {} state GDP records to {}", gdpData.size(), jsonFile.getAbsolutePath());
+    LOGGER.debug("Preparing to save {} state GDP records to {}", gdpData.size(), jsonFile.getAbsolutePath());
 
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
@@ -2312,7 +2312,7 @@ public class BeaDataDownloader {
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.info("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
+    LOGGER.debug("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
 
     // Mark as cached in manifest
     cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
@@ -2353,11 +2353,11 @@ public class BeaDataDownloader {
   public void convertStateGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2402,7 +2402,7 @@ public class BeaDataDownloader {
     if (!gdpData.isEmpty()) {
       // Write parquet file
       writeStateGdpParquet(gdpData, targetFilePath);
-      LOGGER.info("Converted state GDP data to parquet: {} ({} records)", targetFilePath, gdpData.size());
+      LOGGER.debug("Converted state GDP data to parquet: {} ({} records)", targetFilePath, gdpData.size());
 
       // Clean up macOS metadata files that can interfere with DuckDB
       try {
@@ -2429,11 +2429,11 @@ public class BeaDataDownloader {
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2475,7 +2475,7 @@ public class BeaDataDownloader {
     // Write parquet file
     writeGdpComponentsMapParquet(components, targetFilePath);
 
-    LOGGER.info("Converted BEA data to parquet: {} ({} components)", targetFilePath, components.size());
+    LOGGER.debug("Converted BEA data to parquet: {} ({} components)", targetFilePath, components.size());
   }
 
   @SuppressWarnings("deprecation")
@@ -2518,11 +2518,11 @@ public class BeaDataDownloader {
   public void convertTradeStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting trade statistics data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting trade statistics data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2621,11 +2621,11 @@ public class BeaDataDownloader {
   public void convertItaDataToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2729,7 +2729,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file (consistent with rest of codebase)
     storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "ita_data");
-    LOGGER.info("ITA data Parquet written: {} ({} records)", outputFile, records.size());
+    LOGGER.debug("ITA data Parquet written: {} ({} records)", outputFile, records.size());
   }
 
   /**
@@ -2738,11 +2738,11 @@ public class BeaDataDownloader {
   public void convertIndustryGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.info("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    LOGGER.debug("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
 
@@ -2826,7 +2826,7 @@ public class BeaDataDownloader {
 
     // Use StorageProvider to write the parquet file
     storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "industry_gdp");
-    LOGGER.info("Industry GDP Parquet written (Map version): {} ({} records)", outputFile, records.size());
+    LOGGER.debug("Industry GDP Parquet written (Map version): {} ({} records)", outputFile, records.size());
   }
 
   private String parseTradeType(String description) {
@@ -2954,6 +2954,6 @@ public class BeaDataDownloader {
     }
 
     storageProvider.writeAvroParquet(targetFilePath, schema, records, "GdpStatistics");
-    LOGGER.info("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
+    LOGGER.debug("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
   }
 }
