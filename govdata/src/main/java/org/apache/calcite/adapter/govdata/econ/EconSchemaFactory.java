@@ -72,7 +72,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * This method is called by GovDataSchemaFactory to collect table definitions.
    */
   public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
-    LOGGER.info("Building ECON schema operand configuration");
+    LOGGER.debug("Building ECON schema operand configuration");
 
     // Read environment variables at runtime (not static initialization)
     String govdataCacheDir = getGovDataCacheDir();
@@ -91,17 +91,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     String econParquetDir = govdataParquetDir + "/source=econ";
 
     // Use unified govdata directory structure (matching GEO pattern)
-    LOGGER.info("Using unified govdata directories - cache: {}, parquet: {}",
+    LOGGER.debug("Using unified govdata directories - cache: {}, parquet: {}",
         econRawDir, econParquetDir);
 
     // Get year range from unified environment variables
     Integer startYear = getConfiguredStartYear(operand);
     Integer endYear = getConfiguredEndYear(operand);
 
-    LOGGER.info("Economic data configuration:");
-    LOGGER.info("  Cache directory: {}", econRawDir);
-    LOGGER.info("  Parquet directory: {}", econParquetDir);
-    LOGGER.info("  Year range: {} - {}", startYear, endYear);
+    LOGGER.debug("Economic data configuration:");
+    LOGGER.debug("  Cache directory: {}", econRawDir);
+    LOGGER.debug("  Parquet directory: {}", econParquetDir);
+    LOGGER.debug("  Year range: {} - {}", startYear, endYear);
 
     // Extract API keys from environment variables or system properties
     String blsApiKey = System.getenv("BLS_API_KEY");
@@ -137,10 +137,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       enabledSources = java.util.Arrays.asList("bls", "fred", "treasury", "bea", "worldbank");
     }
 
-    LOGGER.info("  Enabled sources: {}", enabledSources);
-    LOGGER.info("  BLS API key: {}", blsApiKey != null ? "configured" : "not configured");
-    LOGGER.info("  FRED API key: {}", fredApiKey != null ? "configured" : "not configured");
-    LOGGER.info("  BEA API key: {}", beaApiKey != null ? "configured" : "not configured");
+    LOGGER.debug("  Enabled sources: {}", enabledSources);
+    LOGGER.debug("  BLS API key: {}", blsApiKey != null ? "configured" : "not configured");
+    LOGGER.debug("  FRED API key: {}", fredApiKey != null ? "configured" : "not configured");
+    LOGGER.debug("  BEA API key: {}", beaApiKey != null ? "configured" : "not configured");
 
     // Parse custom FRED series configuration
     @SuppressWarnings("unchecked")
@@ -158,9 +158,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       defaultPartitionStrategy = "AUTO";
     }
 
-    LOGGER.info("  Custom FRED series: {}", customFredSeries != null ? customFredSeries.size() + " series configured" : "none");
-    LOGGER.info("  FRED series groups: {}", fredSeriesGroups != null ? fredSeriesGroups.size() + " groups configured" : "none");
-    LOGGER.info("  Default partition strategy: {}", defaultPartitionStrategy);
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("  Custom FRED series: {}", customFredSeries != null ? customFredSeries.size() + " series configured" : "none");
+      LOGGER.debug("  FRED series groups: {}", fredSeriesGroups != null ? fredSeriesGroups.size() + " groups configured" : "none");
+    }
+    LOGGER.debug("  Default partition strategy: {}", defaultPartitionStrategy);
 
     // Check auto-download setting (default true like GEO)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
@@ -173,7 +175,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Download data if auto-download is enabled
     if (autoDownload) {
-      LOGGER.info("Auto-download enabled for ECON data");
+      LOGGER.debug("Auto-download enabled for ECON data");
       try {
         downloadEconData(mutableOperand, econRawDir, econParquetDir,
             blsApiKey, fredApiKey, beaApiKey, enabledSources, startYear, endYear, storageProvider,
@@ -223,7 +225,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       int startYear, int endYear, StorageProvider storageProvider,
       List<String> customFredSeries, Map<String, Object> fredSeriesGroups, String defaultPartitionStrategy) throws IOException {
 
-    LOGGER.info("Downloading economic data to: {}", cacheDir);
+    LOGGER.debug("Downloading economic data to: {}", cacheDir);
 
     // Create cache and parquet directories
     File cacheDirFile = new File(cacheDir);
@@ -273,7 +275,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           blsDownloader.convertToParquet(new File(cacheYearPath), regionalParquetPath);
         }
 
-        LOGGER.info("BLS data download completed");
+        LOGGER.debug("BLS data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading BLS data", e);
       }
@@ -295,7 +297,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           fredDownloader.convertToParquet(new File(cacheFredYearPath), fredParquetPath);
         }
 
-        LOGGER.info("FRED data download completed");
+        LOGGER.debug("FRED data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED data", e);
       }
@@ -305,7 +307,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()
         && (customFredSeries != null || fredSeriesGroups != null)) {
       try {
-        LOGGER.info("Processing custom FRED series configuration");
+        LOGGER.debug("Processing custom FRED series configuration");
         downloadCustomFredSeries(cacheDir, parquetDir, fredApiKey, storageProvider,
             customFredSeries, fredSeriesGroups, defaultPartitionStrategy, startYear, endYear);
       } catch (Exception e) {
@@ -333,7 +335,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           treasuryDownloader.convertFederalDebtToParquet(new File(cacheTimeseriesYearPath), debtParquetPath);
         }
 
-        LOGGER.info("Treasury data download completed");
+        LOGGER.debug("Treasury data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading Treasury data", e);
       }
@@ -379,7 +381,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           beaDownloader.convertIndustryGdpToParquet(new File(cacheIndicatorsYearPath), industryGdpParquetPath);
         }
 
-        LOGGER.info("BEA data download completed");
+        LOGGER.debug("BEA data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading BEA data", e);
       }
@@ -401,14 +403,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           worldBankDownloader.convertToParquet(new File(cacheWorldBankYearPath), worldParquetPath);
         }
 
-        LOGGER.info("World Bank data download completed");
+        LOGGER.debug("World Bank data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading World Bank data", e);
       }
     }
 
     // Download FRED series catalog if FRED API key is available
-    LOGGER.info("FRED catalog download check: fredApiKey={}, isEmpty={}",
+    LOGGER.debug("FRED catalog download check: fredApiKey={}, isEmpty={}",
         fredApiKey != null ? "configured" : "null",
         fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
@@ -416,7 +418,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Downloading FRED series catalog");
         FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir);
         catalogDownloader.downloadCatalog();
-        LOGGER.info("FRED catalog download completed");
+        LOGGER.debug("FRED catalog download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED catalog", e);
       }
@@ -434,7 +436,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       StorageProvider storageProvider, List<String> customFredSeries, Map<String, Object> fredSeriesGroups,
       String defaultPartitionStrategy, int startYear, int endYear) throws IOException {
 
-    LOGGER.info("Downloading custom FRED series with smart partitioning");
+    LOGGER.debug("Downloading custom FRED series with smart partitioning");
 
     // Initialize partition analyzer
     FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
@@ -489,11 +491,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredApiKey, storageProvider);
 
     for (FredSeriesGroup group : parsedGroups) {
-      LOGGER.info("Processing FRED series group: {}", group.getGroupName());
+      LOGGER.debug("Processing FRED series group: {}", group.getGroupName());
 
       // Analyze partitioning strategy for this group
       FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(group, allCustomSeries);
-      LOGGER.info("Partition analysis for group '{}': {}", group.getGroupName(), analysis);
+      LOGGER.debug("Partition analysis for group '{}': {}", group.getGroupName(), analysis);
 
       // Download series data with partitioning
       String groupTableName = group.getTableName();
@@ -534,14 +536,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Handle ungrouped custom series
     if (customFredSeries != null && !customFredSeries.isEmpty()) {
-      LOGGER.info("Processing {} ungrouped custom FRED series", customFredSeries.size());
+      LOGGER.debug("Processing {} ungrouped custom FRED series", customFredSeries.size());
 
       // Create default group for ungrouped series
       FredSeriesGroup defaultGroup = new FredSeriesGroup("custom_series", customFredSeries,
           FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase()), null);
 
       FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(defaultGroup, allCustomSeries);
-      LOGGER.info("Partition analysis for ungrouped series: {}", analysis);
+      LOGGER.debug("Partition analysis for ungrouped series: {}", analysis);
 
       // Download ungrouped series
       for (String seriesId : customFredSeries) {
@@ -569,7 +571,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
               // No partitioning
               String parquetPath = storageProvider.resolvePath(parquetDir, "type=custom/" + tableName + ".parquet");
               fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null);
-              LOGGER.info("Created non-partitioned parquet for series {} at: {}", seriesId, parquetPath);
+              LOGGER.debug("Created non-partitioned parquet for series {} at: {}", seriesId, parquetPath);
             } else {
               // Apply partitioning
               List<String> partitionFields = analysis.getPartitionFields();
@@ -577,7 +579,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
                 String partitionPath = buildPartitionPath(parquetDir, tableName, partitionFields, year, seriesId);
                 fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields);
               }
-              LOGGER.info("Created partitioned parquet for series {} as table: {}", seriesId, tableName);
+              LOGGER.debug("Created partitioned parquet for series {} as table: {}", seriesId, tableName);
             }
 
           } catch (Exception e) {
@@ -587,7 +589,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    LOGGER.info("Custom FRED series download completed");
+    LOGGER.debug("Custom FRED series download completed");
   }
 
   /**
@@ -684,16 +686,16 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Start with base table definitions from econ-schema.json
     List<Map<String, Object>> tables = new ArrayList<>(GovDataSubSchemaFactory.super.loadTableDefinitions());
 
-    LOGGER.info("Loaded {} base table definitions from econ-schema.json", tables.size());
+    LOGGER.debug("Loaded {} base table definitions from econ-schema.json", tables.size());
 
     // Add custom FRED table definitions if operand is available
     List<Map<String, Object>> customTables = generateCustomFredTableDefinitions();
     if (!customTables.isEmpty()) {
       tables.addAll(customTables);
-      LOGGER.info("Added {} custom FRED table definitions", customTables.size());
+      LOGGER.debug("Added {} custom FRED table definitions", customTables.size());
     }
 
-    LOGGER.info("Total ECON table definitions: {}", tables.size());
+    LOGGER.debug("Total ECON table definitions: {}", tables.size());
     return tables;
   }
 
@@ -704,12 +706,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private List<Map<String, Object>> generateCustomFredTableDefinitions() {
     List<Map<String, Object>> customTables = new ArrayList<>();
 
-    LOGGER.info("generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
+    LOGGER.debug("generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
         fredSeriesGroups != null ? fredSeriesGroups.size() : "null",
         customFredSeries != null ? customFredSeries.size() : "null");
 
     if (fredSeriesGroups != null) {
-      LOGGER.info("Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
+      LOGGER.debug("Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
 
       for (Map.Entry<String, Object> entry : fredSeriesGroups.entrySet()) {
         String groupName = entry.getKey();
@@ -740,7 +742,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Handle ungrouped custom series
     if (customFredSeries != null && !customFredSeries.isEmpty()) {
-      LOGGER.info("Generating table definitions from {} ungrouped custom FRED series", customFredSeries.size());
+      LOGGER.debug("Generating table definitions from {} ungrouped custom FRED series", customFredSeries.size());
 
       // Group series by expected table name
       Map<String, List<String>> seriesByTable = new HashMap<>();
@@ -765,7 +767,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    LOGGER.info("Generated {} custom FRED table definitions", customTables.size());
+    LOGGER.debug("Generated {} custom FRED table definitions", customTables.size());
     return customTables;
   }
 

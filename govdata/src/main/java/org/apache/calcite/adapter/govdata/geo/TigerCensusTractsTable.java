@@ -117,7 +117,9 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
                 File[] stateDirectories = tractDir.listFiles(File::isDirectory);
                 if (stateDirectories != null) {
                   for (File stateDir : stateDirectories) {
-                    LOGGER.debug("Processing census tracts for state directory: {}", stateDir.getName());
+                    if (LOGGER.isDebugEnabled()) {
+                      LOGGER.debug("Processing census tracts for state directory: {}", stateDir.getName());
+                    }
                     
                     // Parse tract shapefile for this state (e.g., tl_2024_06_tract for California)
                     String stateCode = stateDir.getName();

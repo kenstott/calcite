@@ -117,7 +117,9 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
                 File[] stateDirectories = bgDir.listFiles(File::isDirectory);
                 if (stateDirectories != null) {
                   for (File stateDir : stateDirectories) {
-                    LOGGER.debug("Processing block groups for state directory: {}", stateDir.getName());
+                    if (LOGGER.isDebugEnabled()) {
+                      LOGGER.debug("Processing block groups for state directory: {}", stateDir.getName());
+                    }
                     
                     // Parse block group shapefile for this state (e.g., tl_2024_06_bg for California)
                     String stateCode = stateDir.getName();
