@@ -59,7 +59,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
@@ -71,7 +72,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * with FileConversionManager.
  */
 public class XbrlToParquetConverter implements FileConverter {
-  private static final Logger LOGGER = Logger.getLogger(XbrlToParquetConverter.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(XbrlToParquetConverter.class);
 
   // Global lock for complete single-threading of all vectorization operations to ensure 100% thread safety
   private static final Object GLOBAL_VECTORIZATION_LOCK = new Object();
@@ -100,7 +101,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
   @Override public List<File> convert(File sourceFile, File targetDirectory,
       ConversionMetadata metadata) throws IOException {
-    LOGGER.info("DEBUG: XbrlToParquetConverter.convert() START for file: " + sourceFile.getAbsolutePath());
+    LOGGER.debug(" XbrlToParquetConverter.convert() START for file: " + sourceFile.getAbsolutePath());
     List<File> outputFiles = new ArrayList<>();
     
     // Extract accession from metadata if available
@@ -123,13 +124,13 @@ public class XbrlToParquetConverter implements FileConverter {
       String fileName = sourceFile.getName().toLowerCase();
       if (fileName.endsWith(".htm") || fileName.endsWith(".html")) {
         // Try to parse as inline XBRL
-        LOGGER.info("Attempting to parse inline XBRL from: " + sourceFile.getName());
+        LOGGER.debug("Attempting to parse inline XBRL from: " + sourceFile.getName());
         doc = parseInlineXbrl(sourceFile);
         if (doc != null) {
           isInlineXbrl = true;
-          LOGGER.info("Successfully parsed inline XBRL from HTML: " + sourceFile.getName());
+          LOGGER.debug("Successfully parsed inline XBRL from HTML: " + sourceFile.getName());
         } else {
-          LOGGER.warning("Failed to parse inline XBRL from HTML: " + sourceFile.getName());
+          LOGGER.warn("Failed to parse inline XBRL from HTML: " + sourceFile.getName());
         }
       }
 
@@ -144,15 +145,15 @@ public class XbrlToParquetConverter implements FileConverter {
       
       // For inline XBRL files that failed initial parse, try specialized inline XBRL parsing
       if (doc == null && (fileName.endsWith(".htm") || fileName.endsWith(".html"))) {
-        LOGGER.info("Standard XML parsing failed for HTML file, attempting inline XBRL extraction: " + sourceFile.getName());
+        LOGGER.debug("Standard XML parsing failed for HTML file, attempting inline XBRL extraction: " + sourceFile.getName());
         try {
           // Parse as HTML and extract inline XBRL elements
           doc = parseInlineXbrl(sourceFile);
           if (doc != null) {
-            LOGGER.info("Successfully extracted inline XBRL data from: " + fileName);
+            LOGGER.debug("Successfully extracted inline XBRL data from: " + fileName);
           }
         } catch (Exception e) {
-          LOGGER.warning("Inline XBRL extraction failed: " + e.getMessage());
+          LOGGER.warn("Inline XBRL extraction failed: " + e.getMessage());
           // Get the full stack trace for debugging
           java.io.StringWriter sw = new java.io.StringWriter();
           e.printStackTrace(new java.io.PrintWriter(sw));
@@ -166,7 +167,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // If still no document, don't create minimal parquet files
         // Let the parsing failure be properly reported and track for offline review
         if (doc == null) {
-          LOGGER.warning("Failed to extract XBRL data from inline XBRL file - parsing error for: " + fileName);
+          LOGGER.warn("Failed to extract XBRL data from inline XBRL file - parsing error for: " + fileName);
 
           // Only track generic failure if we didn't already track the exception
           // (this happens when parseInlineXbrl returns null without throwing)
@@ -179,11 +180,11 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Debug: Check document structure after successful parsing
-      LOGGER.info("DEBUG: Document parsing succeeded for: " + sourceFile.getName());
-      LOGGER.info("DEBUG: Document has root element: " + (doc.getDocumentElement() != null ? doc.getDocumentElement().getNodeName() : "null"));
-      LOGGER.info("DEBUG: Document child nodes count: " + doc.getChildNodes().getLength());
+      LOGGER.debug(" Document parsing succeeded for: " + sourceFile.getName());
+      LOGGER.debug(" Document has root element: " + (doc.getDocumentElement() != null ? doc.getDocumentElement().getNodeName() : "null"));
+      LOGGER.debug(" Document child nodes count: " + doc.getChildNodes().getLength());
       if (doc.getDocumentElement() != null) {
-        LOGGER.info("DEBUG: Root element has child nodes count: " + doc.getDocumentElement().getChildNodes().getLength());
+        LOGGER.debug(" Root element has child nodes count: " + doc.getDocumentElement().getChildNodes().getLength());
       }
 
       // Extract filing metadata
@@ -191,17 +192,17 @@ public class XbrlToParquetConverter implements FileConverter {
       String filingType = extractFilingType(doc, sourceFile);
       String filingDate = extractFilingDate(doc, sourceFile);
 
-      LOGGER.info("DEBUG: Extracted metadata for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
+      LOGGER.debug(" Extracted metadata for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
       
       // Skip conversion if we couldn't extract required metadata
       if (cik == null || cik.equals("0000000000")) {
-        LOGGER.warning("DEBUG: Skipping conversion due to invalid or missing CIK: " + sourceFile.getName() + " (extracted CIK: " + cik + ")");
+        LOGGER.warn("DEBUG: Skipping conversion due to invalid or missing CIK: " + sourceFile.getName() + " (extracted CIK: " + cik + ")");
         return outputFiles; // Return empty list
       }
 
       // Validate filing date - must be present
       if (filingDate == null) {
-        LOGGER.warning("DEBUG: Skipping conversion - could not extract filing date from: " + sourceFile.getName());
+        LOGGER.warn("DEBUG: Skipping conversion - could not extract filing date from: " + sourceFile.getName());
         return outputFiles; // Skip conversion
       }
       
@@ -210,25 +211,25 @@ public class XbrlToParquetConverter implements FileConverter {
         try {
           int year = Integer.parseInt(filingDate.substring(0, 4));
           if (year < 1934 || year > java.time.Year.now().getValue()) {
-            LOGGER.warning("Invalid year " + year + " in filing date " + filingDate + " for " + sourceFile.getName());
+            LOGGER.warn("Invalid year " + year + " in filing date " + filingDate + " for " + sourceFile.getName());
             return outputFiles; // Skip conversion
           }
         } catch (NumberFormatException e) {
-          LOGGER.warning("Invalid filing date format: " + filingDate + " for " + sourceFile.getName());
+          LOGGER.warn("Invalid filing date format: " + filingDate + " for " + sourceFile.getName());
           return outputFiles; // Skip conversion
         }
       } else {
-        LOGGER.warning("Filing date too short: " + filingDate + " for " + sourceFile.getName());
+        LOGGER.warn("Filing date too short: " + filingDate + " for " + sourceFile.getName());
         return outputFiles; // Skip conversion
       }
       
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
       if (isInsiderForm(doc, filingType)) {
-        LOGGER.info("Processing as insider form: " + sourceFile.getName());
+        LOGGER.debug("Processing as insider form: " + sourceFile.getName());
         return convertInsiderForm(doc, sourceFile, targetDirectory, cik, filingType, filingDate, accession);
       }
       
-      LOGGER.info("Not an insider form, proceeding to facts extraction: " + sourceFile.getName());
+      LOGGER.debug("Not an insider form, proceeding to facts extraction: " + sourceFile.getName());
       
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
@@ -255,20 +256,20 @@ public class XbrlToParquetConverter implements FileConverter {
       File factsFile = partitionPath.resolve(
           String.format("%s_%s_facts.parquet", cik, uniqueId)).toFile();
 
-      LOGGER.info("DEBUG: Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsFile.getAbsolutePath());
+      LOGGER.debug(" Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsFile.getAbsolutePath());
       try {
         writeFactsToParquet(doc, factsFile, cik, filingType, filingDate);
         if (factsFile.exists() && factsFile.length() > 0) {
           outputFiles.add(factsFile);
-          LOGGER.info("DEBUG: Successfully created facts.parquet (" + factsFile.length() + " bytes): " + factsFile.getName());
+          LOGGER.debug(" Successfully created facts.parquet (" + factsFile.length() + " bytes): " + factsFile.getName());
         } else {
-          LOGGER.warning("DEBUG: facts.parquet creation failed or resulted in empty file: " + factsFile.getAbsolutePath() +
+          LOGGER.warn("DEBUG: facts.parquet creation failed or resulted in empty file: " + factsFile.getAbsolutePath() +
                         " (exists: " + factsFile.exists() + ", size: " + (factsFile.exists() ? factsFile.length() : "N/A") + ")");
           trackConversionError(sourceFile, "facts_parquet_creation_failed",
                               "writeFactsToParquet completed but file missing or empty");
         }
       } catch (Exception e) {
-        LOGGER.severe("DEBUG: Exception during facts.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
+        LOGGER.error("DEBUG: Exception during facts.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
         trackConversionError(sourceFile, "facts_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
         throw e; // Re-throw to maintain original error handling
       }
@@ -295,19 +296,19 @@ public class XbrlToParquetConverter implements FileConverter {
       File relationshipsFile = partitionPath.resolve(
           String.format("%s_%s_relationships.parquet", cik, uniqueId)).toFile();
 
-      LOGGER.info("DEBUG: Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsFile.getAbsolutePath());
+      LOGGER.debug(" Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsFile.getAbsolutePath());
       try {
         writeRelationshipsToParquet(doc, relationshipsFile, cik, filingType, filingDate, sourceFile);
         if (relationshipsFile.exists()) {
           outputFiles.add(relationshipsFile);
-          LOGGER.info("DEBUG: Successfully created relationships.parquet (" + relationshipsFile.length() + " bytes): " + relationshipsFile.getName());
+          LOGGER.debug(" Successfully created relationships.parquet (" + relationshipsFile.length() + " bytes): " + relationshipsFile.getName());
         } else {
-          LOGGER.warning("DEBUG: relationships.parquet creation failed - file not created: " + relationshipsFile.getAbsolutePath());
+          LOGGER.warn("DEBUG: relationships.parquet creation failed - file not created: " + relationshipsFile.getAbsolutePath());
           trackConversionError(sourceFile, "relationships_parquet_creation_failed",
                               "writeRelationshipsToParquet completed but file was not created");
         }
       } catch (Exception e) {
-        LOGGER.severe("DEBUG: Exception during relationships.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
+        LOGGER.error("DEBUG: Exception during relationships.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
         trackConversionError(sourceFile, "relationships_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
         throw e; // Re-throw to maintain original error handling
       }
@@ -384,7 +385,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Last resort - but log warning
-    LOGGER.warning("Could not extract CIK from " + sourceFile.getName() + ", skipping conversion");
+    LOGGER.warn("Could not extract CIK from " + sourceFile.getName() + ", skipping conversion");
     return null; // Return null to indicate failure
   }
 
@@ -494,7 +495,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       
     } catch (IOException e) {
-      LOGGER.warning("Failed to parse HTML file for date extraction: " + e.getMessage());
+      LOGGER.warn("Failed to parse HTML file for date extraction: " + e.getMessage());
     }
     
     return null;
@@ -566,14 +567,14 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Return null if no date found - let the caller handle this
-    LOGGER.warning("Could not extract filing date from: " + sourceFile.getName());
+    LOGGER.warn("Could not extract filing date from: " + sourceFile.getName());
     return null;
   }
 
   private void writeFactsToParquet(Document doc, File outputFile,
       String cik, String filingType, String filingDate) throws IOException {
 
-    LOGGER.info("writeFactsToParquet called for " + outputFile.getName() + 
+    LOGGER.debug("writeFactsToParquet called for " + outputFile.getName() +
                 " (CIK: " + cik + ", Type: " + filingType + ", Date: " + filingDate + ")");
 
     // Create Avro schema for facts
@@ -600,7 +601,7 @@ public class XbrlToParquetConverter implements FileConverter {
     List<GenericRecord> records = new ArrayList<>();
     NodeList allElements = doc.getElementsByTagName("*");
 
-    LOGGER.info("Found " + allElements.getLength() + " total XML elements in document");
+    LOGGER.debug("Found " + allElements.getLength() + " total XML elements in document");
 
     int elementsWithContextRef = 0;
 
@@ -720,12 +721,12 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    LOGGER.info("Found " + elementsWithContextRef + " elements with contextRef attributes");
-    LOGGER.info("Extracted " + records.size() + " valid fact records (including enhanced extraction for elements without contextRef)");
+    LOGGER.debug("Found " + elementsWithContextRef + " elements with contextRef attributes");
+    LOGGER.debug("Extracted " + records.size() + " valid fact records (including enhanced extraction for elements without contextRef)");
 
     if (records.isEmpty()) {
-      LOGGER.warning("No facts extracted from XBRL document for " + filingDate + " despite enhanced extraction - document may not contain recognizable financial facts");
-      LOGGER.warning("DEBUG: Document analysis - total elements: " + allElements.getLength() +
+      LOGGER.warn("No facts extracted from XBRL document for " + filingDate + " despite enhanced extraction - document may not contain recognizable financial facts");
+      LOGGER.warn("DEBUG: Document analysis - total elements: " + allElements.getLength() +
                      ", elements with contextRef: " + elementsWithContextRef);
 
       // Additional diagnostic info for inline XBRL documents
@@ -740,7 +741,7 @@ public class XbrlToParquetConverter implements FileConverter {
         if (tagName.contains("dei:")) deiCount++;
       }
 
-      LOGGER.warning("DEBUG: Inline XBRL elements: " + ixElements.getLength() +
+      LOGGER.warn("DEBUG: Inline XBRL elements: " + ixElements.getLength() +
                      ", us-gaap elements: " + usGaapCount +
                      ", dei elements: " + deiCount);
 
@@ -750,13 +751,13 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Use consolidated StorageProvider method for Parquet writing
     try {
-      LOGGER.info("Writing facts to parquet file: " + outputFile.getAbsolutePath());
-      LOGGER.info("DEBUG: About to write " + records.size() + " fact records using storageProvider.writeAvroParquet");
+      LOGGER.debug("Writing facts to parquet file: " + outputFile.getAbsolutePath());
+      LOGGER.debug(" About to write " + records.size() + " fact records using storageProvider.writeAvroParquet");
 
       // Ensure parent directory exists
       File parentDir = outputFile.getParentFile();
       if (!parentDir.exists()) {
-        LOGGER.info("DEBUG: Creating parent directory: " + parentDir.getAbsolutePath());
+        LOGGER.debug(" Creating parent directory: " + parentDir.getAbsolutePath());
         boolean dirCreated = parentDir.mkdirs();
         if (!dirCreated) {
           throw new IOException("Failed to create parent directory: " + parentDir.getAbsolutePath());
@@ -765,28 +766,28 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Check if we have any records to write
       if (records.isEmpty()) {
-        LOGGER.warning("DEBUG: No fact records to write - creating empty parquet file for cache validation");
+        LOGGER.warn("DEBUG: No fact records to write - creating empty parquet file for cache validation");
         // Still need to create the file for cache validation
       }
 
       storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "facts");
-      LOGGER.info("DEBUG: storageProvider.writeAvroParquet completed successfully");
+      LOGGER.debug(" storageProvider.writeAvroParquet completed successfully");
 
       // Verify file was created successfully with detailed checks
       if (!outputFile.exists()) {
         String errorMsg = "Facts parquet file was not created: " + outputFile.getAbsolutePath();
-        LOGGER.severe("DEBUG: " + errorMsg);
+        LOGGER.error("DEBUG: " + errorMsg);
         trackConversionError(new File(outputFile.getParent()), "facts_file_not_created", errorMsg);
         throw new IOException(errorMsg);
       }
 
       if (outputFile.length() == 0) {
         String errorMsg = "Facts parquet file was created but is empty: " + outputFile.getAbsolutePath();
-        LOGGER.warning("DEBUG: " + errorMsg + " (this may be expected for filings with no extractable facts)");
+        LOGGER.warn("DEBUG: " + errorMsg + " (this may be expected for filings with no extractable facts)");
         if (records.isEmpty()) {
-          LOGGER.info("DEBUG: Empty file is expected since no fact records were extracted");
+          LOGGER.debug(" Empty file is expected since no fact records were extracted");
         } else {
-          LOGGER.severe("DEBUG: Empty file is unexpected since " + records.size() + " records were provided to writeAvroParquet");
+          LOGGER.error("DEBUG: Empty file is unexpected since " + records.size() + " records were provided to writeAvroParquet");
           trackConversionError(new File(outputFile.getParent()), "facts_file_empty_with_records",
                              "Empty file despite " + records.size() + " records");
           throw new IOException(errorMsg);
@@ -797,7 +798,7 @@ public class XbrlToParquetConverter implements FileConverter {
                   " (" + outputFile.length() + " bytes)");
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
+      LOGGER.error("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
       trackConversionError(new File(outputFile.getParent()), "facts_write_exception",
                          "Exception: " + e.getClass().getName() + " - " + e.getMessage());
       throw new IOException("Failed to write facts to parquet: " + e.getMessage(), e);
@@ -1120,18 +1121,18 @@ public class XbrlToParquetConverter implements FileConverter {
    * Inline XBRL uses ix: namespace tags embedded in HTML.
    */
   private Document parseInlineXbrl(File htmlFile) {
-    System.out.println("========== PARSE INLINE XBRL START for: " + htmlFile.getName() + " ==========");
-    LOGGER.info("parseInlineXbrl START for: " + htmlFile.getAbsolutePath());
+    LOGGER.debug("========== PARSE INLINE XBRL START for: " + htmlFile.getName() + " ==========");
+    LOGGER.debug("parseInlineXbrl START for: " + htmlFile.getAbsolutePath());
     try {
       // Read HTML file
-      LOGGER.info("Reading HTML file...");
+      LOGGER.debug("Reading HTML file...");
       String html = new String(Files.readAllBytes(htmlFile.toPath()));
-      LOGGER.info("HTML file size: " + html.length() + " bytes");
+      LOGGER.debug("HTML file size: " + html.length() + " bytes");
 
       // Parse with Jsoup - use XML parser to preserve namespace prefixes
-      LOGGER.info("Calling Jsoup.parse with XML parser for namespace support...");
+      LOGGER.debug("Calling Jsoup.parse with XML parser for namespace support...");
       org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html, "", org.jsoup.parser.Parser.xmlParser());
-      LOGGER.info("Jsoup.parse completed");
+      LOGGER.debug("Jsoup.parse completed");
       // XML syntax already set by xmlParser
 
       // Look for inline XBRL elements - JSoup handles namespace prefixes as part of the tag name
@@ -1140,30 +1141,30 @@ public class XbrlToParquetConverter implements FileConverter {
       // Collect all ix: prefixed elements (these are inline XBRL elements)
       // Use pipe notation for namespace selectors in XML mode
       try {
-        LOGGER.info("Trying selector with pipe notation: ix|nonNumeric, ix|nonFraction");
+        LOGGER.debug("Trying selector with pipe notation: ix|nonNumeric, ix|nonFraction");
         ixElements.addAll(jsoupDoc.select("ix|nonNumeric, ix|nonFraction"));
       } catch (Exception e) {
-        LOGGER.warning("Selector with pipe notation failed: " + e.getMessage());
+        LOGGER.warn("Selector with pipe notation failed: " + e.getMessage());
       }
 
       // Also try lowercase variants
       if (ixElements.isEmpty()) {
         try {
-          LOGGER.info("Trying lowercase selectors");
+          LOGGER.debug("Trying lowercase selectors");
           ixElements.addAll(jsoupDoc.select("ix|nonnumeric, ix|nonfraction"));
         } catch (Exception e) {
-          LOGGER.warning("Lowercase selector failed: " + e.getMessage());
+          LOGGER.warn("Lowercase selector failed: " + e.getMessage());
         }
       }
 
       // Debug: Log what we're finding
-      LOGGER.info("DEBUG: Initial selector found " + ixElements.size() + " elements");
+      LOGGER.debug(" Initial selector found " + ixElements.size() + " elements");
 
       // Debug: Check what tag names JSoup is seeing
       int debugCount = 0;
       for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
         if (elem.tagName().startsWith("ix:") && debugCount < 5) {
-          LOGGER.info("DEBUG: Found tag with name: " + elem.tagName());
+          LOGGER.debug(" Found tag with name: " + elem.tagName());
           debugCount++;
         }
       }
@@ -1179,20 +1180,20 @@ public class XbrlToParquetConverter implements FileConverter {
 
       if (ixElements.isEmpty()) {
         // No inline XBRL found
-        LOGGER.fine("No inline XBRL elements found in: " + htmlFile.getName());
+        LOGGER.debug("No inline XBRL elements found in: " + htmlFile.getName());
         return null;
       }
 
-      System.out.println("========== FOUND " + ixElements.size() + " INLINE XBRL ELEMENTS in: " + htmlFile.getName() + " ==========");
-      LOGGER.info("Found " + ixElements.size() + " inline XBRL elements in: " + htmlFile.getName());
+      LOGGER.debug("========== FOUND " + ixElements.size() + " INLINE XBRL ELEMENTS in: " + htmlFile.getName() + " ==========");
+      LOGGER.debug("Found " + ixElements.size() + " inline XBRL elements in: " + htmlFile.getName());
 
       // Debug: Log detailed information about found elements
       if (ixElements.size() > 0) {
-        LOGGER.info("DEBUG: Sample of found inline XBRL elements:");
+        LOGGER.debug(" Sample of found inline XBRL elements:");
         int sampleCount = Math.min(5, ixElements.size());
         for (int i = 0; i < sampleCount; i++) {
           org.jsoup.nodes.Element elem = ixElements.get(i);
-          LOGGER.info("DEBUG: Element " + (i+1) + ": tag=" + elem.tagName() +
+          LOGGER.debug(" Element " + (i+1) + ": tag=" + elem.tagName() +
                      ", name=" + elem.attr("name") +
                      ", contextRef=" + elem.attr("contextRef") +
                      ", text=" + elem.text().substring(0, Math.min(100, elem.text().length())));
@@ -1356,28 +1357,28 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Log the summary
-      LOGGER.info("Processed inline XBRL from " + htmlFile.getName());
-      LOGGER.info("  Found " + ixElements.size() + " inline XBRL elements");
-      LOGGER.info("  Added " + factsAdded + " facts to XML document");
-      LOGGER.info("  Skipped " + factsSkippedNoName + " elements (no name), " +
+      LOGGER.debug("Processed inline XBRL from " + htmlFile.getName());
+      LOGGER.debug("  Found " + ixElements.size() + " inline XBRL elements");
+      LOGGER.debug("  Added " + factsAdded + " facts to XML document");
+      LOGGER.debug("  Skipped " + factsSkippedNoName + " elements (no name), " +
                   factsSkippedNoContextRef + " elements (no contextRef)");
 
       if (factsAdded == 0) {
-        LOGGER.warning("No valid facts extracted from inline XBRL in " + htmlFile.getName());
+        LOGGER.warn("No valid facts extracted from inline XBRL in " + htmlFile.getName());
         return null;
       }
 
       // Debug: Log conversion summary
-      LOGGER.info("DEBUG: parseInlineXbrl conversion summary for " + htmlFile.getName() + ":");
-      LOGGER.info("DEBUG: - Facts added: " + factsAdded);
-      LOGGER.info("DEBUG: - Facts skipped (no contextRef): " + factsSkippedNoContextRef);
-      LOGGER.info("DEBUG: - Facts skipped (no name): " + factsSkippedNoName);
-      LOGGER.info("DEBUG: - Final document has " + doc.getDocumentElement().getChildNodes().getLength() + " child elements");
+      LOGGER.debug(" parseInlineXbrl conversion summary for " + htmlFile.getName() + ":");
+      LOGGER.debug(" - Facts added: " + factsAdded);
+      LOGGER.debug(" - Facts skipped (no contextRef): " + factsSkippedNoContextRef);
+      LOGGER.debug(" - Facts skipped (no name): " + factsSkippedNoName);
+      LOGGER.debug(" - Final document has " + doc.getDocumentElement().getChildNodes().getLength() + " child elements");
 
       return doc;
 
     } catch (Exception e) {
-      LOGGER.warning("Exception in parseInlineXbrl: " + e.getMessage());
+      LOGGER.warn("Exception in parseInlineXbrl: " + e.getMessage());
       // Re-throw to let caller handle and track with full stack trace
       throw new RuntimeException("Failed to parse inline XBRL from " + htmlFile.getName(), e);
     }
@@ -1548,7 +1549,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to extract MD&A from HTML: " + e.getMessage());
+      LOGGER.warn("Failed to extract MD&A from HTML: " + e.getMessage());
     }
   }
 
@@ -1751,11 +1752,11 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeRelationshipsToParquet(Document doc, File outputFile,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
 
-    LOGGER.info(String.format("DEBUG: writeRelationshipsToParquet START for CIK %s filing type %s date %s", cik, filingType, filingDate));
-    LOGGER.info(String.format("DEBUG: Document is null? %s", doc == null));
+    LOGGER.debug(String.format("DEBUG: writeRelationshipsToParquet START for CIK %s filing type %s date %s", cik, filingType, filingDate));
+    LOGGER.debug(String.format("DEBUG: Document is null? %s", doc == null));
     if (doc != null && doc.getDocumentElement() != null) {
-      LOGGER.info(String.format("DEBUG: Document root element: %s", doc.getDocumentElement().getNodeName()));
-      LOGGER.info(String.format("DEBUG: Document has %d child nodes", doc.getChildNodes().getLength()));
+      LOGGER.debug(String.format("DEBUG: Document root element: %s", doc.getDocumentElement().getNodeName()));
+      LOGGER.debug(String.format("DEBUG: Document has %d child nodes", doc.getChildNodes().getLength()));
     }
 
     // Create schema for relationships
@@ -1778,28 +1779,28 @@ public class XbrlToParquetConverter implements FileConverter {
       // Look for linkbase arcs in the document
       // These define relationships between concepts
       NodeList arcs = doc.getElementsByTagNameNS("*", "arc");
-      LOGGER.info(String.format("DEBUG: Found %d arc elements with namespace wildcard", arcs.getLength()));
+      LOGGER.debug(String.format("DEBUG: Found %d arc elements with namespace wildcard", arcs.getLength()));
 
       // Also try without namespace
       if (arcs.getLength() == 0) {
         arcs = doc.getElementsByTagName("arc");
-        LOGGER.info(String.format("DEBUG: Found %d arc elements without namespace", arcs.getLength()));
+        LOGGER.debug(String.format("DEBUG: Found %d arc elements without namespace", arcs.getLength()));
       }
 
       // Also try with common linkbase prefixes
       if (arcs.getLength() == 0) {
         arcs = doc.getElementsByTagName("link:arc");
-        LOGGER.info(String.format("DEBUG: Found %d link:arc elements", arcs.getLength()));
+        LOGGER.debug(String.format("DEBUG: Found %d link:arc elements", arcs.getLength()));
       }
 
       // Log what elements we DO have at root level
       if (arcs.getLength() == 0 && doc.getDocumentElement() != null) {
         NodeList allElems = doc.getDocumentElement().getChildNodes();
-        LOGGER.info(String.format("DEBUG: Document has %d root child elements:", allElems.getLength()));
+        LOGGER.debug(String.format("DEBUG: Document has %d root child elements:", allElems.getLength()));
         for (int i = 0; i < Math.min(10, allElems.getLength()); i++) {
           Node node = allElems.item(i);
           if (node.getNodeType() == Node.ELEMENT_NODE) {
-            LOGGER.info(String.format("DEBUG: Child element %d: %s", i, node.getNodeName()));
+            LOGGER.debug(String.format("DEBUG: Child element %d: %s", i, node.getNodeName()));
           }
         }
       }
@@ -1845,28 +1846,28 @@ public class XbrlToParquetConverter implements FileConverter {
       record.put("preferred_label", arc.getAttribute("preferredLabel"));
 
       records.add(record);
-      LOGGER.info(String.format("DEBUG: Added arc relationship from %s to %s", from, to));
+      LOGGER.debug(String.format("DEBUG: Added arc relationship from %s to %s", from, to));
     }
-    LOGGER.info(String.format("DEBUG: Total arc-based relationships extracted: %d", records.size()));
+    LOGGER.debug(String.format("DEBUG: Total arc-based relationships extracted: %d", records.size()));
     } else {
-      LOGGER.info("DEBUG: Document is null, skipping arc extraction");
+      LOGGER.debug(" Document is null, skipping arc extraction");
     }
 
     // Also extract relationships from inline XBRL if present
     int beforeInlineCount = records.size();
-    LOGGER.info(String.format("DEBUG: Before inline extraction, have %d relationships", beforeInlineCount));
+    LOGGER.debug(String.format("DEBUG: Before inline extraction, have %d relationships", beforeInlineCount));
     extractInlineXBRLRelationships(doc, schema, records, filingDate, sourceFile);
     int inlineRelationships = records.size() - beforeInlineCount;
-    LOGGER.info(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, records.size()));
+    LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, records.size()));
 
     // Always write the parquet file, even if empty, to satisfy cache validation
     try {
-      LOGGER.info("DEBUG: About to write " + records.size() + " relationship records to " + outputFile.getAbsolutePath());
+      LOGGER.debug(" About to write " + records.size() + " relationship records to " + outputFile.getAbsolutePath());
 
       // Ensure parent directory exists
       File parentDir = outputFile.getParentFile();
       if (!parentDir.exists()) {
-        LOGGER.info("DEBUG: Creating parent directory for relationships: " + parentDir.getAbsolutePath());
+        LOGGER.debug(" Creating parent directory for relationships: " + parentDir.getAbsolutePath());
         boolean dirCreated = parentDir.mkdirs();
         if (!dirCreated) {
           throw new IOException("Failed to create parent directory for relationships: " + parentDir.getAbsolutePath());
@@ -1883,7 +1884,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // the filing hasn't been fully processed and will attempt to reprocess it
         // NOTE: Inline XBRL filings will typically have empty relationship files since
         // relationships are in separate linkbase files that we don't currently download
-        LOGGER.fine(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
+        LOGGER.debug(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
         writeRecordsToParquet(records, schema, outputFile); // Write empty records list
         LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputFile));
       }
@@ -1891,15 +1892,15 @@ public class XbrlToParquetConverter implements FileConverter {
       // Verify file was created successfully with detailed checks
       if (!outputFile.exists()) {
         String errorMsg = "Relationships parquet file was not created: " + outputFile.getAbsolutePath();
-        LOGGER.severe("DEBUG: " + errorMsg);
+        LOGGER.error("DEBUG: " + errorMsg);
         trackConversionError(sourceFile, "relationships_file_not_created", errorMsg);
         throw new IOException(errorMsg);
       }
 
-      LOGGER.info("DEBUG: Relationships parquet file successfully created (" + outputFile.length() + " bytes): " + outputFile.getName());
+      LOGGER.debug(" Relationships parquet file successfully created (" + outputFile.length() + " bytes): " + outputFile.getName());
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to write relationships parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
+      LOGGER.error("Failed to write relationships parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
       trackConversionError(sourceFile, "relationships_write_exception",
                          "Exception: " + e.getClass().getName() + " - " + e.getMessage());
       throw new IOException("Failed to write relationships to parquet: " + e.getMessage(), e);
@@ -1950,16 +1951,16 @@ public class XbrlToParquetConverter implements FileConverter {
   private void extractInlineXBRLRelationships(Document doc, Schema schema,
       List<GenericRecord> records, String filingDate, File sourceFile) {
 
-    LOGGER.info("DEBUG: extractInlineXBRLRelationships START");
-    LOGGER.info(String.format("DEBUG: Document is null? %s", doc == null));
-    LOGGER.info(String.format("DEBUG: Source file is: %s", sourceFile.getName()));
+    LOGGER.debug(" extractInlineXBRLRelationships START");
+    LOGGER.debug(String.format("DEBUG: Document is null? %s", doc == null));
+    LOGGER.debug(String.format("DEBUG: Source file is: %s", sourceFile.getName()));
 
     // First, try to download and parse external linkbase files
     // These contain the actual relationship definitions for inline XBRL
     try {
       downloadAndParseLinkbases(sourceFile, schema, records, filingDate);
     } catch (Exception e) {
-      LOGGER.info("Failed to download/parse linkbase files: " + e.getMessage());
+      LOGGER.debug("Failed to download/parse linkbase files: " + e.getMessage());
     }
 
     // In inline XBRL, relationships are often implicit in the document structure
@@ -1977,14 +1978,14 @@ public class XbrlToParquetConverter implements FileConverter {
     Document originalHtmlDoc = null;
     if (sourceFile.getName().endsWith(".htm") || sourceFile.getName().endsWith(".html")) {
       try {
-        LOGGER.info("Parsing original HTML file to extract inline XBRL relationships: " + sourceFile.getName());
+        LOGGER.debug("Parsing original HTML file to extract inline XBRL relationships: " + sourceFile.getName());
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
         originalHtmlDoc = builder.parse(sourceFile);
-        LOGGER.info("Successfully parsed original HTML file for relationship extraction");
+        LOGGER.debug("Successfully parsed original HTML file for relationship extraction");
       } catch (Exception e) {
-        LOGGER.warning("Failed to parse original HTML file for relationships: " + e.getMessage());
+        LOGGER.warn("Failed to parse original HTML file for relationships: " + e.getMessage());
       }
     }
 
@@ -1993,7 +1994,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Look for ix:relationship elements (Inline XBRL 1.1 standard)
     NodeList ixRelationships = searchDoc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "relationship");
-    LOGGER.info(String.format("Found %d ix:relationship elements", ixRelationships.getLength()));
+    LOGGER.debug(String.format("Found %d ix:relationship elements", ixRelationships.getLength()));
 
     for (int i = 0; i < ixRelationships.getLength(); i++) {
       Element ixRel = (Element) ixRelationships.item(i);
@@ -2003,7 +2004,7 @@ public class XbrlToParquetConverter implements FileConverter {
       String order = ixRel.getAttribute("order");
       String weight = ixRel.getAttribute("weight");
 
-      LOGGER.info(String.format("Processing ix:relationship %d: arcrole=%s, fromRefs=%s, toRefs=%s",
+      LOGGER.debug(String.format("Processing ix:relationship %d: arcrole=%s, fromRefs=%s, toRefs=%s",
           i, arcrole, fromRefs, toRefs));
 
       if (arcrole != null && !arcrole.isEmpty() && fromRefs != null && !fromRefs.isEmpty() &&
@@ -2030,19 +2031,19 @@ public class XbrlToParquetConverter implements FileConverter {
               record.put("preferred_label", ixRel.getAttribute("preferredLabel"));
               records.add(record);
               processedRelationships.add(relationshipKey);
-              LOGGER.info("Added ix:relationship: " + relationshipKey);
+              LOGGER.debug("Added ix:relationship: " + relationshipKey);
             }
           }
         }
       } else {
-        LOGGER.info(String.format("Skipping ix:relationship %d: missing required attributes (arcrole=%s, fromRefs=%s, toRefs=%s)",
+        LOGGER.debug(String.format("Skipping ix:relationship %d: missing required attributes (arcrole=%s, fromRefs=%s, toRefs=%s)",
             i, arcrole, fromRefs, toRefs));
       }
     }
 
     // Look for ix:footnote elements tied to facts
     NodeList ixFootnotes = searchDoc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "footnote");
-    LOGGER.info(String.format("Found %d ix:footnote elements", ixFootnotes.getLength()));
+    LOGGER.debug(String.format("Found %d ix:footnote elements", ixFootnotes.getLength()));
 
     for (int i = 0; i < ixFootnotes.getLength(); i++) {
       Element footnote = (Element) ixFootnotes.item(i);
@@ -2073,7 +2074,7 @@ public class XbrlToParquetConverter implements FileConverter {
                 record.put("preferred_label", footnoteRole);
                 records.add(record);
                 processedRelationships.add(relationshipKey);
-                LOGGER.fine("Added fact-footnote relationship: " + relationshipKey);
+                LOGGER.debug("Added fact-footnote relationship: " + relationshipKey);
               }
             }
           }
@@ -2083,7 +2084,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Look for ix:nonNumeric and ix:nonFraction elements that define structure
     NodeList ixElements = doc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "*");
-    LOGGER.fine(String.format("Found %d inline XBRL elements", ixElements.getLength()));
+    LOGGER.debug(String.format("Found %d inline XBRL elements", ixElements.getLength()));
 
     // Extract relationships from table structures (common in inline XBRL)
     NodeList tables = doc.getElementsByTagName("table");
@@ -2165,7 +2166,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    LOGGER.fine(String.format("Extracted %d unique inline XBRL relationships", processedRelationships.size()));
+    LOGGER.debug(String.format("Extracted %d unique inline XBRL relationships", processedRelationships.size()));
   }
 
   /**
@@ -2174,40 +2175,40 @@ public class XbrlToParquetConverter implements FileConverter {
   private void downloadAndParseLinkbases(File htmlFile, Schema schema,
       List<GenericRecord> records, String filingDate) throws Exception {
 
-    LOGGER.info("Looking for linkbase references in inline XBRL document");
+    LOGGER.debug("Looking for linkbase references in inline XBRL document");
 
     // Parse the HTML file to look for schema references
-    LOGGER.info("Parsing HTML file for schema references: " + htmlFile.getAbsolutePath());
+    LOGGER.debug("Parsing HTML file for schema references: " + htmlFile.getAbsolutePath());
     Document doc;
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
       factory.setNamespaceAware(true);
       DocumentBuilder builder = factory.newDocumentBuilder();
       doc = builder.parse(htmlFile);
-      LOGGER.info("Successfully parsed HTML file, proceeding with schema reference search");
+      LOGGER.debug("Successfully parsed HTML file, proceeding with schema reference search");
     } catch (Exception e) {
-      LOGGER.info("Failed to parse HTML file: " + e.getMessage());
+      LOGGER.debug("Failed to parse HTML file: " + e.getMessage());
       return;
     }
 
     // Find schemaRef element that points to XSD file
     // First try with the correct linkbase namespace
     NodeList schemaRefs = doc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", "schemaRef");
-    LOGGER.info("Found " + schemaRefs.getLength() + " schemaRef elements in linkbase namespace");
+    LOGGER.debug("Found " + schemaRefs.getLength() + " schemaRef elements in linkbase namespace");
 
     if (schemaRefs.getLength() == 0) {
       // Try with prefixed tag name (more common in inline XBRL)
       schemaRefs = doc.getElementsByTagName("link:schemaRef");
-      LOGGER.info("Found " + schemaRefs.getLength() + " link:schemaRef elements");
+      LOGGER.debug("Found " + schemaRefs.getLength() + " link:schemaRef elements");
     }
     if (schemaRefs.getLength() == 0) {
       // Try looking inside ix:references elements
       NodeList references = doc.getElementsByTagName("ix:references");
-      LOGGER.info("Found " + references.getLength() + " ix:references elements");
+      LOGGER.debug("Found " + references.getLength() + " ix:references elements");
       for (int i = 0; i < references.getLength(); i++) {
         Element referencesEl = (Element) references.item(i);
         NodeList childSchemaRefs = referencesEl.getElementsByTagName("link:schemaRef");
-        LOGGER.info("Found " + childSchemaRefs.getLength() + " link:schemaRef children in ix:references[" + i + "]");
+        LOGGER.debug("Found " + childSchemaRefs.getLength() + " link:schemaRef children in ix:references[" + i + "]");
         if (childSchemaRefs.getLength() > 0) {
           schemaRefs = childSchemaRefs;
           break;
@@ -2216,7 +2217,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     if (schemaRefs.getLength() == 0) {
-      LOGGER.info("No schemaRef found in inline XBRL - no linkbases to download");
+      LOGGER.debug("No schemaRef found in inline XBRL - no linkbases to download");
       return;
     }
 
@@ -2227,26 +2228,26 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     if (xsdHref == null || xsdHref.isEmpty()) {
-      LOGGER.fine("No XSD href found in schemaRef");
+      LOGGER.debug("No XSD href found in schemaRef");
       return;
     }
 
-    LOGGER.info("Found XSD reference: " + xsdHref);
+    LOGGER.debug("Found XSD reference: " + xsdHref);
 
     // Extract base URL from source file path or document URL
     String baseUrl = extractBaseUrl(htmlFile, xsdHref);
     if (baseUrl == null) {
-      LOGGER.warning("Could not determine base URL for linkbase downloads");
+      LOGGER.warn("Could not determine base URL for linkbase downloads");
       return;
     }
 
     // Download and parse XSD to find linkbase references
     String xsdUrl = resolveUrl(baseUrl, xsdHref);
-    LOGGER.info("Downloading XSD from: " + xsdUrl);
+    LOGGER.debug("Downloading XSD from: " + xsdUrl);
 
     String xsdContent = downloadFile(xsdUrl);
     if (xsdContent == null) {
-      LOGGER.info("Failed to download XSD file from: " + xsdUrl + " - continuing with inline XBRL relationship processing");
+      LOGGER.debug("Failed to download XSD file from: " + xsdUrl + " - continuing with inline XBRL relationship processing");
       // For inline XBRL documents, XSD files often don't exist on the server
       // We can still extract relationships from the inline document structure
       return;
@@ -2264,7 +2265,7 @@ public class XbrlToParquetConverter implements FileConverter {
       linkbaseRefs = xsdDoc.getElementsByTagName("link:linkbaseRef");
     }
 
-    LOGGER.info("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
+    LOGGER.debug("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
 
     // Process each linkbase file
     for (int i = 0; i < linkbaseRefs.getLength(); i++) {
@@ -2286,14 +2287,14 @@ public class XbrlToParquetConverter implements FileConverter {
       // Determine linkbase type from role
       String linkbaseType = determineLinkbaseTypeFromRole(role);
 
-      LOGGER.info("Processing " + linkbaseType + " linkbase: " + linkbaseHref);
+      LOGGER.debug("Processing " + linkbaseType + " linkbase: " + linkbaseHref);
 
       // Download linkbase file
       String linkbaseUrl = resolveUrl(baseUrl, linkbaseHref);
       String linkbaseContent = downloadFile(linkbaseUrl);
 
       if (linkbaseContent == null) {
-        LOGGER.warning("Failed to download linkbase from: " + linkbaseUrl);
+        LOGGER.warn("Failed to download linkbase from: " + linkbaseUrl);
         continue;
       }
 
@@ -2305,7 +2306,7 @@ public class XbrlToParquetConverter implements FileConverter {
         Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
         extractLinkbaseRelationships(linkbaseDoc, schema, records, filingDate, linkbaseType);
       } catch (Exception e) {
-        LOGGER.warning("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
+        LOGGER.warn("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
       }
     }
   }
@@ -2386,7 +2387,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    LOGGER.info("Extracted " + relationshipCount + " relationships from " + linkbaseType + " linkbase");
+    LOGGER.debug("Extracted " + relationshipCount + " relationships from " + linkbaseType + " linkbase");
   }
 
   /**
@@ -2442,7 +2443,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
     } catch (Exception e) {
-      LOGGER.fine("Could not read HTML file to extract base URL: " + e.getMessage());
+      LOGGER.debug("Could not read HTML file to extract base URL: " + e.getMessage());
     }
 
     // Default to SEC EDGAR base URL structure
@@ -2497,7 +2498,7 @@ public class XbrlToParquetConverter implements FileConverter {
       int responseCode = conn.getResponseCode();
       if (responseCode != HttpURLConnection.HTTP_OK) {
         String responseMessage = conn.getResponseMessage();
-        LOGGER.warning("HTTP " + responseCode + " (" + responseMessage + ") for URL: " + urlString);
+        LOGGER.warn("HTTP " + responseCode + " (" + responseMessage + ") for URL: " + urlString);
 
         // Try to read error response body for more details
         try {
@@ -2505,10 +2506,10 @@ public class XbrlToParquetConverter implements FileConverter {
           if (errorStream != null) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(errorStream));
             String errorResponse = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
-            LOGGER.warning("Error response body: " + errorResponse.substring(0, Math.min(500, errorResponse.length())));
+            LOGGER.warn("Error response body: " + errorResponse.substring(0, Math.min(500, errorResponse.length())));
           }
         } catch (Exception e) {
-          LOGGER.fine("Could not read error response: " + e.getMessage());
+          LOGGER.debug("Could not read error response: " + e.getMessage());
         }
         return null;
       }
@@ -2523,7 +2524,7 @@ public class XbrlToParquetConverter implements FileConverter {
         return content.toString();
       }
     } catch (Exception e) {
-      LOGGER.warning("Failed to download " + urlString + ": " + e.getMessage());
+      LOGGER.warn("Failed to download " + urlString + ": " + e.getMessage());
       return null;
     }
   }
@@ -2535,10 +2536,10 @@ public class XbrlToParquetConverter implements FileConverter {
       File outputFile, String recordType) throws IOException {
     
     if (records.isEmpty()) {
-      LOGGER.fine("No " + recordType + " records to write for " + outputFile.getName() + " - creating empty file with schema");
+      LOGGER.debug("No " + recordType + " records to write for " + outputFile.getName() + " - creating empty file with schema");
     }
 
-    LOGGER.fine("Writing " + records.size() + " " + recordType + " records to " + outputFile.getName());
+    LOGGER.debug("Writing " + records.size() + " " + recordType + " records to " + outputFile.getName());
     
     // Use StorageProvider's consolidated Parquet writing method
     storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, recordType);
@@ -2575,7 +2576,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<File> convertInsiderForm(Document doc, File sourceFile, File targetDirectory,
       String cik, String filingType, String filingDate, String accession) throws IOException {
-    LOGGER.info("DEBUG: convertInsiderForm() START for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
+    LOGGER.debug(" convertInsiderForm() START for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
     List<File> outputFiles = new ArrayList<>();
 
     try {
@@ -2586,11 +2587,11 @@ public class XbrlToParquetConverter implements FileConverter {
         year = Integer.parseInt(filingDate.substring(0, 4));
         // Sanity check - SEC filings shouldn't be from before 1934 or in the future
         if (year < 1934 || year > java.time.Year.now().getValue()) {
-          LOGGER.warning("Invalid year " + year + " for filing date " + filingDate + ", using current year");
+          LOGGER.warn("Invalid year " + year + " for filing date " + filingDate + ", using current year");
           year = java.time.Year.now().getValue();
         }
       } catch (Exception e) {
-        LOGGER.warning("Failed to parse year from filing date: " + filingDate + ", using current year");
+        LOGGER.warn("Failed to parse year from filing date: " + filingDate + ", using current year");
         year = java.time.Year.now().getValue();
       }
       
@@ -2603,7 +2604,7 @@ public class XbrlToParquetConverter implements FileConverter {
       
       // Extract insider transactions
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
-      LOGGER.info("DEBUG: Extracted " + transactions.size() + " insider transactions from " + sourceFile.getName());
+      LOGGER.debug(" Extracted " + transactions.size() + " insider transactions from " + sourceFile.getName());
 
       // Always write insider.parquet file (even if empty) to indicate processing completed
       // This prevents unnecessary reprocessing during cache validation
@@ -2612,16 +2613,16 @@ public class XbrlToParquetConverter implements FileConverter {
           String.format("%s_%s_insider.parquet", cik, uniqueId));
 
       if (!transactions.isEmpty()) {
-        LOGGER.info("DEBUG: Writing " + transactions.size() + " transactions to parquet file: " + outputFile.getAbsolutePath());
+        LOGGER.debug(" Writing " + transactions.size() + " transactions to parquet file: " + outputFile.getAbsolutePath());
       } else {
-        LOGGER.info("DEBUG: Creating empty insider parquet file (no transactions found): " + outputFile.getAbsolutePath());
+        LOGGER.debug(" Creating empty insider parquet file (no transactions found): " + outputFile.getAbsolutePath());
       }
 
       Schema schema = createInsiderTransactionSchema();
       writeParquetFile(transactions, schema, outputFile);
       storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
       outputFiles.add(outputFile);
-      LOGGER.info("DEBUG: Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
+      LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
 
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
           + transactions.size() + " records");
@@ -2641,12 +2642,12 @@ public class XbrlToParquetConverter implements FileConverter {
             storageProvider.cleanupMacosMetadata(vectorizedFile.getParentFile().getAbsolutePath());
           }
         } catch (Exception ve) {
-          LOGGER.warning("Failed to create vectorized blobs for insider form: " + ve.getMessage());
+          LOGGER.warn("Failed to create vectorized blobs for insider form: " + ve.getMessage());
         }
       }
       
     } catch (Exception e) {
-      LOGGER.warning("Failed to convert insider form: " + e.getMessage());
+      LOGGER.warn("Failed to convert insider form: " + e.getMessage());
     }
     
     return outputFiles;
@@ -3195,11 +3196,11 @@ public class XbrlToParquetConverter implements FileConverter {
         try {
           year = Integer.parseInt(filingDate.substring(0, 4));
           if (year < 1934 || year > java.time.Year.now().getValue()) {
-            LOGGER.warning("Invalid year " + year + " for filing date " + filingDate);
+            LOGGER.warn("Invalid year " + year + " for filing date " + filingDate);
             year = java.time.Year.now().getValue();
           }
         } catch (Exception e) {
-          LOGGER.warning("Failed to parse year from filing date: " + filingDate);
+          LOGGER.warn("Failed to parse year from filing date: " + filingDate);
           year = java.time.Year.now().getValue();
         }
         
@@ -3221,7 +3222,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       
     } catch (Exception e) {
-      LOGGER.warning("Failed to extract 8-K exhibits: " + e.getMessage());
+      LOGGER.warn("Failed to extract 8-K exhibits: " + e.getMessage());
     }
     
     return outputFiles;
@@ -3582,7 +3583,7 @@ public class XbrlToParquetConverter implements FileConverter {
               id, "footnote", text, parentSection, null, attributes);
           blobs.add(blob);
           
-          LOGGER.fine("Extracted footnote: " + id + " from concept: " + concept);
+          LOGGER.debug("Extracted footnote: " + id + " from concept: " + concept);
         }
       }
     }
@@ -3794,7 +3795,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
     } catch (IOException e) {
-      LOGGER.warning("Failed to parse HTML for MD&A: " + e.getMessage());
+      LOGGER.warn("Failed to parse HTML for MD&A: " + e.getMessage());
     }
     
     return blobs;
@@ -4079,7 +4080,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       
     } catch (IOException e) {
-      LOGGER.warning("Failed to read HTML file for date extraction: " + e.getMessage());
+      LOGGER.warn("Failed to read HTML file for date extraction: " + e.getMessage());
     }
     return null;
   }
@@ -4118,7 +4119,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       
     } catch (IOException e) {
-      LOGGER.warning("Failed to read HTML file for company info extraction: " + e.getMessage());
+      LOGGER.warn("Failed to read HTML file for company info extraction: " + e.getMessage());
     }
     return info;
   }
@@ -4317,7 +4318,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       return null;
     } catch (Exception e) {
-      LOGGER.warning("Error extracting period end date: " + e.getMessage());
+      LOGGER.warn("Error extracting period end date: " + e.getMessage());
       return null;
     }
   }
@@ -4346,10 +4347,10 @@ public class XbrlToParquetConverter implements FileConverter {
           java.nio.file.StandardOpenOption.CREATE,
           java.nio.file.StandardOpenOption.APPEND);
 
-      LOGGER.fine("Tracked parsing error to: " + errorLogFile.getAbsolutePath());
+      LOGGER.debug("Tracked parsing error to: " + errorLogFile.getAbsolutePath());
 
     } catch (IOException e) {
-      LOGGER.warning("Failed to track parsing error: " + e.getMessage());
+      LOGGER.warn("Failed to track parsing error: " + e.getMessage());
     }
   }
 
@@ -4373,10 +4374,10 @@ public class XbrlToParquetConverter implements FileConverter {
           java.nio.file.StandardOpenOption.CREATE,
           java.nio.file.StandardOpenOption.APPEND);
 
-      LOGGER.fine("Tracked conversion error to: " + errorLogFile.getAbsolutePath());
+      LOGGER.debug("Tracked conversion error to: " + errorLogFile.getAbsolutePath());
 
     } catch (IOException e) {
-      LOGGER.warning("Failed to track conversion error: " + e.getMessage());
+      LOGGER.warn("Failed to track conversion error: " + e.getMessage());
     }
   }
 }

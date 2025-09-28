@@ -21,14 +21,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.util.*;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Loads embedding models from static files.
  * This allows model updates without code changes.
  */
 public class EmbeddingModelLoader {
-  private static final Logger LOGGER = Logger.getLogger(EmbeddingModelLoader.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(EmbeddingModelLoader.class);
 
   private static EmbeddingModelLoader instance;
 
@@ -66,7 +67,7 @@ public class EmbeddingModelLoader {
           + embeddingDim + " dimensions");
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to load embedding models, using defaults: " + e.getMessage());
+      LOGGER.warn("Failed to load embedding models, using defaults: " + e.getMessage());
       loadDefaults();
     }
   }

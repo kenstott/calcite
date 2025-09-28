@@ -25,14 +25,15 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * SEC-specific HTTP storage provider that extends the file adapter's HttpStorageProvider.
  * Adds SEC EDGAR compliance including proper User-Agent headers and rate limiting.
  */
 public class SecHttpStorageProvider extends HttpStorageProvider {
-  private static final Logger LOGGER = Logger.getLogger(SecHttpStorageProvider.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecHttpStorageProvider.class);
   private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
   private static final long RATE_LIMIT_MS = 100; // 10 requests per second max
 
@@ -93,7 +94,7 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
       if (timeSinceLastRequest < RATE_LIMIT_MS) {
         try {
           long waitTime = RATE_LIMIT_MS - timeSinceLastRequest;
-          LOGGER.fine("Rate limiting: waiting " + waitTime + "ms");
+          LOGGER.debug("Rate limiting: waiting " + waitTime + "ms");
           Thread.sleep(waitTime);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -127,7 +128,7 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
 
         // Check if it's a rate limit error (HTTP 429)
         if (e.getMessage() != null && e.getMessage().contains("429")) {
-          LOGGER.warning("SEC rate limit hit, waiting 60 seconds...");
+          LOGGER.warn("SEC rate limit hit, waiting 60 seconds...");
           try {
             Thread.sleep(60000);
           } catch (InterruptedException ie) {

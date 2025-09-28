@@ -27,7 +27,8 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Schema factory for XBRL with embeddings that provides smart defaults.
@@ -41,7 +42,7 @@ import java.util.logging.Logger;
  * Users only need to specify the data directory in their model files.
  */
 public class SecEmbeddingSchemaFactory implements SchemaFactory {
-  private static final Logger LOGGER = Logger.getLogger(SecEmbeddingSchemaFactory.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecEmbeddingSchemaFactory.class);
 
   // Default configurations
   private static final Map<String, Object> DEFAULT_CONFIG = new HashMap<>();
@@ -162,10 +163,10 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     }
 
     // Log effective configuration
-    LOGGER.fine("Effective configuration:");
-    LOGGER.fine("  Directory: " + config.get("directory"));
-    LOGGER.fine("  Execution Engine: " + config.get("executionEngine"));
-    LOGGER.fine("  Embeddings Enabled: " +
+    LOGGER.debug("Effective configuration:");
+    LOGGER.debug("  Directory: " + config.get("directory"));
+    LOGGER.debug("  Execution Engine: " + config.get("executionEngine"));
+    LOGGER.debug("  Embeddings Enabled: " +
         ((Map<String, Object>)config.get("embeddingConfig")).get("enabled"));
 
     // Create the actual schema using FileSchemaFactory
@@ -183,7 +184,7 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
       LOGGER.info("Successfully created XBRL schema with embeddings and vector functions");
 
     } catch (Exception e) {
-      LOGGER.warning("Failed to create schema with FileSchemaFactory, falling back to basic schema: "
+      LOGGER.warn("Failed to create schema with FileSchemaFactory, falling back to basic schema: "
           + e.getMessage());
       // Fallback to a basic schema if FileSchemaFactory fails
       schema = createBasicSchema(config);
@@ -211,7 +212,7 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
       String value = System.getProperty(param);
       if (value != null) {
         params.put(param, value);
-        LOGGER.fine("Found short parameter: " + param + "=" + value);
+        LOGGER.debug("Found short parameter: " + param + "=" + value);
       }
     }
 
@@ -224,7 +225,7 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
         // Only override if not already set by short name, or if explicitly qualified
         if (!params.containsKey(paramName) || key.startsWith("calcite.sec.")) {
           params.put(paramName, value);
-          LOGGER.fine("Found qualified parameter: " + key + "=" + value);
+          LOGGER.debug("Found qualified parameter: " + key + "=" + value);
         }
       }
     }
@@ -237,7 +238,7 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
         String paramName = key.substring("calcite.".length());
         if (!params.containsKey(paramName)) {
           params.put(paramName, System.getProperty(key));
-          LOGGER.fine("Found legacy parameter: " + key + "=" + System.getProperty(key));
+          LOGGER.debug("Found legacy parameter: " + key + "=" + System.getProperty(key));
         }
       }
     }
@@ -309,7 +310,8 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     if (params.containsKey("debug")) {
       boolean debug = Boolean.parseBoolean(params.get("debug"));
       if (debug) {
-        Logger.getLogger("org.apache.calcite.adapter.sec").setLevel(java.util.logging.Level.FINE);
+        // Note: Debug logging should be configured through your logging framework (logback.xml, etc.)
+        // To enable debug logging for SEC adapter, set logger "org.apache.calcite.adapter.govdata.sec" to DEBUG level
         LOGGER.info("Debug mode enabled");
       }
     }
@@ -324,9 +326,9 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     try {
       // Register all vector functions using file adapter's SimilarityFunctions
       SimilarityFunctions.registerFunctions(schema);
-      LOGGER.fine("Registered vector functions using file adapter's SimilarityFunctions");
+      LOGGER.debug("Registered vector functions using file adapter's SimilarityFunctions");
     } catch (Exception e) {
-      LOGGER.warning("Failed to register vector functions: " + e.getMessage());
+      LOGGER.warn("Failed to register vector functions: " + e.getMessage());
     }
   }
 

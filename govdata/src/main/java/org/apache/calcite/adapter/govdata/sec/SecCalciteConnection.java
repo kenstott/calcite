@@ -23,7 +23,8 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * XBRL-specific Calcite connection that preprocesses model files.
@@ -36,7 +37,7 @@ import java.util.logging.Logger;
  * </ul>
  */
 public class SecCalciteConnection {
-  private static final Logger LOGGER = Logger.getLogger(SecCalciteConnection.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(SecCalciteConnection.class);
 
   /**
    * Create an XBRL connection with preprocessing.
@@ -92,11 +93,11 @@ public class SecCalciteConnection {
               // Preprocess and convert to inline model
               String preprocessed = SecModelPreprocessor.preprocessModelFile(modelFile);
               String inlineUrl = parts[0] + "model=inline:" + preprocessed + params;
-              LOGGER.fine("Preprocessed XBRL model file: " + modelPath);
+              LOGGER.debug("Preprocessed XBRL model file: " + modelPath);
               return inlineUrl;
             }
           } catch (IOException e) {
-            LOGGER.warning("Failed to preprocess model file: " + e.getMessage());
+            LOGGER.warn("Failed to preprocess model file: " + e.getMessage());
           }
         }
       }
