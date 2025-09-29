@@ -46,7 +46,7 @@ import java.util.logging.Logger;
  *   <li>Parallel downloads with configurable thread pool</li>
  *   <li>Real-time progress tracking</li>
  *   <li>Detailed performance metrics per company-year</li>
- *   <li>Support for multiple indices (DOW30, SP500, RUSSELL2000)</li>
+ *   <li>Support for multiple indices (DJIA, SP500, RUSSELL2000)</li>
  *   <li>Automatic retry on failures</li>
  *   <li>Performance extrapolations</li>
  * </ul>
@@ -123,7 +123,7 @@ public class IndexPerformanceTest {
   }
 
   @Test public void testDow30Performance() throws Exception {
-    runIndexTest("DOW30", "Dow Jones Industrial Average 30");
+    runIndexTest("DJIA", "Dow Jones Industrial Average 30");
   }
 
   @Test @Disabled("Long running test - ~8 hours")
@@ -137,7 +137,7 @@ public class IndexPerformanceTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"DOW30", "NASDAQ100_COMPLETE", "SP100"})
+  @ValueSource(strings = {"DJIA", "NASDAQ100_COMPLETE", "SP100"})
   public void testMultipleIndices(String indexName) throws Exception {
     runIndexTest(indexName, indexName);
   }

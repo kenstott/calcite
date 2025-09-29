@@ -7,7 +7,7 @@
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "directory": "${GOVDATA_PARQUET_DIR:/Volumes/T9/govdata-parquet}/djia-test",
-      "ciks": ["DOW30"],
+      "ciks": ["DJIA"],
       "filingTypes": ["10-K", "10-Q"],
       "autoDownload": true,
       "startYear": 2019,
