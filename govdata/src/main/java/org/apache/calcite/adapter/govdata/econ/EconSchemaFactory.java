@@ -744,12 +744,19 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         Map<String, Object> tableDefinition = new HashMap<>();
         tableDefinition.put("name", tableName);
 
-        // Build pattern based on partition strategy from the group configuration
-        String partitionStrategy = (String) groupConfig.get("partitionStrategy");
+        // Build pattern based on partition fields from the group configuration
+        @SuppressWarnings("unchecked")
+        List<String> partitionFields = (List<String>) groupConfig.get("partitionFields");
         String pattern;
-        if (partitionStrategy != null && partitionStrategy.contains("maturity")) {
-          // For tables with maturity partitioning
-          pattern = "type=custom/year=*/maturity=*/" + tableName + ".parquet";
+
+        if (partitionFields != null && !partitionFields.isEmpty()) {
+          // Build pattern from partition fields
+          StringBuilder patternBuilder = new StringBuilder("type=custom");
+          for (String field : partitionFields) {
+            patternBuilder.append("/").append(field).append("=*");
+          }
+          patternBuilder.append("/").append(tableName).append(".parquet");
+          pattern = patternBuilder.toString();
         } else {
           // Default partitioning by year only
           pattern = "type=custom/year=*/" + tableName + ".parquet";
