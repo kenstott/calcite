@@ -847,7 +847,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  private void addToManifest(File baseDirectory, File xbrlFile) {
+  private void addToManifest(File baseDirectory, File xbrlFile, File secParquetDir) {
     try {
       // Extract CIK and accession from file path
       // Path structure: baseDir/sec-cache/raw/{cik}/{accession}/{file}
@@ -868,7 +868,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         // Check if vectorized file exists for this accession in the parquet directory
-        File parquetDir = new File(baseDirectory.getParentFile(), "sec-parquet");
+        File parquetDir = secParquetDir;
         if (parquetDir.exists()) {
           // Look for vectorized files with this accession number
           String accessionNoHyphens = accession.replace("-", "");
@@ -879,7 +879,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               File[] yearDirs = ftDir.listFiles((dir, name) -> name.startsWith("year="));
               for (File yDir : yearDirs != null ? yearDirs : new File[0]) {
                 File[] vectorizedFiles = yDir.listFiles((dir, name) ->
-                    name.contains(accessionNoHyphens) && name.endsWith("_vectorized.parquet"));
+                    name.equals(cik + "_" + accessionNoHyphens + "_vectorized.parquet"));
                 if (vectorizedFiles != null && vectorizedFiles.length > 0) {
                   hasVectorized = true;
                   break;
@@ -909,6 +909,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.debug("Could not update manifest: " + e.getMessage());
     }
   }
+
 
   private void rebuildManifestFromExistingFiles(File baseDirectory) {
     // Rebuild manifest from existing files on startup
@@ -1880,7 +1881,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Add to manifest after successful conversion
-            addToManifest(xbrlFile.getParentFile().getParentFile().getParentFile(), xbrlFile);
+            addToManifest(xbrlFile.getParentFile().getParentFile().getParentFile(), xbrlFile, secParquetDir);
           } catch (java.nio.channels.OverlappingFileLockException e) {
             // Non-fatal: Another thread is processing this file, skip it
             if (LOGGER.isDebugEnabled()) {
