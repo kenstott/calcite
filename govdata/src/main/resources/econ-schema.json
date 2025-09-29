@@ -77,8 +77,8 @@
     },
     {
       "name": "fred_data_series_catalog",
-      "pattern": "type=catalog/year=*/fred_data_series_catalog.parquet",
-      "comment": "Complete FRED economic data series catalog with 841,000+ series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access."
+      "pattern": "type=catalog/category=*/frequency=*/source=*/status=*/fred_data_series_catalog.parquet",
+      "comment": "Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access."
     }
   ],
   "constraints": {
