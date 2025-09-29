@@ -125,18 +125,18 @@ public class FredCatalogDownloader {
 
     String catalogCacheFile = cacheDir + "/fred_catalog_complete.json";
 
-    // Check if we have recent cached data (less than 24 hours old)
+    // Check if we have cached data (immutable - never re-download once we have it)
     File cacheFile = new File(catalogCacheFile);
-    if (cacheFile.exists() &&
-        (System.currentTimeMillis() - cacheFile.lastModified()) < TimeUnit.HOURS.toMillis(24)) {
-      LOGGER.info("Using cached FRED catalog from {}", catalogCacheFile);
+    if (cacheFile.exists()) {
+      LOGGER.info("Using immutable cached FRED catalog from {}", catalogCacheFile);
       convertCatalogToParquet(catalogCacheFile);
       return;
     }
 
-    // Use comprehensive series listing with proper pagination
-    LOGGER.info("Downloading complete FRED series catalog via paginated series listing...");
-    List<Map<String, Object>> allSeries = downloadAllSeriesPaginated();
+    // Use category-based approach to avoid 5000 result search limit
+    LOGGER.info("Downloading FRED series catalog via category browsing...");
+    LOGGER.info("This is a one-time download that will be cached permanently");
+    List<Map<String, Object>> allSeries = downloadAllSeriesViaCategories();
 
     LOGGER.info("Downloaded {} total series from FRED catalog", allSeries.size());
 
@@ -148,60 +148,200 @@ public class FredCatalogDownloader {
   }
 
   /**
+   * Download all FRED series using category-based approach to avoid API limitations.
+   * Browses through major categories and their children to get comprehensive coverage.
+   */
+  private List<Map<String, Object>> downloadAllSeriesViaCategories()
+      throws IOException, InterruptedException {
+    List<Map<String, Object>> allSeries = new ArrayList<>();
+    Set<String> seenSeriesIds = new HashSet<>();
+    long startTime = System.currentTimeMillis();
+    int requestCount = 0;
+
+    LOGGER.info("Beginning comprehensive FRED catalog download using category browsing");
+    LOGGER.info("Target: Download all 841,000+ FRED series for complete catalog coverage");
+
+    // Start with root categories and recursively browse their children
+    for (int categoryId : MAJOR_CATEGORIES) {
+      try {
+        LOGGER.info("Browsing category {} for series", categoryId);
+        List<Map<String, Object>> categorySeries = downloadCategoryBrowse(categoryId);
+        requestCount++;
+
+        for (Map<String, Object> series : categorySeries) {
+          String seriesId = (String) series.get("id");
+          if (!seenSeriesIds.contains(seriesId)) {
+            seenSeriesIds.add(seriesId);
+            allSeries.add(series);
+          }
+        }
+
+        // Also get child categories
+        List<Integer> childCategories = downloadChildCategories(categoryId);
+        for (int childId : childCategories) {
+          try {
+            List<Map<String, Object>> childSeries = downloadCategoryBrowse(childId);
+            requestCount++;
+
+            for (Map<String, Object> series : childSeries) {
+              String seriesId = (String) series.get("id");
+              if (!seenSeriesIds.contains(seriesId)) {
+                seenSeriesIds.add(seriesId);
+                allSeries.add(series);
+              }
+            }
+
+            // Progress logging every 10,000 series
+            if (allSeries.size() % 10000 == 0 && allSeries.size() > 0) {
+              long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
+              double seriesPerMinute = allSeries.size() / Math.max(elapsedMinutes, 1.0);
+              double estimatedTotalMinutes = 841000.0 / Math.max(seriesPerMinute, 1.0);
+              LOGGER.info("Progress: {} unique series found, {} requests made, {} series/min, elapsed: {} min, estimated total: {} min",
+                  allSeries.size(), requestCount, String.format("%.0f", seriesPerMinute),
+                  elapsedMinutes, String.format("%.0f", estimatedTotalMinutes));
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Error downloading series for child category {}: {}", childId, e.getMessage());
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error downloading series for category {}: {}", categoryId, e.getMessage());
+      }
+    }
+
+    // Also add recently updated series to catch any we might have missed
+    try {
+      LOGGER.info("Adding recently updated series");
+      List<Map<String, Object>> recentUpdates = downloadSeriesUpdates();
+      requestCount++;
+
+      for (Map<String, Object> series : recentUpdates) {
+        String seriesId = (String) series.get("id");
+        if (!seenSeriesIds.contains(seriesId)) {
+          seenSeriesIds.add(seriesId);
+          allSeries.add(series);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Error downloading recent updates: {}", e.getMessage());
+    }
+
+    long totalMinutes = (System.currentTimeMillis() - startTime) / 60000;
+    LOGGER.info("Completed FRED catalog download: {} unique series, {} requests, {} minutes",
+        allSeries.size(), requestCount, totalMinutes);
+
+    return allSeries;
+  }
+
+  /**
+   * Download child categories for a given parent category.
+   */
+  private List<Integer> downloadChildCategories(int parentCategoryId)
+      throws IOException, InterruptedException {
+    List<Integer> childCategories = new ArrayList<>();
+
+    String url = String.format("%s/category/children?category_id=%d&api_key=%s&file_type=json",
+        FRED_API_BASE, parentCategoryId, fredApiKey);
+
+    JsonNode response = makeApiRequest(url);
+    JsonNode categoriesArray = response.get("categories");
+
+    if (categoriesArray != null) {
+      for (JsonNode category : categoriesArray) {
+        childCategories.add(category.get("id").asInt());
+      }
+    }
+
+    return childCategories;
+  }
+
+  /**
    * Download all FRED series using comprehensive pagination.
-   * Uses the /fred/series endpoint without search terms to get complete coverage.
+   * Uses the /fred/series/search endpoint with a broad search to get complete coverage.
    */
   private List<Map<String, Object>> downloadAllSeriesPaginated()
       throws IOException, InterruptedException {
     List<Map<String, Object>> allSeries = new ArrayList<>();
-    int offset = 0;
-    boolean hasMoreResults = true;
+    Set<String> seenSeriesIds = new HashSet<>();
     long startTime = System.currentTimeMillis();
     int requestCount = 0;
 
-    LOGGER.info("Beginning comprehensive FRED catalog download (estimated 841,000+ series)");
-    LOGGER.info("Rate limit: {} requests/minute, estimated time: ~7 hours", FRED_RATE_LIMIT_REQUESTS_PER_MINUTE);
+    LOGGER.info("Beginning comprehensive FRED catalog download using search API");
+    LOGGER.info("Target: Download all 841,000+ FRED series for complete catalog coverage");
 
-    while (hasMoreResults) {
-      try {
-        // Use the comprehensive series endpoint without search constraints
-        String url = String.format("%s/series?api_key=%s&file_type=json&limit=%d&offset=%d&sort_order=series_id",
-            FRED_API_BASE, fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
+    // Use comprehensive search patterns to get complete coverage
+    // Start with empty search, then use single letters and common terms
+    List<String> searchPatterns = new ArrayList<>();
+    searchPatterns.add(""); // Empty search gets popular series
 
-        JsonNode response = makeApiRequest(url);
-        JsonNode seriesArray = response.get("seriess");
-        requestCount++;
+    // Add single letters to catch all series starting with each letter
+    for (char c = 'a'; c <= 'z'; c++) {
+      searchPatterns.add(String.valueOf(c));
+    }
+    for (char c = '0'; c <= '9'; c++) {
+      searchPatterns.add(String.valueOf(c));
+    }
 
-        if (seriesArray != null && seriesArray.size() > 0) {
-          for (JsonNode series : seriesArray) {
-            Map<String, Object> seriesMap = objectMapper.convertValue(series,
-                new TypeReference<Map<String, Object>>() {});
-            allSeries.add(seriesMap);
+    // Add common economic terms for better coverage
+    searchPatterns.addAll(Arrays.asList(
+        "GDP", "CPI", "unemployment", "inflation", "interest",
+        "trade", "housing", "manufacturing", "retail", "employment",
+        "income", "price", "index", "rate", "growth", "production",
+        "sales", "inventory", "debt", "credit", "loan", "mortgage"
+    ));
+
+    for (String searchText : searchPatterns) {
+      int offset = 0;
+      boolean hasMoreResults = true;
+
+      while (hasMoreResults) { // Download all available series
+        try {
+          // Use the search endpoint which supports pagination
+          String url = String.format("%s/series/search?search_text=%s&api_key=%s&file_type=json&limit=%d&offset=%d",
+              FRED_API_BASE, URLEncoder.encode(searchText, StandardCharsets.UTF_8.toString()),
+              fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
+
+          JsonNode response = makeApiRequest(url);
+          JsonNode seriesArray = response.get("seriess");
+          requestCount++;
+
+          if (seriesArray != null && seriesArray.size() > 0) {
+            for (JsonNode series : seriesArray) {
+              String seriesId = series.get("id").asText();
+              if (!seenSeriesIds.contains(seriesId)) {
+                seenSeriesIds.add(seriesId);
+                Map<String, Object> seriesMap = objectMapper.convertValue(series,
+                    new TypeReference<Map<String, Object>>() {});
+                allSeries.add(seriesMap);
+              }
+            }
+
+            offset += seriesArray.size();
+            hasMoreResults = seriesArray.size() == MAX_RESULTS_PER_REQUEST;
+
+            // Progress logging every 10,000 series
+            if (allSeries.size() % 10000 == 0 && allSeries.size() > 0) {
+              long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
+              double seriesPerMinute = allSeries.size() / Math.max(elapsedMinutes, 1.0);
+              double estimatedTotalMinutes = 841000.0 / Math.max(seriesPerMinute, 1.0);
+              LOGGER.info("Progress: {} unique series found, {} requests made, {} series/min, elapsed: {} min, estimated total: {} min",
+                  allSeries.size(), requestCount, String.format("%.0f", seriesPerMinute),
+                  elapsedMinutes, String.format("%.0f", estimatedTotalMinutes));
+            }
+          } else {
+            hasMoreResults = false;
           }
-
-          offset += seriesArray.size();
-          hasMoreResults = seriesArray.size() == MAX_RESULTS_PER_REQUEST;
-
-          // Progress logging every 10,000 series
-          if (allSeries.size() % 10000 == 0) {
-            long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
-            double seriesPerMinute = allSeries.size() / Math.max(elapsedMinutes, 1.0);
-            LOGGER.info("Progress: {} series downloaded, {} requests made, {} series/min, elapsed: {} min",
-                allSeries.size(), requestCount, String.format("%.0f", seriesPerMinute), elapsedMinutes);
-          }
-        } else {
-          hasMoreResults = false;
+        } catch (Exception e) {
+          LOGGER.error("Error downloading series for search '{}' at offset {}: {}",
+              searchText, offset, e.getMessage());
+          // Continue with next search pattern
+          break;
         }
-      } catch (Exception e) {
-        LOGGER.error("Error downloading series at offset {}: {}", offset, e.getMessage());
-        // On error, wait longer before retrying
-        Thread.sleep(FRED_API_DELAY_MS * 2);
-        throw e;
       }
     }
 
     long totalMinutes = (System.currentTimeMillis() - startTime) / 60000;
-    LOGGER.info("Completed FRED catalog download: {} series, {} requests, {} minutes",
+    LOGGER.info("Completed FRED catalog download: {} unique series, {} requests, {} minutes",
         allSeries.size(), requestCount, totalMinutes);
 
     return allSeries;
