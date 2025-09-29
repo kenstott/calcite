@@ -438,6 +438,55 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Extract date from inline XBRL content using regex patterns.
+   * This is a fallback for complex inline XBRL structures.
+   */
+  private String extractDateFromInlineXBRL(File htmlFile) {
+    try {
+      String content = Files.readString(htmlFile.toPath());
+
+      // Look for xbrli:endDate patterns directly in the content
+      Pattern endDatePattern = Pattern.compile("<xbrli:endDate>(\\d{4}-\\d{2}-\\d{2})</xbrli:endDate>");
+      Matcher matcher = endDatePattern.matcher(content);
+
+      String latestDate = null;
+      while (matcher.find()) {
+        String date = matcher.group(1);
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          // Keep track of the latest date
+          if (latestDate == null || date.compareTo(latestDate) > 0) {
+            latestDate = date;
+          }
+        }
+      }
+
+      if (latestDate != null) {
+        return latestDate;
+      }
+
+      // Try instant dates as well
+      Pattern instantPattern = Pattern.compile("<xbrli:instant>(\\d{4}-\\d{2}-\\d{2})</xbrli:instant>");
+      matcher = instantPattern.matcher(content);
+
+      while (matcher.find()) {
+        String date = matcher.group(1);
+        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+          if (latestDate == null || date.compareTo(latestDate) > 0) {
+            latestDate = date;
+          }
+        }
+      }
+
+      return latestDate;
+
+    } catch (IOException e) {
+      LOGGER.debug("Failed to extract date from inline XBRL: " + e.getMessage());
+    }
+
+    return null;
+  }
+
+  /**
    * Extract date from HTML filing metadata.
    */
   private String extractDateFromHTML(File htmlFile) {
@@ -511,7 +560,7 @@ public class XbrlToParquetConverter implements FileConverter {
         return date;
       }
     }
-    
+
     // Try to extract from document period end date (standard XBRL)
     NodeList periodEnds = doc.getElementsByTagNameNS("*", "DocumentPeriodEndDate");
     if (periodEnds.getLength() > 0) {
@@ -520,7 +569,7 @@ public class XbrlToParquetConverter implements FileConverter {
         return date;
       }
     }
-    
+
     // Try to extract from dei:DocumentPeriodEndDate (inline XBRL)
     NodeList deiPeriodEnds = doc.getElementsByTagNameNS("*", "dei:DocumentPeriodEndDate");
     if (deiPeriodEnds.getLength() == 0) {
@@ -533,36 +582,69 @@ public class XbrlToParquetConverter implements FileConverter {
         return date;
       }
     }
-    
-    // Try to extract from context periods (XBRL contexts)
-    NodeList contexts = doc.getElementsByTagNameNS("*", "context");
+
+    // Try to extract from XBRL contexts - check both xbrli:context and context elements
+    NodeList contexts = doc.getElementsByTagName("xbrli:context");
+    if (contexts.getLength() == 0) {
+      contexts = doc.getElementsByTagNameNS("*", "context");
+    }
     if (contexts.getLength() == 0) {
       contexts = doc.getElementsByTagName("context");
     }
+
+    // Look for the first valid period end date in contexts
+    String latestDate = null;
     for (int i = 0; i < contexts.getLength(); i++) {
       Node context = contexts.item(i);
-      NodeList periods = ((Element) context).getElementsByTagNameNS("*", "instant");
-      if (periods.getLength() > 0) {
-        String date = periods.item(0).getTextContent().trim();
+
+      // Check for xbrli:endDate elements (common in inline XBRL like DEF 14A)
+      NodeList endDates = ((Element) context).getElementsByTagName("xbrli:endDate");
+      if (endDates.getLength() == 0) {
+        endDates = ((Element) context).getElementsByTagNameNS("*", "endDate");
+      }
+      if (endDates.getLength() > 0) {
+        String date = endDates.item(0).getTextContent().trim();
         if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
-          return date;
+          // Keep track of the latest date found
+          if (latestDate == null || date.compareTo(latestDate) > 0) {
+            latestDate = date;
+          }
         }
       }
-      // Also check endDate in period elements
-      periods = ((Element) context).getElementsByTagNameNS("*", "endDate");
-      if (periods.getLength() > 0) {
-        String date = periods.item(0).getTextContent().trim();
+
+      // Also check for instant dates
+      NodeList instants = ((Element) context).getElementsByTagName("xbrli:instant");
+      if (instants.getLength() == 0) {
+        instants = ((Element) context).getElementsByTagNameNS("*", "instant");
+      }
+      if (instants.getLength() > 0) {
+        String date = instants.item(0).getTextContent().trim();
         if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
-          return date;
+          if (latestDate == null || date.compareTo(latestDate) > 0) {
+            latestDate = date;
+          }
         }
       }
     }
-    
+
+    // Return the latest date found from contexts
+    if (latestDate != null) {
+      return latestDate;
+    }
+
     // For HTML/inline XBRL files, try to parse from HTML metadata
     if (sourceFile.getName().endsWith(".htm") || sourceFile.getName().endsWith(".html")) {
       String htmlDate = extractDateFromHTML(sourceFile);
       if (htmlDate != null) {
         return htmlDate;
+      }
+    }
+
+    // Try to extract date from inline XBRL directly from file content as last resort
+    if (sourceFile.getName().endsWith(".htm") || sourceFile.getName().endsWith(".html")) {
+      String inlineDate = extractDateFromInlineXBRL(sourceFile);
+      if (inlineDate != null) {
+        return inlineDate;
       }
     }
 

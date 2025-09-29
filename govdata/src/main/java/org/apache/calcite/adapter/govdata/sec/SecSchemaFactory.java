@@ -830,7 +830,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Waiting for {} filing tasks to complete...", filingProcessingFutures.size());
         CompletableFuture<Void> allDownloads =
             CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
-        allDownloads.get(45, TimeUnit.MINUTES);
+        allDownloads.get(Integer.MAX_VALUE, TimeUnit.MINUTES);
         LOGGER.info("All downloads completed");
       }
 
@@ -1054,25 +1054,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         downloadCikFilings(provider, cik, filingTypes, startYear, endYear, baseDir);
       }
 
-      // Wait for all downloads to complete before proceeding to conversion
+      // Wait for all downloads AND immediate processing to complete
       if (!filingProcessingFutures.isEmpty()) {
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Waiting for {} filing tasks to complete...", filingProcessingFutures.size());
+          LOGGER.debug("Waiting for {} filing download and processing tasks to complete...", filingProcessingFutures.size());
         }
-        CompletableFuture<Void> allDownloads =
+        CompletableFuture<Void> allTasks =
             CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
         try {
-          allDownloads.get(45, TimeUnit.MINUTES); // Wait up to 45 minutes for downloads
+          allTasks.get(Integer.MAX_VALUE, TimeUnit.MINUTES); // Effectively no timeout
           if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("All filing processing completed: {} files (from cache or downloaded)", completedFilingProcessing.get());
+            LOGGER.debug("All filing processing completed: {} files processed", completedFilingProcessing.get());
           }
         } catch (Exception e) {
-          LOGGER.warn("Some downloads may have failed: " + e.getMessage());
+          LOGGER.warn("Some processing tasks may have failed: " + e.getMessage());
         }
       }
 
-      // Create all SEC tables from XBRL data (with parallel conversion)
-      LOGGER.info("Creating SEC tables from XBRL data");
+      // Process any remaining files that weren't converted inline (backward compatibility)
+      LOGGER.info("Processing any remaining XBRL files");
       createSecTablesFromXbrl(baseDir, ciks, startYear, endYear);
 
       // Download or create stock prices if enabled
@@ -1171,7 +1171,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Check if filing type matches and is in date range
         // Normalize form comparison (SEC uses "10K", config uses "10-K")
         String normalizedForm = form.replace("-", "");
-        boolean matchesType = filingTypes.stream()
+
+        // Use explicit whitelist for allowed forms (excludes 424B forms)
+        List<String> allowedForms = Arrays.asList(
+            "3", "4", "5",           // Insider forms
+            "10-K", "10K",           // Annual reports
+            "10-Q", "10Q",           // Quarterly reports
+            "8-K", "8K",             // Current reports
+            "8-K/A", "8KA",          // Amended current reports
+            "DEF 14A", "DEF14A",     // Proxy statements
+            "S-3", "S3",             // Registration statements
+            "S-4", "S4",             // Business combination registration
+            "S-8", "S8"              // Employee benefit plan registration
+        );
+        boolean matchesType = allowedForms.stream()
             .anyMatch(type -> type.replace("-", "").equalsIgnoreCase(normalizedForm));
         if (!matchesType) {
           continue;
@@ -1243,6 +1256,176 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+  // Enum for filing status
+  private enum FilingStatus {
+    FULLY_PROCESSED,      // In manifest with all required files
+    HAS_ALL_PARQUET,      // Has all Parquet files but not in manifest
+    NEEDS_PROCESSING,     // Missing Parquet files or source files
+    EXCLUDED_424B         // 424B forms are excluded from processing
+  }
+
+  // Check filing status - manifest, Parquet files, source files
+  private FilingStatus checkFilingStatus(String cik, String accession, String form,
+                                          String filingDate, File manifestFile) {
+    try {
+      // Skip checking entirely for 424B forms - they are excluded from processing
+      if (form.startsWith("424B")) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("424B filing excluded from processing: {} {}", form, filingDate);
+        }
+        return FilingStatus.EXCLUDED_424B;
+      }
+
+      // Check manifest first
+      if (manifestFile.exists()) {
+        Set<String> processedFilings = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+
+        boolean isInManifest = false;
+        boolean hasVectorized = false;
+        for (String entry : processedFilings) {
+          if (entry.startsWith(cik + "|" + accession + "|")) {
+            isInManifest = true;
+            hasVectorized = entry.contains("PROCESSED_WITH_VECTORS");
+            break;
+          }
+        }
+
+        // Check if text similarity is enabled
+        Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+        boolean needsVectorized = textSimilarityConfig != null &&
+            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+
+        if (isInManifest && (!needsVectorized || hasVectorized)) {
+          return FilingStatus.FULLY_PROCESSED;
+        }
+      }
+
+      // Check if all required Parquet files exist
+      if (hasAllParquetFiles(cik, accession, form, filingDate)) {
+        return FilingStatus.HAS_ALL_PARQUET;
+      }
+
+      return FilingStatus.NEEDS_PROCESSING;
+    } catch (Exception e) {
+      LOGGER.debug("Error checking filing status: " + e.getMessage());
+      return FilingStatus.NEEDS_PROCESSING;
+    }
+  }
+
+  // Check if all required Parquet files exist for a filing
+  private boolean hasAllParquetFiles(String cik, String accession, String form, String filingDate) {
+    try {
+      String year = getPartitionYear(form, filingDate);
+      String govdataParquetDir = getGovDataParquetDir();
+      File parquetDir = new File(govdataParquetDir, "source=sec");
+      File cikParquetDir = new File(parquetDir, "cik=" + cik);
+      File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
+      File yearDir = new File(filingTypeDir, "year=" + year);
+
+      String accessionClean = accession.replace("-", "");
+      boolean isInsiderForm = form.matches("[345]");
+
+      // Check primary file
+      String filenameSuffix = isInsiderForm ? "insider" : "facts";
+      String primaryParquetPath = storageProvider.resolvePath(yearDir.getPath(),
+          String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
+
+      try {
+        StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
+        if (primaryMetadata.getSize() == 0) {
+          return false;
+        }
+      } catch (IOException e) {
+        return false;
+      }
+
+      // Check relationships file for non-insider forms
+      if (!isInsiderForm) {
+        String relationshipsParquetPath = storageProvider.resolvePath(yearDir.getPath(),
+            String.format("%s_%s_relationships.parquet", cik, accessionClean));
+        try {
+          storageProvider.getMetadata(relationshipsParquetPath);
+          // File exists - relationships file can be empty
+        } catch (IOException e) {
+          return false;
+        }
+      }
+
+      // Check vectorized file if enabled
+      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+      if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
+        if (supportsVectorization(form)) {
+          String vectorizedPath = storageProvider.resolvePath(yearDir.getAbsolutePath(),
+              String.format("%s_%s_vectorized.parquet", cik, accessionClean));
+          try {
+            StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
+            if (vectorizedMetadata.getSize() == 0) {
+              return false;
+            }
+          } catch (IOException e) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } catch (Exception e) {
+      LOGGER.debug("Error checking Parquet files: " + e.getMessage());
+      return false;
+    }
+  }
+
+  // Process a single filing immediately after download
+  private void processSingleFiling(File sourceFile, File baseDir) {
+    try {
+      // Get parquet directory from interface method
+      String govdataParquetDir = getGovDataParquetDir();
+      File secParquetDir = new File(govdataParquetDir + "/source=sec");
+      secParquetDir.mkdirs();
+
+      // Check if text similarity is enabled from operand
+      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+      boolean enableVectorization = textSimilarityConfig != null &&
+          Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+
+      XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
+
+      // Extract accession from file path
+      String accession = sourceFile.getParentFile().getName();
+
+      // Create metadata
+      ConversionMetadata metadata = new ConversionMetadata(secParquetDir);
+      ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
+      record.originalFile = sourceFile.getAbsolutePath();
+      record.sourceFile = accession;
+      metadata.recordConversion(sourceFile, record);
+
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Processing filing immediately: {}", sourceFile.getName());
+      }
+
+      List<File> outputFiles = converter.convert(sourceFile, secParquetDir, metadata);
+
+      if (outputFiles.isEmpty()) {
+        LOGGER.warn("No parquet files created for " + sourceFile.getName());
+      } else {
+        // Add to manifest after successful conversion
+        addToManifest(baseDir, sourceFile, secParquetDir);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Successfully processed filing: {} - created {} parquet files",
+              sourceFile.getName(), outputFiles.size());
+        }
+      }
+    } catch (java.nio.channels.OverlappingFileLockException e) {
+      // Non-fatal: Another thread is processing this file
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Skipping {} - already being processed by another thread", sourceFile.getName());
+      }
+    } catch (Exception e) {
+      LOGGER.error("Failed to process filing immediately: " + sourceFile.getName(), e);
+    }
+  }
+
   private void downloadFilingDocumentWithRateLimit(SecHttpStorageProvider provider, FilingToDownload filing) {
     int maxAttempts = 3;
     int attempt = 0;
@@ -1298,44 +1481,29 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
       String manifestKey = cik + "|" + accession + "|" + form + "|" + filingDate;
 
-      // Quick check if already in manifest (meaning fully downloaded AND converted to Parquet)
-      if (manifestFile.exists()) {
-        try {
-          Set<String> processedFilings = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+      // Check if already in manifest or has all required Parquet files
+      FilingStatus status = checkFilingStatus(cik, accession, form, filingDate, manifestFile);
 
-          // Check if this filing is in the manifest
-          boolean isProcessed = false;
-          boolean hasVectorized = false;
-          for (String entry : processedFilings) {
-            if (entry.startsWith(cik + "|" + accession + "|")) {
-              isProcessed = true;
-              hasVectorized = entry.contains("PROCESSED_WITH_VECTORS");
-              break;
-            }
-          }
-
-          // If text similarity is enabled but vectorized files don't exist, need reprocessing
-          Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-          boolean needsVectorized = textSimilarityConfig != null &&
-              Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-
-          if (isProcessed && (!needsVectorized || hasVectorized)) {
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Filing fully processed (in manifest), skipping: {} {}", form, filingDate);
-            }
-            return;
-          } else if (isProcessed && needsVectorized && !hasVectorized) {
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Filing needs vectorization, will reprocess: {} {}", form, filingDate);
-            }
-            // Continue with processing to add vectorized files
-          }
-        } catch (Exception e) {
-          LOGGER.debug("Could not read manifest: " + e.getMessage());
+      if (status == FilingStatus.FULLY_PROCESSED) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Filing fully processed, skipping: {} {}", form, filingDate);
         }
+        return;
+      } else if (status == FilingStatus.EXCLUDED_424B) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("424B filing excluded from processing, skipping: {} {}", form, filingDate);
+        }
+        return;
+      } else if (status == FilingStatus.HAS_ALL_PARQUET) {
+        // Has all Parquet files but not in manifest - add to manifest
+        addToManifest(cikDir.getParentFile(), null, null);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Filing has all Parquet files, added to manifest: {} {}", form, filingDate);
+        }
+        return;
       }
 
-      // Not in manifest - need to do detailed verification
+      // Need to check source files and possibly download/process
 
       // Create accession directory
       String accessionClean = accession.replace("-", "");
@@ -1396,6 +1564,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Check for required parquet files based on form type
       // Parquet files use accession without hyphens (accessionClean is already defined above)
+
 
       // Primary data file (facts for most forms, insider for forms 3/4/5)
       String filenameSuffix = isInsiderForm ? "insider" : "facts";
@@ -1694,9 +1863,39 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      // Don't add to manifest here - only add after Parquet conversion is complete
-      // The manifest should only contain fully processed filings (downloaded + converted)
-      LOGGER.debug("Filing downloaded, but not adding to manifest until Parquet conversion complete");
+      // STREAMING PROCESSING: Process filing immediately after download
+      // Check if we have all required source files and process them
+      boolean shouldProcess = false;
+      File fileToProcess = null;
+
+      if (hasInlineXbrl && htmlFile.exists()) {
+        shouldProcess = true;
+        fileToProcess = htmlFile;
+      } else if (xbrlFile.exists() && xbrlFile.length() > 0) {
+        shouldProcess = true;
+        fileToProcess = xbrlFile;
+      } else if (isInsiderForm && xbrlFile.exists() && xbrlFile.length() > 0) {
+        shouldProcess = true;
+        fileToProcess = xbrlFile;
+      }
+
+      if (shouldProcess && fileToProcess != null) {
+        // Process this filing immediately in a separate thread
+        final File finalFileToProcess = fileToProcess;
+        final File baseDirectory = cikDir.getParentFile();
+        CompletableFuture<Void> processingFuture = CompletableFuture.runAsync(() -> {
+          processSingleFiling(finalFileToProcess, baseDirectory);
+        }, conversionExecutor);
+
+        // Track the processing future (but don't wait for it)
+        filingProcessingFutures.add(processingFuture);
+
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Scheduled immediate processing for filing: {} {}", form, filingDate);
+        }
+      } else {
+        LOGGER.debug("Filing downloaded, but missing required files for processing: {} {}", form, filingDate);
+      }
 
     } catch (Exception e) {
       LOGGER.warn("Failed to download filing " + accession + ": " + e.getMessage());
@@ -2441,9 +2640,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (types instanceof List) {
       return (List<String>) types;
     }
-    // Return empty list to signal "download all filing types"
-    // EdgarDownloader will interpret empty list as "all types"
-    return new ArrayList<>();
+
+    // Return explicit list of allowed filing types (excludes 424B forms)
+    return Arrays.asList(
+        "3", "4", "5",           // Insider forms
+        "10-K", "10K",           // Annual reports
+        "10-Q", "10Q",           // Quarterly reports
+        "8-K", "8K",             // Current reports
+        "8-K/A", "8KA",          // Amended current reports
+        "DEF 14A", "DEF14A",     // Proxy statements
+        "S-3", "S3",             // Registration statements
+        "S-4", "S4",             // Business combination registration
+        "S-8", "S8"              // Employee benefit plan registration
+    );
   }
 
   /**
@@ -2501,8 +2710,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (form == null) return false;
 
     // Forms that commonly contain inline XBRL (from analysis of reprocessing patterns)
-    // 424B2 (10 files) - Prospectus supplements with financial data
-    if ("424B2".equals(form)) return true;
+    // 424B2 excluded - prospectus supplements have minimal analytical value
+    // if ("424B2".equals(form)) return true;
 
     // 10-Q (10 files) - Quarterly reports with mandatory inline XBRL
     if ("10Q".equals(form) || "10-Q".equals(form)) return true;
