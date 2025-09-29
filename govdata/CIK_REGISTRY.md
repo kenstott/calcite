@@ -27,7 +27,7 @@ The default registry is loaded from `/cik-registry.json` and includes:
 | `BIG_BANKS` | Major US banks | JPM, BAC, WFC, C, GS, MS |
 | `BIG_GLOBAL_BANKS` | Major global banks (US + International) | US banks + HSBC, TD, RY, BCS, DB, UBS, etc. |
 | `DOW10` | Top 10 Dow Jones companies | By market weight |
-| `DOW30` | All 30 Dow Jones Industrial Average companies | Complete DJIA |
+| `DJIA` | All 30 Dow Jones Industrial Average companies | Complete DJIA |
 | `FORTUNE10` | Fortune 10 companies (2024) | Largest US companies |
 | `FORTUNE50` | Fortune 50 companies (2024) | Top 50 US companies |
 | `FORTUNE100` | Fortune 100 companies (2024) | Top 100 US companies |
@@ -217,7 +217,7 @@ CikRegistry.reload();
 - **100+ Individual Tickers**: Major companies across all sectors
 - **25+ Predefined Groups**: Industry sectors, indices, and themes
 - **Fortune Rankings**: Fortune 10, 50, and 100 companies
-- **Market Indices**: DOW30, S&P 500 sample, Russell 2000 sample
+- **Market Indices**: DJIA, S&P 500 sample, Russell 2000 sample
 - **Sector Coverage**: Tech, Finance, Healthcare, Energy, Consumer, Industrial, and more
 - **Thematic Groups**: AI, EV, Fintech, Cybersecurity, Streaming, Cloud, and more
 

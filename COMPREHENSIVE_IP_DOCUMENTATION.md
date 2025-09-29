@@ -1,6 +1,6 @@
 # Comprehensive Intellectual Property Portfolio
 
-**Ken Stott's Software Innovation Portfolio**  
+**Ken Stott's Software Innovation Portfolio**
 *A unified ecosystem of data processing, analytics, and integration technologies*
 
 ---
@@ -9,12 +9,12 @@
 
 This document catalogs a comprehensive portfolio of eleven major software projects representing significant intellectual property in the fields of:
 
-> **GitHub Profile**: https://github.com/kenstott  
-> **Main Repository**: https://github.com/kenstott/calcite (Comprehensive Apache Calcite fork with 7+ custom adapters)  
+> **GitHub Profile**: https://github.com/kenstott
+> **Main Repository**: https://github.com/kenstott/calcite (Comprehensive Apache Calcite fork with 7+ custom adapters)
 > **Note**: Most projects are implemented as modules within the main Calcite fork. Individual repositories listed below.
 
 - **Universal Document Processing & Knowledge Graphs**
-- **Multi-Cloud Operations & Analytics** 
+- **Multi-Cloud Operations & Analytics**
 - **Government & SEC Data Integration**
 - **Enterprise SharePoint Integration**
 - **Squnk (pronounced 'skunk') Analytics & Search**
@@ -67,7 +67,7 @@ The world's first **universal document-to-knowledge-graph transformation engine*
 
 **Repository**: https://github.com/kenstott/calcite (cloud-ops module) + https://github.com/kenstott/cloud-ops-jdbc-driver
 
-### 🎯 **Strategic Value** 
+### 🎯 **Strategic Value**
 The industry's first **single pane of glass for multi-cloud operations** - query Azure, AWS, and GCP resources simultaneously using standard SQL.
 
 ### 🏗️ **Architecture & Innovation**
@@ -121,7 +121,7 @@ The industry's first **single pane of glass for multi-cloud operations** - query
   - World Bank: Global economic indicators and development data
   - BEA: National accounts, regional economic data
 - **GEO Schema**: HUD housing data, geographic boundaries, demographic statistics
-- **Company Resolution**: FAANG, MAGNIFICENT7, DOW30, SP500 predefined groups
+- **Company Resolution**: FAANG, MAGNIFICENT7, DJIA, SP500 predefined groups
 - **SQL Processing**: Complex financial and economic analytics with time-series support
 - **Caching System**: Multi-level TTL-based caching for API rate limit management
 
@@ -268,7 +268,7 @@ The industry's first **single pane of glass for multi-cloud operations** - query
 
 ### 💼 **Market Applications**
 - **Business Intelligence**: SQL-based reporting and analytics on CRM data
-- **Data Integration**: Seamless integration of Salesforce data with other enterprise systems  
+- **Data Integration**: Seamless integration of Salesforce data with other enterprise systems
 - **Custom Analytics**: Advanced SQL queries across Salesforce objects and relationships
 - **ETL Processes**: SQL-driven data extraction and transformation workflows
 
@@ -412,7 +412,7 @@ The industry's first **single pane of glass for multi-cloud operations** - query
 
 ### **Languages & Frameworks**
 - **Python**: Document processing, web interfaces, ML/AI integration
-- **Java**: JDBC drivers, enterprise integration, SQL processing  
+- **Java**: JDBC drivers, enterprise integration, SQL processing
 - **JavaScript/TypeScript**: React-based web interfaces, MCP servers, AI integration
 - **SQL Processing Framework**: Advanced SQL processing engine across all JDBC drivers
 

@@ -53,7 +53,7 @@ The GovData adapter automatically resolves company identifiers using the built-i
 - `FAANG` - Facebook/Meta, Apple, Amazon, Netflix, Google
 - `BIG_TECH` - Major technology companies (14 companies)
 - `BIG_BANKS` - JPMorgan, Bank of America, Wells Fargo, Citigroup, Goldman Sachs, Morgan Stanley
-- `DOW30` - All 30 Dow Jones Industrial Average companies
+- `DJIA` - All 30 Dow Jones Industrial Average companies
 - `SP500` - S&P 500 representative sample (top 50 by weight)
 - `FORTUNE100` - Fortune 100 companies
 - `SEMICONDUCTORS` - NVIDIA, Intel, AMD, Qualcomm, Micron, etc.
@@ -71,7 +71,7 @@ The GovData adapter automatically resolves company identifiers using the built-i
 ```json
 {
   "version": "1.0",
-  "defaultSchema": "GOV", 
+  "defaultSchema": "GOV",
   "schemas": [{
     "name": "GOV",
     "type": "custom",
@@ -95,7 +95,7 @@ The GovData adapter automatically resolves company identifiers using the built-i
 // Using single ticker
 "ciks": "AAPL"                     // Also works as string (not array)
 
-// Mixed identifiers  
+// Mixed identifiers
 "ciks": ["AAPL", "MAGNIFICENT7", "0001018724"]  // Ticker + group + raw CIK
 ```
 
