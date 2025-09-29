@@ -625,17 +625,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           case "series_id":
             pathBuilder.append("/series_id=").append(seriesId);
             break;
-          case "frequency":
-            // Determine frequency from series characteristics
-            String frequency = determineSeriesFrequency(seriesId);
-            pathBuilder.append("/frequency=").append(frequency);
-            break;
           case "maturity":
-            // Extract maturity from series ID if available
+            // Extract maturity from treasury series ID (e.g., DGS10 = 10 year, DGS30 = 30 year)
             String maturity = extractMaturityFromSeriesId(seriesId);
             if (maturity != null) {
               pathBuilder.append("/maturity=").append(maturity);
             }
+            break;
+          case "frequency":
+            // Determine frequency from series characteristics
+            String frequency = determineSeriesFrequency(seriesId);
+            pathBuilder.append("/frequency=").append(frequency);
             break;
           default:
             LOGGER.warn("Unknown partition field: {}", field);
@@ -686,16 +686,27 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Start with base table definitions from econ-schema.json
     List<Map<String, Object>> tables = new ArrayList<>(GovDataSubSchemaFactory.super.loadTableDefinitions());
 
-    LOGGER.debug("Loaded {} base table definitions from econ-schema.json", tables.size());
+    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.json", tables.size());
+
+    // Log the base tables
+    for (Map<String, Object> table : tables) {
+      LOGGER.debug("[DEBUG] Base table: {} with pattern: {}", table.get("name"), table.get("pattern"));
+    }
 
     // Add custom FRED table definitions if operand is available
     List<Map<String, Object>> customTables = generateCustomFredTableDefinitions();
     if (!customTables.isEmpty()) {
       tables.addAll(customTables);
-      LOGGER.debug("Added {} custom FRED table definitions", customTables.size());
+      LOGGER.info("[DEBUG] Added {} custom FRED table definitions", customTables.size());
+      for (Map<String, Object> table : customTables) {
+        LOGGER.info("[DEBUG] Custom FRED table added: {} with pattern: {}", table.get("name"), table.get("pattern"));
+      }
+    } else {
+      LOGGER.warn("[DEBUG] No custom FRED table definitions generated!");
     }
 
-    LOGGER.debug("Total ECON table definitions: {}", tables.size());
+    LOGGER.info("[DEBUG] Total ECON table definitions: {} (base: {}, custom: {})",
+        tables.size(), tables.size() - customTables.size(), customTables.size());
     return tables;
   }
 
@@ -706,12 +717,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private List<Map<String, Object>> generateCustomFredTableDefinitions() {
     List<Map<String, Object>> customTables = new ArrayList<>();
 
-    LOGGER.debug("generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
+    LOGGER.info("[DEBUG] generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
         fredSeriesGroups != null ? fredSeriesGroups.size() : "null",
         customFredSeries != null ? customFredSeries.size() : "null");
 
+    // Log the actual groups if present
     if (fredSeriesGroups != null) {
-      LOGGER.debug("Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
+      LOGGER.info("[DEBUG] FRED series groups present: {}", fredSeriesGroups.keySet());
+    }
+
+    if (fredSeriesGroups != null) {
+      LOGGER.info("[DEBUG] Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
 
       for (Map.Entry<String, Object> entry : fredSeriesGroups.entrySet()) {
         String groupName = entry.getKey();
@@ -727,7 +743,18 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         Map<String, Object> tableDefinition = new HashMap<>();
         tableDefinition.put("name", tableName);
-        tableDefinition.put("pattern", "type=custom/year=*/" + tableName + ".parquet");
+
+        // Build pattern based on partition strategy from the group configuration
+        String partitionStrategy = (String) groupConfig.get("partitionStrategy");
+        String pattern;
+        if (partitionStrategy != null && partitionStrategy.contains("maturity")) {
+          // For tables with maturity partitioning
+          pattern = "type=custom/year=*/maturity=*/" + tableName + ".parquet";
+        } else {
+          // Default partitioning by year only
+          pattern = "type=custom/year=*/" + tableName + ".parquet";
+        }
+        tableDefinition.put("pattern", pattern);
 
         String comment = (String) groupConfig.get("comment");
         if (comment == null) {
@@ -736,7 +763,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         tableDefinition.put("comment", comment);
 
         customTables.add(tableDefinition);
-        LOGGER.debug("Generated table definition for FRED group '{}' -> table '{}'", groupName, tableName);
+        LOGGER.info("[DEBUG] Generated table definition for FRED group '{}' -> table '{}' with pattern '{}'",
+            groupName, tableName, pattern);
       }
     }
 
