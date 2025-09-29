@@ -416,7 +416,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
         LOGGER.info("Downloading FRED series catalog");
-        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir);
+        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider);
         catalogDownloader.downloadCatalog();
         LOGGER.debug("FRED catalog download completed");
       } catch (Exception e) {
