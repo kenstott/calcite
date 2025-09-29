@@ -45,7 +45,7 @@ public class Dow30DownloadTest {
     targetDir.mkdirs();
 
     Map<String, Object> edgarConfig = new HashMap<>();
-    edgarConfig.put("ciks", "DOW30");
+    edgarConfig.put("ciks", "DJIA");
     edgarConfig.put("startDate", "2023-01-01");
     edgarConfig.put("endDate", "2023-12-31");
     edgarConfig.put("filingTypes", Arrays.asList("10-K", "10-Q", "8-K"));

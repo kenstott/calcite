@@ -113,7 +113,7 @@ public class Dow30PerformanceTest {
       throws Exception {
 
     // Get list of Dow 30 CIKs from registry
-    List<String> dow30Ciks = CikRegistry.resolveCiks("DOW30");
+    List<String> dow30Ciks = CikRegistry.resolveCiks("DJIA");
     LOGGER.info("Found " + dow30Ciks.size() + " Dow 30 companies\n");
 
     int companyNum = 0;
@@ -296,7 +296,7 @@ public class Dow30PerformanceTest {
   +
       "          \"autoDownload\": true,\n"
   +
-      "          \"ciks\": \"DOW30\",\n"
+      "          \"ciks\": \"DJIA\",\n"
   +
       "          \"startDate\": \"%s\",\n"
   +

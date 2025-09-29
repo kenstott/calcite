@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Comprehensive test for all three government data sources (SEC, ECON, GEO).
- * Tests with 5 years of data (2021-2025) and limits SEC to Microsoft and Apple only.
+ * Tests with 5 years of data (2021-2025) for all 30 DJIA companies.
  * Validates all tables are discoverable and queryable across all three schemas.
  */
 @Tag("integration")
@@ -135,7 +135,7 @@ public class UnifiedGovDataComprehensiveTest {
         "      \"operand\": {" +
         "        \"dataSource\": \"sec\"," +
         "        \"executionEngine\": \"DUCKDB\"," +
-        "        \"ciks\": [\"0000789019\", \"0000320193\"]," +  // Microsoft and Apple
+        "        \"ciks\": [\"DJIA\"]," +  // Dow Jones Industrial Average (DJIA)
         "        \"startYear\": 2021," +
         "        \"endYear\": 2025," +
         "        \"autoDownload\": true," +
