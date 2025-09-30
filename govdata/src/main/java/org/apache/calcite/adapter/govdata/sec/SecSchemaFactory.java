@@ -74,6 +74,7 @@ import java.time.Year;
 public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
+  private SecCacheManifest cacheManifest; // ETag-based caching for submissions.json
 
   // Standard SEC data cache directory - XBRL files are immutable, cache forever
   // These are now accessed at runtime via interface methods
@@ -445,6 +446,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create mutable copy of operand to allow modifications
     Map<String, Object> mutableOperand = new HashMap<>(operand);
+
+    // Load SecCacheManifest for ETag-based caching of submissions.json files
+    String govdataCacheDir = System.getenv("GOVDATA_CACHE_DIR");
+    if (govdataCacheDir != null) {
+      String secCacheDir = govdataCacheDir + "/sec";
+      this.cacheManifest = SecCacheManifest.load(secCacheDir);
+      LOGGER.debug("Loaded SEC cache manifest from {}", secCacheDir);
+    }
 
     // Check auto-download setting (default true like ECON)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
@@ -1089,9 +1098,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
+      // Save SecCacheManifest after all downloads complete
+      if (cacheManifest != null && secRawDir != null) {
+        cacheManifest.save(secRawDir);
+        LOGGER.debug("Saved SEC cache manifest to {}", secRawDir);
+      }
+
     } catch (Exception e) {
       LOGGER.error("Error in downloadSecData", e);
       LOGGER.warn("Failed to download SEC data: " + e.getMessage());
+    } finally {
+      // Save manifest in finally block to ensure it's saved even if errors occur
+      if (cacheManifest != null) {
+        String govdataCacheDir = getGovDataCacheDir();
+        if (govdataCacheDir != null) {
+          String secCacheDir = govdataCacheDir + "/sec";
+          cacheManifest.save(secCacheDir);
+          LOGGER.debug("Saved SEC cache manifest in finally block to {}", secCacheDir);
+        }
+      }
     }
   }
 
@@ -1109,27 +1134,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File cikDir = new File(baseDir, normalizedCik);
       cikDir.mkdirs();
 
-      // Download submissions metadata first (with rate limiting and TTL caching)
-      String submissionsUrl =
-          String.format("https://data.sec.gov/submissions/CIK%s.json", normalizedCik);
+      // Download submissions metadata with ETag-based caching
       File submissionsFile = new File(cikDir, "submissions.json");
 
-      // Check if submissions file exists and is within TTL
+      // Check if submissions are cached using manifest
       boolean needsDownload = true;
-      if (submissionsFile.exists()) {
-        long fileAgeMs = System.currentTimeMillis() - submissionsFile.lastModified();
-        long ttlMs = getSubmissionsTtlHours() * 3600 * 1000;
-
-        if (fileAgeMs < ttlMs) {
-          needsDownload = false;
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Using cached submissions for CIK {} (age: {} hours, TTL: {} hours)",
-                normalizedCik, fileAgeMs / 3600000, getSubmissionsTtlHours());
-          }
-        } else {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Refreshing submissions for CIK {} (age: {} hours exceeds TTL: {} hours)",
-                normalizedCik, fileAgeMs / 3600000, getSubmissionsTtlHours());
+      if (cacheManifest != null && cacheManifest.isCached(normalizedCik)) {
+        String cachedFilePath = cacheManifest.getFilePath(normalizedCik);
+        if (cachedFilePath != null && submissionsFile.exists()) {
+          // Check if we should use conditional GET with ETag
+          String cachedETag = cacheManifest.getETag(normalizedCik);
+          if (cachedETag != null && !cachedETag.isEmpty()) {
+            // We have an ETag - try conditional GET
+            needsDownload = true; // Will check via HTTP 304
+            LOGGER.debug("Have cached submissions with ETag for CIK {}, will check via conditional GET", normalizedCik);
+          } else {
+            // Cached without ETag - manifest says it's fresh
+            needsDownload = false;
+            LOGGER.debug("Using cached submissions for CIK {} (valid per manifest)", normalizedCik);
           }
         }
       }
@@ -1143,18 +1165,64 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           Thread.currentThread().interrupt();
         }
 
-        try (InputStream is = provider.openInputStream(submissionsUrl)) {
-          try (FileOutputStream fos = new FileOutputStream(submissionsFile)) {
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = is.read(buffer)) != -1) {
-              fos.write(buffer, 0, bytesRead);
-            }
+        try {
+          String submissionsUrl =
+              String.format("https://data.sec.gov/submissions/CIK%s.json", normalizedCik);
+
+          // Build request with conditional GET support
+          java.net.HttpURLConnection conn =
+              (java.net.HttpURLConnection) java.net.URI.create(submissionsUrl).toURL().openConnection();
+          conn.setRequestMethod("GET");
+          conn.setRequestProperty("User-Agent", provider.getUserAgent());
+          conn.setRequestProperty("Accept", "application/json");
+
+          // Add If-None-Match header if we have an ETag
+          String cachedETag = (cacheManifest != null) ? cacheManifest.getETag(normalizedCik) : null;
+          if (cachedETag != null && !cachedETag.isEmpty()) {
+            conn.setRequestProperty("If-None-Match", cachedETag);
+            LOGGER.debug("Sending conditional GET with ETag: {}", cachedETag);
           }
-          // Clean up macOS metadata files after writing
-          storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Downloaded submissions metadata for CIK {}", normalizedCik);
+
+          int responseCode = conn.getResponseCode();
+
+          if (responseCode == 304) {
+            // Not Modified - use cached file
+            LOGGER.info("Submissions unchanged for CIK {} (304 Not Modified)", normalizedCik);
+            // Manifest already knows about this file, no need to update
+          } else if (responseCode == 200) {
+            // New or updated content - download and cache
+            String newETag = conn.getHeaderField("ETag");
+
+            try (InputStream is = conn.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(submissionsFile)) {
+              byte[] buffer = new byte[8192];
+              int bytesRead;
+              while ((bytesRead = is.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+              }
+            }
+
+            // Clean up macOS metadata files after writing
+            storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
+
+            // Update manifest with new ETag
+            if (cacheManifest != null) {
+              long fileSize = submissionsFile.length();
+              long refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+              cacheManifest.markCached(normalizedCik, submissionsFile.getAbsolutePath(),
+                                      newETag, fileSize, refreshAfter,
+                                      newETag != null ? "etag_based" : "daily_fallback");
+
+              if (newETag != null) {
+                LOGGER.info("Downloaded and cached submissions for CIK {} (ETag: {})", normalizedCik, newETag);
+              } else {
+                LOGGER.info("Downloaded and cached submissions for CIK {} (no ETag)", normalizedCik);
+              }
+            } else {
+              LOGGER.debug("Downloaded submissions metadata for CIK {} (no manifest available)", normalizedCik);
+            }
+          } else {
+            LOGGER.warn("Unexpected response code {} for submissions CIK {}", responseCode, normalizedCik);
           }
         } finally {
           rateLimiter.release();
