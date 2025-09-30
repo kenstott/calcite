@@ -53,11 +53,17 @@ public class EdgarDownloader {
 
   private final Map<String, Object> edgarConfig;
   private final File targetDirectory;
+  private final SecCacheManifest cacheManifest;
+  private final File cacheDirectory;
 
-  public EdgarDownloader(Map<String, Object> edgarConfig, File targetDirectory) {
+  public EdgarDownloader(Map<String, Object> edgarConfig, File targetDirectory,
+                        SecCacheManifest cacheManifest, File cacheDirectory) {
     this.edgarConfig = edgarConfig;
     this.targetDirectory = targetDirectory;
+    this.cacheManifest = cacheManifest;
+    this.cacheDirectory = cacheDirectory;
     targetDirectory.mkdirs();
+    cacheDirectory.mkdirs();
   }
 
   /**
@@ -131,12 +137,22 @@ public class EdgarDownloader {
   }
 
   /**
-   * Fetch submissions metadata for a CIK.
+   * Fetch submissions metadata for a CIK with ETag support for efficient caching.
+   * Uses conditional GET (If-None-Match) to avoid re-downloading unchanged files.
    */
   private JsonNode fetchSubmissions(String cik) throws IOException {
-    String url = String.format(Locale.ROOT, SUBMISSIONS_URL, cik);
+    // Check cache first
+    if (cacheManifest.isCached(cik)) {
+      String cachedFilePath = cacheManifest.getFilePath(cik);
+      File cachedFile = new File(cachedFilePath);
+      if (cachedFile.exists()) {
+        LOGGER.debug("Using cached submissions for CIK {}", cik);
+        return MAPPER.readTree(cachedFile);
+      }
+    }
 
-    LOGGER.debug("Fetching submissions from: " + url);
+    String url = String.format(Locale.ROOT, SUBMISSIONS_URL, cik);
+    LOGGER.debug("Fetching submissions from: {}", url);
 
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("GET");
@@ -144,6 +160,13 @@ public class EdgarDownloader {
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
+
+    // Add conditional GET header if we have a cached ETag
+    String cachedETag = cacheManifest.getETag(cik);
+    if (cachedETag != null && !cachedETag.isEmpty()) {
+      conn.setRequestProperty("If-None-Match", cachedETag);
+      LOGGER.debug("Using cached ETag for conditional GET: {}", cachedETag);
+    }
 
     // Rate limiting - SEC allows 10 requests per second
     try {
@@ -153,13 +176,60 @@ public class EdgarDownloader {
     }
 
     int responseCode = conn.getResponseCode();
-    if (responseCode == 200) {
+
+    if (responseCode == 304) {
+      // Not Modified - use cached file
+      String cachedFilePath = cacheManifest.getFilePath(cik);
+      if (cachedFilePath != null) {
+        File cachedFile = new File(cachedFilePath);
+        if (cachedFile.exists()) {
+          LOGGER.info("Submissions unchanged for CIK {} (304 Not Modified), using cache", cik);
+          return MAPPER.readTree(cachedFile);
+        }
+      }
+      LOGGER.warn("Got 304 but cached file not found for CIK {}", cik);
+      return null;
+    } else if (responseCode == 200) {
+      // New or updated content - download and cache
+      String newETag = conn.getHeaderField("ETag");
+
       try (BufferedReader reader =
           new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-        return MAPPER.readTree(reader);
+
+        // Read response into string for both parsing and caching
+        StringBuilder responseBuilder = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+          responseBuilder.append(line);
+        }
+        String responseBody = responseBuilder.toString();
+
+        // Parse JSON
+        JsonNode submissions = MAPPER.readTree(responseBody);
+
+        // Save to cache file
+        File cacheFile = new File(cacheDirectory, "submissions_" + cik + ".json");
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(cacheFile, submissions);
+
+        long fileSize = cacheFile.length();
+        long refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+
+        // Update manifest with ETag
+        cacheManifest.markCached(cik, cacheFile.getAbsolutePath(), newETag, fileSize,
+                                 refreshAfter, newETag != null ? "etag_based" : "daily_fallback");
+
+        if (newETag != null) {
+          LOGGER.info("Downloaded and cached submissions for CIK {} (size: {} bytes, ETag: {})",
+                     cik, fileSize, newETag);
+        } else {
+          LOGGER.info("Downloaded and cached submissions for CIK {} (size: {} bytes, no ETag)",
+                     cik, fileSize);
+        }
+
+        return submissions;
       }
     } else {
-      LOGGER.warn("Failed to fetch submissions: HTTP " + responseCode);
+      LOGGER.warn("Failed to fetch submissions for CIK {}: HTTP {}", cik, responseCode);
       return null;
     }
   }
