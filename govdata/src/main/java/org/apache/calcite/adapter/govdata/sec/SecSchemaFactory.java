@@ -448,12 +448,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     Map<String, Object> mutableOperand = new HashMap<>(operand);
 
     // Load SecCacheManifest for ETag-based caching of submissions.json files
-    String govdataCacheDir = System.getenv("GOVDATA_CACHE_DIR");
-    if (govdataCacheDir != null) {
-      String secCacheDir = govdataCacheDir + "/sec";
-      this.cacheManifest = SecCacheManifest.load(secCacheDir);
-      LOGGER.debug("Loaded SEC cache manifest from {}", secCacheDir);
-    }
+    // Note: Cache manifest loading is deferred until after getGovDataCacheDir() is called
+    // to avoid duplicate variable declarations
 
     // Check auto-download setting (default true like ECON)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
@@ -492,6 +488,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
       throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
     }
+
+    // Load SecCacheManifest now that we have the cache directory
+    String secCacheDir = govdataCacheDir + "/sec";
+    this.cacheManifest = SecCacheManifest.load(secCacheDir);
+    LOGGER.debug("Loaded SEC cache manifest from {}", secCacheDir);
 
     // SEC data directories
     String secRawDir = govdataCacheDir + "/sec";
@@ -1110,9 +1111,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     } finally {
       // Save manifest in finally block to ensure it's saved even if errors occur
       if (cacheManifest != null) {
-        String govdataCacheDir = getGovDataCacheDir();
-        if (govdataCacheDir != null) {
-          String secCacheDir = govdataCacheDir + "/sec";
+        String cacheDir = getGovDataCacheDir();
+        if (cacheDir != null) {
+          String secCacheDir = cacheDir + "/sec";
           cacheManifest.save(secCacheDir);
           LOGGER.debug("Saved SEC cache manifest in finally block to {}", secCacheDir);
         }
@@ -1173,7 +1174,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           java.net.HttpURLConnection conn =
               (java.net.HttpURLConnection) java.net.URI.create(submissionsUrl).toURL().openConnection();
           conn.setRequestMethod("GET");
-          conn.setRequestProperty("User-Agent", provider.getUserAgent());
+          conn.setRequestProperty("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
           conn.setRequestProperty("Accept", "application/json");
 
           // Add If-None-Match header if we have an ETag
