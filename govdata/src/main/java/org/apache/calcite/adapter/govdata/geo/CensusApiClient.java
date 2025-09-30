@@ -256,31 +256,73 @@ public class CensusApiClient {
    * @return JSON response from Census API
    */
   public JsonNode getDecennialData(int year, String variables, String geography) throws IOException {
-    String cacheKey = String.format("dec_%d_%s_%s", year,
+    return getDecennialData(year, variables, geography, null);
+  }
+
+  /**
+   * Get decennial census data with specific dataset.
+   *
+   * @param year Census year
+   * @param variables Comma-separated list of variables
+   * @param geography Geographic filter
+   * @param preferredDataset Preferred dataset (null for auto-selection)
+   * @return JSON response from Census API
+   * @throws IOException if API call fails
+   */
+  public JsonNode getDecennialData(int year, String variables, String geography, String preferredDataset) throws IOException {
+    String cacheKey = String.format("dec_%d_%s_%s_%s", year,
         variables.replaceAll("[^a-zA-Z0-9]", "_"),
-        geography.replaceAll("[^a-zA-Z0-9]", "_"));
-    
+        geography.replaceAll("[^a-zA-Z0-9]", "_"),
+        preferredDataset != null ? preferredDataset : "auto");
+
     // Check cache first
     File cacheFile = new File(cacheDir, cacheKey + ".json");
     if (cacheFile.exists()) {
       LOGGER.debug("Using cached Decennial data from {}", cacheFile);
       return objectMapper.readTree(cacheFile);
     }
-    
-    // Build API URL
-    String dataset = (year == 2020) ? "dec/dhc" : "dec/sf1";
-    // Note: Do not URL-encode geography parameter as it contains & characters that Census API expects
-    String url = String.format("%s/%d/%s?get=%s&for=%s&key=%s",
-        BASE_URL, year, dataset, variables, geography, apiKey);
-    
-    // Make API request with rate limiting
-    JsonNode response = makeApiRequest(url);
-    
-    // Cache the response
-    objectMapper.writeValue(cacheFile, response);
-    LOGGER.info("Cached Decennial data to {}", cacheFile);
-    
-    return response;
+
+    // Determine datasets to try
+    String[] datasetsToTry;
+    if (preferredDataset != null) {
+      datasetsToTry = new String[]{preferredDataset};
+    } else {
+      // Use ConceptualVariableMapper to get appropriate datasets
+      String primaryDataset = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getDataset("decennial", year);
+      String[] fallbacks = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getFallbackDatasets("decennial", year);
+
+      datasetsToTry = new String[1 + fallbacks.length];
+      datasetsToTry[0] = primaryDataset;
+      System.arraycopy(fallbacks, 0, datasetsToTry, 1, fallbacks.length);
+    }
+
+    // Try each dataset until one works
+    IOException lastException = null;
+    for (String dataset : datasetsToTry) {
+      try {
+        String url = String.format("%s/%d/dec/%s?get=%s&for=%s&key=%s",
+            BASE_URL, year, dataset, variables, geography, apiKey);
+
+        LOGGER.debug("Trying decennial API call with dataset '{}': {}", dataset, url);
+
+        // Make API request with rate limiting
+        JsonNode response = makeApiRequest(url);
+
+        // Cache the successful response
+        objectMapper.writeValue(cacheFile, response);
+        LOGGER.info("Cached Decennial data to {} using dataset '{}'", cacheFile, dataset);
+
+        return response;
+
+      } catch (IOException e) {
+        lastException = e;
+        LOGGER.debug("Dataset '{}' failed for year {}: {}", dataset, year, e.getMessage());
+      }
+    }
+
+    // All datasets failed
+    throw new IOException(String.format("All datasets failed for decennial year %d with variables %s: %s",
+        year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
   }
   
   /**
