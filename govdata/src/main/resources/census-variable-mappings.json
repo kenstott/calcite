@@ -1,0 +1,593 @@
+{
+  "conceptualVariables": {
+    "total_population": {
+      "description": "Total population count",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P001001"},
+        "2010": {"dataset": "sf1", "variable": "P001001"},
+        "2020": {"dataset": "pl", "variable": "P1_001N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_001E"}
+      }
+    },
+    "white_alone": {
+      "description": "Population identifying as White alone",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P003002"},
+        "2010": {"dataset": "sf1", "variable": "P003002"},
+        "2020": {"dataset": "pl", "variable": "P1_003N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_002E"}
+      }
+    },
+    "black_african_american_alone": {
+      "description": "Population identifying as Black or African American alone",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P003003"},
+        "2010": {"dataset": "sf1", "variable": "P003003"},
+        "2020": {"dataset": "pl", "variable": "P1_004N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_026E"}
+      }
+    },
+    "asian_alone": {
+      "description": "Population identifying as Asian alone",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P003005"},
+        "2010": {"dataset": "sf1", "variable": "P003005"},
+        "2020": {"dataset": "pl", "variable": "P1_006N"}
+      }
+    },
+    "male_population": {
+      "description": "Total male population",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P012002"},
+        "2010": {"dataset": "sf1", "variable": "P012002"},
+        "2020": {"dataset": "pl", "variable": "P1_002N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_002E"}
+      }
+    },
+    "female_population": {
+      "description": "Total female population",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "P012026"},
+        "2010": {"dataset": "sf1", "variable": "P012026"},
+        "2020": {"dataset": "pl", "variable": "P1_026N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_026E"}
+      }
+    },
+    "total_housing_units": {
+      "description": "Total housing units",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "H001001"},
+        "2010": {"dataset": "sf1", "variable": "H001001"},
+        "2020": {"dataset": "pl", "variable": "H1_001N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B25001_001E"}
+      }
+    },
+    "occupied_housing_units": {
+      "description": "Occupied housing units",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "H003001"},
+        "2010": {"dataset": "sf1", "variable": "H003001"},
+        "2020": {"dataset": "pl", "variable": "H1_002N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B25002_002E"}
+      }
+    },
+    "vacant_housing_units": {
+      "description": "Vacant housing units",
+      "dataType": "LONG",
+      "decennial": {
+        "2000": {"dataset": "sf1", "variable": "H003003"},
+        "2010": {"dataset": "sf1", "variable": "H003003"},
+        "2020": {"dataset": "pl", "variable": "H1_003N"}
+      },
+      "acs": {
+        "allYears": {"variable": "B25002_003E"}
+      }
+    },
+    "median_household_income": {
+      "description": "Median household income in dollars",
+      "dataType": "LONG",
+      "decennial": {
+        "note": "Not available in decennial census - only in ACS"
+      },
+      "acs": {
+        "allYears": {"variable": "B19013_001E"}
+      }
+    },
+    "median_home_value": {
+      "description": "Median value of owner-occupied housing units",
+      "dataType": "LONG",
+      "decennial": {
+        "note": "Not available in decennial census - only in ACS"
+      },
+      "acs": {
+        "allYears": {"variable": "B25077_001E"}
+      }
+    },
+    "median_gross_rent": {
+      "description": "Median gross rent for renter-occupied housing units",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25064_001E"}
+      }
+    },
+    "bachelor_degree_or_higher": {
+      "description": "Population 25 years and over with bachelor's degree or higher",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_022E"}
+      }
+    },
+    "high_school_graduate": {
+      "description": "Population 25 years and over with high school diploma",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_017E"}
+      }
+    },
+    "population_25_and_over": {
+      "description": "Total population 25 years and over for education statistics",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_001E"}
+      }
+    },
+    "unemployment_rate": {
+      "description": "Unemployment rate (calculated field)",
+      "dataType": "DOUBLE",
+      "note": "Calculated from unemployed / labor_force_participation"
+    },
+    "unemployed_population": {
+      "description": "Unemployed population 16 years and over",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_005E"}
+      }
+    },
+    "labor_force_participation": {
+      "description": "Population 16 years and over in labor force",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_002E"}
+      }
+    },
+    "employed_population": {
+      "description": "Employed population 16 years and over",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_004E"}
+      }
+    },
+    "poverty_rate": {
+      "description": "Percentage of population below poverty level",
+      "dataType": "DOUBLE",
+      "note": "Calculated from below_poverty_level / total_population_poverty_determined"
+    },
+    "below_poverty_level": {
+      "description": "Population below poverty level",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B17001_002E"}
+      }
+    },
+    "total_population_poverty_determined": {
+      "description": "Total population for whom poverty status is determined",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B17001_001E"}
+      }
+    },
+    "mean_travel_time_to_work": {
+      "description": "Mean travel time to work in minutes",
+      "dataType": "DOUBLE",
+      "acs": {
+        "allYears": {"variable": "B08303_001E"}
+      }
+    },
+    "drove_alone_to_work": {
+      "description": "Workers who drove alone to work",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B08301_010E"}
+      }
+    },
+    "public_transportation_to_work": {
+      "description": "Workers who used public transportation to work",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B08301_021E"}
+      }
+    },
+    "health_insurance_coverage": {
+      "description": "Population with health insurance coverage",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B27001_004E"}
+      }
+    },
+    "no_health_insurance": {
+      "description": "Population with no health insurance coverage",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B27001_007E"}
+      }
+    },
+    "total_population_health_insurance": {
+      "description": "Total population for health insurance status",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B27001_001E"}
+      }
+    },
+    "speak_english_only": {
+      "description": "Population 5 years and over who speak only English at home",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_002E"}
+      }
+    },
+    "speak_language_other_than_english": {
+      "description": "Population 5 years and over who speak language other than English at home",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_003E"}
+      }
+    },
+    "total_population_language": {
+      "description": "Total population 5 years and over for language statistics",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_001E"}
+      }
+    },
+    "with_disability": {
+      "description": "Civilian noninstitutionalized population with a disability",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B18101_004E"}
+      }
+    },
+    "no_disability": {
+      "description": "Civilian noninstitutionalized population with no disability",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B18101_007E"}
+      }
+    },
+    "veteran_status": {
+      "description": "Civilian veteran population 18 years and over",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B21001_002E"}
+      }
+    },
+    "nonveteran_population": {
+      "description": "Civilian nonveteran population 18 years and over",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B21001_005E"}
+      }
+    },
+    "moved_within_same_county": {
+      "description": "Population 1 year and over who moved within same county",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B07001_017E"}
+      }
+    },
+    "moved_from_different_state": {
+      "description": "Population 1 year and over who moved from different state",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B07001_065E"}
+      }
+    },
+    "management_occupations": {
+      "description": "Employed population 16 years and over in management occupations",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_003E"}
+      }
+    },
+    "service_occupations": {
+      "description": "Employed population 16 years and over in service occupations",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_019E"}
+      }
+    },
+    "total_employed_population": {
+      "description": "Total employed population 16 years and over for occupation statistics",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_001E"}
+      }
+    },
+    "establishments": {
+      "description": "Number of establishments",
+      "dataType": "LONG",
+      "economic": {
+        "allYears": {"variable": "ESTAB"}
+      }
+    },
+    "employment": {
+      "description": "Number of employees",
+      "dataType": "LONG",
+      "economic": {
+        "allYears": {"variable": "EMP"}
+      }
+    },
+    "annual_payroll": {
+      "description": "Annual payroll in thousands of dollars",
+      "dataType": "LONG",
+      "economic": {
+        "allYears": {"variable": "PAYANN"}
+      }
+    },
+    "naics_code": {
+      "description": "NAICS industry classification code",
+      "dataType": "STRING",
+      "economic": {
+        "allYears": {"variable": "NAICS2017"}
+      }
+    },
+    "population_estimate": {
+      "description": "Annual population estimate",
+      "dataType": "LONG",
+      "population": {
+        "allYears": {"variable": "POP"}
+      }
+    }
+  },
+  "tableDefinitions": {
+    "decennial_population": {
+      "description": "Decennial Census total population counts and basic demographics",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population",
+        "white_alone",
+        "black_african_american_alone",
+        "asian_alone",
+        "male_population",
+        "female_population"
+      ]
+    },
+    "decennial_demographics": {
+      "description": "Detailed demographic characteristics from the Decennial Census",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population",
+        "white_alone",
+        "black_african_american_alone",
+        "asian_alone",
+        "male_population",
+        "female_population"
+      ]
+    },
+    "decennial_housing": {
+      "description": "Housing unit counts and occupancy status from Decennial Census",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_housing_units",
+        "occupied_housing_units",
+        "vacant_housing_units"
+      ]
+    },
+    "acs_population": {
+      "description": "American Community Survey population demographics",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population",
+        "male_population",
+        "female_population",
+        "white_alone",
+        "black_african_american_alone",
+        "asian_alone"
+      ]
+    },
+    "acs_demographics": {
+      "description": "Detailed demographic characteristics from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population",
+        "male_population",
+        "female_population"
+      ]
+    },
+    "acs_income": {
+      "description": "Household and family income statistics from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "median_household_income"
+      ]
+    },
+    "acs_poverty": {
+      "description": "Poverty statistics from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "below_poverty_level",
+        "total_population_poverty_determined",
+        "poverty_rate"
+      ]
+    },
+    "acs_employment": {
+      "description": "Employment status and labor force participation from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "employed_population",
+        "unemployed_population",
+        "labor_force_participation",
+        "unemployment_rate"
+      ]
+    },
+    "acs_education": {
+      "description": "Educational attainment from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "population_25_and_over",
+        "high_school_graduate",
+        "bachelor_degree_or_higher"
+      ]
+    },
+    "acs_housing": {
+      "description": "Housing characteristics from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_housing_units",
+        "occupied_housing_units",
+        "vacant_housing_units",
+        "median_home_value"
+      ]
+    },
+    "acs_housing_costs": {
+      "description": "Detailed housing costs from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "median_home_value",
+        "median_gross_rent"
+      ]
+    },
+    "acs_commuting": {
+      "description": "Commuting patterns from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "mean_travel_time_to_work",
+        "drove_alone_to_work",
+        "public_transportation_to_work"
+      ]
+    },
+    "acs_health_insurance": {
+      "description": "Health insurance coverage from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population_health_insurance",
+        "health_insurance_coverage",
+        "no_health_insurance"
+      ]
+    },
+    "acs_language": {
+      "description": "Language spoken at home from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_population_language",
+        "speak_english_only",
+        "speak_language_other_than_english"
+      ]
+    },
+    "acs_disability": {
+      "description": "Disability status from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "with_disability",
+        "no_disability"
+      ]
+    },
+    "acs_veterans": {
+      "description": "Veteran status from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "veteran_status",
+        "nonveteran_population"
+      ]
+    },
+    "acs_migration": {
+      "description": "Geographic mobility and migration from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "moved_within_same_county",
+        "moved_from_different_state"
+      ]
+    },
+    "acs_occupation": {
+      "description": "Occupation categories from ACS",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "total_employed_population",
+        "management_occupations",
+        "service_occupations"
+      ]
+    },
+    "economic_census": {
+      "description": "Economic Census data with business establishments, employment, and payroll by industry",
+      "requiredColumns": ["geoid", "year", "state_fips", "naics_code"],
+      "conceptualColumns": [
+        "establishments",
+        "employment",
+        "annual_payroll",
+        "naics_code"
+      ]
+    },
+    "county_business_patterns": {
+      "description": "Annual County Business Patterns data showing business statistics by industry",
+      "requiredColumns": ["geoid", "year", "state_fips", "naics_code"],
+      "conceptualColumns": [
+        "establishments",
+        "employment",
+        "annual_payroll",
+        "naics_code"
+      ]
+    },
+    "population_estimates": {
+      "description": "Annual population estimates between decennial censuses",
+      "requiredColumns": ["geoid", "year", "state_fips"],
+      "conceptualColumns": [
+        "population_estimate"
+      ]
+    }
+  },
+  "datasetMappings": {
+    "decennial": {
+      "2000": {
+        "primary": "sf1",
+        "fallbacks": []
+      },
+      "2010": {
+        "primary": "sf1",
+        "fallbacks": []
+      },
+      "2020": {
+        "primary": "pl",
+        "fallbacks": ["dhc"]
+      }
+    },
+    "acs": {
+      "allYears": {
+        "primary": "acs5",
+        "fallbacks": ["acs1"]
+      }
+    },
+    "economic": {
+      "allYears": {
+        "primary": "cbp",
+        "fallbacks": ["ecn"]
+      }
+    },
+    "population": {
+      "allYears": {
+        "primary": "pep",
+        "fallbacks": []
+      }
+    }
+  }
+}
