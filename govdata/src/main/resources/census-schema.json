@@ -3,515 +3,1047 @@
     {
       "name": "acs_population",
       "pattern": "type=acs/year=*/acs_population.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      },
       "comment": "American Community Survey population demographics including age, sex, race, and ethnicity breakdowns. Provides total population counts and detailed demographic distributions at various geographic levels from state to census tract."
     },
     {
       "name": "acs_demographics",
       "pattern": "type=acs/year=*/acs_demographics.parquet",
-      "comment": "Detailed demographic characteristics including household composition, family structure, marital status, and birth/fertility data from the American Community Survey."
+      "comment": "Detailed demographic characteristics including household composition, family structure, marital status, and birth/fertility data from the American Community Survey.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_income",
       "pattern": "type=acs/year=*/acs_income.parquet",
-      "comment": "Household and family income statistics from ACS including median household income, per capita income, income distribution by brackets, and poverty status. Essential for economic analysis and demographic profiling."
+      "comment": "Household and family income statistics from ACS including median household income, per capita income, income distribution by brackets, and poverty status. Essential for economic analysis and demographic profiling.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_poverty",
       "pattern": "type=acs/year=*/acs_poverty.parquet",
-      "comment": "Poverty statistics including population below poverty level, poverty rates by age groups, and ratio of income to poverty level. Crucial for social program planning and economic equity analysis."
+      "comment": "Poverty statistics including population below poverty level, poverty rates by age groups, and ratio of income to poverty level. Crucial for social program planning and economic equity analysis.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_employment",
       "pattern": "type=acs/year=*/acs_employment.parquet",
-      "comment": "Employment status, labor force participation, unemployment rates, and work status by demographic groups. Includes occupation categories and industry of employment."
+      "comment": "Employment status, labor force participation, unemployment rates, and work status by demographic groups. Includes occupation categories and industry of employment.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_education",
       "pattern": "type=acs/year=*/acs_education.parquet",
-      "comment": "Educational attainment levels from less than high school to graduate degrees. Includes school enrollment status and field of bachelor's degree for college graduates."
+      "comment": "Educational attainment levels from less than high school to graduate degrees. Includes school enrollment status and field of bachelor's degree for college graduates.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_housing",
       "pattern": "type=acs/year=*/acs_housing.parquet",
-      "comment": "Housing characteristics including occupancy status, tenure (owner/renter), housing value, rent costs, number of rooms, and year structure built. Critical for real estate and housing policy analysis."
+      "comment": "Housing characteristics including occupancy status, tenure (owner/renter), housing value, rent costs, number of rooms, and year structure built. Critical for real estate and housing policy analysis.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_housing_costs",
       "pattern": "type=acs/year=*/acs_housing_costs.parquet",
-      "comment": "Detailed housing costs including median home values, median rent, housing cost burden (percentage of income spent on housing), and mortgage status."
+      "comment": "Detailed housing costs including median home values, median rent, housing cost burden (percentage of income spent on housing), and mortgage status.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_commuting",
       "pattern": "type=acs/year=*/acs_commuting.parquet",
-      "comment": "Commuting patterns including means of transportation to work, travel time to work, departure time, and vehicles available. Important for transportation planning and infrastructure analysis."
+      "comment": "Commuting patterns including means of transportation to work, travel time to work, departure time, and vehicles available. Important for transportation planning and infrastructure analysis.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_health_insurance",
       "pattern": "type=acs/year=*/acs_health_insurance.parquet",
-      "comment": "Health insurance coverage status including types of coverage (private, public, Medicare, Medicaid) by age groups and employment status."
+      "comment": "Health insurance coverage status including types of coverage (private, public, Medicare, Medicaid) by age groups and employment status.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_language",
       "pattern": "type=acs/year=*/acs_language.parquet",
-      "comment": "Language spoken at home and English proficiency levels. Includes detailed language categories for population 5 years and over."
+      "comment": "Language spoken at home and English proficiency levels. Includes detailed language categories for population 5 years and over.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_disability",
       "pattern": "type=acs/year=*/acs_disability.parquet",
-      "comment": "Disability status by age group and type of disability including hearing, vision, cognitive, ambulatory, self-care, and independent living difficulties."
+      "comment": "Disability status by age group and type of disability including hearing, vision, cognitive, ambulatory, self-care, and independent living difficulties.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_veterans",
       "pattern": "type=acs/year=*/acs_veterans.parquet",
-      "comment": "Veteran status and characteristics including period of service, disability rating, and demographic profile of veteran population."
+      "comment": "Veteran status and characteristics including period of service, disability rating, and demographic profile of veteran population.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_migration",
       "pattern": "type=acs/year=*/acs_migration.parquet",
-      "comment": "Geographic mobility and migration patterns including residence 1 year ago, domestic migration flows, and foreign-born population statistics."
+      "comment": "Geographic mobility and migration patterns including residence 1 year ago, domestic migration flows, and foreign-born population statistics.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "acs_occupation",
       "pattern": "type=acs/year=*/acs_occupation.parquet",
-      "comment": "Detailed occupation categories and industry of employment. Cross-tabulated with demographic characteristics for workforce analysis."
+      "comment": "Detailed occupation categories and industry of employment. Cross-tabulated with demographic characteristics for workforce analysis.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "decennial_population",
       "pattern": "type=decennial/year=*/decennial_population.parquet",
-      "comment": "Decennial Census total population counts and basic demographics. Most accurate population count conducted every 10 years (2010, 2020, etc.)."
+      "comment": "Decennial Census total population counts and basic demographics. Most accurate population count conducted every 10 years (2010, 2020, etc.).",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "decennial_demographics",
       "pattern": "type=decennial/year=*/decennial_demographics.parquet",
-      "comment": "Detailed demographic characteristics from the Decennial Census including age, sex, race, ethnicity, and household relationships."
+      "comment": "Detailed demographic characteristics from the Decennial Census including age, sex, race, ethnicity, and household relationships.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "decennial_housing",
       "pattern": "type=decennial/year=*/decennial_housing.parquet",
-      "comment": "Housing unit counts and occupancy status from Decennial Census. Includes vacant units, seasonal units, and tenure information."
+      "comment": "Housing unit counts and occupancy status from Decennial Census. Includes vacant units, seasonal units, and tenure information.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "economic_census",
       "pattern": "type=economic/year=*/economic_census.parquet",
-      "comment": "Economic Census data conducted every 5 years providing detailed statistics on business establishments, employment, payroll, and sales by industry."
+      "comment": "Economic Census data conducted every 5 years providing detailed statistics on business establishments, employment, payroll, and sales by industry.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "county_business_patterns",
       "pattern": "type=economic/year=*/county_business_patterns.parquet",
-      "comment": "Annual County Business Patterns data showing number of establishments, employment, and payroll by industry at county level."
+      "comment": "Annual County Business Patterns data showing number of establishments, employment, and payroll by industry at county level.",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "population_estimates",
       "pattern": "type=population/year=*/population_estimates.parquet",
-      "comment": "Annual population estimates between decennial censuses. Includes components of population change (births, deaths, migration)."
+      "comment": "Annual population estimates between decennial censuses. Includes components of population change (births, deaths, migration).",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     }
   ],
   "constraints": {
     "acs_population": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "uniqueKeys": [
-        ["state_fips", "county_fips", "year"]
+        [
+          "state_fips",
+          "county_fips",
+          "year"
+        ]
       ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "County-level geographic reference (5-digit geoid = county_fips)"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "State-level geographic reference"
         }
       ]
     },
     "acs_demographics": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for demographic data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         },
         {
-          "columns": ["geoid", "year"],
+          "columns": [
+            "geoid",
+            "year"
+          ],
           "targetTable": "acs_population",
-          "targetColumns": ["geoid", "year"],
+          "targetColumns": [
+            "geoid",
+            "year"
+          ],
           "comment": "Reference to base population data for demographic analysis"
         }
       ]
     },
     "acs_income": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for income data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_poverty": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for poverty statistics"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_employment": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for employment data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_education": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for education data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_housing": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "uniqueKeys": [
-        ["state_fips", "county_fips", "year"]
+        [
+          "state_fips",
+          "county_fips",
+          "year"
+        ]
       ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for housing data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_housing_costs": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for housing cost data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_commuting": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for commuting data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_health_insurance": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for health insurance data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_language": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for language data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_disability": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for disability data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_veterans": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for veteran data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_migration": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for migration data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "acs_occupation": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for occupation data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "decennial_population": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "uniqueKeys": [
-        ["state_fips", "county_fips", "year"]
+        [
+          "state_fips",
+          "county_fips",
+          "year"
+        ]
       ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for decennial population data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "decennial_demographics": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for decennial demographic data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "decennial_housing": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for decennial housing data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     },
     "economic_census": {
-      "primaryKey": ["geoid", "year", "naics_code"],
+      "primaryKey": [
+        "geoid",
+        "year",
+        "naics_code"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for economic census data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         },
         {
-          "columns": ["naics_code"],
+          "columns": [
+            "naics_code"
+          ],
           "targetSchema": "econ",
           "targetTable": "industry_gdp",
-          "targetColumns": ["naics_code"],
+          "targetColumns": [
+            "naics_code"
+          ],
           "comment": "Industry classification reference"
         }
       ]
     },
     "county_business_patterns": {
-      "primaryKey": ["geoid", "year", "naics_code"],
+      "primaryKey": [
+        "geoid",
+        "year",
+        "naics_code"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for business patterns data"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         },
         {
-          "columns": ["naics_code"],
+          "columns": [
+            "naics_code"
+          ],
           "targetSchema": "econ",
           "targetTable": "industry_gdp",
-          "targetColumns": ["naics_code"],
+          "targetColumns": [
+            "naics_code"
+          ],
           "comment": "Industry classification reference"
         }
       ]
     },
     "population_estimates": {
-      "primaryKey": ["geoid", "year"],
+      "primaryKey": [
+        "geoid",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geoid"],
+          "columns": [
+            "geoid"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Geographic reference for population estimates"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"]
+          "targetColumns": [
+            "state_fips"
+          ]
         }
       ]
     }
