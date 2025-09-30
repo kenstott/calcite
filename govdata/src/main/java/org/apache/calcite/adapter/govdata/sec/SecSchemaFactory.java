@@ -1109,34 +1109,56 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File cikDir = new File(baseDir, normalizedCik);
       cikDir.mkdirs();
 
-      // Download submissions metadata first (with rate limiting)
+      // Download submissions metadata first (with rate limiting and TTL caching)
       String submissionsUrl =
           String.format("https://data.sec.gov/submissions/CIK%s.json", normalizedCik);
       File submissionsFile = new File(cikDir, "submissions.json");
 
-      // Apply rate limiting
-      try {
-        rateLimiter.acquire();
-        Thread.sleep(currentRateLimitDelayMs.get()); // Use dynamic rate limit delay
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
+      // Check if submissions file exists and is within TTL
+      boolean needsDownload = true;
+      if (submissionsFile.exists()) {
+        long fileAgeMs = System.currentTimeMillis() - submissionsFile.lastModified();
+        long ttlMs = getSubmissionsTtlHours() * 3600 * 1000;
 
-      try (InputStream is = provider.openInputStream(submissionsUrl)) {
-        try (FileOutputStream fos = new FileOutputStream(submissionsFile)) {
-          byte[] buffer = new byte[8192];
-          int bytesRead;
-          while ((bytesRead = is.read(buffer)) != -1) {
-            fos.write(buffer, 0, bytesRead);
+        if (fileAgeMs < ttlMs) {
+          needsDownload = false;
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Using cached submissions for CIK {} (age: {} hours, TTL: {} hours)",
+                normalizedCik, fileAgeMs / 3600000, getSubmissionsTtlHours());
+          }
+        } else {
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Refreshing submissions for CIK {} (age: {} hours exceeds TTL: {} hours)",
+                normalizedCik, fileAgeMs / 3600000, getSubmissionsTtlHours());
           }
         }
-        // Clean up macOS metadata files after writing
-        storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Downloaded submissions metadata for CIK {}", normalizedCik);
+      }
+
+      if (needsDownload) {
+        // Apply rate limiting
+        try {
+          rateLimiter.acquire();
+          Thread.sleep(currentRateLimitDelayMs.get()); // Use dynamic rate limit delay
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
         }
-      } finally {
-        rateLimiter.release();
+
+        try (InputStream is = provider.openInputStream(submissionsUrl)) {
+          try (FileOutputStream fos = new FileOutputStream(submissionsFile)) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+              fos.write(buffer, 0, bytesRead);
+            }
+          }
+          // Clean up macOS metadata files after writing
+          storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Downloaded submissions metadata for CIK {}", normalizedCik);
+          }
+        } finally {
+          rateLimiter.release();
+        }
       }
 
       // Parse submissions.json to get filing details
@@ -2546,6 +2568,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "S-4", "S4",             // Business combination registration
         "S-8", "S8"              // Employee benefit plan registration
     );
+  }
+
+  /**
+   * Gets the TTL for submissions.json files in hours.
+   * Default is 24 hours. Configure via SEC_SUBMISSIONS_TTL_HOURS environment variable.
+   */
+  private int getSubmissionsTtlHours() {
+    String ttlStr = System.getenv("SEC_SUBMISSIONS_TTL_HOURS");
+    if (ttlStr != null) {
+      try {
+        return Integer.parseInt(ttlStr);
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Invalid SEC_SUBMISSIONS_TTL_HOURS: {}, using default 24", ttlStr);
+      }
+    }
+    return 24; // Default: 24 hours
   }
 
   /**
