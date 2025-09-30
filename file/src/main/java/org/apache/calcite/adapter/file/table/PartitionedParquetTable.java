@@ -152,7 +152,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       this.partitionColumns = new ArrayList<>();
       LOGGER.debug("PartitionedParquetTable initialized with no partition columns");
     }
-    
+
     // Log partition column types for debugging
     if (partitionColumnTypes != null && !partitionColumnTypes.isEmpty()) {
       LOGGER.debug("Partition column types: {}", partitionColumnTypes);
@@ -233,7 +233,10 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
         addedPartitionColumns = new ArrayList<>();
       }
 
-      // Add partition columns
+      // Add partition columns to the schema
+      LOGGER.debug("Adding {} partition columns to schema for table '{}'",
+          partitionColumns.size(), tableName);
+
       for (String partCol : partitionColumns) {
         if (!containsField(fileSchema, partCol)) {
           // This partition column is not in the file, so add it
@@ -247,6 +250,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
             String typeStr = partitionColumnTypes.get(partCol);
             try {
               sqlType = SqlTypeName.valueOf(typeStr.toUpperCase(java.util.Locale.ROOT));
+              LOGGER.debug("Partition column '{}' will have type: {}", partCol, sqlType);
             } catch (IllegalArgumentException e) {
               LOGGER.warn("Unknown type '{}' for partition column '{}', defaulting to VARCHAR",
                   typeStr, partCol);
@@ -255,11 +259,13 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
           builder.add(
               partCol, typeFactory.createTypeWithNullability(
               typeFactory.createSqlType(sqlType), true));
+          LOGGER.debug("Added partition column '{}' to schema", partCol);
         } else {
-          throw new IllegalStateException(
-              String.format("Partition column '%s' found in Parquet file. " +
-                  "Hive-style partitioned files should NOT contain partition columns in the file content.",
-                  partCol));
+          // Partition column is already in the file
+          // This can happen when data files include partition key values as regular columns
+          // Skip adding it since it's already in the schema from the Parquet file
+          LOGGER.debug("Partition column '{}' already present in Parquet file for table '{}', skipping",
+              partCol, tableName);
         }
       }
 
