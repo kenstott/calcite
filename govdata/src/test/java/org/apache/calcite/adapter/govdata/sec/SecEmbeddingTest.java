@@ -112,8 +112,11 @@ public class SecEmbeddingTest {
       edgarConfig.put("endYear", Integer.parseInt(testEndYear));
     }
 
+    // Load cache manifest
+    SecCacheManifest cacheManifest = SecCacheManifest.load(secDir.getAbsolutePath());
+
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, secDir);
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, secDir, cacheManifest, secDir);
     List<File> downloaded = downloader.downloadFilings();
 
     System.out.println("Downloaded " + downloaded.size() + " XBRL files");
