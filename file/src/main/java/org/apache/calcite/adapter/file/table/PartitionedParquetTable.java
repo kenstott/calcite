@@ -154,6 +154,114 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
     // Extract comments from Parquet metadata
     extractComments();
+
+    // Eagerly initialize the row type to ensure it's available for SQL validation
+    // This is critical for JOIN queries where the validator needs to resolve column references
+    initializeRowType();
+  }
+
+  /**
+   * Eagerly initialize the row type from the first Parquet file.
+   * This ensures the schema is available during SQL validation for JOIN queries.
+   */
+  private void initializeRowType() {
+    if (filePaths == null || filePaths.isEmpty()) {
+      LOGGER.debug("No files available to initialize row type");
+      return;
+    }
+
+    try {
+      // Store as a proto that will compute the row type on demand
+      // The key is that this proto is initialized NOW, not lazily in getRowType()
+      this.protoRowType = new RelProtoDataType() {
+        private RelDataType cachedRowType = null;
+
+        @Override public RelDataType apply(RelDataTypeFactory factory) {
+          // Cache the result per type factory to avoid recomputation
+          if (cachedRowType != null && cachedRowType.getSqlTypeName() != null) {
+            return cachedRowType;
+          }
+
+          // Compute the row type
+          try {
+            cachedRowType = computeRowType(factory);
+            return cachedRowType;
+          } catch (Exception e) {
+            LOGGER.error("Error computing row type: {}", e.getMessage(), e);
+            return factory.builder().build();
+          }
+        }
+      };
+
+      LOGGER.debug("Initialized proto row type for table {}",
+          tableName != null ? tableName : "unnamed");
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to eagerly initialize row type: {}", e.getMessage());
+      // Don't fail - row type will be computed on first access
+    }
+  }
+
+  /**
+   * Compute the row type from the first Parquet file and partition columns.
+   */
+  private RelDataType computeRowType(RelDataTypeFactory typeFactory) {
+    // Get schema from first Parquet file
+    if (filePaths.isEmpty()) {
+      return typeFactory.builder().build();
+    }
+
+    try {
+      String firstFile = filePaths.get(0);
+      RelDataType fileSchema = getParquetSchema(firstFile, typeFactory);
+
+      // Add partition columns to schema
+      RelDataTypeFactory.Builder builder = typeFactory.builder();
+
+      // Add all fields from Parquet file
+      fileSchema.getFieldList().forEach(field ->
+          builder.add(field.getName(), field.getType()));
+
+      // Track which partition columns are actually added
+      if (addedPartitionColumns == null) {
+        addedPartitionColumns = new ArrayList<>();
+      }
+
+      // Add partition columns
+      for (String partCol : partitionColumns) {
+        if (!containsField(fileSchema, partCol)) {
+          // This partition column is not in the file, so add it
+          if (!addedPartitionColumns.contains(partCol)) {
+            addedPartitionColumns.add(partCol);
+          }
+
+          // Use specified type or default to VARCHAR
+          SqlTypeName sqlType = SqlTypeName.VARCHAR;
+          if (partitionColumnTypes != null && partitionColumnTypes.containsKey(partCol)) {
+            String typeStr = partitionColumnTypes.get(partCol);
+            try {
+              sqlType = SqlTypeName.valueOf(typeStr.toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+              LOGGER.warn("Unknown type '{}' for partition column '{}', defaulting to VARCHAR",
+                  typeStr, partCol);
+            }
+          }
+          builder.add(
+              partCol, typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(sqlType), true));
+        } else {
+          throw new IllegalStateException(
+              String.format("Partition column '%s' found in Parquet file. " +
+                  "Hive-style partitioned files should NOT contain partition columns in the file content.",
+                  partCol));
+        }
+      }
+
+      return builder.build();
+    } catch (Exception e) {
+      LOGGER.error("Error computing row type: {}", e.getMessage(), e);
+      return typeFactory.builder().build();
+    }
   }
 
   /**
