@@ -673,17 +673,34 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
 
-      // Find matching JSON cache files from the year subdirectory
-      File yearDir = new File(cacheDir, "year=" + year);
+      // Find matching JSON cache files for this table and year
+      // Cache files are named like: acs_2020_B19013_001E_..._county__.json
+      // We need to filter for files that contain at least one of the required variables
       File[] jsonFiles = null;
-      if (yearDir.exists() && yearDir.isDirectory()) {
-        // Filter out macOS metadata files (._*) and only include valid JSON files
-        jsonFiles = yearDir.listFiles((dir, name) ->
-            name.endsWith(".json") && !name.startsWith("._") && !name.startsWith(".DS_Store"));
+      if (cacheDir.exists() && cacheDir.isDirectory()) {
+        final String yearPrefix = censusType + "_" + year + "_";
+
+        // Get the variable codes we need for this table
+        final java.util.Set<String> requiredVariables = variableMap.keySet();
+
+        // Filter for JSON files matching this year, census type, and containing at least one required variable
+        jsonFiles = cacheDir.listFiles((dir, name) -> {
+          if (!name.startsWith(yearPrefix) || !name.endsWith(".json") ||
+              name.startsWith("._") || name.startsWith(".DS_Store")) {
+            return false;
+          }
+          // Check if filename contains at least one of the required variables
+          for (String varCode : requiredVariables) {
+            if (name.contains(varCode)) {
+              return true;
+            }
+          }
+          return false;
+        });
       }
 
       if (jsonFiles == null || jsonFiles.length == 0) {
-        LOGGER.warn("No JSON cache files found for {} year {}", tableName, year);
+        LOGGER.warn("No JSON cache files found for {} ({} year {})", tableName, censusType, year);
         return;
       }
 
