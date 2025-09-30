@@ -83,6 +83,15 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     this.constraintConfig = constraintConfig;
     this.schemaName = schemaName;
 
+    LOGGER.error("CONSTRUCTOR: Creating RefreshablePartitionedParquetTable for table: {}, hasPartitionConfig: {}",
+        tableName, config.getPartitions() != null);
+    if (config.getPartitions() != null) {
+      LOGGER.error("CONSTRUCTOR: Partition config - style: {}, columnDefinitions: {}",
+          config.getPartitions().getStyle(),
+          config.getPartitions().getColumnDefinitions() != null ?
+              config.getPartitions().getColumnDefinitions().size() : "null");
+    }
+
     // Initial discovery
     refreshTableDefinition();
   }
@@ -150,27 +159,53 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       if (!matchingFiles.equals(lastDiscoveredFiles)) {
         // Detect partitions based on configuration
         PartitionDetector.PartitionInfo partitionInfo = null;
-        if (!matchingFiles.isEmpty() && config.getPartitions() != null) {
-          PartitionedTableConfig.PartitionConfig partConfig = config.getPartitions();
-          String style = partConfig.getStyle();
+        if (!matchingFiles.isEmpty()) {
+          if (config.getPartitions() != null) {
+            // Use explicit partition configuration if provided
+            PartitionedTableConfig.PartitionConfig partConfig = config.getPartitions();
+            String style = partConfig.getStyle();
 
-          if (style == null || "auto".equals(style)) {
-            // Auto-detect partition scheme
+            if (style == null || "auto".equals(style)) {
+              // Auto-detect partition scheme
+              partitionInfo = PartitionDetector.detectPartitionScheme(matchingFiles);
+            } else if ("hive".equals(style)) {
+              // Hive-style partitioning (key=value)
+              // If explicit column definitions provided, use them to constrain detection
+              if (partConfig.getColumnDefinitions() != null && !partConfig.getColumnDefinitions().isEmpty()) {
+                List<String> explicitColumns = new ArrayList<>();
+                for (PartitionedTableConfig.ColumnDefinition colDef : partConfig.getColumnDefinitions()) {
+                  explicitColumns.add(colDef.getName());
+                }
+                LOGGER.info("Using explicit partition columns for table {}: {}", tableName, explicitColumns);
+                // Create partition info with configured columns only (ignoring auto-detected ones)
+                partitionInfo = new PartitionDetector.PartitionInfo(
+                    new java.util.LinkedHashMap<>(),  // Empty values map
+                    explicitColumns,
+                    true);  // isHiveStyle
+                LOGGER.info("Created PartitionInfo with columns: {}", partitionInfo.getPartitionColumns());
+              } else {
+                // Auto-detect from file path
+                LOGGER.info("Auto-detecting partition columns for table {}", tableName);
+                partitionInfo = PartitionDetector.extractHivePartitions(matchingFiles.get(0));
+                if (partitionInfo != null) {
+                  LOGGER.info("Auto-detected partition columns: {}", partitionInfo.getPartitionColumns());
+                }
+              }
+            } else if ("directory".equals(style) && partConfig.getColumns() != null) {
+              // Directory-based partitioning
+              partitionInfo =
+                  PartitionDetector.extractDirectoryPartitions(
+                      matchingFiles.get(0), partConfig.getColumns());
+            } else if ("custom".equals(style) && partConfig.getRegex() != null) {
+              // Custom regex partitioning
+              partitionInfo =
+                  PartitionDetector.extractCustomPartitions(
+                      matchingFiles.get(0), partConfig.getRegex(),
+                      partConfig.getColumnMappings());
+            }
+          } else {
+            // No explicit partition configuration - auto-detect from file paths
             partitionInfo = PartitionDetector.detectPartitionScheme(matchingFiles);
-          } else if ("hive".equals(style)) {
-            // Hive-style partitioning (key=value)
-            partitionInfo = PartitionDetector.extractHivePartitions(matchingFiles.get(0));
-          } else if ("directory".equals(style) && partConfig.getColumns() != null) {
-            // Directory-based partitioning
-            partitionInfo =
-                PartitionDetector.extractDirectoryPartitions(
-                    matchingFiles.get(0), partConfig.getColumns());
-          } else if ("custom".equals(style) && partConfig.getRegex() != null) {
-            // Custom regex partitioning
-            partitionInfo =
-                PartitionDetector.extractCustomPartitions(
-                    matchingFiles.get(0), partConfig.getRegex(),
-                    partConfig.getColumnMappings());
           }
         }
 
@@ -191,6 +226,16 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
               columnTypes.put(col, "VARCHAR");
             }
           }
+        }
+
+        // Auto-generate column types for detected partition columns if not explicitly configured
+        if (columnTypes == null && partitionInfo != null && partitionInfo.getPartitionColumns() != null) {
+          columnTypes = new java.util.HashMap<>();
+          for (String partCol : partitionInfo.getPartitionColumns()) {
+            // Default to VARCHAR for auto-detected partition columns
+            columnTypes.put(partCol, "VARCHAR");
+          }
+          LOGGER.debug("Auto-generated column types for detected partition columns: {}", columnTypes);
         }
 
         // Extract custom regex info if available
