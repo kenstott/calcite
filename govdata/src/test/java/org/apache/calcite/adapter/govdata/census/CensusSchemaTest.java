@@ -427,42 +427,23 @@ public class CensusSchemaTest {
 
 
   @Test
-  public void testPartitionedTableAggregationWithoutFilter() throws Exception {
-    // This test demonstrates the ClassCastException that occurs when aggregating
-    // across partitions without filtering. This is a known Calcite limitation.
+  public void testPartitionedTableAggregationWithFilter() throws Exception {
+    // Test that aggregation works correctly when filtering by partition key
     String apiKey = System.getProperty("CENSUS_API_KEY");
     assertNotNull(apiKey, "CENSUS_API_KEY must be configured for integration tests");
 
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
 
-      // This query SHOULD fail with ClassCastException due to Calcite limitation
-      String query = "SELECT COUNT(*) as row_count FROM census.population_estimates";
+      // Aggregation WITH partition filter should work correctly
+      String query = "SELECT COUNT(*) as row_count FROM census.population_estimates WHERE \"year\" = 2020";
 
-      try {
-        ResultSet rs = stmt.executeQuery(query);
-        if (rs.next()) {
-          int count = rs.getInt("row_count");
-          System.out.println("COUNT without filter succeeded: " + count);
-          // If we get here, the issue has been fixed!
-        }
-      } catch (SQLException e) {
-        // Check if it's the expected ClassCastException
-        Throwable cause = e;
-        while (cause != null) {
-          if (cause instanceof ClassCastException
-              && cause.getMessage().contains("ComparableList")) {
-            System.out.println("Expected ClassCastException occurred: " + cause.getMessage());
-            System.out.println("This is a known Calcite limitation when aggregating across partitions.");
-            System.out.println("Workaround: Add WHERE clause filtering by partition key.");
-            // Don't fail the test - this is expected behavior
-            return;
-          }
-          cause = cause.getCause();
-        }
-        // If it's a different error, rethrow
-        throw e;
-      }
+      ResultSet rs = stmt.executeQuery(query);
+      assertTrue(rs.next(), "Should have results");
+
+      int count = rs.getInt("row_count");
+      assertTrue(count > 0, "Should have data for year 2020");
+      System.out.println("COUNT with partition filter: " + count);
     }
   }
 

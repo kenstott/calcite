@@ -37,6 +37,10 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.sql.SqlKind;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -553,16 +557,136 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     final AtomicBoolean cancelFlag = DataContext.Variable.CANCEL_FLAG.get(root);
     final JavaTypeFactory typeFactory = root.getTypeFactory();
 
-    // For now, we don't actually filter at the file level
-    // Calcite will apply the filters after scanning
-    // TODO: Implement partition pruning based on filters
+    // Apply partition pruning if filters are provided
+    List<String> prunedFilePaths = filePaths;
+    if (filters != null && !filters.isEmpty() && partitionColumns != null && !partitionColumns.isEmpty()) {
+      prunedFilePaths = prunePartitions(filePaths, filters, typeFactory);
+      LOGGER.debug("Partition pruning: {} files before pruning, {} files after pruning",
+          filePaths.size(), prunedFilePaths.size());
+    }
+
+    final List<String> finalFilePaths = prunedFilePaths;
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new PartitionedParquetEnumerator(
-            filePaths, partitionInfo, partitionColumns, addedPartitionColumns, partitionColumnTypes,
+            finalFilePaths, partitionInfo, partitionColumns, addedPartitionColumns, partitionColumnTypes,
             cancelFlag, engineConfig.getMemoryThreshold(), customRegex, columnMappings);
       }
     };
+  }
+
+  /**
+   * Prune partitions based on filter predicates.
+   * Extracts predicates on partition columns and filters the file list.
+   */
+  private List<String> prunePartitions(List<String> allFiles, List<RexNode> filters,
+      RelDataTypeFactory typeFactory) {
+    // Get the row type to map column indices to names
+    RelDataType rowType = getRowType(typeFactory);
+    List<RelDataTypeField> fields = rowType.getFieldList();
+
+    // Extract partition column predicates from filters
+    Map<String, Object> partitionPredicates = new LinkedHashMap<>();
+
+    for (RexNode filter : filters) {
+      extractPartitionPredicates(filter, fields, partitionPredicates);
+    }
+
+    if (partitionPredicates.isEmpty()) {
+      LOGGER.debug("No partition predicates found in filters");
+      return allFiles;
+    }
+
+    LOGGER.debug("Partition predicates extracted: {}", partitionPredicates);
+
+    // Filter files based on partition predicates
+    List<String> filteredFiles = new ArrayList<>();
+    for (String filePath : allFiles) {
+      if (matchesPartitionPredicates(filePath, partitionPredicates)) {
+        filteredFiles.add(filePath);
+      }
+    }
+
+    return filteredFiles;
+  }
+
+  /**
+   * Extract equality predicates on partition columns from a filter expression.
+   */
+  private void extractPartitionPredicates(RexNode filter, List<RelDataTypeField> fields,
+      Map<String, Object> predicates) {
+    if (filter instanceof RexCall) {
+      RexCall call = (RexCall) filter;
+
+      if (call.getKind() == SqlKind.EQUALS) {
+        // Handle: column = literal
+        if (call.getOperands().size() == 2) {
+          RexNode left = call.getOperands().get(0);
+          RexNode right = call.getOperands().get(1);
+
+          if (left instanceof RexInputRef && right instanceof RexLiteral) {
+            RexInputRef inputRef = (RexInputRef) left;
+            RexLiteral literal = (RexLiteral) right;
+
+            String columnName = fields.get(inputRef.getIndex()).getName();
+            if (partitionColumns.contains(columnName)) {
+              Object value = literal.getValue();
+              predicates.put(columnName, value);
+              LOGGER.debug("Extracted partition predicate: {} = {}", columnName, value);
+            }
+          }
+        }
+      } else if (call.getKind() == SqlKind.AND) {
+        // Handle: predicate1 AND predicate2
+        for (RexNode operand : call.getOperands()) {
+          extractPartitionPredicates(operand, fields, predicates);
+        }
+      }
+      // Note: We don't handle OR, IN, or other complex predicates yet
+      // Those would require more sophisticated pruning logic
+    }
+  }
+
+  /**
+   * Check if a file matches the partition predicates.
+   */
+  private boolean matchesPartitionPredicates(String filePath, Map<String, Object> predicates) {
+    // Extract partition values from the file path
+    PartitionDetector.PartitionInfo filePartitionInfo;
+
+    if (partitionInfo.isHiveStyle()) {
+      filePartitionInfo = PartitionDetector.extractHivePartitions(filePath);
+    } else if (customRegex != null && columnMappings != null) {
+      filePartitionInfo = PartitionDetector.extractCustomPartitions(filePath, customRegex,
+          columnMappings);
+    } else {
+      filePartitionInfo = PartitionDetector.extractDirectoryPartitions(filePath, partitionColumns);
+    }
+
+    Map<String, String> filePartitionValues = filePartitionInfo != null
+        ? filePartitionInfo.getPartitionValues()
+        : new LinkedHashMap<>();
+
+    // Check if all predicates match
+    for (Map.Entry<String, Object> predicate : predicates.entrySet()) {
+      String partitionColumn = predicate.getKey();
+      Object expectedValue = predicate.getValue();
+
+      String fileValue = filePartitionValues.get(partitionColumn);
+
+      if (fileValue == null) {
+        return false;  // Partition column not found in file path
+      }
+
+      // Convert expectedValue to string for comparison
+      String expectedStr = expectedValue.toString();
+
+      if (!fileValue.equals(expectedStr)) {
+        return false;  // Value doesn't match
+      }
+    }
+
+    return true;  // All predicates match
   }
 
   /**
