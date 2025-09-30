@@ -427,7 +427,6 @@ public class CensusSchemaTest {
 
 
   @Test
-  @Tag("requires-data")
   public void testDataPresence() throws Exception {
     // Test that tables contain data (non-zero rows)
     // This test requires actual Census data to be downloaded
