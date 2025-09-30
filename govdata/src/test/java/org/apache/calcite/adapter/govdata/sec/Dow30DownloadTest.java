@@ -54,8 +54,11 @@ public class Dow30DownloadTest {
     System.out.println("Filing types: 10-K, 10-Q, 8-K");
     System.out.println("");
 
+    // Load cache manifest
+    SecCacheManifest cacheManifest = SecCacheManifest.load(targetDir.getAbsolutePath());
+
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir);
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir, cacheManifest, targetDir);
     List<File> downloadedFiles = downloader.downloadFilings();
 
     Duration elapsed = Duration.between(start, Instant.now());

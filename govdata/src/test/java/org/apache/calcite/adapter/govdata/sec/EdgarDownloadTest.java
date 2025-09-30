@@ -60,8 +60,11 @@ public class EdgarDownloadTest {
 
     System.out.println("Downloading to: " + targetDir.getAbsolutePath());
 
+    // Load cache manifest
+    SecCacheManifest cacheManifest = SecCacheManifest.load(targetDir.getAbsolutePath());
+
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir);
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir, cacheManifest, targetDir);
     List<File> downloaded = downloader.downloadFilings();
 
     System.out.println("Downloaded " + downloaded.size() + " files:");
