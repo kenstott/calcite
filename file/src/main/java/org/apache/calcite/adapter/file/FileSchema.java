@@ -3525,6 +3525,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                : config.getPartitions().getColumnDefinitions()) {
             columnTypes.put(colDef.getName(), colDef.getType());
           }
+        } else if (partitionInfo != null && partitionInfo.getPartitionColumns() != null) {
+          // Auto-generate column types for detected partition columns
+          // This ensures partition columns are added to the table schema even without explicit configuration
+          columnTypes = new HashMap<>();
+          for (String partCol : partitionInfo.getPartitionColumns()) {
+            // Default to VARCHAR for auto-detected partition columns
+            // Common partition columns like 'year' can be cast in queries if needed
+            columnTypes.put(partCol, "VARCHAR");
+          }
+          LOGGER.debug("Auto-generated column types for detected partition columns: {}", columnTypes);
         }
 
         // Create the partitioned table - use refreshable version if interval configured
