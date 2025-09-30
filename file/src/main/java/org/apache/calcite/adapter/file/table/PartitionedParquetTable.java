@@ -30,11 +30,13 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.CommentableTable;
+import org.apache.calcite.schema.FilterableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.rex.RexNode;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -67,7 +69,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Table implementation for partitioned Parquet datasets.
  * Represents multiple Parquet files as a single logical table.
  */
-public class PartitionedParquetTable extends AbstractTable implements ScannableTable, CommentableTable {
+public class PartitionedParquetTable extends AbstractTable implements ScannableTable, FilterableTable, CommentableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedParquetTable.class);
 
   private final List<String> filePaths;
@@ -544,9 +546,16 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   }
 
   @Override public Enumerable<Object[]> scan(DataContext root) {
+    return scan(root, null);
+  }
+
+  @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
     final AtomicBoolean cancelFlag = DataContext.Variable.CANCEL_FLAG.get(root);
     final JavaTypeFactory typeFactory = root.getTypeFactory();
 
+    // For now, we don't actually filter at the file level
+    // Calcite will apply the filters after scanning
+    // TODO: Implement partition pruning based on filters
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new PartitionedParquetEnumerator(
