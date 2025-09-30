@@ -209,6 +209,9 @@ public class CensusDataTransformer {
 
   /**
    * Transform raw Census data with friendly column names and derived fields.
+   *
+   * NOTE: This does NOT include partition columns (source, type, year) in the data.
+   * Those are encoded in the directory structure for proper Hive-style partitioning.
    */
   private List<Map<String, Object>> transformDataToMaps(List<Map<String, Object>> rawData,
       Map<String, String> variableMap, String tableName, int year) {
@@ -218,8 +221,8 @@ public class CensusDataTransformer {
     for (Map<String, Object> rawRecord : rawData) {
       Map<String, Object> transformedRecord = new HashMap<>();
 
-      // Add year column for partitioning
-      transformedRecord.put("year", year);
+      // NOTE: Do NOT add year, source, or type to the data - they are partition columns
+      // and should only exist in the directory structure (e.g., source=census/type=acs/year=2020/)
 
       // Add geoid column
       String geoid = createGeoid(rawRecord);
@@ -321,6 +324,9 @@ public class CensusDataTransformer {
 
   /**
    * Build Avro schema from sample data.
+   *
+   * NOTE: Does NOT include partition columns (source, type, year) in schema.
+   * Those are in the directory structure only for proper Hive-style partitioning.
    */
   private Schema buildAvroSchema(Map<String, Object> sampleData, String tableName) {
     SchemaBuilder.RecordBuilder<Schema> recordBuilder = SchemaBuilder
@@ -330,14 +336,14 @@ public class CensusDataTransformer {
 
     SchemaBuilder.FieldAssembler<Schema> fields = recordBuilder.fields();
 
-    // Build fields in consistent order: required fields first, then data fields in sorted order
+    // Build fields in consistent order: geoid first, then data fields in sorted order
+    // NOTE: year, source, type are NOT included - they are partition columns
     fields = fields.name("geoid").type().stringType().noDefault();
-    fields = fields.name("year").type().intType().noDefault();
 
-    // Get all non-required field names, sort them for consistency
+    // Get all non-geoid field names, sort them for consistency
     Set<String> dataFieldNames = new TreeSet<>();
     for (String fieldName : sampleData.keySet()) {
-      if (!"geoid".equals(fieldName) && !"year".equals(fieldName)) {
+      if (!"geoid".equals(fieldName)) {
         dataFieldNames.add(fieldName);
       }
     }
@@ -398,6 +404,9 @@ public class CensusDataTransformer {
 
   /**
    * Create a zero-row parquet file with proper schema for tables with no data.
+   *
+   * NOTE: Does NOT include partition columns (source, type, year) in schema.
+   * Those are in the directory structure only for proper Hive-style partitioning.
    */
   public void createZeroRowParquetFile(String targetPath, String tableName, int year,
       Map<String, String> variableMap, StorageProvider storageProvider) throws IOException {
@@ -412,9 +421,8 @@ public class CensusDataTransformer {
 
     SchemaBuilder.FieldAssembler<Schema> fields = recordBuilder.fields();
 
-    // Add required fields
+    // Add required fields (geoid only - year/type/source are partition columns)
     fields = fields.name("geoid").type().stringType().noDefault();
-    fields = fields.name("year").type().intType().noDefault();
 
     // Add a few sample variable columns with nullable types
     fields = fields.name("state_fips").type().nullable().longType().noDefault();
