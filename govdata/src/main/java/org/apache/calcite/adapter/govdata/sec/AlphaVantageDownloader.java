@@ -146,6 +146,17 @@ public class AlphaVantageDownloader {
 
   private void downloadTickerData(String basePath, TickerCikPair pair, int startYear, int endYear) {
     LOGGER.debug("downloadTickerData called with basePath: {}", basePath);
+
+    // Get current time in EST (market timezone)
+    java.time.ZoneId estZone = java.time.ZoneId.of("America/New_York");
+    java.time.ZonedDateTime nowEst = java.time.ZonedDateTime.now(estZone);
+    int currentYear = nowEst.getYear();
+
+    // Market close is 4:30 PM EST (16:30)
+    java.time.ZonedDateTime todayMarketClose = nowEst.toLocalDate()
+        .atTime(16, 30)
+        .atZone(estZone);
+
     for (int year = startYear; year <= endYear; year++) {
       // Build the path - ensure it's absolute
       File baseDir = new File(basePath);
@@ -161,14 +172,38 @@ public class AlphaVantageDownloader {
       String fullPath = parquetFile.getAbsolutePath();
       LOGGER.debug("parquetFile fullPath: {}", fullPath);
 
-      // Check if data already exists
+      // Check if data already exists and determine if refresh is needed
+      boolean needsDownload = true;
       try {
         if (storageProvider.exists(fullPath)) {
-          LOGGER.debug("Stock prices already exist for {} year {}", pair.ticker, year);
-          continue;
+          // For historical years (not current year), use cached data
+          if (year < currentYear) {
+            LOGGER.info("Using cached stock prices for {} year {} (historical data)", pair.ticker, year);
+            needsDownload = false;
+          } else {
+            // For current year, check if we need to refresh after market close
+            long fileModifiedTime = parquetFile.lastModified();
+            java.time.Instant fileModifiedInstant = java.time.Instant.ofEpochMilli(fileModifiedTime);
+            java.time.ZonedDateTime fileModifiedEst = fileModifiedInstant.atZone(estZone);
+
+            // Refresh if: current time is after today's market close AND file was modified before today's market close
+            if (nowEst.isAfter(todayMarketClose) && fileModifiedEst.isBefore(todayMarketClose)) {
+              LOGGER.info("Stock prices for {} year {} need refresh (modified {}, market closed at {})",
+                  pair.ticker, year, fileModifiedEst, todayMarketClose);
+              needsDownload = true;
+            } else {
+              LOGGER.info("Using cached stock prices for {} year {} (current year, up to date)", pair.ticker, year);
+              needsDownload = false;
+            }
+          }
         }
       } catch (IOException e) {
         LOGGER.debug("Error checking if file exists: {}", e.getMessage());
+        needsDownload = true;
+      }
+
+      if (!needsDownload) {
+        continue;
       }
 
       try {
