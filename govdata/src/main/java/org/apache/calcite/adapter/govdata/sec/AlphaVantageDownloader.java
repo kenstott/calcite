@@ -64,6 +64,7 @@ public class AlphaVantageDownloader {
   private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS);
   private final ObjectMapper objectMapper = new ObjectMapper();
   private long lastRequestTime = 0;
+  private volatile boolean dailyLimitReached = false; // Track if we've hit daily API limit
 
   // Avro schema for stock price records (same as YahooFinanceDownloader for compatibility)
   private static final String STOCK_PRICE_SCHEMA = "{"
@@ -146,6 +147,12 @@ public class AlphaVantageDownloader {
 
   private void downloadTickerData(String basePath, TickerCikPair pair, int startYear, int endYear) {
     LOGGER.debug("downloadTickerData called with basePath: {}", basePath);
+
+    // If we've already hit the daily API limit, skip all downloads for this ticker
+    if (dailyLimitReached) {
+      LOGGER.warn("Skipping stock price download for {} - daily API limit already reached", pair.ticker);
+      return;
+    }
 
     // Get current time in EST (market timezone)
     java.time.ZoneId estZone = java.time.ZoneId.of("America/New_York");
@@ -231,8 +238,16 @@ public class AlphaVantageDownloader {
             prices.size(), pair.ticker, year);
 
       } catch (Exception e) {
+        String errorMsg = e.getMessage();
+        // Check if this is a daily rate limit error
+        if (errorMsg != null && (errorMsg.contains("daily rate limit") || errorMsg.contains("25 requests per day"))) {
+          LOGGER.warn("Daily API rate limit reached for Alpha Vantage. Stopping all remaining stock price downloads.");
+          LOGGER.warn("Error message: {}", errorMsg);
+          dailyLimitReached = true;
+          return; // Exit immediately, don't try remaining years for this ticker or other tickers
+        }
         LOGGER.warn("Failed to download {} for year {}: {}",
-            pair.ticker, year, e.getMessage());
+            pair.ticker, year, errorMsg);
       }
     }
   }
