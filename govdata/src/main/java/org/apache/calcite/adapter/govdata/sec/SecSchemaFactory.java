@@ -1300,10 +1300,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      // Check if all required Parquet files exist
-      if (hasAllParquetFiles(cik, accession, form, filingDate)) {
-        return FilingStatus.HAS_ALL_PARQUET;
-      }
+      // DISABLED: Cannot reliably check Parquet files before parsing XBRL because fiscal year
+      // (used for partitioning) is only known after parsing XBRL data. The heuristic-based
+      // getPartitionYear() method produces incorrect year folders, causing false cache misses.
+      // Solution: Rely on manifest file only. After processing, files are added to manifest.
+      // if (hasAllParquetFiles(cik, accession, form, filingDate)) {
+      //   return FilingStatus.HAS_ALL_PARQUET;
+      // }
 
       return FilingStatus.NEEDS_PROCESSING;
     } catch (Exception e) {
@@ -1355,7 +1358,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         if (supportsVectorization(form)) {
-          String vectorizedPath = storageProvider.resolvePath(yearDir.getAbsolutePath(),
+          String vectorizedPath = storageProvider.resolvePath(yearDir.getPath(),
               String.format("%s_%s_vectorized.parquet", cik, accessionClean));
           try {
             StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
@@ -1551,77 +1554,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         needXbrl = true;
       }
 
-      // Check if Parquet conversion was successful
+      // DISABLED: Parquet file validation before XBRL parsing
+      // Cannot reliably check Parquet files before parsing XBRL because fiscal year (used for
+      // partitioning) is only known after parsing XBRL data. The heuristic-based
+      // getPartitionYear() method produces incorrect year folders for filings where filing date
+      // year != fiscal year, causing false cache misses and unnecessary reprocessing.
+      // Solution: Rely on manifest file and source file (HTML/XBRL) existence checks only.
+      // After XBRL is parsed and converted to Parquet, files are added to manifest.
       boolean needParquetReprocessing = false;
-      String year = getPartitionYear(form, filingDate);
-      // Use the unified GOVDATA_PARQUET_DIR location where files are actually written
-      String govdataParquetDir = getGovDataParquetDir();
-      File parquetDir = new File(govdataParquetDir, "source=sec");
-      File cikParquetDir = new File(parquetDir, "cik=" + cik);
-      // Need to include filing_type in the path
-      File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
-      File yearDir = new File(filingTypeDir, "year=" + year);
-
-      // Check for required parquet files based on form type
-      // Parquet files use accession without hyphens (accessionClean is already defined above)
-
-
-      // Primary data file (facts for most forms, insider for forms 3/4/5)
-      String filenameSuffix = isInsiderForm ? "insider" : "facts";
-      String primaryParquetPath = storageProvider.resolvePath(yearDir.getPath(), String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
-
-      // Check primary file (always required)
-      try {
-        StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
-        if (primaryMetadata.getSize() == 0) {
-          needParquetReprocessing = true;
-          LOGGER.debug("Empty primary Parquet file: " + primaryParquetPath);
-        }
-      } catch (IOException e) {
-        needParquetReprocessing = true;
-        LOGGER.debug("Missing primary Parquet file: " + primaryParquetPath);
-      }
-
-      // Check for relationships file (now always generated, even if empty)
-      if (!isInsiderForm) {
-        String relationshipsParquetPath = storageProvider.resolvePath(yearDir.getPath(),
-            String.format("%s_%s_relationships.parquet", cik, accessionClean));
-        try {
-          StorageProvider.FileMetadata relationshipsMetadata = storageProvider.getMetadata(relationshipsParquetPath);
-          // Note: relationships file can be empty (0 bytes is ok) as long as it exists
-          // The file is created even when no relationships are found to indicate processing completed
-        } catch (IOException e) {
-          needParquetReprocessing = true;
-          LOGGER.debug("Missing relationships Parquet file: " + relationshipsParquetPath);
-        }
-      }
-
-      // Note: Currently, no forms generate metadata.parquet or contexts.parquet files
-      // The XBRL processor generates: facts.parquet (financial), insider.parquet (insider forms),
-      // relationships.parquet (financial), and optionally vectorized.parquet
-
-      // Also check for vectorized file if text similarity is enabled and form supports vectorization
-      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-      if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
-        // Only check for vectorized files on forms that actually generate them
-        boolean formSupportsVectorization = supportsVectorization(form);
-        if (formSupportsVectorization) {
-          // Use StorageProvider for vectorized parquet file access
-          String vectorizedPath = storageProvider.resolvePath(yearDir.getAbsolutePath(),
-              String.format("%s_%s_vectorized.parquet", cik, accessionClean));
-          try {
-            StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
-            if (vectorizedMetadata.getSize() == 0) {
-              needParquetReprocessing = true;
-              LOGGER.debug("Empty vectorized Parquet file: " + vectorizedPath);
-            }
-          } catch (IOException e) {
-            // File doesn't exist or can't be accessed
-            needParquetReprocessing = true;
-            LOGGER.debug("Missing or inaccessible vectorized Parquet file: " + vectorizedPath);
-          }
-        }
-      }
 
       // Critical fix: Detect inline XBRL in cached HTML files that need Parquet processing
       // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
@@ -1670,59 +1610,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return; // Both files already downloaded and converted
       }
 
-      if (needParquetReprocessing) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Parquet reprocessing needed for: {} {}", form, filingDate);
-        }
-        // Clean up any existing partial parquet files to ensure clean conversion
-        cleanupPartialParquetFiles(yearDir, cik, accessionClean);
-        // Force reprocessing by treating as if we need XBRL (even if files exist)
-        // This ensures the conversion will run again
-        needXbrl = true;
-
-        // If XBRL file already exists, we need to schedule it for conversion
-        // since it won't be downloaded again
-        if (xbrlFile.exists() && xbrlFile.length() > 0) {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Scheduling existing XBRL file for re-conversion: {}", xbrlFile.getName());
-          }
-          // Add to a list that will be processed later
-          if (!scheduledForReconversion.contains(xbrlFile)) {
-            scheduledForReconversion.add(xbrlFile);
-          }
-        }
-
-        // For forms that use inline XBRL, check if HTML file exists and schedule it too
-        // This is critical for forms like 10-Q, DEF 14A, etc. that don't have separate XBRL files
-        if (htmlFile.exists() && htmlFile.length() > 0) {
-          // Check if this HTML file contains inline XBRL by doing a quick scan
-          boolean htmlHasInlineXbrl = false;
-          try {
-            byte[] headerBytes = new byte[10240];
-            try (FileInputStream fis = new FileInputStream(htmlFile)) {
-              int bytesRead = fis.read(headerBytes);
-              if (bytesRead > 0) {
-                String header = new String(headerBytes, 0, bytesRead);
-                htmlHasInlineXbrl = header.contains("xmlns:ix=") ||
-                                   header.contains("http://www.xbrl.org/2013/inlineXBRL") ||
-                                   header.contains("<ix:") ||
-                                   header.contains("iXBRL");
-              }
-            }
-          } catch (Exception e) {
-            LOGGER.debug("Could not check HTML for iXBRL during reprocessing check: " + e.getMessage());
-          }
-
-          if (htmlHasInlineXbrl) {
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Scheduling existing HTML file with inline XBRL for re-conversion: {}", htmlFile.getName());
-            }
-            if (!scheduledForReconversion.contains(htmlFile)) {
-              scheduledForReconversion.add(htmlFile);
-            }
-          }
-        }
-      }
+      // DISABLED: Parquet reprocessing logic
+      // needParquetReprocessing is now always false because parquet file validation
+      // before XBRL parsing has been disabled due to fiscal year mismatch issues.
+      // if (needParquetReprocessing) {
+      //   ... reprocessing logic ...
+      // }
 
       // Download HTML file first if needed (for preview and iXBRL check)
       if (needHtml) {
