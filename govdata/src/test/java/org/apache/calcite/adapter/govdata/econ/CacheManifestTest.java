@@ -89,10 +89,10 @@ public class CacheManifestTest {
     manifest.markCached(dataType, year, params, testFile.toString(), 100L);
     assertTrue(manifest.isCached(dataType, year, params));
 
-    // Test with cleanup - use cleanupStaleEntries method
-    manifest.cleanupStaleEntries();
+    // Test with cleanup - use cleanupExpiredEntries method
+    manifest.cleanupExpiredEntries();
 
-    // After cleanup with 0 TTL, should still be cached (just added)
+    // After cleanup, should still be cached (not expired yet)
     assertTrue(manifest.isCached(dataType, year, params));
   }
 
