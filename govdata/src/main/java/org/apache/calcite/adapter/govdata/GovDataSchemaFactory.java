@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.pub.PubSchemaFactory;
@@ -49,7 +50,7 @@ import java.util.Map;
  *   <li>econ - Economic data (BLS employment, FRED indicators, Treasury yields)</li>
  *   <li>safety - Public safety data (FBI crime, NHTSA traffic, FEMA disasters)</li>
  *   <li>pub - Public data (Wikipedia, OpenStreetMap, Wikidata, academic research)</li>
- *   <li>census - U.S. Census Bureau data (future)</li>
+ *   <li>census - U.S. Census Bureau demographic and socioeconomic data</li>
  *   <li>irs - Internal Revenue Service data (future)</li>
  * </ul>
  *
@@ -150,8 +151,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         return buildPubOperand(operand);
 
       case "census":
-        throw new UnsupportedOperationException(
-            "Census data source not yet implemented. Coming soon!");
+        return buildCensusOperand(operand);
 
       case "irs":
         throw new UnsupportedOperationException(
@@ -160,7 +160,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
-            "Supported sources: sec, geo, econ, safety, pub, census (future), irs (future)");
+            "Supported sources: sec, geo, econ, safety, pub, census, irs (future)");
     }
   }
 
@@ -288,6 +288,39 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
+
+  /**
+   * Build operand for Census data using the specialized Census factory.
+   */
+  private Map<String, Object> buildCensusOperand(Map<String, Object> operand) {
+    LOGGER.debug("Building operand for Census demographic and socioeconomic data");
+
+    GovDataSubSchemaFactory censusFactory = new CensusSchemaFactory();
+
+    // Build constraint metadata including cross-domain constraints
+    Map<String, Map<String, Object>> allConstraints = new HashMap<>();
+    if (tableConstraints != null) {
+      allConstraints.putAll(tableConstraints);
+    }
+
+    // Add cross-domain constraints if other schemas exist
+    if (schemaDataSources.containsValue("GEO")) {
+      LOGGER.debug("GEO schema exists - geographic demographic joins available");
+    }
+    if (schemaDataSources.containsValue("ECON")) {
+      LOGGER.debug("ECON schema exists - economic demographic correlations available");
+    }
+    if (schemaDataSources.containsValue("SEC")) {
+      LOGGER.debug("SEC schema exists - corporate demographic analysis available");
+    }
+
+    if (!allConstraints.isEmpty() && tableDefinitions != null && censusFactory.supportsConstraints()) {
+      censusFactory.setTableConstraints(allConstraints, tableDefinitions);
+    }
+
+    // Get the operand configuration from CensusSchemaFactory
+    return censusFactory.buildOperand(operand, storageProvider);
+  }
 
   /**
    * Build operand for Economic data using the specialized Econ factory.
