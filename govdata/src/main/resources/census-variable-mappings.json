@@ -356,6 +356,10 @@
       "description": "Annual population estimate",
       "dataType": "LONG",
       "population": {
+        "2020": {"variable": "POP_2020"},
+        "2021": {"variable": "POP_2021"},
+        "2022": {"variable": "POP_2022"},
+        "2023": {"variable": "POP"},
         "allYears": {"variable": "POP"}
       }
     }
@@ -584,9 +588,25 @@
       }
     },
     "population": {
-      "allYears": {
+      "2010-2019": {
         "primary": "pep",
         "fallbacks": []
+      },
+      "2020": {
+        "primary": "charagegroups",
+        "fallbacks": ["population", "charv"]
+      },
+      "2021": {
+        "primary": "population",
+        "fallbacks": ["charv"]
+      },
+      "2022": {
+        "primary": "population",
+        "fallbacks": ["charv"]
+      },
+      "2023-2029": {
+        "primary": "charv",
+        "fallbacks": ["population"]
       }
     }
   }
