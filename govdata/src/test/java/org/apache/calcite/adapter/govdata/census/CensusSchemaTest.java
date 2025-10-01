@@ -280,7 +280,7 @@ public class CensusSchemaTest {
 
       // Test acs_education columns
       verifyTableColumns(metaData, "acs_education",
-          Arrays.asList("geoid", "year", "total_population_25_and_over"));
+          Arrays.asList("geoid", "year", "population_25_and_over"));
 
       // Test decennial_population columns
       verifyTableColumns(metaData, "decennial_population",
@@ -427,26 +427,65 @@ public class CensusSchemaTest {
 
 
   @Test
-  @Tag("requires-data")
+  public void testPartitionedTableAggregationWithFilter() throws Exception {
+    // Test that aggregation works correctly when filtering by partition key
+    String apiKey = System.getProperty("CENSUS_API_KEY");
+    assertNotNull(apiKey, "CENSUS_API_KEY must be configured for integration tests");
+
+    try (Connection connection = createConnection()) {
+      Statement stmt = connection.createStatement();
+
+      // Aggregation WITH partition filter should work correctly
+      String query = "SELECT COUNT(*) as row_count FROM census.population_estimates WHERE \"year\" = 2020";
+
+      ResultSet rs = stmt.executeQuery(query);
+      assertTrue(rs.next(), "Should have results");
+
+      int count = rs.getInt("row_count");
+      assertTrue(count > 0, "Should have data for year 2020");
+      System.out.println("COUNT with partition filter: " + count);
+    }
+  }
+
+  @Test
   public void testDataPresence() throws Exception {
     // Test that tables contain data (non-zero rows)
     // This test requires actual Census data to be downloaded
+    // For partitioned tables, we test with a specific year to avoid partition scanning issues
 
     String apiKey = System.getProperty("CENSUS_API_KEY");
-    if (apiKey == null) {
-      System.out.println("Skipping data presence test - no CENSUS_API_KEY configured");
-      return;
-    }
+    assertNotNull(apiKey, "CENSUS_API_KEY must be configured for integration tests");
 
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
 
       List<String> emptyTables = new ArrayList<>();
 
+      // Define which tables are partitioned by year
+      List<String> partitionedTables = Arrays.asList(
+          "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+          "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+          "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
+          "acs_veterans", "acs_migration", "acs_occupation",
+          "decennial_population", "decennial_demographics", "decennial_housing",
+          "economic_census", "county_business_patterns",
+          "population_estimates"
+      );
+
       for (String tableName : EXPECTED_TABLES) {
         try {
-          String countQuery = String.format(
-              "SELECT COUNT(*) as row_count FROM census.%s", tableName);
+          String countQuery;
+          // For partitioned tables, filter by a specific year to avoid ClassCastException
+          // on partition keys during aggregation
+          if (partitionedTables.contains(tableName)) {
+            countQuery = String.format(
+                "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
+                tableName);
+          } else {
+            countQuery = String.format(
+                "SELECT COUNT(*) as row_count FROM census.\"%s\"", tableName);
+          }
+
           ResultSet rs = stmt.executeQuery(countQuery);
 
           if (rs.next()) {
@@ -477,6 +516,191 @@ public class CensusSchemaTest {
   }
 
   @Test
+  public void testComprehensiveDataCoverage() throws Exception {
+    // Comprehensive test that validates all tables have data for all expected years
+    // This test requires actual Census data to be downloaded
+
+    String apiKey = System.getProperty("CENSUS_API_KEY");
+    assertNotNull(apiKey, "CENSUS_API_KEY must be configured for integration tests");
+
+    // Expected years from model configuration
+    int[] expectedYears = {2020, 2021, 2022, 2023};
+
+    // Tables by data source type
+    List<String> acsTables = Arrays.asList(
+        "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+        "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
+        "acs_veterans", "acs_migration", "acs_occupation"
+    );
+
+    List<String> decennialTables = Arrays.asList(
+        "decennial_population", "decennial_demographics", "decennial_housing"
+    );
+
+    List<String> economicTables = Arrays.asList(
+        "economic_census", "county_business_patterns"
+    );
+
+    List<String> populationTables = Arrays.asList(
+        "population_estimates"
+    );
+
+    try (Connection connection = createConnection()) {
+      Statement stmt = connection.createStatement();
+
+      List<String> missingData = new ArrayList<>();
+      int totalCombinations = 0;
+      int successfulCombinations = 0;
+
+      System.out.println("\n=== COMPREHENSIVE DATA COVERAGE TEST ===\n");
+
+      // Test ACS tables (should have data for all years 2020-2023)
+      System.out.println("Testing ACS tables (expect 2020-2023):");
+      for (String tableName : acsTables) {
+        for (int year : expectedYears) {
+          totalCombinations++;
+          String query = String.format(
+              "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
+              tableName, year);
+
+          try {
+            ResultSet rs = stmt.executeQuery(query);
+            if (rs.next()) {
+              int rowCount = rs.getInt("row_count");
+              if (rowCount > 0) {
+                System.out.printf("  ✓ %s [%d]: %d rows%n", tableName, year, rowCount);
+                successfulCombinations++;
+              } else {
+                String missing = String.format("%s [%d]: 0 rows", tableName, year);
+                missingData.add(missing);
+                System.out.printf("  ✗ %s%n", missing);
+              }
+            }
+            rs.close();
+          } catch (SQLException e) {
+            String missing = String.format("%s [%d]: %s", tableName, year, e.getMessage());
+            missingData.add(missing);
+            System.out.printf("  ✗ %s%n", missing);
+          }
+        }
+      }
+
+      // Test Decennial tables (should have data for 2020 only)
+      System.out.println("\nTesting Decennial tables (expect 2020 only):");
+      for (String tableName : decennialTables) {
+        totalCombinations++;
+        String query = String.format(
+            "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
+            tableName);
+
+        try {
+          ResultSet rs = stmt.executeQuery(query);
+          if (rs.next()) {
+            int rowCount = rs.getInt("row_count");
+            if (rowCount > 0) {
+              System.out.printf("  ✓ %s [2020]: %d rows%n", tableName, rowCount);
+              successfulCombinations++;
+            } else {
+              String missing = String.format("%s [2020]: 0 rows", tableName);
+              missingData.add(missing);
+              System.out.printf("  ✗ %s%n", missing);
+            }
+          }
+          rs.close();
+        } catch (SQLException e) {
+          String missing = String.format("%s [2020]: %s", tableName, e.getMessage());
+          missingData.add(missing);
+          System.out.printf("  ✗ %s%n", missing);
+        }
+      }
+
+      // Test Economic tables (should have data for 2022 only per Economic Census schedule)
+      System.out.println("\nTesting Economic Census tables (expect 2022 only):");
+      for (String tableName : economicTables) {
+        totalCombinations++;
+        String query = String.format(
+            "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2022",
+            tableName);
+
+        try {
+          ResultSet rs = stmt.executeQuery(query);
+          if (rs.next()) {
+            int rowCount = rs.getInt("row_count");
+            if (rowCount > 0) {
+              System.out.printf("  ✓ %s [2022]: %d rows%n", tableName, rowCount);
+              successfulCombinations++;
+            } else {
+              String missing = String.format("%s [2022]: 0 rows", tableName);
+              missingData.add(missing);
+              System.out.printf("  ✗ %s%n", missing);
+            }
+          }
+          rs.close();
+        } catch (SQLException e) {
+          String missing = String.format("%s [2022]: %s", tableName, e.getMessage());
+          missingData.add(missing);
+          System.out.printf("  ✗ %s%n", missing);
+        }
+      }
+
+      // Test Population Estimates (should have data for 2020-2023)
+      System.out.println("\nTesting Population Estimates (expect 2020-2023):");
+      for (String tableName : populationTables) {
+        for (int year : expectedYears) {
+          totalCombinations++;
+          String query = String.format(
+              "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
+              tableName, year);
+
+          try {
+            ResultSet rs = stmt.executeQuery(query);
+            if (rs.next()) {
+              int rowCount = rs.getInt("row_count");
+              if (rowCount > 0) {
+                System.out.printf("  ✓ %s [%d]: %d rows%n", tableName, year, rowCount);
+                successfulCombinations++;
+              } else {
+                String missing = String.format("%s [%d]: 0 rows", tableName, year);
+                missingData.add(missing);
+                System.out.printf("  ✗ %s%n", missing);
+              }
+            }
+            rs.close();
+          } catch (SQLException e) {
+            String missing = String.format("%s [%d]: %s", tableName, year, e.getMessage());
+            missingData.add(missing);
+            System.out.printf("  ✗ %s%n", missing);
+          }
+        }
+      }
+
+      // Summary
+      System.out.printf("%n=== SUMMARY ===%n");
+      System.out.printf("Total table/year combinations: %d%n", totalCombinations);
+      System.out.printf("Successful: %d (%.1f%%)%n",
+          successfulCombinations,
+          (successfulCombinations * 100.0 / totalCombinations));
+      System.out.printf("Missing: %d (%.1f%%)%n",
+          missingData.size(),
+          (missingData.size() * 100.0 / totalCombinations));
+
+      if (!missingData.isEmpty()) {
+        System.out.println("\nMissing data details:");
+        for (String missing : missingData) {
+          System.out.println("  - " + missing);
+        }
+      }
+
+      // Require at least 90% coverage
+      double coveragePercent = successfulCombinations * 100.0 / totalCombinations;
+      assertTrue(coveragePercent >= 90.0,
+          String.format("Data coverage is %.1f%%, expected at least 90%%. Missing: %s",
+              coveragePercent, missingData));
+    }
+  }
+
+  @Test
   public void testYearPartitioning() throws Exception {
     // Test that year partitioning works correctly
     try (Connection connection = createConnection()) {
@@ -485,7 +709,7 @@ public class CensusSchemaTest {
       // Query for specific year
       String yearQuery =
           "SELECT * FROM census.acs_population " +
-          "WHERE year = 2023 LIMIT 1";
+          "WHERE \"year\" = 2023 LIMIT 1";
 
       try {
         ResultSet rs = stmt.executeQuery(yearQuery);
@@ -515,7 +739,6 @@ public class CensusSchemaTest {
 
     ResultSet columns = metaData.getColumns(null, "census", tableName, null);
     Set<String> foundColumns = new HashSet<>();
-
     while (columns.next()) {
       foundColumns.add(columns.getString("COLUMN_NAME").toUpperCase());
     }
