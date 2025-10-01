@@ -19,6 +19,8 @@ package org.apache.calcite.adapter.govdata.census;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.util.Iterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -212,6 +214,26 @@ public class ConceptualVariableMapper {
         return yearMapping.path("primary").asText();
       }
 
+      // Check for year range mappings (e.g., "2020-2029")
+      Iterator<String> fieldNames = datasetMappings.fieldNames();
+      while (fieldNames.hasNext()) {
+        String fieldName = fieldNames.next();
+        if (fieldName.contains("-")) {
+          String[] range = fieldName.split("-");
+          if (range.length == 2) {
+            try {
+              int startYear = Integer.parseInt(range[0]);
+              int endYear = Integer.parseInt(range[1]);
+              if (year >= startYear && year <= endYear) {
+                return datasetMappings.path(fieldName).path("primary").asText();
+              }
+            } catch (NumberFormatException e) {
+              // Skip invalid range
+            }
+          }
+        }
+      }
+
       // Check for allYears mapping
       JsonNode allYearsMapping = datasetMappings.path("allYears");
       if (!allYearsMapping.isMissingNode()) {
@@ -246,6 +268,33 @@ public class ConceptualVariableMapper {
             result[i] = fallbacks.get(i).asText();
           }
           return result;
+        }
+      }
+
+      // Check for year range mappings (e.g., "2020-2029")
+      Iterator<String> fieldNames = datasetMappings.fieldNames();
+      while (fieldNames.hasNext()) {
+        String fieldName = fieldNames.next();
+        if (fieldName.contains("-")) {
+          String[] range = fieldName.split("-");
+          if (range.length == 2) {
+            try {
+              int startYear = Integer.parseInt(range[0]);
+              int endYear = Integer.parseInt(range[1]);
+              if (year >= startYear && year <= endYear) {
+                JsonNode fallbacks = datasetMappings.path(fieldName).path("fallbacks");
+                if (fallbacks.isArray()) {
+                  String[] result = new String[fallbacks.size()];
+                  for (int i = 0; i < fallbacks.size(); i++) {
+                    result[i] = fallbacks.get(i).asText();
+                  }
+                  return result;
+                }
+              }
+            } catch (NumberFormatException e) {
+              // Skip invalid range
+            }
+          }
         }
       }
 
