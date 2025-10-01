@@ -270,7 +270,7 @@ public class CensusApiClient {
    * @throws IOException if API call fails
    */
   public JsonNode getDecennialData(int year, String variables, String geography, String preferredDataset) throws IOException {
-    String cacheKey = String.format("dec_%d_%s_%s_%s", year,
+    String cacheKey = String.format("decennial_%d_%s_%s_%s", year,
         variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"),
         preferredDataset != null ? preferredDataset : "auto");
@@ -324,7 +324,124 @@ public class CensusApiClient {
     throw new IOException(String.format("All datasets failed for decennial year %d with variables %s: %s",
         year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
   }
-  
+
+  /**
+   * Get economic census/CBP data.
+   *
+   * @param year Census year
+   * @param variables Comma-separated list of variables
+   * @param geography Geographic filter
+   * @return JSON response from Census API
+   * @throws IOException if API call fails
+   */
+  public JsonNode getEconomicData(int year, String variables, String geography) throws IOException {
+    String cacheKey = String.format("economic_%d_%s_%s", year,
+        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+        geography.replaceAll("[^a-zA-Z0-9]", "_"));
+
+    // Check cache first
+    File cacheFile = new File(cacheDir, cacheKey + ".json");
+    if (cacheFile.exists()) {
+      LOGGER.debug("Using cached Economic data from {}", cacheFile);
+      return objectMapper.readTree(cacheFile);
+    }
+
+    // Determine dataset to use
+    String dataset = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getDataset("economic", year);
+    String[] fallbacks = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getFallbackDatasets("economic", year);
+
+    // Try primary dataset and fallbacks
+    IOException lastException = null;
+    String[] datasetsToTry = new String[1 + fallbacks.length];
+    datasetsToTry[0] = dataset;
+    System.arraycopy(fallbacks, 0, datasetsToTry, 1, fallbacks.length);
+
+    for (String ds : datasetsToTry) {
+      try {
+        String url = String.format("%s/%d/%s?get=%s&for=%s&key=%s",
+            BASE_URL, year, ds, variables, geography, apiKey);
+
+        LOGGER.debug("Trying economic API call with dataset '{}': {}", ds, url);
+
+        // Make API request with rate limiting
+        JsonNode response = makeApiRequest(url);
+
+        // Cache the successful response
+        objectMapper.writeValue(cacheFile, response);
+        LOGGER.info("Cached Economic data to {} using dataset '{}'", cacheFile, ds);
+
+        return response;
+
+      } catch (IOException e) {
+        lastException = e;
+        LOGGER.debug("Dataset '{}' failed for year {}: {}", ds, year, e.getMessage());
+      }
+    }
+
+    // All datasets failed
+    throw new IOException(String.format("All datasets failed for economic year %d with variables %s: %s",
+        year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
+  }
+
+  /**
+   * Get population estimates data.
+   *
+   * @param year Census year
+   * @param variables Comma-separated list of variables
+   * @param geography Geographic filter
+   * @return JSON response from Census API
+   * @throws IOException if API call fails
+   */
+  public JsonNode getPopulationEstimatesData(int year, String variables, String geography) throws IOException {
+    String cacheKey = String.format("population_%d_%s_%s", year,
+        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+        geography.replaceAll("[^a-zA-Z0-9]", "_"));
+
+    // Check cache first
+    File cacheFile = new File(cacheDir, cacheKey + ".json");
+    if (cacheFile.exists()) {
+      LOGGER.debug("Using cached Population Estimates data from {}", cacheFile);
+      return objectMapper.readTree(cacheFile);
+    }
+
+    // Determine dataset to use
+    String dataset = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getDataset("population", year);
+    String[] fallbacks = org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getFallbackDatasets("population", year);
+
+    // Try primary dataset and fallbacks
+    IOException lastException = null;
+    String[] datasetsToTry = new String[1 + fallbacks.length];
+    datasetsToTry[0] = dataset;
+    System.arraycopy(fallbacks, 0, datasetsToTry, 1, fallbacks.length);
+
+    for (String ds : datasetsToTry) {
+      try {
+        // Population Estimates API path structure
+        String url = String.format("%s/%d/pep/%s?get=%s&for=%s&key=%s",
+            BASE_URL, year, ds, variables, geography, apiKey);
+
+        LOGGER.debug("Trying population API call with dataset '{}': {}", ds, url);
+
+        // Make API request with rate limiting
+        JsonNode response = makeApiRequest(url);
+
+        // Cache the successful response
+        objectMapper.writeValue(cacheFile, response);
+        LOGGER.info("Cached Population Estimates data to {} using dataset '{}'", cacheFile, ds);
+
+        return response;
+
+      } catch (IOException e) {
+        lastException = e;
+        LOGGER.debug("Dataset '{}' failed for year {}: {}", ds, year, e.getMessage());
+      }
+    }
+
+    // All datasets failed
+    throw new IOException(String.format("All datasets failed for population year %d with variables %s: %s",
+        year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
+  }
+
   /**
    * Geocode an address to get coordinates and Census geography.
    *
