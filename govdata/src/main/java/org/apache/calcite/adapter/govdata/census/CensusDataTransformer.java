@@ -121,7 +121,7 @@ public class CensusDataTransformer {
     }
 
     // Transform data with friendly column names
-    List<Map<String, Object>> transformedData = transformDataToMaps(allData, effectiveVariableMap, tableName, year);
+    List<Map<String, Object>> transformedData = transformDataToMaps(allData, effectiveVariableMap, tableName, year, censusType);
 
     if (transformedData.isEmpty()) {
       LOGGER.warn("No transformed data for table: {}", tableName);
@@ -187,24 +187,16 @@ public class CensusDataTransformer {
   }
 
   /**
-   * Convert string values to appropriate data types.
+   * Convert string values - keep as string for now, type conversion happens later based on variable mappings.
    */
   private Object convertValue(String value) {
     if (value == null || value.trim().isEmpty() || "null".equalsIgnoreCase(value)) {
       return null;
     }
 
-    // Try to convert to number
-    try {
-      if (value.contains(".")) {
-        return Double.parseDouble(value);
-      } else {
-        return Long.parseLong(value);
-      }
-    } catch (NumberFormatException e) {
-      // Return as string if not a number
-      return value;
-    }
+    // Keep all values as strings - they will be converted to proper types
+    // later in transformDataToMaps() based on the variable mapping data types
+    return value;
   }
 
   /**
@@ -214,7 +206,7 @@ public class CensusDataTransformer {
    * Those are encoded in the directory structure for proper Hive-style partitioning.
    */
   private List<Map<String, Object>> transformDataToMaps(List<Map<String, Object>> rawData,
-      Map<String, String> variableMap, String tableName, int year) {
+      Map<String, String> variableMap, String tableName, int year, String censusType) {
 
     List<Map<String, Object>> transformedData = new ArrayList<>();
 
@@ -228,18 +220,20 @@ public class CensusDataTransformer {
       String geoid = createGeoid(rawRecord);
       transformedRecord.put("geoid", geoid);
 
-      // Transform variable codes to friendly names
+      // Transform variable codes to friendly names with proper type conversion
       for (Map.Entry<String, String> mapping : variableMap.entrySet()) {
         String variableCode = mapping.getKey();
         String friendlyName = mapping.getValue();
 
         Object value = rawRecord.get(variableCode);
         if (value != null) {
-          transformedRecord.put(friendlyName, value);
+          // Convert to proper type based on variable mapping
+          Object convertedValue = convertValueByType(value, friendlyName, year, censusType);
+          transformedRecord.put(friendlyName, convertedValue);
         }
       }
 
-      // Add any geographic columns directly
+      // Add any geographic columns directly (as strings)
       if (rawRecord.containsKey("state")) {
         transformedRecord.put("state_fips", rawRecord.get("state"));
       }
@@ -252,6 +246,54 @@ public class CensusDataTransformer {
 
     LOGGER.info("Transformed {} records for table {}", transformedData.size(), tableName);
     return transformedData;
+  }
+
+  /**
+   * Convert a value to the appropriate type based on the variable mapping.
+   */
+  private Object convertValueByType(Object value, String columnName, int year, String censusType) {
+    if (value == null) {
+      return null;
+    }
+
+    String stringValue = value.toString();
+    if (stringValue.trim().isEmpty() || "null".equalsIgnoreCase(stringValue)) {
+      return null;
+    }
+
+    // Get the data type from the variable mapping
+    if (censusType != null) {
+      ConceptualVariableMapper.VariableMapping mapping =
+          ConceptualVariableMapper.getVariableMapping(columnName, year, censusType);
+      if (mapping != null) {
+        String dataType = mapping.getDataType();
+        try {
+          switch (dataType) {
+            case "LONG":
+              return Long.parseLong(stringValue);
+            case "DOUBLE":
+              return Double.parseDouble(stringValue);
+            case "STRING":
+            default:
+              return stringValue;
+          }
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Failed to convert {} to {}: {}", columnName, dataType, stringValue);
+          return stringValue;
+        }
+      }
+    }
+
+    // Fallback: try to auto-convert if no mapping found
+    try {
+      if (stringValue.contains(".")) {
+        return Double.parseDouble(stringValue);
+      } else {
+        return Long.parseLong(stringValue);
+      }
+    } catch (NumberFormatException e) {
+      return stringValue;
+    }
   }
 
   /**
