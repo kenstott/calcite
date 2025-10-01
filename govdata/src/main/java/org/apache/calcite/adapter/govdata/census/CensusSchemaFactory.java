@@ -426,14 +426,43 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       if (!needsEconomicUpdate) {
         LOGGER.info("Economic Census data already fully cached for years: {}", economicYears);
       } else {
-        try {
-          LOGGER.info("Downloading Economic Census data for years: {}", economicYears);
-          for (int year : economicYears) {
+        LOGGER.info("Downloading Economic Census data for years: {}", economicYears);
+        for (int year : economicYears) {
+          try {
             downloadEconomicData(censusClient, year);
             convertEconomicDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+          } catch (Exception e) {
+            // Check if this is a "no data" error (404, dataset not available) vs actual API error
+            String errorMsg = e.getMessage();
+            boolean isNoDataError = errorMsg != null && (
+                errorMsg.contains("404") ||
+                errorMsg.contains("not found") ||
+                errorMsg.contains("does not exist") ||
+                errorMsg.contains("No data") ||
+                errorMsg.contains("All datasets failed"));
+
+            if (isNoDataError) {
+              LOGGER.warn("No data available for Economic Census year {}: {}", year, errorMsg);
+              LOGGER.info("Creating zero-row Parquet files for Economic Census year {} (data not available)", year);
+
+              // Create zero-row files so tables still exist in schema
+              String[] economicTables = {"economic_census", "county_business_patterns"};
+              for (String tableName : economicTables) {
+                try {
+                  String parquetPath = storageProvider.resolvePath(censusParquetDir,
+                      ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+                  createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "economic");
+                } catch (IOException ex) {
+                  LOGGER.error("Failed to create zero-row file for {} year {}: {}",
+                      tableName, year, ex.getMessage());
+                }
+              }
+            } else {
+              // Real error - log for analysis but don't create files
+              LOGGER.error("Error downloading Economic Census data for year {} (requires investigation): {}",
+                  year, errorMsg, e);
+            }
           }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading Economic Census data", e);
         }
       }
     }
@@ -444,14 +473,40 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     if (!needsPopulationUpdate) {
       LOGGER.info("Population Estimates data already fully cached for years: {}", acsYears);
     } else {
-      try {
-        LOGGER.info("Downloading Population Estimates data for years: {}", acsYears);
-        for (int year : acsYears) {
+      LOGGER.info("Downloading Population Estimates data for years: {}", acsYears);
+      for (int year : acsYears) {
+        try {
           downloadPopulationEstimatesData(censusClient, year);
           convertPopulationEstimatesDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+        } catch (Exception e) {
+          // Check if this is a "no data" error (404, dataset not available) vs actual API error
+          String errorMsg = e.getMessage();
+          boolean isNoDataError = errorMsg != null && (
+              errorMsg.contains("404") ||
+              errorMsg.contains("not found") ||
+              errorMsg.contains("does not exist") ||
+              errorMsg.contains("No data") ||
+              errorMsg.contains("All datasets failed"));
+
+          if (isNoDataError) {
+            LOGGER.warn("No data available for Population Estimates year {}: {}", year, errorMsg);
+            LOGGER.info("Creating zero-row Parquet file for Population Estimates year {} (data not available)", year);
+
+            // Create zero-row file so table still exists in schema
+            try {
+              String parquetPath = storageProvider.resolvePath(censusParquetDir,
+                  POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
+              createZeroRowParquetFile(parquetPath, "population_estimates", year, storageProvider, "population");
+            } catch (IOException ex) {
+              LOGGER.error("Failed to create zero-row file for population_estimates year {}: {}",
+                  year, ex.getMessage());
+            }
+          } else {
+            // Real error - log for analysis but don't create files
+            LOGGER.error("Error downloading Population Estimates data for year {} (requires investigation): {}",
+                year, errorMsg, e);
+          }
         }
-      } catch (Exception e) {
-        LOGGER.error("Error downloading Population Estimates data", e);
       }
     }
   }
@@ -838,17 +893,36 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadEconomicData(CensusApiClient censusClient, int year) throws IOException {
     LOGGER.info("Downloading Economic Census data for year {}", year);
-    // Economic Census has different variable structure - implement basic business data
-    // Note: Economic Census API may have different endpoints and variable structures
+
+    // Download data for each economic table type using conceptual mappings
+    downloadEconomicTableData(censusClient, year, "economic_census");
+    downloadEconomicTableData(censusClient, year, "county_business_patterns");
+  }
+
+  /**
+   * Download economic data for a specific table type using conceptual variable mappings.
+   */
+  private void downloadEconomicTableData(CensusApiClient censusClient, int year, String tableName) throws IOException {
+    String[] variables = ConceptualVariableMapper.getVariablesToDownload(tableName, year, "economic");
+    if (variables.length == 0) {
+      LOGGER.info("No variables available for {} in year {} - skipping download", tableName, year);
+      return;
+    }
+
+    String variableList = String.join(",", variables);
+    LOGGER.info("Downloading {} variables for {}: {}", variables.length, tableName, variableList);
+
     try {
-      // Get basic establishment counts and employment data for major industries
-      String businessVars = "ESTAB,EMP,PAYANN";  // Establishments, Employment, Annual Payroll
-      // For now, use a simplified approach - this may need adjustment based on actual API
-      censusClient.getAcsData(year, businessVars, "state:*");
-      censusClient.getAcsData(year, businessVars, "county:*");
-    } catch (Exception e) {
-      LOGGER.error("Economic Census data download failed for year {}: {}", year, e.getMessage());
-      // Don't create placeholder data here - let conversion handle missing data
+      // Download state-level data
+      censusClient.getEconomicData(year, variableList, "state:*");
+
+      // Download county-level data
+      censusClient.getEconomicData(year, variableList, "county:*");
+
+      LOGGER.info("Successfully downloaded {} data for year {}", tableName, year);
+    } catch (IOException e) {
+      LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, e.getMessage());
+      throw e;
     }
   }
 
@@ -857,16 +931,44 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadPopulationEstimatesData(CensusApiClient censusClient, int year) throws IOException {
     LOGGER.info("Downloading Population Estimates data for year {}", year);
-    try {
-      // Population estimates API uses different endpoint structure
-      String popVars = "POP";  // Total population estimate
-      // This may need adjustment based on the actual Population Estimates API structure
-      censusClient.getAcsData(year, popVars, "state:*");
-      censusClient.getAcsData(year, popVars, "county:*");
-    } catch (Exception e) {
-      LOGGER.error("Population Estimates data download failed for year {}: {}", year, e.getMessage());
-      // Don't create placeholder data here - let conversion handle missing data
+
+    String[] variables = ConceptualVariableMapper.getVariablesToDownload("population_estimates", year, "population");
+    if (variables.length == 0) {
+      LOGGER.info("No variables available for population_estimates in year {} - skipping download", year);
+      return;
     }
+
+    String variableList = String.join(",", variables);
+    LOGGER.info("Downloading {} variables for population_estimates: {}", variables.length, variableList);
+
+    boolean stateSuccess = false;
+    boolean countySuccess = false;
+
+    // Download state-level data
+    try {
+      censusClient.getPopulationEstimatesData(year, variableList, "state:*");
+      stateSuccess = true;
+      LOGGER.info("Successfully downloaded state-level population_estimates data for year {}", year);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to download state-level population_estimates for year {}: {}", year, e.getMessage());
+    }
+
+    // Download county-level data
+    try {
+      censusClient.getPopulationEstimatesData(year, variableList, "county:*");
+      countySuccess = true;
+      LOGGER.info("Successfully downloaded county-level population_estimates data for year {}", year);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to download county-level population_estimates for year {}: {}", year, e.getMessage());
+    }
+
+    // Throw only if both failed
+    if (!stateSuccess && !countySuccess) {
+      throw new IOException("Failed to download population_estimates for year " + year + " at both state and county levels");
+    }
+
+    LOGGER.info("Successfully downloaded population_estimates data for year {} (state: {}, county: {})",
+        year, stateSuccess, countySuccess);
   }
 
   /**
@@ -884,8 +986,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "economic");
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
-        LOGGER.error("Error converting {} to Parquet for year {}: {}",
-            tableName, year, e.getMessage());
+        LOGGER.error("Error converting {} to Parquet for year {} (requires investigation): {}",
+            tableName, year, e.getMessage(), e);
       }
     }
   }
