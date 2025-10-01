@@ -280,7 +280,7 @@ public class CensusSchemaTest {
 
       // Test acs_education columns
       verifyTableColumns(metaData, "acs_education",
-          Arrays.asList("geoid", "year", "total_population_25_and_over"));
+          Arrays.asList("geoid", "year", "population_25_and_over"));
 
       // Test decennial_population columns
       verifyTableColumns(metaData, "decennial_population",
@@ -709,7 +709,7 @@ public class CensusSchemaTest {
       // Query for specific year
       String yearQuery =
           "SELECT * FROM census.acs_population " +
-          "WHERE year = 2023 LIMIT 1";
+          "WHERE \"year\" = 2023 LIMIT 1";
 
       try {
         ResultSet rs = stmt.executeQuery(yearQuery);
@@ -739,7 +739,6 @@ public class CensusSchemaTest {
 
     ResultSet columns = metaData.getColumns(null, "census", tableName, null);
     Set<String> foundColumns = new HashSet<>();
-
     while (columns.next()) {
       foundColumns.add(columns.getString("COLUMN_NAME").toUpperCase());
     }
