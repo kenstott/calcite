@@ -2071,8 +2071,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           continue;
         }
 
-        // Load submissions.json to check isXBRL flag
+        // Load submissions.json to check isXBRL flag and form types
         Map<String, Boolean> accessionIsXbrlMap = new HashMap<>();
+        Map<String, String> accessionFormTypeMap = new HashMap<>();
         File submissionsFile = new File(cikDir, "submissions.json");
         if (submissionsFile.exists()) {
           try {
@@ -2084,11 +2085,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               if (recent != null) {
                 JsonNode accessionNumbers = recent.get("accessionNumber");
                 JsonNode isXbrlArray = recent.get("isXBRL");
+                JsonNode formsArray = recent.get("form");
                 if (accessionNumbers != null && isXbrlArray != null && accessionNumbers.isArray() && isXbrlArray.isArray()) {
                   for (int i = 0; i < accessionNumbers.size(); i++) {
                     String accessionNumber = accessionNumbers.get(i).asText();
                     int isXbrl = isXbrlArray.get(i).asInt();
                     accessionIsXbrlMap.put(accessionNumber, isXbrl == 1);
+
+                    // Also capture form type to filter out 424B forms
+                    if (formsArray != null && formsArray.isArray() && i < formsArray.size()) {
+                      String formType = formsArray.get(i).asText();
+                      accessionFormTypeMap.put(accessionNumber, formType);
+                    }
                   }
                 }
               }
@@ -2111,6 +2119,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               normalizedAccession = accessionNumber.substring(0, 10) + "-" +
                                    accessionNumber.substring(10, 12) + "-" +
                                    accessionNumber.substring(12);
+            }
+
+            // Skip 424B forms - they are prospectuses and never contain financial XBRL data
+            // even if SEC metadata incorrectly flags them as isXBRL=1
+            String formType = accessionFormTypeMap.get(normalizedAccession);
+            if (formType != null && formType.startsWith("424B")) {
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Skipping 424B filing directory: {} (form={})", accessionDir.getName(), formType);
+              }
+              continue;
             }
 
             // Check if this accession has XBRL data according to submissions.json
