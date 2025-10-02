@@ -997,9 +997,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   private void downloadSecData(Map<String, Object> operand) {
     LOGGER.info("Starting SEC data download");
-    LOGGER.debug("downloadSecData() called - STretun ARTING SEC DATA DOWNLOAD");
+    LOGGER.debug("downloadSecData() called - STARTING SEC DATA DOWNLOAD");
 
-    // Clear download tracking for new cycle
+    // Clear download tracking for the new cycle
     downloadedInThisCycle.clear();
 
     try {
@@ -1049,8 +1049,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Get CIKs to download
+      LOGGER.info("Resolving CIKs from configuration...");
       List<String> ciks = getCiksFromConfig(operand);
-      LOGGER.debug("CIKs: {}", ciks);
+      LOGGER.info("Resolved {} CIKs", ciks.size());
       List<String> filingTypes = getFilingTypes(operand);
       LOGGER.debug("Filing types: {}", filingTypes);
       int startYear = (Integer) operand.getOrDefault("startYear", 2020);
@@ -1060,25 +1061,28 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Use SEC storage provider to download filings
       SecHttpStorageProvider provider = SecHttpStorageProvider.forEdgar();
 
+      LOGGER.info("Starting CIK filing downloads for {} companies (year range: {}-{})", ciks.size(), startYear, endYear);
+      int cikCounter = 0;
       for (String cik : ciks) {
+        cikCounter++;
+        LOGGER.info("Processing CIK {}/{}: {}", cikCounter, ciks.size(), cik);
         downloadCikFilings(provider, cik, filingTypes, startYear, endYear, baseDir);
       }
+      LOGGER.info("Completed processing all {} CIKs", ciks.size());
 
       // Wait for all downloads AND immediate processing to complete
       if (!filingProcessingFutures.isEmpty()) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Waiting for {} filing download and processing tasks to complete...", filingProcessingFutures.size());
-        }
+        LOGGER.info("Waiting for {} filing download and processing tasks to complete...", filingProcessingFutures.size());
         CompletableFuture<Void> allTasks =
             CompletableFuture.allOf(filingProcessingFutures.toArray(new CompletableFuture[0]));
         try {
           allTasks.get(Integer.MAX_VALUE, TimeUnit.MINUTES); // Effectively no timeout
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("All filing processing completed: {} files processed", completedFilingProcessing.get());
-          }
+          LOGGER.info("All filing processing completed: {} files processed", completedFilingProcessing.get());
         } catch (Exception e) {
           LOGGER.warn("Some processing tasks may have failed: " + e.getMessage());
         }
+      } else {
+        LOGGER.info("No filing processing futures to wait for");
       }
 
       // Process any remaining files that weren't converted inline (backward compatibility)
@@ -1126,21 +1130,27 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Ensure executors are initialized
     initializeExecutors();
 
+    LOGGER.info("downloadCikFilings() START for CIK: {}", cik);
+
     try {
       // Normalize CIK
       String normalizedCik = String.format("%010d", Long.parseLong(cik.replaceAll("[^0-9]", "")));
+      LOGGER.info("  Normalized CIK: {}", normalizedCik);
 
       // Create CIK directory in the configured cache location
       // Use the baseDir passed in from downloadSecData
       File cikDir = new File(baseDir, normalizedCik);
       cikDir.mkdirs();
+      LOGGER.info("  CIK directory: {}", cikDir.getAbsolutePath());
 
       // Download submissions metadata with ETag-based caching
       File submissionsFile = new File(cikDir, "submissions.json");
+      LOGGER.info("  Checking submissions file: {} (exists={})", submissionsFile.getAbsolutePath(), submissionsFile.exists());
 
       // Check if submissions are cached using manifest
       boolean needsDownload = true;
       if (cacheManifest != null && cacheManifest.isCached(normalizedCik)) {
+        LOGGER.info("  Cache manifest indicates CIK {} is cached", normalizedCik);
         String cachedFilePath = cacheManifest.getFilePath(normalizedCik);
         if (cachedFilePath != null && submissionsFile.exists()) {
           // Check if we should use conditional GET with ETag
@@ -1214,6 +1224,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                                       newETag, fileSize, refreshAfter,
                                       newETag != null ? "etag_based" : "daily_fallback");
 
+              // Save manifest immediately to avoid losing cache metadata on interruption
+              String cacheDir = getGovDataCacheDir();
+              if (cacheDir != null) {
+                String secCacheDir = cacheDir + "/sec";
+                cacheManifest.save(secCacheDir);
+              }
+
               if (newETag != null) {
                 LOGGER.info("Downloaded and cached submissions for CIK {} (ETag: {})", normalizedCik, newETag);
               } else {
@@ -1245,6 +1262,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       JsonNode filingDates = recent.get("filingDate");
       JsonNode forms = recent.get("form");
       JsonNode primaryDocuments = recent.get("primaryDocument");
+      JsonNode isXBRLArray = recent.get("isXBRL");
+      JsonNode isInlineXBRLArray = recent.get("isInlineXBRL");
 
       if (accessionNumbers == null || !accessionNumbers.isArray()) {
         LOGGER.warn("No accession numbers found for CIK " + normalizedCik);
@@ -1253,17 +1272,45 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Collect all filings to download
       List<FilingToDownload> filingsToDownload = new ArrayList<>();
+      int skippedNonXBRL = 0;
+      int skipped424B = 0;
+      int skippedFormType = 0;
+      int skippedYearRange = 0;
       for (int i = 0; i < accessionNumbers.size(); i++) {
         String accession = accessionNumbers.get(i).asText();
         String filingDate = filingDates.get(i).asText();
         String form = forms.get(i).asText();
         String primaryDoc = primaryDocuments.get(i).asText();
 
+        // Skip 424B forms first - they're prospectuses and we never want to process them
+        // even if they have XBRL data
+        if (form.startsWith("424B")) {
+          skipped424B++;
+          continue;
+        }
+
+        // Skip non-XBRL filings entirely - they have no financial data to extract
+        // This is a major optimization: prevents downloading, parsing, and manifest checking
+        // for filings that would produce no Parquet output anyway
+        boolean hasXBRL = false;
+        if (isXBRLArray != null && i < isXBRLArray.size()) {
+          int isXBRL = isXBRLArray.get(i).asInt(0);
+          hasXBRL = (isXBRL == 1);
+        }
+        if (!hasXBRL && isInlineXBRLArray != null && i < isInlineXBRLArray.size()) {
+          int isInlineXBRL = isInlineXBRLArray.get(i).asInt(0);
+          hasXBRL = (isInlineXBRL == 1);
+        }
+        if (!hasXBRL) {
+          skippedNonXBRL++;
+          continue;
+        }
+
         // Check if filing type matches and is in date range
         // Normalize form comparison (SEC uses "10K", config uses "10-K")
         String normalizedForm = form.replace("-", "");
 
-        // Use explicit whitelist for allowed forms (excludes 424B forms)
+        // Use explicit whitelist for allowed forms
         List<String> allowedForms = Arrays.asList(
             "3", "4", "5",           // Insider forms
             "10-K", "10K",           // Annual reports
@@ -1278,11 +1325,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         boolean matchesType = allowedForms.stream()
             .anyMatch(type -> type.replace("-", "").equalsIgnoreCase(normalizedForm));
         if (!matchesType) {
+          skippedFormType++;
           continue;
         }
 
         int filingYear = Integer.parseInt(filingDate.substring(0, 4));
         if (filingYear < startYear || filingYear > endYear) {
+          skippedYearRange++;
           continue;
         }
 
@@ -1291,11 +1340,46 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             primaryDoc, form, filingDate, cikDir));
       }
 
-      // Download filings in parallel with rate limiting
-      totalFilingsToProcess.addAndGet(filingsToDownload.size());
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Scheduling {} filings for processing (cache check/download) for CIK {}", filingsToDownload.size(), normalizedCik);
+      if (skipped424B > 0) {
+        LOGGER.info("Skipped {} 424B filings for CIK {} (prospectuses excluded)", skipped424B, normalizedCik);
       }
+      if (skippedNonXBRL > 0) {
+        LOGGER.info("Skipped {} non-XBRL filings for CIK {} (isXBRL=0, isInlineXBRL=0)", skippedNonXBRL, normalizedCik);
+      }
+      if (skippedFormType > 0) {
+        LOGGER.info("Skipped {} filings for CIK {} (form type not in whitelist)", skippedFormType, normalizedCik);
+      }
+      if (skippedYearRange > 0) {
+        LOGGER.info("Skipped {} filings for CIK {} (outside year range {}-{})", skippedYearRange, normalizedCik, startYear, endYear);
+      }
+
+      // Check manifest once before creating any futures
+      File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
+
+      // Quick check: if ALL filings are already processed, skip the entire CIK
+      if (manifestFile.exists() && filingsToDownload.size() > 0) {
+        boolean allFilingsProcessed = true;
+        for (FilingToDownload filing : filingsToDownload) {
+          String filingKey = filing.cik + "|" + filing.accession + "|" + filing.form + "|" + filing.filingDate;
+          if (downloadedInThisCycle.contains(filingKey)) {
+            continue; // Skip duplicates
+          }
+          FilingStatus status = checkFilingStatus(filing.cik, filing.accession, filing.form, filing.filingDate, manifestFile);
+          if (status != FilingStatus.FULLY_PROCESSED && status != FilingStatus.EXCLUDED_424B && status != FilingStatus.HAS_ALL_PARQUET) {
+            allFilingsProcessed = false;
+            break;
+          }
+        }
+
+        if (allFilingsProcessed) {
+          LOGGER.info("All {} filings for CIK {} are already fully processed - skipping entire CIK", filingsToDownload.size(), normalizedCik);
+          return; // Skip this entire CIK
+        }
+      }
+
+      // Filter filings - only create futures for those that need processing
+      List<FilingToDownload> filingsNeedingProcessing = new ArrayList<>();
+      int skippedCached = 0;
 
       for (FilingToDownload filing : filingsToDownload) {
         // Create unique key for deduplication
@@ -1309,6 +1393,29 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           continue;
         }
 
+        // Check manifest to see if this filing is already fully processed
+        FilingStatus status = checkFilingStatus(filing.cik, filing.accession, filing.form, filing.filingDate, manifestFile);
+
+        if (status == FilingStatus.FULLY_PROCESSED || status == FilingStatus.EXCLUDED_424B || status == FilingStatus.HAS_ALL_PARQUET) {
+          skippedCached++;
+          continue;
+        }
+
+        // Filing needs processing - add to list
+        filingsNeedingProcessing.add(filing);
+      }
+
+      if (skippedCached > 0) {
+        LOGGER.info("Skipped {} already-processed filings for CIK {} (checked manifest before scheduling)", skippedCached, normalizedCik);
+      }
+
+      // Download filings in parallel with rate limiting
+      totalFilingsToProcess.addAndGet(filingsNeedingProcessing.size());
+      if (filingsNeedingProcessing.size() > 0) {
+        LOGGER.info("Scheduling {} filings for download/processing for CIK {}", filingsNeedingProcessing.size(), normalizedCik);
+      }
+
+      for (FilingToDownload filing : filingsNeedingProcessing) {
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
           downloadFilingDocumentWithRateLimit(provider, filing);
           int completed = completedFilingProcessing.incrementAndGet();
@@ -1964,10 +2071,51 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           continue;
         }
 
+        // Load submissions.json to check isXBRL flag
+        Map<String, Boolean> accessionIsXbrlMap = new HashMap<>();
+        File submissionsFile = new File(cikDir, "submissions.json");
+        if (submissionsFile.exists()) {
+          try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode submissionsJson = mapper.readTree(submissionsFile);
+            JsonNode filings = submissionsJson.get("filings");
+            if (filings != null) {
+              JsonNode recent = filings.get("recent");
+              if (recent != null) {
+                JsonNode accessionNumbers = recent.get("accessionNumber");
+                JsonNode isXbrlArray = recent.get("isXBRL");
+                if (accessionNumbers != null && isXbrlArray != null && accessionNumbers.isArray() && isXbrlArray.isArray()) {
+                  for (int i = 0; i < accessionNumbers.size(); i++) {
+                    String accessionNumber = accessionNumbers.get(i).asText();
+                    int isXbrl = isXbrlArray.get(i).asInt();
+                    accessionIsXbrlMap.put(accessionNumber, isXbrl == 1);
+                  }
+                }
+              }
+            }
+          } catch (Exception e) {
+            LOGGER.warn("Failed to load submissions.json for CIK {}: {}", normalizedCik, e.getMessage());
+          }
+        }
+
         // Process each filing in the CIK directory
         File[] accessionDirs = cikDir.listFiles(File::isDirectory);
         if (accessionDirs != null) {
           for (File accessionDir : accessionDirs) {
+            String accessionNumber = accessionDir.getName();
+
+            // Normalize accession number to match submissions.json format (add dashes)
+            // Directory: 000119312521025910 → Submissions: 0001193125-21-025910
+            String normalizedAccession = accessionNumber;
+            if (accessionNumber.length() == 18 && !accessionNumber.contains("-")) {
+              normalizedAccession = accessionNumber.substring(0, 10) + "-" +
+                                   accessionNumber.substring(10, 12) + "-" +
+                                   accessionNumber.substring(12);
+            }
+
+            // Check if this accession has XBRL data according to submissions.json
+            Boolean isXbrl = accessionIsXbrlMap.get(normalizedAccession);
+
             // Find XBRL and HTML files in this accession directory
             // Exclude macOS metadata files that start with ._
             File[] xbrlFiles = accessionDir.listFiles((dir, name) ->
@@ -1977,12 +2125,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
             if (xbrlFiles != null) {
               if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Found {} XBRL/HTML files in {}", xbrlFiles.length, accessionDir.getName());
-                for (File xbrlFile : xbrlFiles) {
-                  LOGGER.debug("  Adding for conversion: {}", xbrlFile.getName());
-                }
+                LOGGER.debug("Found {} XBRL/HTML files in {} (isXBRL={})", xbrlFiles.length, accessionDir.getName(), isXbrl);
               }
               for (File xbrlFile : xbrlFiles) {
+                // Skip HTML files if isXBRL flag is false (424B forms and other non-XBRL filings)
+                if ((xbrlFile.getName().endsWith(".htm") || xbrlFile.getName().endsWith(".html"))
+                    && Boolean.FALSE.equals(isXbrl)) {
+                  if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("  Skipping non-XBRL HTML file: {}", xbrlFile.getName());
+                  }
+                  continue;
+                }
+
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("  Adding for conversion: {}", xbrlFile.getName());
+                }
                 xbrlFilesToConvert.add(xbrlFile);
               }
             } else {
