@@ -35,10 +35,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -904,15 +906,68 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Include vectorized status in manifest key
       String fileTypes = hasVectorized ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
-      String manifestKey = cik + "|" + accession + "|" + fileTypes + "|" + System.currentTimeMillis();
+      String entryPrefix = cik + "|" + accession + "|";
+      String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
       File manifestFile = new File(baseDirectory, "processed_filings.manifest");
       synchronized (SecSchemaFactory.class) {
-        try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
-          pw.println(manifestKey);
+        // Check if this entry already exists in the manifest (prevent duplicates)
+        boolean alreadyExists = false;
+        if (manifestFile.exists()) {
+          try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+              if (line.startsWith(entryPrefix)) {
+                // Entry already exists - check if we need to upgrade it
+                if (hasVectorized && !line.contains("PROCESSED_WITH_VECTORS")) {
+                  // Need to upgrade from PROCESSED to PROCESSED_WITH_VECTORS
+                  // This is handled by rewriting below
+                } else {
+                  // Already has the correct status
+                  alreadyExists = true;
+                  if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Manifest entry already exists: {}", line);
+                  }
+                  break;
+                }
+              }
+            }
+          }
         }
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Added to manifest after Parquet conversion: {} (vectorized={})", manifestKey, hasVectorized);
+
+        // Only write if new or needs upgrade
+        if (!alreadyExists) {
+          // If upgrading, we need to rewrite the entire manifest to remove old entry
+          if (manifestFile.exists()) {
+            List<String> updatedLines = new ArrayList<>();
+            try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+              String line;
+              while ((line = reader.readLine()) != null) {
+                // Skip old entries for this CIK|ACCESSION
+                if (!line.startsWith(entryPrefix)) {
+                  updatedLines.add(line);
+                }
+              }
+            }
+            // Add new entry
+            updatedLines.add(manifestKey);
+
+            // Write all lines back
+            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, false))) {
+              for (String line : updatedLines) {
+                pw.println(line);
+              }
+            }
+          } else {
+            // New manifest file
+            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
+              pw.println(manifestKey);
+            }
+          }
+
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Added to manifest after Parquet conversion: {} (vectorized={})", manifestKey, hasVectorized);
+          }
         }
       }
     } catch (Exception e) {
@@ -1352,18 +1407,30 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Skipped {} filings for CIK {} (outside year range {}-{})", skippedYearRange, normalizedCik, startYear, endYear);
       }
 
-      // Check manifest once before creating any futures
+      // Load manifest once for ALL filings in this CIK (huge performance improvement)
+      // Reading a 476K-line file on every filing check is wasteful and causes stale reads
       File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
+      Set<String> processedFilingsManifest = new HashSet<>();
+      if (manifestFile.exists()) {
+        try {
+          processedFilingsManifest = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Loaded {} entries from manifest for CIK {}", processedFilingsManifest.size(), normalizedCik);
+          }
+        } catch (IOException e) {
+          LOGGER.warn("Failed to load manifest file: " + e.getMessage());
+        }
+      }
 
       // Quick check: if ALL filings are already processed, skip the entire CIK
-      if (manifestFile.exists() && filingsToDownload.size() > 0) {
+      if (!processedFilingsManifest.isEmpty() && filingsToDownload.size() > 0) {
         boolean allFilingsProcessed = true;
         for (FilingToDownload filing : filingsToDownload) {
           String filingKey = filing.cik + "|" + filing.accession + "|" + filing.form + "|" + filing.filingDate;
           if (downloadedInThisCycle.contains(filingKey)) {
             continue; // Skip duplicates
           }
-          FilingStatus status = checkFilingStatus(filing.cik, filing.accession, filing.form, filing.filingDate, manifestFile);
+          FilingStatus status = checkFilingStatusInMemory(filing.cik, filing.accession, filing.form, filing.filingDate, processedFilingsManifest);
           if (status != FilingStatus.FULLY_PROCESSED && status != FilingStatus.EXCLUDED_424B && status != FilingStatus.HAS_ALL_PARQUET) {
             allFilingsProcessed = false;
             break;
@@ -1393,7 +1460,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
 
         // Check manifest to see if this filing is already fully processed
-        FilingStatus status = checkFilingStatus(filing.cik, filing.accession, filing.form, filing.filingDate, manifestFile);
+        FilingStatus status = checkFilingStatusInMemory(filing.cik, filing.accession, filing.form, filing.filingDate, processedFilingsManifest);
 
         if (status == FilingStatus.FULLY_PROCESSED || status == FilingStatus.EXCLUDED_424B || status == FilingStatus.HAS_ALL_PARQUET) {
           skippedCached++;
@@ -1401,6 +1468,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
 
         // Filing needs processing - add to list
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("DEBUG: Filing needs processing - CIK: {}, Accession: {}, Form: {}, Status: {}",
+              filing.cik, filing.accession, filing.form, status);
+        }
         filingsNeedingProcessing.add(filing);
       }
 
@@ -1504,6 +1575,74 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // if (hasAllParquetFiles(cik, accession, form, filingDate)) {
       //   return FilingStatus.HAS_ALL_PARQUET;
       // }
+
+      return FilingStatus.NEEDS_PROCESSING;
+    } catch (Exception e) {
+      LOGGER.debug("Error checking filing status: " + e.getMessage());
+      return FilingStatus.NEEDS_PROCESSING;
+    }
+  }
+
+  /**
+   * Check filing status using an in-memory manifest (performance-optimized version).
+   * This avoids repeated file I/O and stale reads by working with a pre-loaded manifest.
+   *
+   * IMPORTANT: Manifest may contain duplicate entries for the same filing (historical issue).
+   * We must scan ALL entries and use the LATEST status (PROCESSED_WITH_VECTORS takes precedence).
+   */
+  /**
+   * Check if the given form type is allowed for XBRL conversion.
+   * Excludes 424B prospectuses and S-* registration statements.
+   */
+  private boolean isFormTypeAllowed(String formType) {
+    // Normalize form type (remove dashes and slashes)
+    String normalizedForm = formType.replace("-", "").replace("/", "");
+
+    // Whitelist of allowed forms
+    List<String> allowedForms = Arrays.asList(
+        "3", "4", "5",           // Insider forms
+        "10K",                   // Annual reports
+        "10Q",                   // Quarterly reports
+        "8K",                    // Current reports
+        "8KA",                   // Amended current reports
+        "DEF14A"                 // Proxy statements
+    );
+
+    return allowedForms.stream()
+        .anyMatch(type -> type.equalsIgnoreCase(normalizedForm));
+  }
+
+  private FilingStatus checkFilingStatusInMemory(String cik, String accession, String form,
+                                                  String filingDate, Set<String> processedFilingsManifest) {
+    try {
+      // Scan ALL manifest entries for this filing (don't stop at first match!)
+      // Duplicate entries exist due to historical re-processing, need to find latest status
+      boolean isInManifest = false;
+      boolean hasVectorized = false;
+      for (String entry : processedFilingsManifest) {
+        if (entry.startsWith(cik + "|" + accession + "|")) {
+          isInManifest = true;
+          // Check if THIS entry has vectorized status
+          if (entry.contains("PROCESSED_WITH_VECTORS")) {
+            hasVectorized = true;
+            // Don't break - keep scanning to find all entries
+          }
+        }
+      }
+
+      // Check if text similarity is enabled
+      Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+      boolean needsVectorized = textSimilarityConfig != null &&
+          Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+
+      if (LOGGER.isDebugEnabled() && isInManifest) {
+        LOGGER.debug("DEBUG: checkFilingStatusInMemory - CIK={}, Accession={}, isInManifest={}, hasVectorized={}, needsVectorized={}",
+            cik, accession, isInManifest, hasVectorized, needsVectorized);
+      }
+
+      if (isInManifest && (!needsVectorized || hasVectorized)) {
+        return FilingStatus.FULLY_PROCESSED;
+      }
 
       return FilingStatus.NEEDS_PROCESSING;
     } catch (Exception e) {
@@ -2059,6 +2198,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       List<File> xbrlFilesToConvert = new ArrayList<>();
       int skipped424BFilings = 0;  // Track excluded 424B and S-* forms
 
+      // Load manifest once for performance (avoid repeated file I/O)
+      File manifestFile = new File(secRawDir, "processed_filings.manifest");
+      Set<String> processedFilingsManifest = new HashSet<>();
+      if (manifestFile.exists()) {
+        try {
+          processedFilingsManifest = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+          LOGGER.info("Loaded {} entries from manifest", processedFilingsManifest.size());
+        } catch (IOException e) {
+          LOGGER.warn("Failed to load manifest file: " + e.getMessage());
+        }
+      }
+
       // Process all downloaded XBRL files
       for (String cik : ciks) {
         String normalizedCik = String.format("%010d", Long.parseLong(cik.replaceAll("[^0-9]", "")));
@@ -2150,18 +2301,40 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 LOGGER.debug("Found {} XBRL/HTML files in {} (isXBRL={})", xbrlFiles.length, accessionDir.getName(), isXbrl);
               }
               for (File xbrlFile : xbrlFiles) {
-                // Skip HTML files if isXBRL flag is false (424B forms and other non-XBRL filings)
-                if ((xbrlFile.getName().endsWith(".htm") || xbrlFile.getName().endsWith(".html"))
-                    && Boolean.FALSE.equals(isXbrl)) {
+                // Use submissions.json to determine if this filing has XBRL data
+                // Skip processing if isXBRL flag is false (no XBRL data at all)
+                if (Boolean.FALSE.equals(isXbrl)) {
                   if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("  Skipping non-XBRL HTML file: {}", xbrlFile.getName());
+                    LOGGER.debug("  Skipping non-XBRL filing: {} (isXBRL=false)", xbrlFile.getName());
                   }
                   continue;
                 }
 
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug("  Adding for conversion: {}", xbrlFile.getName());
+                // Check form type against whitelist (skip 424B prospectuses and S-* registration statements)
+                // Also skip files where form type cannot be determined (formType == null)
+                if (formType == null) {
+                  LOGGER.warn("  Skipping file with unknown form type: {} (accession={})", xbrlFile.getName(), normalizedAccession);
+                  continue;
                 }
+                if (!isFormTypeAllowed(formType)) {
+                  LOGGER.info("  Skipping filing type not in whitelist: {} (form={})", xbrlFile.getName(), formType);
+                  continue;
+                }
+
+                // Check manifest to see if this filing is already fully processed
+                FilingStatus status = checkFilingStatusInMemory(normalizedCik, normalizedAccession,
+                    formType != null ? formType : "UNKNOWN", "", processedFilingsManifest);
+
+                if (status == FilingStatus.FULLY_PROCESSED) {
+                  if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("  Skipping already processed filing: {} (CIK={}, Accession={})",
+                        xbrlFile.getName(), normalizedCik, normalizedAccession);
+                  }
+                  continue;
+                }
+
+                LOGGER.info("  SCHEDULING FOR CONVERSION: {} (CIK={}, Accession={}, Status={})",
+                    xbrlFile.getName(), normalizedCik, normalizedAccession, status);
                 xbrlFilesToConvert.add(xbrlFile);
               }
             } else {
