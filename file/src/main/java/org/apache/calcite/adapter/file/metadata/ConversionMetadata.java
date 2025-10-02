@@ -1299,44 +1299,59 @@ public class ConversionMetadata {
       return;
     }
 
-    File lockFile = new File(metadataFile.getParentFile(), metadataFile.getName() + ".lock");
+    // Get JVM-level lock for this metadata file
+    String lockKey = metadataFile.getAbsolutePath();
+    ReentrantReadWriteLock jvmLock = JVM_LOCKS.computeIfAbsent(lockKey,
+        k -> new ReentrantReadWriteLock());
 
-    try (RandomAccessFile raf = new RandomAccessFile(lockFile, "rw");
-         FileChannel channel = raf.getChannel()) {
+    // Acquire JVM-level read lock first to prevent OverlappingFileLockException
+    jvmLock.readLock().lock();
+    try {
+      File lockFile = new File(metadataFile.getParentFile(), metadataFile.getName() + ".lock");
 
-      // Acquire shared lock for reading with retry
-      try (FileLock lock = acquireLockWithRetry(channel, 0, Long.MAX_VALUE, true)) {
-        @SuppressWarnings("unchecked")
-        Map<String, ConversionRecord> loaded =
-            MAPPER.readValue(
-                metadataFile, MAPPER.getTypeFactory().constructMapType(HashMap.class,
-                String.class, ConversionRecord.class));
+      try (RandomAccessFile raf = new RandomAccessFile(lockFile, "rw");
+           FileChannel channel = raf.getChannel()) {
 
-        conversions.putAll(loaded);
-        LOGGER.debug("Loaded {} conversion records from metadata", loaded.size());
+        // Now safe to acquire file lock - no other thread in this JVM will try simultaneously
+        try (FileLock lock = acquireLockWithRetry(channel, 0, Long.MAX_VALUE, true)) {
+          @SuppressWarnings("unchecked")
+          Map<String, ConversionRecord> loaded =
+              MAPPER.readValue(
+                  metadataFile, MAPPER.getTypeFactory().constructMapType(HashMap.class,
+                  String.class, ConversionRecord.class));
 
-        // Clean up entries for files that no longer exist
-        boolean needsCleanup = false;
-        for (Map.Entry<String, ConversionRecord> entry : loaded.entrySet()) {
-          File convertedFile = new File(entry.getKey());
-          File originalFile = new File(entry.getValue().originalFile);
-          if (convertedFile.exists() && originalFile.exists()) {
-            conversions.put(entry.getKey(), entry.getValue());
-          } else {
-            LOGGER.debug("Skipping stale conversion record: {}", entry.getKey());
-            needsCleanup = true;
+          conversions.putAll(loaded);
+          LOGGER.debug("Loaded {} conversion records from metadata", loaded.size());
+
+          // Clean up entries for files that no longer exist
+          boolean needsCleanup = false;
+          for (Map.Entry<String, ConversionRecord> entry : loaded.entrySet()) {
+            File convertedFile = new File(entry.getKey());
+            File originalFile = new File(entry.getValue().originalFile);
+            if (convertedFile.exists() && originalFile.exists()) {
+              conversions.put(entry.getKey(), entry.getValue());
+            } else {
+              LOGGER.debug("Skipping stale conversion record: {}", entry.getKey());
+              needsCleanup = true;
+            }
+          }
+
+          // Save cleaned version if needed (will use exclusive lock)
+          if (needsCleanup) {
+            // Release shared lock before acquiring exclusive lock
+            lock.release();
+            // Release JVM read lock before calling saveMetadata (which needs write lock)
+            jvmLock.readLock().unlock();
+            saveMetadata();
+            // Re-acquire read lock to maintain lock state for finally block
+            jvmLock.readLock().lock();
           }
         }
-
-        // Save cleaned version if needed (will use exclusive lock)
-        if (needsCleanup) {
-          // Release shared lock before acquiring exclusive lock
-          lock.release();
-          saveMetadata();
-        }
+      } catch (Exception e) {
+        LOGGER.error("Failed to load conversion metadata", e);
       }
-    } catch (Exception e) {
-      LOGGER.error("Failed to load conversion metadata", e);
+    } finally {
+      jvmLock.readLock().unlock();
     }
   }
 
@@ -1344,7 +1359,11 @@ public class ConversionMetadata {
    * Saves metadata to disk with file locking for concurrent access.
    */
   private void saveMetadata() {
-    File tempFile = new File(metadataFile.getParentFile(), metadataFile.getName() + ".tmp");
+    // Use unique temp file per thread to avoid race conditions
+    // Combine thread hashcode with nanotime for uniqueness across concurrent threads
+    long uniqueId = System.nanoTime() + Thread.currentThread().hashCode();
+    File tempFile = new File(metadataFile.getParentFile(),
+        metadataFile.getName() + ".tmp." + uniqueId);
     File lockFile = new File(metadataFile.getParentFile(), metadataFile.getName() + ".lock");
 
     try (RandomAccessFile raf = new RandomAccessFile(lockFile, "rw");
