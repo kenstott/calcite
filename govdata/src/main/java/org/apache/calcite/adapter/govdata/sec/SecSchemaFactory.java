@@ -1341,7 +1341,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       if (skipped424B > 0) {
-        LOGGER.info("Skipped {} 424B filings for CIK {} (prospectuses excluded)", skipped424B, normalizedCik);
+        LOGGER.info("Skipped {} excluded filings for CIK {} (424B prospectuses and S-* registration statements)", skipped424B, normalizedCik);
       }
       if (skippedNonXBRL > 0) {
         LOGGER.info("Skipped {} non-XBRL filings for CIK {} (isXBRL=0, isInlineXBRL=0)", skippedNonXBRL, normalizedCik);
@@ -2058,6 +2058,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Collect all XBRL files to convert
       List<File> xbrlFilesToConvert = new ArrayList<>();
+      int skipped424BFilings = 0;  // Track excluded 424B and S-* forms
 
       // Process all downloaded XBRL files
       for (String cik : ciks) {
@@ -2121,13 +2122,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                                    accessionNumber.substring(12);
             }
 
-            // Skip 424B forms - they are prospectuses and never contain financial XBRL data
-            // even if SEC metadata incorrectly flags them as isXBRL=1
+            // Skip 424B and S-* forms - prospectuses and registration statements
+            // that never contain useful financial XBRL data, even if SEC metadata
+            // incorrectly flags them as isXBRL=1
             String formType = accessionFormTypeMap.get(normalizedAccession);
-            if (formType != null && formType.startsWith("424B")) {
+            if (formType != null && (formType.startsWith("424B") || formType.startsWith("S-"))) {
               if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Skipping 424B filing directory: {} (form={})", accessionDir.getName(), formType);
+                LOGGER.debug("Skipping {} filing directory: {} (excluded form type)",
+                    formType, accessionDir.getName());
               }
+              skipped424BFilings++;  // Track all excluded filings
               continue;
             }
 
@@ -2273,6 +2277,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       allConversions.get(30, TimeUnit.MINUTES); // Wait up to 30 minutes
 
       LOGGER.info("Processed " + completedConversions.get() + " XBRL files into Parquet tables in: " + secParquetDir);
+      if (skipped424BFilings > 0) {
+        LOGGER.info("Skipped {} excluded filings in XBRL conversion phase (424B prospectuses and S-* registration statements)", skipped424BFilings);
+      }
 
       // Bulk cleanup of macOS metadata files at the end of processing
       cleanupAllMacOSMetadataFiles(secParquetDir);
