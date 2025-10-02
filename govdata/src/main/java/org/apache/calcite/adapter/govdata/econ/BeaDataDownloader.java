@@ -2553,6 +2553,28 @@ public class BeaDataDownloader {
 
     List<Map<String, Object>> records = new ArrayList<>();
 
+    // Check for simplified format (custom download format)
+    JsonNode tradeStatsArray = rootNode.path("trade_statistics");
+    if (tradeStatsArray.isArray() && tradeStatsArray.size() > 0) {
+      for (JsonNode item : tradeStatsArray) {
+        Map<String, Object> record = new HashMap<>();
+        record.put("table_id", item.path("table_id").asText());
+        record.put("line_number", item.path("line_number").asInt());
+        record.put("line_description", item.path("line_description").asText());
+        record.put("series_code", item.path("series_code").asText());
+        record.put("year", item.path("year").asInt());
+        record.put("value", item.path("value").asDouble());
+        record.put("units", item.path("units").asText("Billions of dollars"));
+        record.put("frequency", item.path("frequency").asText("A"));
+        record.put("trade_type", item.path("trade_type").asText());
+        record.put("category", item.path("category").asText());
+        record.put("trade_balance", item.path("trade_balance").asDouble(0.0));
+        records.add(record);
+      }
+      return records;
+    }
+
+    // Fall back to BEA API format
     JsonNode results = rootNode.path("BEAAPI").path("Results");
     if (results.isArray() && results.size() > 0) {
       JsonNode data = results.get(0).path("Data");
@@ -2583,7 +2605,7 @@ public class BeaDataDownloader {
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
         .name("table_id").type().stringType().noDefault()
-        .name("line_number").type().stringType().noDefault()
+        .name("line_number").type().intType().noDefault()
         .name("line_description").type().stringType().noDefault()
         .name("series_code").type().stringType().noDefault()
         .name("value").type().doubleType().noDefault()
@@ -2773,6 +2795,26 @@ public class BeaDataDownloader {
 
     List<Map<String, Object>> records = new ArrayList<>();
 
+    // Check for simplified format (custom download format)
+    JsonNode industryGdpArray = rootNode.path("industry_gdp");
+    if (industryGdpArray.isArray() && industryGdpArray.size() > 0) {
+      for (JsonNode item : industryGdpArray) {
+        Map<String, Object> record = new HashMap<>();
+        record.put("table_id", item.path("table_id").asText());
+        record.put("year", item.path("year").asInt());
+        record.put("quarter", item.path("quarter").asText());
+        record.put("industry_code", item.path("industry_code").asText());
+        record.put("industry_description", item.path("industry_description").asText());
+        record.put("value", item.path("value").asDouble());
+        record.put("units", item.path("units").asText("Billions of dollars"));
+        record.put("frequency", item.path("frequency").asText("A"));
+        record.put("note_ref", item.path("note_ref").asText(""));
+        records.add(record);
+      }
+      return records;
+    }
+
+    // Fall back to BEA API format
     JsonNode results = rootNode.path("BEAAPI").path("Results");
     if (results.isArray() && results.size() > 0) {
       JsonNode data = results.get(0).path("Data");
@@ -2800,27 +2842,27 @@ public class BeaDataDownloader {
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
         .name("table_id").type().stringType().noDefault()
-        .name("line_number").type().stringType().noDefault()
-        .name("line_description").type().stringType().noDefault()
-        .name("series_code").type().stringType().noDefault()
+        .name("quarter").type().stringType().noDefault()
+        .name("industry_code").type().stringType().noDefault()
+        .name("industry_description").type().stringType().noDefault()
         .name("value").type().doubleType().noDefault()
         .name("units").type().stringType().noDefault()
         .name("frequency").type().stringType().noDefault()
-        .name("industry").type().stringType().noDefault()
+        .name("note_ref").type().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecords
     List<GenericRecord> avroRecords = new ArrayList<>();
     for (Map<String, Object> record : records) {
       GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("table_id", record.get("table_id"));
-      avroRecord.put("line_number", record.get("line_number"));
-      avroRecord.put("line_description", record.get("line_description"));
-      avroRecord.put("series_code", record.get("series_code"));
+      avroRecord.put("table_id", String.valueOf(record.get("table_id")));
+      avroRecord.put("quarter", record.get("quarter"));
+      avroRecord.put("industry_code", record.get("industry_code"));
+      avroRecord.put("industry_description", record.get("industry_description"));
       avroRecord.put("value", record.get("value"));
       avroRecord.put("units", record.get("units"));
       avroRecord.put("frequency", record.get("frequency"));
-      avroRecord.put("industry", record.get("industry"));
+      avroRecord.put("note_ref", record.get("note_ref"));
       avroRecords.add(avroRecord);
     }
 
