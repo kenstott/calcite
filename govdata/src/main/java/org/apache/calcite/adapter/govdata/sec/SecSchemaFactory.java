@@ -1311,16 +1311,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String normalizedForm = form.replace("-", "");
 
         // Use explicit whitelist for allowed forms
+        // NOTE: S-* forms (S-3, S-4, S-8, etc.) are registration statements that rarely
+        // contain useful financial XBRL data and are explicitly excluded
         List<String> allowedForms = Arrays.asList(
             "3", "4", "5",           // Insider forms
             "10-K", "10K",           // Annual reports
             "10-Q", "10Q",           // Quarterly reports
             "8-K", "8K",             // Current reports
             "8-K/A", "8KA",          // Amended current reports
-            "DEF 14A", "DEF14A",     // Proxy statements
-            "S-3", "S3",             // Registration statements
-            "S-4", "S4",             // Business combination registration
-            "S-8", "S8"              // Employee benefit plan registration
+            "DEF 14A", "DEF14A"      // Proxy statements
         );
         boolean matchesType = allowedForms.stream()
             .anyMatch(type -> type.replace("-", "").equalsIgnoreCase(normalizedForm));
@@ -1341,7 +1340,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       if (skipped424B > 0) {
-        LOGGER.info("Skipped {} excluded filings for CIK {} (424B prospectuses and S-* registration statements)", skipped424B, normalizedCik);
+        LOGGER.info("Skipped {} 424B filings for CIK {} (prospectuses excluded)", skipped424B, normalizedCik);
       }
       if (skippedNonXBRL > 0) {
         LOGGER.info("Skipped {} non-XBRL filings for CIK {} (isXBRL=0, isInlineXBRL=0)", skippedNonXBRL, normalizedCik);
@@ -2122,16 +2121,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                                    accessionNumber.substring(12);
             }
 
-            // Skip 424B and S-* forms - prospectuses and registration statements
-            // that never contain useful financial XBRL data, even if SEC metadata
-            // incorrectly flags them as isXBRL=1
+            // Skip 424B forms - prospectuses that never contain useful financial XBRL data
+            // even if SEC metadata incorrectly flags them as isXBRL=1
+            // Note: This is a safety check for cached files; download phase now filters these
             String formType = accessionFormTypeMap.get(normalizedAccession);
-            if (formType != null && (formType.startsWith("424B") || formType.startsWith("S-"))) {
+            if (formType != null && formType.startsWith("424B")) {
               if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Skipping {} filing directory: {} (excluded form type)",
-                    formType, accessionDir.getName());
+                LOGGER.debug("Skipping 424B filing directory: {} (prospectus)",
+                    accessionDir.getName());
               }
-              skipped424BFilings++;  // Track all excluded filings
+              skipped424BFilings++;
               continue;
             }
 
@@ -2278,7 +2277,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       LOGGER.info("Processed " + completedConversions.get() + " XBRL files into Parquet tables in: " + secParquetDir);
       if (skipped424BFilings > 0) {
-        LOGGER.info("Skipped {} excluded filings in XBRL conversion phase (424B prospectuses and S-* registration statements)", skipped424BFilings);
+        LOGGER.info("Skipped {} 424B filings in XBRL conversion phase (prospectuses excluded from cache)", skipped424BFilings);
       }
 
       // Bulk cleanup of macOS metadata files at the end of processing
