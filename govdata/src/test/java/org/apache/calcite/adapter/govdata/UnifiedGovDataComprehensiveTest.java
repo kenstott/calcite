@@ -43,9 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Comprehensive test for all three government data sources (SEC, ECON, GEO).
+ * Comprehensive test for all four government data sources (SEC, ECON, GEO, CENSUS).
  * Tests with 5 years of data (2021-2025) for all 30 DJIA companies.
- * Validates all tables are discoverable and queryable across all three schemas.
+ * Validates all tables are discoverable and queryable across all four schemas.
  */
 @Tag("integration")
 public class UnifiedGovDataComprehensiveTest {
@@ -115,6 +115,23 @@ public class UnifiedGovDataComprehensiveTest {
       "tract_zip_crosswalk"
   ));
 
+  /**
+   * CENSUS schema expected tables (21 total).
+   */
+  private static final Set<String> CENSUS_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
+      // ACS tables (15)
+      "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+      "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+      "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
+      "acs_veterans", "acs_migration", "acs_occupation",
+      // Decennial tables (3)
+      "decennial_population", "decennial_demographics", "decennial_housing",
+      // Economic tables (2)
+      "economic_census", "county_business_patterns",
+      // Population estimates (1)
+      "population_estimates"
+  ));
+
   @BeforeAll
   public static void setup() {
     TestEnvironmentLoader.ensureLoaded();
@@ -122,7 +139,7 @@ public class UnifiedGovDataComprehensiveTest {
 
   @Test
   public void testAllThreeDataSourcesComprehensive() throws Exception {
-    // Create comprehensive model with all three schemas
+    // Create comprehensive model with all four schemas
     String modelJson =
         "{" +
         "  \"version\": \"1.0\"," +
@@ -178,6 +195,18 @@ public class UnifiedGovDataComprehensiveTest {
         "        \"executionEngine\": \"DUCKDB\"," +
         "        \"autoDownload\": true" +
         "      }" +
+        "    }," +
+        "    {" +
+        "      \"name\": \"census\"," +
+        "      \"type\": \"custom\"," +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "      \"operand\": {" +
+        "        \"dataSource\": \"census\"," +
+        "        \"executionEngine\": \"DUCKDB\"," +
+        "        \"autoDownload\": true," +
+        "        \"startYear\": 2019," +
+        "        \"endYear\": 2023" +
+        "      }" +
         "    }" +
         "  ]" +
         "}";
@@ -192,7 +221,7 @@ public class UnifiedGovDataComprehensiveTest {
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
       LOGGER.info("\n{}", createRepeatedString("=", 80));
       LOGGER.info(" UNIFIED GOVERNMENT DATA COMPREHENSIVE TEST");
-      LOGGER.info(" Testing SEC (MSFT + AAPL, 2021-2025), ECON, and GEO schemas");
+      LOGGER.info(" Testing SEC (MSFT + AAPL, 2021-2025), ECON, GEO, and CENSUS schemas");
       LOGGER.info("{}", "=".repeat(80));
 
       Map<String, TestResult> results = new HashMap<>();
@@ -205,6 +234,9 @@ public class UnifiedGovDataComprehensiveTest {
 
       // Test GEO schema
       results.put("GEO", validateSchema(conn, "geo", GEO_EXPECTED_TABLES));
+
+      // Test CENSUS schema
+      results.put("CENSUS", validateSchema(conn, "census", CENSUS_EXPECTED_TABLES));
 
       // Test cross-schema queries
       boolean crossSchemaSuccess = testCrossSchemaQueries(conn);
@@ -223,7 +255,8 @@ public class UnifiedGovDataComprehensiveTest {
       if (!overallSuccess) {
         fail("Comprehensive test failed. See summary above for details.");
       } else {
-        LOGGER.info("\n✅ ALL TESTS PASSED - All {} tables across SEC, ECON, and GEO are fully functional!", 41);
+        LOGGER.info("\n✅ ALL TESTS PASSED - All {} tables across SEC, ECON, GEO, and CENSUS are fully functional!",
+            SEC_EXPECTED_TABLES.size() + ECON_EXPECTED_TABLES.size() + GEO_EXPECTED_TABLES.size() + CENSUS_EXPECTED_TABLES.size());
       }
     }
   }
@@ -504,7 +537,8 @@ public class UnifiedGovDataComprehensiveTest {
     LOGGER.info(" COMPREHENSIVE TEST SUMMARY");
     LOGGER.info("{}", "=".repeat(80));
 
-    int totalExpected = SEC_EXPECTED_TABLES.size() + ECON_EXPECTED_TABLES.size() + GEO_EXPECTED_TABLES.size();
+    int totalExpected = SEC_EXPECTED_TABLES.size() + ECON_EXPECTED_TABLES.size() +
+                        GEO_EXPECTED_TABLES.size() + CENSUS_EXPECTED_TABLES.size();
     int totalDiscovered = 0;
     int totalQueryable = 0;
     int totalFailed = 0;
@@ -516,9 +550,10 @@ public class UnifiedGovDataComprehensiveTest {
     }
 
     LOGGER.info("\n📊 Overall Statistics:");
-    LOGGER.info("  Total Expected Tables: {} (SEC: {}, ECON: {}, GEO: {})",
+    LOGGER.info("  Total Expected Tables: {} (SEC: {}, ECON: {}, GEO: {}, CENSUS: {})",
                       totalExpected, SEC_EXPECTED_TABLES.size(),
-                      ECON_EXPECTED_TABLES.size(), GEO_EXPECTED_TABLES.size());
+                      ECON_EXPECTED_TABLES.size(), GEO_EXPECTED_TABLES.size(),
+                      CENSUS_EXPECTED_TABLES.size());
     LOGGER.info("  Total Discovered: {}", totalDiscovered);
     LOGGER.info("  Total Queryable: {}", totalQueryable);
     LOGGER.info("  Total Failed: {}", totalFailed);
@@ -540,7 +575,7 @@ public class UnifiedGovDataComprehensiveTest {
     LOGGER.info("\n{}", createRepeatedString("=", 80));
     if (allPassed) {
       LOGGER.info(" ✅ COMPREHENSIVE TEST: PASSED");
-      LOGGER.info(" All {} tables across 3 schemas are fully functional!", totalExpected);
+      LOGGER.info(" All {} tables across 4 schemas are fully functional!", totalExpected);
     } else {
       LOGGER.error(" ❌ COMPREHENSIVE TEST: FAILED");
       if (totalDiscovered < totalExpected) {
@@ -561,6 +596,7 @@ public class UnifiedGovDataComprehensiveTest {
       case "SEC": return SEC_EXPECTED_TABLES.size();
       case "ECON": return ECON_EXPECTED_TABLES.size();
       case "GEO": return GEO_EXPECTED_TABLES.size();
+      case "CENSUS": return CENSUS_EXPECTED_TABLES.size();
       default: return 0;
     }
   }
