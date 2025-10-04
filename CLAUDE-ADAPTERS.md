@@ -6,7 +6,7 @@
 ```
 DuckDB Engine = Special case of Parquet Engine
    ↓
-Converts everything to Parquet internally  
+Converts everything to Parquet internally
    ↓
 Creates DuckDB catalog over Parquet files
    ↓
@@ -16,11 +16,11 @@ Always uses 1 catalog: "memory"
 ### Common DuckDB Error Patterns
 ```
 Error: "catalog 'X' does not exist"
-→ DuckDB tried to find 'X' as: table → schema → catalog  
+→ DuckDB tried to find 'X' as: table → schema → catalog
 → Exhausted all lookups in "memory" catalog
 → Usually means table/schema name is wrong
 
-Error: "table 'Y' does not exist"  
+Error: "table 'Y' does not exist"
 → Check table configuration in model JSON
 → Verify parquet files exist in expected directory structure
 ```
@@ -29,7 +29,7 @@ Error: "table 'Y' does not exist"
 ```bash
 # Test all file engines systematically
 CALCITE_FILE_ENGINE_TYPE=PARQUET gtimeout 1800 ./gradlew :file:test --continue --console=plain
-CALCITE_FILE_ENGINE_TYPE=DUCKDB gtimeout 1800 ./gradlew :file:test --continue --console=plain  
+CALCITE_FILE_ENGINE_TYPE=DUCKDB gtimeout 1800 ./gradlew :file:test --continue --console=plain
 CALCITE_FILE_ENGINE_TYPE=LINQ4J gtimeout 1800 ./gradlew :file:test --continue --console=plain
 CALCITE_FILE_ENGINE_TYPE=ARROW gtimeout 1800 ./gradlew :file:test --continue --console=plain
 ```
@@ -39,7 +39,7 @@ CALCITE_FILE_ENGINE_TYPE=ARROW gtimeout 1800 ./gradlew :file:test --continue --c
 # Check what DuckDB sees
 duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/to/file.parquet')"
 
-# Verify parquet file structure  
+# Verify parquet file structure
 duckdb -c "SELECT COUNT(*) FROM read_parquet('/path/to/file.parquet')"
 
 # Test partitioned table access
@@ -52,7 +52,7 @@ duckdb -c "SELECT * FROM read_parquet('/path/cik=*/filing_type=*/year=*/*.parque
 ```bash
 # Economic data sources
 FRED_API_KEY=your_fred_key                    # Federal Reserve Economic Data
-BLS_API_KEY=your_bls_key                      # Bureau of Labor Statistics  
+BLS_API_KEY=your_bls_key                      # Bureau of Labor Statistics
 BEA_API_KEY=your_bea_key                      # Bureau of Economic Analysis
 
 # Geographic data (HUD requires credentials)
@@ -69,7 +69,7 @@ GOVDATA_PARQUET_DIR=/path/to/parquet          # Converted parquet files
 govdata/
 ├── source=econ/
 │   ├── type=indicators/year=2024/
-│   ├── type=timeseries/year=2024/  
+│   ├── type=timeseries/year=2024/
 │   └── type=regional/year=2024/
 ├── source=geo/
 │   └── type=boundary/year=2024/
@@ -169,7 +169,7 @@ SELECT CAST(field1 AS INTEGER), field1 + field2 FROM splunk_table
 // ❌ WRONG - Never assume all projections are RexInputRef
 RexInputRef inputRef = (RexInputRef) project;
 
-// ✅ CORRECT - Always check type first  
+// ✅ CORRECT - Always check type first
 if (project instanceof RexInputRef) {
     RexInputRef inputRef = (RexInputRef) project;
     // Handle simple field reference
@@ -212,16 +212,16 @@ File adapter test failing?
 ├─ Check CALCITE_FILE_ENGINE_TYPE environment variable
 ├─ DuckDB "catalog not found"?
 │  ├─ Verify table name in model JSON matches expected
-│  ├─ Check parquet file directory structure  
+│  ├─ Check parquet file directory structure
 │  └─ Confirm file permissions and accessibility
 ├─ Parquet engine issues?
 │  ├─ Check parquet file format validity
-│  └─ Verify Arrow/Parquet library compatibility  
+│  └─ Verify Arrow/Parquet library compatibility
 └─ LINQ4J issues?
     └─ Usually indicates Java classpath or reflection problems
 ```
 
-### Govdata Adapter Issues  
+### Govdata Adapter Issues
 ```
 Govdata test failing?
 ├─ Missing API keys?
@@ -250,7 +250,7 @@ Govdata test failing?
 // Standard schema factory pattern
 public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
     // 1. Extract configuration from operand map
-    // 2. Validate required parameters  
+    // 2. Validate required parameters
     // 3. Create and return schema instance
     // 4. Handle errors gracefully with descriptive messages
 }
@@ -264,6 +264,6 @@ timeout 300 ./gradlew :adapter:test -PincludeTags=integration
 # Standard console output for debugging
 --console=plain
 
-# Standard continuation on failure  
+# Standard continuation on failure
 --continue
 ```

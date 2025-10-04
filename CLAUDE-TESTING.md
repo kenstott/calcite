@@ -26,7 +26,7 @@ useJUnitPlatform {
 # Default behavior (unit tests only)
 ./gradlew :govdata:test
 
-# Integration tests for specific module  
+# Integration tests for specific module
 ./gradlew :govdata:test -PincludeTags=integration
 
 # Specific integration test
@@ -43,7 +43,7 @@ useJUnitPlatform {
 ```bash
 # File adapter - test all engines
 CALCITE_FILE_ENGINE_TYPE=DUCKDB ./gradlew :file:test -PincludeTags=integration
-CALCITE_FILE_ENGINE_TYPE=PARQUET ./gradlew :file:test -PincludeTags=integration  
+CALCITE_FILE_ENGINE_TYPE=PARQUET ./gradlew :file:test -PincludeTags=integration
 CALCITE_FILE_ENGINE_TYPE=ARROW ./gradlew :file:test -PincludeTags=integration
 CALCITE_FILE_ENGINE_TYPE=LINQ4J ./gradlew :file:test -PincludeTags=integration
 
@@ -53,7 +53,7 @@ BLS_API_KEY=xxx FRED_API_KEY=yyy ./gradlew :govdata:test -PincludeTags=integrati
 # SharePoint adapter
 SHAREPOINT_INTEGRATION_TESTS=true ./gradlew :sharepoint-list:test -PincludeTags=integration
 
-# Splunk adapter  
+# Splunk adapter
 CALCITE_TEST_SPLUNK=true ./gradlew :splunk:test -PincludeTags=integration
 ```
 
@@ -68,7 +68,7 @@ CALCITE_TEST_SPLUNK=true ./gradlew :splunk:test -PincludeTags=integration
 # Look at @Tag annotations, test setup, assertions
 ```
 
-### Step 2: Systematic Investigation  
+### Step 2: Systematic Investigation
 1. **Read full stack trace** - don't just look at assertion failure
 2. **Check test prerequisites** - environment variables, test data, network access
 3. **Verify test expectations** - are the assertions correct for current behavior?
@@ -86,7 +86,7 @@ Thread.dumpStack();
 
 ### Step 4: Fix, Don't Replace
 - **ALWAYS** fix the original failing test
-- **NEVER** create `TestFoo2.java` because `TestFoo.java` fails  
+- **NEVER** create `TestFoo2.java` because `TestFoo.java` fails
 - **NEVER** add `testMethodNew()` instead of fixing `testMethod()`
 - **Only** create isolation tests for complex debugging, then delete them
 
@@ -95,7 +95,7 @@ Thread.dumpStack();
 ### Required Test Tags
 ```java
 @Tag("unit")        // Runs by default, no external dependencies
-@Tag("integration") // Requires -PincludeTags=integration  
+@Tag("integration") // Requires -PincludeTags=integration
 @Tag("performance") // Manual execution only
 @Tag("temp")        // Temporary debugging tests - MUST be deleted
 ```
@@ -131,7 +131,7 @@ Thread.dumpStack();
 public class TestFoo2 { ... }        // Wrong
 public void testMethodNew() { ... }  // Wrong
 
-// ❌ Relaxing tests instead of fixing root cause  
+// ❌ Relaxing tests instead of fixing root cause
 // assertEquals(expected, actual);   // Original
 assertEquals(actual, actual);        // Wrong "fix"
 
@@ -150,7 +150,7 @@ Test not executing?
 │  └─ No @Tag? → Add @Tag("unit") and re-run
 ├─ Test found but failing?
 │  ├─ Check environment variables (API keys, cache dirs)
-│  ├─ Check test data prerequisites  
+│  ├─ Check test data prerequisites
 │  └─ Follow debugging workflow above
 └─ Test skipped?
     ├─ Check for @Disabled annotation
