@@ -59,13 +59,14 @@ public class FredDataDownloader {
 
   // FRED API pagination limits
   private static final int MAX_OBSERVATIONS_PER_REQUEST = 100000; // FRED default limit
-  private static final int FRED_API_DELAY_MS = 150; // Delay between requests (increased for rate limiting)
+  private static final int FRED_API_DELAY_MS = 150; // Delay between paginated requests
 
-  // Rate limiting for 429 errors
+  // Rate limiting: FRED API allows 120 requests per minute
+  // Safe rate: 500ms between requests = 120 requests/minute exactly
   private long lastRequestTime = 0;
-  private static final long MIN_REQUEST_INTERVAL_MS = 200; // 200ms between requests
-  private static final int MAX_RETRIES = 3;
-  private static final long RETRY_DELAY_MS = 2000; // 2 seconds initial retry delay
+  private static final long MIN_REQUEST_INTERVAL_MS = 500; // 500ms between requests (120 req/min)
+  private static final int MAX_RETRIES = 5; // Increased retries for rate limit recovery
+  private static final long RETRY_DELAY_MS = 5000; // 5 seconds initial retry delay (more conservative)
 
   private final String cacheDir;
   private final String apiKey;
