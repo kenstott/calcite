@@ -59,7 +59,13 @@ public class FredDataDownloader {
 
   // FRED API pagination limits
   private static final int MAX_OBSERVATIONS_PER_REQUEST = 100000; // FRED default limit
-  private static final int FRED_API_DELAY_MS = 100; // Small delay between requests
+  private static final int FRED_API_DELAY_MS = 150; // Delay between requests (increased for rate limiting)
+
+  // Rate limiting for 429 errors
+  private long lastRequestTime = 0;
+  private static final long MIN_REQUEST_INTERVAL_MS = 200; // 200ms between requests
+  private static final int MAX_RETRIES = 3;
+  private static final long RETRY_DELAY_MS = 2000; // 2 seconds initial retry delay
 
   private final String cacheDir;
   private final String apiKey;
@@ -532,12 +538,46 @@ public class FredDataDownloader {
           .timeout(Duration.ofSeconds(30))
           .build();
 
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      requestCount++;
+      // Retry loop with exponential backoff for rate limiting
+      int attempt = 0;
+      HttpResponse<String> response = null;
+      while (attempt < MAX_RETRIES) {
+        // Rate limiting: ensure minimum interval between requests
+        synchronized (this) {
+          long now = System.currentTimeMillis();
+          long timeSinceLastRequest = now - lastRequestTime;
+          if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+            long sleepTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
+            Thread.sleep(sleepTime);
+          }
+          lastRequestTime = System.currentTimeMillis();
+        }
 
-      if (response.statusCode() != 200) {
-        throw new IOException("FRED API request failed for series " + seriesId
-            + " with status: " + response.statusCode() + ", body: " + response.body());
+        response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        requestCount++;
+
+        if (response.statusCode() == 200) {
+          break; // Success
+        } else if (response.statusCode() == 429) {
+          // Rate limit exceeded - retry with exponential backoff
+          attempt++;
+          if (attempt >= MAX_RETRIES) {
+            throw new IOException("FRED API rate limit exceeded after " + MAX_RETRIES + " retries for series " + seriesId +
+                ". Response: " + response.body());
+          }
+          long backoffDelay = RETRY_DELAY_MS * (1L << (attempt - 1)); // Exponential: 2s, 4s, 8s
+          LOGGER.warn("FRED API rate limit hit (429) for series {}. Retry {}/{} after {}ms delay",
+              seriesId, attempt, MAX_RETRIES, backoffDelay);
+          Thread.sleep(backoffDelay);
+        } else {
+          // Other error - don't retry
+          throw new IOException("FRED API request failed for series " + seriesId
+              + " with status: " + response.statusCode() + ", body: " + response.body());
+        }
+      }
+
+      if (response == null || response.statusCode() != 200) {
+        throw new IOException("FRED API request failed for series " + seriesId + " after " + MAX_RETRIES + " retries");
       }
 
       JsonNode root = MAPPER.readTree(response.body());
@@ -576,7 +616,7 @@ public class FredDataDownloader {
   }
 
   /**
-   * Gets metadata information for a FRED series.
+   * Gets metadata information for a FRED series with rate limiting and retry logic.
    */
   private FredSeriesInfo getSeriesInfo(String seriesId) throws IOException, InterruptedException {
     String url = FRED_API_BASE + "series"
@@ -589,10 +629,43 @@ public class FredDataDownloader {
         .timeout(Duration.ofSeconds(10))
         .build();
 
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    // Retry loop with exponential backoff for rate limiting
+    int attempt = 0;
+    HttpResponse<String> response = null;
+    while (attempt < MAX_RETRIES) {
+      // Rate limiting: ensure minimum interval between requests
+      synchronized (this) {
+        long now = System.currentTimeMillis();
+        long timeSinceLastRequest = now - lastRequestTime;
+        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+          long sleepTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
+          Thread.sleep(sleepTime);
+        }
+        lastRequestTime = System.currentTimeMillis();
+      }
 
-    if (response.statusCode() != 200) {
-      throw new IOException("Failed to get series info for " + seriesId);
+      response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+      if (response.statusCode() == 200) {
+        break; // Success
+      } else if (response.statusCode() == 429) {
+        // Rate limit exceeded - retry with exponential backoff
+        attempt++;
+        if (attempt >= MAX_RETRIES) {
+          throw new IOException("FRED API rate limit exceeded after " + MAX_RETRIES + " retries for series info " + seriesId);
+        }
+        long backoffDelay = RETRY_DELAY_MS * (1L << (attempt - 1)); // Exponential: 2s, 4s, 8s
+        LOGGER.warn("FRED API rate limit hit (429) getting info for series {}. Retry {}/{} after {}ms delay",
+            seriesId, attempt, MAX_RETRIES, backoffDelay);
+        Thread.sleep(backoffDelay);
+      } else {
+        // Other error - don't retry
+        throw new IOException("Failed to get series info for " + seriesId);
+      }
+    }
+
+    if (response == null || response.statusCode() != 200) {
+      throw new IOException("Failed to get series info for " + seriesId + " after " + MAX_RETRIES + " retries");
     }
 
     JsonNode root = MAPPER.readTree(response.body());

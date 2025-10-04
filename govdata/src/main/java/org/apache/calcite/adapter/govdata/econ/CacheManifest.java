@@ -50,6 +50,9 @@ public class CacheManifest {
   @JsonProperty("lastUpdated")
   private long lastUpdated = System.currentTimeMillis();
 
+  @JsonIgnore
+  private String cacheDir;  // Cache directory for resolving relative paths
+
   /**
    * Check if data is cached and fresh for the given parameters.
    * Uses explicit refreshAfter timestamp stored in each entry.
@@ -62,8 +65,9 @@ public class CacheManifest {
       return false;
     }
 
-    // Check if file still exists
-    if (!new File(entry.filePath).exists()) {
+    // Check if file still exists (resolve relative path using cache directory)
+    File file = cacheDir != null ? new File(cacheDir, entry.filePath) : new File(entry.filePath);
+    if (!file.exists()) {
       LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
       entries.remove(key);
       return false;
@@ -151,8 +155,9 @@ public class CacheManifest {
     entries.entrySet().removeIf(entry -> {
       CacheEntry cacheEntry = entry.getValue();
 
-      // Remove if file doesn't exist
-      if (!new File(cacheEntry.filePath).exists()) {
+      // Remove if file doesn't exist (resolve relative path using cache directory)
+      File file = cacheDir != null ? new File(cacheDir, cacheEntry.filePath) : new File(cacheEntry.filePath);
+      if (!file.exists()) {
         LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
         removed[0]++;
         return true;
@@ -186,11 +191,14 @@ public class CacheManifest {
 
     if (!manifestFile.exists()) {
       LOGGER.debug("No cache manifest found, creating new one");
-      return new CacheManifest();
+      CacheManifest manifest = new CacheManifest();
+      manifest.cacheDir = cacheDir;
+      return manifest;
     }
 
     try {
       CacheManifest manifest = MAPPER.readValue(manifestFile, CacheManifest.class);
+      manifest.cacheDir = cacheDir;  // Set cache directory for path resolution
       LOGGER.debug("Loaded cache manifest version {} with {} entries", manifest.version, manifest.entries.size());
 
       // Migrate old entries that don't have refreshAfter set
