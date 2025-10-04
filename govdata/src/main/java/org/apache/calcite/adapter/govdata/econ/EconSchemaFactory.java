@@ -211,8 +211,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     return mutableOperand;
   }
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/econ-schema.json";
   }
 
@@ -539,8 +538,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.debug("Processing {} ungrouped custom FRED series", customFredSeries.size());
 
       // Create default group for ungrouped series
-      FredSeriesGroup defaultGroup = new FredSeriesGroup("custom_series", customFredSeries,
-          FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase()), null);
+      FredSeriesGroup defaultGroup =
+          new FredSeriesGroup("custom_series", customFredSeries, FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase()), null);
 
       FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(defaultGroup, allCustomSeries);
       LOGGER.debug("Partition analysis for ungrouped series: {}", analysis);
@@ -681,8 +680,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * This combines static table definitions from econ-schema.json with dynamically
    * generated table definitions for custom FRED series.
    */
-  @Override
-  public List<Map<String, Object>> loadTableDefinitions() {
+  @Override public List<Map<String, Object>> loadTableDefinitions() {
     // Start with base table definitions from econ-schema.json
     List<Map<String, Object>> tables = new ArrayList<>(GovDataSubSchemaFactory.super.loadTableDefinitions());
 

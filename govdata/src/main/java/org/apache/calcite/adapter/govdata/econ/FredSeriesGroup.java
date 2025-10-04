@@ -16,11 +16,11 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
-
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Configuration for a group of FRED series with common partitioning strategy.
@@ -132,8 +132,7 @@ public class FredSeriesGroup {
         .replaceAll("^_|_$", "");
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     return String.format("FredSeriesGroup{name=%s, series=%s, strategy=%s, fields=%s}",
                         groupName, series, partitionStrategy, partitionFields);
   }

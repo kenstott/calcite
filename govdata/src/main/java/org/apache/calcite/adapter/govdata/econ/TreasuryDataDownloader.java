@@ -48,7 +48,7 @@ import java.util.Map;
 /**
  * Downloads and converts U.S. Treasury data to Parquet format.
  * Supports daily treasury yields and federal debt statistics.
- * 
+ *
  * <p>Uses the Treasury Fiscal Data API which requires no authentication.
  */
 public class TreasuryDataDownloader {
@@ -56,7 +56,7 @@ public class TreasuryDataDownloader {
   private static final String TREASURY_API_BASE = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/";
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
-  
+
   private final String cacheDir;
   private final HttpClient httpClient;
   private final CacheManifest cacheManifest;
@@ -70,7 +70,7 @@ public class TreasuryDataDownloader {
         .build();
     this.cacheManifest = CacheManifest.load(cacheDir);
   }
-  
+
   /**
    * Creates metadata map for Parquet file with table and column comments.
    *
@@ -103,14 +103,14 @@ public class TreasuryDataDownloader {
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading Treasury data for years {} to {}", startYear, endYear);
-    
+
     // Download treasury yields data
     downloadTreasuryYields(startYear, endYear);
-    
+
     // Download federal debt data
     downloadFederalDebt(startYear, endYear);
   }
-  
+
   /**
    * Gets the default start year from environment variables.
    */
@@ -124,7 +124,7 @@ public class TreasuryDataDownloader {
         LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataStart = System.getenv("GOVDATA_START_YEAR");
     if (govdataStart != null) {
@@ -134,11 +134,11 @@ public class TreasuryDataDownloader {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
       }
     }
-    
+
     // Default to 5 years ago
     return LocalDate.now().getYear() - 5;
   }
-  
+
   /**
    * Gets the default end year from environment variables.
    */
@@ -152,7 +152,7 @@ public class TreasuryDataDownloader {
         LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataEnd = System.getenv("GOVDATA_END_YEAR");
     if (govdataEnd != null) {
@@ -162,163 +162,161 @@ public class TreasuryDataDownloader {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
       }
     }
-    
+
     // Default to current year
     return LocalDate.now().getYear();
   }
-  
+
   /**
    * Downloads treasury yields using default date range from environment.
    */
   public File downloadTreasuryYields() throws IOException, InterruptedException {
     return downloadTreasuryYields(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads daily treasury yield curve data.
    */
   public File downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading treasury yields for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      Path outputDir = Paths.get(cacheDir, "source=econ", "type=timeseries", "year=" + year);
-      Files.createDirectories(outputDir);
-
       // Check cache manifest first
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "treasury_yields");
       cacheParams.put("year", String.valueOf(year));
 
-      File jsonFile = new File(outputDir.toFile(), "treasury_yields.json");
+      String relativePath = "source=econ/type=timeseries/year=" + year + "/treasury_yields.json";
+      File jsonFile = new File(cacheDir, relativePath);
 
       if (cacheManifest.isCached("treasury_yields", year, cacheParams)) {
         LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
-        lastFile = jsonFile;
+        lastFile = new File(relativePath);
         continue;
       }
 
       // Check if file exists but not in manifest - update manifest
       if (jsonFile.exists()) {
         LOGGER.info("Found existing treasury yields file for year {} - updating manifest", year);
-        cacheManifest.markCached("treasury_yields", year, cacheParams, jsonFile.getAbsolutePath(), 0L);
+        cacheManifest.markCached("treasury_yields", year, cacheParams, relativePath, 0L);
         cacheManifest.save(cacheDir);
-        lastFile = jsonFile;
+        lastFile = new File(relativePath);
         continue;
       }
 
       // Fetch data from Treasury API for this year
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
-      
+
       String url = TREASURY_API_BASE + "v2/accounting/od/avg_interest_rates"
           + "?filter=record_date:gte:" + startDate
           + ",record_date:lte:" + endDate
           + "&sort=-record_date&page[size]=10000";
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("Treasury API request failed for year {} with status: {}", year, response.statusCode());
         continue;
       }
-      
+
       // Save raw JSON data to cache directory
+      jsonFile.getParentFile().mkdirs();
       Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
 
       // Mark as cached in manifest
-      cacheManifest.markCached("treasury_yields", year, cacheParams, jsonFile.getAbsolutePath(), response.body().length());
+      cacheManifest.markCached("treasury_yields", year, cacheParams, relativePath, response.body().length());
       cacheManifest.save(cacheDir);
 
-      LOGGER.info("Treasury yields raw data saved for year {}: {}", year, jsonFile);
-      lastFile = jsonFile;
+      LOGGER.info("Treasury yields raw data saved for year {}: {}", year, relativePath);
+      lastFile = new File(relativePath);
     }
-    
+
     return lastFile;
   }
-  
+
   /**
    * Downloads federal debt using default date range from environment.
    */
   public File downloadFederalDebt() throws IOException, InterruptedException {
     return downloadFederalDebt(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads federal debt statistics.
    */
   public File downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading federal debt data for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      Path outputDir = Paths.get(cacheDir, "source=econ", "type=timeseries", "year=" + year);
-      Files.createDirectories(outputDir);
-
       // Check cache manifest first
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "federal_debt");
       cacheParams.put("year", String.valueOf(year));
 
-      File jsonFile = new File(outputDir.toFile(), "federal_debt.json");
+      String relativePath = "source=econ/type=timeseries/year=" + year + "/federal_debt.json";
+      File jsonFile = new File(cacheDir, relativePath);
 
       if (cacheManifest.isCached("federal_debt", year, cacheParams)) {
         LOGGER.info("Found cached federal debt for year {} - skipping download", year);
-        lastFile = jsonFile;
+        lastFile = new File(relativePath);
         continue;
       }
 
       // Check if file exists but not in manifest - update manifest
       if (jsonFile.exists()) {
         LOGGER.info("Found existing federal debt file for year {} - updating manifest", year);
-        cacheManifest.markCached("federal_debt", year, cacheParams, jsonFile.getAbsolutePath(), 0L);
+        cacheManifest.markCached("federal_debt", year, cacheParams, relativePath, 0L);
         cacheManifest.save(cacheDir);
-        lastFile = jsonFile;
+        lastFile = new File(relativePath);
         continue;
       }
 
       // Fetch debt to the penny data for this year
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
-      
+
       String url = TREASURY_API_BASE + "v2/accounting/od/debt_to_penny"
           + "?filter=record_date:gte:" + startDate
           + ",record_date:lte:" + endDate
           + "&page[size]=10000";
-      
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
         LOGGER.warn("Treasury API request failed for year {} with status: {}", year, response.statusCode());
         continue;
       }
-      
+
       // Save raw JSON data to cache directory
+      jsonFile.getParentFile().mkdirs();
       Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
 
       // Mark as cached in manifest
-      cacheManifest.markCached("federal_debt", year, cacheParams, jsonFile.getAbsolutePath(), response.body().length());
+      cacheManifest.markCached("federal_debt", year, cacheParams, relativePath, response.body().length());
       cacheManifest.save(cacheDir);
 
-      LOGGER.info("Federal debt raw data saved for year {}: {}", year, jsonFile);
-      lastFile = jsonFile;
+      LOGGER.info("Federal debt raw data saved for year {}: {}", year, relativePath);
+      lastFile = new File(relativePath);
     }
-    
+
     return lastFile;
   }
-  
+
   private int parseMaturityMonths(String description) {
     // Parse maturity from Treasury API security descriptions
     // Handle explicit maturity descriptions first
@@ -334,7 +332,7 @@ public class TreasuryDataDownloader {
     if (description.contains("3-Month")) return 3;
     if (description.contains("1-Month")) return 1;
     if (description.contains("4-Week")) return 1;
-    
+
     // Handle Treasury API security types (typical maturity ranges)
     if (description.contains("Treasury Bills")) return 3; // Bills are typically 3-month average
     if (description.contains("Treasury Notes")) return 60; // Notes are typically 2-10 years, use 5-year average
@@ -345,10 +343,10 @@ public class TreasuryDataDownloader {
     if (description.contains("Total Marketable")) return 60; // Average of all marketable, use 5-year
     if (description.contains("Total Non-marketable")) return 60; // Average of all non-marketable, use 5-year
     if (description.contains("Total Interest-bearing Debt")) return 60; // Average of all debt, use 5-year
-    
+
     return 0; // Unknown
   }
-  
+
   private String formatMaturityLabel(int months) {
     if (months >= 12) {
       int years = months / 12;
@@ -357,7 +355,7 @@ public class TreasuryDataDownloader {
       return months + "M";
     }
   }
-  
+
   private void writeTreasuryYieldsParquet(List<TreasuryYield> yields, String targetFilePath) throws IOException {
     Schema schema = SchemaBuilder.record("TreasuryYield")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -424,7 +422,7 @@ public class TreasuryDataDownloader {
     String maturityLabel;
     double avgInterestRate;
   }
-  
+
   private static class FederalDebt {
     String date;
     String debtType;
@@ -433,11 +431,11 @@ public class TreasuryDataDownloader {
     double intragovDebt;
     String holderCategory;
   }
-  
+
   /**
    * Converts cached Treasury yields data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
-   * 
+   *
    * @param sourceDir Directory containing cached Treasury JSON data
    * @param targetFile Target parquet file to create
    */
@@ -449,9 +447,9 @@ public class TreasuryDataDownloader {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
+
     List<TreasuryYield> yields = new ArrayList<>();
-    
+
     // Look for JSON files in the source directory
     File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.endsWith(".json"));
     if (jsonFiles != null) {
@@ -460,7 +458,7 @@ public class TreasuryDataDownloader {
           String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode data = root.get("data");
-          
+
           if (data != null && data.isArray()) {
             for (JsonNode record : data) {
               TreasuryYield yield = new TreasuryYield();
@@ -468,11 +466,11 @@ public class TreasuryDataDownloader {
               yield.securityType = record.get("security_type_desc").asText("");
               yield.securityDesc = record.get("security_desc").asText("");
               yield.avgInterestRate = record.get("avg_interest_rate_amt").asDouble(0.0);
-              
+
               // Parse maturity from description
               yield.maturityMonths = parseMaturityMonths(yield.securityDesc);
               yield.maturityLabel = formatMaturityLabel(yield.maturityMonths);
-              
+
               yields.add(yield);
             }
           }
@@ -481,12 +479,12 @@ public class TreasuryDataDownloader {
         }
       }
     }
-    
+
     // Create parquet file
     writeTreasuryYieldsParquet(yields, targetFilePath);
     LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
   }
-  
+
   /**
    * Converts cached federal debt data to Parquet format.
    *
@@ -501,9 +499,9 @@ public class TreasuryDataDownloader {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
-    
+
     List<FederalDebt> debtRecords = new ArrayList<>();
-    
+
     // Look for federal debt JSON files in the source directory
     File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("federal_debt.json"));
     if (jsonFiles != null) {
@@ -512,31 +510,31 @@ public class TreasuryDataDownloader {
           String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode data = root.get("data");
-          
+
           if (data != null && data.isArray()) {
             for (JsonNode record : data) {
               FederalDebt debt = new FederalDebt();
               debt.date = record.get("record_date").asText();
               debt.debtType = "Total Public Debt Outstanding";
-              
+
               // Parse debt amounts (convert from millions to billions)
               JsonNode totalDebtNode = record.get("tot_pub_debt_out_amt");
               if (totalDebtNode != null) {
                 debt.totalDebt = totalDebtNode.asDouble(0.0) / 1000.0; // Convert millions to billions
               }
-              
+
               JsonNode publicDebtNode = record.get("debt_held_public_amt");
               if (publicDebtNode != null) {
                 debt.debtHeldByPublic = publicDebtNode.asDouble(0.0) / 1000.0;
               }
-              
+
               JsonNode intragovDebtNode = record.get("intragov_hold_amt");
               if (intragovDebtNode != null) {
                 debt.intragovDebt = intragovDebtNode.asDouble(0.0) / 1000.0;
               }
-              
+
               debt.holderCategory = "All";
-              
+
               debtRecords.add(debt);
             }
           }
@@ -545,7 +543,7 @@ public class TreasuryDataDownloader {
         }
       }
     }
-    
+
     // Create parquet file
     writeFederalDebtParquet(debtRecords, targetFilePath);
     LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFilePath, debtRecords.size());

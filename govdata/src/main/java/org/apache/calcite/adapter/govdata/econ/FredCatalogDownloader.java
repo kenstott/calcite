@@ -16,14 +16,14 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Downloads and processes FRED economic data series catalog.
@@ -75,24 +74,22 @@ public class FredCatalogDownloader {
   private static final int MAX_RESULTS_PER_REQUEST = 1000;
 
   // Common search terms to get comprehensive series coverage
-  private static final List<String> COMPREHENSIVE_SEARCH_TERMS = Arrays.asList(
-      "gdp", "unemployment", "inflation", "interest", "employment", "cpi", "ppi",
+  private static final List<String> COMPREHENSIVE_SEARCH_TERMS =
+      Arrays.asList("gdp", "unemployment", "inflation", "interest", "employment", "cpi", "ppi",
       "wages", "income", "productivity", "trade", "housing", "retail", "manufacturing",
       "services", "energy", "commodity", "stock", "bond", "treasury", "federal",
       "state", "regional", "international", "currency", "exchange", "population",
-      "labor", "consumer", "producer", "industrial", "construction", "agriculture"
-  );
+      "labor", "consumer", "producer", "industrial", "construction", "agriculture");
 
   // Major FRED categories to browse systematically
-  private static final List<Integer> MAJOR_CATEGORIES = Arrays.asList(
-      1,    // National Accounts
+  private static final List<Integer> MAJOR_CATEGORIES =
+      Arrays.asList(1,    // National Accounts
       10,   // Population, Employment, & Labor Markets
       32992, // Money, Banking, & Finance
       32455, // International Data
       3,    // Production & Business Activity
       32991, // Prices
-      32263  // Academic Data
-  );
+      32263);  // Academic Data
 
   private final String fredApiKey;
   private final HttpClient httpClient;
@@ -467,8 +464,8 @@ public class FredCatalogDownloader {
       throws IOException, InterruptedException {
     List<Integer> childCategories = new ArrayList<>();
 
-    String url = String.format("%s/category/children?category_id=%d&api_key=%s&file_type=json",
-        FRED_API_BASE, parentCategoryId, fredApiKey);
+    String url =
+        String.format("%s/category/children?category_id=%d&api_key=%s&file_type=json", FRED_API_BASE, parentCategoryId, fredApiKey);
 
     JsonNode response = makeApiRequest(url);
     JsonNode categoriesArray = response.get("categories");
@@ -487,8 +484,8 @@ public class FredCatalogDownloader {
    */
   private String getCategoryName(int categoryId) {
     try {
-      String url = String.format("%s/category?category_id=%d&api_key=%s&file_type=json",
-          FRED_API_BASE, categoryId, fredApiKey);
+      String url =
+          String.format("%s/category?category_id=%d&api_key=%s&file_type=json", FRED_API_BASE, categoryId, fredApiKey);
 
       JsonNode response = makeApiRequest(url);
       JsonNode categories = response.get("categories");
@@ -543,12 +540,12 @@ public class FredCatalogDownloader {
     }
 
     // Add common economic terms for better coverage
-    searchPatterns.addAll(Arrays.asList(
+    searchPatterns.addAll(
+        Arrays.asList(
         "GDP", "CPI", "unemployment", "inflation", "interest",
         "trade", "housing", "manufacturing", "retail", "employment",
         "income", "price", "index", "rate", "growth", "production",
-        "sales", "inventory", "debt", "credit", "loan", "mortgage"
-    ));
+        "sales", "inventory", "debt", "credit", "loan", "mortgage"));
 
     for (String searchText : searchPatterns) {
       int offset = 0;
@@ -557,8 +554,8 @@ public class FredCatalogDownloader {
       while (hasMoreResults) { // Download all available series
         try {
           // Use the search endpoint which supports pagination
-          String url = String.format("%s/series/search?search_text=%s&api_key=%s&file_type=json&limit=%d&offset=%d",
-              FRED_API_BASE, URLEncoder.encode(searchText, StandardCharsets.UTF_8.toString()),
+          String url =
+              String.format("%s/series/search?search_text=%s&api_key=%s&file_type=json&limit=%d&offset=%d", FRED_API_BASE, URLEncoder.encode(searchText, StandardCharsets.UTF_8.toString()),
               fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
 
           JsonNode response = makeApiRequest(url);
@@ -570,8 +567,8 @@ public class FredCatalogDownloader {
               String seriesId = series.get("id").asText();
               if (!seenSeriesIds.contains(seriesId)) {
                 seenSeriesIds.add(seriesId);
-                Map<String, Object> seriesMap = objectMapper.convertValue(series,
-                    new TypeReference<Map<String, Object>>() {});
+                Map<String, Object> seriesMap =
+                    objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
                 allSeries.add(seriesMap);
               }
             }
@@ -620,16 +617,16 @@ public class FredCatalogDownloader {
     String categoryName = getCategoryName(categoryId);
 
     while (hasMoreResults) {
-      String url = String.format("%s/category/series?category_id=%d&api_key=%s&file_type=json&limit=%d&offset=%d",
-          FRED_API_BASE, categoryId, fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
+      String url =
+          String.format("%s/category/series?category_id=%d&api_key=%s&file_type=json&limit=%d&offset=%d", FRED_API_BASE, categoryId, fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
 
       JsonNode response = makeApiRequest(url);
       JsonNode seriesArray = response.get("seriess");
 
       if (seriesArray != null && seriesArray.size() > 0) {
         for (JsonNode series : seriesArray) {
-          Map<String, Object> seriesMap = objectMapper.convertValue(series,
-              new TypeReference<Map<String, Object>>() {});
+          Map<String, Object> seriesMap =
+              objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
           // Add category information
           seriesMap.put("category_id", categoryId);
           seriesMap.put("category_name", categoryName);
@@ -660,16 +657,16 @@ public class FredCatalogDownloader {
     String startDateStr = startDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
     while (hasMoreResults) {
-      String url = String.format("%s/series/updates?api_key=%s&file_type=json&limit=%d&offset=%d&start_time=%s",
-          FRED_API_BASE, fredApiKey, MAX_RESULTS_PER_REQUEST, offset, startDateStr);
+      String url =
+          String.format("%s/series/updates?api_key=%s&file_type=json&limit=%d&offset=%d&start_time=%s", FRED_API_BASE, fredApiKey, MAX_RESULTS_PER_REQUEST, offset, startDateStr);
 
       JsonNode response = makeApiRequest(url);
       JsonNode seriesArray = response.get("seriess");
 
       if (seriesArray != null && seriesArray.size() > 0) {
         for (JsonNode series : seriesArray) {
-          Map<String, Object> seriesMap = objectMapper.convertValue(series,
-              new TypeReference<Map<String, Object>>() {});
+          Map<String, Object> seriesMap =
+              objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
           allResults.add(seriesMap);
         }
 
@@ -701,8 +698,8 @@ public class FredCatalogDownloader {
         .build();
 
     try {
-      HttpResponse<String> response = httpClient.send(request,
-          HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       lastRequestTime = System.currentTimeMillis();
 
       if (response.statusCode() != 200) {

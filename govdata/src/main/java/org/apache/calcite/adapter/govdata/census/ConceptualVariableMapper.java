@@ -19,14 +19,12 @@ package org.apache.calcite.adapter.govdata.census;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.Iterator;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -74,8 +72,7 @@ public class ConceptualVariableMapper {
     public String getConceptualName() { return conceptualName; }
     public String getDataType() { return dataType; }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("VariableMapping{dataset='%s', variable='%s', conceptualName='%s'}",
           dataset, variable, conceptualName);
     }

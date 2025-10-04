@@ -27,21 +27,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -55,7 +48,7 @@ import java.util.Map;
  * Downloads and converts Federal Reserve Economic Data (FRED) to Parquet format.
  * Provides access to thousands of economic time series including interest rates,
  * GDP, monetary aggregates, and economic indicators.
- * 
+ *
  * <p>Requires a FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html
  */
 public class FredDataDownloader {
@@ -67,13 +60,13 @@ public class FredDataDownloader {
   // FRED API pagination limits
   private static final int MAX_OBSERVATIONS_PER_REQUEST = 100000; // FRED default limit
   private static final int FRED_API_DELAY_MS = 100; // Small delay between requests
-  
+
   private final String cacheDir;
   private final String apiKey;
   private final HttpClient httpClient;
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
   private final CacheManifest cacheManifest;
-  
+
   // Key FRED series IDs for economic indicators
   public static class Series {
     // Interest Rates
@@ -81,59 +74,59 @@ public class FredDataDownloader {
     public static final String TEN_YEAR_TREASURY = "DGS10";      // 10-Year Treasury Rate
     public static final String THREE_MONTH_TBILL = "DGS3MO";     // 3-Month Treasury Bill
     public static final String MORTGAGE_RATE_30Y = "MORTGAGE30US"; // 30-Year Fixed Mortgage Rate
-    
+
     // GDP and Growth
     public static final String REAL_GDP = "GDPC1";               // Real GDP
     public static final String NOMINAL_GDP = "GDP";              // Nominal GDP
     public static final String GDP_DEFLATOR = "GDPDEF";          // GDP Deflator
     public static final String REAL_GDP_PER_CAPITA = "A939RX0Q048SBEA"; // Real GDP per Capita
-    
+
     // Inflation
     public static final String CPI_ALL_URBAN = "CPIAUCSL";       // Consumer Price Index
     public static final String CORE_CPI = "CPILFESL";            // Core CPI (less food & energy)
     public static final String PCE_INFLATION = "PCEPI";          // PCE Price Index
     public static final String BREAKEVEN_INFLATION_5Y = "T5YIE"; // 5-Year Breakeven Inflation Rate
-    
+
     // Labor Market
     public static final String UNEMPLOYMENT_RATE = "UNRATE";     // Unemployment Rate
     public static final String LABOR_FORCE_PARTICIPATION = "CIVPART"; // Labor Force Participation Rate
     public static final String NONFARM_PAYROLLS = "PAYEMS";      // All Employees: Total Nonfarm
     public static final String INITIAL_CLAIMS = "ICSA";          // Initial Jobless Claims
-    
+
     // Money Supply
     public static final String M1_MONEY_SUPPLY = "M1SL";         // M1 Money Stock
     public static final String M2_MONEY_SUPPLY = "M2SL";         // M2 Money Stock
     public static final String MONETARY_BASE = "BOGMBASE";       // Monetary Base
-    
+
     // Housing
     public static final String HOUSING_STARTS = "HOUST";         // Housing Starts
     public static final String CASE_SHILLER_INDEX = "CSUSHPISA"; // Case-Shiller Home Price Index
     public static final String EXISTING_HOME_SALES = "EXHOSLUSM495S"; // Existing Home Sales
-    
+
     // Manufacturing & Trade
     public static final String INDUSTRIAL_PRODUCTION = "INDPRO";  // Industrial Production Index
     public static final String CAPACITY_UTILIZATION = "TCU";      // Capacity Utilization
     public static final String RETAIL_SALES = "RSXFS";           // Retail Sales
     public static final String TRADE_BALANCE = "BOPGSTB";        // Trade Balance
-    
+
     // Financial Markets
     public static final String SP500 = "SP500";                  // S&P 500 Index
     public static final String VIX = "VIXCLS";                   // VIX Volatility Index
     public static final String DOLLAR_INDEX = "DTWEXBGS";        // Trade Weighted US Dollar Index
     public static final String CORPORATE_SPREADS = "BAMLC0A0CM"; // Investment Grade Corporate Spreads
-    
+
     // Banking Indicators
     public static final String COMMERCIAL_BANK_DEPOSITS = "DPSACBW027SBOG"; // Deposits at Commercial Banks
     public static final String BANK_CREDIT = "TOTBKCR";                     // Bank Credit, All Commercial Banks
     public static final String BANK_LENDING_STANDARDS = "DRTSCILM";         // Net Percentage of Banks Tightening Standards for C&I Loans
     public static final String MORTGAGE_DELINQUENCY_RATE = "DRSFRMACBS";    // Delinquency Rate on Single-Family Residential Mortgages
-    
+
     // Real Estate Metrics
     public static final String BUILDING_PERMITS = "PERMIT";                 // New Private Housing Permits
     public static final String MEDIAN_HOME_PRICE = "MSPUS";                 // Median Sales Price of Houses Sold in the United States
     public static final String RENTAL_VACANCY_RATE = "RRVRUSQ156N";         // Rental Vacancy Rate in the United States
     public static final String SINGLE_UNIT_HOUSING_STARTS = "HOUST1F";      // Housing Starts: 1-Unit Structures
-    
+
     // Consumer Sentiment Indices
     public static final String CONSUMER_SENTIMENT = "UMCSENT";              // University of Michigan Consumer Sentiment Index
     public static final String REAL_DISPOSABLE_INCOME = "DSPIC96";          // Real Disposable Personal Income
@@ -170,10 +163,10 @@ public class FredDataDownloader {
     public static final String TOTAL_VEHICLE_SALES = "TOTALSA";            // Total Vehicle Sales
     public static final String BUILDING_PERMITS_NEW = "PERMIT";            // New Private Housing Units Authorized
   }
-  
+
   // Default series to download if none specified
-  public static final List<String> DEFAULT_SERIES = Arrays.asList(
-      // Core Economic Indicators
+  public static final List<String> DEFAULT_SERIES =
+      Arrays.asList(// Core Economic Indicators
       Series.FED_FUNDS_RATE,
       Series.TEN_YEAR_TREASURY,
       Series.REAL_GDP,
@@ -211,9 +204,8 @@ public class FredDataDownloader {
       Series.CONSUMER_SENTIMENT,
       Series.REAL_DISPOSABLE_INCOME,
       Series.CONSUMER_CONFIDENCE,
-      Series.PERSONAL_SAVING_RATE
-  );
-  
+      Series.PERSONAL_SAVING_RATE);
+
   public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
     this.apiKey = apiKey;
@@ -257,7 +249,7 @@ public class FredDataDownloader {
 
     return metadata;
   }
-  
+
   /**
    * Gets the default start date from environment variables.
    */
@@ -271,7 +263,7 @@ public class FredDataDownloader {
         LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataStart = System.getenv("GOVDATA_START_YEAR");
     if (govdataStart != null) {
@@ -281,11 +273,11 @@ public class FredDataDownloader {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
       }
     }
-    
+
     // Default to 5 years ago
     return LocalDate.now().minusYears(5).format(DateTimeFormatter.ISO_LOCAL_DATE);
   }
-  
+
   /**
    * Gets the default end date from environment variables.
    */
@@ -299,7 +291,7 @@ public class FredDataDownloader {
         LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataEnd = System.getenv("GOVDATA_END_YEAR");
     if (govdataEnd != null) {
@@ -309,42 +301,39 @@ public class FredDataDownloader {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
       }
     }
-    
+
     // Default to current date
     return LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
   }
-  
+
   /**
    * Downloads all FRED data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading FRED data for years {} to {}", startYear, endYear);
-    
+
     for (int year = startYear; year <= endYear; year++) {
       downloadEconomicIndicatorsForYear(year);
     }
   }
-  
+
   /**
    * Downloads economic indicators for a specific year.
    */
   public void downloadEconomicIndicatorsForYear(int year) throws IOException, InterruptedException {
     String startDate = year + "-01-01";
     String endDate = year + "-12-31";
-    
+
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
     }
-    
-    String outputDirPath = "source=econ/type=indicators/year=" + year;
-    // Directories are created automatically by StorageProvider when writing files
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "fred_indicators");
     cacheParams.put("year", String.valueOf(year));
 
-    String jsonFilePath = outputDirPath + "/fred_indicators.json";
+    String relativePath = "source=econ/type=indicators/year=" + year + "/fred_indicators.json";
 
     if (cacheManifest.isCached("fred_indicators", year, cacheParams)) {
       LOGGER.info("Found cached FRED data for year {} - skipping download", year);
@@ -352,20 +341,20 @@ public class FredDataDownloader {
     }
 
     // Check if file exists but not in manifest - update manifest
-    File jsonFile = new File(cacheDir, jsonFilePath);
+    File jsonFile = new File(cacheDir, relativePath);
     if (jsonFile.exists()) {
       LOGGER.info("Found existing FRED file for year {} - updating manifest", year);
       long fileSize = jsonFile.length();
-      cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, fileSize);
+      cacheManifest.markCached("fred_indicators", year, cacheParams, relativePath, fileSize);
       cacheManifest.save(cacheDir);
       return;
     }
-    
+
     LOGGER.info("Downloading {} FRED series for year {}", DEFAULT_SERIES.size(), year);
-    
+
     List<Map<String, Object>> observations = new ArrayList<>();
     Map<String, FredSeriesInfo> seriesInfoMap = new HashMap<>();
-    
+
     // First, get series info for all requested series
     for (String seriesId : DEFAULT_SERIES) {
       try {
@@ -377,14 +366,14 @@ public class FredDataDownloader {
         LOGGER.warn("Failed to get info for series {}: {}", seriesId, e.getMessage());
       }
     }
-    
+
     // Download observations for each series
     for (String seriesId : DEFAULT_SERIES) {
       FredSeriesInfo info = seriesInfoMap.get(seriesId);
       if (info == null) {
         continue;
       }
-      
+
       LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
 
       try {
@@ -412,24 +401,24 @@ public class FredDataDownloader {
         continue;
       }
     }
-    
+
     // Save raw JSON data to cache
     Map<String, Object> data = new HashMap<>();
     data.put("observations", observations);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
     // Save raw JSON data to local cache directory
-    jsonFile = new File(cacheDir, jsonFilePath);
+    jsonFile = new File(cacheDir, relativePath);
     jsonFile.getParentFile().mkdirs();
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     // Mark as cached in manifest
-    cacheManifest.markCached("fred_indicators", year, cacheParams, jsonFilePath, jsonContent.length());
+    cacheManifest.markCached("fred_indicators", year, cacheParams, relativePath, jsonContent.length());
     cacheManifest.save(cacheDir);
 
-    LOGGER.info("FRED indicators saved to: {} ({} observations)", jsonFilePath, observations.size());
+    LOGGER.info("FRED indicators saved to: {} ({} observations)", relativePath, observations.size());
   }
 
   /**
@@ -438,26 +427,22 @@ public class FredDataDownloader {
   public File downloadEconomicIndicators() throws IOException, InterruptedException {
     return downloadEconomicIndicators(DEFAULT_SERIES, getDefaultStartDate(), getDefaultEndDate());
   }
-  
+
   /**
    * Downloads specified FRED economic time series data.
    */
-  public File downloadEconomicIndicators(List<String> seriesIds, String startDate, String endDate) 
+  public File downloadEconomicIndicators(List<String> seriesIds, String startDate, String endDate)
       throws IOException, InterruptedException {
-    
+
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
     }
-    
+
     LOGGER.info("Downloading {} FRED series from {} to {}", seriesIds.size(), startDate, endDate);
-    
-    String outputDirPath = String.format("source=econ/type=fred_indicators/date_range=%s_%s",
-            startDate.substring(0, 10), endDate.substring(0, 10));
-    // Directories are created automatically by StorageProvider when writing files
-    
+
     List<FredObservation> observations = new ArrayList<>();
     Map<String, FredSeriesInfo> seriesInfoMap = new HashMap<>();
-    
+
     // First, get series info for all requested series
     for (String seriesId : seriesIds) {
       try {
@@ -469,14 +454,14 @@ public class FredDataDownloader {
         LOGGER.warn("Failed to get info for series {}: {}", seriesId, e.getMessage());
       }
     }
-    
+
     // Download observations for each series
     for (String seriesId : seriesIds) {
       FredSeriesInfo info = seriesInfoMap.get(seriesId);
       if (info == null) {
         continue;
       }
-      
+
       LOGGER.info("Fetching series: {} - {}", seriesId, info.title);
 
       try {
@@ -504,20 +489,21 @@ public class FredDataDownloader {
         continue;
       }
     }
-    
+
     LOGGER.info("FRED indicators data collected: {} observations", observations.size());
-    
+
     // Convert to Parquet format
-    String parquetFileName = String.format("fred_indicators_%s_%s.parquet", 
-        startDate.substring(0, 10), endDate.substring(0, 10));
-    String parquetPath = outputDirPath + "/" + parquetFileName;
-    convertToParquet(observations, parquetPath);
-    
+    String parquetFileName =
+        String.format("fred_indicators_%s_%s.parquet", startDate.substring(0, 10), endDate.substring(0, 10));
+    String relativePath = String.format("source=econ/type=fred_indicators/date_range=%s_%s/%s",
+        startDate.substring(0, 10), endDate.substring(0, 10), parquetFileName);
+    convertToParquet(observations, relativePath);
+
     // For compatibility, return a File representing the Parquet file
     // Note: This assumes local storage for the return value
-    return new File(parquetPath);
+    return new File(relativePath);
   }
-  
+
   /**
    * Fetches observations for a FRED series with automatic pagination handling.
    * The FRED API may return large datasets that need to be fetched in chunks.
@@ -597,21 +583,21 @@ public class FredDataDownloader {
         + "?series_id=" + seriesId
         + "&api_key=" + apiKey
         + "&file_type=json";
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(10))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("Failed to get series info for " + seriesId);
     }
-    
+
     JsonNode root = MAPPER.readTree(response.body());
     JsonNode seriesArray = root.get("seriess");
-    
+
     if (seriesArray != null && seriesArray.isArray() && seriesArray.size() > 0) {
       JsonNode series = seriesArray.get(0);
       FredSeriesInfo info = new FredSeriesInfo();
@@ -623,10 +609,10 @@ public class FredDataDownloader {
       info.lastUpdated = series.get("last_updated").asText();
       return info;
     }
-    
+
     return null;
   }
-  
+
   /**
    * Converts FRED observations to Parquet format.
    */
@@ -643,13 +629,13 @@ public class FredDataDownloader {
       map.put("frequency", obs.frequency);
       mapObservations.add(map);
     }
-    
+
     File targetFile = new File(targetFilePath);
     writeFredIndicatorsParquet(mapObservations, targetFilePath);
     LOGGER.info("Converted FRED indicators to parquet: {} ({} observations)", targetFilePath, observations.size());
   }
-  
-  
+
+
   // Data classes
   private static class FredSeriesInfo {
     String id;
@@ -659,7 +645,7 @@ public class FredDataDownloader {
     String seasonalAdjustment;
     String lastUpdated;
   }
-  
+
   private static class FredObservation {
     String seriesId;
     String seriesName;
@@ -670,19 +656,19 @@ public class FredDataDownloader {
     String seasonalAdjustment;
     String lastUpdated;
   }
-  
+
   /**
    * Converts cached FRED data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
-   * 
+   *
    * @param sourceDir Directory containing cached FRED JSON data
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
-    
+
     LOGGER.info("Converting FRED data from {} to parquet: {}", sourceDirPath, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
@@ -704,7 +690,7 @@ public class FredDataDownloader {
           String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
           JsonNode obsArray = root.get("observations");
-          
+
           if (obsArray != null && obsArray.isArray()) {
             for (JsonNode obs : obsArray) {
               Map<String, Object> observation = new HashMap<>();
@@ -714,7 +700,7 @@ public class FredDataDownloader {
               observation.put("value", obs.get("value").asDouble());
               observation.put("units", obs.get("units").asText());
               observation.put("frequency", obs.get("frequency").asText());
-              
+
               observations.add(observation);
             }
           }
@@ -723,13 +709,13 @@ public class FredDataDownloader {
         }
       }
     }
-    
+
     // Write parquet file
     writeFredIndicatorsParquet(observations, targetFilePath);
-    
+
     LOGGER.info("Converted FRED data to parquet: {} ({} observations)", targetFilePath, observations.size());
   }
-  
+
   @SuppressWarnings("deprecation")
   private void writeFredIndicatorsParquet(List<Map<String, Object>> observations, String targetPath)
       throws IOException {
@@ -778,7 +764,6 @@ public class FredDataDownloader {
 
     String startDate = startYear + "-01-01";
     String endDate = endYear + "-12-31";
-    String outputDirPath = String.format("source=econ/type=custom_fred/series=%s", seriesId);
 
     // Check if we already have this data cached
     Map<String, String> cacheParams = new HashMap<>();
@@ -787,7 +772,8 @@ public class FredDataDownloader {
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
-    String jsonFilePath = outputDirPath + "/" + seriesId + "_" + startYear + "_" + endYear + ".json";
+    String relativePath = String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json",
+        seriesId, seriesId, startYear, endYear);
 
     if (cacheManifest.isCached("custom_fred_series", startYear, cacheParams)) {
       LOGGER.info("Found cached FRED series {} data - skipping download", seriesId);
@@ -795,11 +781,11 @@ public class FredDataDownloader {
     }
 
     // Check if file exists but not in manifest
-    File jsonFile = new File(cacheDir, jsonFilePath);
+    File jsonFile = new File(cacheDir, relativePath);
     if (jsonFile.exists()) {
       LOGGER.info("Found existing FRED series {} file - updating manifest", seriesId);
       long fileSize = jsonFile.length();
-      cacheManifest.markCached("custom_fred_series", startYear, cacheParams, jsonFilePath, fileSize);
+      cacheManifest.markCached("custom_fred_series", startYear, cacheParams, relativePath, fileSize);
       cacheManifest.save(cacheDir);
       return;
     }
@@ -860,10 +846,10 @@ public class FredDataDownloader {
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     // Mark as cached in manifest
-    cacheManifest.markCached("custom_fred_series", startYear, cacheParams, jsonFilePath, jsonContent.length());
+    cacheManifest.markCached("custom_fred_series", startYear, cacheParams, relativePath, jsonContent.length());
     cacheManifest.save(cacheDir);
 
-    LOGGER.info("FRED series {} saved to: {} ({} observations)", seriesId, jsonFilePath, observations.size());
+    LOGGER.info("FRED series {} saved to: {} ({} observations)", seriesId, relativePath, observations.size());
   }
 
   /**
@@ -907,10 +893,6 @@ public class FredDataDownloader {
         seriesObservations.add(obs);
       }
     }
-
-    // Create target directory
-    File targetFile = new File(targetPath);
-    targetFile.getParentFile().mkdirs();
 
     // Write parquet file
     writeFredIndicatorsParquet(seriesObservations, targetPath);
