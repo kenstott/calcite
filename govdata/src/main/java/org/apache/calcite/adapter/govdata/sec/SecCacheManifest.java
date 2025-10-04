@@ -44,8 +44,11 @@ public class SecCacheManifest {
   @JsonProperty("entries")
   private Map<String, SubmissionCacheEntry> entries = new HashMap<>();
 
+  @JsonProperty("filings")
+  private Map<String, FilingCacheEntry> filings = new HashMap<>();
+
   @JsonProperty("version")
-  private String version = "1.0";
+  private String version = "2.0";
 
   @JsonProperty("lastUpdated")
   private long lastUpdated = System.currentTimeMillis();
@@ -248,7 +251,7 @@ public class SecCacheManifest {
       cleanupExpiredEntries();
 
       MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
-      LOGGER.debug("Saved SEC cache manifest with {} entries", entries.size());
+      LOGGER.debug("Saved SEC cache manifest with {} submissions, {} filings", entries.size(), filings.size());
     } catch (IOException e) {
       LOGGER.warn("Failed to save SEC cache manifest: {}", e.getMessage());
     }
@@ -270,6 +273,10 @@ public class SecCacheManifest {
     stats.entriesWithoutETag = stats.totalEntries - stats.entriesWithETag;
     stats.expiredEntries = (int) entries.values().stream()
         .filter(entry -> (entry.etag == null || entry.etag.isEmpty()) && now >= entry.refreshAfter)
+        .count();
+    stats.totalFilings = filings.size();
+    stats.notFoundFilings = (int) filings.values().stream()
+        .filter(entry -> "not_found".equals(entry.state))
         .count();
 
     return stats;
@@ -302,6 +309,91 @@ public class SecCacheManifest {
   }
 
   /**
+   * Cache entry for individual filing files (XBRL, HTML).
+   */
+  public static class FilingCacheEntry {
+    @JsonProperty("cik")
+    public String cik;
+
+    @JsonProperty("accession")
+    public String accession;
+
+    @JsonProperty("fileName")
+    public String fileName;
+
+    @JsonProperty("state")
+    public String state;  // "not_found" (existence tracked by submissions.json)
+
+    @JsonProperty("reason")
+    public String reason;  // Why it's not found (e.g., "404_from_server", "network_error")
+
+    @JsonProperty("checkedAt")
+    public long checkedAt;
+
+    public FilingCacheEntry() {
+    }
+
+    public FilingCacheEntry(String cik, String accession, String fileName, String state, String reason) {
+      this.cik = cik;
+      this.accession = accession;
+      this.fileName = fileName;
+      this.state = state;
+      this.reason = reason;
+      this.checkedAt = System.currentTimeMillis();
+    }
+  }
+
+  /**
+   * Check if a filing file is known to not exist.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param fileName Name of the file (e.g., "a10-qq_htm.xml")
+   * @return true if we've previously determined this file doesn't exist
+   */
+  public boolean isFileNotFound(String cik, String accession, String fileName) {
+    String key = buildFilingKey(cik, accession, fileName);
+    FilingCacheEntry entry = filings.get(key);
+    return entry != null && "not_found".equals(entry.state);
+  }
+
+  /**
+   * Mark a filing file as not found.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param fileName Name of the file
+   * @param reason Why it doesn't exist
+   */
+  public void markFileNotFound(String cik, String accession, String fileName, String reason) {
+    String key = buildFilingKey(cik, accession, fileName);
+    FilingCacheEntry entry = new FilingCacheEntry(cik, accession, fileName, "not_found", reason);
+    filings.put(key, entry);
+    this.lastUpdated = System.currentTimeMillis();
+  }
+
+
+  /**
+   * Remove a filing entry (for cache invalidation).
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param fileName Name of the file
+   */
+  public void removeFilingEntry(String cik, String accession, String fileName) {
+    String key = buildFilingKey(cik, accession, fileName);
+    filings.remove(key);
+    this.lastUpdated = System.currentTimeMillis();
+  }
+
+  /**
+   * Build a unique key for a filing file.
+   */
+  private String buildFilingKey(String cik, String accession, String fileName) {
+    return cik + "/" + accession + "/" + fileName;
+  }
+
+  /**
    * Cache statistics.
    */
   public static class CacheStats {
@@ -309,11 +401,12 @@ public class SecCacheManifest {
     public int entriesWithETag;
     public int entriesWithoutETag;
     public int expiredEntries;
+    public int totalFilings;
+    public int notFoundFilings;
 
-    @Override
-    public String toString() {
-      return String.format("SEC Cache stats: %d total, %d with ETag, %d without ETag, %d expired",
-                          totalEntries, entriesWithETag, entriesWithoutETag, expiredEntries);
+    @Override public String toString() {
+      return String.format("SEC Cache stats: %d submissions (%d with ETag, %d without ETag, %d expired), %d filings (%d not found)",
+                          totalEntries, entriesWithETag, entriesWithoutETag, expiredEntries, totalFilings, notFoundFilings);
     }
   }
 }
