@@ -74,39 +74,39 @@ public class SafetySchemaFactory implements ConstraintCapableSchemaFactory {
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     LOGGER.info("Creating public safety data schema: {}", name);
-    
+
     // Extract configuration
     String fbiApiKey = (String) operand.get("fbiApiKey");
-    String femaApiKey = (String) operand.get("femaApiKey"); 
+    String femaApiKey = (String) operand.get("femaApiKey");
     String nhtsaApiKey = (String) operand.get("nhtsaApiKey");
     String updateFrequency = (String) operand.getOrDefault("updateFrequency", "monthly");
     String historicalDepth = (String) operand.getOrDefault("historicalDepth", "5 years");
     String cacheDirectory = (String) operand.get("cacheDirectory");
-    
+
     @SuppressWarnings("unchecked")
     List<String> enabledSources = (List<String>) operand.get("enabledSources");
     if (enabledSources == null) {
       // Default to core federal sources
       enabledSources = java.util.Arrays.asList("fbi", "nhtsa", "fema");
     }
-    
+
     @SuppressWarnings("unchecked")
     Map<String, Object> localDataPortals = (Map<String, Object>) operand.get("localDataPortals");
-    
+
     @SuppressWarnings("unchecked")
     Map<String, Object> spatialAnalysis = (Map<String, Object>) operand.get("spatialAnalysis");
-    
+
     LOGGER.debug("Public safety data sources enabled: {}", enabledSources);
     LOGGER.debug("Update frequency: {}, Historical depth: {}", updateFrequency, historicalDepth);
-    
+
     if (localDataPortals != null) {
       LOGGER.debug("Local data portals configured: {}", localDataPortals.keySet());
     }
-    
+
     if (spatialAnalysis != null && Boolean.TRUE.equals(spatialAnalysis.get("enabled"))) {
       LOGGER.debug("Spatial analysis enabled with configuration: {}", spatialAnalysis);
     }
-    
+
     // Create the schema with configured sources
     return new SafetySchema(parentSchema, name, operand);
   }

@@ -35,7 +35,7 @@ import java.util.List;
 
 /**
  * Table for TIGER Census Tracts.
- * 
+ *
  * <p>Census tracts are small, relatively permanent statistical subdivisions
  * of a county or statistically equivalent entity. They generally have a
  * population between 1,200 and 8,000 people, with an optimum size of 4,000.
@@ -43,18 +43,18 @@ import java.util.List;
  */
 public class TigerCensusTractsTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerCensusTractsTable.class);
-  
+
   private final TigerDataDownloader downloader;
-  
+
   public TigerCensusTractsTable(TigerDataDownloader downloader) {
     this.downloader = downloader;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("tract_geoid", SqlTypeName.VARCHAR)     // 11-digit census tract GEOID
         .add("state_fips", SqlTypeName.VARCHAR)      // 2-digit state FIPS code
-        .add("county_fips", SqlTypeName.VARCHAR)     // 3-digit county FIPS code  
+        .add("county_fips", SqlTypeName.VARCHAR)     // 3-digit county FIPS code
         .add("tract_code", SqlTypeName.VARCHAR)      // 6-digit tract code
         .add("tract_name", SqlTypeName.VARCHAR)      // Tract name (usually numeric)
         .add("namelsad", SqlTypeName.VARCHAR)        // Name and legal/statistical description
@@ -70,19 +70,19 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
         .add("awater_sqmi", SqlTypeName.DOUBLE)      // Water area in square miles
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadCensusTractData();
@@ -90,18 +90,18 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadCensusTractData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               // Check if Census Tract data exists
               File tractDir = new File(downloader.getCacheDir(), "census_tracts");
@@ -109,10 +109,10 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
                 LOGGER.info("Downloading TIGER Census Tract data...");
                 downloader.downloadCensusTracts();
               }
-              
+
               if (tractDir.exists()) {
                 LOGGER.info("Loading Census Tract data from {}", tractDir);
-                
+
                 // Parse TIGER Census Tract shapefiles (state-level files)
                 File[] stateDirectories = tractDir.listFiles(File::isDirectory);
                 if (stateDirectories != null) {
@@ -120,21 +120,21 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
                     if (LOGGER.isDebugEnabled()) {
                       LOGGER.debug("Processing census tracts for state directory: {}", stateDir.getName());
                     }
-                    
+
                     // Parse tract shapefile for this state (e.g., tl_2024_06_tract for California)
                     String stateCode = stateDir.getName();
                     String expectedPrefix = "tl_2024_" + stateCode + "_tract";
-                    
+
                     List<Object[]> stateTracts = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
                       String geoid = TigerShapefileParser.getStringAttribute(feature, "GEOID");
                       if (geoid.length() != 11) {
                         return null; // Skip invalid tract records
                       }
-                      
+
                       String stateFips = geoid.substring(0, 2);
                       String countyFips = geoid.substring(2, 5);
                       String tractCode = geoid.substring(5, 11);
-                      
+
                       return new Object[] {
                           geoid,                                                           // tract_geoid
                           stateFips,                                                      // state_fips
@@ -154,7 +154,7 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
                           TigerShapefileParser.getDoubleAttribute(feature, "AWATER") / 2589988.110336   // awater_sqmi
                       };
                     });
-                    
+
                     data.addAll(stateTracts);
                   }
                 }
@@ -164,7 +164,7 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
             } catch (Exception e) {
               LOGGER.error("Error loading Census Tract data", e);
             }
-            
+
             return data;
           }
         };

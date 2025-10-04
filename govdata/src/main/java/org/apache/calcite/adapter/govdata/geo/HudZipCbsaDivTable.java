@@ -34,20 +34,20 @@ import java.util.List;
 
 /**
  * Table for HUD ZIP Code to CBSA Division crosswalk.
- * 
+ *
  * <p>Provides mapping between ZIP codes and CBSA Divisions (Metropolitan
  * Divisions within large Metropolitan Statistical Areas). This crosswalk
  * enables analysis at the sub-metropolitan level for large urban areas.
  */
 public class HudZipCbsaDivTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudZipCbsaDivTable.class);
-  
+
   private final HudCrosswalkFetcher fetcher;
-  
+
   public HudZipCbsaDivTable(HudCrosswalkFetcher fetcher) {
     this.fetcher = fetcher;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("zip", SqlTypeName.VARCHAR)             // 5-digit ZIP code
@@ -63,19 +63,19 @@ public class HudZipCbsaDivTable extends AbstractTable implements ScannableTable 
         .add("state_code", SqlTypeName.VARCHAR)      // 2-letter state code
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadZipCbsaDivData();
@@ -83,28 +83,28 @@ public class HudZipCbsaDivTable extends AbstractTable implements ScannableTable 
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadZipCbsaDivData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               if (fetcher != null) {
                 LOGGER.info("Loading HUD ZIP to CBSA crosswalk data for Q2 2024");
-                
+
                 // Download ZIP-CBSA crosswalk data from HUD API
                 java.io.File csvFile = fetcher.downloadZipToCbsa("2", 2024);
-                
+
                 // Load the crosswalk records from the CSV file
                 List<HudCrosswalkFetcher.CrosswalkRecord> records = fetcher.loadCrosswalkData(csvFile);
-                
+
                 // Convert to table format - filter for CBSA Division data
                 for (HudCrosswalkFetcher.CrosswalkRecord record : records) {
                   // CBSAs with divisions have separate division codes
@@ -123,16 +123,16 @@ public class HudZipCbsaDivTable extends AbstractTable implements ScannableTable 
                       record.state             // state_code
                   });
                 }
-                
+
                 LOGGER.info("Loaded {} ZIP-CBSA crosswalk records", data.size());
-                
+
               } else {
                 LOGGER.warn("HUD fetcher not configured. Cannot load ZIP-CBSA Division crosswalk.");
               }
             } catch (Exception e) {
               LOGGER.error("Error loading ZIP-CBSA crosswalk data", e);
             }
-            
+
             return data;
           }
         };

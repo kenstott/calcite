@@ -20,9 +20,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,23 +28,19 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Converts TIGER/Line shapefiles to Parquet format using StorageProvider pattern.
- * 
+ *
  * Since shapefiles consist of multiple files (.shp, .dbf, .shx, etc.),
  * this converter focuses on extracting attribute data from the .dbf file
  * and converting it to Parquet. Geometry is stored as WKT strings for now.
  */
 public class ShapefileToParquetConverter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShapefileToParquetConverter.class);
-  
+
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
 
   /**
@@ -55,7 +49,7 @@ public class ShapefileToParquetConverter {
   public ShapefileToParquetConverter(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.storageProvider = storageProvider;
   }
-  
+
   /**
    * Convert shapefiles in a directory to Parquet format using StorageProvider.
    */
@@ -64,27 +58,27 @@ public class ShapefileToParquetConverter {
       LOGGER.warn("Source directory does not exist: {}", sourceDir);
       return;
     }
-    
+
     // Process each year directory
     File[] yearDirs = sourceDir.listFiles(f -> f.isDirectory() && f.getName().startsWith("year="));
     if (yearDirs == null || yearDirs.length == 0) {
       LOGGER.info("No year directories found in {}", sourceDir);
       return;
     }
-    
+
     for (File yearDir : yearDirs) {
       String year = yearDir.getName().substring(5); // Remove "year=" prefix
       String yearRelativePath = targetRelativePath + "/" + yearDir.getName();
-      
+
       // Convert states shapefile
       convertStatesShapefile(yearDir, yearRelativePath, year);
-      
+
       // Convert counties shapefile
       convertCountiesShapefile(yearDir, yearRelativePath, year);
-      
+
       // Convert places shapefile
       convertPlacesShapefile(yearDir, yearRelativePath, year);
-      
+
       // Convert ZCTAs shapefile
       convertZctasShapefile(yearDir, yearRelativePath, year);
 
@@ -98,7 +92,7 @@ public class ShapefileToParquetConverter {
       convertCbsaShapefile(yearDir, yearRelativePath, year);
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void convertStatesShapefile(File yearDir, String targetRelativePath, String year) {
     try {
@@ -107,7 +101,7 @@ public class ShapefileToParquetConverter {
         LOGGER.debug("No states directory found in {}", yearDir);
         return;
       }
-      
+
       // Create schema with TIGER state attributes
       Schema schema = SchemaBuilder.record("State")
           .fields()
@@ -119,9 +113,9 @@ public class ShapefileToParquetConverter {
           .name("water_area").type().nullable().doubleType().noDefault()
           .name("geometry").type().nullable().stringType().noDefault()
           .endRecord();
-      
+
       String outputRelativePath = targetRelativePath + "/states.parquet";
-      
+
       // Use TigerShapefileParser to parse real shapefile data
       String expectedPrefix = "tl_" + year + "_us_state";
       List<Object[]> statesData = TigerShapefileParser.parseShapefile(statesDir, expectedPrefix, feature -> {
@@ -131,10 +125,10 @@ public class ShapefileToParquetConverter {
         String stateAbbr = TigerShapefileParser.getStringAttribute(feature, "STUSPS");
         Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
         Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
-        
+
         return new Object[]{
             stateFips,   // state_fips
-            stateCode,   // state_code  
+            stateCode,   // state_code
             stateName,   // state_name
             stateAbbr,   // state_abbr
             landArea,    // land_area
@@ -142,7 +136,7 @@ public class ShapefileToParquetConverter {
             TigerShapefileParser.getGeometryAttribute(feature)  // geometry from .shp file
         };
       });
-      
+
       // Convert data to GenericRecord list
       List<GenericRecord> records = new ArrayList<>();
       for (Object[] stateData : statesData) {
@@ -156,18 +150,18 @@ public class ShapefileToParquetConverter {
         record.put("geometry", stateData[6]);
         records.add(record);
       }
-      
+
       // Write using StorageProvider pattern
       storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
-      
-      LOGGER.info("Created states parquet file: {} with {} records from real TIGER data", 
+
+      LOGGER.info("Created states parquet file: {} with {} records from real TIGER data",
           outputRelativePath, statesData.size());
-      
+
     } catch (Exception e) {
       LOGGER.error("Error converting states shapefile", e);
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void convertCountiesShapefile(File yearDir, String targetRelativePath, String year) {
     try {
@@ -176,7 +170,7 @@ public class ShapefileToParquetConverter {
         LOGGER.debug("No counties directory found in {}", yearDir);
         return;
       }
-      
+
       // Create schema for counties
       Schema schema = SchemaBuilder.record("County")
           .fields()
@@ -188,9 +182,9 @@ public class ShapefileToParquetConverter {
           .name("water_area").type().nullable().doubleType().noDefault()
           .name("geometry").type().nullable().stringType().noDefault()
           .endRecord();
-      
+
       String outputRelativePath = targetRelativePath + "/counties.parquet";
-      
+
       // Use TigerShapefileParser to parse real shapefile data
       String expectedPrefix = "tl_" + year + "_us_county";
       List<Object[]> countiesData = TigerShapefileParser.parseShapefile(countiesDir, expectedPrefix, feature -> {
@@ -200,7 +194,7 @@ public class ShapefileToParquetConverter {
         String countyCode = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
         Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
         Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
-        
+
         return new Object[]{
             countyFips,  // county_fips
             stateFips,   // state_fips
@@ -211,7 +205,7 @@ public class ShapefileToParquetConverter {
             TigerShapefileParser.getGeometryAttribute(feature)  // geometry from .shp file
         };
       });
-      
+
       // Convert data to GenericRecord list
       List<GenericRecord> records = new ArrayList<>();
       for (Object[] countyData : countiesData) {
@@ -225,18 +219,18 @@ public class ShapefileToParquetConverter {
         record.put("geometry", countyData[6]);
         records.add(record);
       }
-      
+
       // Write using StorageProvider pattern
       storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
-      
-      LOGGER.info("Created counties parquet file: {} with {} records from real TIGER data", 
+
+      LOGGER.info("Created counties parquet file: {} with {} records from real TIGER data",
           outputRelativePath, countiesData.size());
-      
+
     } catch (Exception e) {
       LOGGER.error("Error converting counties shapefile", e);
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void convertPlacesShapefile(File yearDir, String targetRelativePath, String year) {
     try {
@@ -245,7 +239,7 @@ public class ShapefileToParquetConverter {
         LOGGER.debug("No places directory found in {}", yearDir);
         return;
       }
-      
+
       // Create schema for places
       Schema schema = SchemaBuilder.record("Place")
           .fields()
@@ -255,25 +249,25 @@ public class ShapefileToParquetConverter {
           .name("place_type").type().nullable().stringType().noDefault()
           .name("geometry").type().nullable().stringType().noDefault()
           .endRecord();
-      
+
       String outputRelativePath = targetRelativePath + "/places.parquet";
-      
-      // Process places for each state 
+
+      // Process places for each state
       List<Object[]> allPlacesData = new ArrayList<>();
-      
+
       // Look for state directories within places
       File[] stateDirs = placesDir.listFiles(File::isDirectory);
       if (stateDirs != null) {
         for (File stateDir : stateDirs) {
           String stateFips = stateDir.getName();
           String expectedPrefix = "tl_" + year + "_" + stateFips + "_place";
-          
+
           List<Object[]> statePlaces = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
             String placeFips = TigerShapefileParser.getStringAttribute(feature, "GEOID");
             String stateFipsAttr = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
             String placeName = TigerShapefileParser.getStringAttribute(feature, "NAME");
             String placeType = TigerShapefileParser.getStringAttribute(feature, "CLASSFP");
-            
+
             return new Object[]{
                 placeFips,      // place_fips
                 stateFipsAttr,  // state_fips
@@ -282,11 +276,11 @@ public class ShapefileToParquetConverter {
                 TigerShapefileParser.getGeometryAttribute(feature)  // geometry from .shp file
             };
           });
-          
+
           allPlacesData.addAll(statePlaces);
         }
       }
-      
+
       // Convert data to GenericRecord list
       List<GenericRecord> records = new ArrayList<>();
       for (Object[] placeData : allPlacesData) {
@@ -298,18 +292,18 @@ public class ShapefileToParquetConverter {
         record.put("geometry", placeData[4]);
         records.add(record);
       }
-      
+
       // Write using StorageProvider pattern
       storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
-      
-      LOGGER.info("Created places parquet file: {} with {} records from real TIGER data", 
+
+      LOGGER.info("Created places parquet file: {} with {} records from real TIGER data",
           outputRelativePath, allPlacesData.size());
-      
+
     } catch (Exception e) {
       LOGGER.error("Error converting places shapefile", e);
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void convertZctasShapefile(File yearDir, String targetRelativePath, String year) {
     try {
@@ -318,7 +312,7 @@ public class ShapefileToParquetConverter {
         LOGGER.debug("No zctas directory found in {}", yearDir);
         return;
       }
-      
+
       // Create schema for ZCTAs
       Schema schema = SchemaBuilder.record("ZCTA")
           .fields()
@@ -327,9 +321,9 @@ public class ShapefileToParquetConverter {
           .name("water_area").type().nullable().doubleType().noDefault()
           .name("geometry").type().nullable().stringType().noDefault()
           .endRecord();
-      
+
       String outputRelativePath = targetRelativePath + "/zctas.parquet";
-      
+
       // Use TigerShapefileParser to parse real ZCTA shapefile data
       String expectedPrefix = "tl_" + year + "_us_zcta520";
       List<Object[]> zctasData = TigerShapefileParser.parseShapefile(zctasDir, expectedPrefix, feature -> {
@@ -341,7 +335,7 @@ public class ShapefileToParquetConverter {
         if (zcta5.isEmpty()) {
           zcta5 = TigerShapefileParser.getStringAttribute(feature, "ZCTA5CE");
         }
-        
+
         // Try different land/water area attribute names
         Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND20");
         if (landArea == 0.0) {
@@ -350,7 +344,7 @@ public class ShapefileToParquetConverter {
         if (landArea == 0.0) {
           landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
         }
-        
+
         Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER20");
         if (waterArea == 0.0) {
           waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER10");
@@ -358,7 +352,7 @@ public class ShapefileToParquetConverter {
         if (waterArea == 0.0) {
           waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
         }
-        
+
         return new Object[]{
             zcta5,       // zcta
             landArea,    // land_area
@@ -366,7 +360,7 @@ public class ShapefileToParquetConverter {
             TigerShapefileParser.getGeometryAttribute(feature)  // geometry from .shp file
         };
       });
-      
+
       // Convert data to GenericRecord list
       List<GenericRecord> records = new ArrayList<>();
       for (Object[] zctaData : zctasData) {
@@ -377,23 +371,23 @@ public class ShapefileToParquetConverter {
         record.put("geometry", zctaData[3]);
         records.add(record);
       }
-      
+
       // Write using StorageProvider pattern
       storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
-      
-      LOGGER.info("Created zctas parquet file: {} with {} records from real TIGER data", 
+
+      LOGGER.info("Created zctas parquet file: {} with {} records from real TIGER data",
           outputRelativePath, zctasData.size());
-      
+
     } catch (Exception e) {
       LOGGER.error("Error converting zctas shapefile", e);
     }
   }
-  
+
   @SuppressWarnings("deprecation")
   private void convertStatesCsvToParquet(File csvFile, String outputRelativePath) throws IOException {
     // If a CSV export is available, convert it to Parquet
     LOGGER.info("Converting CSV file {} to Parquet", csvFile);
-    
+
     Schema schema = SchemaBuilder.record("State")
         .fields()
         .name("state_fips").type().stringType().noDefault()
@@ -404,13 +398,13 @@ public class ShapefileToParquetConverter {
         .name("water_area").type().nullable().doubleType().noDefault()
         .name("geometry").type().nullable().stringType().noDefault()
         .endRecord();
-    
+
     List<GenericRecord> records = new ArrayList<>();
-    
+
     try (BufferedReader reader = new BufferedReader(new FileReader(csvFile))) {
       String line = reader.readLine(); // Skip header
       int count = 0;
-      
+
       while ((line = reader.readLine()) != null) {
         String[] parts = line.split(",");
         if (parts.length >= 3) {
@@ -426,7 +420,7 @@ public class ShapefileToParquetConverter {
           count++;
         }
       }
-      
+
       // Write using StorageProvider pattern
       storageProvider.writeAvroParquet(outputRelativePath, schema, records, schema.getName());
       LOGGER.info("Converted {} records from CSV to Parquet", count);

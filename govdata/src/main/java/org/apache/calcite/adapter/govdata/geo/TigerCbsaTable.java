@@ -35,8 +35,8 @@ import java.util.List;
 
 /**
  * Table for TIGER Core Based Statistical Areas (CBSAs).
- * 
- * <p>CBSAs are geographic entities associated with at least one core 
+ *
+ * <p>CBSAs are geographic entities associated with at least one core
  * (urbanized area or urban cluster) of at least 10,000 population, plus
  * adjacent counties having a high degree of social and economic integration
  * with the core. CBSAs include both Metropolitan Statistical Areas (50,000+)
@@ -44,13 +44,13 @@ import java.util.List;
  */
 public class TigerCbsaTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerCbsaTable.class);
-  
+
   private final TigerDataDownloader downloader;
-  
+
   public TigerCbsaTable(TigerDataDownloader downloader) {
     this.downloader = downloader;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("cbsa_code", SqlTypeName.VARCHAR)       // 5-digit CBSA code
@@ -69,19 +69,19 @@ public class TigerCbsaTable extends AbstractTable implements ScannableTable {
         .add("awater_sqmi", SqlTypeName.DOUBLE)      // Water area in square miles
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadCbsaData();
@@ -89,18 +89,18 @@ public class TigerCbsaTable extends AbstractTable implements ScannableTable {
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadCbsaData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               // Check if CBSA data exists
               File cbsaDir = new File(downloader.getCacheDir(), "cbsa");
@@ -108,20 +108,20 @@ public class TigerCbsaTable extends AbstractTable implements ScannableTable {
                 LOGGER.info("Downloading TIGER CBSA data...");
                 downloader.downloadCbsas();
               }
-              
+
               if (cbsaDir.exists()) {
                 LOGGER.info("Loading CBSA data from {}", cbsaDir);
-                
+
                 // Parse TIGER CBSA shapefile (national-level file)
                 data = TigerShapefileParser.parseShapefile(cbsaDir, "tl_2024_us_cbsa", feature -> {
                   String cbsaCode = TigerShapefileParser.getStringAttribute(feature, "CBSAFP");
                   if (cbsaCode.isEmpty()) {
                     return null; // Skip invalid records
                   }
-                  
+
                   String memi = TigerShapefileParser.getStringAttribute(feature, "MEMI");
                   String cbsaType = "1".equals(memi) ? "Metropolitan" : "Micropolitan";
-                  
+
                   return new Object[] {
                       cbsaCode,                                                        // cbsa_code
                       TigerShapefileParser.getStringAttribute(feature, "NAME"),       // cbsa_name
@@ -145,7 +145,7 @@ public class TigerCbsaTable extends AbstractTable implements ScannableTable {
             } catch (Exception e) {
               LOGGER.error("Error loading CBSA data", e);
             }
-            
+
             return data;
           }
         };

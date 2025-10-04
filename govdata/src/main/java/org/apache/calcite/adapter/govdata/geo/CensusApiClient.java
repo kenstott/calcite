@@ -18,13 +18,13 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,14 +36,9 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -64,14 +59,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class CensusApiClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusApiClient.class);
-  
+
   private static final String BASE_URL = "https://api.census.gov/data";
   private static final String GEOCODING_URL = "https://geocoding.geo.census.gov/geocoder";
-  
+
   // Rate limiting: Census allows 500/day, we'll be conservative
   private static final int MAX_REQUESTS_PER_SECOND = 2;
   private static final long RATE_LIMIT_DELAY_MS = 500; // 2 requests per second
-  
+
   private final String apiKey;
   private final File cacheDir;
   private final List<Integer> censusYears;
@@ -79,7 +74,7 @@ public class CensusApiClient {
   private final Semaphore rateLimiter;
   private final AtomicLong lastRequestTime;
   private final StorageProvider storageProvider;
-  
+
   public CensusApiClient(String apiKey, File cacheDir) {
     this(apiKey, cacheDir, new ArrayList<>(), null);
   }
@@ -211,7 +206,7 @@ public class CensusApiClient {
     objectMapper.writeValue(jsonFile, data);
     LOGGER.debug("Saved Census data to {}", jsonFile);
   }
-  
+
   /**
    * Get demographic data from American Community Survey (ACS).
    *
@@ -221,32 +216,32 @@ public class CensusApiClient {
    * @return JSON response from Census API
    */
   public JsonNode getAcsData(int year, String variables, String geography) throws IOException {
-    String cacheKey = String.format("acs_%d_%s_%s", year, 
-        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+    String cacheKey =
+        String.format("acs_%d_%s_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
-    
+
     // Check cache first
     File cacheFile = new File(cacheDir, cacheKey + ".json");
     if (cacheFile.exists()) {
       LOGGER.debug("Using cached ACS data from {}", cacheFile);
       return objectMapper.readTree(cacheFile);
     }
-    
+
     // Build API URL
     // Note: Do not URL-encode geography parameter as it contains & characters that Census API expects
-    String url = String.format("%s/%d/acs/acs5?get=%s&for=%s&key=%s",
-        BASE_URL, year, variables, geography, apiKey);
-    
+    String url =
+        String.format("%s/%d/acs/acs5?get=%s&for=%s&key=%s", BASE_URL, year, variables, geography, apiKey);
+
     // Make API request with rate limiting
     JsonNode response = makeApiRequest(url);
-    
+
     // Cache the response
     objectMapper.writeValue(cacheFile, response);
     LOGGER.info("Cached ACS data to {}", cacheFile);
-    
+
     return response;
   }
-  
+
   /**
    * Get data from Decennial Census.
    *
@@ -270,8 +265,8 @@ public class CensusApiClient {
    * @throws IOException if API call fails
    */
   public JsonNode getDecennialData(int year, String variables, String geography, String preferredDataset) throws IOException {
-    String cacheKey = String.format("decennial_%d_%s_%s_%s", year,
-        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+    String cacheKey =
+        String.format("decennial_%d_%s_%s_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"),
         preferredDataset != null ? preferredDataset : "auto");
 
@@ -300,8 +295,8 @@ public class CensusApiClient {
     IOException lastException = null;
     for (String dataset : datasetsToTry) {
       try {
-        String url = String.format("%s/%d/dec/%s?get=%s&for=%s&key=%s",
-            BASE_URL, year, dataset, variables, geography, apiKey);
+        String url =
+            String.format("%s/%d/dec/%s?get=%s&for=%s&key=%s", BASE_URL, year, dataset, variables, geography, apiKey);
 
         LOGGER.debug("Trying decennial API call with dataset '{}': {}", dataset, url);
 
@@ -321,7 +316,8 @@ public class CensusApiClient {
     }
 
     // All datasets failed
-    throw new IOException(String.format("All datasets failed for decennial year %d with variables %s: %s",
+    throw new IOException(
+        String.format("All datasets failed for decennial year %d with variables %s: %s",
         year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
   }
 
@@ -335,8 +331,8 @@ public class CensusApiClient {
    * @throws IOException if API call fails
    */
   public JsonNode getEconomicData(int year, String variables, String geography) throws IOException {
-    String cacheKey = String.format("economic_%d_%s_%s", year,
-        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+    String cacheKey =
+        String.format("economic_%d_%s_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
     // Check cache first
@@ -358,8 +354,8 @@ public class CensusApiClient {
 
     for (String ds : datasetsToTry) {
       try {
-        String url = String.format("%s/%d/%s?get=%s&for=%s&key=%s",
-            BASE_URL, year, ds, variables, geography, apiKey);
+        String url =
+            String.format("%s/%d/%s?get=%s&for=%s&key=%s", BASE_URL, year, ds, variables, geography, apiKey);
 
         LOGGER.debug("Trying economic API call with dataset '{}': {}", ds, url);
 
@@ -379,7 +375,8 @@ public class CensusApiClient {
     }
 
     // All datasets failed
-    throw new IOException(String.format("All datasets failed for economic year %d with variables %s: %s",
+    throw new IOException(
+        String.format("All datasets failed for economic year %d with variables %s: %s",
         year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
   }
 
@@ -393,8 +390,8 @@ public class CensusApiClient {
    * @throws IOException if API call fails
    */
   public JsonNode getPopulationEstimatesData(int year, String variables, String geography) throws IOException {
-    String cacheKey = String.format("population_%d_%s_%s", year,
-        variables.replaceAll("[^a-zA-Z0-9]", "_"),
+    String cacheKey =
+        String.format("population_%d_%s_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
     // Check cache first
@@ -417,8 +414,8 @@ public class CensusApiClient {
     for (String ds : datasetsToTry) {
       try {
         // Population Estimates API path structure
-        String url = String.format("%s/%d/pep/%s?get=%s&for=%s&key=%s",
-            BASE_URL, year, ds, variables, geography, apiKey);
+        String url =
+            String.format("%s/%d/pep/%s?get=%s&for=%s&key=%s", BASE_URL, year, ds, variables, geography, apiKey);
 
         LOGGER.debug("Trying population API call with dataset '{}': {}", ds, url);
 
@@ -438,7 +435,8 @@ public class CensusApiClient {
     }
 
     // All datasets failed
-    throw new IOException(String.format("All datasets failed for population year %d with variables %s: %s",
+    throw new IOException(
+        String.format("All datasets failed for population year %d with variables %s: %s",
         year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
   }
 
@@ -451,37 +449,37 @@ public class CensusApiClient {
    * @param zip ZIP code (optional)
    * @return Geocoding result with lat/lon and Census geography codes
    */
-  public GeocodeResult geocodeAddress(String street, String city, String state, String zip) 
+  public GeocodeResult geocodeAddress(String street, String city, String state, String zip)
       throws IOException {
-    
+
     // Build geocoding URL
     StringBuilder urlBuilder = new StringBuilder(GEOCODING_URL);
     urlBuilder.append("/locations/onelineaddress?address=");
-    
+
     // Construct address string
     String address = street + ", " + city + ", " + state;
     if (zip != null && !zip.isEmpty()) {
       address += " " + zip;
     }
     urlBuilder.append(URLEncoder.encode(address, "UTF-8"));
-    
+
     urlBuilder.append("&benchmark=2020");
     urlBuilder.append("&format=json");
-    
+
     // Make API request (geocoding doesn't require API key)
     JsonNode response = makeApiRequest(urlBuilder.toString());
-    
+
     // Parse result
     JsonNode result = response.get("result");
     if (result != null && result.has("addressMatches") && result.get("addressMatches").size() > 0) {
       JsonNode match = result.get("addressMatches").get(0);
       JsonNode coords = match.get("coordinates");
       JsonNode geos = match.get("geographies");
-      
+
       GeocodeResult geocodeResult = new GeocodeResult();
       geocodeResult.latitude = coords.get("y").asDouble();
       geocodeResult.longitude = coords.get("x").asDouble();
-      
+
       // Extract Census geography codes
       if (geos != null && geos.has("Census Tracts")) {
         JsonNode tract = geos.get("Census Tracts").get(0);
@@ -490,13 +488,13 @@ public class CensusApiClient {
         geocodeResult.tractCode = tract.get("TRACT").asText();
         geocodeResult.blockGroup = tract.get("BLKGRP").asText();
       }
-      
+
       return geocodeResult;
     }
-    
+
     return null; // No match found
   }
-  
+
   /**
    * Make an API request with rate limiting.
    */
@@ -504,7 +502,7 @@ public class CensusApiClient {
     try {
       // Rate limiting
       rateLimiter.acquire();
-      
+
       // Ensure minimum time between requests
       long now = System.currentTimeMillis();
       long timeSinceLastRequest = now - lastRequestTime.get();
@@ -512,7 +510,7 @@ public class CensusApiClient {
         Thread.sleep(RATE_LIMIT_DELAY_MS - timeSinceLastRequest);
       }
       lastRequestTime.set(System.currentTimeMillis());
-      
+
       // Make HTTP request (Java 8 compatible)
       URI uri = URI.create(urlString);
       URL url = uri.toURL();
@@ -520,15 +518,15 @@ public class CensusApiClient {
       conn.setRequestMethod("GET");
       conn.setConnectTimeout(10000);
       conn.setReadTimeout(30000);
-      
+
       int responseCode = conn.getResponseCode();
       if (responseCode == HttpURLConnection.HTTP_OK) {
         return objectMapper.readTree(conn.getInputStream());
       } else {
-        throw new IOException("Census API request failed with code " + responseCode + 
+        throw new IOException("Census API request failed with code " + responseCode +
             " for URL: " + urlString);
       }
-      
+
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Rate limiting interrupted", e);
@@ -536,7 +534,7 @@ public class CensusApiClient {
       rateLimiter.release();
     }
   }
-  
+
   /**
    * Convert Census API JSON response to CSV for easier processing.
    */
@@ -544,7 +542,7 @@ public class CensusApiClient {
     if (!jsonData.isArray() || jsonData.size() < 2) {
       throw new IllegalArgumentException("Invalid Census API response format");
     }
-    
+
     try (FileWriter writer = new FileWriter(outputFile)) {
       // First row is headers
       JsonNode headers = jsonData.get(0);
@@ -553,7 +551,7 @@ public class CensusApiClient {
         writer.write(headers.get(i).asText());
       }
       writer.write("\n");
-      
+
       // Remaining rows are data
       for (int row = 1; row < jsonData.size(); row++) {
         JsonNode dataRow = jsonData.get(row);
@@ -564,10 +562,10 @@ public class CensusApiClient {
         writer.write("\n");
       }
     }
-    
+
     LOGGER.info("Converted Census API response to CSV: {}", outputFile);
   }
-  
+
   /**
    * Result of geocoding an address.
    */
@@ -578,13 +576,13 @@ public class CensusApiClient {
     public String countyFips;
     public String tractCode;
     public String blockGroup;
-    
+
     @Override public String toString() {
       return String.format("GeocodeResult[lat=%.6f, lon=%.6f, state=%s, county=%s, tract=%s]",
           latitude, longitude, stateFips, countyFips, tractCode);
     }
   }
-  
+
   /**
    * Common Census variables for reference.
    */
@@ -593,22 +591,22 @@ public class CensusApiClient {
     public static final String TOTAL_POPULATION = "B01001_001E";
     public static final String MALE_POPULATION = "B01001_002E";
     public static final String FEMALE_POPULATION = "B01001_026E";
-    
+
     // Income
     public static final String MEDIAN_HOUSEHOLD_INCOME = "B19013_001E";
     public static final String PER_CAPITA_INCOME = "B19301_001E";
-    
+
     // Housing
     public static final String TOTAL_HOUSING_UNITS = "B25001_001E";
     public static final String OCCUPIED_HOUSING_UNITS = "B25002_002E";
     public static final String VACANT_HOUSING_UNITS = "B25002_003E";
     public static final String MEDIAN_HOME_VALUE = "B25077_001E";
-    
+
     // Employment
     public static final String LABOR_FORCE = "B23025_002E";
     public static final String EMPLOYED = "B23025_004E";
     public static final String UNEMPLOYED = "B23025_005E";
-    
+
     // Education
     public static final String HIGH_SCHOOL_GRADUATE = "B15003_017E";
     public static final String BACHELORS_DEGREE = "B15003_022E";

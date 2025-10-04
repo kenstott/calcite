@@ -35,7 +35,7 @@ import java.util.List;
 
 /**
  * Table for TIGER Census Block Groups.
- * 
+ *
  * <p>Block groups are statistical divisions of census tracts, generally containing
  * between 600 and 3,000 people. They are the smallest geographic unit for which
  * the Census Bureau publishes sample data (ACS data). Block groups are crucial
@@ -43,13 +43,13 @@ import java.util.List;
  */
 public class TigerBlockGroupsTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerBlockGroupsTable.class);
-  
+
   private final TigerDataDownloader downloader;
-  
+
   public TigerBlockGroupsTable(TigerDataDownloader downloader) {
     this.downloader = downloader;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("bg_geoid", SqlTypeName.VARCHAR)        // 12-digit block group GEOID
@@ -70,19 +70,19 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
         .add("awater_sqmi", SqlTypeName.DOUBLE)      // Water area in square miles
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadBlockGroupData();
@@ -90,18 +90,18 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadBlockGroupData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               // Check if Block Group data exists
               File bgDir = new File(downloader.getCacheDir(), "block_groups");
@@ -109,10 +109,10 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
                 LOGGER.info("Downloading TIGER Block Group data...");
                 downloader.downloadBlockGroups();
               }
-              
+
               if (bgDir.exists()) {
                 LOGGER.info("Loading Block Group data from {}", bgDir);
-                
+
                 // Parse TIGER Block Group shapefiles (state-level files)
                 File[] stateDirectories = bgDir.listFiles(File::isDirectory);
                 if (stateDirectories != null) {
@@ -120,22 +120,22 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
                     if (LOGGER.isDebugEnabled()) {
                       LOGGER.debug("Processing block groups for state directory: {}", stateDir.getName());
                     }
-                    
+
                     // Parse block group shapefile for this state (e.g., tl_2024_06_bg for California)
                     String stateCode = stateDir.getName();
                     String expectedPrefix = "tl_2024_" + stateCode + "_bg";
-                    
+
                     List<Object[]> stateBlockGroups = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
                       String geoid = TigerShapefileParser.getStringAttribute(feature, "GEOID");
                       if (geoid.length() != 12) {
                         return null; // Skip invalid block group records
                       }
-                      
+
                       String stateFips = geoid.substring(0, 2);
                       String countyFips = geoid.substring(2, 5);
                       String tractCode = geoid.substring(5, 11);
                       String blkgrp = geoid.substring(11, 12);
-                      
+
                       return new Object[] {
                           geoid,                                                           // bg_geoid
                           stateFips,                                                      // state_fips
@@ -155,7 +155,7 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
                           TigerShapefileParser.getDoubleAttribute(feature, "AWATER") / 2589988.110336   // awater_sqmi
                       };
                     });
-                    
+
                     data.addAll(stateBlockGroups);
                   }
                 }
@@ -165,7 +165,7 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
             } catch (Exception e) {
               LOGGER.error("Error loading Block Group data", e);
             }
-            
+
             return data;
           }
         };

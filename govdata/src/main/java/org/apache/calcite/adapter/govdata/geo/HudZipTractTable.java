@@ -37,13 +37,13 @@ import java.util.List;
  */
 public class HudZipTractTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudZipTractTable.class);
-  
+
   private final HudCrosswalkFetcher hudFetcher;
-  
+
   public HudZipTractTable(HudCrosswalkFetcher hudFetcher) {
     this.hudFetcher = hudFetcher;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("zip", SqlTypeName.VARCHAR)
@@ -56,20 +56,20 @@ public class HudZipTractTable extends AbstractTable implements ScannableTable {
         .add("state", SqlTypeName.VARCHAR)
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         try {
           LOGGER.info("Fetching HUD ZIP-Tract crosswalk data for Q2 2024");
-          
+
           // Download latest crosswalk data from HUD API
           java.io.File csvFile = hudFetcher.downloadZipToTract("2", 2024);
-          
+
           // Load the actual crosswalk records from the CSV file
           List<HudCrosswalkFetcher.CrosswalkRecord> records = hudFetcher.loadCrosswalkData(csvFile);
           return new HudZipTractEnumerator(records);
-          
+
         } catch (Exception e) {
           LOGGER.error("Error fetching HUD ZIP-Tract data", e);
           throw new RuntimeException("Failed to fetch HUD ZIP-Tract data", e);
@@ -77,11 +77,11 @@ public class HudZipTractTable extends AbstractTable implements ScannableTable {
       }
     };
   }
-  
+
   private static class HudZipTractEnumerator implements Enumerator<Object[]> {
     private final Iterator<Object[]> iterator;
     private Object[] current;
-    
+
     HudZipTractEnumerator(List<HudCrosswalkFetcher.CrosswalkRecord> records) {
       this.iterator = records.stream()
           .map(record -> new Object[] {
@@ -96,11 +96,11 @@ public class HudZipTractTable extends AbstractTable implements ScannableTable {
           })
           .iterator();
     }
-    
+
     @Override public Object[] current() {
       return current;
     }
-    
+
     @Override public boolean moveNext() {
       if (iterator.hasNext()) {
         current = iterator.next();
@@ -108,11 +108,11 @@ public class HudZipTractTable extends AbstractTable implements ScannableTable {
       }
       return false;
     }
-    
+
     @Override public void reset() {
       throw new UnsupportedOperationException("Reset not supported");
     }
-    
+
     @Override public void close() {
       // Nothing to close
     }
