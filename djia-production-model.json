@@ -3,32 +3,6 @@
   "defaultSchema": "sec",
   "schemas": [
     {
-      "name": "sec",
-      "type": "custom",
-      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-      "operand": {
-        "dataSource": "sec",
-        "executionEngine": "DUCKDB",
-        "s3Config": {
-          "region": "${AWS_REGION:us-east-1}",
-          "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
-        },
-        "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
-        "startYear": 2010,
-        "endYear": 2024,
-        "autoDownload": true,
-        "ciks": ["DJIA"],
-        "enabledForms": ["10-K", "10-Q", "8-K", "DEF 14A", "3", "4", "5"],
-        "excludeForms": ["424B"],
-        "downloadTimeout": 2147483647,
-        "maxConcurrentDownloads": 5,
-        "rateLimitDelayMs": 100,
-        "fetchStockPrices": true
-      }
-    },
-    {
       "name": "econ",
       "type": "custom",
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
@@ -79,14 +53,12 @@
         "executionEngine": "DUCKDB",
         "storageProvider": "S3",
         "s3Config": {
-          "bucket": "${GOVDATA_S3_BUCKET}",
           "region": "${AWS_REGION:us-east-1}",
           "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
-          "prefix": "govdata-production/"
+          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
         },
         "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "parquetDirectory": "${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
+        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
         "startYear": 2010,
         "endYear": 2024,
         "autoDownload": true,
@@ -105,16 +77,13 @@
       "operand": {
         "dataSource": "census",
         "executionEngine": "DUCKDB",
-        "storageProvider": "S3",
         "s3Config": {
-          "bucket": "${GOVDATA_S3_BUCKET}",
           "region": "${AWS_REGION:us-east-1}",
           "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
-          "prefix": "govdata-production/"
+          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
         },
         "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "parquetDirectory": "${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
+        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
         "startYear": 2010,
         "endYear": 2024,
         "autoDownload": true,
