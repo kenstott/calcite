@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -2509,7 +2510,7 @@ public class BeaDataDownloader {
       return;
     }
 
-    // Read JSON file
+    // Read JSON file from local cache (not via storage provider)
     File jsonFile = new File(sourceDir, "trade_statistics.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("Trade statistics JSON file not found: {}", jsonFile.getAbsolutePath());
@@ -2517,7 +2518,7 @@ public class BeaDataDownloader {
     }
 
     String jsonContent;
-    try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
+    try (InputStream inputStream = new FileInputStream(jsonFile)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseTradeStatisticsJson(jsonContent);
@@ -2634,7 +2635,7 @@ public class BeaDataDownloader {
       return;
     }
 
-    // Read JSON file
+    // Read JSON file from local cache (not via storage provider)
     File jsonFile = new File(sourceDir, "ita_data.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("ITA data JSON file not found: {}", jsonFile.getAbsolutePath());
@@ -2642,7 +2643,7 @@ public class BeaDataDownloader {
     }
 
     String jsonContent;
-    try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
+    try (InputStream inputStream = new FileInputStream(jsonFile)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseItaDataJson(jsonContent);
@@ -2759,7 +2760,8 @@ public class BeaDataDownloader {
     }
 
     String jsonContent;
-    try (InputStream inputStream = storageProvider.openInputStream(jsonFile.getAbsolutePath())) {
+    // Read JSON file from local cache (not via storage provider)
+    try (InputStream inputStream = new FileInputStream(jsonFile)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseIndustryGdpJson(jsonContent);
