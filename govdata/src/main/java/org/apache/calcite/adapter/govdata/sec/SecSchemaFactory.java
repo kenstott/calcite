@@ -1894,30 +1894,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             LOGGER.debug("Filing has inline XBRL, skipping separate XBRL file detection: {}", primaryDoc);
           }
         } else {
-          // Try to find separate XBRL file - 3 approaches in order:
-          // 1. FilingSummary.xml (most reliable - SEC's own metadata)
-          // 2. Pattern-based construction (ticker-YYYYMMDD.xml)
-          // 3. Old pattern as last resort (primaryDoc_htm.xml)
-          xbrlDoc = getXbrlFilenameFromSummary(provider, cik, accession, accessionDir);
-
-          // If FilingSummary.xml exists but has no instance doc, check HTML for inline XBRL
-          if (xbrlDoc == null && cacheManifest.isFilingSummaryNotFound(cik, accession)) {
-            // FilingSummary.xml was checked and had no instance - likely inline XBRL
-            // But we haven't downloaded HTML yet, so mark for HTML check after download
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("FilingSummary.xml has no instance document - will check HTML after download");
-            }
-          }
-
+          // For separate XBRL files, use pattern-based construction for initial cache check
+          // We'll try FilingSummary.xml later if we actually need to download
+          xbrlDoc = constructXbrlFilename(cik, reportDate);
           if (xbrlDoc == null) {
-            xbrlDoc = constructXbrlFilename(cik, reportDate);
-          }
-          if (xbrlDoc == null) {
-            // Fallback to old pattern (may result in 404)
+            // Fallback to old pattern
             xbrlDoc = primaryDoc.replace(".htm", "_htm.xml");
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Using fallback XBRL filename pattern: {}", xbrlDoc);
-            }
           }
           xbrlFile = new File(accessionDir, xbrlDoc);
         }
@@ -2101,7 +2083,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "download_failed: " + e.getMessage());
             }
           } else {
-            // For other forms, download the XBRL file directly
+            // For other forms, try FilingSummary.xml first for accurate filename
+            String actualXbrlFilename = getXbrlFilenameFromSummary(provider, cik, accession, accessionDir);
+            if (actualXbrlFilename != null && !actualXbrlFilename.equals(xbrlDoc)) {
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("FilingSummary.xml provided more accurate filename: {} (was: {})", actualXbrlFilename, xbrlDoc);
+              }
+              xbrlDoc = actualXbrlFilename;
+              xbrlFile = new File(accessionDir, xbrlDoc);
+            }
+
+            // Download the XBRL file
             String xbrlUrl =
                 String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
                 cik, accessionClean, xbrlDoc);
