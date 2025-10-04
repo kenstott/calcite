@@ -39,6 +39,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -46,9 +48,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.calcite.util.Static.RESOURCE;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Deviant implementation of {@link SqlValidatorScope} for the top of the scope
@@ -59,7 +58,7 @@ import org.slf4j.LoggerFactory;
  */
 class EmptyScope implements SqlValidatorScope {
   //~ Instance fields --------------------------------------------------------
-  
+
   private static final Logger LOGGER = LoggerFactory.getLogger(EmptyScope.class);
   protected final SqlValidatorImpl validator;
 
@@ -100,7 +99,7 @@ class EmptyScope implements SqlValidatorScope {
     LOGGER.info("=== EmptyScope.resolveTable ===");
     LOGGER.info("Names to resolve: {}", names);
     LOGGER.info("Schema paths: {}", validator.catalogReader.getSchemaPaths());
-    
+
     final List<Resolve> imperfectResolves = new ArrayList<>();
     final List<Resolve> resolves = ((ResolvedImpl) resolved).resolves;
 
@@ -134,9 +133,9 @@ class EmptyScope implements SqlValidatorScope {
     CalciteSchema schema = rootSchema;
     SqlValidatorNamespace namespace = null;
     List<String> remainingNames = concat;
-    
+
     LOGGER.info("resolve_: schemaNames={}, names={}, concat={}", schemaNames, names, concat);
-    LOGGER.info("Starting with schema: {} (available tables: {})", 
+    LOGGER.info("Starting with schema: {} (available tables: {})",
         schema.name, schema.getTableNames());
     for (String schemaName : concat) {
       if (schema == rootSchema
@@ -180,7 +179,7 @@ class EmptyScope implements SqlValidatorScope {
         resolved.found(namespace, false, this, path, remainingNames);
         return;
       } else {
-        LOGGER.info("Table '{}' NOT found in schema: {} (available: {})", 
+        LOGGER.info("Table '{}' NOT found in schema: {} (available: {})",
             schemaName, schema.name, schema.getTableNames());
       }
       // neither sub-schema nor table

@@ -21,16 +21,15 @@ import org.apache.calcite.avatica.MetaImpl;
 import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.linq4j.tree.Expression;
+import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeImpl;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelProtoDataType;
-import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Schemas;
@@ -88,7 +87,7 @@ public class JdbcSchema implements Schema, Wrapper {
   final JdbcConvention convention;
   private @Nullable ImmutableMap<String, JdbcTable> tableMap;
   private final boolean snapshot;
-  
+
   // Constraint metadata from model files (supplements JDBC metadata)
   private Map<String, Map<String, Object>> constraintMetadata = new java.util.HashMap<>();
 
@@ -362,26 +361,26 @@ public class JdbcSchema implements Schema, Wrapper {
   @Override public @Nullable Table getTable(String name) {
     return getTableMap(false).get(name);
   }
-  
+
   /**
    * Sets constraint metadata for tables in this schema.
    * Called by JdbcSchema.Factory to pass constraint definitions from model files.
    * This supplements the constraint metadata that JDBC provides.
-   * 
+   *
    * @param constraintMetadata Map from table name to constraint definitions
    */
   public void setConstraintMetadata(Map<String, Map<String, Object>> constraintMetadata) {
     this.constraintMetadata = constraintMetadata;
     LOGGER.debug("Received constraint metadata for {} tables", constraintMetadata.size());
-    
+
     // This metadata will supplement what JDBC provides
     // Useful for databases that don't expose full constraint metadata via JDBC
   }
-  
+
   /**
    * Gets constraint metadata for a specific table.
    * This returns model-file-defined constraints, not JDBC metadata.
-   * 
+   *
    * @param tableName The table name
    * @return Constraint metadata or null if none defined in model file
    */
@@ -612,7 +611,7 @@ public class JdbcSchema implements Schema, Wrapper {
    */
   public static class Factory implements ConstraintCapableSchemaFactory {
     public static final Factory INSTANCE = new Factory();
-    
+
     // Store constraint metadata from model files
     private Map<String, Map<String, Object>> tableConstraints;
     private List<JsonTable> tableDefinitions;
@@ -624,24 +623,22 @@ public class JdbcSchema implements Schema, Wrapper {
         String name,
         Map<String, Object> operand) {
       JdbcSchema jdbcSchema = JdbcSchema.create(parentSchema, name, operand);
-      
+
       // Pass constraint metadata to JdbcSchema if available
       if (tableConstraints != null && !tableConstraints.isEmpty()) {
         jdbcSchema.setConstraintMetadata(tableConstraints);
       }
-      
+
       return jdbcSchema;
     }
-    
-    @Override
-    public boolean supportsConstraints() {
+
+    @Override public boolean supportsConstraints() {
       // Enable constraint support for JDBC-based schemas
       // This allows model files to override/supplement JDBC metadata
       return true;
     }
-    
-    @Override
-    public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+
+    @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
         List<JsonTable> tableDefinitions) {
       this.tableConstraints = tableConstraints;
       this.tableDefinitions = tableDefinitions;

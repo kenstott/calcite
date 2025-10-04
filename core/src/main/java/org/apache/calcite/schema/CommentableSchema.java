@@ -36,8 +36,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>Comments can then be queried via SQL:
  * <pre>
- * SELECT schema_name, schema_comment 
- * FROM information_schema.schemata 
+ * SELECT schema_name, schema_comment
+ * FROM information_schema.schemata
  * WHERE schema_comment IS NOT NULL;
  * </pre>
  */
