@@ -104,3 +104,6 @@ geo-credentials.properties
 *-credentials.properties
 /tmp/calcite-geo-cache/
 /geo-cache/
+
+# Production environment files (contain credentials)
+djia-production-env.sh
