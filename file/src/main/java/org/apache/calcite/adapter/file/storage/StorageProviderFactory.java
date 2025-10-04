@@ -119,6 +119,9 @@ public class StorageProviderFactory {
         if (config != null && config.containsKey("s3Client")) {
           // Custom S3 client provided
           return new S3StorageProvider((AmazonS3) config.get("s3Client"));
+        } else if (config != null && !config.isEmpty()) {
+          // Configuration map provided with credentials/region
+          return new S3StorageProvider(config);
         }
         return getCachedProvider("s3", S3StorageProvider::new);
 
@@ -126,7 +129,7 @@ public class StorageProviderFactory {
         if (config != null && config.containsKey("hadoopConfig")) {
           // Custom Hadoop configuration provided
           try {
-            org.apache.hadoop.conf.Configuration hadoopConfig = 
+            org.apache.hadoop.conf.Configuration hadoopConfig =
                 (org.apache.hadoop.conf.Configuration) config.get("hadoopConfig");
             return new HDFSStorageProvider(hadoopConfig);
           } catch (Exception e) {

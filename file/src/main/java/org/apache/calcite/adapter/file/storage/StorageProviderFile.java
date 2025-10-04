@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * A File wrapper that provides unified interface for both local files 
+ * A File wrapper that provides unified interface for both local files
  * and remote storage files accessed through a StorageProvider.
  */
 public class StorageProviderFile extends File {
@@ -53,8 +53,7 @@ public class StorageProviderFile extends File {
     return path;
   }
 
-  @Override
-  public boolean exists() {
+  @Override public boolean exists() {
     if (isLocal) {
       return super.exists();
     } else {
@@ -66,8 +65,7 @@ public class StorageProviderFile extends File {
     }
   }
 
-  @Override
-  public long lastModified() {
+  @Override public long lastModified() {
     if (isLocal) {
       return super.lastModified();
     } else {
@@ -75,8 +73,7 @@ public class StorageProviderFile extends File {
     }
   }
 
-  @Override
-  public long length() {
+  @Override public long length() {
     if (isLocal) {
       return super.length();
     } else {
@@ -84,8 +81,7 @@ public class StorageProviderFile extends File {
     }
   }
 
-  @Override
-  public boolean delete() {
+  @Override public boolean delete() {
     if (isLocal) {
       return super.delete();
     } else {
@@ -97,8 +93,7 @@ public class StorageProviderFile extends File {
     }
   }
 
-  @Override
-  public boolean mkdirs() {
+  @Override public boolean mkdirs() {
     if (isLocal) {
       return super.mkdirs();
     } else {
@@ -183,8 +178,8 @@ public class StorageProviderFile extends File {
    * Create a StorageProviderFile for the given path using the appropriate storage provider.
    */
   public static StorageProviderFile create(String path, StorageProvider storageProvider) {
-    if (storageProvider instanceof LocalFileStorageProvider || 
-        (path.startsWith("/") && !path.startsWith("hdfs://")) || 
+    if (storageProvider instanceof LocalFileStorageProvider ||
+        (path.startsWith("/") && !path.startsWith("hdfs://")) ||
         path.matches("^[A-Za-z]:.*")) {
       // Local filesystem path
       return new StorageProviderFile(path);

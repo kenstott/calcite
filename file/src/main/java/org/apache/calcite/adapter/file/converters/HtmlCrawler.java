@@ -36,14 +36,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Crawler that discovers and processes HTML tables and linked data files.
  */
 public class HtmlCrawler {
-  private static final Logger LOGGER = Logger.getLogger(HtmlCrawler.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(HtmlCrawler.class);
 
   /**
    * Result of a crawl operation.
@@ -165,7 +165,7 @@ public class HtmlCrawler {
         }
 
         if (visited.size() >= config.getMaxPages()) {
-          LOGGER.warning("Reached maximum page limit of " + config.getMaxPages());
+          LOGGER.warn("Reached maximum page limit of " + config.getMaxPages());
           return result;
         }
 
@@ -198,7 +198,7 @@ public class HtmlCrawler {
           }
 
         } catch (Exception e) {
-          LOGGER.log(Level.WARNING, "Failed to process " + url, e);
+          LOGGER.warn("Failed to process " + url, e);
           result.markFailed(url);
         }
       }
@@ -230,7 +230,7 @@ public class HtmlCrawler {
       // Check if already processed
       ResourceMetadata cached = processedDataFiles.get(url);
       if (cached != null && !cached.isExpired(config.getDataFileCacheTTL().toMillis())) {
-        LOGGER.fine("Skipping already processed data file: " + url);
+        LOGGER.debug("Skipping already processed data file: " + url);
         return;
       }
 
@@ -241,7 +241,7 @@ public class HtmlCrawler {
         long maxSize = config.getSizeLimitForExtension(extension);
 
         if (contentLength > maxSize) {
-          LOGGER.warning("Data file too large: " + url + " (" + contentLength + " bytes exceeds limit of " + maxSize + ")");
+          LOGGER.warn("Data file too large: " + url + " (" + contentLength + " bytes exceeds limit of " + maxSize + ")");
           return;
         }
       }
@@ -271,7 +271,7 @@ public class HtmlCrawler {
       LOGGER.info("Downloaded data file: " + url + " -> " + tempFile.getName());
 
     } catch (Exception e) {
-      LOGGER.log(Level.WARNING, "Failed to process data file: " + url, e);
+      LOGGER.warn("Failed to process data file: " + url, e);
       result.markFailed(url);
     }
   }

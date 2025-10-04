@@ -21,14 +21,11 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
-import org.apache.calcite.adapter.file.storage.S3StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.model.ModelHandler;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.lookup.LikePattern;
@@ -57,7 +54,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
   /** Public singleton, per factory contract. */
   public static final FileSchemaFactory INSTANCE = new FileSchemaFactory();
-  
+
   // Store constraint metadata from model files
   private Map<String, Map<String, Object>> tableConstraints;
   private List<JsonTable> tableDefinitions;
@@ -234,7 +231,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     String storageType = (String) operand.get("storageType");
     @SuppressWarnings("unchecked") Map<String, Object> storageConfig =
         (Map<String, Object>) operand.get("storageConfig");
-    
+
     // Auto-detect storage type from directory path
     if (storageType == null && directory != null) {
       if (directory.startsWith("s3://")) {
@@ -248,7 +245,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         LOGGER.info("Auto-detected HDFS storage from directory path: {}", directory);
       }
     }
-    
+
     // Auto-detect storage type from baseDirectory path for cache/parquet locations
     final Object baseDirObj = operand.get("baseDirectory");
     if (storageType == null && baseDirObj instanceof String) {
@@ -485,7 +482,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Register text similarity functions if enabled
-    @SuppressWarnings("unchecked") 
+    @SuppressWarnings("unchecked")
     Map<String, Object> textSimilarity = (Map<String, Object>) operand.get("textSimilarity");
     if (textSimilarity != null) {
       Boolean enabled = (Boolean) textSimilarity.get("enabled");
@@ -494,11 +491,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         try {
           // Register functions on the parent schema
           org.apache.calcite.adapter.file.similarity.SimilarityFunctions.registerFunctions(schemaPlus);
-          
+
           // Also register functions directly on the FileSchema instance for direct schema queries
           com.google.common.collect.ImmutableMultimap.Builder<String, org.apache.calcite.schema.Function> functionBuilder =
               com.google.common.collect.ImmutableMultimap.builder();
-          
+
           // Add similarity functions to the FileSchema
           functionBuilder.put("COSINE_SIMILARITY",
               org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
@@ -527,9 +524,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           functionBuilder.put("EMBED",
               org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
                   org.apache.calcite.adapter.file.similarity.SimilarityFunctions.class, "embed"));
-          
+
           fileSchema.setFunctionMultimap(functionBuilder.build());
-          
+
           LOGGER.info("FileSchemaFactory: Successfully registered text similarity functions on both parent schema and FileSchema instance");
         } catch (Exception e) {
           LOGGER.warn("FileSchemaFactory: Failed to register similarity functions: " + e.getMessage(), e);
@@ -641,15 +638,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
     return null;
   }
-  
-  @Override
-  public boolean supportsConstraints() {
+
+  @Override public boolean supportsConstraints() {
     // Enable constraint support for file-based schemas
     return true;
   }
-  
-  @Override
-  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+
+  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;

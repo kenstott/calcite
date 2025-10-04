@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Interface for text embedding providers.
- * 
+ *
  * Supports multiple embedding backends:
  * - Local ONNX models (sentence-transformers, etc.)
  * - Remote APIs (OpenAI, Cohere, Anthropic, etc.)
@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
  * - Custom domain-specific models
  */
 public interface TextEmbeddingProvider {
-  
+
   /**
    * Generate embedding for a single text.
    *
@@ -38,7 +38,7 @@ public interface TextEmbeddingProvider {
    * @throws EmbeddingException if embedding generation fails
    */
   double[] generateEmbedding(String text) throws EmbeddingException;
-  
+
   /**
    * Generate embeddings for multiple texts (batch processing).
    * More efficient than individual calls for large volumes.
@@ -48,7 +48,7 @@ public interface TextEmbeddingProvider {
    * @throws EmbeddingException if batch embedding fails
    */
   List<double[]> generateEmbeddings(List<String> texts) throws EmbeddingException;
-  
+
   /**
    * Generate embeddings asynchronously.
    *
@@ -56,7 +56,7 @@ public interface TextEmbeddingProvider {
    * @return Future containing the embedding array
    */
   CompletableFuture<double[]> generateEmbeddingAsync(String text);
-  
+
   /**
    * Generate embeddings for multiple texts asynchronously.
    *
@@ -64,49 +64,49 @@ public interface TextEmbeddingProvider {
    * @return Future containing list of embedding arrays
    */
   CompletableFuture<List<double[]>> generateEmbeddingsAsync(List<String> texts);
-  
+
   /**
    * Get the embedding dimension for this provider.
    *
    * @return Number of dimensions in embeddings (e.g., 384, 768, 1536)
    */
   int getDimensions();
-  
+
   /**
    * Get the maximum input length for this provider.
    *
    * @return Maximum characters/tokens supported per text
    */
   int getMaxInputLength();
-  
+
   /**
    * Check if the provider is available and configured.
    *
    * @return true if provider can generate embeddings
    */
   boolean isAvailable();
-  
+
   /**
    * Get a descriptive name for this embedding provider.
    *
    * @return Provider name (e.g., "OpenAI text-embedding-ada-002", "sentence-transformers/all-MiniLM-L6-v2")
    */
   String getProviderName();
-  
+
   /**
    * Get the model identifier used by this provider.
    *
    * @return Model name or path
    */
   String getModelId();
-  
+
   /**
    * Cleanup resources when provider is no longer needed.
    */
   default void close() {
     // Default implementation does nothing
   }
-  
+
   /**
    * Get estimated cost per 1000 tokens (for API-based providers).
    *
@@ -115,7 +115,7 @@ public interface TextEmbeddingProvider {
   default double getCostPer1000Tokens() {
     return 0.0;
   }
-  
+
   /**
    * Whether this provider supports batch processing.
    *

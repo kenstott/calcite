@@ -178,8 +178,8 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
                 }
                 LOGGER.info("Using explicit partition columns for table {}: {}", tableName, explicitColumns);
                 // Create partition info with configured columns only (ignoring auto-detected ones)
-                partitionInfo = new PartitionDetector.PartitionInfo(
-                    new java.util.LinkedHashMap<>(),  // Empty values map
+                partitionInfo =
+                    new PartitionDetector.PartitionInfo(new java.util.LinkedHashMap<>(),  // Empty values map
                     explicitColumns,
                     true);  // isHiveStyle
                 LOGGER.info("Created PartitionInfo with columns: {}", partitionInfo.getPartitionColumns());

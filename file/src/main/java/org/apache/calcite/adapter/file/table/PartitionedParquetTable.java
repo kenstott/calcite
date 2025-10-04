@@ -29,18 +29,18 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelProtoDataType;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.FilterableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
-import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.rex.RexCall;
-import org.apache.calcite.rex.RexInputRef;
-import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -56,6 +56,7 @@ import org.apache.parquet.io.InputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +67,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Table implementation for partitioned Parquet datasets.
@@ -368,8 +367,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     return filePaths;
   }
 
-  @Override
-  public Statistic getStatistic() {
+  @Override public Statistic getStatistic() {
     LOGGER.debug("getStatistic called for table '{}': constraintConfig={}", tableName,
         constraintConfig != null ? constraintConfig.keySet() : "null");
     if (constraintConfig == null || constraintConfig.isEmpty()) {
@@ -435,7 +433,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
             String typeStr = partitionColumnTypes.get(partCol);
             try {
               sqlType = SqlTypeName.valueOf(typeStr.toUpperCase(java.util.Locale.ROOT));
-              LOGGER.debug("Partition column '{}' will have type: {} (from '{}')", 
+              LOGGER.debug("Partition column '{}' will have type: {} (from '{}')",
                           partCol, sqlType, typeStr);
             } catch (IllegalArgumentException e) {
               LOGGER.warn("Unknown type '{}' for partition column '{}', defaulting to VARCHAR",
@@ -663,8 +661,8 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     if (partitionInfo.isHiveStyle()) {
       filePartitionInfo = PartitionDetector.extractHivePartitions(filePath);
     } else if (customRegex != null && columnMappings != null) {
-      filePartitionInfo = PartitionDetector.extractCustomPartitions(filePath, customRegex,
-          columnMappings);
+      filePartitionInfo =
+          PartitionDetector.extractCustomPartitions(filePath, customRegex, columnMappings);
     } else {
       filePartitionInfo = PartitionDetector.extractDirectoryPartitions(filePath, partitionColumns);
     }
@@ -896,15 +894,15 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
           try {
             SqlTypeName sqlType = SqlTypeName.valueOf(typeStr.toUpperCase(java.util.Locale.ROOT));
             value = convertPartitionValue(strValue, sqlType);
-            LOGGER.debug("Converted partition column '{}' value '{}' to type {} -> {}", 
+            LOGGER.debug("Converted partition column '{}' value '{}' to type {} -> {}",
                         partCol, strValue, sqlType, value.getClass().getSimpleName());
           } catch (Exception e) {
             // Keep as string if conversion fails
-            LOGGER.debug("Failed to convert partition value '{}' to type {}: {}", 
+            LOGGER.debug("Failed to convert partition value '{}' to type {}: {}",
                         strValue, typeStr, e.getMessage());
           }
         } else {
-          LOGGER.debug("No type conversion for partition column '{}', keeping as string: '{}'", 
+          LOGGER.debug("No type conversion for partition column '{}', keeping as string: '{}'",
                       partCol, strValue);
         }
 

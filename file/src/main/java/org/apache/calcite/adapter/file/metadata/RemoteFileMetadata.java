@@ -29,13 +29,14 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Metadata for remote files to detect changes without downloading full content.
  */
 public class RemoteFileMetadata {
-  private static final Logger LOGGER = Logger.getLogger(RemoteFileMetadata.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(RemoteFileMetadata.class);
 
   private final String url;
   private final @Nullable String etag;
@@ -93,7 +94,7 @@ public class RemoteFileMetadata {
 
       int responseCode = conn.getResponseCode();
       if (responseCode != HttpURLConnection.HTTP_OK) {
-        LOGGER.warning("HTTP HEAD request failed for " + urlString + ": " + responseCode);
+        LOGGER.warn("HTTP HEAD request failed for " + urlString + ": " + responseCode);
         // Fall back to GET request metadata
         conn.disconnect();
         conn = (HttpURLConnection) url.openConnection();

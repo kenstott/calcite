@@ -24,14 +24,11 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
-import com.google.common.collect.ImmutableList;
-
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Table constraint metadata for file-based tables.
@@ -113,7 +110,7 @@ public class TableConstraints {
   @SuppressWarnings("unchecked")
   private static List<String> extractColumnNamesFromConstraints(Map<String, Object> constraints) {
     List<String> allColumns = new ArrayList<>();
-    
+
     // Extract from primary key
     Object primaryKey = constraints.get("primaryKey");
     if (primaryKey instanceof List) {
@@ -124,7 +121,7 @@ public class TableConstraints {
       // Handle single column primary key
       allColumns.add((String) primaryKey);
     }
-    
+
     // Extract from unique keys
     List<List<String>> uniqueKeys = (List<List<String>>) constraints.get("uniqueKeys");
     if (uniqueKeys != null) {
@@ -132,7 +129,7 @@ public class TableConstraints {
         allColumns.addAll(keyColumns);
       }
     }
-    
+
     // Extract from foreign keys
     Object foreignKeysObj = constraints.get("foreignKeys");
     if (foreignKeysObj instanceof List) {
@@ -147,7 +144,7 @@ public class TableConstraints {
         }
       }
     }
-    
+
     // Return unique columns in order
     return new ArrayList<>(new java.util.LinkedHashSet<>(allColumns));
   }
@@ -222,7 +219,7 @@ public class TableConstraints {
 
     List<RelReferentialConstraint> foreignKeys = new ArrayList<>();
 
-    List<Map<String, Object>> fkList = 
+    List<Map<String, Object>> fkList =
         (List<Map<String, Object>>) constraints.get("foreignKeys");
     if (fkList == null) {
       return foreignKeys;
@@ -289,15 +286,15 @@ public class TableConstraints {
             sourceTable = new ArrayList<>();
           }
         }
-        
+
         // If target table doesn't have a schema, assume same schema as source
         if (targetTable.size() == 1 && schemaName != null) {
           // Only table name provided, prepend the schema
           targetTable = List.of(schemaName, targetTable.get(0));
         }
 
-        RelReferentialConstraint fk = RelReferentialConstraintImpl.of(
-            sourceTable, targetTable, columnPairs);
+        RelReferentialConstraint fk =
+            RelReferentialConstraintImpl.of(sourceTable, targetTable, columnPairs);
         foreignKeys.add(fk);
       }
     }
@@ -347,7 +344,6 @@ public class TableConstraints {
     return Map.of(
         "columns", columns,
         "targetTable", List.of(targetSchema, targetTable),
-        "targetColumns", targetColumns
-    );
+        "targetColumns", targetColumns);
   }
 }

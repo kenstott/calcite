@@ -28,13 +28,10 @@ import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
-import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlNode;
-
-import com.google.common.collect.Multimap;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -65,8 +62,7 @@ public class ConstraintAwareJdbcSchema implements Schema {
   }
 
   @SuppressWarnings("deprecation")
-  @Override
-  public @Nullable Table getTable(String name) {
+  @Override public @Nullable Table getTable(String name) {
     Table table = delegate.getTable(name);
     if (table instanceof JdbcTable && constraintMetadata.containsKey(name)) {
       LOGGER.info("Wrapping JdbcTable '{}' with constraint metadata", name);
@@ -76,55 +72,45 @@ public class ConstraintAwareJdbcSchema implements Schema {
   }
 
   @SuppressWarnings("deprecation")
-  @Override
-  public Set<String> getTableNames() {
+  @Override public Set<String> getTableNames() {
     return delegate.getTableNames();
   }
 
-  @Override
-  public @Nullable RelProtoDataType getType(String name) {
+  @Override public @Nullable RelProtoDataType getType(String name) {
     return delegate.getType(name);
   }
 
-  @Override
-  public Set<String> getTypeNames() {
+  @Override public Set<String> getTypeNames() {
     return delegate.getTypeNames();
   }
 
-  @Override
-  public Collection<Function> getFunctions(String name) {
+  @Override public Collection<Function> getFunctions(String name) {
     return delegate.getFunctions(name);
   }
 
-  @Override
-  public Set<String> getFunctionNames() {
+  @Override public Set<String> getFunctionNames() {
     return delegate.getFunctionNames();
   }
 
   @SuppressWarnings("deprecation")
-  @Override
-  public @Nullable Schema getSubSchema(String name) {
+  @Override public @Nullable Schema getSubSchema(String name) {
     return delegate.getSubSchema(name);
   }
 
   @SuppressWarnings("deprecation")
-  @Override
-  public Set<String> getSubSchemaNames() {
+  @Override public Set<String> getSubSchemaNames() {
     return delegate.getSubSchemaNames();
   }
 
-  @Override
-  public Expression getExpression(@Nullable SchemaPlus parentSchema, String name) {
+  @Override public Expression getExpression(@Nullable SchemaPlus parentSchema, String name) {
     return delegate.getExpression(parentSchema, name);
   }
 
-  @Override
-  public boolean isMutable() {
+  @Override public boolean isMutable() {
     return delegate.isMutable();
   }
 
-  @Override
-  public Schema snapshot(SchemaVersion version) {
+  @Override public Schema snapshot(SchemaVersion version) {
     return delegate.snapshot(version);
   }
 
@@ -144,8 +130,7 @@ public class ConstraintAwareJdbcSchema implements Schema {
       this.statistic = null;
     }
 
-    @Override
-    public Statistic getStatistic() {
+    @Override public Statistic getStatistic() {
       if (statistic == null) {
         // Lazily create the statistic when first requested
         try {
@@ -154,8 +139,8 @@ public class ConstraintAwareJdbcSchema implements Schema {
           tableConfig.put("constraints", constraintConfig);
 
           // Get column names from the row type
-          RelDataTypeFactory typeFactory = new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
-              org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+          RelDataTypeFactory typeFactory =
+              new org.apache.calcite.sql.type.SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
           RelDataType rowType = delegate.getRowType(typeFactory);
           List<String> columnNames = new ArrayList<>();
           for (org.apache.calcite.rel.type.RelDataTypeField field : rowType.getFieldList()) {
@@ -180,23 +165,19 @@ public class ConstraintAwareJdbcSchema implements Schema {
       return statistic;
     }
 
-    @Override
-    public Schema.TableType getJdbcTableType() {
+    @Override public Schema.TableType getJdbcTableType() {
       return delegate.getJdbcTableType();
     }
 
-    @Override
-    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+    @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return delegate.getRowType(typeFactory);
     }
 
-    @Override
-    public boolean isRolledUp(String column) {
+    @Override public boolean isRolledUp(String column) {
       return delegate.isRolledUp(column);
     }
 
-    @Override
-    public boolean rolledUpColumnValidInsideAgg(String column,
+    @Override public boolean rolledUpColumnValidInsideAgg(String column,
         SqlCall call, SqlNode parent, CalciteConnectionConfig config) {
       return delegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
     }

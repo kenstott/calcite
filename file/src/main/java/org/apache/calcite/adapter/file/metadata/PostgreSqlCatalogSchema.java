@@ -46,15 +46,15 @@ import java.util.Map;
 
 /**
  * PostgreSQL-compatible system catalog schema (pg_catalog).
- * 
+ *
  * <p>Provides PostgreSQL-style system tables for metadata access,
  * including schema comments via pg_description and pg_namespace.
  * Enables PostgreSQL-compatible queries for schema comments:
- * 
+ *
  * <pre>
- * SELECT n.nspname as schema_name, d.description 
- * FROM pg_namespace n 
- * LEFT JOIN pg_description d ON d.objoid = n.oid 
+ * SELECT n.nspname as schema_name, d.description
+ * FROM pg_namespace n
+ * LEFT JOIN pg_description d ON d.objoid = n.oid
  * WHERE d.objsubid = 0;
  * </pre>
  */
@@ -113,7 +113,8 @@ public class PostgreSqlCatalogSchema extends AbstractSchema {
           .add("oid", SqlTypeName.INTEGER)          // Schema OID (synthetic)
           .add("nspname", SqlTypeName.VARCHAR)      // Schema name
           .add("nspowner", SqlTypeName.INTEGER)     // Schema owner OID
-          .add("nspacl", typeFactory.createArrayType(          // Access privileges (not used)
+          .add(
+              "nspacl", typeFactory.createArrayType(          // Access privileges (not used)
               typeFactory.createSqlType(SqlTypeName.VARCHAR), -1))
           .build();
     }
@@ -122,7 +123,7 @@ public class PostgreSqlCatalogSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       int oid = 1000; // Start with synthetic OIDs
-      
+
       // Add all schemas from root
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         rows.add(new Object[]{
@@ -163,14 +164,14 @@ public class PostgreSqlCatalogSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       int oid = 1000; // Match OIDs from PgNamespaceTable
-      
+
       // Scan all schemas for comments
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         Schema schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null && schema instanceof CommentableSchema) {
           CommentableSchema commentableSchema = (CommentableSchema) schema;
           String comment = commentableSchema.getComment();
-          
+
           if (comment != null && !comment.trim().isEmpty()) {
             rows.add(new Object[]{
                 oid,      // objoid - matches pg_namespace.oid

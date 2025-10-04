@@ -19,13 +19,13 @@ package org.apache.calcite.adapter.file.metadata;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
+import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
-import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.ScannableTable;
+import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
@@ -34,14 +34,13 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.ImmutableMap;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -185,12 +184,12 @@ public class InformationSchema extends AbstractSchema {
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
             Table table = schema.tables().get(tableName);
             String tableComment = null;
-            
+
             // Get table comment if available
             if (table instanceof CommentableTable) {
               tableComment = ((CommentableTable) table).getTableComment();
             }
-            
+
             rows.add(new Object[]{
                 catalogName,
                 schemaName,
@@ -296,7 +295,7 @@ public class InformationSchema extends AbstractSchema {
               for (RelDataTypeField field : rowType.getFieldList()) {
                 SqlTypeName sqlType = field.getType().getSqlTypeName();
                 String columnComment = null;
-                
+
                 // Get column comment if available
                 if (table instanceof CommentableTable) {
                   columnComment = ((CommentableTable) table).getColumnComment(field.getName());

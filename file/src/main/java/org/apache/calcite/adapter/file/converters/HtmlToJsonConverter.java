@@ -43,8 +43,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.stream.Collectors;
 
 /**
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  * Similar to MultiTableExcelToJsonConverter but for HTML files.
  */
 public class HtmlToJsonConverter {
-  private static final Logger LOGGER = Logger.getLogger(HtmlToJsonConverter.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(HtmlToJsonConverter.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private HtmlToJsonConverter() {
@@ -255,7 +255,7 @@ public class HtmlToJsonConverter {
     List<File> jsonFiles = new ArrayList<>();
 
     if (selector == null || index == null) {
-      LOGGER.warning("Selector or index is null, falling back to regular conversion");
+      LOGGER.warn("Selector or index is null, falling back to regular conversion");
       return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, explicitTableName, baseDirectory, null);
     }
 
@@ -269,12 +269,12 @@ public class HtmlToJsonConverter {
     Elements selectedTables = doc.select(selector);
 
     if (selectedTables.size() == 0) {
-      LOGGER.warning("No tables found for selector: " + selector);
+      LOGGER.warn("No tables found for selector: " + selector);
       return jsonFiles;
     }
 
     if (index >= selectedTables.size()) {
-      LOGGER.warning("Index " + index + " is out of bounds, only " + selectedTables.size() + " tables found for selector: " + selector);
+      LOGGER.warn("Index " + index + " is out of bounds, only " + selectedTables.size() + " tables found for selector: " + selector);
       return jsonFiles;
     }
 
@@ -381,7 +381,7 @@ public class HtmlToJsonConverter {
     Elements rows = table.select("tr");
     boolean skipFirstRow = shouldSkipFirstRow(table, headers);
 
-    LOGGER.fine("Processing table with " + rows.size() + " rows, skipFirstRow=" + skipFirstRow);
+    LOGGER.debug("Processing table with " + rows.size() + " rows, skipFirstRow=" + skipFirstRow);
 
     for (int rowIndex = skipFirstRow ? 1 : 0; rowIndex < rows.size(); rowIndex++) {
       Element row = rows.get(rowIndex);
@@ -683,10 +683,10 @@ public class HtmlToJsonConverter {
           File sourceFile = new File(url); // Pseudo-file for URL tracking
           ConversionRecorder.recordConversion(sourceFile, jsonFile, "HTML_TO_JSON", baseDirectory);
 
-          LOGGER.fine("Wrote table from " + url + " to " + jsonFile.getName());
+          LOGGER.debug("Wrote table from " + url + " to " + jsonFile.getName());
         }
       } catch (IOException e) {
-        LOGGER.log(Level.WARNING, "Failed to process table " + tableInfo.name + " from " + url, e);
+        LOGGER.warn("Failed to process table " + tableInfo.name + " from " + url, e);
       }
     }
 
@@ -736,10 +736,10 @@ public class HtmlToJsonConverter {
         LOGGER.info("Parquet file " + dataFile.getName() + " can be used directly");
 
       } else {
-        LOGGER.warning("Unsupported file type: " + fileName);
+        LOGGER.warn("Unsupported file type: " + fileName);
       }
     } catch (Exception e) {
-      LOGGER.log(Level.WARNING, "Failed to process data file: " + dataFile.getName(), e);
+      LOGGER.warn("Failed to process data file: " + dataFile.getName(), e);
     }
 
     return jsonFiles;

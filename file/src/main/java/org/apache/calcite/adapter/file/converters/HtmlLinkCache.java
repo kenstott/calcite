@@ -42,14 +42,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Cache for extracted links from HTML pages to avoid re-parsing.
  */
 public class HtmlLinkCache {
-  private static final Logger LOGGER = Logger.getLogger(HtmlLinkCache.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(HtmlLinkCache.class);
 
   /**
    * Cached extraction results from an HTML page.
@@ -331,11 +331,11 @@ public class HtmlLinkCache {
       try {
         HttpMetadata currentMeta = fetchHttpMetadata(url);
         if (currentMeta.matches(cached)) {
-          LOGGER.fine("Using cached links for " + url);
+          LOGGER.debug("Using cached links for " + url);
           return cached;
         }
       } catch (IOException e) {
-        LOGGER.log(Level.WARNING, "Failed to fetch HTTP metadata for " + url, e);
+        LOGGER.warn("Failed to fetch HTTP metadata for " + url, e);
       }
     }
 

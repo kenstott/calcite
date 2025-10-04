@@ -22,7 +22,7 @@ import org.apache.calcite.schema.impl.ScalarFunctionImpl;
  * SQL functions for text similarity and vector operations.
  * These functions can be used in SQL queries to find similar documents
  * or text chunks based on their embeddings.
- * 
+ *
  * All functions work with vectors represented as comma-separated strings
  * for compatibility with standard SQL types.
  */
@@ -57,7 +57,7 @@ public class SimilarityFunctions {
 
   /**
    * Cosine similarity for String arguments (called by Calcite for CHARACTER columns).
-   * 
+   *
    * @param vector1 First vector as string
    * @param vector2 Second vector as string
    * @return Cosine similarity score
@@ -233,7 +233,7 @@ public class SimilarityFunctions {
   /**
    * Compute text similarity between two texts.
    * This function generates embeddings on-the-fly and computes cosine similarity.
-   * 
+   *
    * Uses the default embedding provider (local TF-IDF with financial domain knowledge)
    * to generate semantic embeddings and compute similarity.
    *
@@ -245,21 +245,21 @@ public class SimilarityFunctions {
     if (text1 == null || text2 == null) {
       return 0.0;
     }
-    
+
     try {
       // Get default embedding provider (local)
       TextEmbeddingProvider provider = getDefaultEmbeddingProvider();
-      
+
       // Generate embeddings for both texts
       double[] embedding1 = provider.generateEmbedding(text1);
       double[] embedding2 = provider.generateEmbedding(text2);
-      
+
       // Convert to comma-separated strings and compute cosine similarity
       String vector1 = arrayToString(embedding1);
       String vector2 = arrayToString(embedding2);
-      
+
       return cosineSimilarity(vector1, vector2);
-      
+
     } catch (EmbeddingException e) {
       // Fall back to simple Jaccard similarity if embedding fails
       return computeJaccardSimilarity(text1, text2);
@@ -285,12 +285,12 @@ public class SimilarityFunctions {
       }
       return result.toString();
     }
-    
+
     try {
       TextEmbeddingProvider provider = getDefaultEmbeddingProvider();
       double[] embedding = provider.generateEmbedding(text);
       return arrayToString(embedding);
-      
+
     } catch (EmbeddingException e) {
       // Fall back to deterministic hash-based vector
       return generateHashBasedEmbedding(text, 384);
@@ -378,10 +378,10 @@ public class SimilarityFunctions {
         // Use reflection to handle Avro arrays without hard dependency
         java.lang.reflect.Method sizeMethod = obj.getClass().getMethod("size");
         java.lang.reflect.Method getMethod = obj.getClass().getMethod("get", int.class);
-        
+
         int size = (Integer) sizeMethod.invoke(obj);
         double[] result = new double[size];
-        
+
         for (int i = 0; i < size; i++) {
           Object item = getMethod.invoke(obj, i);
           if (item instanceof Number) {
@@ -445,14 +445,14 @@ public class SimilarityFunctions {
         ScalarFunctionImpl.create(SimilarityFunctions.class, "vectorNorm"));
     schema.add("NORMALIZE_VECTOR",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "normalizeVector"));
-    
+
     // Text operations
     schema.add("TEXT_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "textSimilarity"));
     schema.add("EMBED",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "embed"));
   }
-  
+
   /**
    * Get the default embedding provider (local TF-IDF).
    */
@@ -463,7 +463,7 @@ public class SimilarityFunctions {
       throw new RuntimeException("Failed to create default embedding provider", e);
     }
   }
-  
+
   /**
    * Convert double array to comma-separated string.
    */
@@ -475,29 +475,29 @@ public class SimilarityFunctions {
     }
     return result.toString();
   }
-  
+
   /**
    * Compute simple Jaccard similarity as fallback.
    */
   private static double computeJaccardSimilarity(String text1, String text2) {
     String[] words1 = text1.toLowerCase().split("\\s+");
     String[] words2 = text2.toLowerCase().split("\\s+");
-    
+
     java.util.Set<String> set1 = new java.util.HashSet<>();
     java.util.Collections.addAll(set1, words1);
-    
+
     java.util.Set<String> set2 = new java.util.HashSet<>();
     java.util.Collections.addAll(set2, words2);
-    
+
     java.util.Set<String> intersection = new java.util.HashSet<>(set1);
     intersection.retainAll(set2);
-    
+
     java.util.Set<String> union = new java.util.HashSet<>(set1);
     union.addAll(set2);
-    
+
     return union.isEmpty() ? 0.0 : (double) intersection.size() / union.size();
   }
-  
+
   /**
    * Generate hash-based embedding as fallback.
    */
@@ -505,12 +505,12 @@ public class SimilarityFunctions {
     int hash = text.hashCode();
     java.util.Random random = new java.util.Random(hash);
     StringBuilder result = new StringBuilder();
-    
+
     for (int i = 0; i < dimensions; i++) {
       if (i > 0) result.append(",");
       result.append(random.nextGaussian());
     }
-    
+
     return result.toString();
   }
 }

@@ -26,14 +26,14 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract base class for tables that support refresh operations.
  */
 public abstract class AbstractRefreshableTable extends AbstractTable implements RefreshableTable {
-  private static final Logger LOGGER = Logger.getLogger(AbstractRefreshableTable.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(AbstractRefreshableTable.class);
 
   protected final @Nullable Duration refreshInterval;
   protected final String tableName;
@@ -107,7 +107,7 @@ public abstract class AbstractRefreshableTable extends AbstractTable implements 
 
       return changed;
     } catch (IOException e) {
-      LOGGER.log(Level.WARNING, "Failed to fetch remote file metadata for " + source.path(), e);
+      LOGGER.warn("Failed to fetch remote file metadata for " + source.path(), e);
       // If we can't check, assume it might have changed
       return true;
     }
@@ -146,11 +146,11 @@ public abstract class AbstractRefreshableTable extends AbstractTable implements 
     // - If file has changed BUT interval hasn't elapsed: don't update (prevent thrashing)
 
     if (!needsRefresh()) {
-      LOGGER.log(Level.FINE, "Refresh interval not elapsed, skipping refresh");
+      LOGGER.debug("Refresh interval not elapsed, skipping refresh");
       return;
     }
 
-    LOGGER.log(Level.INFO, "Refresh interval elapsed, calling doRefresh()");
+    LOGGER.info("Refresh interval elapsed, calling doRefresh()");
     doRefresh();
     lastRefreshTime = Instant.now();
   }

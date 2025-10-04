@@ -36,8 +36,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Converts XML files to JSON files for processing by the file adapter.
@@ -61,7 +61,7 @@ import java.util.logging.Logger;
  * {@code <address><city>NYC</city></address>} becomes {@code {"address__city": "NYC"}}
  */
 public class XmlToJsonConverter {
-  private static final Logger LOGGER = Logger.getLogger(XmlToJsonConverter.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(XmlToJsonConverter.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   // Configuration constants
@@ -142,9 +142,9 @@ public class XmlToJsonConverter {
     SourceFileLockManager.LockHandle lockHandle = null;
     try {
       lockHandle = SourceFileLockManager.acquireReadLock(xmlFile);
-      LOGGER.fine("Acquired read lock on XML file: " + xmlFile.getPath());
+      LOGGER.debug("Acquired read lock on XML file: " + xmlFile.getPath());
     } catch (IOException e) {
-      LOGGER.warning("Could not acquire lock on file: " + xmlFile.getPath() + " - proceeding without lock");
+      LOGGER.warn("Could not acquire lock on file: " + xmlFile.getPath() + " - proceeding without lock");
     }
 
     try {
@@ -163,10 +163,10 @@ public class XmlToJsonConverter {
           // Record the conversion for refresh tracking
           ConversionRecorder.recordConversion(xmlFile, jsonFile, "XML_TO_JSON", baseDirectory);
 
-          LOGGER.fine("Wrote table '" + tableName + "' to " + jsonFile.getAbsolutePath());
+          LOGGER.debug("Wrote table '" + tableName + "' to " + jsonFile.getAbsolutePath());
 
         } catch (IOException e) {
-          LOGGER.log(Level.WARNING, "Failed to write table " + tableName + " to JSON", e);
+          LOGGER.warn("Failed to write table " + tableName + " to JSON", e);
           // Continue with other tables
         }
       }
@@ -174,7 +174,7 @@ public class XmlToJsonConverter {
     } finally {
       if (lockHandle != null) {
         lockHandle.close();
-        LOGGER.fine("Released read lock on XML file");
+        LOGGER.debug("Released read lock on XML file");
       }
     }
 

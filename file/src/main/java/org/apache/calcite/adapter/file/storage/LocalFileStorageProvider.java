@@ -32,7 +32,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
-
 /**
  * Storage provider implementation for local filesystem access.
  */
@@ -184,32 +183,32 @@ public class LocalFileStorageProvider implements StorageProvider {
 
   @Override public void writeFile(String path, byte[] content) throws IOException {
     Path filePath = parsePath(path);
-    
+
     // Create parent directories if they don't exist
     Path parentDir = filePath.getParent();
     if (parentDir != null && !Files.exists(parentDir)) {
       Files.createDirectories(parentDir);
     }
-    
+
     // Write the file, creating or overwriting as needed
-    Files.write(filePath, content, 
-        StandardOpenOption.CREATE, 
+    Files.write(filePath, content,
+        StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING,
         StandardOpenOption.WRITE);
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {
     Path filePath = parsePath(path);
-    
+
     // Create parent directories if they don't exist
     Path parentDir = filePath.getParent();
     if (parentDir != null && !Files.exists(parentDir)) {
       Files.createDirectories(parentDir);
     }
-    
+
     // Copy the input stream to the file
-    try (OutputStream out = Files.newOutputStream(filePath,
-        StandardOpenOption.CREATE,
+    try (OutputStream out =
+        Files.newOutputStream(filePath, StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING,
         StandardOpenOption.WRITE)) {
       byte[] buffer = new byte[8192];
@@ -230,7 +229,7 @@ public class LocalFileStorageProvider implements StorageProvider {
     if (!Files.exists(filePath)) {
       return false;
     }
-    
+
     // If it's a directory, ensure it's empty before deleting
     if (Files.isDirectory(filePath)) {
       // For now, only delete empty directories
@@ -245,29 +244,28 @@ public class LocalFileStorageProvider implements StorageProvider {
   @Override public void copyFile(String source, String destination) throws IOException {
     Path sourcePath = parsePath(source);
     Path destPath = parsePath(destination);
-    
+
     if (!Files.exists(sourcePath)) {
       throw new IOException("Source file does not exist: " + source);
     }
-    
+
     // Create parent directories for destination if needed
     Path parentDir = destPath.getParent();
     if (parentDir != null && !Files.exists(parentDir)) {
       Files.createDirectories(parentDir);
     }
-    
+
     // Copy the file, replacing if it exists
     Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
   }
 
 
-  @Override
-  public void cleanupMacosMetadata(String directoryPath) throws IOException {
+  @Override public void cleanupMacosMetadata(String directoryPath) throws IOException {
     File dir = new File(directoryPath);
     if (!dir.exists() || !dir.isDirectory()) {
       return; // Nothing to clean up
     }
-    
+
     // Define patterns for files to clean up
     String[] patterns = {
         "._",        // macOS resource forks
@@ -276,10 +274,10 @@ public class LocalFileStorageProvider implements StorageProvider {
         "~",         // Backup files (suffix check)
         ".tmp"       // Temporary files (suffix check)
     };
-    
+
     cleanupDirectory(dir, patterns);
   }
-  
+
   /**
    * Recursively clean up unwanted metadata files in directory.
    */
@@ -288,7 +286,7 @@ public class LocalFileStorageProvider implements StorageProvider {
     if (files == null) {
       return;
     }
-    
+
     for (File file : files) {
       if (file.isDirectory()) {
         // Recursively clean subdirectories
@@ -297,7 +295,7 @@ public class LocalFileStorageProvider implements StorageProvider {
         // Check if file matches any cleanup pattern
         String fileName = file.getName();
         boolean shouldDelete = false;
-        
+
         for (String pattern : patterns) {
           if (pattern.equals(".DS_Store") && fileName.equals(".DS_Store")) {
             shouldDelete = true;
@@ -316,7 +314,7 @@ public class LocalFileStorageProvider implements StorageProvider {
             break;
           }
         }
-        
+
         if (shouldDelete) {
           try {
             Files.delete(file.toPath());

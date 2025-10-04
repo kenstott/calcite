@@ -78,7 +78,7 @@ public class DuckDBFunctionMapping {
     FUNCTION_MAP.put("READ_CSV", "read_csv_auto");
     FUNCTION_MAP.put("READ_PARQUET", "read_parquet");
     FUNCTION_MAP.put("READ_JSON", "read_json_auto");
-    
+
     // Vector similarity functions - map to DuckDB's native array functions
     FUNCTION_MAP.put("COSINE_SIMILARITY", "array_cosine_similarity");
     FUNCTION_MAP.put("COSINE_DISTANCE", "array_cosine_distance");
@@ -155,10 +155,10 @@ public class DuckDBFunctionMapping {
         writer.print("(");
         for (int i = 0; i < call.operandCount(); i++) {
           if (i > 0) writer.print(", ");
-          
+
           // Skip CAST operations for embedding arrays
           SqlNode operand = call.operand(i);
-          if (operand instanceof SqlCall && 
+          if (operand instanceof SqlCall &&
               ((SqlCall) operand).getOperator().getKind() == SqlKind.CAST) {
             // If this is a CAST operation, just use the inner expression
             SqlCall castCall = (SqlCall) operand;
