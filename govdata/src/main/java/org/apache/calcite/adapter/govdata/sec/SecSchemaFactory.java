@@ -739,29 +739,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     LOGGER.debug("Pre-defined {} partitioned table patterns", partitionedTables.size());
 
-    // Ensure the parquet directory exists
-    File secParquetDirFile = new File(secParquetDir);
+    // Log parquet directory (may be local or S3)
+    LOGGER.info("Using SEC parquet directory: {}", secParquetDir);
 
-    if (secParquetDirFile.exists() && secParquetDirFile.isDirectory()) {
-      LOGGER.info("Using SEC parquet cache directory: {}", secParquetDirFile.getAbsolutePath());
-
-      // Debug: List all .parquet files
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("DEBUG: Listing all .parquet files in directory:");
-        File[] parquetFiles = secParquetDirFile.listFiles((dir, fileName) -> fileName.endsWith(".parquet"));
-        if (parquetFiles != null && parquetFiles.length > 0) {
-          for (File f : parquetFiles) {
-            LOGGER.debug("DEBUG: Found table file: {} (size={})", f.getName(), f.length());
-          }
-        } else {
-          LOGGER.warn("DEBUG: No .parquet files found in {}", secParquetDirFile.getAbsolutePath());
-        }
-      }
-    } else {
-      // Parquet dir doesn't exist yet, but still use secParquetDir path
-      // FileSchemaFactory will handle the non-existent directory
-      LOGGER.info("SEC parquet directory doesn't exist yet: {}", secParquetDir);
-    }
+    // Don't use File operations for directory checks - path may be S3
+    // FileSchemaFactory will handle directory scanning via StorageProvider
 
     // Don't set execution engine - let GovDataSchemaFactory control it
     // The parent factory will set it based on global configuration
@@ -1724,8 +1706,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       // Get parquet directory from interface method
       String govdataParquetDir = getGovDataParquetDir();
-      File secParquetDir = new File(govdataParquetDir + "/source=sec");
-      secParquetDir.mkdirs();
+      String secParquetDirPath = govdataParquetDir + "/source=sec";
+      // Don't create File or call mkdirs() for parquet directory - it may be S3
+      // StorageProvider will create directories as needed when writing files
+
+      // TODO: XbrlToParquetConverter and ConversionMetadata use File APIs - need S3 update
+      // For now, create temporary File object for API compatibility (won't do actual File I/O)
+      File secParquetDir = new File(secParquetDirPath);
 
       // Check if text similarity is enabled from operand
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
@@ -2182,12 +2169,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String govdataParquetDir = getGovDataParquetDir();
       String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
       // Parquet directory uses unified GOVDATA_PARQUET_DIR structure
+      // Don't create File or call mkdirs() - parquet path may be S3
+      // StorageProvider will create directories as needed when writing files
+
+      // TODO: XbrlToParquetConverter and ConversionMetadata use File APIs - need S3 update
+      // For now, create temporary File object for API compatibility (won't do actual File I/O)
       File secParquetDir = new File(secParquetDirPath);
-      secParquetDir.mkdirs();
 
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("DEBUG: secRawDir={} exists={}", secRawDir.getAbsolutePath(), secRawDir.exists());
-        LOGGER.debug("DEBUG: secParquetDir={} exists={}", secParquetDir.getAbsolutePath(), secParquetDir.exists());
+        LOGGER.debug("DEBUG: secParquetDirPath={}", secParquetDirPath);
       }
       LOGGER.info("Processing XBRL files from " + secRawDir + " to create Parquet tables");
 
@@ -2492,8 +2483,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Get parquet directory from interface method
       String govdataParquetDir = getGovDataParquetDir();
       String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
-      File secParquetDir = new File(secParquetDirPath);
-      secParquetDir.mkdirs();
+      // Don't create File or call mkdirs() - parquet path may be S3
+      // StorageProvider will create directories as needed when writing files
 
       if (!secRawDir.exists() || !secRawDir.isDirectory()) {
         LOGGER.warn("No sec-raw directory found: " + secRawDir);
@@ -2579,7 +2570,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Write consolidated SEC filings table
-      String outputFilePath = storageProvider.resolvePath(secParquetDir.getPath(), "sec_filings.parquet");
+      String outputFilePath = storageProvider.resolvePath(secParquetDirPath, "sec_filings.parquet");
       // Use StorageProvider for parquet writing
       storageProvider.writeAvroParquet(outputFilePath, schema, allRecords, "sec_filings");
       LOGGER.info("Created SEC filings table with " + allRecords.size() + " records: " + outputFilePath);
@@ -2617,10 +2608,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private void createMockStockPrices(File baseDir, List<String> ciks, int startYear, int endYear) {
     try {
       // baseDir is the cache directory (sec-cache)
-      // We need to create files in sec-parquet/stock_prices
-      File parquetDir = new File(baseDir.getParentFile(), "sec-parquet");
-      File stockPricesDir = new File(parquetDir, "stock_prices");
-      LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir.getAbsolutePath());
+      // We need to create files in govdata-parquet/source=sec/stock_prices
+      String govdataParquetDir = getGovDataParquetDir();
+      String stockPricesDir = govdataParquetDir + "/source=sec/stock_prices";
+      LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir);
 
       // For each CIK, create mock price data
       for (String cik : ciks) {
@@ -2635,14 +2626,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // Create mock data for each year
         for (int year = startYear; year <= endYear; year++) {
-          // Create directory structure: ticker=*/year=*/
-          File tickerDir = new File(stockPricesDir, "ticker=" + ticker);
-          File yearDir = new File(tickerDir, "year=" + year);
-          yearDir.mkdirs();
-
-          String parquetFilePath = storageProvider.resolvePath(yearDir.getPath(), ticker + "_" + year + "_prices.parquet");
+          // Build relative path for parquet file - don't use File for S3 compatibility
+          String relativePath = String.format("ticker=%s/year=%d/%s_%d_prices.parquet",
+              ticker, year, ticker, year);
+          String parquetFilePath = storageProvider.resolvePath(stockPricesDir, relativePath);
           LOGGER.debug("About to create/check file: {}", parquetFilePath);
-          LOGGER.debug("Parent directory exists: {}, isDirectory: {}", yearDir.exists(), yearDir.isDirectory());
           try {
             StorageProvider.FileMetadata parquetMetadata = storageProvider.getMetadata(parquetFilePath);
             LOGGER.debug("Mock stock price file already exists: {}", parquetFilePath);
