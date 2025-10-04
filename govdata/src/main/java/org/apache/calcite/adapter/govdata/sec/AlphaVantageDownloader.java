@@ -16,12 +16,15 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,12 +34,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -258,8 +256,8 @@ public class AlphaVantageDownloader {
   @SuppressWarnings("deprecation")
   private List<StockPriceRecord> fetchAlphaVantageData(String ticker, int year) throws IOException {
     // Use TIME_SERIES_DAILY for free tier access (not ADJUSTED which is premium)
-    String urlString = String.format("%s?function=TIME_SERIES_DAILY&symbol=%s&apikey=%s&outputsize=full&datatype=json",
-        ALPHA_VANTAGE_BASE_URL, ticker.toUpperCase(), apiKey);
+    String urlString =
+        String.format("%s?function=TIME_SERIES_DAILY&symbol=%s&apikey=%s&outputsize=full&datatype=json", ALPHA_VANTAGE_BASE_URL, ticker.toUpperCase(), apiKey);
 
     URL url = new URL(urlString);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();

@@ -19,10 +19,11 @@ package org.apache.calcite.adapter.govdata.sec;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.*;
-import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.util.*;
 
 /**
  * Loads embedding models from static files.

@@ -19,14 +19,14 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.storage.HttpStorageProvider;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * SEC-specific HTTP storage provider that extends the file adapter's HttpStorageProvider.
