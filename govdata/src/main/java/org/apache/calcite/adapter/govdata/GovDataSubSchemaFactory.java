@@ -18,8 +18,6 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.model.JsonTable;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -138,23 +136,63 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
-   * Get the GOVDATA_CACHE_DIR environment variable with fallback to system property.
+   * Get the cache directory from operand, environment variable, or system property.
+   * Checks in order: operand.cacheDirectory, GOVDATA_CACHE_DIR env, GOVDATA_CACHE_DIR property.
    *
+   * @param operand Configuration map (optional)
    * @return Cache directory path or null if not set
    */
-  default String getGovDataCacheDir() {
+  default String getGovDataCacheDir(Map<String, Object> operand) {
+    // First check operand
+    if (operand != null) {
+      String dir = (String) operand.get("cacheDirectory");
+      if (dir != null && !dir.isEmpty()) {
+        return dir;
+      }
+    }
+    // Fall back to environment variable
     String dir = System.getenv("GOVDATA_CACHE_DIR");
     return dir != null ? dir : System.getProperty("GOVDATA_CACHE_DIR");
   }
 
   /**
-   * Get the GOVDATA_PARQUET_DIR environment variable with fallback to system property.
+   * Get the cache directory from environment variable or system property only.
+   * For backward compatibility.
+   *
+   * @return Cache directory path or null if not set
+   */
+  default String getGovDataCacheDir() {
+    return getGovDataCacheDir(null);
+  }
+
+  /**
+   * Get the parquet directory from operand, environment variable, or system property.
+   * Checks in order: operand.parquetDirectory, GOVDATA_PARQUET_DIR env, GOVDATA_PARQUET_DIR property.
+   *
+   * @param operand Configuration map (optional)
+   * @return Parquet directory path or null if not set
+   */
+  default String getGovDataParquetDir(Map<String, Object> operand) {
+    // First check operand
+    if (operand != null) {
+      String dir = (String) operand.get("parquetDirectory");
+      if (dir != null && !dir.isEmpty()) {
+        return dir;
+      }
+    }
+    // Fall back to environment variable
+    String dir = System.getenv("GOVDATA_PARQUET_DIR");
+    return dir != null ? dir : System.getProperty("GOVDATA_PARQUET_DIR");
+  }
+
+  /**
+   * Get the parquet directory from environment variable or system property only.
+   * For backward compatibility.
    *
    * @return Parquet directory path or null if not set
    */
   default String getGovDataParquetDir() {
-    String dir = System.getenv("GOVDATA_PARQUET_DIR");
-    return dir != null ? dir : System.getProperty("GOVDATA_PARQUET_DIR");
+    return getGovDataParquetDir(null);
   }
 
   /**

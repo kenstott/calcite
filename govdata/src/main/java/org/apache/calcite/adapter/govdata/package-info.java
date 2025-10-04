@@ -46,7 +46,7 @@
  *   "version": "1.0",
  *   "defaultSchema": "GOV",
  *   "schemas": [{
- *     "name": "GOV", 
+ *     "name": "GOV",
  *     "type": "custom",
  *     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
  *     "operand": {
@@ -64,7 +64,7 @@
  *       that routes to specialized factories</li>
  *   <li>{@link org.apache.calcite.adapter.govdata.GovDataDriver} - JDBC driver with
  *       unified connection interface</li>
- *   <li>Sub-packages for each data source (e.g., 
+ *   <li>Sub-packages for each data source (e.g.,
  *       {@link org.apache.calcite.adapter.govdata.sec})</li>
  *   <li>Common utilities in {@link org.apache.calcite.adapter.govdata.common}</li>
  * </ul>

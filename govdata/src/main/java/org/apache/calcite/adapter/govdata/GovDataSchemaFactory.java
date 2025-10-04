@@ -21,13 +21,9 @@ import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
-import org.apache.calcite.adapter.govdata.pub.PubSchemaFactory;
-import org.apache.calcite.adapter.govdata.safety.SafetySchemaFactory;
-import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 
 import org.slf4j.Logger;
@@ -111,8 +107,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create ONE FileSchema with the unified operand
     LOGGER.info("Creating single FileSchema with unified operand for {} data", dataSource);
-    Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(
-        parentSchema, name, unifiedOperand);
+    Schema schema =
+        org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
 
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
@@ -239,10 +235,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       return; // Already initialized
     }
 
-    // Get explicit storage type configuration
-    String storageType = (String) operand.get("storageType");
+    String storageType = null;
+
     @SuppressWarnings("unchecked")
     Map<String, Object> storageConfig = (Map<String, Object>) operand.get("storageConfig");
+    if (storageConfig == null) {
+      storageConfig = (Map<String, Object>) operand.get("s3Config");
+      if (storageConfig != null) {
+        storageType = "s3";
+      }
+    }
 
     // Auto-detect storage type from directory path (same logic as FileSchemaFactory)
     if (storageType == null) {
@@ -261,25 +263,19 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       }
     }
 
-    // Auto-detect from baseDirectory if still not determined
-    if (storageType == null) {
-      Object baseDirObj = operand.get("baseDirectory");
-      if (baseDirObj instanceof String) {
-        String baseDirStr = (String) baseDirObj;
-        if (baseDirStr.startsWith("s3://")) {
-          storageType = "s3";
-          LOGGER.info("Auto-detected S3 storage from baseDirectory path: {}", baseDirStr);
-        } else if (baseDirStr.startsWith("hdfs://")) {
-          storageType = "hdfs";
-          LOGGER.info("Auto-detected HDFS storage from baseDirectory path: {}", baseDirStr);
-        }
-      }
-    }
-
     // Create the appropriate storage provider using the factory
     if (storageType != null) {
+      // Add directory to storageConfig so S3StorageProvider can use it as baseS3Path
+      if (storageConfig == null) {
+        storageConfig = new java.util.HashMap<>();
+      }
+      String directory = (String) operand.get("directory");
+      if (directory != null && !storageConfig.containsKey("directory")) {
+        storageConfig.put("directory", directory);
+      }
+
       storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
-      LOGGER.debug("Initialized {} StorageProvider", storageType);
+      LOGGER.debug("Initialized {} StorageProvider with directory: {}", storageType, directory);
     } else {
       // Default to local file storage
       storageProvider = StorageProviderFactory.createFromType("local", null);
@@ -356,14 +352,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
 
-  @Override
-  public boolean supportsConstraints() {
+  @Override public boolean supportsConstraints() {
     // Enable constraint support for all government data sources
     return true;
   }
 
-  @Override
-  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
