@@ -34,20 +34,20 @@ import java.util.List;
 
 /**
  * Table for HUD ZIP Code to Congressional District crosswalk.
- * 
+ *
  * <p>Provides mapping between ZIP codes and Congressional Districts.
  * Essential for political analysis, constituent services, and connecting
  * corporate/demographic data to political representation.
  */
 public class HudZipCongressionalTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudZipCongressionalTable.class);
-  
+
   private final HudCrosswalkFetcher fetcher;
-  
+
   public HudZipCongressionalTable(HudCrosswalkFetcher fetcher) {
     this.fetcher = fetcher;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("zip", SqlTypeName.VARCHAR)             // 5-digit ZIP code
@@ -63,19 +63,19 @@ public class HudZipCongressionalTable extends AbstractTable implements Scannable
         .add("state_name", SqlTypeName.VARCHAR)      // State name
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadZipCongressionalData();
@@ -83,40 +83,40 @@ public class HudZipCongressionalTable extends AbstractTable implements Scannable
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadZipCongressionalData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               if (fetcher != null) {
                 LOGGER.info("Loading HUD ZIP to Congressional District crosswalk data for Q2 2024");
-                
+
                 // Download ZIP-Congressional District crosswalk data from HUD API
                 java.io.File csvFile = fetcher.downloadZipToCongressionalDistrict("2", 2024);
-                
+
                 // Load the crosswalk records from the CSV file
                 List<HudCrosswalkFetcher.CrosswalkRecord> records = fetcher.loadCrosswalkData(csvFile);
-                
+
                 // Convert to table format
                 for (HudCrosswalkFetcher.CrosswalkRecord record : records) {
                   // Parse state-congressional district code (format: SSDD where SS=state, DD=district)
                   String stateCd = record.geoCode;
                   String cd = "";
                   String cdName = "Congressional District " + record.geoCode;
-                  
+
                   // Extract district number from state-district code
                   if (stateCd != null && stateCd.length() >= 2) {
                     cd = stateCd.substring(2); // District part
                   }
-                  
+
                   data.add(new Object[] {
                       record.zip,              // zip
                       cd,                      // cd
@@ -131,16 +131,16 @@ public class HudZipCongressionalTable extends AbstractTable implements Scannable
                       ""                       // state_name (not in HUD data)
                   });
                 }
-                
+
                 LOGGER.info("Loaded {} ZIP-Congressional District crosswalk records", data.size());
-                
+
               } else {
                 LOGGER.warn("HUD fetcher not configured. Cannot load ZIP-Congressional District crosswalk.");
               }
             } catch (Exception e) {
               LOGGER.error("Error loading ZIP-Congressional District crosswalk data", e);
             }
-            
+
             return data;
           }
         };

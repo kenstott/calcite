@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.file.FileSchema;
-import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
@@ -27,21 +25,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,22 +87,21 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   private static final String DEMOGRAPHIC_TYPE = "type=demographic";  // Census API data
   private static final String CROSSWALK_TYPE = "type=crosswalk";  // HUD data
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/geo-schema.json";
   }
-  
+
   /**
    * Builds the operand configuration for GEO schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
    */
   public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     LOGGER.info("Building GEO schema operand configuration");
-    
+
     // Get cache directories from interface methods
     String govdataCacheDir = getGovDataCacheDir();
     String govdataParquetDir = getGovDataParquetDir();
-    
+
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
       throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
@@ -122,7 +109,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
       throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
     }
-    
+
     // Build GEO data directories
     String geoRawDir = govdataCacheDir + "/geo";
     String geoParquetDir = govdataParquetDir + "/source=geo";
@@ -133,7 +120,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     // Extract configuration parameters
     // Calcite's ModelHandler automatically substitutes ${ENV_VAR} placeholders
     String configuredDir = (String) mutableOperand.get("cacheDirectory");
-    
+
     // Use unified govdata directory structure
     String cacheDir;
     if (govdataCacheDir != null && govdataParquetDir != null) {
@@ -144,12 +131,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     } else {
       cacheDir = configuredDir != null ? configuredDir : geoRawDir;
     }
-    
+
     // Expand tilde in cache directory path if present
     if (cacheDir != null && cacheDir.startsWith("~")) {
       cacheDir = System.getProperty("user.home") + cacheDir.substring(1);
     }
-    
+
     // Get API credentials from environment variables (matching ECON pattern)
     String censusApiKey = System.getenv("CENSUS_API_KEY");
     if (censusApiKey == null) {
@@ -185,13 +172,13 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     Integer startYear = (Integer) mutableOperand.get("startYear");
     Integer endYear = (Integer) mutableOperand.get("endYear");
     Integer dataYear = (Integer) mutableOperand.get("dataYear");
-    
+
     // If dataYear is specified (old format), use it for both start and end
     if (dataYear != null && startYear == null && endYear == null) {
       startYear = dataYear;
       endYear = dataYear;
     }
-    
+
     // Default to current year if nothing specified
     if (startYear == null) {
       startYear = 2024;
@@ -199,14 +186,14 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     if (endYear == null) {
       endYear = startYear;
     }
-    
+
     // Calculate which census years to include based on the date range
     List<Integer> censusYears = determineCensusYears(startYear, endYear);
     List<Integer> tigerYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       tigerYears.add(year);
     }
-    
+
     Boolean autoDownload = (Boolean) mutableOperand.getOrDefault("autoDownload", true);
 
     // GEO data TTL configuration (in days) - default 90 days for quarterly boundary updates
@@ -263,7 +250,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         // Continue even if download fails - existing data may be available
       }
     }
-    
+
     // Now configure for FileSchemaFactory
     // Set the directory to the parquet directory with hive-partitioned structure
     mutableOperand.put("directory", geoParquetDir);
@@ -317,7 +304,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     if (tableConstraints != null) {
       geoConstraints.putAll(tableConstraints);
     }
-    
+
     if (!geoConstraints.isEmpty()) {
       mutableOperand.put("tableConstraints", geoConstraints);
     }
@@ -437,7 +424,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     }
-    
+
     // Download HUD crosswalk data if enabled
     if (Arrays.asList(enabledSources).contains("hud") &&
         (hudUsername != null || hudToken != null)) {
@@ -518,7 +505,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     }
-    
+
     // Download Census API data if enabled
     if (Arrays.asList(enabledSources).contains("census") &&
         censusApiKey != null && !censusYears.isEmpty()) {
@@ -594,10 +581,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
   }
-  
 
 
-  
+
+
   /**
    * Load table definitions from geo-schema.json resource file.
    */
@@ -625,14 +612,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   }
 
 
-  @Override
-  public boolean supportsConstraints() {
+  @Override public boolean supportsConstraints() {
     // Enable constraint support for geographic data
     return true;
   }
 
-  @Override
-  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;

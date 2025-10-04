@@ -22,7 +22,6 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +31,7 @@ import java.util.Map;
 
 /**
  * Public safety data schema implementation.
- * 
+ *
  * <p>Provides SQL access to U.S. public safety data including crime statistics,
  * traffic safety data, emergency services, natural disasters, and law enforcement
  * information from federal, state, and local government sources.
@@ -54,13 +53,13 @@ public class SafetySchema extends FileSchema implements CommentableSchema {
     if (directory != null) {
       return new File(directory);
     }
-    
+
     // Check for explicit cache directory
     String cacheDirectory = (String) operand.get("cacheDirectory");
     if (cacheDirectory != null) {
       return new File(cacheDirectory);
     }
-    
+
     // Use default public safety data cache directory
     String cacheHome = System.getenv("SAFETY_CACHE_HOME");
     if (cacheHome == null) {

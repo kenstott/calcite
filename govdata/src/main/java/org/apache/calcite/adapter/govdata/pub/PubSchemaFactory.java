@@ -75,49 +75,49 @@ public class PubSchemaFactory implements ConstraintCapableSchemaFactory {
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     LOGGER.info("Creating public data schema: {}", name);
-    
+
     // Extract configuration
     @SuppressWarnings("unchecked")
     List<String> wikipediaLanguages = (List<String>) operand.get("wikipediaLanguages");
     if (wikipediaLanguages == null) {
       wikipediaLanguages = java.util.Arrays.asList("en"); // Default to English
     }
-    
+
     @SuppressWarnings("unchecked")
     List<String> osmRegions = (List<String>) operand.get("osmRegions");
     if (osmRegions == null) {
       osmRegions = java.util.Arrays.asList("us"); // Default to United States
     }
-    
-    String wikidataEndpoint = (String) operand.getOrDefault("wikidataEndpoint", 
-        "https://query.wikidata.org/sparql");
+
+    String wikidataEndpoint =
+        (String) operand.getOrDefault("wikidataEndpoint", "https://query.wikidata.org/sparql");
     String openalexApiKey = (String) operand.get("openalexApiKey");
     String updateFrequency = (String) operand.getOrDefault("updateFrequency", "daily");
     String cacheDirectory = (String) operand.get("cacheDirectory");
-    
+
     @SuppressWarnings("unchecked")
     Map<String, Object> entityLinking = (Map<String, Object>) operand.get("entityLinking");
-    
+
     @SuppressWarnings("unchecked")
     Map<String, Object> spatialAnalysis = (Map<String, Object>) operand.get("spatialAnalysis");
-    
+
     LOGGER.debug("Wikipedia languages: {}", wikipediaLanguages);
     LOGGER.debug("OSM regions: {}", osmRegions);
     LOGGER.debug("Wikidata endpoint: {}", wikidataEndpoint);
     LOGGER.debug("Update frequency: {}", updateFrequency);
-    
+
     if (entityLinking != null && Boolean.TRUE.equals(entityLinking.get("enabled"))) {
       Double threshold = (Double) entityLinking.get("confidenceThreshold");
-      LOGGER.debug("Entity linking enabled with confidence threshold: {}", 
+      LOGGER.debug("Entity linking enabled with confidence threshold: {}",
           threshold != null ? threshold : 0.8);
     }
-    
+
     if (spatialAnalysis != null && Boolean.TRUE.equals(spatialAnalysis.get("enabled"))) {
       @SuppressWarnings("unchecked")
       List<String> buffers = (List<String>) spatialAnalysis.get("bufferAnalysis");
       LOGGER.debug("Spatial analysis enabled with buffer distances: {}", buffers);
     }
-    
+
     // Create the schema with configured sources
     return new PubSchema(parentSchema, name, operand);
   }

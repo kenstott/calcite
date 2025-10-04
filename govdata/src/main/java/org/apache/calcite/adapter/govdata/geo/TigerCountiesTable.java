@@ -29,7 +29,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collections;
 import java.util.Iterator;
 
@@ -38,13 +37,13 @@ import java.util.Iterator;
  */
 public class TigerCountiesTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerCountiesTable.class);
-  
+
   private final TigerDataDownloader tigerDownloader;
-  
+
   public TigerCountiesTable(TigerDataDownloader tigerDownloader) {
     this.tigerDownloader = tigerDownloader;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("county_fips", SqlTypeName.VARCHAR)
@@ -55,21 +54,21 @@ public class TigerCountiesTable extends AbstractTable implements ScannableTable 
         .add("water_area", SqlTypeName.DOUBLE)
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         try {
           LOGGER.info("Fetching TIGER counties data");
-          
+
           // Download counties shapefiles for all years
           tigerDownloader.downloadCounties();
-          
+
           // For now, return stub data - would need shapefile parsing
           // TODO: Iterate through year partitions and merge data
           LOGGER.warn("TIGER shapefile parsing not yet implemented, returning empty result");
           return new TigerCountiesEnumerator();
-          
+
         } catch (Exception e) {
           LOGGER.error("Error fetching TIGER counties data", e);
           throw new RuntimeException("Failed to fetch TIGER counties data", e);
@@ -77,19 +76,19 @@ public class TigerCountiesTable extends AbstractTable implements ScannableTable 
       }
     };
   }
-  
+
   private static class TigerCountiesEnumerator implements Enumerator<Object[]> {
     private final Iterator<Object[]> iterator;
     private Object[] current;
-    
+
     TigerCountiesEnumerator() {
       this.iterator = Collections.emptyIterator();
     }
-    
+
     @Override public Object[] current() {
       return current;
     }
-    
+
     @Override public boolean moveNext() {
       if (iterator.hasNext()) {
         current = iterator.next();
@@ -97,11 +96,11 @@ public class TigerCountiesTable extends AbstractTable implements ScannableTable 
       }
       return false;
     }
-    
+
     @Override public void reset() {
       throw new UnsupportedOperationException("Reset not supported");
     }
-    
+
     @Override public void close() {
       // Nothing to close
     }

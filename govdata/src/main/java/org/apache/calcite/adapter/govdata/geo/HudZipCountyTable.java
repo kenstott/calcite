@@ -29,24 +29,23 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
 /**
  * HUD ZIP-County crosswalk table.
- * 
+ *
  * <p>Provides ZIP code to county FIPS mappings with residential/business address ratios.
  */
 public class HudZipCountyTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudZipCountyTable.class);
-  
+
   private final HudCrosswalkFetcher hudFetcher;
-  
+
   public HudZipCountyTable(HudCrosswalkFetcher hudFetcher) {
     this.hudFetcher = hudFetcher;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("zip", SqlTypeName.VARCHAR)
@@ -59,20 +58,20 @@ public class HudZipCountyTable extends AbstractTable implements ScannableTable {
         .add("state", SqlTypeName.VARCHAR)
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         try {
           LOGGER.info("Fetching HUD ZIP-County crosswalk data for Q2 2024");
-          
+
           // Download latest crosswalk data from HUD API
           java.io.File csvFile = hudFetcher.downloadZipToCounty("2", 2024);
-          
+
           // Load the actual crosswalk records from the CSV file
           List<HudCrosswalkFetcher.CrosswalkRecord> records = hudFetcher.loadCrosswalkData(csvFile);
           return new HudZipCountyEnumerator(records);
-          
+
         } catch (Exception e) {
           LOGGER.error("Error fetching HUD ZIP-County data", e);
           throw new RuntimeException("Failed to fetch HUD ZIP-County data", e);
@@ -80,11 +79,11 @@ public class HudZipCountyTable extends AbstractTable implements ScannableTable {
       }
     };
   }
-  
+
   private static class HudZipCountyEnumerator implements Enumerator<Object[]> {
     private final Iterator<Object[]> iterator;
     private Object[] current;
-    
+
     HudZipCountyEnumerator(List<HudCrosswalkFetcher.CrosswalkRecord> records) {
       // Convert HUD crosswalk records to Object arrays
       this.iterator = records.stream()
@@ -100,11 +99,11 @@ public class HudZipCountyTable extends AbstractTable implements ScannableTable {
           })
           .iterator();
     }
-    
+
     @Override public Object[] current() {
       return current;
     }
-    
+
     @Override public boolean moveNext() {
       if (iterator.hasNext()) {
         current = iterator.next();
@@ -112,11 +111,11 @@ public class HudZipCountyTable extends AbstractTable implements ScannableTable {
       }
       return false;
     }
-    
+
     @Override public void reset() {
       throw new UnsupportedOperationException("Reset not supported");
     }
-    
+
     @Override public void close() {
       // Nothing to close
     }

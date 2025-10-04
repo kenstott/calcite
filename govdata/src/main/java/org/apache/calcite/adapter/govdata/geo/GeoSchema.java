@@ -16,22 +16,19 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.govdata.TableCommentDefinitions;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
-import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-
 import com.google.common.collect.ImmutableMap;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,31 +68,31 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
   private final List<Integer> tigerYears;
   private final List<Integer> censusYears;
   private final boolean autoDownload;
-  
+
   // Data fetchers (to be implemented)
   private TigerDataDownloader tigerDownloader;
   private CensusApiClient censusClient;
   private HudCrosswalkFetcher hudFetcher;
-  
+
   // Cached tables
   private final Map<String, Table> tableMap = new HashMap<>();
-  
+
   // Constraint metadata from factory
   private Map<String, Map<String, Object>> constraintMetadata = new HashMap<>();
 
   public GeoSchema(SchemaPlus parentSchema, String name, String cacheDir,
       String censusApiKey, String hudUsername, String hudPassword,
-      String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears, 
+      String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears,
       boolean autoDownload) {
-    this(parentSchema, name, cacheDir, censusApiKey, hudUsername, hudPassword, 
+    this(parentSchema, name, cacheDir, censusApiKey, hudUsername, hudPassword,
          null, enabledSources, tigerYears, censusYears, autoDownload);
   }
-  
+
   public GeoSchema(SchemaPlus parentSchema, String name, String cacheDir,
       String censusApiKey, String hudUsername, String hudPassword, String hudToken,
-      String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears, 
+      String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears,
       boolean autoDownload) {
-    
+
     this.parentSchema = parentSchema;
     this.name = name;
     this.cacheDir = cacheDir;
@@ -107,10 +104,10 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     this.tigerYears = tigerYears;
     this.censusYears = censusYears;
     this.autoDownload = autoDownload;
-    
+
     // Initialize data fetchers
     initializeDataFetchers();
-    
+
     // Initialize tables
     initializeTables();
   }
@@ -119,21 +116,21 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     LOGGER.info("Initializing geographic data fetchers");
     LOGGER.info("  TIGER years: {}", tigerYears);
     LOGGER.info("  Census years: {}", censusYears);
-    
+
     // Initialize TIGER downloader with hive-partitioned structure
     if (enabledSources.contains("tiger") && !tigerYears.isEmpty()) {
       // TIGER data goes under: /govdata-parquet/source=geo/type=boundary/year=YYYY/
       File boundaryDir = new File(new File(cacheDir, "source=geo"), "type=boundary");
       this.tigerDownloader = new TigerDataDownloader(boundaryDir, tigerYears, autoDownload);
     }
-    
+
     // Initialize Census API client with hive-partitioned structure
     if (enabledSources.contains("census") && censusApiKey != null && !censusYears.isEmpty()) {
       // Census data goes under: /govdata-parquet/source=geo/type=demographic/year=YYYY/
       File demographicDir = new File(new File(cacheDir, "source=geo"), "type=demographic");
       this.censusClient = new CensusApiClient(censusApiKey, demographicDir, censusYears);
     }
-    
+
     // Initialize HUD crosswalk fetcher with hive-partitioned structure
     if (enabledSources.contains("hud")) {
       // HUD data goes under: /govdata-parquet/source=geo/type=crosswalk/year=YYYY/
@@ -150,99 +147,99 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
 
   private void initializeTables() {
     LOGGER.info("Initializing geographic tables");
-    
+
     // Create HUD crosswalk tables directly from API data
     if (enabledSources.contains("hud") && hudFetcher != null) {
       createHudTables();
     }
-    
+
     // Create Census tables if enabled
     if (enabledSources.contains("census") && censusClient != null) {
       createCensusTables();
     }
-    
+
     // Create TIGER boundary tables if enabled
     if (enabledSources.contains("tiger") && tigerDownloader != null) {
       createTigerTables();
     }
-    
+
     // Log available tables
     if (!tableMap.isEmpty()) {
       LOGGER.info("Available geographic tables: {}", tableMap.keySet());
     } else {
       LOGGER.info("No geographic tables found. Data may need to be downloaded first.");
     }
-    
+
     // If auto-download is enabled and no data exists, trigger initial download
     if (autoDownload && tableMap.isEmpty()) {
       LOGGER.info("Auto-download enabled. Initiating data download...");
       downloadInitialData();
     }
   }
-  
+
   private void createHudTables() {
     LOGGER.info("Creating HUD crosswalk tables");
-    
+
     // Create HUD ZIP-County table
     HudZipCountyTable hudZipCountyTable = new HudZipCountyTable(hudFetcher);
     tableMap.put("hud_zip_county", hudZipCountyTable);
-    
-    // Create HUD ZIP-Tract table  
+
+    // Create HUD ZIP-Tract table
     HudZipTractTable hudZipTractTable = new HudZipTractTable(hudFetcher);
     tableMap.put("hud_zip_tract", hudZipTractTable);
-    
+
     // Create HUD ZIP-CBSA table
     HudZipCbsaTable hudZipCbsaTable = new HudZipCbsaTable(hudFetcher);
     tableMap.put("hud_zip_cbsa", hudZipCbsaTable);
-    
+
     // Create HUD ZIP-CBSA Division table
     HudZipCbsaDivTable hudZipCbsaDivTable = new HudZipCbsaDivTable(hudFetcher);
     tableMap.put("hud_zip_cbsa_div", hudZipCbsaDivTable);
-    
+
     // Create HUD ZIP-Congressional District table
     HudZipCongressionalTable hudZipCongressionalTable = new HudZipCongressionalTable(hudFetcher);
     tableMap.put("hud_zip_congressional", hudZipCongressionalTable);
   }
-  
+
   private void createCensusTables() {
     LOGGER.info("Creating Census tables");
-    
+
     // Create Census places (cities) table
     CensusPlacesTable censusPlacesTable = new CensusPlacesTable(censusClient);
     tableMap.put("census_places", censusPlacesTable);
   }
-  
+
   private void createTigerTables() {
     LOGGER.info("Creating TIGER boundary tables");
-    
+
     // Create states table
     TigerStatesTable statesTable = new TigerStatesTable(tigerDownloader);
     tableMap.put("tiger_states", statesTable);
-    
+
     // Create counties table
     TigerCountiesTable countiesTable = new TigerCountiesTable(tigerDownloader);
     tableMap.put("tiger_counties", countiesTable);
-    
+
     // Create ZIP Code Tabulation Areas table
     TigerZctasTable zctasTable = new TigerZctasTable(tigerDownloader);
     tableMap.put("tiger_zctas", zctasTable);
-    
+
     // Create Census Tracts table
     TigerCensusTractsTable censusTractsTable = new TigerCensusTractsTable(tigerDownloader);
     tableMap.put("tiger_census_tracts", censusTractsTable);
-    
+
     // Create Block Groups table
     TigerBlockGroupsTable blockGroupsTable = new TigerBlockGroupsTable(tigerDownloader);
     tableMap.put("tiger_block_groups", blockGroupsTable);
-    
+
     // Create CBSA table
     TigerCbsaTable cbsaTable = new TigerCbsaTable(tigerDownloader);
     tableMap.put("tiger_cbsa", cbsaTable);
   }
-  
+
   private void downloadInitialData() {
     LOGGER.info("Downloading initial geographic data");
-    
+
     // Download TIGER data
     if (tigerDownloader != null) {
       try {
@@ -258,7 +255,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Error downloading TIGER data", e);
       }
     }
-    
+
     // Download HUD crosswalk
     if (hudFetcher != null) {
       try {
@@ -268,7 +265,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Error downloading HUD crosswalk", e);
       }
     }
-    
+
     // Note: Census API data is fetched on-demand, not pre-downloaded
   }
 
@@ -278,11 +275,11 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     for (Map.Entry<String, Table> entry : tableMap.entrySet()) {
       String tableName = entry.getKey();
       Table originalTable = entry.getValue();
-      
+
       // Check if we have comments for this table
       String tableComment = TableCommentDefinitions.getGeoTableComment(tableName);
       Map<String, String> columnComments = TableCommentDefinitions.getGeoColumnComments(tableName);
-      
+
       if (tableComment != null || !columnComments.isEmpty()) {
         // Wrap with comment support
         commentableTableMap.put(tableName, new CommentableGeoTableWrapper(originalTable, tableComment, columnComments));
@@ -292,17 +289,17 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     }
     return ImmutableMap.copyOf(commentableTableMap);
   }
-  
+
   /**
    * Sets constraint metadata for tables in this schema.
    * Called by GeoSchemaFactory to pass constraint definitions.
-   * 
+   *
    * @param constraintMetadata Map from table name to constraint definitions
    */
   public void setConstraintMetadata(Map<String, Map<String, Object>> constraintMetadata) {
     this.constraintMetadata = constraintMetadata;
     LOGGER.debug("Received constraint metadata for {} tables", constraintMetadata.size());
-    
+
     // Update existing tables with constraint metadata
     for (Map.Entry<String, Table> entry : tableMap.entrySet()) {
       String tableName = entry.getKey();
@@ -313,17 +310,17 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
       }
     }
   }
-  
+
   /**
    * Gets constraint metadata for a specific table.
-   * 
+   *
    * @param tableName The table name
    * @return Constraint metadata or null if none defined
    */
   public Map<String, Object> getTableConstraints(String tableName) {
     return constraintMetadata.get(tableName);
   }
-  
+
   /**
    * Define the schema for the states table.
    */
@@ -339,7 +336,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         .add("intpt_lon", SqlTypeName.DOUBLE)
         .build();
   }
-  
+
   /**
    * Define the schema for the counties table.
    */
@@ -356,7 +353,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         .add("intpt_lon", SqlTypeName.DOUBLE)
         .build();
   }
-  
+
   /**
    * Define the schema for the places (cities) table.
    */
@@ -375,7 +372,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         .add("population", SqlTypeName.INTEGER)
         .build();
   }
-  
+
   /**
    * Define the schema for the ZCTAs (ZIP codes) table.
    */
@@ -391,7 +388,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         .add("housing_units", SqlTypeName.INTEGER)
         .build();
   }
-  
+
   /**
    * Define the schema for the ZIP to county crosswalk table.
    */
@@ -405,7 +402,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
         .add("tot_ratio", SqlTypeName.DOUBLE)
         .build();
   }
-  
+
   /**
    * Wrapper that adds comment support to existing GEO Table instances.
    */
@@ -413,43 +410,43 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     private final Table delegate;
     private final @Nullable String tableComment;
     private final Map<String, String> columnComments;
-    
-    CommentableGeoTableWrapper(Table delegate, @Nullable String tableComment, 
+
+    CommentableGeoTableWrapper(Table delegate, @Nullable String tableComment,
         Map<String, String> columnComments) {
       this.delegate = delegate;
       this.tableComment = tableComment;
       this.columnComments = columnComments;
     }
-    
+
     @Override public @Nullable String getTableComment() {
       return tableComment;
     }
-    
+
     @Override public @Nullable String getColumnComment(String columnName) {
       return columnComments.get(columnName.toLowerCase());
     }
-    
+
     // Delegate all other Table methods
-    
+
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return delegate.getRowType(typeFactory);
     }
-    
+
     @Override public org.apache.calcite.schema.Statistic getStatistic() {
       return delegate.getStatistic();
     }
-    
+
     @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
       return delegate.getJdbcTableType();
     }
-    
+
     @Override public boolean isRolledUp(String column) {
       return delegate.isRolledUp(column);
     }
-    
-    @Override public boolean rolledUpColumnValidInsideAgg(String column, 
+
+    @Override public boolean rolledUpColumnValidInsideAgg(String column,
         org.apache.calcite.sql.SqlCall call,
-        org.apache.calcite.sql.SqlNode parent, 
+        org.apache.calcite.sql.SqlNode parent,
         org.apache.calcite.config.CalciteConnectionConfig config) {
       return delegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
     }

@@ -35,7 +35,7 @@ import java.util.List;
 
 /**
  * Table for TIGER ZIP Code Tabulation Areas (ZCTAs).
- * 
+ *
  * <p>ZCTAs are statistical entities developed by the Census Bureau
  * to represent ZIP Code service areas. Unlike actual ZIP codes which
  * can change frequently, ZCTAs are relatively stable and better suited
@@ -43,13 +43,13 @@ import java.util.List;
  */
 public class TigerZctasTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerZctasTable.class);
-  
+
   private final TigerDataDownloader downloader;
-  
+
   public TigerZctasTable(TigerDataDownloader downloader) {
     this.downloader = downloader;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("zcta5", SqlTypeName.VARCHAR)           // 5-digit ZCTA code
@@ -67,19 +67,19 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
         .add("awater_sqmi", SqlTypeName.DOUBLE)      // Water area in square miles
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         return new Enumerator<Object[]>() {
           private List<Object[]> rows;
           private int currentIndex = -1;
-          
+
           @Override public Object[] current() {
-            return rows != null && currentIndex >= 0 && currentIndex < rows.size() 
+            return rows != null && currentIndex >= 0 && currentIndex < rows.size()
                 ? rows.get(currentIndex) : null;
           }
-          
+
           @Override public boolean moveNext() {
             if (rows == null) {
               rows = loadZctaData();
@@ -87,18 +87,18 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
             currentIndex++;
             return currentIndex < rows.size();
           }
-          
+
           @Override public void reset() {
             currentIndex = -1;
           }
-          
+
           @Override public void close() {
             // Nothing to close
           }
-          
+
           private List<Object[]> loadZctaData() {
             List<Object[]> data = new ArrayList<>();
-            
+
             try {
               // Check if ZCTA data exists
               File zctaDir = new File(downloader.getCacheDir(), "zctas");
@@ -106,10 +106,10 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
                 LOGGER.info("Downloading TIGER ZCTA data...");
                 downloader.downloadZctas();
               }
-              
+
               if (zctaDir.exists()) {
                 LOGGER.info("Loading ZCTA data from {}", zctaDir);
-                
+
                 // Parse TIGER ZCTA shapefile
                 data = TigerShapefileParser.parseShapefile(zctaDir, "tl_2024_us_zcta520", feature -> {
                   String zcta5 = TigerShapefileParser.getStringAttribute(feature, "ZCTA5CE20");
@@ -119,7 +119,7 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
                   if (zcta5.isEmpty()) {
                     return null; // Skip invalid records
                   }
-                  
+
                   return new Object[] {
                       zcta5,                                                          // zcta5
                       "ZCTA5 " + zcta5,                                              // zcta5_name
@@ -127,7 +127,7 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
                       "", // state_code - would need lookup table
                       TigerShapefileParser.getDoubleAttribute(feature, "ALAND20"),   // land_area
                       TigerShapefileParser.getDoubleAttribute(feature, "AWATER20"),  // water_area
-                      TigerShapefileParser.getDoubleAttribute(feature, "ALAND20") + 
+                      TigerShapefileParser.getDoubleAttribute(feature, "ALAND20") +
                           TigerShapefileParser.getDoubleAttribute(feature, "AWATER20"), // total_area
                       TigerShapefileParser.getDoubleAttribute(feature, "INTPTLAT20"), // intpt_lat
                       TigerShapefileParser.getDoubleAttribute(feature, "INTPTLON20"), // intpt_lon
@@ -143,7 +143,7 @@ public class TigerZctasTable extends AbstractTable implements ScannableTable {
             } catch (Exception e) {
               LOGGER.error("Error loading ZCTA data", e);
             }
-            
+
             return data;
           }
         };

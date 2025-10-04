@@ -22,7 +22,6 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +31,7 @@ import java.util.Map;
 
 /**
  * Public data schema implementation.
- * 
+ *
  * <p>Provides SQL access to ubiquitous public data sources including Wikipedia,
  * OpenStreetMap, Wikidata, and academic research databases. Enables comprehensive
  * entity resolution and knowledge graph analysis across all public information sources.
@@ -54,13 +53,13 @@ public class PubSchema extends FileSchema implements CommentableSchema {
     if (directory != null) {
       return new File(directory);
     }
-    
+
     // Check for explicit cache directory
     String cacheDirectory = (String) operand.get("cacheDirectory");
     if (cacheDirectory != null) {
       return new File(cacheDirectory);
     }
-    
+
     // Use default public data cache directory
     String cacheHome = System.getenv("PUB_CACHE_HOME");
     if (cacheHome == null) {

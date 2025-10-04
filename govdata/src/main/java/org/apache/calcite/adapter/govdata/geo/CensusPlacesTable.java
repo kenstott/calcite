@@ -40,36 +40,36 @@ import java.util.List;
  */
 public class CensusPlacesTable extends AbstractTable implements ScannableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusPlacesTable.class);
-  
+
   private final CensusApiClient censusClient;
-  
+
   public CensusPlacesTable(CensusApiClient censusClient) {
     this.censusClient = censusClient;
   }
-  
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("place_name", SqlTypeName.VARCHAR)
-        .add("place_fips", SqlTypeName.VARCHAR) 
+        .add("place_fips", SqlTypeName.VARCHAR)
         .add("state_fips", SqlTypeName.VARCHAR)
         .add("population", SqlTypeName.INTEGER)
         .build();
   }
-  
+
   @Override public Enumerable<Object[]> scan(DataContext root) {
     return new AbstractEnumerable<Object[]>() {
       @Override public Enumerator<Object[]> enumerator() {
         try {
           LOGGER.info("Fetching Census places data for all states");
-          
+
           // Get places (cities) population data for all states
           JsonNode data = censusClient.getAcsData(2022, "NAME,B01003_001E", "place:*");
-          
+
           List<Object[]> places = new ArrayList<>();
-          
+
           if (data.has("data") && data.get("data").isArray()) {
             JsonNode dataArray = data.get("data");
-            
+
             // Skip header row (index 0)
             for (int i = 1; i < dataArray.size(); i++) {
               JsonNode row = dataArray.get(i);
@@ -78,7 +78,7 @@ public class CensusPlacesTable extends AbstractTable implements ScannableTable {
                 String population = row.get(1).asText();
                 String stateFips = row.get(2).asText();
                 String placeFips = row.get(3).asText();
-                
+
                 // Extract place name (remove state suffix and type suffix)
                 String placeName = fullName;
                 // Remove state suffix (e.g., ", North Carolina", ", California", etc.)
@@ -88,7 +88,7 @@ public class CensusPlacesTable extends AbstractTable implements ScannableTable {
                 }
                 // Remove type suffixes
                 placeName = placeName.replaceAll(" (town|city|village|CDP)$", "");
-                
+
                 try {
                   int pop = Integer.parseInt(population);
                   places.add(new Object[] {placeName, placeFips, stateFips, pop});
@@ -98,10 +98,10 @@ public class CensusPlacesTable extends AbstractTable implements ScannableTable {
               }
             }
           }
-          
+
           LOGGER.info("Loaded {} Census places", places.size());
           return new CensusPlacesEnumerator(places);
-          
+
         } catch (Exception e) {
           LOGGER.error("Error fetching Census places data", e);
           throw new RuntimeException("Failed to fetch Census places data", e);
@@ -109,19 +109,19 @@ public class CensusPlacesTable extends AbstractTable implements ScannableTable {
       }
     };
   }
-  
+
   private static class CensusPlacesEnumerator implements Enumerator<Object[]> {
     private final Iterator<Object[]> iterator;
     private Object[] current;
-    
+
     CensusPlacesEnumerator(List<Object[]> places) {
       this.iterator = places.iterator();
     }
-    
+
     @Override public Object[] current() {
       return current;
     }
-    
+
     @Override public boolean moveNext() {
       if (iterator.hasNext()) {
         current = iterator.next();
@@ -129,11 +129,11 @@ public class CensusPlacesTable extends AbstractTable implements ScannableTable {
       }
       return false;
     }
-    
+
     @Override public void reset() {
       throw new UnsupportedOperationException("Reset not supported");
     }
-    
+
     @Override public void close() {
       // Nothing to close
     }
