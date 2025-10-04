@@ -18,23 +18,22 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.TableCommentDefinitions;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Test that all ECON schema tables have proper comment definitions.
  */
 @Tag("unit")
 public class EconTableCommentsTest {
-  
-  @Test
-  public void testAllEconTablesHaveComments() {
+
+  @Test public void testAllEconTablesHaveComments() {
     // List of all ECON tables
     String[] tables = {
         "employment_statistics",
@@ -48,18 +47,18 @@ public class EconTableCommentsTest {
         "gdp_components",
         "regional_income"
     };
-    
+
     for (String tableName : tables) {
       // Check table comment exists
       String tableComment = TableCommentDefinitions.getEconTableComment(tableName);
       assertNotNull(tableComment, "Table comment missing for: " + tableName);
       assertFalse(tableComment.isEmpty(), "Table comment empty for: " + tableName);
-      
+
       // Check column comments exist
       Map<String, String> columnComments = TableCommentDefinitions.getEconColumnComments(tableName);
       assertNotNull(columnComments, "Column comments missing for: " + tableName);
       assertFalse(columnComments.isEmpty(), "No column comments for: " + tableName);
-      
+
       // Verify at least some key columns have comments
       switch (tableName) {
         case "employment_statistics":
@@ -105,24 +104,23 @@ public class EconTableCommentsTest {
       }
     }
   }
-  
-  @Test
-  public void testEconSchemaComment() {
+
+  @Test public void testEconSchemaComment() {
     // Verify the ECON schema itself would have a comment
     // This is defined in EconSchema.getComment() method
     String expectedComment = "U.S. and international economic data";
-    
+
     // Just verify that table comments are well-formed
     String employmentComment = TableCommentDefinitions.getEconTableComment("employment_statistics");
-    assertTrue(employmentComment.contains("Bureau of Labor Statistics"), 
+    assertTrue(employmentComment.contains("Bureau of Labor Statistics"),
         "Employment statistics should mention BLS");
-    
+
     String treasuryComment = TableCommentDefinitions.getEconTableComment("treasury_yields");
-    assertTrue(treasuryComment.contains("Treasury"), 
+    assertTrue(treasuryComment.contains("Treasury"),
         "Treasury yields should mention Treasury");
-    
+
     String worldComment = TableCommentDefinitions.getEconTableComment("world_indicators");
-    assertTrue(worldComment.contains("World Bank"), 
+    assertTrue(worldComment.contains("World Bank"),
         "World indicators should mention World Bank");
   }
 }

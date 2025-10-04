@@ -17,8 +17,8 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -27,39 +27,37 @@ import java.sql.Statement;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Validates ECON schema data with SQL queries.
  */
 @Tag("integration")
 public class EconDataValidationTest {
-  
+
   @BeforeAll
   public static void setup() {
     // Use the actual environment variables from .env.test
     String cacheDir = System.getenv("GOVDATA_CACHE_DIR");
     String parquetDir = System.getenv("GOVDATA_PARQUET_DIR");
-    
+
     if (cacheDir == null || parquetDir == null) {
       System.out.println("Setting default directories for test");
       System.setProperty("GOVDATA_CACHE_DIR", "/Volumes/T9/govdata-cache");
       System.setProperty("GOVDATA_PARQUET_DIR", "/Volumes/T9/govdata-parquet");
     }
   }
-  
-  @Test
-  public void testEconTablesExistAndHaveData() throws Exception {
+
+  @Test public void testEconTablesExistAndHaveData() throws Exception {
     System.out.println("\n=== ECON Data Validation Test ===");
-    System.out.println("GOVDATA_CACHE_DIR: " + 
-        (System.getenv("GOVDATA_CACHE_DIR") != null ? 
-         System.getenv("GOVDATA_CACHE_DIR") : 
+    System.out.println("GOVDATA_CACHE_DIR: " +
+        (System.getenv("GOVDATA_CACHE_DIR") != null ?
+         System.getenv("GOVDATA_CACHE_DIR") :
          System.getProperty("GOVDATA_CACHE_DIR")));
-    System.out.println("GOVDATA_PARQUET_DIR: " + 
-        (System.getenv("GOVDATA_PARQUET_DIR") != null ? 
-         System.getenv("GOVDATA_PARQUET_DIR") : 
+    System.out.println("GOVDATA_PARQUET_DIR: " +
+        (System.getenv("GOVDATA_PARQUET_DIR") != null ?
+         System.getenv("GOVDATA_PARQUET_DIR") :
          System.getProperty("GOVDATA_PARQUET_DIR")));
-    
+
     // Create model JSON with auto-download enabled
     String modelJson = "{"
         + "\"version\": \"1.0\","
@@ -76,26 +74,26 @@ public class EconDataValidationTest {
         + "  }"
         + "}]"
         + "}";
-    
+
     java.nio.file.Path modelFile = java.nio.file.Files.createTempFile("econ-validation", ".json");
     java.nio.file.Files.writeString(modelFile, modelJson);
-    
+
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, info);
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, info);
          Statement stmt = conn.createStatement()) {
-      
+
       System.out.println("\n1. Checking what tables exist in ECON schema:");
       System.out.println("================================================");
-      
+
       // Query for all tables in ECON schema (try both uppercase and lowercase)
       String tableQuery = "SELECT \"TABLE_SCHEMA\", \"TABLE_NAME\", \"TABLE_TYPE\" "
           + "FROM information_schema.tables "
           + "ORDER BY \"TABLE_SCHEMA\", \"TABLE_NAME\"";
-      
+
       int tableCount = 0;
       try (ResultSet rs = stmt.executeQuery(tableQuery)) {
         while (rs.next()) {
@@ -108,13 +106,13 @@ public class EconDataValidationTest {
           }
         }
       }
-      
+
       System.out.println("\nTotal tables found: " + tableCount);
       assertTrue(tableCount > 0, "Should have at least one table in ECON schema");
-      
+
       System.out.println("\n2. Checking row counts for each table:");
       System.out.println("========================================");
-      
+
       // List of expected tables
       String[] expectedTables = {
           "employment_statistics",
@@ -128,7 +126,7 @@ public class EconDataValidationTest {
           "gdp_components",
           "gdp_statistics"
       };
-      
+
       int tablesWithData = 0;
       for (String table : expectedTables) {
         try {
@@ -146,25 +144,25 @@ public class EconDataValidationTest {
           System.out.printf("  %s: NOT FOUND or ERROR (%s)\n", table, e.getMessage());
         }
       }
-      
+
       System.out.println("\nTables with data: " + tablesWithData);
-      
+
       System.out.println("\n3. Sample data from available tables:");
       System.out.println("=======================================");
-      
+
       // Try to get sample data from employment_statistics
       try {
         System.out.println("\nSample from employment_statistics:");
         String sampleQuery = "SELECT * FROM econ.employment_statistics LIMIT 3";
         try (ResultSet rs = stmt.executeQuery(sampleQuery)) {
           int cols = rs.getMetaData().getColumnCount();
-          
+
           // Print column headers
           for (int i = 1; i <= cols; i++) {
             System.out.print(rs.getMetaData().getColumnName(i) + "\t");
           }
           System.out.println();
-          
+
           // Print data
           while (rs.next()) {
             for (int i = 1; i <= cols; i++) {
@@ -176,20 +174,20 @@ public class EconDataValidationTest {
       } catch (Exception e) {
         System.out.println("Could not query employment_statistics: " + e.getMessage());
       }
-      
+
       // Try to get sample data from treasury_yields
       try {
         System.out.println("\nSample from treasury_yields:");
         String sampleQuery = "SELECT * FROM econ.treasury_yields LIMIT 3";
         try (ResultSet rs = stmt.executeQuery(sampleQuery)) {
           int cols = rs.getMetaData().getColumnCount();
-          
+
           // Print column headers
           for (int i = 1; i <= cols; i++) {
             System.out.print(rs.getMetaData().getColumnName(i) + "\t");
           }
           System.out.println();
-          
+
           // Print data
           while (rs.next()) {
             for (int i = 1; i <= cols; i++) {
@@ -201,24 +199,24 @@ public class EconDataValidationTest {
       } catch (Exception e) {
         System.out.println("Could not query treasury_yields: " + e.getMessage());
       }
-      
+
       System.out.println("\n4. Checking table schema/columns:");
       System.out.println("===================================");
-      
+
       // Get column information for a table that exists
       String columnQuery = "SELECT \"TABLE_NAME\", \"COLUMN_NAME\", \"DATA_TYPE\", \"ORDINAL_POSITION\" "
           + "FROM information_schema.columns "
           + "WHERE \"TABLE_SCHEMA\" = 'ECON' "
           + "AND \"TABLE_NAME\" IN ('employment_statistics', 'treasury_yields') "
           + "ORDER BY \"TABLE_NAME\", \"ORDINAL_POSITION\"";
-      
+
       String currentTable = "";
       try (ResultSet rs = stmt.executeQuery(columnQuery)) {
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME");
           String columnName = rs.getString("COLUMN_NAME");
           String dataType = rs.getString("DATA_TYPE");
-          
+
           if (!tableName.equals(currentTable)) {
             currentTable = tableName;
             System.out.println("\nTable: " + tableName);
@@ -226,9 +224,9 @@ public class EconDataValidationTest {
           System.out.printf("  - %s (%s)\n", columnName, dataType);
         }
       }
-      
+
       System.out.println("\n=== Test Complete ===\n");
-      
+
     } finally {
       java.nio.file.Files.deleteIfExists(modelFile);
     }

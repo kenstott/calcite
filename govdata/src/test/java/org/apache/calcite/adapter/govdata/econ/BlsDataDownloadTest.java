@@ -16,13 +16,13 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -39,16 +39,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 public class BlsDataDownloadTest {
-  
+
   private static String blsApiKey;
-  
+
   @TempDir
   Path tempDir;
 
   private StorageProvider createStorageProvider() {
     return StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
   }
-  
+
   @BeforeAll
   public static void setUp() {
     // Get API key from environment
@@ -57,81 +57,77 @@ public class BlsDataDownloadTest {
       blsApiKey = System.getProperty("bls.api.key");
     }
   }
-  
-  @Test
-  public void testDownloadEmploymentStatistics() throws Exception {
+
+  @Test public void testDownloadEmploymentStatistics() throws Exception {
     if (blsApiKey == null) {
       System.out.println("Skipping test - no BLS API key configured");
       return;
     }
-    
+
     BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
-    
+
     // Download just 2 years of data for testing
     File parquetFile = downloader.downloadEmploymentStatistics(2023, 2024);
-    
+
     assertNotNull(parquetFile);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
-    
+
     // Verify we can query the Parquet file
     verifyParquetReadable(parquetFile, "employment_statistics");
   }
-  
-  @Test
-  public void testDownloadInflationMetrics() throws Exception {
+
+  @Test public void testDownloadInflationMetrics() throws Exception {
     if (blsApiKey == null) {
       System.out.println("Skipping test - no BLS API key configured");
       return;
     }
-    
+
     BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
-    
+
     File parquetFile = downloader.downloadInflationMetrics(2023, 2024);
-    
+
     assertNotNull(parquetFile);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
-    
+
     verifyParquetReadable(parquetFile, "inflation_metrics");
   }
-  
-  @Test
-  public void testDownloadWageGrowth() throws Exception {
+
+  @Test public void testDownloadWageGrowth() throws Exception {
     if (blsApiKey == null) {
       System.out.println("Skipping test - no BLS API key configured");
       return;
     }
-    
+
     BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
-    
+
     File parquetFile = downloader.downloadWageGrowth(2023, 2024);
-    
+
     assertNotNull(parquetFile);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
-    
+
     verifyParquetReadable(parquetFile, "wage_growth");
   }
-  
-  @Test
-  public void testDownloadRegionalEmployment() throws Exception {
+
+  @Test public void testDownloadRegionalEmployment() throws Exception {
     if (blsApiKey == null) {
       System.out.println("Skipping test - no BLS API key configured");
       return;
     }
-    
+
     BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
-    
+
     File parquetFile = downloader.downloadRegionalEmployment(2023, 2024);
-    
+
     assertNotNull(parquetFile);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
-    
+
     verifyParquetReadable(parquetFile, "regional_employment");
   }
-  
+
   /**
    * Verifies that a Parquet file can be read using DuckDB.
    */
@@ -140,22 +136,22 @@ public class BlsDataDownloadTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       try (Statement stmt = conn.createStatement()) {
         // Query the Parquet file
-        String query = String.format(
-            "SELECT COUNT(*) as row_count FROM read_parquet('%s')",
+        String query =
+            String.format("SELECT COUNT(*) as row_count FROM read_parquet('%s')",
             parquetFile.getAbsolutePath());
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next());
           int rowCount = rs.getInt("row_count");
           assertTrue(rowCount > 0, "Parquet file should contain data");
           System.out.printf("%s: Found %d rows in Parquet file%n", expectedTable, rowCount);
         }
-        
+
         // Verify schema
-        query = String.format(
-            "DESCRIBE SELECT * FROM read_parquet('%s')",
+        query =
+            String.format("DESCRIBE SELECT * FROM read_parquet('%s')",
             parquetFile.getAbsolutePath());
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           System.out.printf("%s schema:%n", expectedTable);
           while (rs.next()) {

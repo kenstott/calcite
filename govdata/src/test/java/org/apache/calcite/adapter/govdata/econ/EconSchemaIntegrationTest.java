@@ -16,13 +16,13 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -37,7 +37,6 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,13 +49,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 @Tag("integration")
 public class EconSchemaIntegrationTest {
-  
+
   @TempDir
   static Path tempDir;
-  
+
   private static String cacheDir;
   private static String parquetDir;
-  
+
   // All 13 tables that should be exposed in ECON schema
   private static final Set<String> EXPECTED_TABLES = new HashSet<>();
   static {
@@ -65,17 +64,17 @@ public class EconSchemaIntegrationTest {
     EXPECTED_TABLES.add("inflation_metrics");
     EXPECTED_TABLES.add("wage_growth");
     EXPECTED_TABLES.add("regional_employment");
-    
+
     // Treasury tables
     EXPECTED_TABLES.add("treasury_yields");
     EXPECTED_TABLES.add("federal_debt");
-    
+
     // World Bank tables
     EXPECTED_TABLES.add("world_indicators");
-    
+
     // FRED tables
     EXPECTED_TABLES.add("fred_indicators");
-    
+
     // BEA tables
     EXPECTED_TABLES.add("gdp_components");
     EXPECTED_TABLES.add("regional_income");
@@ -83,13 +82,13 @@ public class EconSchemaIntegrationTest {
     EXPECTED_TABLES.add("ita_data");
     EXPECTED_TABLES.add("industry_gdp");
   }
-  
+
   @BeforeAll
   static void setupTestData() throws Exception {
     // Set up test directories
     cacheDir = tempDir.resolve("econ-cache").toString();
     parquetDir = tempDir.resolve("econ-parquet").toString();
-    
+
     // Create directory structure for test data
     Files.createDirectories(tempDir.resolve("econ-parquet/source=econ/type=employment/year=2024"));
     Files.createDirectories(tempDir.resolve("econ-parquet/source=econ/type=inflation/year=2024"));
@@ -104,21 +103,21 @@ public class EconSchemaIntegrationTest {
     Files.createDirectories(tempDir.resolve("econ-parquet/source=econ/type=trade/year_range=2022_2023"));
     Files.createDirectories(tempDir.resolve("econ-parquet/source=econ/type=ita/year_range=2022_2023"));
     Files.createDirectories(tempDir.resolve("econ-parquet/source=econ/type=industry_gdp/year_range=2022_2023"));
-    
+
     // Create minimal sample Parquet files for each table
     // In a real test, we'd use actual downloaders to create these
     createSampleParquetFiles();
   }
-  
+
   private static void createSampleParquetFiles() throws Exception {
     // For this test, we'll check if we can download minimal real data
     // Otherwise we'll skip the data query tests
-    
+
     // Try to create minimal data using the downloaders if API keys are available
     String fredKey = System.getenv("FRED_API_KEY");
     String beaKey = System.getenv("BEA_API_KEY");
     String blsKey = System.getenv("BLS_API_KEY");
-    
+
     if (fredKey != null) {
       // Create FRED indicators file
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
@@ -133,7 +132,7 @@ public class EconSchemaIntegrationTest {
           targetDir.mkdirs();
           // The file might already have the correct name, check first
           if (!fredParquet.getName().equals("fred_indicators.parquet")) {
-            Files.copy(fredParquet.toPath(), 
+            Files.copy(fredParquet.toPath(),
                        new File(targetDir, "fred_indicators.parquet").toPath());
           }
         }
@@ -141,24 +140,24 @@ public class EconSchemaIntegrationTest {
         // Ignore - we'll test what we can
       }
     }
-    
+
     if (beaKey != null) {
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
       BeaDataDownloader beaDownloader = new BeaDataDownloader(beaKey, cacheDir, storageProvider);
-      
+
       // Try to download each BEA dataset
       try {
         File gdpFile = beaDownloader.downloadGdpComponents(2024, 2024);
         if (gdpFile != null && gdpFile.exists()) {
           File targetDir = new File(parquetDir, "source=econ/type=gdp/year=2024");
           targetDir.mkdirs();
-          Files.copy(gdpFile.toPath(), 
+          Files.copy(gdpFile.toPath(),
                      new File(targetDir, "gdp_components.parquet").toPath());
         }
       } catch (Exception e) {
         // Ignore
       }
-      
+
       try {
         beaDownloader.downloadTradeStatistics(2022, 2023);
         // Check if the file was created in the storage provider directory
@@ -170,25 +169,25 @@ public class EconSchemaIntegrationTest {
       } catch (Exception e) {
         // Ignore
       }
-      
+
       try {
         File itaFile = beaDownloader.downloadItaData(2022, 2023);
         if (itaFile != null && itaFile.exists()) {
           File targetDir = new File(parquetDir, "source=econ/type=ita/year_range=2022_2023");
           targetDir.mkdirs();
-          Files.copy(itaFile.toPath(), 
+          Files.copy(itaFile.toPath(),
                      new File(targetDir, "ita_data.parquet").toPath());
         }
       } catch (Exception e) {
         // Ignore
       }
-      
+
       try {
         File industryFile = beaDownloader.downloadIndustryGdp(2022, 2023);
         if (industryFile != null && industryFile.exists()) {
           File targetDir = new File(parquetDir, "source=econ/type=industry_gdp/year_range=2022_2023");
           targetDir.mkdirs();
-          Files.copy(industryFile.toPath(), 
+          Files.copy(industryFile.toPath(),
                      new File(targetDir, "industry_gdp.parquet").toPath());
         }
       } catch (Exception e) {
@@ -196,12 +195,11 @@ public class EconSchemaIntegrationTest {
       }
     }
   }
-  
-  @Test
-  public void testAllTablesExposedInSchema() throws Exception {
+
+  @Test public void testAllTablesExposedInSchema() throws Exception {
     // Create Calcite model JSON
-    String modelJson = String.format(
-        "{"
+    String modelJson =
+        String.format("{"
         + "  \"version\": \"1.0\","
         + "  \"defaultSchema\": \"econ\","
         + "  \"schemas\": ["
@@ -219,30 +217,30 @@ public class EconSchemaIntegrationTest {
         + "    }"
         + "  ]"
         + "}", parquetDir, cacheDir);
-    
+
     // Write model file
     Path modelFile = Files.createTempFile("econ-test-model", ".json");
     Files.write(modelFile, modelJson.getBytes());
-    
+
     // Connect via JDBC
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
+
       DatabaseMetaData meta = conn.getMetaData();
-      
+
       // Get all tables in ECON schema
       Set<String> actualTables = new HashSet<>();
       try (ResultSet rs = meta.getTables(null, "ECON", "%", null)) {
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME").toLowerCase();
           String tableComment = rs.getString("REMARKS");
-          
+
           actualTables.add(tableName);
-          
+
           // Verify table has a comment
           if (EXPECTED_TABLES.contains(tableName)) {
             assertNotNull(tableComment, "Table " + tableName + " should have a comment");
@@ -250,13 +248,13 @@ public class EconSchemaIntegrationTest {
           }
         }
       }
-      
+
       // Verify all expected tables are present
       for (String expectedTable : EXPECTED_TABLES) {
         assertTrue(actualTables.contains(expectedTable),
             "Expected table '" + expectedTable + "' not found in schema. Found tables: " + actualTables);
       }
-      
+
       // Report on coverage
       System.out.println("ECON Schema Table Coverage:");
       System.out.println("Expected tables: " + EXPECTED_TABLES.size());
@@ -264,60 +262,58 @@ public class EconSchemaIntegrationTest {
       System.out.println("All expected tables present: " + actualTables.containsAll(EXPECTED_TABLES));
     }
   }
-  
-  @Test
-  public void testTableColumnsAccessible() throws Exception {
+
+  @Test public void testTableColumnsAccessible() throws Exception {
     // Only test if we have at least one API key
     boolean hasApiKey = System.getenv("FRED_API_KEY") != null ||
                          System.getenv("BEA_API_KEY") != null ||
                          System.getenv("BLS_API_KEY") != null;
-    
+
     assumeTrue(hasApiKey, "Skipping column test - no API keys available");
-    
+
     Path modelFile = createModelFile();
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
+
       DatabaseMetaData meta = conn.getMetaData();
-      
+
       // Test a few key tables have expected columns
       verifyTableColumns(meta, "trade_statistics",
           "table_id", "year", "value", "trade_type", "category");
-      
+
       verifyTableColumns(meta, "ita_data",
           "indicator", "year", "value", "units");
-      
+
       verifyTableColumns(meta, "industry_gdp",
           "table_id", "frequency", "year", "quarter", "industry_code", "value");
     }
   }
-  
-  @Test
-  public void testSqlQueriesWork() throws Exception {
+
+  @Test public void testSqlQueriesWork() throws Exception {
     Path modelFile = createModelFile();
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
+
       try (Statement stmt = conn.createStatement()) {
         // Test EXPLAIN PLAN for each table - this verifies the table is queryable
         for (String table : EXPECTED_TABLES) {
           String query = "EXPLAIN PLAN FOR SELECT * FROM econ." + table + " LIMIT 1";
-          
+
           try (ResultSet rs = stmt.executeQuery(query)) {
             assertTrue(rs.next(), "EXPLAIN PLAN should return at least one row for " + table);
             String plan = rs.getString(1);
             assertNotNull(plan, "EXPLAIN PLAN should not be null for " + table);
-            
+
             // Verify the plan mentions the table
             assertTrue(plan.toLowerCase().contains(table.toLowerCase()) ||
                        plan.contains("PartitionedParquetTable"),
@@ -330,75 +326,73 @@ public class EconSchemaIntegrationTest {
       }
     }
   }
-  
-  @Test
-  public void testDataRetrievalFromPopulatedTables() throws Exception {
+
+  @Test public void testDataRetrievalFromPopulatedTables() throws Exception {
     // This test only runs if we have actual data files
     File tradeFile = new File(parquetDir, "source=econ/type=trade/year_range=2022_2023/trade_statistics.parquet");
     assumeTrue(tradeFile.exists(), "Skipping data test - no trade_statistics.parquet file");
-    
+
     Path modelFile = createModelFile();
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
+
       try (Statement stmt = conn.createStatement()) {
         // Query actual data from trade_statistics
         String query = "SELECT COUNT(*) as cnt FROM econ.trade_statistics";
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next(), "COUNT query should return a result");
           int count = rs.getInt("cnt");
           assertTrue(count >= 0, "Count should be non-negative");
           System.out.println("trade_statistics row count: " + count);
         }
-        
+
         // Test filtering and projection
         query = "SELECT year, trade_type, COUNT(*) as cnt "
               + "FROM econ.trade_statistics "
               + "WHERE year >= 2022 "
               + "GROUP BY year, trade_type "
               + "ORDER BY year, trade_type";
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           while (rs.next()) {
             int year = rs.getInt("year");
             String tradeType = rs.getString("trade_type");
             int count = rs.getInt("cnt");
-            
+
             assertTrue(year >= 2022, "Year should be >= 2022");
             assertNotNull(tradeType, "Trade type should not be null");
             assertTrue(count > 0, "Count should be positive");
-            
+
             System.out.printf("Year: %d, Trade Type: %s, Count: %d%n", year, tradeType, count);
           }
         }
       }
     }
   }
-  
-  @Test
-  public void testCrossTableJoins() throws Exception {
+
+  @Test public void testCrossTableJoins() throws Exception {
     // Test that we can join between tables if data exists
     File tradeFile = new File(parquetDir, "source=econ/type=trade/year_range=2022_2023/trade_statistics.parquet");
     File itaFile = new File(parquetDir, "source=econ/type=ita/year_range=2022_2023/ita_data.parquet");
-    
-    assumeTrue(tradeFile.exists() && itaFile.exists(), 
+
+    assumeTrue(tradeFile.exists() && itaFile.exists(),
         "Skipping join test - required parquet files don't exist");
-    
+
     Path modelFile = createModelFile();
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
+
       try (Statement stmt = conn.createStatement()) {
         // Join trade_statistics with ita_data on year
         String query = "SELECT t.year, COUNT(DISTINCT t.category) as trade_categories, "
@@ -407,7 +401,7 @@ public class EconSchemaIntegrationTest {
                      + "JOIN econ.ita_data i ON t.year = i.year "
                      + "GROUP BY t.year "
                      + "ORDER BY t.year";
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           boolean hasResults = false;
           while (rs.next()) {
@@ -415,15 +409,15 @@ public class EconSchemaIntegrationTest {
             int year = rs.getInt("year");
             int tradeCategories = rs.getInt("trade_categories");
             int itaIndicators = rs.getInt("ita_indicators");
-            
+
             assertTrue(year >= 2022, "Year should be >= 2022");
             assertTrue(tradeCategories > 0, "Should have trade categories");
             assertTrue(itaIndicators > 0, "Should have ITA indicators");
-            
-            System.out.printf("Year: %d, Trade Categories: %d, ITA Indicators: %d%n", 
+
+            System.out.printf("Year: %d, Trade Categories: %d, ITA Indicators: %d%n",
                 year, tradeCategories, itaIndicators);
           }
-          
+
           if (!hasResults) {
             System.out.println("Warning: Join returned no results - tables may be empty");
           }
@@ -431,36 +425,36 @@ public class EconSchemaIntegrationTest {
       }
     }
   }
-  
-  private void verifyTableColumns(DatabaseMetaData meta, String tableName, String... expectedColumns) 
+
+  private void verifyTableColumns(DatabaseMetaData meta, String tableName, String... expectedColumns)
       throws SQLException {
     Set<String> actualColumns = new HashSet<>();
-    
+
     try (ResultSet rs = meta.getColumns(null, "ECON", tableName.toUpperCase(), null)) {
       while (rs.next()) {
         String columnName = rs.getString("COLUMN_NAME").toLowerCase();
         String columnComment = rs.getString("REMARKS");
         actualColumns.add(columnName);
-        
+
         // Verify important columns have comments
         if (columnName.equals("year") || columnName.equals("value")) {
-          assertNotNull(columnComment, 
+          assertNotNull(columnComment,
               String.format("Column %s.%s should have a comment", tableName, columnName));
         }
       }
     }
-    
+
     // Verify expected columns exist
     for (String expectedCol : expectedColumns) {
       assertTrue(actualColumns.contains(expectedCol.toLowerCase()),
-          String.format("Table %s should have column %s. Found columns: %s", 
+          String.format("Table %s should have column %s. Found columns: %s",
               tableName, expectedCol, actualColumns));
     }
   }
-  
+
   private Path createModelFile() throws Exception {
-    String modelJson = String.format(
-        "{"
+    String modelJson =
+        String.format("{"
         + "  \"version\": \"1.0\","
         + "  \"defaultSchema\": \"econ\","
         + "  \"schemas\": ["
@@ -478,7 +472,7 @@ public class EconSchemaIntegrationTest {
         + "    }"
         + "  ]"
         + "}", parquetDir, cacheDir);
-    
+
     Path modelFile = Files.createTempFile("econ-test-model", ".json");
     Files.write(modelFile, modelJson.getBytes());
     return modelFile;

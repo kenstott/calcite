@@ -37,7 +37,6 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,52 +46,70 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class AllGeoTablesTest {
 
-  private static final List<String> EXPECTED_TABLES = Arrays.asList(
-      "TIGER_STATES",
-      "TIGER_COUNTIES", 
+  private static final List<String> EXPECTED_TABLES =
+      Arrays.asList("TIGER_STATES",
+      "TIGER_COUNTIES",
       "TIGER_ZCTAS",
       "TIGER_CENSUS_TRACTS",
-      "TIGER_BLOCK_GROUPS", 
+      "TIGER_BLOCK_GROUPS",
       "TIGER_CBSA",
       "HUD_ZIP_COUNTY",
-      "HUD_ZIP_TRACT", 
+      "HUD_ZIP_TRACT",
       "HUD_ZIP_CBSA",
       "HUD_ZIP_CBSA_DIV",
       "HUD_ZIP_CONGRESSIONAL",
-      "CENSUS_PLACES"
-  );
+      "CENSUS_PLACES");
 
   @BeforeAll
   public static void setupEnvironment() {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  @Timeout(value = 5, unit = TimeUnit.MINUTES)
+  @Test @Timeout(value = 5, unit = TimeUnit.MINUTES)
   public void testAllGeoTablesQueryable() throws Exception {
     System.out.println("\n=== COMPREHENSIVE GEO TABLES TEST ===");
-    
+
     // Create model file with full geographic data configuration
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"geo\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"geo\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"dataSource\": \"geo\",\n" +
-        "        \"cacheDirectory\": \"${GEO_CACHE_DIR:/Volumes/T9/geo-test-all}\",\n" +
-        "        \"autoDownload\": false,\n" +
-        "        \"dataYear\": 2024,\n" +
-        "        \"enabledSources\": [\"tiger\", \"census\", \"hud\"],\n" +
-        "        \"censusApiKey\": \"${CENSUS_API_KEY:}\",\n" +
-        "        \"hudUsername\": \"${HUD_USERNAME:}\",\n" +
-        "        \"hudPassword\": \"${HUD_PASSWORD:}\"\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"geo\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"geo\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"dataSource\": \"geo\",\n"
+  +
+        "        \"cacheDirectory\": \"${GEO_CACHE_DIR:/Volumes/T9/geo-test-all}\",\n"
+  +
+        "        \"autoDownload\": false,\n"
+  +
+        "        \"dataYear\": 2024,\n"
+  +
+        "        \"enabledSources\": [\"tiger\", \"census\", \"hud\"],\n"
+  +
+        "        \"censusApiKey\": \"${CENSUS_API_KEY:}\",\n"
+  +
+        "        \"hudUsername\": \"${HUD_USERNAME:}\",\n"
+  +
+        "        \"hudPassword\": \"${HUD_PASSWORD:}\"\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
 
     File tempDir = Files.createTempDirectory("geo-all-test").toFile();
@@ -106,34 +123,34 @@ public class AllGeoTablesTest {
     String jdbcUrl = "jdbc:calcite:model=" + modelFile.getAbsolutePath();
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, info)) {
-      
+
       System.out.println("\n=== STEP 1: Discover All Available Tables ===");
       List<String> availableTables = discoverTables(conn);
       System.out.println("Found " + availableTables.size() + " tables total");
-      
+
       assertFalse(availableTables.isEmpty(), "Should have at least some geographic tables");
-      
+
       System.out.println("\n=== STEP 2: Test Each Table Type ===");
-      
+
       // Test TIGER tables
       testTigerTables(conn, availableTables);
-      
-      // Test HUD tables  
+
+      // Test HUD tables
       testHudTables(conn, availableTables);
-      
+
       // Test Census tables
       testCensusTables(conn, availableTables);
-      
+
       System.out.println("\n=== STEP 3: Test Schema Queries ===");
       testSchemaQueries(conn, availableTables);
-      
+
       System.out.println("\n=== ALL GEO TABLES TEST COMPLETED SUCCESSFULLY ===");
     }
   }
-  
+
   private List<String> discoverTables(Connection conn) throws SQLException {
     List<String> tables = new ArrayList<>();
-    
+
     // Try different schema names to find tables
     for (String schemaName : new String[]{"GEO", "geo", null}) {
       try (ResultSet rs = conn.getMetaData().getTables(null, schemaName, "%", new String[]{"TABLE"})) {
@@ -147,33 +164,33 @@ public class AllGeoTablesTest {
         }
       }
     }
-    
+
     return tables;
   }
-  
+
   private void testTigerTables(Connection conn, List<String> availableTables) throws SQLException {
     System.out.println("\n--- Testing TIGER Tables ---");
-    
+
     String[] tigerTables = {
-        "TIGER_STATES", "TIGER_COUNTIES", "TIGER_ZCTAS", 
+        "TIGER_STATES", "TIGER_COUNTIES", "TIGER_ZCTAS",
         "TIGER_CENSUS_TRACTS", "TIGER_BLOCK_GROUPS", "TIGER_CBSA"
     };
-    
+
     for (String tableName : tigerTables) {
       if (availableTables.contains(tableName) || availableTables.contains(tableName.toLowerCase())) {
         System.out.println("Testing " + tableName + "...");
-        
+
         // Test basic SELECT with LIMIT to avoid large result sets
         // Use lowercase table name since tables are registered with lowercase names
         String lowerTableName = tableName.toLowerCase();
         String query = "SELECT * FROM \"geo\".\"" + lowerTableName + "\" LIMIT 5";
-        
+
         try (Statement stmt = conn.createStatement()) {
           // Test that the query can be prepared and executed (even if no data)
           try (ResultSet rs = stmt.executeQuery(query)) {
             int columnCount = rs.getMetaData().getColumnCount();
             System.out.println("  ✓ " + tableName + " - Query successful (" + columnCount + " columns)");
-            
+
             // Try to read a few rows if available
             int rowCount = 0;
             while (rs.next() && rowCount < 3) {
@@ -195,27 +212,27 @@ public class AllGeoTablesTest {
       }
     }
   }
-  
+
   private void testHudTables(Connection conn, List<String> availableTables) throws SQLException {
     System.out.println("\n--- Testing HUD Tables ---");
-    
+
     String[] hudTables = {
-        "HUD_ZIP_COUNTY", "HUD_ZIP_TRACT", "HUD_ZIP_CBSA", 
+        "HUD_ZIP_COUNTY", "HUD_ZIP_TRACT", "HUD_ZIP_CBSA",
         "HUD_ZIP_CBSA_DIV", "HUD_ZIP_CONGRESSIONAL"
     };
-    
+
     for (String tableName : hudTables) {
       if (availableTables.contains(tableName) || availableTables.contains(tableName.toLowerCase())) {
         System.out.println("Testing " + tableName + "...");
-        
+
         String lowerTableName = tableName.toLowerCase();
         String query = "SELECT * FROM \"geo\".\"" + lowerTableName + "\" LIMIT 5";
-        
+
         try (Statement stmt = conn.createStatement()) {
           try (ResultSet rs = stmt.executeQuery(query)) {
             int columnCount = rs.getMetaData().getColumnCount();
             System.out.println("  ✓ " + tableName + " - Query successful (" + columnCount + " columns)");
-            
+
             int rowCount = 0;
             while (rs.next() && rowCount < 3) {
               rowCount++;
@@ -224,7 +241,7 @@ public class AllGeoTablesTest {
           }
         } catch (SQLException e) {
           if (e.getMessage().contains("cost") || e.getMessage().contains("infinite") ||
-              e.getMessage().contains("HUD fetcher not configured") || 
+              e.getMessage().contains("HUD fetcher not configured") ||
               e.getMessage().contains("HUD API authentication") ||
               e.getMessage().contains("Failed to fetch HUD")) {
             System.out.println("  ⚠ " + tableName + " - No data/credentials available (expected): " + e.getMessage());
@@ -238,24 +255,24 @@ public class AllGeoTablesTest {
       }
     }
   }
-  
+
   private void testCensusTables(Connection conn, List<String> availableTables) throws SQLException {
     System.out.println("\n--- Testing Census Tables ---");
-    
+
     String[] censusTables = {"CENSUS_PLACES", "CENSUS_POPULATION"};
-    
+
     for (String tableName : censusTables) {
       if (availableTables.contains(tableName) || availableTables.contains(tableName.toLowerCase())) {
         System.out.println("Testing " + tableName + "...");
-        
+
         String lowerTableName = tableName.toLowerCase();
         String query = "SELECT * FROM \"geo\".\"" + lowerTableName + "\" LIMIT 5";
-        
+
         try (Statement stmt = conn.createStatement()) {
           try (ResultSet rs = stmt.executeQuery(query)) {
             int columnCount = rs.getMetaData().getColumnCount();
             System.out.println("  ✓ " + tableName + " - Query successful (" + columnCount + " columns)");
-            
+
             int rowCount = 0;
             while (rs.next() && rowCount < 3) {
               rowCount++;
@@ -278,14 +295,14 @@ public class AllGeoTablesTest {
       }
     }
   }
-  
+
   private void testSchemaQueries(Connection conn, List<String> availableTables) throws SQLException {
     System.out.println("\n--- Testing Schema Information ---");
-    
+
     // Test that we can query metadata for each table
     for (String tableName : availableTables) {
       System.out.println("Checking metadata for " + tableName + "...");
-      
+
       // Test column metadata
       try (ResultSet columns = conn.getMetaData().getColumns(null, "geo", tableName, "%")) {
         int columnCount = 0;
@@ -295,7 +312,7 @@ public class AllGeoTablesTest {
         System.out.println("  ✓ " + tableName + " - " + columnCount + " columns in metadata");
         assertTrue(columnCount > 0, "Table " + tableName + " should have columns");
       }
-      
+
       // Test that the table can be found in metadata
       try (ResultSet tables = conn.getMetaData().getTables(null, "geo", tableName, new String[]{"TABLE"})) {
         boolean found = tables.next();

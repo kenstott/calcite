@@ -87,8 +87,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testEconSchemaCreation() throws SQLException {
+  @Test void testEconSchemaCreation() throws SQLException {
     LOGGER.info("Testing ECON schema creation and basic connectivity");
 
     Properties props = new Properties();
@@ -101,8 +100,8 @@ public class EconDataIntegrationTest {
       assertFalse(connection.isClosed(), "Connection should be open");
 
       // Verify schema exists
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'ECON'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'ECON'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "ECON schema should exist");
           assertEquals("ECON", rs.getString("schema_name"));
@@ -111,8 +110,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testEconTableAvailability() throws SQLException {
+  @Test void testEconTableAvailability() throws SQLException {
     LOGGER.info("Testing ECON table availability and metadata");
 
     Properties props = new Properties();
@@ -132,8 +130,8 @@ public class EconDataIntegrationTest {
       };
 
       for (String tableName : expectedTables) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT table_name FROM information_schema.tables " +
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT table_name FROM information_schema.tables " +
             "WHERE table_schema = 'ECON' AND table_name = ?")) {
           stmt.setString(1, tableName);
           try (ResultSet rs = stmt.executeQuery()) {
@@ -146,8 +144,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testFredDataSeriesCatalog() throws SQLException {
+  @Test void testFredDataSeriesCatalog() throws SQLException {
     LOGGER.info("Testing FRED data series catalog functionality");
 
     Properties props = new Properties();
@@ -157,8 +154,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test FRED series catalog structure and basic data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT series_id, title, units FROM fred_data_series_catalog " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT series_id, title, units FROM fred_data_series_catalog " +
           "WHERE series_id LIKE 'GDP%' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -182,8 +179,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGdpComponentsData() throws SQLException {
+  @Test void testGdpComponentsData() throws SQLException {
     LOGGER.info("Testing GDP components data access");
 
     Properties props = new Properties();
@@ -193,8 +189,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test GDP components structure
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT date_value, gdp_total, personal_consumption FROM gdp_components " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT date_value, gdp_total, personal_consumption FROM gdp_components " +
           "WHERE year >= 2020 ORDER BY date_value DESC LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -216,8 +212,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testRegionalEmploymentData() throws SQLException {
+  @Test void testRegionalEmploymentData() throws SQLException {
     LOGGER.info("Testing regional employment data access");
 
     Properties props = new Properties();
@@ -227,8 +222,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test regional employment data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT state_code, year, unemployment_rate FROM regional_employment " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT state_code, year, unemployment_rate FROM regional_employment " +
           "WHERE state_code IN ('CA', 'NY', 'TX') AND year >= 2020 LIMIT 10")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -251,8 +246,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testRegionalIncomeData() throws SQLException {
+  @Test void testRegionalIncomeData() throws SQLException {
     LOGGER.info("Testing regional income data access");
 
     Properties props = new Properties();
@@ -262,8 +256,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test regional income data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT geo_fips, geo_name, year, per_capita_personal_income FROM regional_income " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT geo_fips, geo_name, year, per_capita_personal_income FROM regional_income " +
           "WHERE year >= 2020 ORDER BY per_capita_personal_income DESC LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -287,8 +281,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testStateGdpData() throws SQLException {
+  @Test void testStateGdpData() throws SQLException {
     LOGGER.info("Testing state GDP data access");
 
     Properties props = new Properties();
@@ -298,8 +291,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test state GDP data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT geo_fips, geo_name, year, gdp_millions FROM state_gdp " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT geo_fips, geo_name, year, gdp_millions FROM state_gdp " +
           "WHERE year >= 2020 ORDER BY gdp_millions DESC LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -323,8 +316,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testTreasuryYieldsData() throws SQLException {
+  @Test void testTreasuryYieldsData() throws SQLException {
     LOGGER.info("Testing Treasury yields data access");
 
     Properties props = new Properties();
@@ -334,8 +326,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test Treasury yields data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT date_value, yield_1_year, yield_10_year, yield_30_year FROM treasury_yields " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT date_value, yield_1_year, yield_10_year, yield_30_year FROM treasury_yields " +
           "ORDER BY date_value DESC LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -358,8 +350,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testEconJoinQueries() throws SQLException {
+  @Test void testEconJoinQueries() throws SQLException {
     LOGGER.info("Testing ECON cross-table join functionality");
 
     Properties props = new Properties();
@@ -369,8 +360,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test join between regional income and state GDP
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT ri.geo_name, ri.per_capita_personal_income, sg.gdp_millions " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT ri.geo_name, ri.per_capita_personal_income, sg.gdp_millions " +
           "FROM regional_income ri " +
           "LEFT JOIN state_gdp sg ON ri.geo_fips = sg.geo_fips AND ri.year = sg.year " +
           "WHERE ri.year = '2021' LIMIT 5")) {
@@ -394,8 +385,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testEconDataTypes() throws SQLException {
+  @Test void testEconDataTypes() throws SQLException {
     LOGGER.info("Testing ECON data type handling and validation");
 
     Properties props = new Properties();
@@ -405,8 +395,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test numeric data validation in GDP components
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT gdp_total, " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT gdp_total, " +
           "CASE WHEN gdp_total ~ '^[0-9]+\\.?[0-9]*$' THEN 'NUMERIC' ELSE 'TEXT' END as value_type " +
           "FROM gdp_components WHERE gdp_total IS NOT NULL LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
@@ -422,8 +412,7 @@ public class EconDataIntegrationTest {
     }
   }
 
-  @Test
-  void testEconErrorHandling() throws SQLException {
+  @Test void testEconErrorHandling() throws SQLException {
     LOGGER.info("Testing ECON error handling and edge cases");
 
     Properties props = new Properties();
@@ -433,8 +422,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test query with non-existent year
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT COUNT(*) as count FROM gdp_components WHERE year = 1900")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT COUNT(*) as count FROM gdp_components WHERE year = 1900")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "Query should execute successfully");
           assertEquals(0, rs.getInt("count"), "Non-existent year should return 0 results");
@@ -443,16 +432,15 @@ public class EconDataIntegrationTest {
 
       // Test invalid table reference (should fail gracefully)
       assertThrows(SQLException.class, () -> {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT * FROM nonexistent_econ_table")) {
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT * FROM nonexistent_econ_table")) {
           stmt.executeQuery();
         }
       }, "Query on non-existent table should throw SQLException");
     }
   }
 
-  @Test
-  void testTimeSeriesAnalysis() throws SQLException {
+  @Test void testTimeSeriesAnalysis() throws SQLException {
     LOGGER.info("Testing economic time series analysis capabilities");
 
     Properties props = new Properties();
@@ -462,8 +450,8 @@ public class EconDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test time series ordering and range queries
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT year, AVG(CAST(unemployment_rate AS DECIMAL)) as avg_unemployment " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT year, AVG(CAST(unemployment_rate AS DECIMAL)) as avg_unemployment " +
           "FROM regional_employment " +
           "WHERE unemployment_rate IS NOT NULL AND year BETWEEN '2020' AND '2022' " +
           "GROUP BY year ORDER BY year")) {

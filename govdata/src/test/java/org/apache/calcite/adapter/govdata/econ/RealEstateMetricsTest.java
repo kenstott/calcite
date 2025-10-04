@@ -16,12 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -31,7 +31,6 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -40,27 +39,25 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 @Tag("integration")
 public class RealEstateMetricsTest {
-  
+
   @TempDir
   Path tempDir;
-  
-  @Test
-  public void testRealEstateMetricsDownload() throws Exception {
+
+  @Test public void testRealEstateMetricsDownload() throws Exception {
     String apiKey = System.getenv("FRED_API_KEY");
-    assumeTrue(apiKey != null && !apiKey.isEmpty(), 
+    assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "FRED_API_KEY not set, skipping real estate metrics test");
-    
+
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
     FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider);
-    
+
     // Test all 4 real estate metrics
     downloader.downloadEconomicIndicators(
         Arrays.asList(
             FredDataDownloader.Series.BUILDING_PERMITS,
             FredDataDownloader.Series.MEDIAN_HOME_PRICE,
             FredDataDownloader.Series.RENTAL_VACANCY_RATE,
-            FredDataDownloader.Series.SINGLE_UNIT_HOUSING_STARTS
-        ),
+            FredDataDownloader.Series.SINGLE_UNIT_HOUSING_STARTS),
         "2023-01-01", "2023-06-01"); // Just 6 months for faster testing
 
     // The data is now written to storage provider, find the parquet file
@@ -74,7 +71,7 @@ public class RealEstateMetricsTest {
     // Verify the Parquet file contains real estate data
     verifyRealEstateMetricsParquet(parquetFile);
   }
-  
+
   /**
    * Verifies that the real estate metrics Parquet file contains expected data.
    */
@@ -82,48 +79,48 @@ public class RealEstateMetricsTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       try (Statement stmt = conn.createStatement()) {
         // Check row count
-        String query = String.format(
-            "SELECT COUNT(*) as row_count FROM read_parquet('%s')",
+        String query =
+            String.format("SELECT COUNT(*) as row_count FROM read_parquet('%s')",
             parquetFile.getAbsolutePath());
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           assertTrue(rs.next());
           int rowCount = rs.getInt("row_count");
           assertTrue(rowCount > 0, "Real estate metrics Parquet should contain data");
           System.out.println("Real estate metrics: Found " + rowCount + " rows");
         }
-        
+
         // Verify schema has expected columns
-        query = String.format(
-            "DESCRIBE SELECT * FROM read_parquet('%s')",
+        query =
+            String.format("DESCRIBE SELECT * FROM read_parquet('%s')",
             parquetFile.getAbsolutePath());
-        
+
         boolean foundSeriesId = false;
         boolean foundValue = false;
         boolean foundDate = false;
-        
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           System.out.println("Real estate metrics schema:");
           while (rs.next()) {
             String columnName = rs.getString("column_name");
             String columnType = rs.getString("column_type");
             System.out.printf("  %s: %s%n", columnName, columnType);
-            
+
             if ("series_id".equals(columnName)) foundSeriesId = true;
             else if ("value".equals(columnName)) foundValue = true;
             else if ("date".equals(columnName)) foundDate = true;
           }
         }
-        
+
         assertTrue(foundSeriesId, "Expected series_id column");
-        assertTrue(foundValue, "Expected value column"); 
+        assertTrue(foundValue, "Expected value column");
         assertTrue(foundDate, "Expected date column");
-        
+
         // Check that we have data for our real estate metrics
-        query = String.format(
-            "SELECT series_id, COUNT(*) as count FROM read_parquet('%s') GROUP BY series_id",
+        query =
+            String.format("SELECT series_id, COUNT(*) as count FROM read_parquet('%s') GROUP BY series_id",
             parquetFile.getAbsolutePath());
-            
+
         try (ResultSet rs = stmt.executeQuery(query)) {
           System.out.println("Real estate metrics by series:");
           boolean foundRealEstateMetric = false;
@@ -131,9 +128,9 @@ public class RealEstateMetricsTest {
             String seriesId = rs.getString("series_id");
             int count = rs.getInt("count");
             System.out.printf("  %s: %d observations%n", seriesId, count);
-            
+
             // Check if this is one of our real estate metrics
-            if ("PERMIT".equals(seriesId) || "MSPUS".equals(seriesId) || 
+            if ("PERMIT".equals(seriesId) || "MSPUS".equals(seriesId) ||
                 "RRVRUSQ156N".equals(seriesId) || "HOUST1F".equals(seriesId)) {
               foundRealEstateMetric = true;
             }

@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.govdata.census;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
-import org.apache.calcite.jdbc.CalciteConnection;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -31,13 +30,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -87,21 +83,36 @@ public class CensusConstraintValidationTest {
   private static void createTestModel() throws Exception {
     modelFile = tempDir.resolve("census-constraint-validation-model.json").toFile();
 
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"CENSUS\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"CENSUS\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"dataSource\": \"census\",\n" +
-        "      \"autoDownload\": true,\n" +
-        "      \"startYear\": 2022,\n" +
-        "      \"endYear\": 2023,\n" +
-        "      \"censusCacheTtlDays\": 365\n" +
-        "    }\n" +
-        "  }]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"CENSUS\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"CENSUS\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"dataSource\": \"census\",\n"
+  +
+        "      \"autoDownload\": true,\n"
+  +
+        "      \"startYear\": 2022,\n"
+  +
+        "      \"endYear\": 2023,\n"
+  +
+        "      \"censusCacheTtlDays\": 365\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     try (FileWriter writer = new FileWriter(modelFile)) {
@@ -112,8 +123,7 @@ public class CensusConstraintValidationTest {
   /**
    * Data profiling to validate primary key constraints.
    */
-  @Test
-  public void testPrimaryKeyConstraints() throws Exception {
+  @Test public void testPrimaryKeyConstraints() throws Exception {
     // Define expected primary keys for each table
     Map<String, List<String>> expectedPrimaryKeys = new HashMap<>();
     expectedPrimaryKeys.put("acs_population", List.of("geoid", "year"));
@@ -150,8 +160,8 @@ public class CensusConstraintValidationTest {
         try {
           // Test primary key uniqueness
           String columnsStr = String.join(", ", pkColumns);
-          String query = String.format(
-              "SELECT COUNT(*) as total_rows, COUNT(DISTINCT %s) as unique_combinations " +
+          String query =
+              String.format("SELECT COUNT(*) as total_rows, COUNT(DISTINCT %s) as unique_combinations " +
               "FROM CENSUS.\"%s\"", columnsStr, tableName);
 
           ResultSet rs = stmt.executeQuery(query);
@@ -183,8 +193,7 @@ public class CensusConstraintValidationTest {
   /**
    * Data profiling to validate foreign key constraints.
    */
-  @Test
-  public void testForeignKeyConstraints() throws Exception {
+  @Test public void testForeignKeyConstraints() throws Exception {
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
 
@@ -198,22 +207,21 @@ public class CensusConstraintValidationTest {
 
   private void testGeoidForeignKeys(Statement stmt) {
     // List of Census tables that should have geoid foreign keys to GEO schema
-    List<String> tablesWithGeoidFK = List.of(
-        "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+    List<String> tablesWithGeoidFK =
+        List.of("acs_population", "acs_demographics", "acs_income", "acs_poverty",
         "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
         "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
         "acs_veterans", "acs_migration", "acs_occupation",
         "decennial_population", "decennial_demographics", "decennial_housing",
-        "economic_census", "county_business_patterns", "population_estimates"
-    );
+        "economic_census", "county_business_patterns", "population_estimates");
 
     for (String tableName : tablesWithGeoidFK) {
       try {
         // Test if all geoids in Census tables exist in GEO schema
         // We'll test against multiple GEO tables since geoid could reference
         // states, counties, places, etc.
-        String query = String.format(
-            "SELECT COUNT(*) as total_census_geoids, " +
+        String query =
+            String.format("SELECT COUNT(*) as total_census_geoids, " +
             "       COUNT(CASE WHEN LENGTH(c.geoid) = 2 THEN 1 END) as state_level, " +
             "       COUNT(CASE WHEN LENGTH(c.geoid) = 5 THEN 1 END) as county_level, " +
             "       COUNT(CASE WHEN LENGTH(c.geoid) > 5 THEN 1 END) as sub_county_level " +
@@ -242,16 +250,15 @@ public class CensusConstraintValidationTest {
 
   private void testIntraCensusForeignKeys(Statement stmt) {
     // Test if state_fips/county_fips columns in Census data are consistent
-    List<String> tablesWithStateCounty = List.of(
-        "acs_population", "acs_demographics", "acs_income", "acs_poverty",
-        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs"
-    );
+    List<String> tablesWithStateCounty =
+        List.of("acs_population", "acs_demographics", "acs_income", "acs_poverty",
+        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs");
 
     for (String tableName : tablesWithStateCounty) {
       try {
         // Test if state_fips and county_fips are derivable from geoid
-        String query = String.format(
-            "SELECT COUNT(*) as total_rows, " +
+        String query =
+            String.format("SELECT COUNT(*) as total_rows, " +
             "       COUNT(CASE WHEN state_fips = SUBSTRING(geoid, 1, 2) THEN 1 END) as consistent_state, " +
             "       COUNT(CASE WHEN LENGTH(geoid) = 5 AND geoid = state_fips || county_fips THEN 1 END) as consistent_county " +
             "FROM CENSUS.\"%s\" " +
@@ -286,8 +293,7 @@ public class CensusConstraintValidationTest {
   /**
    * Profile data types and null patterns to inform constraint design.
    */
-  @Test
-  public void testDataProfiling() throws Exception {
+  @Test public void testDataProfiling() throws Exception {
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
 
@@ -306,8 +312,8 @@ public class CensusConstraintValidationTest {
 
   private void profileTable(Statement stmt, String tableName) throws Exception {
     // Get basic table statistics
-    String query = String.format(
-        "SELECT COUNT(*) as row_count, " +
+    String query =
+        String.format("SELECT COUNT(*) as row_count, " +
         "       COUNT(DISTINCT geoid) as unique_geoids, " +
         "       COUNT(DISTINCT year) as unique_years, " +
         "       MIN(year) as min_year, " +
@@ -327,8 +333,8 @@ public class CensusConstraintValidationTest {
           rowCount, uniqueGeoids, uniqueYears, minYear, maxYear);
 
       // Check for nulls in key constraint columns
-      String nullQuery = String.format(
-          "SELECT COUNT(CASE WHEN geoid IS NULL THEN 1 END) as null_geoids, " +
+      String nullQuery =
+          String.format("SELECT COUNT(CASE WHEN geoid IS NULL THEN 1 END) as null_geoids, " +
           "       COUNT(CASE WHEN year IS NULL THEN 1 END) as null_years " +
           "FROM CENSUS.\"%s\"", tableName);
 

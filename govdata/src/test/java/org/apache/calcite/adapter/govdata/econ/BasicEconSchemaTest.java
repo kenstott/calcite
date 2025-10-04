@@ -20,19 +20,17 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class BasicEconSchemaTest {
-  
+
   @BeforeAll
   public static void setup() {
     // Set system properties for test if environment variables are not set
@@ -51,27 +49,26 @@ public class BasicEconSchemaTest {
       System.setProperty("GOVDATA_PARQUET_DIR", "/tmp/govdata-test-parquet");
     }
   }
-  
-  @Test
-  public void testBasicSchemaCreation() throws Exception {
+
+  @Test public void testBasicSchemaCreation() throws Exception {
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
       CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
-      
+
       // Create ECON schema using factory
       Map<String, Object> operand = new HashMap<>();
       operand.put("autoDownload", false); // Don't download data in unit test
       operand.put("startYear", 2023);
       operand.put("endYear", 2024);
-      
+
       org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
       operand.put("dataSource", "econ");
       rootSchema.add("econ", factory.create(rootSchema, "econ", operand));
-      
+
       // Check if we can query metadata
       DatabaseMetaData metaData = connection.getMetaData();
       try (ResultSet schemas = metaData.getSchemas()) {
@@ -86,27 +83,26 @@ public class BasicEconSchemaTest {
       }
     }
   }
-  
-  @Test
-  public void testEconTableDefinitions() throws Exception {
+
+  @Test public void testEconTableDefinitions() throws Exception {
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
       CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
-      
+
       // Create ECON schema
       Map<String, Object> operand = new HashMap<>();
       operand.put("autoDownload", false);
       operand.put("startYear", 2023);
       operand.put("endYear", 2024);
-      
+
       org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
       operand.put("dataSource", "econ");
       rootSchema.add("econ", factory.create(rootSchema, "econ", operand));
-      
+
       // Check for expected tables
       DatabaseMetaData metaData = connection.getMetaData();
       try (ResultSet tables = metaData.getTables(null, "ECON", "%", null)) {
@@ -121,9 +117,8 @@ public class BasicEconSchemaTest {
       }
     }
   }
-  
-  @Test
-  public void testConstraintSupport() {
+
+  @Test public void testConstraintSupport() {
     EconSchemaFactory factory = new EconSchemaFactory();
     assertTrue(factory.supportsConstraints(), "ECON schema factory should support constraints");
   }
