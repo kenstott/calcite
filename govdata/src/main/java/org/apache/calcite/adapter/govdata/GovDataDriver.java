@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata;
 
-import org.apache.calcite.adapter.govdata.sec.SecModelPreprocessor;
 import org.apache.calcite.jdbc.Driver;
 
 import org.slf4j.Logger;
@@ -96,7 +95,7 @@ public class GovDataDriver extends Driver {
     try {
       // Extract connection parameters from URL
       String paramString = url.substring(getConnectStringPrefix().length());
-      
+
       // Check if dataSource is specified, default to SEC for backward compatibility
       String dataSource = extractParameter(paramString, "source");
       if (dataSource == null) {
@@ -106,7 +105,7 @@ public class GovDataDriver extends Driver {
 
       // Create appropriate model based on data source
       String modelPath = createModelFile(paramString, dataSource);
-      
+
       // Set model path in connection properties
       govDataInfo.setProperty("model", modelPath);
 
@@ -162,7 +161,7 @@ public class GovDataDriver extends Driver {
   private String createSecModel(String paramString) throws IOException {
     // For now, create a simple temporary model that uses the GovData factory
     // In a full implementation, this would parse URL parameters and create appropriate model
-    
+
     // Extract basic parameters
     // Note: 'ciks' parameter accepts tickers (AAPL), groups (FAANG), or raw CIKs (0000320193)
     // The CikRegistry automatically resolves all identifiers to 10-digit CIK format
@@ -170,41 +169,56 @@ public class GovDataDriver extends Driver {
     if (ciks == null) {
       throw new IllegalArgumentException("SEC data source requires 'ciks' parameter (tickers, groups, or CIKs)");
     }
-    
+
     String startYear = extractParameter(paramString, "startYear");
     String endYear = extractParameter(paramString, "endYear");
     String dataDirectory = extractParameter(paramString, "dataDirectory");
-    
+
     // Create temporary model file
     File tempFile = File.createTempFile("govdata-sec-model", ".json");
     tempFile.deleteOnExit();
-    
-    String modelJson = String.format(
-        "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"SEC\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"SEC\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"dataSource\": \"sec\",\n" +
-        "      \"ciks\": \"%s\"%s%s%s,\n" +
-        "      \"autoDownload\": true,\n" +
-        "      \"testMode\": false,\n" +
-        "      \"ephemeralCache\": true\n" +
-        "    }\n" +
-        "  }]\n" +
+
+    String modelJson =
+        String.format("{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"SEC\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"SEC\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"dataSource\": \"sec\",\n"
+  +
+        "      \"ciks\": \"%s\"%s%s%s,\n"
+  +
+        "      \"autoDownload\": true,\n"
+  +
+        "      \"testMode\": false,\n"
+  +
+        "      \"ephemeralCache\": true\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}",
         ciks,
         startYear != null ? ",\n      \"startYear\": " + startYear : "",
         endYear != null ? ",\n      \"endYear\": " + endYear : "",
         dataDirectory != null ? ",\n      \"dataDirectory\": \"" + dataDirectory + "\"" : "");
-    
+
     try (java.io.FileWriter writer = new java.io.FileWriter(tempFile)) {
       writer.write(modelJson);
     }
-    
+
     LOGGER.debug("Created temporary SEC model file: {}", tempFile.getAbsolutePath());
     return tempFile.getAbsolutePath();
   }

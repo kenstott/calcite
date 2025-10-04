@@ -23,7 +23,7 @@ package org.apache.calcite.adapter.govdata;
  * to provide consistent error handling and messaging.
  */
 public class GovDataException extends RuntimeException {
-  
+
   /**
    * Creates a new GovDataException with the specified message.
    */
