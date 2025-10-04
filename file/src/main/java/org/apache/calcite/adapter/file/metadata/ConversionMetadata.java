@@ -375,6 +375,28 @@ public class ConversionMetadata {
   }
 
   /**
+   * Creates a metadata tracker for the given directory path (supports S3 URIs).
+   * Always stores the .conversions.json file directly in the provided directory.
+   * For S3 paths, metadata file path is constructed but not loaded (S3 doesn't support local file metadata).
+   *
+   * @param directoryPath Path to directory (may be S3 URI like "s3://bucket/path")
+   */
+  public ConversionMetadata(String directoryPath) {
+    // Construct metadata file path - for S3 this is just a path reference
+    if (directoryPath.contains("://")) {
+      // S3 or other URI - just store path, don't use File
+      this.metadataFile = new File(directoryPath + "/" + METADATA_FILE);
+      LOGGER.debug("Using metadata file path (URI): {}", metadataFile);
+      // Don't try to load metadata for S3 paths - S3 doesn't support local file-based metadata
+    } else {
+      // Local filesystem path
+      this.metadataFile = new File(directoryPath, METADATA_FILE);
+      LOGGER.debug("Using metadata file: {}", metadataFile);
+      loadMetadata();
+    }
+  }
+
+  /**
    * Records a file conversion.
    *
    * @param originalFile The source file (e.g., Excel)

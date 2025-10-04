@@ -496,6 +496,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // SEC data directories
     String secRawDir = govdataCacheDir + "/sec";
     String secParquetDir = govdataParquetDir + "/source=sec";
+    LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}'", govdataParquetDir, secParquetDir);
 
     // Determine cache directory
     String configuredDir = (String) mutableOperand.get("directory");
@@ -1300,6 +1301,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       JsonNode recent = filings.get("recent");
       JsonNode accessionNumbers = recent.get("accessionNumber");
       JsonNode filingDates = recent.get("filingDate");
+      JsonNode reportDates = recent.get("reportDate");  // Period end date for XBRL filename
       JsonNode forms = recent.get("form");
       JsonNode primaryDocuments = recent.get("primaryDocument");
       JsonNode isXBRLArray = recent.get("isXBRL");
@@ -1319,6 +1321,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       for (int i = 0; i < accessionNumbers.size(); i++) {
         String accession = accessionNumbers.get(i).asText();
         String filingDate = filingDates.get(i).asText();
+        String reportDate = (reportDates != null && i < reportDates.size()) ? reportDates.get(i).asText() : null;
         String form = forms.get(i).asText();
         String primaryDoc = primaryDocuments.get(i).asText();
 
@@ -1338,10 +1341,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           int isXBRL = isXBRLArray.get(i).asInt(0);
           hasXBRL = (isXBRL == 1);
         }
-        if (!hasXBRL && isInlineXBRLArray != null && i < isInlineXBRLArray.size()) {
+        // Check inline XBRL independently - some filings have BOTH isXBRL=1 and isInlineXBRL=1
+        if (isInlineXBRLArray != null && i < isInlineXBRLArray.size()) {
           int isInlineXBRL = isInlineXBRLArray.get(i).asInt(0);
           hasInlineXBRL = (isInlineXBRL == 1);
-          hasXBRL = hasInlineXBRL;
+          if (hasInlineXBRL) {
+            hasXBRL = true;  // Inline XBRL counts as XBRL
+          }
         }
         if (!hasXBRL) {
           skippedNonXBRL++;
@@ -1377,7 +1383,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         filingsToDownload.add(
             new FilingToDownload(normalizedCik, accession,
-            primaryDoc, form, filingDate, cikDir, hasInlineXBRL));
+            primaryDoc, form, filingDate, reportDate, cikDir, hasInlineXBRL));
       }
 
       if (skipped424B > 0) {
@@ -1497,16 +1503,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     final String primaryDoc;
     final String form;
     final String filingDate;
+    final String reportDate;  // Period end date (for XBRL filename construction)
     final File cikDir;
     final boolean hasInlineXBRL;
 
     FilingToDownload(String cik, String accession, String primaryDoc,
-        String form, String filingDate, File cikDir, boolean hasInlineXBRL) {
+        String form, String filingDate, String reportDate, File cikDir, boolean hasInlineXBRL) {
       this.cik = cik;
       this.accession = accession;
       this.primaryDoc = primaryDoc;
       this.form = form;
       this.filingDate = filingDate;
+      this.reportDate = reportDate;
       this.cikDir = cikDir;
       this.hasInlineXBRL = hasInlineXBRL;
     }
@@ -1710,10 +1718,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Don't create File or call mkdirs() for parquet directory - it may be S3
       // StorageProvider will create directories as needed when writing files
 
-      // TODO: XbrlToParquetConverter and ConversionMetadata use File APIs - need S3 update
-      // For now, create temporary File object for API compatibility (won't do actual File I/O)
-      File secParquetDir = new File(secParquetDirPath);
-
       // Check if text similarity is enabled from operand
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       boolean enableVectorization = textSimilarityConfig != null &&
@@ -1724,8 +1728,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Extract accession from file path
       String accession = sourceFile.getParentFile().getName();
 
-      // Create metadata
-      ConversionMetadata metadata = new ConversionMetadata(secParquetDir);
+      // Create metadata (S3-compatible)
+      ConversionMetadata metadata = new ConversionMetadata(secParquetDirPath);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
       record.sourceFile = accession;
@@ -1735,13 +1739,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("Processing filing immediately: {}", sourceFile.getName());
       }
 
-      List<File> outputFiles = converter.convert(sourceFile, secParquetDir, metadata);
+      // Use S3-compatible convertInternal method
+      List<File> outputFiles = converter.convertInternal(sourceFile.getAbsolutePath(), secParquetDirPath, metadata);
 
       if (outputFiles.isEmpty()) {
         LOGGER.warn("No parquet files created for " + sourceFile.getName());
       } else {
         // Add to manifest after successful conversion
-        addToManifest(baseDir, sourceFile, secParquetDir);
+        addToManifest(baseDir, sourceFile, new File(secParquetDirPath));
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("Successfully processed filing: {} - created {} parquet files",
               sourceFile.getName(), outputFiles.size());
@@ -1768,7 +1773,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         Thread.sleep(currentRateLimitDelayMs.get());
         try {
           downloadFilingDocument(provider, filing.cik, filing.accession,
-              filing.primaryDoc, filing.form, filing.filingDate, filing.cikDir, filing.hasInlineXBRL);
+              filing.primaryDoc, filing.form, filing.filingDate, filing.reportDate, filing.cikDir, filing.hasInlineXBRL);
           break; // Success - exit retry loop
         } finally {
           rateLimiter.release();
@@ -1806,7 +1811,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private void downloadFilingDocument(SecHttpStorageProvider provider, String cik,
-      String accession, String primaryDoc, String form, String filingDate, File cikDir, boolean hasInlineXBRL) {
+      String accession, String primaryDoc, String form, String filingDate, String reportDate, File cikDir, boolean hasInlineXBRL) {
     try {
       // Check manifest first to see if this filing was already fully processed
       File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
@@ -1861,14 +1866,61 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Check if XBRL file exists (for structured data)
       String xbrlDoc;
       File xbrlFile;
+      boolean confirmedInlineXbrl = false;  // Track if we've confirmed inline XBRL by HTML inspection
+
       if (isInsiderForm) {
         // For Forms 3/4/5, we'll save the extracted XML as ownership.xml
         xbrlDoc = "ownership.xml";
         xbrlFile = new File(accessionDir, xbrlDoc);
       } else {
-        // For other forms, look for separate XBRL file
-        xbrlDoc = primaryDoc.replace(".htm", "_htm.xml");
-        xbrlFile = new File(accessionDir, xbrlDoc);
+        // For other forms, detect XBRL type and filename
+        // Strategy: Check HTML file FIRST for inline XBRL (most reliable), then try FilingSummary.xml
+
+        // Step 1: If HTML exists, check for inline XBRL markers (authoritative test)
+        if (htmlFile.exists()) {
+          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
+          if (confirmedInlineXbrl) {
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Confirmed inline XBRL by HTML inspection: {}", primaryDoc);
+            }
+          }
+        }
+
+        if (confirmedInlineXbrl || hasInlineXBRL) {
+          // Inline XBRL confirmed - no separate XBRL file, use placeholder
+          xbrlDoc = primaryDoc.replace(".htm", "_inline.xml");
+          xbrlFile = new File(accessionDir, xbrlDoc);
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Filing has inline XBRL, skipping separate XBRL file detection: {}", primaryDoc);
+          }
+        } else {
+          // Try to find separate XBRL file - 3 approaches in order:
+          // 1. FilingSummary.xml (most reliable - SEC's own metadata)
+          // 2. Pattern-based construction (ticker-YYYYMMDD.xml)
+          // 3. Old pattern as last resort (primaryDoc_htm.xml)
+          xbrlDoc = getXbrlFilenameFromSummary(provider, cik, accession, accessionDir);
+
+          // If FilingSummary.xml exists but has no instance doc, check HTML for inline XBRL
+          if (xbrlDoc == null && cacheManifest.isFilingSummaryNotFound(cik, accession)) {
+            // FilingSummary.xml was checked and had no instance - likely inline XBRL
+            // But we haven't downloaded HTML yet, so mark for HTML check after download
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("FilingSummary.xml has no instance document - will check HTML after download");
+            }
+          }
+
+          if (xbrlDoc == null) {
+            xbrlDoc = constructXbrlFilename(cik, reportDate);
+          }
+          if (xbrlDoc == null) {
+            // Fallback to old pattern (may result in 404)
+            xbrlDoc = primaryDoc.replace(".htm", "_htm.xml");
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Using fallback XBRL filename pattern: {}", xbrlDoc);
+            }
+          }
+          xbrlFile = new File(accessionDir, xbrlDoc);
+        }
       }
 
       // Create parent directory if xbrlDoc contains path
@@ -1876,12 +1928,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         xbrlFile.getParentFile().mkdirs();
       }
 
-      // Only need XBRL if: file doesn't exist AND we haven't already marked it as not found in manifest AND it's not inline-only
-      // If submissions.json indicates inline XBRL, skip separate XBRL download entirely
-      if ((!xbrlFile.exists() || xbrlFile.length() == 0)
-          && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)
-          && !hasInlineXBRL) {
-        needXbrl = true;
+      // DEFER XBRL download decision until AFTER HTML is downloaded
+      // We can only make the decision after checking the HTML file for inline XBRL markers
+      // For now, just check if we already have the XBRL file or know it doesn't exist
+      boolean xbrlAlreadyExists = xbrlFile.exists() && xbrlFile.length() > 0;
+      boolean xbrlKnownNotFound = cacheManifest.isFileNotFound(cik, accession, xbrlDoc);
+
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Initial XBRL check: form={} date={} hasInlineXBRL={} confirmedInlineXbrl={} xbrlExists={} inManifest={}",
+            form, filingDate, hasInlineXBRL, confirmedInlineXbrl, xbrlAlreadyExists, xbrlKnownNotFound);
+      }
+
+      // Only skip XBRL if we're certain it's inline XBRL (from HTML inspection or submissions.json)
+      // OR if we already have it cached
+      if (hasInlineXBRL || confirmedInlineXbrl) {
+        if (LOGGER.isDebugEnabled()) {
+          String source = confirmedInlineXbrl ? "HTML inspection" : "submissions.json";
+          LOGGER.debug("Confirmed inline XBRL per {}, will skip separate XBRL file: {} {}", source, form, filingDate);
+        }
       }
 
       // DISABLED: Parquet file validation before XBRL parsing
@@ -1897,39 +1961,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
       // but Parquet files were never generated due to cache logic gaps
       if (htmlFile.exists()) {
-        try {
-          byte[] headerBytes = new byte[10240];
-          try (FileInputStream fis = new FileInputStream(htmlFile)) {
-            int bytesRead = fis.read(headerBytes);
-            if (bytesRead > 0) {
-              String header = new String(headerBytes, 0, bytesRead);
-              boolean htmlHasInlineXbrl = header.contains("xmlns:ix=") ||
-                                         header.contains("http://www.xbrl.org/2013/inlineXBRL") ||
-                                         header.contains("<ix:") ||
-                                         header.contains("iXBRL");
+        boolean htmlHasInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
 
-              if (htmlHasInlineXbrl && needParquetReprocessing) {
-                // This is the critical case: HTML file exists with inline XBRL but Parquet files are missing
-                // Schedule the HTML file for inline XBRL processing
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug("Cached HTML file contains inline XBRL, scheduling for processing: {} {}", form, filingDate);
-                }
+        if (htmlHasInlineXbrl && needParquetReprocessing) {
+          // This is the critical case: HTML file exists with inline XBRL but Parquet files are missing
+          // Schedule the HTML file for inline XBRL processing
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Cached HTML file contains inline XBRL, scheduling for processing: {} {}", form, filingDate);
+          }
 
-                // Ensure the HTML file gets scheduled for inline XBRL processing
-                if (!scheduledForInlineXbrlProcessing.contains(htmlFile)) {
-                  scheduledForInlineXbrlProcessing.add(htmlFile);
-                  if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Scheduled HTML file for inline XBRL processing: {}", htmlFile.getName());
-                  }
-                }
-
-                // Since we have inline XBRL in HTML, we don't need separate XBRL download
-                needXbrl = false;
-              }
+          // Ensure the HTML file gets scheduled for inline XBRL processing
+          if (!scheduledForInlineXbrlProcessing.contains(htmlFile)) {
+            scheduledForInlineXbrlProcessing.add(htmlFile);
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Scheduled HTML file for inline XBRL processing: {}", htmlFile.getName());
             }
           }
-        } catch (Exception e) {
-          LOGGER.debug("Could not check HTML for inline XBRL detection: " + e.getMessage());
+
+          // Since we have inline XBRL in HTML, we don't need separate XBRL download
+          needXbrl = false;
         }
       }
 
@@ -1968,38 +2018,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.debug("Could not download HTML: " + e.getMessage());
           return; // Can't proceed without HTML
         }
-      }
 
-      // Check if HTML contains inline XBRL (iXBRL) - if it does, we don't need separate XBRL
-      boolean hasInlineXbrl = false;
-      if (htmlFile.exists()) {
-        try {
-          // Quick check for iXBRL markers in the first 10KB of the HTML
-          byte[] headerBytes = new byte[10240];
-          try (FileInputStream fis = new FileInputStream(htmlFile)) {
-            int bytesRead = fis.read(headerBytes);
-            if (bytesRead > 0) {
-              String header = new String(headerBytes, 0, bytesRead);
-              hasInlineXbrl = header.contains("xmlns:ix=") ||
-                             header.contains("http://www.xbrl.org/2013/inlineXBRL") ||
-                             header.contains("<ix:") ||
-                             header.contains("iXBRL");
-              if (hasInlineXbrl) {
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug("HTML file contains inline XBRL (iXBRL), will process HTML file directly: {}", primaryDoc);
-                }
-                // No need to mark in manifest - submissions.json already indicates inline XBRL
-                // Continue processing - HTML file will be included in conversion process
-              }
+        // CRITICAL: After HTML download, check for inline XBRL to make XBRL download decision
+        // This is the authoritative check - don't rely solely on submissions.json isInlineXBRL flag
+        if (htmlFile.exists()) {
+          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
+          if (confirmedInlineXbrl) {
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("HTML contains inline XBRL, will skip separate XBRL download: {} {}", form, filingDate);
             }
+            // Mark the constructed XBRL filename as not found so we don't try again
+            cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "filing_uses_inline_xbrl");
           }
-        } catch (Exception e) {
-          LOGGER.debug("Could not check HTML for iXBRL: " + e.getMessage());
         }
       }
 
-      // Download XBRL file if needed (only if HTML doesn't have iXBRL)
-      if (needXbrl && !hasInlineXbrl) {
+      // NOW make the XBRL download decision AFTER checking HTML
+      // Download XBRL only if:
+      // 1. XBRL file doesn't exist locally
+      // 2. NOT already marked as not found in manifest
+      // 3. NOT inline XBRL (per submissions.json OR HTML inspection)
+      if ((!xbrlFile.exists() || xbrlFile.length() == 0)
+          && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)
+          && !hasInlineXBRL
+          && !confirmedInlineXbrl) {
+        needXbrl = true;
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Will download XBRL file: {}", xbrlDoc);
+        }
+      } else if (hasInlineXBRL || confirmedInlineXbrl) {
+        if (LOGGER.isDebugEnabled()) {
+          String source = confirmedInlineXbrl ? "HTML inspection" : "submissions.json";
+          LOGGER.debug("Skipping XBRL download - filing has inline XBRL per {}: {} {}", source, form, filingDate);
+        }
+      }
+
+      // Download XBRL file if needed (only if not inline XBRL)
+      if (needXbrl) {
         // Check if we already know this XBRL doesn't exist
         if (cacheManifest.isFileNotFound(cik, accession, xbrlDoc)) {
           if (LOGGER.isDebugEnabled()) {
@@ -2081,7 +2136,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean shouldProcess = false;
       File fileToProcess = null;
 
-      if (hasInlineXbrl && htmlFile.exists()) {
+      if (hasInlineXBRL && htmlFile.exists()) {
         shouldProcess = true;
         fileToProcess = htmlFile;
       } else if (xbrlFile.exists() && xbrlFile.length() > 0) {
@@ -2113,6 +2168,193 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     } catch (Exception e) {
       LOGGER.warn("Failed to download filing " + accession + ": " + e.getMessage());
     }
+  }
+
+  /**
+   * Get XBRL instance document filename from FilingSummary.xml.
+   *
+   * @param provider HTTP storage provider
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param accessionDir Directory for this filing
+   * @return XBRL instance document filename, or null if unavailable
+   */
+  private String getXbrlFilenameFromSummary(SecHttpStorageProvider provider, String cik,
+      String accession, File accessionDir) {
+    // Check cache first
+    String cachedFilename = cacheManifest.getCachedFilingSummaryXbrlFilename(cik, accession);
+    if (cachedFilename != null) {
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Using cached XBRL filename from FilingSummary: {}", cachedFilename);
+      }
+      return cachedFilename;
+    }
+
+    // Check if we already know FilingSummary.xml doesn't exist
+    if (cacheManifest.isFilingSummaryNotFound(cik, accession)) {
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("FilingSummary.xml known to not exist for {} {}", cik, accession);
+      }
+      return null;
+    }
+
+    // Download and parse FilingSummary.xml
+    String accessionClean = accession.replace("-", "");
+    String summaryUrl = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml",
+        cik, accessionClean);
+
+    try {
+      File summaryFile = new File(accessionDir, "FilingSummary.xml");
+      try (InputStream is = provider.openInputStream(summaryUrl)) {
+        try (FileOutputStream fos = new FileOutputStream(summaryFile)) {
+          byte[] buffer = new byte[8192];
+          int bytesRead;
+          while ((bytesRead = is.read(buffer)) != -1) {
+            fos.write(buffer, 0, bytesRead);
+          }
+        }
+      }
+
+      // Parse XML to extract instance document filename
+      String xbrlFilename = parseXbrlFilenameFromSummary(summaryFile);
+      if (xbrlFilename != null) {
+        // Cache the result
+        cacheManifest.cacheFilingSummaryXbrlFilename(cik, accession, xbrlFilename);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Extracted XBRL filename from FilingSummary: {}", xbrlFilename);
+        }
+        return xbrlFilename;
+      } else {
+        LOGGER.debug("No XBRL instance document found in FilingSummary.xml for {} {}", cik, accession);
+        cacheManifest.markFilingSummaryNotFound(cik, accession, "no_instance_document_in_summary");
+        return null;
+      }
+
+    } catch (Exception e) {
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("FilingSummary.xml not available for {} {}: {}", cik, accession, e.getMessage());
+      }
+      cacheManifest.markFilingSummaryNotFound(cik, accession, "download_failed: " + e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Parse XBRL instance document filename from FilingSummary.xml.
+   *
+   * @param summaryFile The FilingSummary.xml file
+   * @return Instance document filename, or null if not found
+   */
+  private String parseXbrlFilenameFromSummary(File summaryFile) {
+    try {
+      javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+      javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
+      org.w3c.dom.Document doc = builder.parse(summaryFile);
+
+      // Look for <InstanceReport> element
+      org.w3c.dom.NodeList instanceReports = doc.getElementsByTagName("InstanceReport");
+      if (instanceReports.getLength() > 0) {
+        org.w3c.dom.Node instanceReport = instanceReports.item(0);
+        return instanceReport.getTextContent().trim();
+      }
+
+      // Fallback: look for <Report> with type="instance"
+      org.w3c.dom.NodeList reports = doc.getElementsByTagName("Report");
+      for (int i = 0; i < reports.getLength(); i++) {
+        org.w3c.dom.Node report = reports.item(i);
+        if (report.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
+          org.w3c.dom.Element reportElement = (org.w3c.dom.Element) report;
+          String reportType = reportElement.getAttribute("type");
+          if ("instance".equalsIgnoreCase(reportType)) {
+            org.w3c.dom.NodeList htmlFileNames = reportElement.getElementsByTagName("HtmlFileName");
+            if (htmlFileNames.getLength() > 0) {
+              String htmlFileName = htmlFileNames.item(0).getTextContent().trim();
+              // Convert .htm to .xml for XBRL instance
+              return htmlFileName.replace(".htm", ".xml").replace(".html", ".xml");
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (Exception e) {
+      LOGGER.debug("Failed to parse FilingSummary.xml: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Construct XBRL filename using ticker and report date (period end date) pattern.
+   *
+   * @param cik CIK of the company
+   * @param reportDate Report/period end date (YYYY-MM-DD format) - NOT filing date
+   * @return XBRL filename (e.g., "aapl-20181229.xml"), or null if unable to construct
+   */
+  private String constructXbrlFilename(String cik, String reportDate) {
+    try {
+      // Get ticker from CIK
+      List<String> tickers = CikRegistry.getTickersForCik(cik);
+      if (tickers.isEmpty()) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("No ticker found for CIK {}", cik);
+        }
+        return null;
+      }
+
+      // Require reportDate for XBRL filename construction
+      if (reportDate == null || reportDate.isEmpty()) {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("No report date available for XBRL filename construction");
+        }
+        return null;
+      }
+
+      // Use first ticker (most companies have one ticker)
+      String ticker = tickers.get(0).toLowerCase();
+
+      // Convert report date YYYY-MM-DD to YYYYMMDD
+      String dateStr = reportDate.replace("-", "");
+
+      String xbrlFilename = ticker + "-" + dateStr + ".xml";
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Constructed XBRL filename using report date {}: {}", reportDate, xbrlFilename);
+      }
+      return xbrlFilename;
+
+    } catch (Exception e) {
+      LOGGER.debug("Failed to construct XBRL filename for CIK {}: {}", cik, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Check if HTML file contains inline XBRL markers.
+   *
+   * @param htmlFile The HTML file to check
+   * @return true if inline XBRL detected, false otherwise
+   */
+  private boolean checkHtmlForInlineXbrl(File htmlFile) {
+    try {
+      byte[] headerBytes = new byte[10240];
+      try (FileInputStream fis = new FileInputStream(htmlFile)) {
+        int bytesRead = fis.read(headerBytes);
+        if (bytesRead > 0) {
+          String header = new String(headerBytes, 0, bytesRead);
+          boolean hasInlineXbrl = header.contains("xmlns:ix=")
+              || header.contains("http://www.xbrl.org/2013/inlineXBRL")
+              || header.contains("<ix:")
+              || header.contains("iXBRL");
+
+          if (LOGGER.isDebugEnabled() && hasInlineXbrl) {
+            LOGGER.debug("Detected inline XBRL in HTML file: {}", htmlFile.getName());
+          }
+          return hasInlineXbrl;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to check HTML for inline XBRL: {}", e.getMessage());
+    }
+    return false;
   }
 
   private void downloadInlineXbrl(SecHttpStorageProvider provider, String cik,
@@ -2377,8 +2619,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Path is like: /sec-data/0000789019/000078901922000007/ownership.xml
             String accession = xbrlFile.getParentFile().getName();
 
-            // Create a simple ConversionMetadata to pass accession to converter
-            ConversionMetadata metadata = new ConversionMetadata(secParquetDir);
+            // Create a simple ConversionMetadata to pass accession to converter (S3-compatible)
+            ConversionMetadata metadata = new ConversionMetadata(secParquetDirPath);
             ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
             record.originalFile = xbrlFile.getAbsolutePath();
             // Store accession in the sourceFile field for now - converter can extract it
@@ -2387,9 +2629,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
             // The converter now properly extracts metadata from the XML content itself
             if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("DEBUG: Starting conversion of {} to parquet in {}", xbrlFile.getAbsolutePath(), secParquetDir.getAbsolutePath());
+              LOGGER.debug("DEBUG: Starting conversion of {} to parquet in {}", xbrlFile.getAbsolutePath(), secParquetDirPath);
             }
-            List<File> outputFiles = converter.convert(xbrlFile, secParquetDir, metadata);
+            // Use S3-compatible convertInternal method
+            List<File> outputFiles = converter.convertInternal(xbrlFile.getAbsolutePath(), secParquetDirPath, metadata);
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("DEBUG: Conversion completed for {} - created {} parquet files", xbrlFile.getName(), outputFiles.size());
             }

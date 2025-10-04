@@ -387,6 +387,58 @@ public class SecCacheManifest {
   }
 
   /**
+   * Cache the XBRL instance document filename from FilingSummary.xml.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param xbrlInstanceFilename The instance document filename (e.g., "aapl-20181229.xml")
+   */
+  public void cacheFilingSummaryXbrlFilename(String cik, String accession, String xbrlInstanceFilename) {
+    String key = buildFilingKey(cik, accession, "FilingSummary.xml");
+    FilingCacheEntry entry = new FilingCacheEntry(cik, accession, xbrlInstanceFilename, "xbrl_filename_cached", "parsed_from_FilingSummary");
+    filings.put(key, entry);
+    this.lastUpdated = System.currentTimeMillis();
+  }
+
+  /**
+   * Get the cached XBRL instance document filename from FilingSummary.xml.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @return The cached XBRL filename, or null if not cached
+   */
+  public String getCachedFilingSummaryXbrlFilename(String cik, String accession) {
+    String key = buildFilingKey(cik, accession, "FilingSummary.xml");
+    FilingCacheEntry entry = filings.get(key);
+    if (entry != null && "xbrl_filename_cached".equals(entry.state)) {
+      return entry.fileName;  // Contains the XBRL filename
+    }
+    return null;
+  }
+
+  /**
+   * Mark FilingSummary.xml as unavailable (e.g., 404 error).
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param reason Why it's not available
+   */
+  public void markFilingSummaryNotFound(String cik, String accession, String reason) {
+    markFileNotFound(cik, accession, "FilingSummary.xml", reason);
+  }
+
+  /**
+   * Check if FilingSummary.xml is known to not exist for this filing.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @return true if we've previously determined FilingSummary.xml doesn't exist
+   */
+  public boolean isFilingSummaryNotFound(String cik, String accession) {
+    return isFileNotFound(cik, accession, "FilingSummary.xml");
+  }
+
+  /**
    * Build a unique key for a filing file.
    */
   private String buildFilingKey(String cik, String accession, String fileName) {
