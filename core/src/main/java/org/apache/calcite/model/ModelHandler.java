@@ -24,9 +24,9 @@ import org.apache.calcite.materialize.Lattice;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.AggregateFunction;
+import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.ScalarFunction;
-import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -339,7 +339,7 @@ public class ModelHandler {
       Map<String, Map<String, Object>> tableConstraints) {
     // Start with the base operand map
     Map<String, Object> baseMap = operandMap(jsonSchema, operand);
-    
+
     // Create mutable copy and add constraints if present
     Map<String, Object> mutableMap = new java.util.HashMap<>(baseMap);
     if (!tableConstraints.isEmpty()) {

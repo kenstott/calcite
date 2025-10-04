@@ -22,8 +22,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Interface for tables that provide comments for JDBC metadata.
  *
  * <p>This interface allows tables to provide business definitions and comments
- * that are exposed through JDBC metadata operations like 
- * {@link java.sql.DatabaseMetaData#getTables()} and 
+ * that are exposed through JDBC metadata operations like
+ * {@link java.sql.DatabaseMetaData#getTables()} and
  * {@link java.sql.DatabaseMetaData#getColumns()}.
  *
  * <p>Table comments appear in the REMARKS column of getTables() results,
@@ -35,7 +35,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *   public String getTableComment() {
  *     return "Employee data with personal and employment information";
  *   }
- *   
+ *
  *   public String getColumnComment(String columnName) {
  *     switch (columnName.toLowerCase()) {
  *       case "employee_id": return "Unique identifier for each employee";
@@ -47,23 +47,23 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * </pre>
  */
 public interface CommentableTable extends Table {
-  
+
   /**
    * Returns a comment describing this table's business purpose and contents.
-   * 
+   *
    * <p>This comment is exposed through JDBC metadata as the REMARKS column
    * in {@link java.sql.DatabaseMetaData#getTables()} results.
-   * 
+   *
    * @return table comment, or null if no comment is available
    */
   @Nullable String getTableComment();
-  
+
   /**
    * Returns a comment describing the specified column's business meaning.
-   * 
+   *
    * <p>This comment is exposed through JDBC metadata as the REMARKS column
    * in {@link java.sql.DatabaseMetaData#getColumns()} results.
-   * 
+   *
    * @param columnName name of the column (case-insensitive)
    * @return column comment, or null if no comment is available for this column
    */

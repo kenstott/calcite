@@ -18,7 +18,6 @@ package org.apache.calcite.model;
 
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
@@ -48,8 +47,7 @@ public class JsonConstraintsTest {
   /**
    * Test that JsonConstraints correctly parses primary key definitions.
    */
-  @Test
-  public void testPrimaryKeyParsing() {
+  @Test public void testPrimaryKeyParsing() {
     // Create constraint configuration with primary key
     Map<String, Object> constraints = Map.of("primaryKey", Arrays.asList("id", "version"));
     List<String> columnNames = Arrays.asList("id", "name", "version", "created");
@@ -70,15 +68,13 @@ public class JsonConstraintsTest {
   /**
    * Test that JsonConstraints correctly parses foreign key definitions.
    */
-  @Test
-  public void testForeignKeyParsing() {
+  @Test public void testForeignKeyParsing() {
     // Create constraint configuration with foreign key
-    Map<String, Object> foreignKey = Map.of(
-        "columns", Arrays.asList("customer_id"),
+    Map<String, Object> foreignKey =
+        Map.of("columns", Arrays.asList("customer_id"),
         "targetTable", Arrays.asList("customers"),
-        "targetColumns", Arrays.asList("id")
-    );
-    
+        "targetColumns", Arrays.asList("id"));
+
     Map<String, Object> constraints = Map.of("foreignKeys", Arrays.asList(foreignKey));
     List<String> columnNames = Arrays.asList("id", "customer_id", "product_id", "quantity");
 
@@ -98,26 +94,22 @@ public class JsonConstraintsTest {
   /**
    * Test that JsonConstraints handles multiple constraint types together.
    */
-  @Test
-  public void testMultipleConstraintTypes() {
+  @Test public void testMultipleConstraintTypes() {
     // Create complex constraint configuration
-    Map<String, Object> foreignKey1 = Map.of(
-        "columns", Arrays.asList("customer_id"),
+    Map<String, Object> foreignKey1 =
+        Map.of("columns", Arrays.asList("customer_id"),
         "targetTable", Arrays.asList("customers"),
-        "targetColumns", Arrays.asList("id")
-    );
-    
-    Map<String, Object> foreignKey2 = Map.of(
-        "columns", Arrays.asList("product_id"),
-        "targetTable", Arrays.asList("products"),
-        "targetColumns", Arrays.asList("id")
-    );
+        "targetColumns", Arrays.asList("id"));
 
-    Map<String, Object> constraints = Map.of(
-        "primaryKey", Arrays.asList("order_id"),
+    Map<String, Object> foreignKey2 =
+        Map.of("columns", Arrays.asList("product_id"),
+        "targetTable", Arrays.asList("products"),
+        "targetColumns", Arrays.asList("id"));
+
+    Map<String, Object> constraints =
+        Map.of("primaryKey", Arrays.asList("order_id"),
         "uniqueKeys", Arrays.asList(Arrays.asList("order_number")),
-        "foreignKeys", Arrays.asList(foreignKey1, foreignKey2)
-    );
+        "foreignKeys", Arrays.asList(foreignKey1, foreignKey2));
 
     List<String> columnNames = Arrays.asList("order_id", "order_number", "customer_id", "product_id");
 
@@ -133,20 +125,18 @@ public class JsonConstraintsTest {
   /**
    * Test that helper methods create correct constraint configurations.
    */
-  @Test
-  public void testHelperMethods() {
+  @Test public void testHelperMethods() {
     // Test primary key helper
     Map<String, Object> pkConfig = JsonConstraints.primaryKey("id", "version");
     assertEquals(Arrays.asList("id", "version"), pkConfig.get("primaryKey"));
 
     // Test foreign key helper
-    Map<String, Object> fkConfig = JsonConstraints.foreignKey(
-        Arrays.asList("customer_id"),
+    Map<String, Object> fkConfig =
+        JsonConstraints.foreignKey(Arrays.asList("customer_id"),
         "sales",
-        "customers", 
-        Arrays.asList("id")
-    );
-    
+        "customers",
+        Arrays.asList("id"));
+
     assertEquals(Arrays.asList("customer_id"), fkConfig.get("columns"));
     assertEquals(Arrays.asList("sales", "customers"), fkConfig.get("targetTable"));
     assertEquals(Arrays.asList("id"), fkConfig.get("targetColumns"));
@@ -155,37 +145,34 @@ public class JsonConstraintsTest {
   /**
    * Test that constraints work with missing column information (lazy evaluation).
    */
-  @Test
-  public void testLazyColumnEvaluation() {
+  @Test public void testLazyColumnEvaluation() {
     // Create constraints without providing column names upfront
-    Map<String, Object> constraints = Map.of(
-        "primaryKey", Arrays.asList("id", "version"),
-        "uniqueKeys", Arrays.asList(Arrays.asList("email"))
-    );
+    Map<String, Object> constraints =
+        Map.of("primaryKey", Arrays.asList("id", "version"),
+        "uniqueKeys", Arrays.asList(Arrays.asList("email")));
 
     // Parse without column names - should extract them from constraints
     Statistic statistic = JsonConstraints.fromConstraintsMap(constraints, null, null);
 
     // Should still create statistics even without explicit column list
     assertNotNull(statistic, "Should create statistic even without column names");
-    assertTrue(statistic.getKeys().isEmpty() || !statistic.getKeys().isEmpty(), 
+    assertTrue(statistic.getKeys().isEmpty() || !statistic.getKeys().isEmpty(),
                "Keys may be empty when column names can't be resolved");
   }
 
   /**
    * Test constraint-capable schema factory interface.
    */
-  @Test
-  public void testConstraintCapableSchemaFactory() {
+  @Test public void testConstraintCapableSchemaFactory() {
     TestConstraintSchemaFactory factory = new TestConstraintSchemaFactory();
-    
+
     // Test default behavior
     assertTrue(factory.supportsConstraints(), "Test factory should support constraints");
-    
+
     // Test constraint setting
     Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
     tableConstraints.put("test_table", Map.of("primaryKey", Arrays.asList("id")));
-    
+
     factory.setTableConstraints(tableConstraints, Arrays.asList());
     assertEquals(1, factory.getReceivedConstraints().size(), "Should receive constraint metadata");
   }
@@ -196,18 +183,15 @@ public class JsonConstraintsTest {
   private static class TestConstraintSchemaFactory implements org.apache.calcite.schema.ConstraintCapableSchemaFactory {
     private Map<String, Map<String, Object>> receivedConstraints = new HashMap<>();
 
-    @Override
-    public boolean supportsConstraints() {
+    @Override public boolean supportsConstraints() {
       return true;
     }
 
-    @Override
-    public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints, List<JsonTable> tableDefinitions) {
+    @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints, List<JsonTable> tableDefinitions) {
       this.receivedConstraints = new HashMap<>(tableConstraints);
     }
 
-    @Override
-    public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
+    @Override public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
       return new TestSchema(receivedConstraints);
     }
 
@@ -226,8 +210,7 @@ public class JsonConstraintsTest {
       this.constraints = constraints;
     }
 
-    @Override
-    protected Map<String, Table> getTableMap() {
+    @Override protected Map<String, Table> getTableMap() {
       Map<String, Table> tables = new HashMap<>();
       for (String tableName : constraints.keySet()) {
         tables.put(tableName, new TestTable(constraints.get(tableName)));
@@ -246,8 +229,7 @@ public class JsonConstraintsTest {
       this.constraints = constraints;
     }
 
-    @Override
-    public org.apache.calcite.rel.type.RelDataType getRowType(org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
+    @Override public org.apache.calcite.rel.type.RelDataType getRowType(org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
       // Create a simple row type for testing
       return typeFactory.builder()
           .add("id", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER))
@@ -256,8 +238,7 @@ public class JsonConstraintsTest {
           .build();
     }
 
-    @Override
-    public Statistic getStatistic() {
+    @Override public Statistic getStatistic() {
       if (constraints != null && !constraints.isEmpty()) {
         // In a real implementation, you'd get actual column names from the table
         List<String> columnNames = Arrays.asList("id", "name", "created");

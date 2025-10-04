@@ -30,6 +30,8 @@ import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -37,16 +39,13 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * Namespace whose contents are defined by the type of an
  * {@link org.apache.calcite.sql.SqlIdentifier identifier}.
  */
 public class IdentifierNamespace extends AbstractNamespace {
   //~ Instance fields --------------------------------------------------------
-  
+
   private static final Logger LOGGER = LoggerFactory.getLogger(IdentifierNamespace.class);
 
   private final SqlIdentifier id;
@@ -115,16 +114,16 @@ public class IdentifierNamespace extends AbstractNamespace {
     LOGGER.info("=== RESOLVING TABLE IDENTIFIER ===");
     LOGGER.info("Identifier: {}", id);
     LOGGER.info("ID names: {}", id.names);
-    
+
     final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
     final SqlValidatorScope.ResolvedImpl resolved =
         new SqlValidatorScope.ResolvedImpl();
     final List<String> names = SqlIdentifier.toStar(id.names);
-    
+
     LOGGER.info("Names to resolve: {}", names);
     LOGGER.info("Case sensitive: {}", nameMatcher.isCaseSensitive());
     LOGGER.info("Parent scope: {}", parentScope.getClass().getSimpleName());
-    
+
     try {
       parentScope.resolveTable(names, nameMatcher,
           SqlValidatorScope.Path.EMPTY, resolved);
@@ -133,8 +132,8 @@ public class IdentifierNamespace extends AbstractNamespace {
         LOGGER.info("Resolved items:");
         for (int i = 0; i < resolved.resolves.size(); i++) {
           SqlValidatorScope.Resolve resolve = resolved.resolves.get(i);
-          LOGGER.info("  [{}] Path: {}, Remaining: {}, Namespace: {}", 
-              i, resolve.path.stepNames(), resolve.remainingNames, 
+          LOGGER.info("  [{}] Path: {}, Remaining: {}, Namespace: {}",
+              i, resolve.path.stepNames(), resolve.remainingNames,
               resolve.namespace.getClass().getSimpleName());
         }
       }
@@ -164,8 +163,8 @@ public class IdentifierNamespace extends AbstractNamespace {
         LOGGER.error("Resolved count: {}", resolved.count());
         LOGGER.error("Remaining names: {}", resolve.remainingNames);
         LOGGER.error("Path step names: {}", resolve.path.stepNames());
-        LOGGER.error("Error: Object '{}' not found within '{}'", 
-            resolve.remainingNames.get(0), 
+        LOGGER.error("Error: Object '{}' not found within '{}'",
+            resolve.remainingNames.get(0),
             SqlIdentifier.getString(resolve.path.stepNames()));
         throw validator.newValidationError(id,
             RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
@@ -214,8 +213,8 @@ public class IdentifierNamespace extends AbstractNamespace {
           LOGGER.error("Previous resolve was: {}", previousResolve);
           LOGGER.error("Current resolve remaining names: {}", resolve.remainingNames);
           LOGGER.error("Current resolve path step names: {}", resolve.path.stepNames());
-          LOGGER.error("Error: Object '{}' not found within '{}'", 
-              resolve.remainingNames.get(0), 
+          LOGGER.error("Error: Object '{}' not found within '{}'",
+              resolve.remainingNames.get(0),
               SqlIdentifier.getString(resolve.path.stepNames()));
           throw validator.newValidationError(id,
               RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),

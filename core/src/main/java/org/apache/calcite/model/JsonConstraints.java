@@ -24,8 +24,6 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
-import com.google.common.collect.ImmutableList;
-
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -110,13 +108,13 @@ public class JsonConstraints {
   @SuppressWarnings("unchecked")
   private static List<String> extractColumnNamesFromConstraints(Map<String, Object> constraints) {
     List<String> allColumns = new ArrayList<>();
-    
+
     // Extract from primary key
     Object primaryKey = constraints.get("primaryKey");
     if (primaryKey instanceof List) {
       allColumns.addAll((List<String>) primaryKey);
     }
-    
+
     // Extract from unique keys
     List<List<String>> uniqueKeys = (List<List<String>>) constraints.get("uniqueKeys");
     if (uniqueKeys != null) {
@@ -124,7 +122,7 @@ public class JsonConstraints {
         allColumns.addAll(keyColumns);
       }
     }
-    
+
     // Extract from foreign keys
     List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) constraints.get("foreignKeys");
     if (foreignKeys != null) {
@@ -135,7 +133,7 @@ public class JsonConstraints {
         }
       }
     }
-    
+
     // Return unique columns in order
     return new ArrayList<>(new java.util.LinkedHashSet<>(allColumns));
   }
@@ -210,7 +208,7 @@ public class JsonConstraints {
 
     List<RelReferentialConstraint> foreignKeys = new ArrayList<>();
 
-    List<Map<String, Object>> fkList = 
+    List<Map<String, Object>> fkList =
         (List<Map<String, Object>>) constraints.get("foreignKeys");
     if (fkList == null) {
       return foreignKeys;
@@ -248,7 +246,7 @@ public class JsonConstraints {
             sourceTable = new ArrayList<>();
           }
         }
-        
+
         // If target table doesn't have a schema and we have a schema name, prepend it
         // But only if the target table is a single name
         List<String> resolvedTargetTable = targetTable;
@@ -257,8 +255,8 @@ public class JsonConstraints {
           resolvedTargetTable = List.of(schemaName, targetTable.get(0));
         }
 
-        RelReferentialConstraint fk = RelReferentialConstraintImpl.of(
-            sourceTable, resolvedTargetTable, columnPairs);
+        RelReferentialConstraint fk =
+            RelReferentialConstraintImpl.of(sourceTable, resolvedTargetTable, columnPairs);
         foreignKeys.add(fk);
       }
     }
@@ -308,7 +306,6 @@ public class JsonConstraints {
     return Map.of(
         "columns", columns,
         "targetTable", List.of(targetSchema, targetTable),
-        "targetColumns", targetColumns
-    );
+        "targetColumns", targetColumns);
   }
 }
