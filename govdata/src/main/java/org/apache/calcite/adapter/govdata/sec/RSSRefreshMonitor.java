@@ -26,9 +26,9 @@ import java.net.URL;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,31 +40,31 @@ import java.util.regex.Pattern;
  */
 public class RSSRefreshMonitor {
   private static final Logger LOGGER = LoggerFactory.getLogger(RSSRefreshMonitor.class);
-  
+
   private final Map<String, Object> operand;
   private final ScheduledExecutorService scheduler;
   private final int checkIntervalMinutes;
   private final int debounceMinutes;
   private final int maxDebounceMinutes;
-  
+
   // Debouncing state
   private final Set<String> lastSeenFilings = new HashSet<>();
   private final Set<String> pendingFilings = new HashSet<>();
   private ScheduledFuture<?> debouncedRefresh;
   private long firstTriggerTime = 0;
   private volatile boolean shutdown = false;
-  
+
   // RSS URL patterns
   private static final String SEC_RSS_RECENT = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&output=atom";
   private static final String SEC_RSS_COMPANY = "https://data.sec.gov/rss?cik=%s";
-  
+
   // Pattern to extract filing identifiers from RSS
   private static final Pattern FILING_ID_PATTERN = Pattern.compile("accession[Nn]umber=(\\d{10}-\\d{2}-\\d{6})");
 
   public RSSRefreshMonitor(Map<String, Object> operand) {
     this.operand = operand;
     this.scheduler = Executors.newScheduledThreadPool(1);
-    
+
     Map<String, Object> refreshConfig = getRefreshConfig(operand);
     this.checkIntervalMinutes = getIntConfig(refreshConfig, "checkIntervalMinutes", 5);
     this.debounceMinutes = getIntConfig(refreshConfig, "debounceMinutes", 10);
@@ -77,9 +77,9 @@ public class RSSRefreshMonitor {
       return;
     }
 
-    LOGGER.info("Starting RSS refresh monitor - check every {} min, debounce {} min, max {} min", 
+    LOGGER.info("Starting RSS refresh monitor - check every {} min, debounce {} min, max {} min",
                checkIntervalMinutes, debounceMinutes, maxDebounceMinutes);
-    
+
     scheduler.scheduleAtFixedRate(this::checkForUpdates, 0, checkIntervalMinutes, TimeUnit.MINUTES);
   }
 
@@ -108,14 +108,14 @@ public class RSSRefreshMonitor {
       Set<String> currentFilings = fetchRSSFilings();
       Set<String> newFilings = new HashSet<>(currentFilings);
       newFilings.removeAll(lastSeenFilings);
-      
+
       if (newFilings.isEmpty()) {
         // NO TRIGGERS = NO PROCESSING
         return;
       }
 
       LOGGER.info("Detected {} new filings from RSS", newFilings.size());
-      
+
       synchronized (this) {
         pendingFilings.addAll(newFilings);
         long now = System.currentTimeMillis();
@@ -133,7 +133,7 @@ public class RSSRefreshMonitor {
         // Check if we've hit max wait time
         long timeSinceFirst = now - firstTriggerTime;
         if (timeSinceFirst >= TimeUnit.MINUTES.toMillis(maxDebounceMinutes)) {
-          LOGGER.info("Max debounce time reached after {} minutes, executing refresh immediately", 
+          LOGGER.info("Max debounce time reached after {} minutes, executing refresh immediately",
                      timeSinceFirst / 60000);
           executeRefresh();
         } else {
@@ -143,14 +143,14 @@ public class RSSRefreshMonitor {
             executeRefresh();
           }, delay, TimeUnit.MILLISECONDS);
 
-          LOGGER.info("Debounce timer reset, {} pending filings will refresh in {} minutes", 
+          LOGGER.info("Debounce timer reset, {} pending filings will refresh in {} minutes",
                      pendingFilings.size(), debounceMinutes);
         }
 
         // Update last seen filings
         lastSeenFilings.addAll(newFilings);
       }
-      
+
     } catch (Exception e) {
       LOGGER.warn("Error checking RSS feeds: {}", e.getMessage());
     }
@@ -161,7 +161,7 @@ public class RSSRefreshMonitor {
       return;
     }
 
-    LOGGER.info("Executing refresh for {} accumulated filings after quiet period", 
+    LOGGER.info("Executing refresh for {} accumulated filings after quiet period",
                pendingFilings.size());
 
     try {
@@ -182,10 +182,10 @@ public class RSSRefreshMonitor {
 
   private Set<String> fetchRSSFilings() throws Exception {
     Set<String> filings = new HashSet<>();
-    
+
     // Fetch recent filings RSS
     filings.addAll(fetchRSSFeed(SEC_RSS_RECENT));
-    
+
     // If specific CIKs are configured, also fetch company-specific RSS
     if (operand.containsKey("ciks")) {
       Object ciksObj = operand.get("ciks");
@@ -201,19 +201,19 @@ public class RSSRefreshMonitor {
         }
       }
     }
-    
+
     return filings;
   }
 
   private Set<String> fetchRSSFeed(String rssUrl) throws Exception {
     Set<String> filings = new HashSet<>();
-    
+
     @SuppressWarnings("deprecation")
     HttpURLConnection conn = (HttpURLConnection) new URL(rssUrl).openConnection();
     conn.setRequestProperty("User-Agent", "Calcite-SEC-Adapter/1.0");
     conn.setConnectTimeout(10000);
     conn.setReadTimeout(30000);
-    
+
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
       String line;
       while ((line = reader.readLine()) != null) {
@@ -223,13 +223,13 @@ public class RSSRefreshMonitor {
         }
       }
     }
-    
+
     return filings;
   }
 
   private boolean isEnabled() {
     Map<String, Object> refreshConfig = getRefreshConfig(operand);
-    return refreshConfig != null && 
+    return refreshConfig != null &&
            getBooleanConfig(refreshConfig, "enabled", false);
   }
 

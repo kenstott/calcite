@@ -237,97 +237,79 @@ public class XbrlToParquetConverter implements FileConverter {
         outputFiles.addAll(extraFiles);
       }
 
-      // Create partitioned output path
+      // Create partitioned output path - BUILD RELATIVE PATHS
       // Normalize filing type: remove hyphens and slashes
       String normalizedFilingType = filingType.replace("-", "").replace("/", "");
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
-      java.nio.file.Path partitionPath = Paths.get(
-          targetDirectory.getAbsolutePath(),
-          String.format("cik=%s/filing_type=%s/year=%s",
-              cik, normalizedFilingType, partitionYear));
-      Files.createDirectories(partitionPath);
-      
-      // Clean up macOS metadata files after creating directories
-      storageProvider.cleanupMacosMetadata(targetDirectory.getAbsolutePath());
 
-      // Convert financial facts to Parquet
+      // Build RELATIVE partition path (StorageProvider will add base path)
+      String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
+          cik, normalizedFilingType, partitionYear);
+
+      // For local filesystem only, create actual directories
+      java.nio.file.Path partitionPath = Paths.get(targetDirectory.getAbsolutePath(), relativePartitionPath);
+      if (!targetDirectory.getPath().contains("://")) {
+        Files.createDirectories(partitionPath);
+      }
+
       // Use accession for file naming if available, otherwise fall back to filing date
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-      File factsFile = partitionPath.resolve(
-          String.format("%s_%s_facts.parquet", cik, uniqueId)).toFile();
 
-      LOGGER.debug(" Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsFile.getAbsolutePath());
+      // Build RELATIVE paths for all outputs
+      String factsPath = relativePartitionPath + "/" + String.format("%s_%s_facts.parquet", cik, uniqueId);
+      String metadataPath = relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId);
+      String contextsPath = relativePartitionPath + "/" + String.format("%s_%s_contexts.parquet", cik, uniqueId);
+      String mdaPath = relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId);
+      String relationshipsPath = relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId);
+
+      // Convert financial facts to Parquet
+      LOGGER.debug(" Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsPath);
       try {
-        writeFactsToParquet(doc, factsFile, cik, filingType, filingDate);
-        if (factsFile.exists() && factsFile.length() > 0) {
-          outputFiles.add(factsFile);
-          LOGGER.debug(" Successfully created facts.parquet (" + factsFile.length() + " bytes): " + factsFile.getName());
-        } else {
-          LOGGER.warn("DEBUG: facts.parquet creation failed or resulted in empty file: " + factsFile.getAbsolutePath() +
-                        " (exists: " + factsFile.exists() + ", size: " + (factsFile.exists() ? factsFile.length() : "N/A") + ")");
-          trackConversionError(sourceFile, "facts_parquet_creation_failed",
-                              "writeFactsToParquet completed but file missing or empty");
-        }
+        writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, sourceFile);
+        // For File-based return list, create dummy File (only used for count)
+        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_facts.parquet", cik, uniqueId)));
+        LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during facts.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
         trackConversionError(sourceFile, "facts_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
-        throw e; // Re-throw to maintain original error handling
+        throw e;
       }
 
-      // Write filing metadata (company info, state of incorporation, etc.)
-      File metadataFile = partitionPath.resolve(
-          String.format("%s_%s_metadata.parquet", cik, uniqueId)).toFile();
-      writeMetadataToParquet(doc, metadataFile, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(metadataFile);  // Always add since file is always created now
+      // Write filing metadata
+      writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, sourceFile);
+      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_metadata.parquet", cik, uniqueId)));
 
       // Convert contexts to Parquet
-      File contextsFile = partitionPath.resolve(
-          String.format("%s_%s_contexts.parquet", cik, uniqueId)).toFile();
-      writeContextsToParquet(doc, contextsFile, cik, filingType, filingDate);
-      outputFiles.add(contextsFile);
+      writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate);
+      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_contexts.parquet", cik, uniqueId)));
 
-      // Extract and write MD&A (Management Discussion & Analysis)
-      File mdaFile = partitionPath.resolve(
-          String.format("%s_%s_mda.parquet", cik, uniqueId)).toFile();
-      writeMDAToParquet(doc, mdaFile, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(mdaFile);  // Always add since file is always created now
+      // Extract and write MD&A
+      writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, sourceFile);
+      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_mda.parquet", cik, uniqueId)));
 
       // Extract and write XBRL relationships
-      File relationshipsFile = partitionPath.resolve(
-          String.format("%s_%s_relationships.parquet", cik, uniqueId)).toFile();
-
-      LOGGER.debug(" Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsFile.getAbsolutePath());
+      LOGGER.debug(" Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsPath);
       try {
-        writeRelationshipsToParquet(doc, relationshipsFile, cik, filingType, filingDate, sourceFile);
-        if (relationshipsFile.exists()) {
-          outputFiles.add(relationshipsFile);
-          LOGGER.debug(" Successfully created relationships.parquet (" + relationshipsFile.length() + " bytes): " + relationshipsFile.getName());
-        } else {
-          LOGGER.warn("DEBUG: relationships.parquet creation failed - file not created: " + relationshipsFile.getAbsolutePath());
-          trackConversionError(sourceFile, "relationships_parquet_creation_failed",
-                              "writeRelationshipsToParquet completed but file was not created");
-        }
+        writeRelationshipsToParquet(doc, relationshipsPath, cik, filingType, filingDate, sourceFile);
+        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_relationships.parquet", cik, uniqueId)));
+        LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during relationships.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
         trackConversionError(sourceFile, "relationships_parquet_exception", "Exception: " + e.getClass().getName() + " - " + e.getMessage());
-        throw e; // Re-throw to maintain original error handling
+        throw e;
       }
 
       // Create vectorized blobs with contextual enrichment if enabled
       if (enableVectorization) {
-        File vectorizedFile = partitionPath.resolve(
-            String.format("%s_%s_vectorized.parquet", cik, uniqueId)).toFile();
-        writeVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile);
-        outputFiles.add(vectorizedFile);  // Always add since file is always created now
+        String vectorizedPath = relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId);
+        writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile);
+        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_vectorized.parquet", cik, uniqueId)));
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
 
       LOGGER.info("Converted XBRL to Parquet: " + sourceFile.getName() +
           " -> " + outputFiles.size() + " files");
-      
-      // Final cleanup of macOS metadata files in the entire target directory
-      storageProvider.cleanupMacosMetadata(targetDirectory.getAbsolutePath());
 
     } catch (Exception e) {
       throw new IOException("Failed to convert XBRL to Parquet", e);
@@ -653,10 +635,10 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
-  private void writeFactsToParquet(Document doc, File outputFile,
-      String cik, String filingType, String filingDate) throws IOException {
+  private void writeFactsToParquet(Document doc, String outputPath,
+      String cik, String filingType, String filingDate, File sourceFile) throws IOException {
 
-    LOGGER.debug("writeFactsToParquet called for " + outputFile.getName() +
+    LOGGER.debug("writeFactsToParquet called for " + outputPath +
                 " (CIK: " + cik + ", Type: " + filingType + ", Date: " + filingDate + ")");
 
     // Create Avro schema for facts
@@ -827,24 +809,14 @@ public class XbrlToParquetConverter implements FileConverter {
                      ", us-gaap elements: " + usGaapCount +
                      ", dei elements: " + deiCount);
 
-      trackConversionError(new File(cik + "_" + filingType + "_" + filingDate), "no_facts_extracted",
+      trackConversionError(sourceFile, "no_facts_extracted",
                          "No recognizable facts found despite " + allElements.getLength() + " elements");
     }
 
     // Use consolidated StorageProvider method for Parquet writing
     try {
-      LOGGER.debug("Writing facts to parquet file: " + outputFile.getAbsolutePath());
+      LOGGER.debug("Writing facts to parquet file: " + outputPath);
       LOGGER.debug(" About to write " + records.size() + " fact records using storageProvider.writeAvroParquet");
-
-      // Ensure parent directory exists
-      File parentDir = outputFile.getParentFile();
-      if (!parentDir.exists()) {
-        LOGGER.debug(" Creating parent directory: " + parentDir.getAbsolutePath());
-        boolean dirCreated = parentDir.mkdirs();
-        if (!dirCreated) {
-          throw new IOException("Failed to create parent directory: " + parentDir.getAbsolutePath());
-        }
-      }
 
       // Check if we have any records to write
       if (records.isEmpty()) {
@@ -852,42 +824,18 @@ public class XbrlToParquetConverter implements FileConverter {
         // Still need to create the file for cache validation
       }
 
-      storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "facts");
-      LOGGER.debug(" storageProvider.writeAvroParquet completed successfully");
-
-      // Verify file was created successfully with detailed checks
-      if (!outputFile.exists()) {
-        String errorMsg = "Facts parquet file was not created: " + outputFile.getAbsolutePath();
-        LOGGER.error("DEBUG: " + errorMsg);
-        trackConversionError(new File(outputFile.getParent()), "facts_file_not_created", errorMsg);
-        throw new IOException(errorMsg);
-      }
-
-      if (outputFile.length() == 0) {
-        String errorMsg = "Facts parquet file was created but is empty: " + outputFile.getAbsolutePath();
-        LOGGER.warn("DEBUG: " + errorMsg + " (this may be expected for filings with no extractable facts)");
-        if (records.isEmpty()) {
-          LOGGER.debug(" Empty file is expected since no fact records were extracted");
-        } else {
-          LOGGER.error("DEBUG: Empty file is unexpected since " + records.size() + " records were provided to writeAvroParquet");
-          trackConversionError(new File(outputFile.getParent()), "facts_file_empty_with_records",
-                             "Empty file despite " + records.size() + " records");
-          throw new IOException(errorMsg);
-        }
-      }
-
-      LOGGER.info("Successfully wrote " + records.size() + " facts to " + outputFile.getName() +
-                  " (" + outputFile.length() + " bytes)");
+      storageProvider.writeAvroParquet(outputPath, schema, records, "facts");
+      LOGGER.info("Successfully wrote " + records.size() + " facts to " + outputPath);
 
     } catch (Exception e) {
       LOGGER.error("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
-      trackConversionError(new File(outputFile.getParent()), "facts_write_exception",
+      trackConversionError(sourceFile, "facts_write_exception",
                          "Exception: " + e.getClass().getName() + " - " + e.getMessage());
       throw new IOException("Failed to write facts to parquet: " + e.getMessage(), e);
     }
   }
 
-  private void writeMetadataToParquet(Document doc, File outputFile,
+  private void writeMetadataToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
     
     // Create Avro schema for filing metadata
@@ -965,7 +913,8 @@ public class XbrlToParquetConverter implements FileConverter {
     records.add(record);
     
     // Use consolidated StorageProvider method for Parquet writing
-    writeRecordsToParquet(records, schema, outputFile, "metadata");
+    storageProvider.writeAvroParquet(outputPath, schema, records, "metadata");
+    LOGGER.info("Successfully wrote " + records.size() + " metadata records to " + outputPath);
   }
   
   private String extractDeiValue(Document doc, String... possibleTags) {
@@ -1021,7 +970,7 @@ public class XbrlToParquetConverter implements FileConverter {
     return null;
   }
 
-  private void writeContextsToParquet(Document doc, File outputFile,
+  private void writeContextsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate) throws IOException {
 
     // Create Avro schema for contexts
@@ -1082,7 +1031,8 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Use consolidated StorageProvider method for Parquet writing
-    writeRecordsToParquet(records, schema, outputFile, "contexts");
+    storageProvider.writeAvroParquet(outputPath, schema, records, "contexts");
+    LOGGER.info("Successfully wrote " + records.size() + " context records to " + outputPath);
   }
 
   @Override public String getSourceFormat() {
@@ -1471,7 +1421,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract and write MD&A (Management Discussion & Analysis) to Parquet.
    * Each paragraph becomes a separate record for better querying.
    */
-  private void writeMDAToParquet(Document doc, File outputFile,
+  private void writeMDAToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
 
     // Create schema for MD&A paragraphs
@@ -1512,18 +1462,8 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Always write file, even if empty (zero rows) to ensure cache consistency
-    writeRecordsToParquet(records, schema, outputFile);
-    LOGGER.info("Wrote " + records.size() + " MD&A paragraphs to " + outputFile);
-
-    // Clean up macOS metadata files in the entire partition directory
-    storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
-    // Also clean parent directories
-    if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
-      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
-      if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
-        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
-      }
-    }
+    storageProvider.writeAvroParquet(outputPath, schema, records, "mda");
+    LOGGER.info("Successfully wrote " + records.size() + " MD&A paragraphs to " + outputPath);
   }
 
   /**
@@ -1831,7 +1771,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * - Parse linkbase XML for arc elements defining relationships
    * - Convert relationships to Parquet records with proper linkbase_type classification
    */
-  private void writeRelationshipsToParquet(Document doc, File outputFile,
+  private void writeRelationshipsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
 
     LOGGER.debug(String.format("DEBUG: writeRelationshipsToParquet START for CIK %s filing type %s date %s", cik, filingType, filingDate));
@@ -1944,22 +1884,12 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Always write the parquet file, even if empty, to satisfy cache validation
     try {
-      LOGGER.debug(" About to write " + records.size() + " relationship records to " + outputFile.getAbsolutePath());
-
-      // Ensure parent directory exists
-      File parentDir = outputFile.getParentFile();
-      if (!parentDir.exists()) {
-        LOGGER.debug(" Creating parent directory for relationships: " + parentDir.getAbsolutePath());
-        boolean dirCreated = parentDir.mkdirs();
-        if (!dirCreated) {
-          throw new IOException("Failed to create parent directory for relationships: " + parentDir.getAbsolutePath());
-        }
-      }
+      LOGGER.debug(" About to write " + records.size() + " relationship records to " + outputPath);
 
       if (!records.isEmpty()) {
-        writeRecordsToParquet(records, schema, outputFile);
+        storageProvider.writeAvroParquet(outputPath, schema, records, "relationships");
         LOGGER.info(String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
-            records.size(), beforeInlineCount, inlineRelationships, outputFile));
+            records.size(), beforeInlineCount, inlineRelationships, outputPath));
       } else {
         // Create an empty parquet file to indicate that relationship extraction was completed
         // This is important for cache validation - without this file, the system will think
@@ -1967,35 +1897,15 @@ public class XbrlToParquetConverter implements FileConverter {
         // NOTE: Inline XBRL filings will typically have empty relationship files since
         // relationships are in separate linkbase files that we don't currently download
         LOGGER.debug(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
-        writeRecordsToParquet(records, schema, outputFile); // Write empty records list
-        LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputFile));
+        storageProvider.writeAvroParquet(outputPath, schema, records, "relationships"); // Write empty records list
+        LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputPath));
       }
-
-      // Verify file was created successfully with detailed checks
-      if (!outputFile.exists()) {
-        String errorMsg = "Relationships parquet file was not created: " + outputFile.getAbsolutePath();
-        LOGGER.error("DEBUG: " + errorMsg);
-        trackConversionError(sourceFile, "relationships_file_not_created", errorMsg);
-        throw new IOException(errorMsg);
-      }
-
-      LOGGER.debug(" Relationships parquet file successfully created (" + outputFile.length() + " bytes): " + outputFile.getName());
 
     } catch (Exception e) {
       LOGGER.error("Failed to write relationships parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
       trackConversionError(sourceFile, "relationships_write_exception",
                          "Exception: " + e.getClass().getName() + " - " + e.getMessage());
       throw new IOException("Failed to write relationships to parquet: " + e.getMessage(), e);
-    }
-
-    // Clean up macOS metadata files in the entire partition directory
-    storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
-    // Also clean parent directories
-    if (outputFile.getParentFile() != null && outputFile.getParentFile().getParentFile() != null) {
-      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getAbsolutePath());
-      if (outputFile.getParentFile().getParentFile().getParentFile() != null) {
-        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getParentFile().getParentFile().getAbsolutePath());
-      }
     }
   }
 
@@ -2615,26 +2525,26 @@ public class XbrlToParquetConverter implements FileConverter {
    * Helper method to write records using StorageProvider's consolidated Parquet writing.
    */
   private void writeRecordsToParquet(List<GenericRecord> records, Schema schema,
-      File outputFile, String recordType) throws IOException {
-    
+      String outputPath, String recordType) throws IOException {
+
     if (records.isEmpty()) {
-      LOGGER.debug("No " + recordType + " records to write for " + outputFile.getName() + " - creating empty file with schema");
+      LOGGER.debug("No " + recordType + " records to write for " + outputPath + " - creating empty file with schema");
     }
 
-    LOGGER.debug("Writing " + records.size() + " " + recordType + " records to " + outputFile.getName());
-    
+    LOGGER.debug("Writing " + records.size() + " " + recordType + " records to " + outputPath);
+
     // Use StorageProvider's consolidated Parquet writing method
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, recordType);
-    
-    LOGGER.info("Successfully wrote " + records.size() + " " + recordType + " records to " + outputFile.getName());
+    storageProvider.writeAvroParquet(outputPath, schema, records, recordType);
+
+    LOGGER.info("Successfully wrote " + records.size() + " " + recordType + " records to " + outputPath);
   }
-  
+
   /**
    * Overloaded method for backward compatibility with existing calls.
    */
   private void writeRecordsToParquet(List<GenericRecord> records, Schema schema,
-      File outputFile) throws IOException {
-    writeRecordsToParquet(records, schema, outputFile, "records");
+      String outputPath) throws IOException {
+    writeRecordsToParquet(records, schema, outputPath, "records");
   }
   
   /**
@@ -2662,7 +2572,6 @@ public class XbrlToParquetConverter implements FileConverter {
     List<File> outputFiles = new ArrayList<>();
 
     try {
-      // Create partition directory
       // Validate and parse year from filing date
       int year;
       try {
@@ -2676,14 +2585,15 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.warn("Failed to parse year from filing date: " + filingDate + ", using current year");
         year = java.time.Year.now().getValue();
       }
-      
+
       // Normalize filing type: remove both slashes and hyphens
       String normalizedFilingType = filingType.replace("/", "").replace("-", "");
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
-      File partitionDir = new File(targetDirectory,
-          String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear));
-      partitionDir.mkdirs();
-      
+
+      // Build RELATIVE partition path (StorageProvider will add base path)
+      String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
+          cik, normalizedFilingType, partitionYear);
+
       // Extract insider transactions
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
       LOGGER.debug(" Extracted " + transactions.size() + " insider transactions from " + sourceFile.getName());
@@ -2691,47 +2601,39 @@ public class XbrlToParquetConverter implements FileConverter {
       // Always write insider.parquet file (even if empty) to indicate processing completed
       // This prevents unnecessary reprocessing during cache validation
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-      File outputFile = new File(partitionDir,
-          String.format("%s_%s_insider.parquet", cik, uniqueId));
+      String outputPath = relativePartitionPath + "/" + String.format("%s_%s_insider.parquet", cik, uniqueId);
 
       if (!transactions.isEmpty()) {
-        LOGGER.debug(" Writing " + transactions.size() + " transactions to parquet file: " + outputFile.getAbsolutePath());
+        LOGGER.debug(" Writing " + transactions.size() + " transactions to parquet file: " + outputPath);
       } else {
-        LOGGER.debug(" Creating empty insider parquet file (no transactions found): " + outputFile.getAbsolutePath());
+        LOGGER.debug(" Creating empty insider parquet file (no transactions found): " + outputPath);
       }
 
       Schema schema = createInsiderTransactionSchema();
-      writeParquetFile(transactions, schema, outputFile);
-      storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
-      outputFiles.add(outputFile);
-      LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputFile.getAbsolutePath());
+      writeParquetFile(transactions, schema, outputPath);
+      LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
 
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
           + transactions.size() + " records");
-      
+
       // Create vectorized blobs for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
       if (enableVectorization) {
         // Reuse uniqueId from above
-        File vectorizedFile = new File(partitionDir,
-            String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+        String vectorizedPath = relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId);
 
         try {
-          writeInsiderVectorizedBlobsToParquet(doc, vectorizedFile, cik, filingType, filingDate, sourceFile, accession);
-          if (vectorizedFile.exists()) {
-            outputFiles.add(vectorizedFile);
-            storageProvider.cleanupMacosMetadata(vectorizedFile.getParentFile().getAbsolutePath());
-          }
+          writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile, accession);
         } catch (Exception ve) {
           LOGGER.warn("Failed to create vectorized blobs for insider form: " + ve.getMessage());
         }
       }
-      
+
     } catch (Exception e) {
       LOGGER.warn("Failed to convert insider form: " + e.getMessage());
     }
-    
+
     return outputFiles;
   }
   
@@ -3119,15 +3021,11 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Write Parquet file using StorageProvider's consolidated method.
    */
-  private void writeParquetFile(List<GenericRecord> records, Schema schema, File outputFile)
+  private void writeParquetFile(List<GenericRecord> records, Schema schema, String outputPath)
       throws IOException {
     // Complete single-threading of all vectorization operations to ensure 100% thread safety
     synchronized (GLOBAL_VECTORIZATION_LOCK) {
-      if (outputFile.getParentFile() != null) {
-        outputFile.getParentFile().mkdirs();
-      }
-
-      storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "vectorized");
+      storageProvider.writeAvroParquet(outputPath, schema, records, "vectorized");
     }
   }
   
@@ -3147,7 +3045,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Write vectorized blobs for insider forms (Form 3/4/5).
    * Creates minimal vectors for remarks and transaction descriptions.
    */
-  private void writeInsiderVectorizedBlobsToParquet(Document doc, File outputFile,
+  private void writeInsiderVectorizedBlobsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile, String accession) throws IOException {
     
     // Create schema for vectorized blobs
@@ -3221,11 +3119,11 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     
     // Always write the file, even if empty, to satisfy cache validation
-    writeRecordsToParquet(records, schema, outputFile);
+    writeRecordsToParquet(records, schema, outputPath);
     if (!records.isEmpty()) {
-      LOGGER.info("Wrote " + records.size() + " vectorized insider blobs to " + outputFile);
+      LOGGER.info("Wrote " + records.size() + " vectorized insider blobs to " + outputPath);
     } else {
-      LOGGER.info("Created empty vectorized file (no content > 20 chars) for " + outputFile);
+      LOGGER.info("Created empty vectorized file (no content > 20 chars) for " + outputPath);
     }
   }
   
@@ -3288,17 +3186,14 @@ public class XbrlToParquetConverter implements FileConverter {
         
         String normalizedFilingType = filingType.replace("/", "").replace("-", "");
         String partitionYear = filingDate.substring(0, 4); // 8-K filings use filing year
-        java.nio.file.Path partitionPath = Paths.get(
-            targetDirectory.getAbsolutePath(),
-            String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear));
-        Files.createDirectories(partitionPath);
 
-        File outputFile = partitionPath.resolve(
-            String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate)).toFile();
-        
-        writeParquetFile(earningsRecords, earningsSchema, outputFile);
-        storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());  // Clean macOS metadata after writing
-        outputFiles.add(outputFile);
+        // Build RELATIVE partition path (StorageProvider will add base path)
+        String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
+            cik, normalizedFilingType, partitionYear);
+        String outputPath = relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik,
+            (accession != null && !accession.isEmpty()) ? accession : filingDate);
+
+        writeParquetFile(earningsRecords, earningsSchema, outputPath);
         
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
       }
@@ -3494,7 +3389,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Write vectorized blobs with contextual enrichment to Parquet.
    * Creates individual vectors for footnotes and MD&A paragraphs with relationships.
    */
-  private void writeVectorizedBlobsToParquet(Document doc, File outputFile,
+  private void writeVectorizedBlobsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
 
     // Create schema for vectorized blobs
@@ -3605,9 +3500,8 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Always write file, even if empty (zero rows) to ensure cache consistency
-    writeRecordsToParquet(records, schema, outputFile);
-    LOGGER.info("Wrote " + records.size() + " vectorized blobs to " + outputFile);
-    storageProvider.cleanupMacosMetadata(outputFile.getParentFile().getAbsolutePath());
+    storageProvider.writeAvroParquet(outputPath, schema, records, "vectorized_blobs");
+    LOGGER.info("Successfully wrote " + records.size() + " vectorized blobs to " + outputPath);
   }
 
   /**

@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Interface for text embedding services.
- * 
+ *
  * This abstraction allows plugging in different embedding providers:
  * - OpenAI Embeddings API
  * - Anthropic Claude embeddings
@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
  * - Google Vertex AI embeddings
  */
 public interface EmbeddingService {
-  
+
   /**
    * Generate embeddings for a single text.
    *
@@ -41,7 +41,7 @@ public interface EmbeddingService {
    * @throws EmbeddingException if embedding generation fails
    */
   double[] generateEmbedding(String text) throws EmbeddingException;
-  
+
   /**
    * Generate embeddings for multiple texts (batch processing).
    * More efficient than individual calls for large volumes.
@@ -51,7 +51,7 @@ public interface EmbeddingService {
    * @throws EmbeddingException if batch embedding fails
    */
   double[][] generateEmbeddings(String[] texts) throws EmbeddingException;
-  
+
   /**
    * Generate embeddings asynchronously.
    *
@@ -59,28 +59,28 @@ public interface EmbeddingService {
    * @return Future containing the embedding array
    */
   CompletableFuture<double[]> generateEmbeddingAsync(String text);
-  
+
   /**
    * Get the embedding dimension for this service.
    *
    * @return Number of dimensions in embeddings (e.g., 1536 for OpenAI text-embedding-ada-002)
    */
   int getDimensions();
-  
+
   /**
    * Get the maximum input length for this service.
    *
    * @return Maximum characters/tokens supported
    */
   int getMaxInputLength();
-  
+
   /**
    * Check if the service is available and configured.
    *
    * @return true if service can generate embeddings
    */
   boolean isAvailable();
-  
+
   /**
    * Get a descriptive name for this embedding service.
    *

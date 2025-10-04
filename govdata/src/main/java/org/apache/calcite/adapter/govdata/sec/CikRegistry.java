@@ -19,6 +19,9 @@ package org.apache.calcite.adapter.govdata.sec;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,8 +31,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Registry of common CIK aliases loaded from cik-registry.json.
@@ -332,7 +333,7 @@ public class CikRegistry {
 
   /**
    * Resolve a company identifier to a list of normalized 10-digit CIKs.
-   * 
+   *
    * <p>This is the core method that powers ticker-to-CIK conversion throughout the SEC adapter.
    * All company identifiers are automatically resolved using this registry:
    *
@@ -416,36 +417,36 @@ public class CikRegistry {
    */
   public static List<String> getTickersForCik(String cik) {
     loadRegistry();
-    
+
     // Normalize CIK to 10 digits with leading zeros
     String normalizedCik = normalizeCik(cik);
-    
+
     List<String> tickers = new ArrayList<>();
-    
+
     // Search through all ticker mappings to find matches
     for (Map.Entry<String, String> entry : TICKER_TO_CIK.entrySet()) {
       if (normalizeCik(entry.getValue()).equals(normalizedCik)) {
         tickers.add(entry.getKey());
       }
     }
-    
+
     return tickers;
   }
-  
+
   /**
    * Get all ticker-CIK pairs from the registry.
    * @return Map of ticker symbols to normalized CIKs
    */
   public static Map<String, String> getAllTickerCikPairs() {
     loadRegistry();
-    
+
     Map<String, String> pairs = new HashMap<>();
     for (Map.Entry<String, String> entry : TICKER_TO_CIK.entrySet()) {
       pairs.put(entry.getKey(), normalizeCik(entry.getValue()));
     }
     return pairs;
   }
-  
+
   /**
    * Normalize a CIK to 10 digits with leading zeros.
    * @param cik The CIK to normalize
@@ -454,15 +455,15 @@ public class CikRegistry {
   private static String normalizeCik(String cik) {
     // Remove any non-digit characters
     String digits = cik.replaceAll("[^0-9]", "");
-    
+
     // Pad with leading zeros to 10 digits
     while (digits.length() < 10) {
       digits = "0" + digits;
     }
-    
+
     return digits;
   }
-  
+
   /**
    * Handle special marker identifiers that require dynamic loading.
    * @param marker Special marker like _ALL_EDGAR_FILERS

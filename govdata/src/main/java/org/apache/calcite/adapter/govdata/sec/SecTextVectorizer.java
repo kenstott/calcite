@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.similarity.EmbeddingException;
 import org.apache.calcite.adapter.file.similarity.EmbeddingProviderFactory;
 import org.apache.calcite.adapter.file.similarity.TextEmbeddingProvider;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -47,7 +48,7 @@ public class SecTextVectorizer {
 
   // Default embedding dimension
   private final int embeddingDimension;
-  
+
   // Embedding provider for generating real embeddings
   private final TextEmbeddingProvider embeddingProvider;
 
@@ -116,14 +117,14 @@ public class SecTextVectorizer {
     if (conceptName == null || conceptName.isEmpty()) {
       return conceptName;
     }
-    
+
     // Handle acronyms and special cases
     conceptName = conceptName.replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2");
     // Insert space before capital letters (except at start)
     conceptName = conceptName.replaceAll("([a-z])([A-Z])", "$1 $2");
     // Clean up multiple spaces
     conceptName = conceptName.replaceAll("\\s+", " ").trim();
-    
+
     return conceptName;
   }
 
@@ -192,14 +193,16 @@ public class SecTextVectorizer {
       // Generate embedding for the chunk
       String chunkTextStr = chunkText.toString();
       double[] embedding = generateRealEmbedding(chunkTextStr);
-      chunks.add(new ContextualChunk(context, chunkTextStr, "concept_group", 
+      chunks.add(
+          new ContextualChunk(context, chunkTextStr, "concept_group",
                                      context, new HashMap<>(), embedding));
     }
 
     // Also create a full document embedding
     String fullDoc = createFullDocumentText(facts, narratives, footnotes, secFile);
     double[] fullDocEmbedding = generateRealEmbedding(fullDoc);
-    chunks.add(new ContextualChunk("FULL_DOCUMENT", fullDoc, "document", 
+    chunks.add(
+        new ContextualChunk("FULL_DOCUMENT", fullDoc, "document",
                                    "FULL_DOCUMENT", new HashMap<>(), fullDocEmbedding));
 
     return chunks;
@@ -415,12 +418,12 @@ public class SecTextVectorizer {
       this(context, text, "concept_group", null, new HashMap<>(), null);
     }
 
-    public ContextualChunk(String context, String text, String blobType, 
+    public ContextualChunk(String context, String text, String blobType,
                           String originalBlobId, Map<String, Object> metadata) {
       this(context, text, blobType, originalBlobId, metadata, null);
     }
 
-    public ContextualChunk(String context, String text, String blobType, 
+    public ContextualChunk(String context, String text, String blobType,
                           String originalBlobId, Map<String, Object> metadata,
                           double[] embedding) {
       this.context = context;
@@ -484,10 +487,10 @@ public class SecTextVectorizer {
       List<TextBlob> mdaParagraphs,
       Map<String, List<String>> references,
       Map<String, FinancialFact> facts) {
-    
+
     return createIndividualChunks(footnotes, mdaParagraphs, new ArrayList<>(), references, facts);
   }
-  
+
   /**
    * Create individual chunks for footnotes, MD&A paragraphs, and earnings content.
    * This is the enhanced version that includes earnings content.
@@ -498,45 +501,45 @@ public class SecTextVectorizer {
       List<TextBlob> earningsBlobs,
       Map<String, List<String>> references,
       Map<String, FinancialFact> facts) {
-    
+
     List<ContextualChunk> chunks = new ArrayList<>();
     SecTokenManager tokenManager = new SecTokenManager();
 
     // Vectorize each footnote with its relationships
     for (TextBlob footnote : footnotes) {
-      ContextualChunk chunk = vectorizeFootnote(footnote, references, mdaParagraphs, 
-                                                facts, tokenManager);
+      ContextualChunk chunk =
+                                                vectorizeFootnote(footnote, references, mdaParagraphs, facts, tokenManager);
       if (chunk != null) {
         // Generate real semantic embedding using configured provider
         double[] embedding = generateRealEmbedding(chunk.text);
-        chunk = new ContextualChunk(chunk.context, chunk.text, chunk.blobType,
-                                   chunk.originalBlobId, chunk.metadata, embedding);
+        chunk =
+                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
         chunks.add(chunk);
       }
     }
 
     // Vectorize each MD&A paragraph with referenced footnotes
     for (TextBlob mdaPara : mdaParagraphs) {
-      ContextualChunk chunk = vectorizeMDAParagraph(mdaPara, references, footnotes, 
-                                                    facts, tokenManager);
+      ContextualChunk chunk =
+                                                    vectorizeMDAParagraph(mdaPara, references, footnotes, facts, tokenManager);
       if (chunk != null) {
         // Generate real semantic embedding using configured provider
         double[] embedding = generateRealEmbedding(chunk.text);
-        chunk = new ContextualChunk(chunk.context, chunk.text, chunk.blobType,
-                                   chunk.originalBlobId, chunk.metadata, embedding);
+        chunk =
+                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
         chunks.add(chunk);
       }
     }
-    
+
     // Vectorize each earnings paragraph with referenced footnotes
     for (TextBlob earningsBlob : earningsBlobs) {
-      ContextualChunk chunk = vectorizeEarningsParagraph(earningsBlob, references, footnotes, 
-                                                         facts, tokenManager);
+      ContextualChunk chunk =
+                                                         vectorizeEarningsParagraph(earningsBlob, references, footnotes, facts, tokenManager);
       if (chunk != null) {
         // Generate real semantic embedding using configured provider
         double[] embedding = generateRealEmbedding(chunk.text);
-        chunk = new ContextualChunk(chunk.context, chunk.text, chunk.blobType,
-                                   chunk.originalBlobId, chunk.metadata, embedding);
+        chunk =
+                                   new ContextualChunk(chunk.context, chunk.text, chunk.blobType, chunk.originalBlobId, chunk.metadata, embedding);
         chunks.add(chunk);
       }
     }
@@ -556,11 +559,11 @@ public class SecTextVectorizer {
 
     StringBuilder enriched = new StringBuilder();
     Map<String, Object> metadata = new HashMap<>();
-    
+
     // Start with main footnote text
     enriched.append("[MAIN:FOOTNOTE:").append(footnote.id).append("] ");
     enriched.append(footnote.text);
-    
+
     int tokensUsed = tokenManager.estimateTokens(enriched.toString());
     int remainingBudget = SecTokenManager.MAX_TOKENS - tokensUsed;
 
@@ -578,19 +581,19 @@ public class SecTextVectorizer {
     if (referencedBy != null && !referencedBy.isEmpty() && remainingBudget > 200) {
       metadata.put("referenced_by", referencedBy);
       enriched.append("\n[REFERENCED_BY:");
-      
+
       // Add first few referencing paragraphs
       int added = 0;
       for (String refId : referencedBy) {
         if (added >= 3 || remainingBudget < 200) break;
-        
+
         // Find the MD&A paragraph
         TextBlob refPara = findBlobById(mdaParagraphs, refId);
         if (refPara != null) {
           String excerpt = extractRelevantSentence(refPara.text, footnote.id);
-          String refText = String.format("\n  %s:%s: %s", 
-              refPara.parentSection, refId, excerpt);
-          
+          String refText =
+              String.format("\n  %s:%s: %s", refPara.parentSection, refId, excerpt);
+
           int refTokens = tokenManager.estimateTokens(refText);
           if (refTokens < remainingBudget) {
             enriched.append(refText);
@@ -618,7 +621,8 @@ public class SecTextVectorizer {
     // Add metadata about enrichment
     metadata.put("tokens_used", SecTokenManager.MAX_TOKENS - remainingBudget);
     metadata.put("token_budget", SecTokenManager.MAX_TOKENS);
-    enriched.append(String.format("\n[ENRICHMENT_META tokens=%d/%d]", 
+    enriched.append(
+        String.format("\n[ENRICHMENT_META tokens=%d/%d]",
         SecTokenManager.MAX_TOKENS - remainingBudget, SecTokenManager.MAX_TOKENS));
 
     return new ContextualChunk(
@@ -626,8 +630,7 @@ public class SecTextVectorizer {
         enriched.toString(),
         "footnote",
         footnote.id,
-        metadata
-    );
+        metadata);
   }
 
   /**
@@ -642,11 +645,11 @@ public class SecTextVectorizer {
 
     StringBuilder enriched = new StringBuilder();
     Map<String, Object> metadata = new HashMap<>();
-    
+
     // Start with main paragraph text
     enriched.append("[MAIN:MDA:").append(mdaPara.id).append("] ");
     enriched.append(mdaPara.text);
-    
+
     int tokensUsed = tokenManager.estimateTokens(enriched.toString());
     int remainingBudget = SecTokenManager.MAX_TOKENS - tokensUsed;
 
@@ -657,7 +660,7 @@ public class SecTextVectorizer {
         hierarchy += " > " + mdaPara.subsection;
       }
       hierarchy += "]";
-      
+
       if (tokenManager.estimateTokens(hierarchy) < remainingBudget * 0.1) {
         enriched.append(hierarchy);
         remainingBudget -= tokenManager.estimateTokens(hierarchy);
@@ -669,17 +672,17 @@ public class SecTextVectorizer {
     if (!footnotesReferenced.isEmpty() && remainingBudget > 300) {
       metadata.put("references_footnotes", footnotesReferenced);
       enriched.append("\n[REFERENCED_FOOTNOTES:");
-      
+
       for (String fnId : footnotesReferenced) {
         if (remainingBudget < 200) break;
-        
+
         TextBlob footnote = findBlobById(footnotes, fnId);
         if (footnote != null) {
           // Add first paragraph or up to 500 tokens of footnote
-          String excerpt = tokenManager.getSmartExcerpt(footnote.text, 
-              Math.min(500, remainingBudget - 100));
+          String excerpt =
+              tokenManager.getSmartExcerpt(footnote.text, Math.min(500, remainingBudget - 100));
           String fnText = String.format("\n  %s: %s", fnId, excerpt);
-          
+
           int fnTokens = tokenManager.estimateTokens(fnText);
           if (fnTokens < remainingBudget) {
             enriched.append(fnText);
@@ -705,7 +708,8 @@ public class SecTextVectorizer {
 
     // Add metadata
     metadata.put("tokens_used", SecTokenManager.MAX_TOKENS - remainingBudget);
-    enriched.append(String.format("\n[ENRICHMENT_META tokens=%d/%d]", 
+    enriched.append(
+        String.format("\n[ENRICHMENT_META tokens=%d/%d]",
         SecTokenManager.MAX_TOKENS - remainingBudget, SecTokenManager.MAX_TOKENS));
 
     return new ContextualChunk(
@@ -713,8 +717,7 @@ public class SecTextVectorizer {
         enriched.toString(),
         "mda_paragraph",
         mdaPara.id,
-        metadata
-    );
+        metadata);
   }
 
   /**
@@ -729,22 +732,22 @@ public class SecTextVectorizer {
 
     StringBuilder enriched = new StringBuilder();
     Map<String, Object> metadata = new HashMap<>();
-    
+
     // Start with main earnings paragraph text
     enriched.append("[MAIN:EARNINGS:").append(earningsBlob.id).append("] ");
     enriched.append(earningsBlob.text);
-    
+
     int tokensUsed = tokenManager.estimateTokens(enriched.toString());
     int remainingBudget = SecTokenManager.MAX_TOKENS - tokensUsed;
 
     // Add earnings call context (speaker info and section)
     if (earningsBlob.attributes != null) {
       StringBuilder contextInfo = new StringBuilder();
-      
+
       String speakerName = earningsBlob.attributes.get("speaker_name");
       String speakerRole = earningsBlob.attributes.get("speaker_role");
       String sectionType = earningsBlob.attributes.get("section_type");
-      
+
       contextInfo.append("\n[CONTEXT:");
       if (speakerName != null && !speakerName.isEmpty()) {
         contextInfo.append(" SPEAKER:").append(speakerName);
@@ -756,7 +759,7 @@ public class SecTextVectorizer {
         contextInfo.append(" SECTION:").append(sectionType);
       }
       contextInfo.append("]");
-      
+
       String context = contextInfo.toString();
       if (tokenManager.estimateTokens(context) < remainingBudget * 0.1) {
         enriched.append(context);
@@ -771,7 +774,7 @@ public class SecTextVectorizer {
         hierarchy += " > " + earningsBlob.subsection;
       }
       hierarchy += "]";
-      
+
       if (tokenManager.estimateTokens(hierarchy) < remainingBudget * 0.1) {
         enriched.append(hierarchy);
         remainingBudget -= tokenManager.estimateTokens(hierarchy);
@@ -783,17 +786,17 @@ public class SecTextVectorizer {
     if (!footnotesReferenced.isEmpty() && remainingBudget > 300) {
       metadata.put("references_footnotes", footnotesReferenced);
       enriched.append("\n[REFERENCED_FOOTNOTES:");
-      
+
       for (String fnId : footnotesReferenced) {
         if (remainingBudget < 200) break;
-        
+
         TextBlob footnote = findBlobById(footnotes, fnId);
         if (footnote != null) {
           // Add excerpt of footnote
-          String excerpt = tokenManager.getSmartExcerpt(footnote.text, 
-              Math.min(300, remainingBudget - 100));
+          String excerpt =
+              tokenManager.getSmartExcerpt(footnote.text, Math.min(300, remainingBudget - 100));
           String fnText = String.format("\n  %s: %s", fnId, excerpt);
-          
+
           int fnTokens = tokenManager.estimateTokens(fnText);
           if (fnTokens < remainingBudget) {
             enriched.append(fnText);
@@ -821,7 +824,7 @@ public class SecTextVectorizer {
     metadata.put("tokens_used", SecTokenManager.MAX_TOKENS - remainingBudget);
     metadata.put("original_text", earningsBlob.text);
     metadata.put("parent_section", earningsBlob.parentSection);
-    
+
     // Include speaker information in metadata
     if (earningsBlob.attributes != null) {
       String speakerName = earningsBlob.attributes.get("speaker_name");
@@ -829,8 +832,9 @@ public class SecTextVectorizer {
       if (speakerName != null) metadata.put("speaker_name", speakerName);
       if (speakerRole != null) metadata.put("speaker_role", speakerRole);
     }
-    
-    enriched.append(String.format("\n[ENRICHMENT_META tokens=%d/%d]", 
+
+    enriched.append(
+        String.format("\n[ENRICHMENT_META tokens=%d/%d]",
         SecTokenManager.MAX_TOKENS - remainingBudget, SecTokenManager.MAX_TOKENS));
 
     return new ContextualChunk(
@@ -838,8 +842,7 @@ public class SecTextVectorizer {
         enriched.toString(),
         "earnings_paragraph",
         earningsBlob.id,
-        metadata
-    );
+        metadata);
   }
 
   /**
@@ -848,7 +851,7 @@ public class SecTextVectorizer {
   private List<String> extractFinancialConcepts(String text) {
     List<String> concepts = new ArrayList<>();
     String lowerText = text.toLowerCase();
-    
+
     // Check against all known concepts
     for (List<String> group : CONCEPT_GROUPS.values()) {
       for (String concept : group) {
@@ -858,7 +861,7 @@ public class SecTextVectorizer {
         }
       }
     }
-    
+
     return concepts;
   }
 
@@ -867,14 +870,14 @@ public class SecTextVectorizer {
    */
   private List<String> extractFootnoteReferences(String text) {
     List<String> references = new ArrayList<>();
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-        "(?:Note|Footnote)\\s+(\\d+[A-Za-z]?)", java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Pattern pattern =
+        java.util.regex.Pattern.compile("(?:Note|Footnote)\\s+(\\d+[A-Za-z]?)", java.util.regex.Pattern.CASE_INSENSITIVE);
     java.util.regex.Matcher matcher = pattern.matcher(text);
-    
+
     while (matcher.find()) {
       references.add("footnote_" + matcher.group(1));
     }
-    
+
     return references;
   }
 
@@ -884,17 +887,17 @@ public class SecTextVectorizer {
   private String extractRelevantSentence(String text, String itemId) {
     String[] sentences = text.split("(?<=[.!?])\\s+");
     String searchTerm = itemId.replace("footnote_", "Note ");
-    
+
     for (String sentence : sentences) {
       if (sentence.toLowerCase().contains(searchTerm.toLowerCase())) {
-        return sentence.length() > 200 ? 
+        return sentence.length() > 200 ?
             sentence.substring(0, 197) + "..." : sentence;
       }
     }
-    
+
     // Return first sentence if no specific reference found
-    return sentences.length > 0 ? 
-        (sentences[0].length() > 200 ? sentences[0].substring(0, 197) + "..." : sentences[0]) 
+    return sentences.length > 0 ?
+        (sentences[0].length() > 200 ? sentences[0].substring(0, 197) + "..." : sentences[0])
         : text.substring(0, Math.min(200, text.length()));
   }
 
@@ -909,7 +912,7 @@ public class SecTextVectorizer {
     }
     return null;
   }
-  
+
   /**
    * Generate real semantic embedding using configured provider.
    */
@@ -928,34 +931,34 @@ public class SecTextVectorizer {
     if (text == null || text.isEmpty()) {
       return new double[embeddingDimension];
     }
-    
+
     double[] embedding = new double[embeddingDimension];
-    
+
     try {
       // Use SHA-256 to create a deterministic hash of the text
       MessageDigest md = MessageDigest.getInstance("SHA-256");
       byte[] hashBytes = md.digest(text.getBytes(StandardCharsets.UTF_8));
-      
+
       // Create a deterministic random generator from the hash
       long seed = 0;
       for (int i = 0; i < Math.min(8, hashBytes.length); i++) {
         seed = (seed << 8) | (hashBytes[i] & 0xFF);
       }
       Random random = new Random(seed);
-      
+
       // Generate embedding based on text features
       String[] tokens = text.toLowerCase().split("\\s+");
-      
+
       // Initialize with random values based on text hash
       for (int i = 0; i < embeddingDimension; i++) {
         embedding[i] = random.nextGaussian() * 0.1;
       }
-      
+
       // Add semantic features based on financial terms
       for (String token : tokens) {
         int tokenHash = token.hashCode();
         int index = Math.abs(tokenHash) % embeddingDimension;
-        
+
         // Boost dimensions for important financial terms
         if (isFinancialTerm(token)) {
           embedding[index] += 0.5;
@@ -967,20 +970,20 @@ public class SecTextVectorizer {
           embedding[index] += 0.1;
         }
       }
-      
+
       // Normalize the vector to unit length
       double magnitude = 0;
       for (double val : embedding) {
         magnitude += val * val;
       }
       magnitude = Math.sqrt(magnitude);
-      
+
       if (magnitude > 0) {
         for (int i = 0; i < embeddingDimension; i++) {
           embedding[i] /= magnitude;
         }
       }
-      
+
     } catch (NoSuchAlgorithmException e) {
       // Fallback to simple hash-based embedding
       Random random = new Random(text.hashCode());
@@ -988,7 +991,7 @@ public class SecTextVectorizer {
         embedding[i] = random.nextGaussian();
       }
     }
-    
+
     return embedding;
   }
 
@@ -1017,14 +1020,14 @@ public class SecTextVectorizer {
       throw new RuntimeException("Failed to create default embedding provider", e);
     }
   }
-  
+
   /**
    * Check if a token is a financial term.
    */
   private boolean isFinancialTerm(String token) {
     return FINANCIAL_TERMS.contains(token.toLowerCase());
   }
-  
+
   /**
    * Check if a token is numeric.
    */
@@ -1038,7 +1041,7 @@ public class SecTextVectorizer {
       return false;
     }
   }
-  
+
   /**
    * Extract real MD&A text from HTML filing using enhanced parsing.
    * Uses similar approach to XbrlToParquetConverter.extractMDAFromHTML().
@@ -1046,7 +1049,7 @@ public class SecTextVectorizer {
   private String extractRealMDAText(Document xbrlDoc) {
     // MD&A extraction requires HTML parsing for modern filings
     // XBRL documents typically don't contain full MD&A text
-    // This is a simplified version - full implementation would require 
+    // This is a simplified version - full implementation would require
     // access to associated HTML filing
     return null; // Placeholder - real implementation in XbrlToParquetConverter
   }
@@ -1060,14 +1063,14 @@ public class SecTextVectorizer {
   }
 
   // Common financial terms for semantic enhancement
-  private static final Set<String> FINANCIAL_TERMS = new HashSet<>(Arrays.asList(
-    "revenue", "income", "profit", "loss", "earnings", "ebitda", "margin",
+  private static final Set<String> FINANCIAL_TERMS =
+    new HashSet<>(
+        Arrays.asList("revenue", "income", "profit", "loss", "earnings", "ebitda", "margin",
     "cash", "debt", "equity", "asset", "liability", "expense", "cost",
     "investment", "dividend", "share", "stock", "bond", "derivative",
     "goodwill", "amortization", "depreciation", "capex", "opex",
     "receivable", "payable", "inventory", "tax", "interest", "principal",
     "acquisition", "merger", "restructuring", "impairment", "provision",
     "segment", "subsidiary", "consolidated", "gaap", "non-gaap",
-    "quarter", "fiscal", "year", "annual", "quarterly", "ytd", "qoq", "yoy"
-  ));
+    "quarter", "fiscal", "year", "annual", "quarterly", "ytd", "qoq", "yoy"));
 }

@@ -18,22 +18,22 @@ package org.apache.calcite.adapter.govdata.sec;
 
 /**
  * Manages token budgets for text enrichment in vectorization.
- * 
+ *
  * Provides simple token estimation and smart text trimming to ensure
  * enriched text stays within model token limits while preserving
  * the most important information.
  */
 public class SecTokenManager {
-  
+
   // Maximum tokens for most embedding models (e.g., OpenAI ada-002)
   public static final int MAX_TOKENS = 8192;
-  
+
   // Reserve tokens for main text (50% of budget)
   public static final int MAIN_TEXT_RESERVE = 4096;
-  
+
   // Approximate tokens per character (conservative estimate)
   private static final double CHARS_PER_TOKEN = 4.0;
-  
+
   /**
    * Estimate token count for a text string.
    * Uses simple approximation: 1 token ≈ 4 characters.
@@ -45,10 +45,10 @@ public class SecTokenManager {
     // Conservative estimate to avoid exceeding limits
     return (int) Math.ceil(text.length() / CHARS_PER_TOKEN);
   }
-  
+
   /**
    * Get a smart excerpt that tries to preserve complete sentences.
-   * 
+   *
    * @param text The text to excerpt
    * @param maxTokens Maximum tokens for the excerpt
    * @return Excerpted text that fits within token budget
@@ -57,17 +57,17 @@ public class SecTokenManager {
     if (text == null || text.isEmpty()) {
       return "";
     }
-    
+
     int currentTokens = estimateTokens(text);
     if (currentTokens <= maxTokens) {
       return text;
     }
-    
+
     // Split into sentences
     String[] sentences = text.split("(?<=[.!?])\\s+");
     StringBuilder excerpt = new StringBuilder();
     int tokensUsed = 0;
-    
+
     for (String sentence : sentences) {
       int sentenceTokens = estimateTokens(sentence);
       if (tokensUsed + sentenceTokens > maxTokens) {
@@ -81,14 +81,14 @@ public class SecTokenManager {
       excerpt.append(sentence).append(" ");
       tokensUsed += sentenceTokens;
     }
-    
+
     String result = excerpt.toString().trim();
     if (result.length() < text.length()) {
       result += " [...]";
     }
     return result;
   }
-  
+
   /**
    * Intelligently trim main text if it exceeds the reserve budget.
    * Preserves beginning and end, summarizes middle.
@@ -97,28 +97,28 @@ public class SecTokenManager {
     if (text == null || text.isEmpty()) {
       return "";
     }
-    
+
     int currentTokens = estimateTokens(text);
     if (currentTokens <= maxTokens) {
       return text;
     }
-    
+
     String[] sentences = text.split("(?<=[.!?])\\s+");
     int totalSentences = sentences.length;
-    
+
     if (totalSentences <= 3) {
       // Too few sentences, just truncate
       return getSmartExcerpt(text, maxTokens);
     }
-    
+
     // Keep first 30% and last 20% of sentences
     int keepStart = Math.max(1, (int)(totalSentences * 0.3));
     int keepEnd = Math.max(1, (int)(totalSentences * 0.2));
-    
+
     StringBuilder result = new StringBuilder();
     int tokensUsed = 0;
     int targetTokens = maxTokens - 50; // Reserve space for trimming marker
-    
+
     // Add beginning sentences
     for (int i = 0; i < keepStart && i < sentences.length; i++) {
       String sentence = sentences[i];
@@ -129,31 +129,31 @@ public class SecTokenManager {
       result.append(sentence).append(" ");
       tokensUsed += sentTokens;
     }
-    
+
     // Add trimming marker
     int trimmedSentences = totalSentences - keepStart - keepEnd;
     String marker = String.format("[... %d sentences trimmed ...] ", trimmedSentences);
     result.append(marker);
     tokensUsed += estimateTokens(marker);
-    
+
     // Add ending sentences
     StringBuilder ending = new StringBuilder();
     for (int i = Math.max(keepStart, totalSentences - keepEnd); i < totalSentences; i++) {
       ending.append(sentences[i]).append(" ");
     }
-    
+
     String endingText = ending.toString().trim();
     int endingTokens = estimateTokens(endingText);
-    
+
     if (tokensUsed + endingTokens > maxTokens) {
       // Ending is too long, truncate it
       endingText = getSmartExcerpt(endingText, maxTokens - tokensUsed);
     }
-    
+
     result.append(endingText);
     return result.toString().trim();
   }
-  
+
   /**
    * Allocate token budget across different relationship types.
    */
@@ -163,7 +163,7 @@ public class SecTokenManager {
     public final int referencesBudget;
     public final int metricsBudget;
     public final int totalBudget;
-    
+
     public TokenAllocation() {
       this.totalBudget = MAX_TOKENS;
       this.mainTextBudget = MAIN_TEXT_RESERVE;
@@ -171,7 +171,7 @@ public class SecTokenManager {
       this.referencesBudget = 2500;    // ~30% for references
       this.metricsBudget = 500;        // ~10% for metrics
     }
-    
+
     public TokenAllocation(int total, double mainPercent, double parentPercent,
                            double referencesPercent, double metricsPercent) {
       this.totalBudget = total;
@@ -180,12 +180,12 @@ public class SecTokenManager {
       this.referencesBudget = (int)(total * referencesPercent);
       this.metricsBudget = (int)(total * metricsPercent);
     }
-    
+
     public int getRemainingBudget(int used) {
       return Math.max(0, totalBudget - used);
     }
   }
-  
+
   /**
    * Extract first N sentences from text.
    */
@@ -193,24 +193,24 @@ public class SecTokenManager {
     if (text == null || text.isEmpty() || numSentences <= 0) {
       return "";
     }
-    
+
     String[] sentences = text.split("(?<=[.!?])\\s+");
     StringBuilder result = new StringBuilder();
-    
+
     for (int i = 0; i < Math.min(numSentences, sentences.length); i++) {
       result.append(sentences[i]).append(" ");
     }
-    
+
     return result.toString().trim();
   }
-  
+
   /**
    * Check if text is likely to need trimming.
    */
   public boolean needsTrimming(String text) {
     return estimateTokens(text) > MAIN_TEXT_RESERVE;
   }
-  
+
   /**
    * Get a summary of token usage.
    */
