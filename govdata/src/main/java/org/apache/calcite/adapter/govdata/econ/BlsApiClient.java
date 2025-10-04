@@ -16,12 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -30,9 +30,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Client for accessing Bureau of Labor Statistics (BLS) API.
@@ -44,17 +44,17 @@ public class BlsApiClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(BlsApiClient.class);
   private static final String BLS_API_BASE = "https://api.bls.gov/publicAPI/v2/";
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  
+
   private final String apiKey;
   private final HttpClient httpClient;
-  
+
   public BlsApiClient(String apiKey) {
     this.apiKey = apiKey;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
   }
-  
+
   /**
    * Fetches time series data from BLS API.
    *
@@ -63,79 +63,79 @@ public class BlsApiClient {
    * @param endYear End year for data
    * @return List of data points with date and value
    */
-  public List<Map<String, Object>> fetchTimeSeries(String seriesId, int startYear, int endYear) 
+  public List<Map<String, Object>> fetchTimeSeries(String seriesId, int startYear, int endYear)
       throws IOException, InterruptedException {
-    
+
     ObjectNode requestBody = MAPPER.createObjectNode();
     ArrayNode seriesArray = MAPPER.createArrayNode();
     seriesArray.add(seriesId);
     requestBody.set("seriesid", seriesArray);
     requestBody.put("startyear", String.valueOf(startYear));
     requestBody.put("endyear", String.valueOf(endYear));
-    
+
     if (apiKey != null && !apiKey.isEmpty()) {
       requestBody.put("registrationkey", apiKey);
     }
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(BLS_API_BASE + "timeseries/data/"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("BLS API request failed with status: " + response.statusCode());
     }
-    
+
     return parseTimeSeriesResponse(response.body(), seriesId);
   }
-  
+
   /**
    * Fetches multiple series in a single request (more efficient).
    */
   public Map<String, List<Map<String, Object>>> fetchMultipleSeries(
-      List<String> seriesIds, int startYear, int endYear) 
+      List<String> seriesIds, int startYear, int endYear)
       throws IOException, InterruptedException {
-    
+
     ObjectNode requestBody = MAPPER.createObjectNode();
     ArrayNode seriesArray = MAPPER.createArrayNode();
     seriesIds.forEach(seriesArray::add);
     requestBody.set("seriesid", seriesArray);
     requestBody.put("startyear", String.valueOf(startYear));
     requestBody.put("endyear", String.valueOf(endYear));
-    
+
     if (apiKey != null && !apiKey.isEmpty()) {
       requestBody.put("registrationkey", apiKey);
     }
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(BLS_API_BASE + "timeseries/data/"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
       throw new IOException("BLS API request failed with status: " + response.statusCode());
     }
-    
+
     return parseMultiSeriesResponse(response.body());
   }
-  
-  private List<Map<String, Object>> parseTimeSeriesResponse(String json, String seriesId) 
+
+  private List<Map<String, Object>> parseTimeSeriesResponse(String json, String seriesId)
       throws IOException {
     List<Map<String, Object>> results = new ArrayList<>();
     ObjectNode root = (ObjectNode) MAPPER.readTree(json);
-    
+
     if (!"REQUEST_SUCCEEDED".equals(root.get("status").asText())) {
       throw new IOException("BLS API error: " + root.get("message").asText());
     }
-    
+
     ArrayNode series = (ArrayNode) root.get("Results").get("series");
     if (series != null && series.size() > 0) {
       ArrayNode data = (ArrayNode) series.get(0).get("data");
@@ -146,33 +146,33 @@ public class BlsApiClient {
         row.put("period", node.get("period").asText());
         row.put("value", node.get("value").asDouble());
         row.put("periodName", node.get("periodName").asText());
-        
+
         // Calculate date from year and period
         String date = calculateDate(node.get("year").asText(), node.get("period").asText());
         row.put("date", date);
-        
+
         results.add(row);
       });
     }
-    
+
     return results;
   }
-  
-  private Map<String, List<Map<String, Object>>> parseMultiSeriesResponse(String json) 
+
+  private Map<String, List<Map<String, Object>>> parseMultiSeriesResponse(String json)
       throws IOException {
     Map<String, List<Map<String, Object>>> results = new HashMap<>();
     ObjectNode root = (ObjectNode) MAPPER.readTree(json);
-    
+
     if (!"REQUEST_SUCCEEDED".equals(root.get("status").asText())) {
       throw new IOException("BLS API error: " + root.get("message").asText());
     }
-    
+
     ArrayNode series = (ArrayNode) root.get("Results").get("series");
     if (series != null) {
       series.forEach(seriesNode -> {
         String seriesId = seriesNode.get("seriesID").asText();
         List<Map<String, Object>> seriesData = new ArrayList<>();
-        
+
         ArrayNode data = (ArrayNode) seriesNode.get("data");
         data.forEach(node -> {
           Map<String, Object> row = new HashMap<>();
@@ -181,20 +181,20 @@ public class BlsApiClient {
           row.put("period", node.get("period").asText());
           row.put("value", node.get("value").asDouble());
           row.put("periodName", node.get("periodName").asText());
-          
+
           String date = calculateDate(node.get("year").asText(), node.get("period").asText());
           row.put("date", date);
-          
+
           seriesData.add(row);
         });
-        
+
         results.put(seriesId, seriesData);
       });
     }
-    
+
     return results;
   }
-  
+
   private String calculateDate(String year, String period) {
     // Convert BLS period codes to dates
     // M01-M12 = months, Q01-Q04 = quarters, A01 = annual
@@ -210,7 +210,7 @@ public class BlsApiClient {
     }
     return year + "-01-01"; // Default to January 1st
   }
-  
+
   /**
    * Common BLS series IDs for easy reference.
    */

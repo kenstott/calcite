@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -27,21 +29,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -287,8 +283,8 @@ public class BeaDataDownloader {
     List<GdpComponent> components = new ArrayList<>();
 
     // Download GDP components (Table 1)
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON",
-        apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, year);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, year);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -411,10 +407,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA GDP components for {}-{}", startYear, endYear);
 
-    // Create local cache directory
-    File outputDir = new File(cacheDir,
-        String.format("source=econ/type=gdp_components/year_range=%d_%d", startYear, endYear));
-    outputDir.mkdirs();
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet",
+        startYear, endYear);
 
     List<GdpComponent> components = new ArrayList<>();
 
@@ -426,8 +421,8 @@ public class BeaDataDownloader {
     String yearParam = String.join(",", years);
 
     // Download GDP components (Table 1)
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, yearParam);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, yearParam);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -479,8 +474,8 @@ public class BeaDataDownloader {
     // Also download personal consumption details
     Thread.sleep(100); // Rate limiting
 
-    params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.NIPA, NipaTables.PERSONAL_CONSUMPTION, yearParam);
+    params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.PERSONAL_CONSUMPTION, yearParam);
 
     url = BEA_API_BASE + "?" + params;
     request = HttpRequest.newBuilder()
@@ -526,13 +521,10 @@ public class BeaDataDownloader {
     }
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet", startYear, endYear));
-    File parquetFile = new File(parquetFilePath);
-    writeGdpComponentsParquet(components, parquetFile);
+    writeGdpComponentsParquet(components, relativePath);
 
-    LOGGER.debug("GDP components saved to: {} ({} records)", parquetFilePath, components.size());
-    return parquetFile;
+    LOGGER.debug("GDP components saved to: {} ({} records)", relativePath, components.size());
+    return new File(relativePath); // For return value compatibility
   }
 
   /**
@@ -575,8 +567,8 @@ public class BeaDataDownloader {
     for (String lineCode : lineCodes) {
       LOGGER.debug("Downloading regional income data for year {} LineCode {}", year, lineCode);
 
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON",
-          apiKey, Datasets.REGIONAL, lineCode, year);
+      String params =
+          String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON", apiKey, Datasets.REGIONAL, lineCode, year);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -730,9 +722,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA regional income data for {}-{}", startYear, endYear);
 
-    String outputDirPath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=regional_income/year_range=%d_%d", startYear, endYear));
-    // Directory creation is handled by StorageProvider when writing files
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=regional_income/year_range=%d_%d/regional_income.parquet",
+        startYear, endYear);
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
@@ -745,8 +737,8 @@ public class BeaDataDownloader {
 
     // Download state personal income data
     // LineCode 1 = Total Personal Income, 2 = Population, 3 = Per Capita Income
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=1,2,3&GeoFips=STATE&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.REGIONAL, yearParam);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAINC1&LineCode=1,2,3&GeoFips=STATE&Year=%s&ResultFormat=JSON", apiKey, Datasets.REGIONAL, yearParam);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -804,11 +796,9 @@ public class BeaDataDownloader {
     }
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "regional_income.parquet");
-    writeRegionalIncomeParquet(incomeData, parquetFilePath);
-    File parquetFile = new File(parquetFilePath);
+    writeRegionalIncomeParquet(incomeData, relativePath);
 
-    LOGGER.debug("Regional income data saved to: {} ({} records)", parquetFilePath, incomeData.size());
+    LOGGER.debug("Regional income data saved to: {} ({} records)", relativePath, incomeData.size());
   }
 
   /**
@@ -845,8 +835,8 @@ public class BeaDataDownloader {
     List<TradeStatistic> tradeData = new ArrayList<>();
 
     // Download exports and imports (Table 125) for single year
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON",
-        apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, year);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, year);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -947,9 +937,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA trade statistics for {}-{}", startYear, endYear);
 
-    String outputDirPath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=trade_statistics/year_range=%d_%d", startYear, endYear));
-    // Directory creation is handled by StorageProvider when writing files
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=trade_statistics/year_range=%d_%d/trade_statistics.parquet",
+        startYear, endYear);
 
     List<TradeStatistic> tradeData = new ArrayList<>();
 
@@ -961,8 +951,8 @@ public class BeaDataDownloader {
     String yearParam = String.join(",", years);
 
     // Download exports and imports (Table 125)
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, yearParam);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%s&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.EXPORTS_IMPORTS, yearParam);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -1017,10 +1007,9 @@ public class BeaDataDownloader {
     calculateTradeBalances(tradeData);
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "trade_statistics.parquet");
-    writeTradeStatisticsParquet(tradeData, parquetFilePath);
+    writeTradeStatisticsParquet(tradeData, relativePath);
 
-    LOGGER.debug("Trade statistics saved to: {} ({} records)", parquetFilePath, tradeData.size());
+    LOGGER.debug("Trade statistics saved to: {} ({} records)", relativePath, tradeData.size());
   }
 
   /**
@@ -1203,8 +1192,8 @@ public class BeaDataDownloader {
       // Rate limiting to avoid 429 errors
       Thread.sleep(500);
 
-      String params = String.format("UserID=%s&method=GetData&DataSetName=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%d&ResultFormat=JSON",
-          apiKey, Datasets.ITA, indicator, year);
+      String params =
+          String.format("UserID=%s&method=GetData&DataSetName=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%d&ResultFormat=JSON", apiKey, Datasets.ITA, indicator, year);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -1324,9 +1313,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA ITA data for {}-{}", startYear, endYear);
 
-    String outputDirPath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=ita_data/year_range=%d_%d", startYear, endYear));
-    // Directory creation is handled by StorageProvider when writing files
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=ita_data/year_range=%d_%d/ita_data.parquet",
+        startYear, endYear);
 
     List<ItaData> itaRecords = new ArrayList<>();
 
@@ -1349,8 +1338,8 @@ public class BeaDataDownloader {
     };
 
     for (String indicator : indicators) {
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%s&ResultFormat=JSON",
-          apiKey, Datasets.ITA, indicator, yearParam);
+      String params =
+          String.format("UserID=%s&method=GetData&datasetname=%s&Indicator=%s&AreaOrCountry=AllCountries&Frequency=A&Year=%s&ResultFormat=JSON", apiKey, Datasets.ITA, indicator, yearParam);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -1404,12 +1393,10 @@ public class BeaDataDownloader {
     }
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "ita_data.parquet");
-    File parquetFile = new File(parquetFilePath);
-    writeItaDataParquet(itaRecords, parquetFile);
+    writeItaDataParquet(itaRecords, relativePath);
 
-    LOGGER.debug("ITA data saved to: {} ({} records)", parquetFilePath, itaRecords.size());
-    return parquetFile;
+    LOGGER.debug("ITA data saved to: {} ({} records)", relativePath, itaRecords.size());
+    return new File(relativePath); // For return value compatibility
   }
 
   /**
@@ -1429,7 +1416,7 @@ public class BeaDataDownloader {
   }
 
   @SuppressWarnings("deprecation")
-  private void writeItaDataParquet(List<ItaData> itaRecords, File outputFile) throws IOException {
+  private void writeItaDataParquet(List<ItaData> itaRecords, String outputPath) throws IOException {
     Schema schema = SchemaBuilder.record("ItaData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -1461,8 +1448,8 @@ public class BeaDataDownloader {
     }
 
     // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "ita_data");
-    LOGGER.debug("ITA data Parquet written: {} ({} records)", outputFile.getAbsolutePath(), itaRecords.size());
+    storageProvider.writeAvroParquet(outputPath, schema, records, "ita_data");
+    LOGGER.debug("ITA data Parquet written: {} ({} records)", outputPath, itaRecords.size());
   }
 
   /**
@@ -1509,8 +1496,8 @@ public class BeaDataDownloader {
 
     // Download annual data for Table 1 (Value Added by Industry)
     for (String industry : keyIndustries) {
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%d&Industry=%s&ResultFormat=JSON",
-          apiKey, Datasets.GDP_BY_INDUSTRY, year, industry);
+      String params =
+          String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%d&Industry=%s&ResultFormat=JSON", apiKey, Datasets.GDP_BY_INDUSTRY, year, industry);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -1617,9 +1604,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA GDP by Industry data for {}-{}", startYear, endYear);
 
-    String outputDirPath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=industry_gdp/year_range=%d_%d", startYear, endYear));
-    // Directory creation is handled by StorageProvider when writing files
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=industry_gdp/year_range=%d_%d/industry_gdp.parquet",
+        startYear, endYear);
 
     List<IndustryGdpData> industryData = new ArrayList<>();
 
@@ -1656,8 +1643,8 @@ public class BeaDataDownloader {
 
     // Download annual data for Table 1 (Value Added by Industry)
     for (String industry : keyIndustries) {
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%s&Industry=%s&ResultFormat=JSON",
-          apiKey, Datasets.GDP_BY_INDUSTRY, yearParam, industry);
+      String params =
+          String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=A&Year=%s&Industry=%s&ResultFormat=JSON", apiKey, Datasets.GDP_BY_INDUSTRY, yearParam, industry);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -1724,8 +1711,8 @@ public class BeaDataDownloader {
     for (int year = quarterlyStartYear; year <= endYear; year++) {
       for (String quarter : new String[]{"Q1", "Q2", "Q3", "Q4"}) {
         // Download quarterly data for manufacturing sector as example
-        String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=Q&Year=%d&Quarter=%s&Industry=31G&ResultFormat=JSON",
-            apiKey, Datasets.GDP_BY_INDUSTRY, year, quarter);
+        String params =
+            String.format("UserID=%s&method=GetData&datasetname=%s&TableID=1&Frequency=Q&Year=%d&Quarter=%s&Industry=31G&ResultFormat=JSON", apiKey, Datasets.GDP_BY_INDUSTRY, year, quarter);
 
         String url = BEA_API_BASE + "?" + params;
 
@@ -1779,16 +1766,14 @@ public class BeaDataDownloader {
     }
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "industry_gdp.parquet");
-    File parquetFile = new File(parquetFilePath);
-    writeIndustryGdpParquet(industryData, parquetFile);
+    writeIndustryGdpParquet(industryData, relativePath);
 
-    LOGGER.debug("Industry GDP data saved to: {} ({} records)", parquetFilePath, industryData.size());
-    return parquetFile;
+    LOGGER.debug("Industry GDP data saved to: {} ({} records)", relativePath, industryData.size());
+    return new File(relativePath); // For return value compatibility
   }
 
   @SuppressWarnings("deprecation")
-  private void writeIndustryGdpParquet(List<IndustryGdpData> industryData, File outputFile) throws IOException {
+  private void writeIndustryGdpParquet(List<IndustryGdpData> industryData, String outputPath) throws IOException {
     Schema schema = SchemaBuilder.record("IndustryGdpData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -1820,12 +1805,12 @@ public class BeaDataDownloader {
     }
 
     // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "industry_gdp");
-    LOGGER.debug("Industry GDP Parquet written: {} ({} records)", outputFile.getAbsolutePath(), industryData.size());
+    storageProvider.writeAvroParquet(outputPath, schema, records, "industry_gdp");
+    LOGGER.debug("Industry GDP Parquet written: {} ({} records)", outputPath, industryData.size());
   }
 
   @SuppressWarnings("deprecation")
-  private void writeGdpComponentsParquet(List<GdpComponent> components, File outputFile) throws IOException {
+  private void writeGdpComponentsParquet(List<GdpComponent> components, String outputPath) throws IOException {
     Schema schema = SchemaBuilder.record("GdpComponent")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -1855,8 +1840,8 @@ public class BeaDataDownloader {
     }
 
     // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputFile.getAbsolutePath(), schema, records, "gdp_components");
-    LOGGER.debug("GDP Components Parquet written: {} ({} records)", outputFile.getAbsolutePath(), components.size());
+    storageProvider.writeAvroParquet(outputPath, schema, records, "gdp_components");
+    LOGGER.debug("GDP Components Parquet written: {} ({} records)", outputPath, components.size());
   }
 
   @SuppressWarnings("deprecation")
@@ -2069,9 +2054,9 @@ public class BeaDataDownloader {
 
     LOGGER.info("Downloading BEA state GDP data for {}-{}", startYear, endYear);
 
-    String outputDirPath = storageProvider.resolvePath(cacheDir,
-        String.format("source=econ/type=state_gdp/year_range=%d_%d", startYear, endYear));
-    // Directory creation is handled by StorageProvider when writing files
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=state_gdp/year_range=%d_%d/state_gdp.parquet",
+        startYear, endYear);
 
     List<StateGdp> gdpData = new ArrayList<>();
 
@@ -2085,8 +2070,8 @@ public class BeaDataDownloader {
     // Download state GDP data
     // TableName=SAGDP1 for state annual GDP summary
     // LineCode=1 for Real GDP
-    String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.REGIONAL, yearParam);
+    String params =
+        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON", apiKey, Datasets.REGIONAL, yearParam);
 
     String url = BEA_API_BASE + "?" + params;
 
@@ -2169,11 +2154,9 @@ public class BeaDataDownloader {
     }
 
     // Convert to Parquet
-    String parquetFilePath = storageProvider.resolvePath(outputDirPath, "state_gdp.parquet");
-    writeStateGdpParquet(gdpData, parquetFilePath);
-    File parquetFile = new File(parquetFilePath);
+    writeStateGdpParquet(gdpData, relativePath);
 
-    LOGGER.debug("State GDP data saved to: {} ({} records)", parquetFilePath, gdpData.size());
+    LOGGER.debug("State GDP data saved to: {} ({} records)", relativePath, gdpData.size());
   }
 
   /**
@@ -2222,8 +2205,8 @@ public class BeaDataDownloader {
 
       LOGGER.debug("Downloading state GDP data for year {} LineCode {}", year, lineCode);
 
-      String params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON",
-          apiKey, Datasets.REGIONAL, lineCode, year);
+      String params =
+          String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON", apiKey, Datasets.REGIONAL, lineCode, year);
 
       String url = BEA_API_BASE + "?" + params;
 
@@ -2669,7 +2652,7 @@ public class BeaDataDownloader {
     }
 
     // Always write the Parquet file, even if empty - this ensures the table is discoverable
-    writeItaDataParquet(records, targetFilePath);
+    writeItaDataParquetFromMaps(records, targetFilePath);
   }
 
   private List<Map<String, Object>> parseItaDataJson(String jsonContent) throws IOException {
@@ -2718,7 +2701,7 @@ public class BeaDataDownloader {
   }
 
   @SuppressWarnings("deprecation")
-  private void writeItaDataParquet(List<Map<String, Object>> records, String outputFile) throws IOException {
+  private void writeItaDataParquetFromMaps(List<Map<String, Object>> records, String outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("ItaData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
@@ -2786,7 +2769,7 @@ public class BeaDataDownloader {
       return;
     }
 
-    writeIndustryGdpParquet(records, targetFilePath);
+    writeIndustryGdpParquetFromMaps(records, targetFilePath);
   }
 
   private List<Map<String, Object>> parseIndustryGdpJson(String jsonContent) throws IOException {
@@ -2837,7 +2820,7 @@ public class BeaDataDownloader {
   }
 
   @SuppressWarnings("deprecation")
-  private void writeIndustryGdpParquet(List<Map<String, Object>> records, String outputFile) throws IOException {
+  private void writeIndustryGdpParquetFromMaps(List<Map<String, Object>> records, String outputFile) throws IOException {
     Schema schema = SchemaBuilder.record("IndustryGdp")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()

@@ -151,8 +151,8 @@ public class FredSeriesPartitionAnalyzer {
                   group.getGroupName());
     }
 
-    String reasoning = String.format("Auto-analysis: frequencies=%s, categories=%s, totalSeries=%d",
-                                   frequencies, categories, allCustomSeries.size());
+    String reasoning =
+                                   String.format("Auto-analysis: frequencies=%s, categories=%s, totalSeries=%d", frequencies, categories, allCustomSeries.size());
 
     return new PartitionAnalysis(FredSeriesGroup.PartitionStrategy.AUTO, recommendedFields, reasoning);
   }
@@ -200,8 +200,7 @@ public class FredSeriesPartitionAnalyzer {
       return reasoning;
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("PartitionAnalysis{strategy=%s, fields=%s, reason='%s'}",
                           strategy, partitionFields, reasoning);
     }

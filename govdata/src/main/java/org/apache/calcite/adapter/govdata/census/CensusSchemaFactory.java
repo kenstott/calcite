@@ -21,18 +21,12 @@ import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
 import org.apache.calcite.model.JsonTable;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,8 +94,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final String ECONOMIC_TYPE = "type=economic";  // Economic Census
   private static final String POPULATION_TYPE = "type=population";  // Population Estimates
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/census-schema.json";
   }
 
@@ -109,8 +102,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Builds the operand configuration for CENSUS schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
    */
-  @Override
-  public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
+  @Override public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
     LOGGER.info("Building CENSUS schema operand configuration");
 
     // Get cache directories from interface methods
@@ -313,8 +305,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       };
 
       for (String filename : acsFiles) {
-        String parquetPath = storageProvider.resolvePath(censusParquetDir,
-            ACS_TYPE + "/year=" + year + "/" + filename);
+        String parquetPath =
+            storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + filename);
         LOGGER.debug("Checking ACS cache file: {}", parquetPath);
         try {
           if (!storageProvider.exists(parquetPath)) {
@@ -382,8 +374,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         };
 
         for (String filename : decennialFiles) {
-          String parquetPath = storageProvider.resolvePath(censusParquetDir,
-              DECENNIAL_TYPE + "/year=" + year + "/" + filename);
+          String parquetPath =
+              storageProvider.resolvePath(censusParquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + filename);
           try {
             if (!storageProvider.exists(parquetPath)) {
               needsDecennialUpdate = true;
@@ -434,8 +426,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
           } catch (Exception e) {
             // Check if this is a "no data" error (404, dataset not available) vs actual API error
             String errorMsg = e.getMessage();
-            boolean isNoDataError = errorMsg != null && (
-                errorMsg.contains("404") ||
+            boolean isNoDataError =
+                errorMsg != null && (errorMsg.contains("404") ||
                 errorMsg.contains("not found") ||
                 errorMsg.contains("does not exist") ||
                 errorMsg.contains("No data") ||
@@ -449,8 +441,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
               String[] economicTables = {"economic_census", "county_business_patterns"};
               for (String tableName : economicTables) {
                 try {
-                  String parquetPath = storageProvider.resolvePath(censusParquetDir,
-                      ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+                  String parquetPath =
+                      storageProvider.resolvePath(censusParquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
                   createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "economic");
                 } catch (IOException ex) {
                   LOGGER.error("Failed to create zero-row file for {} year {}: {}",
@@ -481,8 +473,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         } catch (Exception e) {
           // Check if this is a "no data" error (404, dataset not available) vs actual API error
           String errorMsg = e.getMessage();
-          boolean isNoDataError = errorMsg != null && (
-              errorMsg.contains("404") ||
+          boolean isNoDataError =
+              errorMsg != null && (errorMsg.contains("404") ||
               errorMsg.contains("not found") ||
               errorMsg.contains("does not exist") ||
               errorMsg.contains("No data") ||
@@ -494,8 +486,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
             // Create zero-row file so table still exists in schema
             try {
-              String parquetPath = storageProvider.resolvePath(censusParquetDir,
-                  POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
+              String parquetPath =
+                  storageProvider.resolvePath(censusParquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
               createZeroRowParquetFile(parquetPath, "population_estimates", year, storageProvider, "population");
             } catch (IOException ex) {
               LOGGER.error("Failed to create zero-row file for population_estimates year {}: {}",
@@ -629,8 +621,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     // Convert each table type
     for (String tableName : acsTableNames) {
       try {
-        String parquetPath = storageProvider.resolvePath(parquetDir,
-            ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+        String parquetPath =
+            storageProvider.resolvePath(parquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
         convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "acs");
 
@@ -642,8 +634,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
             errorMessage.contains("insufficient data"))) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
-            String parquetPath = storageProvider.resolvePath(parquetDir,
-                ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+            String parquetPath =
+                storageProvider.resolvePath(parquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
             createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "acs");
           } catch (Exception zeroRowException) {
             LOGGER.error("Failed to create zero-row file for {} year {}: {}",
@@ -671,8 +663,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     // Convert each table type
     for (String tableName : decennialTableNames) {
       try {
-        String parquetPath = storageProvider.resolvePath(parquetDir,
-            DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+        String parquetPath =
+            storageProvider.resolvePath(parquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
         convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "decennial");
 
@@ -684,8 +676,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
             errorMessage.contains("insufficient data"))) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
-            String parquetPath = storageProvider.resolvePath(parquetDir,
-                DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+            String parquetPath =
+                storageProvider.resolvePath(parquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
             createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "decennial");
           } catch (Exception zeroRowException) {
             LOGGER.error("Failed to create zero-row file for {} year {}: {}",
@@ -789,14 +781,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     return decennialYears;
   }
 
-  @Override
-  public boolean supportsConstraints() {
+  @Override public boolean supportsConstraints() {
     // Enable constraint support for census data
     return true;
   }
 
-  @Override
-  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
@@ -831,8 +821,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       String[] economicFiles = {"economic_census.parquet", "county_business_patterns.parquet"};
 
       for (String filename : economicFiles) {
-        String parquetPath = storageProvider.resolvePath(censusParquetDir,
-            ECONOMIC_TYPE + "/year=" + year + "/" + filename);
+        String parquetPath =
+            storageProvider.resolvePath(censusParquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + filename);
         try {
           if (!storageProvider.exists(parquetPath)) {
             LOGGER.info("Missing Economic parquet file: {}", parquetPath);
@@ -863,8 +853,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private boolean checkPopulationEstimatesNeeds(List<Integer> years, String censusParquetDir,
       StorageProvider storageProvider, long currentTime, long censusDataTtlMillis) {
     for (int year : years) {
-      String parquetPath = storageProvider.resolvePath(censusParquetDir,
-          POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
+      String parquetPath =
+          storageProvider.resolvePath(censusParquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
       try {
         if (!storageProvider.exists(parquetPath)) {
           LOGGER.info("Missing Population Estimates parquet file: {}", parquetPath);
@@ -981,8 +971,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     for (String tableName : economicTableNames) {
       try {
-        String parquetPath = storageProvider.resolvePath(parquetDir,
-            ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+        String parquetPath =
+            storageProvider.resolvePath(parquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
         convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "economic");
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
@@ -1000,8 +990,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Converting Population Estimates data to Parquet for year {}", year);
 
     try {
-      String parquetPath = storageProvider.resolvePath(parquetDir,
-          POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
+      String parquetPath =
+          storageProvider.resolvePath(parquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
       convertTableDataToParquet(cacheDir, parquetPath, "population_estimates", year, storageProvider, "population");
       LOGGER.info("Successfully converted population_estimates to Parquet for year {}", year);
     } catch (Exception e) {

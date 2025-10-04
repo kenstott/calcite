@@ -47,14 +47,14 @@ import java.util.Map;
 /**
  * Downloads and converts World Bank economic data to Parquet format.
  * Provides international economic indicators for comparison with U.S. data.
- * 
+ *
  * <p>Uses the World Bank API which requires no authentication.
  */
 public class WorldBankDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(WorldBankDataDownloader.class);
   private static final String WORLD_BANK_API_BASE = "https://api.worldbank.org/v2/";
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  
+
   private final String cacheDir;
   private final HttpClient httpClient;
   private final CacheManifest cacheManifest;
@@ -73,24 +73,21 @@ public class WorldBankDataDownloader {
     public static final String INTEREST_RATE = "FR.INR.RINR";        // Real interest rate (%)
     public static final String EXCHANGE_RATE = "PA.NUS.FCRF";        // Official exchange rate (LCU per US$)
   }
-  
+
   // Focus on major economies for comparison
   public static class Countries {
-    public static final List<String> G7 = Arrays.asList(
-        "USA", "JPN", "DEU", "GBR", "FRA", "ITA", "CAN"
-    );
-    
-    public static final List<String> G20 = Arrays.asList(
-        "USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "ITA", "BRA", "CAN",
-        "KOR", "RUS", "AUS", "MEX", "IDN", "TUR", "SAU", "ARG", "ZAF"
-    );
-    
-    public static final List<String> MAJOR_ECONOMIES = Arrays.asList(
-        "USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "BRA", "ITA", "CAN",
-        "KOR", "ESP", "AUS", "RUS", "MEX", "IDN", "NLD", "TUR", "CHE", "POL"
-    );
+    public static final List<String> G7 =
+        Arrays.asList("USA", "JPN", "DEU", "GBR", "FRA", "ITA", "CAN");
+
+    public static final List<String> G20 =
+        Arrays.asList("USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "ITA", "BRA", "CAN",
+        "KOR", "RUS", "AUS", "MEX", "IDN", "TUR", "SAU", "ARG", "ZAF");
+
+    public static final List<String> MAJOR_ECONOMIES =
+        Arrays.asList("USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "BRA", "ITA", "CAN",
+        "KOR", "ESP", "AUS", "RUS", "MEX", "IDN", "NLD", "TUR", "CHE", "POL");
   }
-  
+
   public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
     this.storageProvider = storageProvider;
@@ -139,7 +136,7 @@ public class WorldBankDataDownloader {
         LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
       }
     }
-    
+
     String govdataStart = System.getenv("GOVDATA_START_YEAR");
     if (govdataStart != null) {
       try {
@@ -148,10 +145,10 @@ public class WorldBankDataDownloader {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
       }
     }
-    
+
     return LocalDate.now().getYear() - 5;
   }
-  
+
   /**
    * Gets the default end year from environment variables.
    */
@@ -164,7 +161,7 @@ public class WorldBankDataDownloader {
         LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
       }
     }
-    
+
     String govdataEnd = System.getenv("GOVDATA_END_YEAR");
     if (govdataEnd != null) {
       try {
@@ -173,65 +170,64 @@ public class WorldBankDataDownloader {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
       }
     }
-    
+
     return LocalDate.now().getYear();
   }
-  
+
   /**
    * Downloads all World Bank data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading World Bank data for years {} to {}", startYear, endYear);
-    
+
     for (int year = startYear; year <= endYear; year++) {
       downloadWorldIndicatorsForYear(year);
     }
   }
-  
+
   /**
    * Downloads world economic indicators for a specific year.
    */
   public void downloadWorldIndicatorsForYear(int year) throws IOException, InterruptedException {
     LOGGER.info("Downloading world economic indicators for year {}", year);
-    
+
     Path outputDir = Paths.get(cacheDir, "source=econ", "type=indicators", "year=" + year);
     Files.createDirectories(outputDir);
-    
+
     List<Map<String, Object>> indicators = new ArrayList<>();
-    
+
     // Download key indicators for major economies
-    List<String> indicatorCodes = Arrays.asList(
-        Indicators.GDP_CURRENT_USD,
+    List<String> indicatorCodes =
+        Arrays.asList(Indicators.GDP_CURRENT_USD,
         Indicators.GDP_GROWTH,
         Indicators.GDP_PER_CAPITA,
         Indicators.INFLATION_CPI,
         Indicators.UNEMPLOYMENT,
         Indicators.POPULATION,
-        Indicators.GOVT_DEBT
-    );
-    
+        Indicators.GOVT_DEBT);
+
     // Use G20 countries for broader coverage
     String countriesParam = String.join(";", Countries.G20);
-    
+
     for (String indicatorCode : indicatorCodes) {
       LOGGER.info("Fetching indicator: {} for year {}", indicatorCode, year);
-      
-      String url = String.format("%scountry/%s/indicator/%s?format=json&date=%d&per_page=1000",
-          WORLD_BANK_API_BASE, countriesParam, indicatorCode, year);
-      
+
+      String url =
+          String.format("%scountry/%s/indicator/%s?format=json&date=%d&per_page=1000", WORLD_BANK_API_BASE, countriesParam, indicatorCode, year);
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
-        LOGGER.warn("World Bank API request failed for indicator {} year {} with status: {}", 
+        LOGGER.warn("World Bank API request failed for indicator {} year {} with status: {}",
             indicatorCode, year, response.statusCode());
         continue;
       }
-      
+
       // World Bank API returns array with metadata in first element, data in second
       JsonNode root = MAPPER.readTree(response.body());
       if (root.isArray() && root.size() > 1) {
@@ -241,7 +237,7 @@ public class WorldBankDataDownloader {
             if (record.get("value").isNull()) {
               continue; // Skip null values
             }
-            
+
             Map<String, Object> indicator = new HashMap<>();
             JsonNode countryNode = record.get("country");
             if (countryNode != null) {
@@ -259,31 +255,31 @@ public class WorldBankDataDownloader {
               indicator.put("indicator_code", "");
               indicator.put("indicator_name", "");
             }
-            
+
             indicator.put("year", record.get("date") != null ? record.get("date").asInt() : 0);
             indicator.put("value", record.get("value") != null ? record.get("value").asDouble() : 0.0);
             indicator.put("unit", record.get("unit") != null ? record.get("unit").asText("") : "");
             indicator.put("scale", record.get("scale") != null ? record.get("scale").asText("") : "");
-            
+
             indicators.add(indicator);
           }
         }
       }
-      
+
       // Small delay to be respectful to the API
       Thread.sleep(100);
     }
-    
+
     // Save raw JSON data to cache
     File jsonFile = new File(outputDir.toFile(), "world_indicators.json");
     Map<String, Object> data = new HashMap<>();
     data.put("indicators", indicators);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
-    
+
     String jsonContent = MAPPER.writeValueAsString(data);
     Files.writeString(jsonFile.toPath(), jsonContent);
-    
+
     LOGGER.info("World indicators saved to: {} ({} records)", jsonFile, indicators.size());
   }
 
@@ -293,16 +289,16 @@ public class WorldBankDataDownloader {
   public File downloadWorldIndicators() throws IOException, InterruptedException {
     return downloadWorldIndicators(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads world economic indicators for major economies.
    */
   public File downloadWorldIndicators(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading world economic indicators for {}-{}", startYear, endYear);
-    
-    Path outputDir = Paths.get(cacheDir, "source=econ", "type=world_indicators",
-        String.format("year_range=%d_%d", startYear, endYear));
-    Files.createDirectories(outputDir);
+
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=world_indicators/year_range=%d_%d/world_indicators.parquet",
+        startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
@@ -310,8 +306,8 @@ public class WorldBankDataDownloader {
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
-    String parquetFilePath = storageProvider.resolvePath(outputDir.toString(), "world_indicators.parquet");
-    File parquetFile = new File(parquetFilePath); // For return value compatibility
+    // For return value compatibility - create dummy File
+    File parquetFile = new File(relativePath);
 
     if (cacheManifest.isCached("world_indicators", startYear, cacheParams)) {
       LOGGER.info("Found cached world indicators for {}-{} - skipping download", startYear, endYear);
@@ -319,48 +315,51 @@ public class WorldBankDataDownloader {
     }
 
     // Check if file exists but not in manifest - update manifest
-    if (parquetFile.exists()) {
-      LOGGER.info("Found existing world indicators file for {}-{} - updating manifest", startYear, endYear);
-      cacheManifest.markCached("world_indicators", startYear, cacheParams, parquetFile.getAbsolutePath(), 0L);
-      cacheManifest.save(cacheDir);
-      return parquetFile;
+    try {
+      if (storageProvider.exists(relativePath)) {
+        LOGGER.info("Found existing world indicators file for {}-{} - updating manifest", startYear, endYear);
+        cacheManifest.markCached("world_indicators", startYear, cacheParams, relativePath, 0L);
+        cacheManifest.save(cacheDir);
+        return parquetFile;
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check if file exists: {}", e.getMessage());
     }
 
     List<WorldIndicator> indicators = new ArrayList<>();
 
     // Download key indicators for major economies
-    List<String> indicatorCodes = Arrays.asList(
-        Indicators.GDP_CURRENT_USD,
+    List<String> indicatorCodes =
+        Arrays.asList(Indicators.GDP_CURRENT_USD,
         Indicators.GDP_GROWTH,
         Indicators.GDP_PER_CAPITA,
         Indicators.INFLATION_CPI,
         Indicators.UNEMPLOYMENT,
         Indicators.POPULATION,
-        Indicators.GOVT_DEBT
-    );
-    
+        Indicators.GOVT_DEBT);
+
     // Use G20 countries for broader coverage
     String countriesParam = String.join(";", Countries.G20);
-    
+
     for (String indicatorCode : indicatorCodes) {
       LOGGER.info("Fetching indicator: {}", indicatorCode);
-      
-      String url = String.format("%scountry/%s/indicator/%s?format=json&date=%d:%d&per_page=10000",
-          WORLD_BANK_API_BASE, countriesParam, indicatorCode, startYear, endYear);
-      
+
+      String url =
+          String.format("%scountry/%s/indicator/%s?format=json&date=%d:%d&per_page=10000", WORLD_BANK_API_BASE, countriesParam, indicatorCode, startYear, endYear);
+
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofSeconds(30))
           .build();
-      
+
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      
+
       if (response.statusCode() != 200) {
-        LOGGER.warn("World Bank API request failed for indicator {} with status: {}", 
+        LOGGER.warn("World Bank API request failed for indicator {} with status: {}",
             indicatorCode, response.statusCode());
         continue;
       }
-      
+
       // World Bank API returns array with metadata in first element, data in second
       JsonNode root = MAPPER.readTree(response.body());
       if (root.isArray() && root.size() > 1) {
@@ -370,7 +369,7 @@ public class WorldBankDataDownloader {
             if (record.get("value").isNull()) {
               continue; // Skip null values
             }
-            
+
             WorldIndicator indicator = new WorldIndicator();
             indicator.countryCode = record.get("country").get("id").asText();
             indicator.countryName = record.get("country").get("value").asText();
@@ -380,43 +379,43 @@ public class WorldBankDataDownloader {
             indicator.value = record.get("value").asDouble();
             indicator.unit = record.get("unit").asText("");
             indicator.scale = record.get("scale").asText("");
-            
+
             indicators.add(indicator);
           }
         }
       }
-      
+
       // Small delay to be respectful to the API
       Thread.sleep(100);
     }
-    
+
     // Convert to Parquet
-    writeWorldIndicatorsParquet(indicators, parquetFilePath);
+    writeWorldIndicatorsParquet(indicators, relativePath);
 
     // Mark as cached in manifest
-    cacheManifest.markCached("world_indicators", startYear, cacheParams, parquetFile.getAbsolutePath(), parquetFile.length());
+    cacheManifest.markCached("world_indicators", startYear, cacheParams, relativePath, 0L);
     cacheManifest.save(cacheDir);
 
-    LOGGER.info("World indicators saved to: {} ({} records)", parquetFile, indicators.size());
+    LOGGER.info("World indicators saved to: {} ({} records)", relativePath, indicators.size());
     return parquetFile;
   }
-  
+
   /**
    * Downloads comparative GDP data for all countries.
    */
   public File downloadGlobalGDP() throws IOException, InterruptedException {
     return downloadGlobalGDP(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads GDP data for all countries for global comparison.
    */
   public File downloadGlobalGDP(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading global GDP data for {}-{}", startYear, endYear);
-    
-    Path outputDir = Paths.get(cacheDir, "source=econ", "type=global_gdp",
-        String.format("year_range=%d_%d", startYear, endYear));
-    Files.createDirectories(outputDir);
+
+    // Build RELATIVE path (StorageProvider will add base path)
+    String relativePath = String.format("source=econ/type=global_gdp/year_range=%d_%d/global_gdp.parquet",
+        startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
@@ -424,8 +423,8 @@ public class WorldBankDataDownloader {
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
-    String parquetFilePath = storageProvider.resolvePath(outputDir.toString(), "global_gdp.parquet");
-    File parquetFile = new File(parquetFilePath); // For return value compatibility
+    // For return value compatibility - create dummy File
+    File parquetFile = new File(relativePath);
 
     if (cacheManifest.isCached("global_gdp", startYear, cacheParams)) {
       LOGGER.info("Found cached global GDP for {}-{} - skipping download", startYear, endYear);
@@ -433,26 +432,30 @@ public class WorldBankDataDownloader {
     }
 
     // Check if file exists but not in manifest - update manifest
-    if (parquetFile.exists()) {
-      LOGGER.info("Found existing global GDP file for {}-{} - updating manifest", startYear, endYear);
-      cacheManifest.markCached("global_gdp", startYear, cacheParams, parquetFile.getAbsolutePath(), 0L);
-      cacheManifest.save(cacheDir);
-      return parquetFile;
+    try {
+      if (storageProvider.exists(relativePath)) {
+        LOGGER.info("Found existing global GDP file for {}-{} - updating manifest", startYear, endYear);
+        cacheManifest.markCached("global_gdp", startYear, cacheParams, relativePath, 0L);
+        cacheManifest.save(cacheDir);
+        return parquetFile;
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check if file exists: {}", e.getMessage());
     }
 
     List<WorldIndicator> gdpData = new ArrayList<>();
 
     // Download GDP data for all countries
-    String url = String.format("%scountry/all/indicator/%s?format=json&date=%d:%d&per_page=20000",
-        WORLD_BANK_API_BASE, Indicators.GDP_CURRENT_USD, startYear, endYear);
-    
+    String url =
+        String.format("%scountry/all/indicator/%s?format=json&date=%d:%d&per_page=20000", WORLD_BANK_API_BASE, Indicators.GDP_CURRENT_USD, startYear, endYear);
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofSeconds(60))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() == 200) {
       JsonNode root = MAPPER.readTree(response.body());
       if (root.isArray() && root.size() > 1) {
@@ -462,7 +465,7 @@ public class WorldBankDataDownloader {
             if (record.get("value").isNull()) {
               continue;
             }
-            
+
             WorldIndicator gdp = new WorldIndicator();
             gdp.countryCode = record.get("country").get("id").asText();
             gdp.countryName = record.get("country").get("value").asText();
@@ -472,24 +475,24 @@ public class WorldBankDataDownloader {
             gdp.value = record.get("value").asDouble();
             gdp.unit = "USD";
             gdp.scale = "1";
-            
+
             gdpData.add(gdp);
           }
         }
       }
     }
-    
+
     // Convert to Parquet
-    writeWorldIndicatorsParquet(gdpData, parquetFilePath);
+    writeWorldIndicatorsParquet(gdpData, relativePath);
 
     // Mark as cached in manifest
-    cacheManifest.markCached("global_gdp", startYear, cacheParams, parquetFile.getAbsolutePath(), parquetFile.length());
+    cacheManifest.markCached("global_gdp", startYear, cacheParams, relativePath, 0L);
     cacheManifest.save(cacheDir);
 
-    LOGGER.info("Global GDP data saved to: {} ({} records)", parquetFile, gdpData.size());
+    LOGGER.info("Global GDP data saved to: {} ({} records)", relativePath, gdpData.size());
     return parquetFile;
   }
-  
+
   private void writeWorldIndicatorsParquet(List<WorldIndicator> indicators, String targetPath) throws IOException {
     Schema schema = SchemaBuilder.record("WorldIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
@@ -532,17 +535,17 @@ public class WorldBankDataDownloader {
     String unit;
     String scale;
   }
-  
+
   /**
    * Converts cached World Bank data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
-   * 
+   *
    * @param sourceDir Directory containing cached World Bank JSON data
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFilePath);
-    
+
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
@@ -550,20 +553,20 @@ public class WorldBankDataDownloader {
     }
 
     // Directories are created automatically by StorageProvider when writing files
-    
+
     List<Map<String, Object>> indicators = new ArrayList<>();
-    
+
     // Look for World Bank indicators JSON files in the source directory
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> 
+    File[] jsonFiles = sourceDir.listFiles((dir, name) ->
         name.equals("world_indicators.json") && !name.startsWith("."));
-    
+
     if (jsonFiles != null) {
       for (File jsonFile : jsonFiles) {
         try {
           String content = Files.readString(jsonFile.toPath());
           JsonNode root = MAPPER.readTree(content);
           JsonNode indicatorsArray = root.get("indicators");
-          
+
           if (indicatorsArray != null && indicatorsArray.isArray()) {
             for (JsonNode ind : indicatorsArray) {
               Map<String, Object> indicator = new HashMap<>();
@@ -575,7 +578,7 @@ public class WorldBankDataDownloader {
               indicator.put("value", ind.get("value").asDouble());
               indicator.put("unit", ind.get("unit").asText(""));
               indicator.put("scale", ind.get("scale").asText(""));
-              
+
               indicators.add(indicator);
             }
           }
@@ -584,13 +587,13 @@ public class WorldBankDataDownloader {
         }
       }
     }
-    
+
     // Write parquet file
     writeWorldIndicatorsMapParquet(indicators, targetFilePath);
-    
+
     LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFilePath, indicators.size());
   }
-  
+
   private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)
       throws IOException {
     Schema schema = SchemaBuilder.record("WorldIndicator")

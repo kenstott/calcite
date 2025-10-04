@@ -29,11 +29,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -42,7 +39,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,35 +52,35 @@ public class BlsDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BlsDataDownloader.class);
   private static final String BLS_API_BASE = "https://api.bls.gov/publicAPI/v2/";
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  
+
   private final String apiKey;
   private final String cacheDir;
   private final HttpClient httpClient;
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
   private final CacheManifest cacheManifest;
-  
+
   // Common BLS series IDs
   public static class Series {
     // Employment Statistics
     public static final String UNEMPLOYMENT_RATE = "LNS14000000";
     public static final String EMPLOYMENT_LEVEL = "CES0000000001";
     public static final String LABOR_FORCE_PARTICIPATION = "LNS11300000";
-    
+
     // Inflation Metrics
     public static final String CPI_ALL_URBAN = "CUUR0000SA0";
     public static final String CPI_CORE = "CUUR0000SA0L1E";
     public static final String PPI_FINAL_DEMAND = "WPUFD4";
-    
+
     // Wage Growth
     public static final String AVG_HOURLY_EARNINGS = "CES0500000003";
     public static final String EMPLOYMENT_COST_INDEX = "CIU1010000000000A";
-    
+
     // Regional Employment (examples)
     public static final String CA_UNEMPLOYMENT = "LASST060000000000003";
     public static final String NY_UNEMPLOYMENT = "LASST360000000000003";
     public static final String TX_UNEMPLOYMENT = "LASST480000000000003";
   }
-  
+
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
@@ -138,7 +134,7 @@ public class BlsDataDownloader {
         LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataStart = System.getenv("GOVDATA_START_YEAR");
     if (govdataStart != null) {
@@ -148,11 +144,11 @@ public class BlsDataDownloader {
         LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
       }
     }
-    
+
     // Default to 5 years ago
     return LocalDate.now().getYear() - 5;
   }
-  
+
   /**
    * Gets the default end year from environment variables.
    * Falls back to GOVDATA_END_YEAR, then defaults to current year.
@@ -167,7 +163,7 @@ public class BlsDataDownloader {
         LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
       }
     }
-    
+
     // Fall back to unified setting
     String govdataEnd = System.getenv("GOVDATA_END_YEAR");
     if (govdataEnd != null) {
@@ -177,11 +173,11 @@ public class BlsDataDownloader {
         LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
       }
     }
-    
+
     // Default to current year
     return LocalDate.now().getYear();
   }
-  
+
   /**
    * Downloads all BLS data for the specified year range.
    */
@@ -200,20 +196,20 @@ public class BlsDataDownloader {
     // Download regional employment data
     downloadRegionalEmployment(startYear, endYear);
   }
-  
+
   /**
    * Downloads employment statistics using default date range from environment.
    */
   public File downloadEmploymentStatistics() throws IOException, InterruptedException {
     return downloadEmploymentStatistics(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads employment statistics data and converts to Parquet.
    */
   public File downloadEmploymentStatistics(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading employment statistics for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -240,16 +236,15 @@ public class BlsDataDownloader {
         long fileSize = jsonFile.length();
         cacheManifest.markCached("employment_statistics", year, cacheParams, jsonFilePath, fileSize);
         cacheManifest.save(cacheDir);
-        lastFile = jsonFile;
+        lastFile = new File(jsonFilePath);
         continue;
       }
 
     // Download key employment series
-    List<String> seriesIds = List.of(
-        Series.UNEMPLOYMENT_RATE,
+    List<String> seriesIds =
+        List.of(Series.UNEMPLOYMENT_RATE,
         Series.EMPLOYMENT_LEVEL,
-        Series.LABOR_FORCE_PARTICIPATION
-    );
+        Series.LABOR_FORCE_PARTICIPATION);
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
@@ -266,23 +261,23 @@ public class BlsDataDownloader {
       LOGGER.info("Employment statistics raw data saved for year {}: {}", year, jsonFilePath);
       lastFile = new File(jsonFilePath);
     }
-    
+
     return lastFile;
   }
-  
+
   /**
    * Downloads inflation metrics using default date range from environment.
    */
   public File downloadInflationMetrics() throws IOException, InterruptedException {
     return downloadInflationMetrics(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads inflation metrics data and converts to Parquet.
    */
   public File downloadInflationMetrics(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading inflation metrics for {}-{}", startYear, endYear);
-    
+
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -309,15 +304,14 @@ public class BlsDataDownloader {
         long fileSize = jsonFile.length();
         cacheManifest.markCached("inflation_metrics", year, cacheParams, jsonFilePath, fileSize);
         cacheManifest.save(cacheDir);
-        lastFile = jsonFile;
+        lastFile = new File(jsonFilePath);
         continue;
       }
 
-    List<String> seriesIds = List.of(
-        Series.CPI_ALL_URBAN,
+    List<String> seriesIds =
+        List.of(Series.CPI_ALL_URBAN,
         Series.CPI_CORE,
-        Series.PPI_FINAL_DEMAND
-    );
+        Series.PPI_FINAL_DEMAND);
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
@@ -334,17 +328,17 @@ public class BlsDataDownloader {
       LOGGER.info("Inflation metrics raw data saved for year {}: {}", year, jsonFilePath);
       lastFile = new File(jsonFilePath);
     }
-    
+
     return lastFile;
   }
-  
+
   /**
    * Downloads wage growth using default date range from environment.
    */
   public File downloadWageGrowth() throws IOException, InterruptedException {
     return downloadWageGrowth(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads wage growth data and converts to Parquet.
    */
@@ -359,49 +353,44 @@ public class BlsDataDownloader {
       cacheParams.put("type", "wage_growth");
       cacheParams.put("year", String.valueOf(year));
 
+      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+
       if (cacheManifest.isCached("wage_growth", year, cacheParams)) {
         LOGGER.info("Found cached wage growth data for year {} - skipping download", year);
-        String outputDirPath = "source=econ/type=indicators/year=" + year;
-        lastFile = new File(cacheDir, outputDirPath + "/wage_growth.json");
+        lastFile = new File(relativePath);
         continue;
       }
 
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
-      // Directories are created automatically by StorageProvider when writing files
-
-    List<String> seriesIds = List.of(
-        Series.AVG_HOURLY_EARNINGS,
-        Series.EMPLOYMENT_COST_INDEX
-    );
+    List<String> seriesIds =
+        List.of(Series.AVG_HOURLY_EARNINGS,
+        Series.EMPLOYMENT_COST_INDEX);
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to cache directory
-      String jsonFilePath = outputDirPath + "/wage_growth.json";
       // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, jsonFilePath);
+      File jsonFile = new File(cacheDir, relativePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
 
-      LOGGER.info("Wage growth raw data saved for year {}: {}", year, jsonFile);
+      LOGGER.info("Wage growth raw data saved for year {}: {}", year, relativePath);
 
       // Mark as cached in manifest
-      cacheManifest.markCached("wage_growth", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.markCached("wage_growth", year, cacheParams, relativePath, jsonFile.length());
       cacheManifest.save(cacheDir);
 
-      lastFile = jsonFile;
+      lastFile = new File(relativePath);
     }
-    
+
     return lastFile;
   }
-  
+
   /**
    * Downloads regional employment using default date range from environment.
    */
   public File downloadRegionalEmployment() throws IOException, InterruptedException {
     return downloadRegionalEmployment(getDefaultStartYear(), getDefaultEndYear());
   }
-  
+
   /**
    * Downloads regional employment data for selected states.
    */
@@ -416,75 +405,70 @@ public class BlsDataDownloader {
       cacheParams.put("type", "regional_employment");
       cacheParams.put("year", String.valueOf(year));
 
+      String relativePath = "source=econ/type=regional/year=" + year + "/regional_employment.json";
+
       if (cacheManifest.isCached("regional_employment", year, cacheParams)) {
         LOGGER.info("Found cached regional employment data for year {} - skipping download", year);
-        String outputDirPath = "source=econ/type=regional/year=" + year;
-        lastFile = new File(cacheDir, outputDirPath + "/regional_employment.json");
+        lastFile = new File(relativePath);
         continue;
       }
 
-      String outputDirPath = "source=econ/type=regional/year=" + year;
-      // Directories are created automatically by StorageProvider when writing files
-
     // Download data for major states
-    List<String> seriesIds = List.of(
-        Series.CA_UNEMPLOYMENT,
+    List<String> seriesIds =
+        List.of(Series.CA_UNEMPLOYMENT,
         Series.NY_UNEMPLOYMENT,
-        Series.TX_UNEMPLOYMENT
-    );
+        Series.TX_UNEMPLOYMENT);
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to cache directory
-      String jsonFilePath = outputDirPath + "/regional_employment.json";
       // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, jsonFilePath);
+      File jsonFile = new File(cacheDir, relativePath);
       jsonFile.getParentFile().mkdirs();
       Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
 
-      LOGGER.info("Regional employment raw data saved for year {}: {}", year, jsonFile);
+      LOGGER.info("Regional employment raw data saved for year {}: {}", year, relativePath);
 
       // Mark as cached in manifest
-      cacheManifest.markCached("regional_employment", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      cacheManifest.markCached("regional_employment", year, cacheParams, relativePath, jsonFile.length());
       cacheManifest.save(cacheDir);
 
-      lastFile = jsonFile;
+      lastFile = new File(relativePath);
     }
-    
+
     return lastFile;
   }
-  
+
   /**
    * Fetches raw JSON response for multiple BLS series in a single API call.
    */
   private String fetchMultipleSeriesRaw(
       List<String> seriesIds, int startYear, int endYear) throws IOException, InterruptedException {
-    
+
     ObjectNode requestBody = MAPPER.createObjectNode();
     ArrayNode seriesArray = MAPPER.createArrayNode();
     seriesIds.forEach(seriesArray::add);
     requestBody.set("seriesid", seriesArray);
     requestBody.put("startyear", String.valueOf(startYear));
     requestBody.put("endyear", String.valueOf(endYear));
-    
+
     if (apiKey != null && !apiKey.isEmpty()) {
       requestBody.put("registrationkey", apiKey);
     }
-    
+
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(BLS_API_BASE + "timeseries/data/"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
         .timeout(Duration.ofSeconds(30))
         .build();
-    
+
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
     if (response.statusCode() != 200) {
-      throw new IOException("BLS API request failed with status: " + response.statusCode() + 
+      throw new IOException("BLS API request failed with status: " + response.statusCode() +
           " - Response: " + response.body());
     }
-    
+
     return response.body();
   }
 
@@ -493,32 +477,32 @@ public class BlsDataDownloader {
    */
   private Map<String, List<Map<String, Object>>> fetchMultipleSeries(
       List<String> seriesIds, int startYear, int endYear) throws IOException, InterruptedException {
-    
+
     String rawJson = fetchMultipleSeriesRaw(seriesIds, startYear, endYear);
     return parseMultiSeriesResponse(rawJson);
   }
-  
+
   /**
    * Parses BLS API response for multiple series.
    */
-  private Map<String, List<Map<String, Object>>> parseMultiSeriesResponse(String jsonResponse) 
+  private Map<String, List<Map<String, Object>>> parseMultiSeriesResponse(String jsonResponse)
       throws IOException {
-    
+
     Map<String, List<Map<String, Object>>> result = new HashMap<>();
     JsonNode root = MAPPER.readTree(jsonResponse);
-    
+
     String status = root.path("status").asText();
     if (!"REQUEST_SUCCEEDED".equals(status)) {
       String message = root.path("message").asText("Unknown error");
       throw new IOException("BLS API error: " + message);
     }
-    
+
     JsonNode seriesArray = root.path("Results").path("series");
     if (seriesArray.isArray()) {
       for (JsonNode series : seriesArray) {
         String seriesId = series.path("seriesID").asText();
         List<Map<String, Object>> data = new ArrayList<>();
-        
+
         JsonNode dataArray = series.path("data");
         if (dataArray.isArray()) {
           for (JsonNode point : dataArray) {
@@ -526,7 +510,7 @@ public class BlsDataDownloader {
             String year = point.path("year").asText();
             String period = point.path("period").asText();
             String value = point.path("value").asText();
-            
+
             // Convert period to month
             int month = periodToMonth(period);
             if (month > 0) {
@@ -538,14 +522,14 @@ public class BlsDataDownloader {
             }
           }
         }
-        
+
         result.put(seriesId, data);
       }
     }
-    
+
     return result;
   }
-  
+
   /**
    * Converts BLS period code to month.
    */
@@ -555,7 +539,7 @@ public class BlsDataDownloader {
     }
     return 0; // Annual or other non-monthly data
   }
-  
+
   /**
    * Gets human-readable name for series ID.
    */
@@ -575,7 +559,7 @@ public class BlsDataDownloader {
       default: return seriesId;
     }
   }
-  
+
   /**
    * Writes employment statistics data to Parquet.
    */
@@ -616,7 +600,7 @@ public class BlsDataDownloader {
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
   }
-  
+
   /**
    * Writes inflation metrics data to Parquet.
    */
@@ -658,7 +642,7 @@ public class BlsDataDownloader {
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
   }
-  
+
   /**
    * Writes wage growth data to Parquet.
    */
@@ -705,7 +689,7 @@ public class BlsDataDownloader {
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
   }
-  
+
   /**
    * Writes regional employment data to Parquet.
    */
@@ -747,36 +731,36 @@ public class BlsDataDownloader {
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
   }
-  
+
   private String getUnit(String seriesId) {
     if (seriesId.contains("RATE") || seriesId.contains("000003")) {
       return "percent";
     }
     return "index";
   }
-  
+
   private boolean isSeasonallyAdjusted(String seriesId) {
     return !seriesId.contains("NSA");
   }
-  
+
   private String getSubcategory(String seriesId) {
     if (seriesId.startsWith("LNS")) return "Labor Force Statistics";
     if (seriesId.startsWith("CES")) return "Current Employment Statistics";
     return "General";
   }
-  
+
   private String getIndexType(String seriesId) {
     if (seriesId.startsWith("CUU")) return "CPI-U";
     if (seriesId.startsWith("WPU")) return "PPI";
     return "Other";
   }
-  
+
   private String getItemCode(String seriesId) {
     if (seriesId.contains("SA0L1E")) return "Core";
     if (seriesId.contains("SA0")) return "All Items";
     return "Other";
   }
-  
+
   private String getStateCode(String seriesId) {
     // LASST series: LASST + state FIPS code (2 digits) + ...
     // Extract state FIPS code from positions 5-6 (0-indexed)
@@ -839,7 +823,7 @@ public class BlsDataDownloader {
     }
     return "US";
   }
-  
+
   private String getStateName(String stateCode) {
     switch (stateCode) {
       case "AL": return "Alabama";
@@ -896,8 +880,8 @@ public class BlsDataDownloader {
       default: return "United States";
     }
   }
-  
-  
+
+
   /**
    * Converts cached BLS employment data to Parquet format.
    */
@@ -926,10 +910,10 @@ public class BlsDataDownloader {
       convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
     }
   }
-  
+
   private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
-    
+
     // Look for employment statistics JSON files
     File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("employment_statistics.json"));
     if (jsonFiles != null) {
@@ -937,17 +921,17 @@ public class BlsDataDownloader {
         try {
           String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
-          
+
           if (root.has("Results") && root.get("Results").has("series")) {
             JsonNode series = root.get("Results").get("series");
             for (JsonNode seriesNode : series) {
               String seriesId = seriesNode.get("seriesID").asText();
               List<Map<String, Object>> dataPoints = new ArrayList<>();
-              
+
               if (seriesNode.has("data")) {
                 for (JsonNode dataNode : seriesNode.get("data")) {
                   Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" + 
+                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
                     String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                   dataPoint.put("value", dataNode.get("value").asDouble());
                   dataPoints.add(dataPoint);
@@ -961,15 +945,15 @@ public class BlsDataDownloader {
         }
       }
     }
-    
+
     // Write to parquet
     writeEmploymentStatisticsParquet(seriesData, targetPath);
     LOGGER.info("Converted BLS employment data to parquet: {}", targetPath);
   }
-  
+
   private void convertInflationMetricsToParquet(File sourceDir, String targetPath) throws IOException {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
-    
+
     // Look for inflation metrics JSON files
     File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("inflation_metrics.json"));
     if (jsonFiles != null) {
@@ -977,17 +961,17 @@ public class BlsDataDownloader {
         try {
           String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
           JsonNode root = MAPPER.readTree(content);
-          
+
           if (root.has("Results") && root.get("Results").has("series")) {
             JsonNode series = root.get("Results").get("series");
             for (JsonNode seriesNode : series) {
               String seriesId = seriesNode.get("seriesID").asText();
               List<Map<String, Object>> dataPoints = new ArrayList<>();
-              
+
               if (seriesNode.has("data")) {
                 for (JsonNode dataNode : seriesNode.get("data")) {
                   Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" + 
+                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
                     String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                   dataPoint.put("value", dataNode.get("value").asDouble());
                   dataPoints.add(dataPoint);
@@ -1001,7 +985,7 @@ public class BlsDataDownloader {
         }
       }
     }
-    
+
     // Write to parquet using inflation metrics schema
     writeInflationMetricsParquet(seriesData, targetPath);
     LOGGER.info("Converted BLS inflation data to parquet: {}", targetPath);
@@ -1052,8 +1036,8 @@ public class BlsDataDownloader {
 
     // Regional employment data is in type=regional subdirectory, not type=indicators
     // Adjust path to look in the regional directory
-    File regionalDir = new File(sourceDir.getParentFile().getParentFile(),
-        "type=regional/year=" + sourceDir.getName().replace("year=", ""));
+    File regionalDir =
+        new File(sourceDir.getParentFile().getParentFile(), "type=regional/year=" + sourceDir.getName().replace("year=", ""));
 
     // Look for regional employment JSON files
     File[] jsonFiles = regionalDir.listFiles((dir, name) -> name.equals("regional_employment.json"));

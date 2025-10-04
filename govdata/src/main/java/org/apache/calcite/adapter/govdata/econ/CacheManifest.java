@@ -49,7 +49,7 @@ public class CacheManifest {
 
   @JsonProperty("lastUpdated")
   private long lastUpdated = System.currentTimeMillis();
-  
+
   /**
    * Check if data is cached and fresh for the given parameters.
    * Uses explicit refreshAfter timestamp stored in each entry.
@@ -86,7 +86,7 @@ public class CacheManifest {
 
     return true;
   }
-  
+
   /**
    * Mark data as cached with metadata and explicit refresh timestamp.
    *
@@ -140,7 +140,7 @@ public class CacheManifest {
 
     markCached(dataType, year, parameters, filePath, fileSize, refreshAfter, refreshReason);
   }
-  
+
   /**
    * Remove expired entries from the manifest based on refreshAfter timestamps.
    */
@@ -177,7 +177,7 @@ public class CacheManifest {
 
     return removed[0];
   }
-  
+
   /**
    * Load manifest from file with automatic migration from old format.
    */
@@ -224,7 +224,7 @@ public class CacheManifest {
       return new CacheManifest();
     }
   }
-  
+
   /**
    * Save manifest to file.
    */
@@ -244,23 +244,23 @@ public class CacheManifest {
       LOGGER.warn("Failed to save cache manifest: {}", e.getMessage());
     }
   }
-  
+
   /**
    * Build cache key from parameters.
    */
   private String buildKey(String dataType, int year, Map<String, String> parameters) {
     StringBuilder key = new StringBuilder();
     key.append(dataType).append(":").append(year);
-    
+
     if (parameters != null && !parameters.isEmpty()) {
       parameters.entrySet().stream()
           .sorted(Map.Entry.comparingByKey())
           .forEach(entry -> key.append(":").append(entry.getKey()).append("=").append(entry.getValue()));
     }
-    
+
     return key.toString();
   }
-  
+
   /**
    * Get cache statistics.
    */
@@ -276,7 +276,7 @@ public class CacheManifest {
 
     return stats;
   }
-  
+
   /**
    * Cache entry metadata with explicit refresh timestamp.
    */
@@ -305,7 +305,7 @@ public class CacheManifest {
     @JsonProperty("refreshReason")
     public String refreshReason;  // e.g., "current_year_daily", "historical_immutable", "market_close"
   }
-  
+
   /**
    * Cache statistics.
    */
@@ -314,8 +314,7 @@ public class CacheManifest {
     public int freshEntries;
     public int expiredEntries;
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("Cache stats: %d total, %d fresh, %d expired",
                           totalEntries, freshEntries, expiredEntries);
     }
