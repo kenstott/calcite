@@ -25,7 +25,7 @@
 # Unit tests only (default)
 ./gradlew :module:test
 
-# Integration tests only  
+# Integration tests only
 ./gradlew :module:test -PincludeTags=integration
 
 # Specific integration test
@@ -45,7 +45,7 @@
 
 ### SQL Conventions
 - **Default**: lex=ORACLE, unquotedCasing=TO_LOWER, nameGeneration=SMART_CASING
-- **Quote**: Reserved words used as identifiers, mixed/upper case identifiers  
+- **Quote**: Reserved words used as identifiers, mixed/upper case identifiers
 - **Don't Quote**: Lower case identifiers
 
 ## 🔧 CORE PRACTICES
@@ -67,7 +67,7 @@
 ```
 Test Failing?
 ├─ Check @Tag annotation first
-│  ├─ @Tag("integration")? → Use -PincludeTags=integration  
+│  ├─ @Tag("integration")? → Use -PincludeTags=integration
 │  └─ @Tag("unit")? → Default command should work
 ├─ Error "0 tests executed"?
 │  └─ Missing -PincludeTags parameter
@@ -87,5 +87,5 @@ Ready to claim "Complete"?
 
 ## 📚 CROSS-REFERENCES
 - Testing details → See CLAUDE-TESTING.md
-- Adapter specifics → See CLAUDE-ADAPTERS.md  
+- Adapter specifics → See CLAUDE-ADAPTERS.md
 - Debug workflows → See CLAUDE-TROUBLESHOOTING.md

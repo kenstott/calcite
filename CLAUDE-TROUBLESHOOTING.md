@@ -4,7 +4,7 @@
 
 ### When Completely Stuck
 1. **STOP** - Don't create more files or tests
-2. **READ** the full error message and stack trace  
+2. **READ** the full error message and stack trace
 3. **TRACE** execution path with strategic debug output
 4. **ISOLATE** the minimal failing case
 5. **DOCUMENT** findings before attempting fixes
@@ -28,7 +28,7 @@ duckdb -c "SELECT COUNT(*) FROM read_parquet('/path/to/test.parquet')"
 # See "Debug Output Patterns" section below
 ```
 
-### Workflow 2: Adapter Connection Issues  
+### Workflow 2: Adapter Connection Issues
 ```java
 // Step 1: Trace schema creation
 System.err.println("DEBUG: Creating schema with operand: " + operand);
@@ -77,7 +77,7 @@ ROOT CAUSE: Table/schema name doesn't match DuckDB expectations
 
 DIAGNOSTIC COMMANDS:
 duckdb -c "SHOW SCHEMAS"
-duckdb -c "SHOW TABLES FROM schema_name"  
+duckdb -c "SHOW TABLES FROM schema_name"
 duckdb -c "DESCRIBE table_name"
 
 INVESTIGATION STEPS:
@@ -97,7 +97,7 @@ timeout 30 ./gradlew :module:test -PincludeTags=integration --tests "*TestName*"
 SOLUTIONS:
 1. Increase timeout: timeout 300 ...
 2. Check API rate limits
-3. Verify network connectivity  
+3. Verify network connectivity
 4. Use smaller test datasets
 ```
 
@@ -123,7 +123,7 @@ INVESTIGATION:
 // At method entry points
 System.err.println("DEBUG: " + getClass().getSimpleName() + "." + methodName + " called");
 
-// Before SQL execution  
+// Before SQL execution
 System.err.println("DEBUG: Executing SQL: " + sql);
 
 // After data retrieval
@@ -150,14 +150,14 @@ System.err.println("DEBUG: Called from: " + Thread.currentThread().getStackTrace
 // For ResultSet analysis
 ResultSetMetaData meta = rs.getMetaData();
 for (int i = 1; i <= meta.getColumnCount(); i++) {
-    System.err.printf("Column %d: %s (%s)%n", 
+    System.err.printf("Column %d: %s (%s)%n",
         i, meta.getColumnName(i), meta.getColumnTypeName(i));
 }
 
 // For Map/operand debugging
 operand.forEach((k, v) -> System.err.println("DEBUG: " + k + " = " + v));
 
-// For List/collection debugging  
+// For List/collection debugging
 System.err.println("DEBUG: Collection size=" + list.size() + ", contents=" + list);
 ```
 
@@ -170,7 +170,7 @@ DuckDB error?
 │  ├─ Check table name casing (DuckDB uses lowercase)
 │  ├─ Verify model JSON configuration
 │  └─ Test with: duckdb -c "SHOW SCHEMAS"
-├─ "table does not exist"?  
+├─ "table does not exist"?
 │  ├─ Check parquet file exists at expected path
 │  ├─ Test with: duckdb -c "SELECT * FROM read_parquet('/path')"
 │  └─ Verify directory structure matches partition pattern
@@ -227,7 +227,7 @@ find . -name "*.md" -path "./build/*" -o -name "Test*.java" -path "./"
 # 1. Build succeeds
 ./gradlew build
 
-# 2. Tests pass  
+# 2. Tests pass
 ./gradlew :module:test -PincludeTags=unit
 ./gradlew :module:test -PincludeTags=integration
 
@@ -251,7 +251,7 @@ find . -maxdepth 1 -name "*.java" -o -name "*.class" && echo "Files in wrong loc
 // ❌ Creating workarounds instead of fixes
 // Adding try-catch to hide exceptions instead of addressing root cause
 
-// ❌ Abandoning difficult debugging  
+// ❌ Abandoning difficult debugging
 // "This is too complex" → Break down systematically
 
 // ❌ Not cleaning up debug output
@@ -288,5 +288,5 @@ VERIFICATION: [Command/test that proves fix works]
 ### Pattern Recognition
 - **Recurring Issues**: Document patterns that appear multiple times
 - **Environmental Dependencies**: Note tests that require specific setup
-- **Timing Issues**: Identify tests sensitive to timeouts/race conditions  
+- **Timing Issues**: Identify tests sensitive to timeouts/race conditions
 - **Data Dependencies**: Track tests that need specific data formats/content

@@ -213,7 +213,7 @@ val javadocAggregateIncludingTests by tasks.registering(Javadoc::class) {
 
 val adaptersForSqlline = listOf(
     ":arrow", ":babel", ":cassandra", ":druid", ":elasticsearch",
-    ":file", ":geode", ":graphql", ":innodb", ":kafka", ":mongodb",
+    ":file", ":geode", ":govdata", ":graphql", ":innodb", ":kafka", ":mongodb",
     ":openapi", ":salesforce", // Added custom adapters
     ":plus", ":redis", ":server", ":spark", ":splunk")
 
@@ -232,6 +232,9 @@ val sqllineClasspath by configurations.creating {
         attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, JavaVersion.current().majorVersion.toInt())
         attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
     }
+    // Exclude conflicting SLF4J bindings - only use log4j-slf4j-impl
+    exclude(group = "org.slf4j", module = "slf4j-reload4j")
+    exclude(group = "org.slf4j", module = "slf4j-log4j12")
 }
 
 @CacheableRule
@@ -253,6 +256,7 @@ dependencies {
     sqllineClasspath(platform(project(":bom")))
     sqllineClasspath(project(":testkit"))
     sqllineClasspath("sqlline:sqlline")
+    sqllineClasspath("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     for (p in adaptersForSqlline) {
         sqllineClasspath(project(p))
     }
