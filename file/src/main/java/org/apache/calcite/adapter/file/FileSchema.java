@@ -38,7 +38,6 @@ import org.apache.calcite.adapter.file.statistics.TableStatistics;
 import org.apache.calcite.adapter.file.storage.HttpStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
-import org.apache.calcite.adapter.file.storage.StorageProviderFile;
 import org.apache.calcite.adapter.file.storage.StorageProviderSource;
 import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 import org.apache.calcite.adapter.file.table.CsvTranslatableTable;
@@ -1585,7 +1584,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         Source source;
         // Check if this is a StorageProviderFile
         if (file instanceof org.apache.calcite.adapter.file.storage.StorageProviderFile) {
-          org.apache.calcite.adapter.file.storage.StorageProviderFile spFile = 
+          org.apache.calcite.adapter.file.storage.StorageProviderFile spFile =
               (org.apache.calcite.adapter.file.storage.StorageProviderFile) file;
           source = new StorageProviderSource(spFile.getFileEntry(), spFile.getStorageProvider());
         } else if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
@@ -2030,7 +2029,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.info("  Table: '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
       }
       LOGGER.info("=== END BUILDER CONTENTS ===");
-      
+
       // Debug: Log what tables we have before final build
       LOGGER.info("=== BEFORE FINAL BUILD ===");
       LOGGER.info("Preview tables count: {}", previewTables.size());
@@ -2038,12 +2037,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.info("  Table '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
       }
       LOGGER.info("=== END BEFORE FINAL BUILD ===");
-      
+
       // Rebuild the builder since build() consumes it
       ImmutableMap.Builder<String, Table> newBuilder = ImmutableMap.builder();
       newBuilder.putAll(previewTables);
       tableCache = newBuilder.build();
-      
+
       // Debug: Log final table cache contents
       LOGGER.info("=== FINAL TABLE CACHE ===");
       LOGGER.info("Final tableCache count: {}", tableCache.size());
@@ -2055,7 +2054,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       LOGGER.error("Exception during final table cache build: {}", builderException.getMessage(), builderException);
       throw builderException;
     }
-    
+
     LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}",
                 tableCache.size(), name, tableCache.keySet());
     if (tableCache.isEmpty()) {
@@ -2230,7 +2229,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // Let Sources.of handle protocol detection
     Source source0 = Sources.of(uri);
 
-    // Apply source directory for relative paths (use original directory for reading files)
+    // Apply source directory for relative paths (use the original directory for reading files)
     if (sourceDirectory != null && !isAbsoluteUri(uri)) {
       return Sources.of(sourceDirectory).append(source0);
     }
@@ -2488,12 +2487,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
           // Create JsonSearchConfig from table definition
           JsonSearchConfig config = JsonSearchConfig.fromTableDefinition(tableDef);
-          
+
           // Create multiple tables using JsonMultiTableFactory
           Map<String, Table> jsonTables = JsonMultiTableFactory.createTables(source, config);
-          
+
           LOGGER.info("Created {} tables from JSONPath extraction", jsonTables.size());
-          
+
           // Add all discovered tables to the schema
           for (Map.Entry<String, Table> entry : jsonTables.entrySet()) {
             String discoveredTableName = entry.getKey();
@@ -2501,7 +2500,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             builder.put(discoveredTableName, table);
             LOGGER.debug("Added table '{}' from JSONPath extraction", discoveredTableName);
           }
-          
+
           // Return early - we've handled this source completely
           return true;
         }
@@ -3577,7 +3576,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           LOGGER.info("Table class: {}", table.getClass().getName());
           LOGGER.info("Table toString: {}", table.toString());
           LOGGER.info("MatchingFiles count: {}", matchingFiles.size());
-          
+
           builder.put(config.getName(), table);
           alreadyProcessed.add(config.getName());
           LOGGER.info("✓ SUCCESS: Added partitioned table '{}' to builder, matchingFiles.size: {}", config.getName(), matchingFiles.size());
@@ -4332,7 +4331,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
   // Map to store explicit table mappings: source file path -> explicit table name
   private final Map<String, String> explicitTableMappings = new ConcurrentHashMap<>();
-  
+
   // Constraint metadata from model files
   private Map<String, Map<String, Object>> constraintMetadata = new HashMap<>();
 
@@ -4398,13 +4397,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       } else {
         targetFile = new File(relativePath);
       }
-      
+
       // Create parent directories if needed
       File parentDir = targetFile.getParentFile();
       if (parentDir != null && !parentDir.exists()) {
         parentDir.mkdirs();
       }
-      
+
       Files.write(targetFile.toPath(), content);
     }
   }
@@ -4508,7 +4507,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // For storage providers, need to determine the base path
       if (sourceDirectory != null) {
         String sourcePath = sourceDirectory.getAbsolutePath();
-        if (sourcePath.startsWith("s3://") || sourcePath.startsWith("gs://") || 
+        if (sourcePath.startsWith("s3://") || sourcePath.startsWith("gs://") ||
             sourcePath.startsWith("azure://") || sourcePath.startsWith("http")) {
           // Cloud storage path
           return storageProvider.resolvePath(sourcePath, relativePath);
@@ -4614,11 +4613,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     return (List<Map<String, Object>>) tableDef.get("fields");
   }
-  
+
   /**
    * Sets constraint metadata for tables in this schema.
    * Called by FileSchemaFactory to pass constraint definitions from model files.
-   * 
+   *
    * @param constraintMetadata Map from table name to constraint definitions
    */
   public void setConstraintMetadata(Map<String, Map<String, Object>> constraintMetadata) {
@@ -4635,7 +4634,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // Tables will use this metadata when getStatistic() is called
     // This enables query optimization and JDBC metadata support
   }
-  
+
   /**
    * Gets constraint metadata for a specific table.
    *

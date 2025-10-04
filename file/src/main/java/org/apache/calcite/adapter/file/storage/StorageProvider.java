@@ -209,7 +209,7 @@ public interface StorageProvider {
   /**
    * Writes Avro GenericRecords to a Parquet file using modern ParquetWriter API.
    * This is a consolidated method that all adapters can use for Parquet writing.
-   * 
+   *
    * @param path The file path where the Parquet file should be written
    * @param schema The Avro schema for the records
    * @param records The list of GenericRecords to write
@@ -221,11 +221,11 @@ public interface StorageProvider {
   default void writeAvroParquet(String path, org.apache.avro.Schema schema,
                                java.util.List<org.apache.avro.generic.GenericRecord> records,
                                String recordType) throws IOException {
-    java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+    org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
         .info("DEBUG: writeAvroParquet() START - path: " + path + ", recordType: " + recordType + ", recordCount: " + records.size());
 
     if (records.isEmpty()) {
-      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+      org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
           .info("DEBUG: writeAvroParquet() - No records to write, creating empty parquet file");
       // Don't return - we still want to create an empty file with the schema
     }
@@ -237,14 +237,14 @@ public interface StorageProvider {
     tempFile.delete();
     try {
       // Use modern ParquetWriter API with try-with-resources
-      try (org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer = 
+      try (org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer =
            org.apache.parquet.avro.AvroParquetWriter
                .<org.apache.avro.generic.GenericRecord>builder(
                    new org.apache.hadoop.fs.Path(tempFile.toURI()))
                .withSchema(schema)
                .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
                .build()) {
-        
+
         for (org.apache.avro.generic.GenericRecord record : records) {
           writer.write(record);
         }
@@ -252,12 +252,12 @@ public interface StorageProvider {
 
       // Use StorageProvider to move temp file to final location
       byte[] parquetData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+      org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
           .info("DEBUG: writeAvroParquet() - Writing " + parquetData.length + " bytes to final location: " + path);
       writeFile(path, parquetData);
-      java.util.logging.Logger.getLogger(StorageProvider.class.getName())
+      org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
           .info("DEBUG: writeAvroParquet() COMPLETED successfully - path: " + path);
-      
+
     } finally {
       // Clean up temp file
       if (tempFile.exists() && !tempFile.delete()) {
@@ -265,7 +265,7 @@ public interface StorageProvider {
         System.err.println("Warning: Could not delete temporary file: " + tempFile.getAbsolutePath());
       }
     }
-    
+
     // Clean up macOS metadata files after writing
     String parentDir = java.nio.file.Paths.get(path).getParent().toString();
     cleanupMacosMetadata(parentDir);
@@ -273,7 +273,7 @@ public interface StorageProvider {
 
   /**
    * Clean up macOS metadata files in the specified directory.
-   * Removes files like ._*, .DS_Store, *.crc, *~, *.tmp that can interfere 
+   * Removes files like ._*, .DS_Store, *.crc, *~, *.tmp that can interfere
    * with data processing tools like DuckDB.
    * Only effective for local storage providers.
    *

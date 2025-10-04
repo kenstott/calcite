@@ -174,7 +174,8 @@ public class PartitionedTableConfig {
           } else if (firstElem instanceof Map) {
             // Full definition with types: [{"name": "year", "type": "INTEGER"}, ...]
             columnDefinitions = ((List<Map<String, Object>>) defsList).stream()
-                .map(m -> new ColumnDefinition(
+                .map(
+                    m -> new ColumnDefinition(
                     (String) m.get("name"),
                     (String) m.get("type")))
                 .collect(java.util.stream.Collectors.toList());

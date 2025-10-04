@@ -35,7 +35,6 @@ import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -55,33 +54,81 @@ public class S3StorageProvider implements StorageProvider {
   // Persistent cache for restart-survivable caching
   private final PersistentStorageCache persistentCache;
 
+  // Base S3 path from directory operand (e.g., "s3://bucket/prefix/")
+  private final String baseS3Path;
+
   public S3StorageProvider() {
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-        .withCredentials(new DefaultAWSCredentialsProviderChain());
-
-    // Try to get region from default provider chain, fallback to us-west-1 if not available
-    try {
-      String region = new DefaultAwsRegionProviderChain().getRegion();
-      builder.withRegion(region);
-    } catch (Exception e) {
-      // If no region is configured, use us-west-1 as default
-      builder.withRegion("us-west-1");
-    }
-
-    this.s3Client = builder.build();
-
-    // Initialize persistent cache if cache manager is available
-    PersistentStorageCache cache = null;
-    try {
-      cache = StorageCacheManager.getInstance().getCache("s3");
-    } catch (IllegalStateException e) {
-      // Cache manager not initialized, persistent cache will be null
-    }
-    this.persistentCache = cache;
+    this((AmazonS3) null, null);
   }
 
   public S3StorageProvider(AmazonS3 s3Client) {
-    this.s3Client = s3Client;
+    this(s3Client, null);
+  }
+
+  /**
+   * Constructor with explicit configuration.
+   * Expects config map with: bucket, region, accessKeyId, secretAccessKey, directory
+   */
+  public S3StorageProvider(java.util.Map<String, Object> config) {
+    this(null, config);
+  }
+
+  /**
+   * Internal constructor with both s3Client and config.
+   */
+  private S3StorageProvider(AmazonS3 s3Client, java.util.Map<String, Object> config) {
+    // Build or use provided S3 client
+    if (s3Client == null) {
+      AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
+
+      if (config != null) {
+        // Use provided credentials if available, otherwise fall back to default chain
+        String accessKeyId = (String) config.get("accessKeyId");
+        String secretAccessKey = (String) config.get("secretAccessKey");
+
+        if (accessKeyId != null && secretAccessKey != null) {
+          builder.withCredentials(
+              new com.amazonaws.auth.AWSStaticCredentialsProvider(
+              new com.amazonaws.auth.BasicAWSCredentials(accessKeyId, secretAccessKey)));
+        } else {
+          builder.withCredentials(new DefaultAWSCredentialsProviderChain());
+        }
+
+        // Use provided region if available
+        String region = (String) config.get("region");
+        if (region != null) {
+          builder.withRegion(region);
+        } else {
+          try {
+            String defaultRegion = new DefaultAwsRegionProviderChain().getRegion();
+            builder.withRegion(defaultRegion);
+          } catch (Exception e) {
+            builder.withRegion("us-west-1");
+          }
+        }
+      } else {
+        builder.withCredentials(new DefaultAWSCredentialsProviderChain());
+        try {
+          String region = new DefaultAwsRegionProviderChain().getRegion();
+          builder.withRegion(region);
+        } catch (Exception e) {
+          builder.withRegion("us-west-1");
+        }
+      }
+
+      this.s3Client = builder.build();
+    } else {
+      this.s3Client = s3Client;
+    }
+
+    // Extract base S3 path from config (directory operand)
+    if (config != null && config.get("directory") != null) {
+      String directory = (String) config.get("directory");
+      // Ensure it ends with /
+      this.baseS3Path = directory.endsWith("/") ? directory : directory + "/";
+    } else {
+      this.baseS3Path = null;
+    }
 
     // Initialize persistent cache if cache manager is available
     PersistentStorageCache cache = null;
@@ -290,18 +337,38 @@ public class S3StorageProvider implements StorageProvider {
     return buffer.toByteArray();
   }
 
+  /**
+   * Converts a relative path to a full S3 URI using the base S3 path.
+   * If the path is already a full S3 URI, returns it unchanged.
+   */
+  private String toFullPath(String path) throws IOException {
+    if (path.startsWith("s3://")) {
+      return path;
+    }
+
+    if (baseS3Path == null) {
+      throw new IOException("Cannot resolve relative path '" + path
+          + "' without base S3 path. Please provide 'directory' in configuration.");
+    }
+
+    // Combine base S3 path with relative path
+    return baseS3Path + path;
+  }
+
   @Override public void writeFile(String path, byte[] content) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
-    
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
+
     ObjectMetadata metadata = new ObjectMetadata();
     metadata.setContentLength(content.length);
-    
+
     // Set content type based on file extension
     String contentType = guessContentType(path);
     if (contentType != null) {
       metadata.setContentType(contentType);
     }
-    
+
     try (InputStream input = new ByteArrayInputStream(content)) {
       PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, input, metadata);
       s3Client.putObject(request);
@@ -311,8 +378,6 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
-    
     // For input streams, we need to buffer the content to determine size
     // This is required for S3 uploads unless using multipart upload
     byte[] buffer = readAllBytes(content);
@@ -326,13 +391,13 @@ public class S3StorageProvider implements StorageProvider {
     if (!path.endsWith("/")) {
       path = path + "/";
     }
-    
+
     S3Uri s3Uri = parseS3Uri(path);
-    
+
     // Create an empty marker object
     ObjectMetadata metadata = new ObjectMetadata();
     metadata.setContentLength(0);
-    
+
     try (InputStream emptyContent = new ByteArrayInputStream(new byte[0])) {
       PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, emptyContent, metadata);
       s3Client.putObject(request);
@@ -346,13 +411,13 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public boolean delete(String path) throws IOException {
     S3Uri s3Uri = parseS3Uri(path);
-    
+
     try {
-      // Check if object exists first
+      // Check if an object exists first
       if (!s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key)) {
         return false;
       }
-      
+
       // Delete the object
       DeleteObjectRequest request = new DeleteObjectRequest(s3Uri.bucket, s3Uri.key);
       s3Client.deleteObject(request);
@@ -365,18 +430,18 @@ public class S3StorageProvider implements StorageProvider {
   @Override public void copyFile(String source, String destination) throws IOException {
     S3Uri sourceUri = parseS3Uri(source);
     S3Uri destUri = parseS3Uri(destination);
-    
+
     try {
       // Check if source exists
       if (!s3Client.doesObjectExist(sourceUri.bucket, sourceUri.key)) {
         throw new IOException("Source file does not exist in S3: " + source);
       }
-      
+
       // Perform the copy
-      CopyObjectRequest copyRequest = new CopyObjectRequest(
-          sourceUri.bucket, sourceUri.key,
+      CopyObjectRequest copyRequest =
+          new CopyObjectRequest(sourceUri.bucket, sourceUri.key,
           destUri.bucket, destUri.key);
-      
+
       s3Client.copyObject(copyRequest);
     } catch (AmazonServiceException e) {
       throw new IOException("Failed to copy S3 object from " + source + " to " + destination, e);

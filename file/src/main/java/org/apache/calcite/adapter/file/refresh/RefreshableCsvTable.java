@@ -32,14 +32,14 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Refreshable CSV table that re-reads the source file when modified.
  */
 public class RefreshableCsvTable extends CsvTranslatableTable implements RefreshableTable {
-  private static final Logger LOGGER = Logger.getLogger(RefreshableCsvTable.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(RefreshableCsvTable.class);
 
   private final String tableName;
   private final @Nullable Duration refreshInterval;
@@ -112,7 +112,7 @@ public class RefreshableCsvTable extends CsvTranslatableTable implements Refresh
           LOGGER.info("Remote file changed: " + source.path());
         }
       } catch (IOException e) {
-        LOGGER.log(Level.WARNING, "Failed to check remote file metadata: " + source.path(), e);
+        LOGGER.warn("Failed to check remote file metadata: " + source.path(), e);
         // Assume it might have changed to be safe
         dataStale = true;
       }
@@ -152,7 +152,7 @@ public class RefreshableCsvTable extends CsvTranslatableTable implements Refresh
       fieldTypesField.setAccessible(true);
       fieldTypesField.set(this, null);
     } catch (Exception e) {
-      LOGGER.log(Level.WARNING, "Failed to clear cached row type", e);
+      LOGGER.warn("Failed to clear cached row type", e);
     }
   }
 

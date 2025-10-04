@@ -1301,8 +1301,8 @@ public class ConversionMetadata {
 
     // Get JVM-level lock for this metadata file
     String lockKey = metadataFile.getAbsolutePath();
-    ReentrantReadWriteLock jvmLock = JVM_LOCKS.computeIfAbsent(lockKey,
-        k -> new ReentrantReadWriteLock());
+    ReentrantReadWriteLock jvmLock =
+        JVM_LOCKS.computeIfAbsent(lockKey, k -> new ReentrantReadWriteLock());
 
     // Acquire JVM-level read lock first to prevent OverlappingFileLockException
     jvmLock.readLock().lock();
@@ -1362,8 +1362,8 @@ public class ConversionMetadata {
     // Use unique temp file per thread to avoid race conditions
     // Combine thread hashcode with nanotime for uniqueness across concurrent threads
     long uniqueId = System.nanoTime() + Thread.currentThread().hashCode();
-    File tempFile = new File(metadataFile.getParentFile(),
-        metadataFile.getName() + ".tmp." + uniqueId);
+    File tempFile =
+        new File(metadataFile.getParentFile(), metadataFile.getName() + ".tmp." + uniqueId);
     File lockFile = new File(metadataFile.getParentFile(), metadataFile.getName() + ".lock");
 
     try (RandomAccessFile raf = new RandomAccessFile(lockFile, "rw");
@@ -1396,7 +1396,7 @@ public class ConversionMetadata {
   private FileLock acquireLockWithRetry(FileChannel channel, long position, long size, boolean shared) throws IOException {
     int maxRetries = 10;
     long baseDelayMs = 10;
-    
+
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       try {
         return channel.lock(position, size, shared);
@@ -1404,22 +1404,22 @@ public class ConversionMetadata {
         if (attempt == maxRetries - 1) {
           throw new IOException("Failed to acquire file lock after " + maxRetries + " attempts", e);
         }
-        
+
         // Exponential backoff with jitter
         long delayMs = baseDelayMs * (1L << attempt);
         delayMs += (long) (Math.random() * delayMs * 0.1); // Add 10% jitter
-        
+
         try {
           Thread.sleep(delayMs);
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
           throw new IOException("Interrupted while waiting for file lock", ie);
         }
-        
+
         LOGGER.debug("Retrying file lock acquisition, attempt {}/{}", attempt + 2, maxRetries);
       }
     }
-    
+
     throw new IOException("Unreachable code");
   }
 

@@ -60,8 +60,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -75,7 +75,7 @@ import java.util.stream.Collectors;
 public class GlobParquetTable extends AbstractTable
     implements RefreshableTable, ScannableTable {
 
-  private static final Logger LOGGER = Logger.getLogger(GlobParquetTable.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(GlobParquetTable.class);
 
   private final String globPattern;
   private final String tableName;
@@ -220,7 +220,7 @@ public class GlobParquetTable extends AbstractTable
 
       lastRefreshTime = Instant.now();
     } catch (Exception e) {
-      LOGGER.log(Level.WARNING, "Failed to refresh glob cache", e);
+      LOGGER.warn("Failed to refresh glob cache", e);
       cacheValid.set(false);
     }
   }
@@ -246,7 +246,7 @@ public class GlobParquetTable extends AbstractTable
         .collect(Collectors.toList());
 
     if (filePaths.isEmpty()) {
-      LOGGER.warning("No files to process for glob: " + globPattern);
+      LOGGER.warn("No files to process for glob: " + globPattern);
       return;
     }
 
@@ -309,11 +309,11 @@ public class GlobParquetTable extends AbstractTable
 
       if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
         // Excel files - use existing converter (placeholder for now)
-        LOGGER.fine("Excel file found: " + file.getName());
+        LOGGER.debug("Excel file found: " + file.getName());
         allFiles.add(file);
       } else if (fileName.endsWith(".html") || fileName.endsWith(".htm")) {
         // HTML files - use new converter
-        LOGGER.fine("Preprocessing HTML file: " + file.getName());
+        LOGGER.debug("Preprocessing HTML file: " + file.getName());
         // Use conversions subdirectory under cacheDir, not source directory
         File conversionsDir = new File(cacheDir, "conversions");
         if (!conversionsDir.exists()) {

@@ -22,13 +22,15 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.Driver;
 import org.apache.calcite.schema.SchemaPlus;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
 /**
  * JDBC Driver for the Calcite File Adapter.
@@ -53,7 +55,7 @@ import java.util.logging.Logger;
  */
 public class FileJdbcDriver extends Driver {
 
-  private static final Logger LOGGER = Logger.getLogger(FileJdbcDriver.class.getName());
+  private static final Logger LOGGER = LoggerFactory.getLogger(FileJdbcDriver.class);
 
   // Track initialized schemas to avoid duplicate setup
   private static final Set<String> INITIALIZED_SCHEMAS = ConcurrentHashMap.newKeySet();
@@ -96,7 +98,7 @@ public class FileJdbcDriver extends Driver {
       }
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to setup file schemas: " + e.getMessage());
+      LOGGER.error("Failed to setup file schemas: {}", e.getMessage(), e);
       throw new RuntimeException("Schema setup failed", e);
     }
   }
@@ -144,7 +146,7 @@ public class FileJdbcDriver extends Driver {
       LOGGER.info("✓ File schema setup complete: " + schemaConfig.getName());
 
     } catch (Exception e) {
-      LOGGER.severe("Failed to setup schema " + schemaConfig.getName() + ": " + e.getMessage());
+      LOGGER.error("Failed to setup schema {}: {}", schemaConfig.getName(), e.getMessage(), e);
       throw new RuntimeException("Schema setup failed: " + schemaConfig.getName(), e);
     }
   }
@@ -187,7 +189,7 @@ public class FileJdbcDriver extends Driver {
           try {
             batchSize = Integer.parseInt(value);
           } catch (NumberFormatException e) {
-            LOGGER.warning("Invalid batch_size: " + value + ", using default: " + batchSize);
+            LOGGER.warn("Invalid batch_size: {}, using default: {}", value, batchSize);
           }
           break;
         }
@@ -268,7 +270,7 @@ public class FileJdbcDriver extends Driver {
           config.addSchema(schemaConfig);
           LOGGER.info("Configured schema from properties: " + schemaName);
         } catch (NumberFormatException e) {
-          LOGGER.warning("Invalid batch_size for schema " + schemaName + ": " + batchSizeStr);
+          LOGGER.warn("Invalid batch_size for schema {}: {}", schemaName, batchSizeStr);
         }
       }
     }

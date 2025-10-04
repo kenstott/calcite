@@ -23,7 +23,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.security.UserGroupInformation;
 
 import org.slf4j.Logger;
@@ -36,7 +35,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -71,25 +69,25 @@ public class HDFSStorageProvider implements StorageProvider {
    */
   public HDFSStorageProvider(Configuration config) throws IOException {
     this.hadoopConfig = new Configuration(config);
-    
+
     // Get the default filesystem URI from configuration
     this.defaultUri = hadoopConfig.get("fs.defaultFS", "hdfs://localhost:9000");
-    
+
     try {
       // Initialize HDFS filesystem
       this.hdfsFileSystem = FileSystem.get(URI.create(defaultUri), hadoopConfig);
-      
+
       LOGGER.info("Initialized HDFS storage provider with URI: {}", defaultUri);
-      
+
       // Log authentication information for debugging
       if (UserGroupInformation.isSecurityEnabled()) {
-        LOGGER.info("Kerberos authentication enabled, current user: {}", 
+        LOGGER.info("Kerberos authentication enabled, current user: {}",
             UserGroupInformation.getCurrentUser());
       } else {
-        LOGGER.info("Simple authentication, current user: {}", 
+        LOGGER.info("Simple authentication, current user: {}",
             UserGroupInformation.getCurrentUser().getShortUserName());
       }
-      
+
     } catch (Exception e) {
       throw new IOException("Failed to initialize HDFS filesystem with URI: " + defaultUri, e);
     }
@@ -139,9 +137,9 @@ public class HDFSStorageProvider implements StorageProvider {
 
       if (recursive) {
         // Use listFiles for recursive listing
-        org.apache.hadoop.fs.RemoteIterator<org.apache.hadoop.fs.LocatedFileStatus> iterator = 
+        org.apache.hadoop.fs.RemoteIterator<org.apache.hadoop.fs.LocatedFileStatus> iterator =
             hdfsFileSystem.listFiles(hdfsPath, true);
-        
+
         while (iterator.hasNext()) {
           org.apache.hadoop.fs.LocatedFileStatus status = iterator.next();
           entries.add(createFileEntry(status));
@@ -168,17 +166,16 @@ public class HDFSStorageProvider implements StorageProvider {
 
     try {
       FileStatus status = hdfsFileSystem.getFileStatus(hdfsPath);
-      
+
       // HDFS doesn't have ETags like S3, so we'll use modification time as a pseudo-ETag
       String etag = String.valueOf(status.getModificationTime());
-      
+
       return new FileMetadata(
           path,
           status.getLen(),
           status.getModificationTime(),
           inferContentType(path),
-          etag
-      );
+          etag);
 
     } catch (IOException e) {
       LOGGER.error("Failed to get metadata for HDFS path: {}", hdfsPath, e);
@@ -248,7 +245,7 @@ public class HDFSStorageProvider implements StorageProvider {
     // Remove hdfs:// prefix from base path for resolution, then add it back
     String basePathNormalized = basePath;
     String uriPrefix = "";
-    
+
     if (basePath.startsWith("hdfs://")) {
       int pathStart = basePath.indexOf("/", 8); // Skip hdfs://host:port
       if (pathStart != -1) {
@@ -268,7 +265,7 @@ public class HDFSStorageProvider implements StorageProvider {
     }
 
     String resolved = basePathNormalized + relativePath;
-    
+
     // Add back URI prefix if it existed
     if (!uriPrefix.isEmpty()) {
       resolved = uriPrefix + resolved;
@@ -290,7 +287,7 @@ public class HDFSStorageProvider implements StorageProvider {
       // Write content to HDFS
       try (OutputStream outputStream = hdfsFileSystem.create(hdfsPath, true);
            ByteArrayInputStream inputStream = new ByteArrayInputStream(content)) {
-        
+
         byte[] buffer = new byte[8192];
         int bytesRead;
         while ((bytesRead = inputStream.read(buffer)) != -1) {
@@ -321,12 +318,12 @@ public class HDFSStorageProvider implements StorageProvider {
         byte[] buffer = new byte[8192];
         int bytesRead;
         long totalBytes = 0;
-        
+
         while ((bytesRead = content.read(buffer)) != -1) {
           outputStream.write(buffer, 0, bytesRead);
           totalBytes += bytesRead;
         }
-        
+
         LOGGER.debug("Wrote {} bytes to HDFS path: {}", totalBytes, hdfsPath);
       }
 
@@ -383,8 +380,8 @@ public class HDFSStorageProvider implements StorageProvider {
       }
 
       // Copy file using Hadoop's built-in copy utility
-      org.apache.hadoop.fs.FileUtil.copy(hdfsFileSystem, sourcePath, 
-                                        hdfsFileSystem, destPath, 
+      org.apache.hadoop.fs.FileUtil.copy(hdfsFileSystem, sourcePath,
+                                        hdfsFileSystem, destPath,
                                         false, hadoopConfig);
 
       LOGGER.debug("Copied HDFS file from {} to {}", sourcePath, destPath);
@@ -397,7 +394,7 @@ public class HDFSStorageProvider implements StorageProvider {
 
   /**
    * Gets the underlying Hadoop FileSystem for advanced operations.
-   * 
+   *
    * @return The Hadoop FileSystem instance
    */
   public FileSystem getFileSystem() {
@@ -406,7 +403,7 @@ public class HDFSStorageProvider implements StorageProvider {
 
   /**
    * Gets the Hadoop configuration used by this provider.
-   * 
+   *
    * @return The Hadoop Configuration instance
    */
   public Configuration getConfiguration() {
@@ -434,8 +431,7 @@ public class HDFSStorageProvider implements StorageProvider {
         status.getPath().getName(),
         status.isDirectory(),
         status.getLen(),
-        status.getModificationTime()
-    );
+        status.getModificationTime());
   }
 
   /**

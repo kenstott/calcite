@@ -306,40 +306,40 @@ public class DuckDBJdbcSchemaFactory {
   private static void registerSimilarityFunctions(Connection conn) {
     try {
       LOGGER.info("Registering similarity functions using DuckDB's native array functions");
-      
+
       // DuckDB has native array_cosine_similarity() function
       // We need to create macros that handle different input formats
-      
+
       // Create a macro that converts string vectors to arrays and uses DuckDB's native function
-      String cosineSimilarityMacro = 
+      String cosineSimilarityMacro =
         "CREATE OR REPLACE MACRO COSINE_SIMILARITY(vector1, vector2) AS " +
         "array_cosine_similarity(" +
         "  CAST(string_split(vector1, ',') AS DOUBLE[]), " +
         "  CAST(string_split(vector2, ',') AS DOUBLE[])" +
         ")";
-      
+
       conn.createStatement().execute(cosineSimilarityMacro);
       LOGGER.info("Successfully registered COSINE_SIMILARITY macro using DuckDB's array_cosine_similarity");
-      
+
       // Create COSINE_DISTANCE macro using DuckDB's native function
-      String cosineDistanceMacro = 
+      String cosineDistanceMacro =
         "CREATE OR REPLACE MACRO COSINE_DISTANCE(vector1, vector2) AS " +
         "array_cosine_distance(" +
         "  CAST(string_split(vector1, ',') AS DOUBLE[]), " +
         "  CAST(string_split(vector2, ',') AS DOUBLE[])" +
         ")";
-      
+
       conn.createStatement().execute(cosineDistanceMacro);
       LOGGER.info("Successfully registered COSINE_DISTANCE macro using DuckDB's array_cosine_distance");
-      
+
       // Also create macros for arrays directly (in case embeddings are stored as arrays)
-      String arrayCosineSimilarityMacro = 
+      String arrayCosineSimilarityMacro =
         "CREATE OR REPLACE MACRO ARRAY_COSINE_SIMILARITY(arr1, arr2) AS " +
         "array_cosine_similarity(arr1, arr2)";
-      
+
       conn.createStatement().execute(arrayCosineSimilarityMacro);
       LOGGER.info("Successfully registered ARRAY_COSINE_SIMILARITY macro");
-      
+
     } catch (Exception e) {
       LOGGER.warn("Failed to register similarity functions as DuckDB macros: " + e.getMessage());
       LOGGER.debug("Error details: ", e);
