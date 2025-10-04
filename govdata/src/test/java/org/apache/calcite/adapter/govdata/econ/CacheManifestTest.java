@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,8 +37,7 @@ public class CacheManifestTest {
   @TempDir
   Path tempDir;
 
-  @Test
-  void testBasicCacheOperations() throws IOException {
+  @Test void testBasicCacheOperations() throws IOException {
     String cacheDir = tempDir.toString();
     CacheManifest manifest = CacheManifest.load(cacheDir);
 
@@ -71,8 +69,7 @@ public class CacheManifestTest {
     assertTrue(newManifest.isCached(dataType, year, params));
   }
 
-  @Test
-  void testCacheExpiration() throws IOException, InterruptedException {
+  @Test void testCacheExpiration() throws IOException, InterruptedException {
     String cacheDir = tempDir.toString();
     CacheManifest manifest = CacheManifest.load(cacheDir);
 
@@ -96,8 +93,7 @@ public class CacheManifestTest {
     assertTrue(manifest.isCached(dataType, year, params));
   }
 
-  @Test
-  void testMissingFileHandling() throws IOException {
+  @Test void testMissingFileHandling() throws IOException {
     String cacheDir = tempDir.toString();
     CacheManifest manifest = CacheManifest.load(cacheDir);
 
@@ -114,8 +110,7 @@ public class CacheManifestTest {
     assertFalse(manifest.isCached(dataType, year, params));
   }
 
-  @Test
-  void testManifestPersistence() throws IOException {
+  @Test void testManifestPersistence() throws IOException {
     String cacheDir = tempDir.toString();
     CacheManifest manifest = CacheManifest.load(cacheDir);
 

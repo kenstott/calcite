@@ -21,11 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,8 +37,7 @@ public class BasicQueryTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(BasicQueryTest.class);
 
-  @Test
-  void testDriverLoading() {
+  @Test void testDriverLoading() {
     LOGGER.debug("Testing Calcite JDBC driver loading");
 
     assertDoesNotThrow(() -> {
@@ -51,8 +45,7 @@ public class BasicQueryTest {
     }, "Should load Calcite JDBC driver without exception");
   }
 
-  @Test
-  void testConnectionPropertiesValidation() {
+  @Test void testConnectionPropertiesValidation() {
     LOGGER.debug("Testing connection properties validation");
 
     Properties props = new Properties();
@@ -64,8 +57,7 @@ public class BasicQueryTest {
     assertEquals("TO_LOWER", props.getProperty("unquotedCasing"));
   }
 
-  @Test
-  void testSqlIdentifierHandling() {
+  @Test void testSqlIdentifierHandling() {
     LOGGER.debug("Testing SQL identifier casing and quoting rules");
 
     // Test lowercase identifiers (should not need quoting)
@@ -85,8 +77,7 @@ public class BasicQueryTest {
     assertTrue(needsQuoting(reservedWord), "Reserved words should need quoting");
   }
 
-  @Test
-  void testQueryStructureValidation() {
+  @Test void testQueryStructureValidation() {
     LOGGER.debug("Testing basic SQL query structure validation");
 
     // Test simple SELECT query structure
@@ -106,8 +97,7 @@ public class BasicQueryTest {
     assertFalse(isValidQueryStructure(invalidQuery), "Invalid syntax should be rejected");
   }
 
-  @Test
-  void testParameterizedQueryPreparation() {
+  @Test void testParameterizedQueryPreparation() {
     LOGGER.debug("Testing parameterized query preparation patterns");
 
     String queryTemplate = "SELECT * FROM table1 WHERE id = ? AND name = ?";
@@ -118,8 +108,7 @@ public class BasicQueryTest {
     assertEquals(2, paramCount, "Should have exactly 2 parameters");
   }
 
-  @Test
-  void testErrorHandlingPatterns() {
+  @Test void testErrorHandlingPatterns() {
     LOGGER.debug("Testing error handling patterns");
 
     // Test null handling
@@ -138,8 +127,7 @@ public class BasicQueryTest {
     }, "Should accept valid input");
   }
 
-  @Test
-  void testDataTypeMapping() {
+  @Test void testDataTypeMapping() {
     LOGGER.debug("Testing basic data type mapping");
 
     // Test string type mapping

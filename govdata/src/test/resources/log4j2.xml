@@ -33,6 +33,7 @@
 
         <!-- Enable DEBUG for SEC adapter -->
         <Logger name="org.apache.calcite.adapter.sec" level="DEBUG"/>
+        <Logger name="org.apache.calcite.adapter.govdata" level="DEBUG"/>
 
         <!-- Reduce Parquet noise -->
         <Logger name="org.apache.parquet" level="WARN"/>

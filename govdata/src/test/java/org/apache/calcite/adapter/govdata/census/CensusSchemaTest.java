@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.govdata.census;
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.Table;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -32,7 +31,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -68,8 +66,8 @@ public class CensusSchemaTest {
 
   // List of expected Census tables based on census-schema.json
   // Tables are created with lowercase names due to SMART_CASING
-  private static final List<String> EXPECTED_TABLES = Arrays.asList(
-      "acs_population",
+  private static final List<String> EXPECTED_TABLES =
+      Arrays.asList("acs_population",
       "acs_demographics",
       "acs_income",
       "acs_poverty",
@@ -89,8 +87,7 @@ public class CensusSchemaTest {
       "decennial_housing",
       "economic_census",
       "county_business_patterns",
-      "population_estimates"
-  );
+      "population_estimates");
 
   @BeforeAll
   public static void setUp() throws Exception {
@@ -135,21 +132,36 @@ public class CensusSchemaTest {
   private static void createTestModel() throws Exception {
     modelFile = tempDir.resolve("census-model.json").toFile();
 
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"census\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"census\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"dataSource\": \"census\",\n" +
-        "      \"autoDownload\": true,\n" +  // Enable auto-download with improved caching
-        "      \"startYear\": 2020,\n" +
-        "      \"endYear\": 2023,\n" +
-        "      \"censusCacheTtlDays\": 365\n" +
-        "    }\n" +
-        "  }]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"census\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"census\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"dataSource\": \"census\",\n"
+  +
+        "      \"autoDownload\": true,\n"
+  +  // Enable auto-download with improved caching
+        "      \"startYear\": 2020,\n"
+  +
+        "      \"endYear\": 2023,\n"
+  +
+        "      \"censusCacheTtlDays\": 365\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     try (FileWriter writer = new FileWriter(modelFile)) {
@@ -158,8 +170,7 @@ public class CensusSchemaTest {
   }
 
 
-  @Test
-  @SuppressWarnings("deprecation")
+  @Test @SuppressWarnings("deprecation")
   public void testCensusSchemaConnection() throws Exception {
     // Test that we can connect to the Census schema
     try (Connection connection = createConnection()) {
@@ -177,8 +188,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testAllTablesDiscoverable() throws Exception {
+  @Test public void testAllTablesDiscoverable() throws Exception {
     // Test that all expected tables are discoverable via metadata
     try (Connection connection = createConnection()) {
       DatabaseMetaData metaData = connection.getMetaData();
@@ -223,8 +233,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testAllTablesQueryable() throws Exception {
+  @Test public void testAllTablesQueryable() throws Exception {
     // Test that all tables can be queried with SELECT *
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
@@ -262,8 +271,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testTableColumns() throws Exception {
+  @Test public void testTableColumns() throws Exception {
     // Test that tables have expected columns
     try (Connection connection = createConnection()) {
       DatabaseMetaData metaData = connection.getMetaData();
@@ -288,8 +296,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testCrossTableJoins() throws Exception {
+  @Test public void testCrossTableJoins() throws Exception {
     // Test that we can join Census tables (demonstrates foreign key relationships)
     // Note: Partitioned tables may not support column-level metadata, so we use SELECT *
     try (Connection connection = createConnection()) {
@@ -426,8 +433,7 @@ public class CensusSchemaTest {
   }
 
 
-  @Test
-  public void testPartitionedTableAggregationWithFilter() throws Exception {
+  @Test public void testPartitionedTableAggregationWithFilter() throws Exception {
     // Test that aggregation works correctly when filtering by partition key
     String apiKey = System.getProperty("CENSUS_API_KEY");
     assertNotNull(apiKey, "CENSUS_API_KEY must be configured for integration tests");
@@ -447,8 +453,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testDataPresence() throws Exception {
+  @Test public void testDataPresence() throws Exception {
     // Test that tables contain data (non-zero rows)
     // This test requires actual Census data to be downloaded
     // For partitioned tables, we test with a specific year to avoid partition scanning issues
@@ -462,15 +467,14 @@ public class CensusSchemaTest {
       List<String> emptyTables = new ArrayList<>();
 
       // Define which tables are partitioned by year
-      List<String> partitionedTables = Arrays.asList(
-          "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+      List<String> partitionedTables =
+          Arrays.asList("acs_population", "acs_demographics", "acs_income", "acs_poverty",
           "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
           "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
           "acs_veterans", "acs_migration", "acs_occupation",
           "decennial_population", "decennial_demographics", "decennial_housing",
           "economic_census", "county_business_patterns",
-          "population_estimates"
-      );
+          "population_estimates");
 
       for (String tableName : EXPECTED_TABLES) {
         try {
@@ -478,12 +482,12 @@ public class CensusSchemaTest {
           // For partitioned tables, filter by a specific year to avoid ClassCastException
           // on partition keys during aggregation
           if (partitionedTables.contains(tableName)) {
-            countQuery = String.format(
-                "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
+            countQuery =
+                String.format("SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
                 tableName);
           } else {
-            countQuery = String.format(
-                "SELECT COUNT(*) as row_count FROM census.\"%s\"", tableName);
+            countQuery =
+                String.format("SELECT COUNT(*) as row_count FROM census.\"%s\"", tableName);
           }
 
           ResultSet rs = stmt.executeQuery(countQuery);
@@ -515,8 +519,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testComprehensiveDataCoverage() throws Exception {
+  @Test public void testComprehensiveDataCoverage() throws Exception {
     // Comprehensive test that validates all tables have data for all expected years
     // This test requires actual Census data to be downloaded
 
@@ -527,24 +530,20 @@ public class CensusSchemaTest {
     int[] expectedYears = {2020, 2021, 2022, 2023};
 
     // Tables by data source type
-    List<String> acsTables = Arrays.asList(
-        "acs_population", "acs_demographics", "acs_income", "acs_poverty",
+    List<String> acsTables =
+        Arrays.asList("acs_population", "acs_demographics", "acs_income", "acs_poverty",
         "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
         "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
-        "acs_veterans", "acs_migration", "acs_occupation"
-    );
+        "acs_veterans", "acs_migration", "acs_occupation");
 
-    List<String> decennialTables = Arrays.asList(
-        "decennial_population", "decennial_demographics", "decennial_housing"
-    );
+    List<String> decennialTables =
+        Arrays.asList("decennial_population", "decennial_demographics", "decennial_housing");
 
-    List<String> economicTables = Arrays.asList(
-        "economic_census", "county_business_patterns"
-    );
+    List<String> economicTables =
+        Arrays.asList("economic_census", "county_business_patterns");
 
-    List<String> populationTables = Arrays.asList(
-        "population_estimates"
-    );
+    List<String> populationTables =
+        Arrays.asList("population_estimates");
 
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
@@ -560,8 +559,8 @@ public class CensusSchemaTest {
       for (String tableName : acsTables) {
         for (int year : expectedYears) {
           totalCombinations++;
-          String query = String.format(
-              "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
+          String query =
+              String.format("SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
               tableName, year);
 
           try {
@@ -590,8 +589,8 @@ public class CensusSchemaTest {
       System.out.println("\nTesting Decennial tables (expect 2020 only):");
       for (String tableName : decennialTables) {
         totalCombinations++;
-        String query = String.format(
-            "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
+        String query =
+            String.format("SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2020",
             tableName);
 
         try {
@@ -619,8 +618,8 @@ public class CensusSchemaTest {
       System.out.println("\nTesting Economic Census tables (expect 2022 only):");
       for (String tableName : economicTables) {
         totalCombinations++;
-        String query = String.format(
-            "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2022",
+        String query =
+            String.format("SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = 2022",
             tableName);
 
         try {
@@ -649,8 +648,8 @@ public class CensusSchemaTest {
       for (String tableName : populationTables) {
         for (int year : expectedYears) {
           totalCombinations++;
-          String query = String.format(
-              "SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
+          String query =
+              String.format("SELECT COUNT(*) as row_count FROM census.\"%s\" WHERE \"year\" = %d",
               tableName, year);
 
           try {
@@ -700,8 +699,7 @@ public class CensusSchemaTest {
     }
   }
 
-  @Test
-  public void testYearPartitioning() throws Exception {
+  @Test public void testYearPartitioning() throws Exception {
     // Test that year partitioning works correctly
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();

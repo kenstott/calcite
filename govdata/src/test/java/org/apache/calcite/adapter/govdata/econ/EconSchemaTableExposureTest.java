@@ -17,12 +17,11 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
-import org.apache.calcite.adapter.govdata.econ.BeaDataDownloader;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -37,7 +36,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Simple test to verify all ECON tables are exposed and queryable.
@@ -51,8 +49,7 @@ public class EconSchemaTableExposureTest {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  public void testAllTablesAreQueryable() throws Exception {
+  @Test public void testAllTablesAreQueryable() throws Exception {
     // Create model JSON using GovDataSchemaFactory
     String modelJson =
         "{"
@@ -96,8 +93,8 @@ public class EconSchemaTableExposureTest {
     expectedTables.add("ita_data");
     expectedTables.add("industry_gdp");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Test each table by sampling data and checking for rows
@@ -149,13 +146,11 @@ public class EconSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testTableConstraintsExistWithDuckDB() throws Exception {
+  @Test public void testTableConstraintsExistWithDuckDB() throws Exception {
     testTableConstraintsWithEngine("DUCKDB");
   }
 
-  @Test
-  public void testTableConstraintsExistWithParquet() throws Exception {
+  @Test public void testTableConstraintsExistWithParquet() throws Exception {
     testTableConstraintsWithEngine("PARQUET");
   }
 
@@ -189,8 +184,8 @@ public class EconSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Query primary key constraints using proper SQL syntax
@@ -279,8 +274,7 @@ public class EconSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testStateGdpTableExists() throws Exception {
+  @Test public void testStateGdpTableExists() throws Exception {
     // Create model JSON
     String modelJson =
         "{"
@@ -306,8 +300,8 @@ public class EconSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Simple test - just try to query state_gdp table

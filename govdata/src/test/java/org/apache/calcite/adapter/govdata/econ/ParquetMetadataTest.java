@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -26,9 +29,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -50,8 +50,7 @@ public class ParquetMetadataTest {
     return StorageProviderFactory.createFromUrl("file://" + tempDir.getAbsolutePath());
   }
 
-  @Test
-  void testTradeStatisticsMetadata() throws Exception {
+  @Test void testTradeStatisticsMetadata() throws Exception {
     // Create a minimal trade statistics dataset
     BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
 
@@ -113,8 +112,7 @@ public class ParquetMetadataTest {
     }
   }
 
-  @Test
-  void testRegionalIncomeMetadata() throws Exception {
+  @Test void testRegionalIncomeMetadata() throws Exception {
     BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
 
     List<BeaDataDownloader.RegionalIncome> incomeData = new ArrayList<>();
@@ -158,8 +156,7 @@ public class ParquetMetadataTest {
     }
   }
 
-  @Test
-  void testStateGdpMetadata() throws Exception {
+  @Test void testStateGdpMetadata() throws Exception {
     BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
 
     List<BeaDataDownloader.StateGdp> gdpData = new ArrayList<>();

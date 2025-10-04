@@ -43,17 +43,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class EconSchemaTest {
-  
+
   private static Path tempDir;
-  
+
   @BeforeAll
   public static void setUp() throws Exception {
     tempDir = Files.createTempDirectory("econ-test");
     tempDir.toFile().deleteOnExit();
   }
-  
-  @Test
-  public void testBlsTablesWithComments() throws Exception {
+
+  @Test public void testBlsTablesWithComments() throws Exception {
     // Create model with BLS API key
     String modelJson = "{"
         + "\"version\": \"1.0\","
@@ -69,29 +68,29 @@ public class EconSchemaTest {
         + "  }"
         + "}]"
         + "}";
-    
+
     File modelFile = new File(tempDir.toFile(), "econ-model.json");
     Files.write(modelFile.toPath(), modelJson.getBytes());
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile.getAbsolutePath(), props)) {
-      
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath(), props)) {
+
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       assertNotNull(calciteConn);
-      
+
       DatabaseMetaData meta = conn.getMetaData();
-      
+
       // Check that BLS tables exist
       try (ResultSet rs = meta.getTables(null, "ECON", "%", null)) {
         boolean foundEmployment = false;
         boolean foundInflation = false;
         boolean foundWage = false;
         boolean foundRegional = false;
-        
+
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME");
           if ("EMPLOYMENT_STATISTICS".equals(tableName)) {
@@ -119,23 +118,23 @@ public class EconSchemaTest {
             assertTrue(comment.contains("metropolitan"));
           }
         }
-        
+
         assertTrue(foundEmployment, "employment_statistics table not found");
         assertTrue(foundInflation, "inflation_metrics table not found");
         assertTrue(foundWage, "wage_growth table not found");
         assertTrue(foundRegional, "regional_employment table not found");
       }
-      
+
       // Check column comments for employment_statistics
       try (ResultSet rs = meta.getColumns(null, "ECON", "EMPLOYMENT_STATISTICS", null)) {
         boolean foundDate = false;
         boolean foundSeriesId = false;
         boolean foundValue = false;
-        
+
         while (rs.next()) {
           String columnName = rs.getString("COLUMN_NAME");
           String comment = rs.getString("REMARKS");
-          
+
           if ("DATE".equals(columnName)) {
             foundDate = true;
             assertNotNull(comment);
@@ -150,16 +149,16 @@ public class EconSchemaTest {
             assertTrue(comment.contains("Metric value"));
           }
         }
-        
+
         assertTrue(foundDate, "date column not found");
         assertTrue(foundSeriesId, "series_id column not found");
         assertTrue(foundValue, "value column not found");
       }
-      
+
       // Test schema comment
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT comment FROM information_schema.schemata WHERE schema_name = 'ECON'")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT comment FROM information_schema.schemata WHERE schema_name = 'ECON'")) {
         assertTrue(rs.next());
         String schemaComment = rs.getString("comment");
         assertNotNull(schemaComment);
@@ -169,24 +168,23 @@ public class EconSchemaTest {
       }
     }
   }
-  
-  @Test
-  public void testBlsApiClient() throws Exception {
+
+  @Test public void testBlsApiClient() throws Exception {
     String apiKey = System.getenv("BLS_API_KEY");
     if (apiKey == null) {
       // Skip test if no API key available
       System.out.println("Skipping BLS API test - no API key configured");
       return;
     }
-    
+
     BlsApiClient client = new BlsApiClient(apiKey);
-    
+
     // Test fetching unemployment rate for 2024
     List<Map<String, Object>> data = client.fetchTimeSeries(BlsApiClient.Series.UNEMPLOYMENT_RATE, 2024, 2024);
-    
+
     assertNotNull(data);
     assertTrue(data.size() > 0, "Should have some data points");
-    
+
     // Verify data structure
     Map<String, Object> firstPoint = data.get(0);
     assertNotNull(firstPoint.get("date"));

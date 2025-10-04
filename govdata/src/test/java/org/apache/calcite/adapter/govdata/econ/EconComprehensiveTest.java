@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -56,8 +56,9 @@ public class EconComprehensiveTest {
   /**
    * ECON schema expected tables (18 total).
    */
-  private static final Set<String> ECON_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
-      "employment_statistics",
+  private static final Set<String> ECON_EXPECTED_TABLES =
+      new HashSet<>(
+          Arrays.asList("employment_statistics",
       "inflation_metrics",
       "wage_growth",
       "regional_employment",
@@ -76,16 +77,14 @@ public class EconComprehensiveTest {
       "fred_treasuries",
       "fred_employment_indicators",
       // FRED catalog table
-      "fred_data_series_catalog"
-  ));
+      "fred_data_series_catalog"));
 
   @BeforeAll
   public static void setup() {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  public void testEconSchemaComprehensive() throws Exception {
+  @Test public void testEconSchemaComprehensive() throws Exception {
     // Create ECON-only model with comprehensive configuration
     String modelJson =
         "{" +

@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,66 +35,63 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Tag("integration")
 public class RegionalIncomeDebugTest {
-  
+
   @BeforeAll
   static void setUp() {
     TestEnvironmentLoader.ensureLoaded();
   }
-  
-  @Test
-  public void testRegionalIncomeDownload() throws Exception {
+
+  @Test public void testRegionalIncomeDownload() throws Exception {
     // Use a temp directory for testing
     Path tempDir = Files.createTempDirectory("regional-test");
     String cacheDir = tempDir.toString();
-    
+
     String apiKey = System.getenv("BEA_API_KEY");
     if (apiKey == null) {
       apiKey = System.getProperty("BEA_API_KEY");
     }
-    
+
     if (apiKey == null) {
       fail("BEA_API_KEY not found in environment or system properties");
     }
-    
+
     System.out.println("Testing with BEA API key: " + apiKey.substring(0, 4) + "...");
-    
-    BeaDataDownloader downloader = new BeaDataDownloader(
-        cacheDir,
+
+    BeaDataDownloader downloader =
+        new BeaDataDownloader(cacheDir,
         apiKey,
-        StorageProviderFactory.createFromUrl(cacheDir)
-    );
-    
+        StorageProviderFactory.createFromUrl(cacheDir));
+
     // Test download for 2023
     System.out.println("Downloading regional income for 2023...");
     downloader.downloadRegionalIncomeForYear(2023);
-    
+
     // Check if file was created
     File jsonFile = new File(cacheDir, "source=econ/type=indicators/year=2023/regional_income.json");
     assertTrue(jsonFile.exists(), "Regional income JSON file should exist");
-    
+
     // Check file size
     long fileSize = jsonFile.length();
     System.out.println("JSON file size: " + fileSize + " bytes");
-    
+
     // Read and check content
     String content = Files.readString(jsonFile.toPath());
     System.out.println("First 500 chars of content: " + content.substring(0, Math.min(500, content.length())));
-    
+
     // Check if it has actual data
     assertTrue(content.contains("regional_income"), "File should contain regional_income field");
     assertTrue(fileSize > 100, "File should have substantial data (not just empty array)");
-    
+
     // Test parquet conversion
     File parquetDir = new File(tempDir.toString(), "parquet");
     parquetDir.mkdirs();
     File parquetFile = new File(parquetDir, "regional_income.parquet");
-    
+
     System.out.println("Converting to parquet...");
     downloader.convertRegionalIncomeToParquet(
         new File(cacheDir, "source=econ/type=indicators/year=2023"),
-        parquetFile.getAbsolutePath()
-    );
-    
+        parquetFile.getAbsolutePath());
+
     assertTrue(parquetFile.exists(), "Parquet file should be created");
     System.out.println("Parquet file size: " + parquetFile.length() + " bytes");
   }

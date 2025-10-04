@@ -17,8 +17,8 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.sql.Connection;
@@ -37,20 +37,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 @EnabledIfEnvironmentVariable(named = "BLS_API_KEY", matches = ".+")
 public class EconIntegrationTest {
-  
+
   @BeforeAll
   public static void setup() {
     // Verify environment is properly configured
-    assertNotNull(System.getenv("GOVDATA_CACHE_DIR"), 
+    assertNotNull(System.getenv("GOVDATA_CACHE_DIR"),
         "GOVDATA_CACHE_DIR must be set");
-    assertNotNull(System.getenv("GOVDATA_PARQUET_DIR"), 
+    assertNotNull(System.getenv("GOVDATA_PARQUET_DIR"),
         "GOVDATA_PARQUET_DIR must be set");
-    assertNotNull(System.getenv("BLS_API_KEY"), 
+    assertNotNull(System.getenv("BLS_API_KEY"),
         "BLS_API_KEY must be set for integration tests");
   }
-  
-  @Test
-  public void testEconDataDownloadAndQuery() throws Exception {
+
+  @Test public void testEconDataDownloadAndQuery() throws Exception {
     // Create model JSON with ECON schema
     String modelJson = "{"
         + "\"version\": \"1.0\","
@@ -67,43 +66,43 @@ public class EconIntegrationTest {
         + "  }"
         + "}]"
         + "}";
-    
+
     // Write model to temp file
     java.nio.file.Path modelFile = java.nio.file.Files.createTempFile("econ-model", ".json");
     java.nio.file.Files.writeString(modelFile, modelJson);
-    
+
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, info);
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, info);
          Statement stmt = conn.createStatement()) {
-      
+
       // Query schema metadata
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT table_name FROM information_schema.tables "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT table_name FROM information_schema.tables "
           + "WHERE table_schema = 'econ' ORDER BY table_name")) {
-        
+
         int tableCount = 0;
         while (rs.next()) {
           String tableName = rs.getString("table_name");
           System.out.println("Found ECON table: " + tableName);
           tableCount++;
         }
-        
+
         // Should have at least one table after download
         assertTrue(tableCount > 0, "Should have ECON tables after download");
       }
-      
+
       // Try to query employment statistics if it exists
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) as cnt FROM econ.employment_statistics")) {
-        
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) as cnt FROM econ.employment_statistics")) {
+
         assertTrue(rs.next(), "Should get result from employment_statistics");
         int count = rs.getInt("cnt");
         System.out.println("Employment statistics row count: " + count);
-        
+
         // Should have at least the placeholder record
         assertTrue(count >= 1, "Should have at least placeholder data");
       } catch (Exception e) {
@@ -115,9 +114,8 @@ public class EconIntegrationTest {
       java.nio.file.Files.deleteIfExists(modelFile);
     }
   }
-  
-  @Test
-  public void testEconSchemaConstraints() throws Exception {
+
+  @Test public void testEconSchemaConstraints() throws Exception {
     // Create model JSON
     String modelJson = "{"
         + "\"version\": \"1.0\","
@@ -132,35 +130,35 @@ public class EconIntegrationTest {
         + "  }"
         + "}]"
         + "}";
-    
+
     java.nio.file.Path modelFile = java.nio.file.Files.createTempFile("econ-constraints", ".json");
     java.nio.file.Files.writeString(modelFile, modelJson);
-    
+
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, info);
+
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, info);
          Statement stmt = conn.createStatement()) {
-      
+
       // Query constraint metadata
-      try (ResultSet rs = stmt.executeQuery(
-          "SELECT constraint_name, constraint_type, table_name "
+      try (ResultSet rs =
+          stmt.executeQuery("SELECT constraint_name, constraint_type, table_name "
           + "FROM information_schema.table_constraints "
           + "WHERE table_schema = 'econ' "
           + "AND constraint_type = 'PRIMARY KEY' "
           + "ORDER BY table_name")) {
-        
+
         int constraintCount = 0;
         while (rs.next()) {
           String constraintName = rs.getString("constraint_name");
           String tableName = rs.getString("table_name");
-          System.out.println("Found PRIMARY KEY constraint: " + constraintName + 
+          System.out.println("Found PRIMARY KEY constraint: " + constraintName +
               " on table: " + tableName);
           constraintCount++;
         }
-        
+
         // ECON schema defines primary keys for its tables
         assertTrue(constraintCount > 0, "Should have PRIMARY KEY constraints defined");
       }
