@@ -16,14 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
-import org.apache.calcite.schema.SchemaPlus;
 
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -46,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -63,7 +59,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.time.Year;
 
 /**
  * Factory for SEC schemas that extends FileSchema with SEC-specific capabilities.
@@ -114,8 +109,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   // Constraint metadata support
   private Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/sec-schema.json";
   }
 
@@ -446,7 +440,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     this.storageProvider = storageProvider;
     LOGGER.debug("SEC buildOperand: storageProvider set to {}", storageProvider);
 
-    // Create mutable copy of operand to allow modifications
+    // Create a mutable copy of operand to allow modifications
     Map<String, Object> mutableOperand = new HashMap<>(operand);
 
     // Load SecCacheManifest for ETag-based caching of submissions.json files
@@ -479,22 +473,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     this.currentOperand = mutableOperand; // Store for table auto-discovery
 
-    // Get cache directories from interface methods
-    String govdataCacheDir = getGovDataCacheDir();
-    String govdataParquetDir = getGovDataParquetDir();
+    // Get cache directories from operand or environment variables
+    String govdataCacheDir = getGovDataCacheDir(mutableOperand);
+    String govdataParquetDir = getGovDataParquetDir(mutableOperand);
 
-    // Check required environment variables
+    // Check required directories are configured
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
+      throw new IllegalStateException("cacheDirectory must be set in model operand or GOVDATA_CACHE_DIR environment variable must be set");
     }
     if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
+      throw new IllegalStateException("parquetDirectory must be set in model operand or GOVDATA_PARQUET_DIR environment variable must be set");
     }
 
     // Load SecCacheManifest now that we have the cache directory
     String secCacheDir = govdataCacheDir + "/sec";
     this.cacheManifest = SecCacheManifest.load(secCacheDir);
     LOGGER.debug("Loaded SEC cache manifest from {}", secCacheDir);
+
+    // Migrate legacy .notfound markers to manifest
+    migrateNotFoundMarkers(secCacheDir);
 
     // SEC data directories
     String secRawDir = govdataCacheDir + "/sec";
@@ -579,7 +576,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
       // Primary key: (cik, filing_type, year, filing_date, concept, context_ref)
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "concept", "context_ref"));
 
       // Foreign key to filing_contexts table
@@ -624,7 +622,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
       // Primary key: (cik, filing_type, year, filing_date, context_id)
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "context_id"));
       filingContexts.put("constraints", constraints);
     }
@@ -638,7 +637,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     mdaSections.put("partitions", partitionConfig);
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "section_id"));
       mdaSections.put("constraints", constraints);
     }
@@ -651,7 +651,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     xbrlRelationships.put("partitions", partitionConfig);
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "relationship_id"));
       xbrlRelationships.put("constraints", constraints);
     }
@@ -664,7 +665,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     insiderTransactions.put("partitions", partitionConfig);
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "transaction_id"));
       insiderTransactions.put("constraints", constraints);
     }
@@ -677,7 +679,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     earningsTranscripts.put("partitions", partitionConfig);
     if (enableConstraints == null || enableConstraints) {
       Map<String, Object> constraints = new HashMap<>();
-      constraints.put("primaryKey", Arrays.asList("cik", "filing_type", "year",
+      constraints.put(
+          "primaryKey", Arrays.asList("cik", "filing_type", "year",
           "filing_date", "transcript_id"));
       earningsTranscripts.put("constraints", constraints);
     }
@@ -1348,13 +1351,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // This is a major optimization: prevents downloading, parsing, and manifest checking
         // for filings that would produce no Parquet output anyway
         boolean hasXBRL = false;
+        boolean hasInlineXBRL = false;
         if (isXBRLArray != null && i < isXBRLArray.size()) {
           int isXBRL = isXBRLArray.get(i).asInt(0);
           hasXBRL = (isXBRL == 1);
         }
         if (!hasXBRL && isInlineXBRLArray != null && i < isInlineXBRLArray.size()) {
           int isInlineXBRL = isInlineXBRLArray.get(i).asInt(0);
-          hasXBRL = (isInlineXBRL == 1);
+          hasInlineXBRL = (isInlineXBRL == 1);
+          hasXBRL = hasInlineXBRL;
         }
         if (!hasXBRL) {
           skippedNonXBRL++;
@@ -1368,14 +1373,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Use explicit whitelist for allowed forms
         // NOTE: S-* forms (S-3, S-4, S-8, etc.) are registration statements that rarely
         // contain useful financial XBRL data and are explicitly excluded
-        List<String> allowedForms = Arrays.asList(
-            "3", "4", "5",           // Insider forms
+        List<String> allowedForms =
+            Arrays.asList("3", "4", "5",           // Insider forms
             "10-K", "10K",           // Annual reports
             "10-Q", "10Q",           // Quarterly reports
             "8-K", "8K",             // Current reports
             "8-K/A", "8KA",          // Amended current reports
-            "DEF 14A", "DEF14A"      // Proxy statements
-        );
+            "DEF 14A", "DEF14A");      // Proxy statements
         boolean matchesType = allowedForms.stream()
             .anyMatch(type -> type.replace("-", "").equalsIgnoreCase(normalizedForm));
         if (!matchesType) {
@@ -1391,7 +1395,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         filingsToDownload.add(
             new FilingToDownload(normalizedCik, accession,
-            primaryDoc, form, filingDate, cikDir));
+            primaryDoc, form, filingDate, cikDir, hasInlineXBRL));
       }
 
       if (skipped424B > 0) {
@@ -1512,15 +1516,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     final String form;
     final String filingDate;
     final File cikDir;
+    final boolean hasInlineXBRL;
 
     FilingToDownload(String cik, String accession, String primaryDoc,
-        String form, String filingDate, File cikDir) {
+        String form, String filingDate, File cikDir, boolean hasInlineXBRL) {
       this.cik = cik;
       this.accession = accession;
       this.primaryDoc = primaryDoc;
       this.form = form;
       this.filingDate = filingDate;
       this.cikDir = cikDir;
+      this.hasInlineXBRL = hasInlineXBRL;
     }
   }
 
@@ -1599,14 +1605,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     String normalizedForm = formType.replace("-", "").replace("/", "");
 
     // Whitelist of allowed forms
-    List<String> allowedForms = Arrays.asList(
-        "3", "4", "5",           // Insider forms
+    List<String> allowedForms =
+        Arrays.asList("3", "4", "5",           // Insider forms
         "10K",                   // Annual reports
         "10Q",                   // Quarterly reports
         "8K",                    // Current reports
         "8KA",                   // Amended current reports
-        "DEF14A"                 // Proxy statements
-    );
+        "DEF14A");                 // Proxy statements
 
     return allowedForms.stream()
         .anyMatch(type -> type.equalsIgnoreCase(normalizedForm));
@@ -1656,18 +1661,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       String year = getPartitionYear(form, filingDate);
       String govdataParquetDir = getGovDataParquetDir();
-      File parquetDir = new File(govdataParquetDir, "source=sec");
-      File cikParquetDir = new File(parquetDir, "cik=" + cik);
-      File filingTypeDir = new File(cikParquetDir, "filing_type=" + form.replace("-", ""));
-      File yearDir = new File(filingTypeDir, "year=" + year);
+
+      // Build path as a string to support S3 URLs
+      String yearDirPath = govdataParquetDir + "/source=sec/cik=" + cik +
+          "/filing_type=" + form.replace("-", "") + "/year=" + year;
 
       String accessionClean = accession.replace("-", "");
       boolean isInsiderForm = form.matches("[345]");
 
       // Check primary file
       String filenameSuffix = isInsiderForm ? "insider" : "facts";
-      String primaryParquetPath = storageProvider.resolvePath(yearDir.getPath(),
-          String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
+      String primaryParquetPath =
+          storageProvider.resolvePath(yearDirPath, String.format("%s_%s_%s.parquet", cik, accessionClean, filenameSuffix));
 
       try {
         StorageProvider.FileMetadata primaryMetadata = storageProvider.getMetadata(primaryParquetPath);
@@ -1680,8 +1685,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Check relationships file for non-insider forms
       if (!isInsiderForm) {
-        String relationshipsParquetPath = storageProvider.resolvePath(yearDir.getPath(),
-            String.format("%s_%s_relationships.parquet", cik, accessionClean));
+        String relationshipsParquetPath =
+            storageProvider.resolvePath(yearDirPath, String.format("%s_%s_relationships.parquet", cik, accessionClean));
         try {
           storageProvider.getMetadata(relationshipsParquetPath);
           // File exists - relationships file can be empty
@@ -1694,8 +1699,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         if (supportsVectorization(form)) {
-          String vectorizedPath = storageProvider.resolvePath(yearDir.getPath(),
-              String.format("%s_%s_vectorized.parquet", cik, accessionClean));
+          String vectorizedPath =
+              storageProvider.resolvePath(yearDirPath, String.format("%s_%s_vectorized.parquet", cik, accessionClean));
           try {
             StorageProvider.FileMetadata vectorizedMetadata = storageProvider.getMetadata(vectorizedPath);
             if (vectorizedMetadata.getSize() == 0) {
@@ -1776,7 +1781,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         Thread.sleep(currentRateLimitDelayMs.get());
         try {
           downloadFilingDocument(provider, filing.cik, filing.accession,
-              filing.primaryDoc, filing.form, filing.filingDate, filing.cikDir);
+              filing.primaryDoc, filing.form, filing.filingDate, filing.cikDir, filing.hasInlineXBRL);
           break; // Success - exit retry loop
         } finally {
           rateLimiter.release();
@@ -1814,7 +1819,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private void downloadFilingDocument(SecHttpStorageProvider provider, String cik,
-      String accession, String primaryDoc, String form, String filingDate, File cikDir) {
+      String accession, String primaryDoc, String form, String filingDate, File cikDir, boolean hasInlineXBRL) {
     try {
       // Check manifest first to see if this filing was already fully processed
       File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
@@ -1884,9 +1889,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         xbrlFile.getParentFile().mkdirs();
       }
 
-      File xbrlNotFoundMarker = new File(accessionDir, xbrlDoc + ".notfound");
-      // Only need XBRL if: file doesn't exist AND we haven't already marked it as not found
-      if ((!xbrlFile.exists() || xbrlFile.length() == 0) && !xbrlNotFoundMarker.exists()) {
+      // Only need XBRL if: file doesn't exist AND we haven't already marked it as not found in manifest AND it's not inline-only
+      // If submissions.json indicates inline XBRL, skip separate XBRL download entirely
+      if ((!xbrlFile.exists() || xbrlFile.length() == 0)
+          && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)
+          && !hasInlineXBRL) {
         needXbrl = true;
       }
 
@@ -1994,10 +2001,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 if (LOGGER.isDebugEnabled()) {
                   LOGGER.debug("HTML file contains inline XBRL (iXBRL), will process HTML file directly: {}", primaryDoc);
                 }
-                // Create marker to avoid checking XBRL in future
-                if (!xbrlNotFoundMarker.exists()) {
-                  xbrlNotFoundMarker.createNewFile();
-                }
+                // No need to mark in manifest - submissions.json already indicates inline XBRL
                 // Continue processing - HTML file will be included in conversion process
               }
             }
@@ -2010,15 +2014,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Download XBRL file if needed (only if HTML doesn't have iXBRL)
       if (needXbrl && !hasInlineXbrl) {
         // Check if we already know this XBRL doesn't exist
-        if (xbrlNotFoundMarker.exists()) {
+        if (cacheManifest.isFileNotFound(cik, accession, xbrlDoc)) {
           if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Skipping XBRL download - already marked as not found: {}", xbrlDoc);
+            LOGGER.debug("Skipping XBRL download - already marked as not found in manifest: {}", xbrlDoc);
           }
         } else {
           if (isInsiderForm) {
             // For Forms 3/4/5, download the .txt file and extract the XML
-            String txtUrl = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s.txt",
-                cik, accession); // Use hyphenated accession number for .txt files
+            String txtUrl =
+                String.format("https://www.sec.gov/Archives/edgar/data/%s/%s.txt", cik, accession); // Use hyphenated accession number for .txt files
 
             try (InputStream is = provider.openInputStream(txtUrl)) {
               // Read the entire .txt file to extract the XML
@@ -2035,7 +2039,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               int xmlEnd = txtContent.indexOf("</ownershipDocument>");
 
               if (xmlStart != -1 && xmlEnd != -1) {
-                String xmlContent = "<?xml version=\"1.0\"?>\n" +
+                String xmlContent = "<?xml version=\"1.0\"?>\n"
+  +
                     txtContent.substring(xmlStart, xmlEnd + "</ownershipDocument>".length());
 
                 // Save the extracted XML
@@ -2047,15 +2052,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 }
               } else {
                 LOGGER.warn("Could not find ownershipDocument in Form " + form + " .txt file");
-                xbrlNotFoundMarker.createNewFile();
+                cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "ownership_xml_not_in_txt_file");
               }
             } catch (Exception e) {
               LOGGER.warn("Failed to download/extract Form " + form + " ownership XML: " + e.getMessage());
-              try {
-                xbrlNotFoundMarker.createNewFile();
-              } catch (IOException ioe) {
-                LOGGER.debug("Could not create .notfound marker: " + ioe.getMessage());
-              }
+              cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "download_failed: " + e.getMessage());
             }
           } else {
             // For other forms, download the XBRL file directly
@@ -2075,17 +2076,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 LOGGER.debug("Downloaded XBRL filing: {} {} ({})", form, filingDate, xbrlDoc);
               }
             } catch (Exception e) {
-              // XBRL doesn't exist for this filing - create marker to avoid retrying
+              // XBRL doesn't exist for this filing - mark in manifest to avoid retrying
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("XBRL not available for {} {}, will use HTML with inline XBRL", form, filingDate);
               }
-              try {
-                xbrlNotFoundMarker.createNewFile();
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug("Created .notfound marker for: {}", xbrlDoc);
-                }
-              } catch (IOException ioe) {
-                LOGGER.debug("Could not create .notfound marker: " + ioe.getMessage());
+              cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "not_on_sec_server");
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Marked as not found in manifest: {}", xbrlDoc);
               }
             }
           }
@@ -2322,8 +2319,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 }
 
                 // Check manifest to see if this filing is already fully processed
-                FilingStatus status = checkFilingStatusInMemory(normalizedCik, normalizedAccession,
-                    formType != null ? formType : "UNKNOWN", "", processedFilingsManifest);
+                FilingStatus status =
+                    checkFilingStatusInMemory(normalizedCik, normalizedAccession, formType != null ? formType : "UNKNOWN", "", processedFilingsManifest);
 
                 if (status == FilingStatus.FULLY_PROCESSED) {
                   if (LOGGER.isDebugEnabled()) {
@@ -2900,8 +2897,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         for (String ticker : tickers) {
           for (int year = startYear; year <= endYear; year++) {
             String stockPriceDir = basePath + "/stock_prices";
-            String parquetPath = storageProvider.resolvePath(stockPriceDir,
-                String.format("ticker=%s/year=%d/%s_%d.parquet", ticker, year, ticker, year));
+            String parquetPath =
+                storageProvider.resolvePath(stockPriceDir, String.format("ticker=%s/year=%d/%s_%d.parquet", ticker, year, ticker, year));
 
             try {
               StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
@@ -2990,8 +2987,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "DEF 14A", "DEF14A",     // Proxy statements
         "S-3", "S3",             // Registration statements
         "S-4", "S4",             // Business combination registration
-        "S-8", "S8"              // Employee benefit plan registration
-    );
+        "S-8", "S8");              // Employee benefit plan registration
   }
 
   /**
@@ -3140,6 +3136,62 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     String partitionYear = String.valueOf(java.time.LocalDate.parse(filingDate).getYear());
     LOGGER.debug("Partition year calculation: {} {} → filing year {} (non-10Q/10K)", filingType, filingDate, partitionYear);
     return partitionYear;
+  }
+
+  /**
+   * Migrate legacy .notfound marker files to SecCacheManifest entries.
+   * This allows us to deprecate the .notfound file mechanism in favor of manifest-based tracking.
+   */
+  private void migrateNotFoundMarkers(String secCacheDir) {
+    File cacheRoot = new File(secCacheDir);
+    if (!cacheRoot.exists()) {
+      return;
+    }
+
+    int migratedCount = 0;
+    int deletedCount = 0;
+
+    try {
+      java.nio.file.Files.walk(cacheRoot.toPath())
+          .filter(path -> path.toString().endsWith(".notfound"))
+          .forEach(notFoundPath -> {
+            try {
+              File notFoundFile = notFoundPath.toFile();
+              String fileName = notFoundFile.getName();
+              String xbrlFileName = fileName.replace(".notfound", "");
+
+              // Extract CIK and accession from path
+              // Path structure: secCacheDir/CIK/ACCESSION/file.notfound
+              File accessionDir = notFoundFile.getParentFile();
+              File cikDir = accessionDir.getParentFile();
+
+              if (cikDir != null && accessionDir != null) {
+                String cik = cikDir.getName();
+                String accession = accessionDir.getName();
+
+                // Migrate to manifest
+                cacheManifest.markFileNotFound(cik, accession, xbrlFileName, "migrated_from_notfound_marker");
+
+                // Delete the old marker file
+                if (notFoundFile.delete()) {
+                  LOGGER.debug("Migrated and deleted .notfound marker: {}/{}/{}", cik, accession, xbrlFileName);
+                } else {
+                  LOGGER.warn("Failed to delete .notfound marker after migration: {}", notFoundPath);
+                }
+              }
+            } catch (Exception e) {
+              LOGGER.warn("Failed to migrate .notfound marker {}: {}", notFoundPath, e.getMessage());
+            }
+          });
+
+      // Save manifest with migrated entries
+      if (migratedCount > 0) {
+        cacheManifest.save(secCacheDir);
+        LOGGER.info("Migrated {} .notfound markers to manifest, deleted {} files", migratedCount, deletedCount);
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Error during .notfound marker migration: {}", e.getMessage());
+    }
   }
 
 }
