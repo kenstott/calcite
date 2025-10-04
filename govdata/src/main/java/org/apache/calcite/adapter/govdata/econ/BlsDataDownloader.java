@@ -59,6 +59,12 @@ public class BlsDataDownloader {
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
   private final CacheManifest cacheManifest;
 
+  // Rate limiting: BLS enforces requests per second limit
+  private long lastRequestTime = 0;
+  private static final long MIN_REQUEST_INTERVAL_MS = 1100; // 1.1 seconds between requests (safe margin)
+  private static final int MAX_RETRIES = 3;
+  private static final long RETRY_DELAY_MS = 2000; // 2 seconds initial retry delay
+
   // Common BLS series IDs
   public static class Series {
     // Employment Statistics
@@ -440,6 +446,7 @@ public class BlsDataDownloader {
 
   /**
    * Fetches raw JSON response for multiple BLS series in a single API call.
+   * Implements rate limiting and retry logic for 429 (rate limit) errors.
    */
   private String fetchMultipleSeriesRaw(
       List<String> seriesIds, int startYear, int endYear) throws IOException, InterruptedException {
@@ -462,14 +469,44 @@ public class BlsDataDownloader {
         .timeout(Duration.ofSeconds(30))
         .build();
 
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    // Retry loop with exponential backoff
+    int attempt = 0;
+    while (attempt < MAX_RETRIES) {
+      // Rate limiting: ensure minimum interval between requests
+      synchronized (this) {
+        long now = System.currentTimeMillis();
+        long timeSinceLastRequest = now - lastRequestTime;
+        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+          long sleepTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
+          LOGGER.debug("Rate limiting: sleeping {}ms before BLS API request", sleepTime);
+          Thread.sleep(sleepTime);
+        }
+        lastRequestTime = System.currentTimeMillis();
+      }
 
-    if (response.statusCode() != 200) {
-      throw new IOException("BLS API request failed with status: " + response.statusCode() +
-          " - Response: " + response.body());
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+      if (response.statusCode() == 200) {
+        return response.body();
+      } else if (response.statusCode() == 429) {
+        // Rate limit exceeded - retry with exponential backoff
+        attempt++;
+        if (attempt >= MAX_RETRIES) {
+          throw new IOException("BLS API rate limit exceeded after " + MAX_RETRIES + " retries. " +
+              "Response: " + response.body());
+        }
+        long backoffDelay = RETRY_DELAY_MS * (1L << (attempt - 1)); // Exponential: 2s, 4s, 8s
+        LOGGER.warn("BLS API rate limit hit (429). Retry {}/{} after {}ms delay",
+            attempt, MAX_RETRIES, backoffDelay);
+        Thread.sleep(backoffDelay);
+      } else {
+        // Other error - don't retry
+        throw new IOException("BLS API request failed with status: " + response.statusCode() +
+            " - Response: " + response.body());
+      }
     }
 
-    return response.body();
+    throw new IOException("BLS API request failed after " + MAX_RETRIES + " retries");
   }
 
   /**
