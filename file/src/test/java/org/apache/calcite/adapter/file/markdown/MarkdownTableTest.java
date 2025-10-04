@@ -17,30 +17,23 @@
 package org.apache.calcite.adapter.file.markdown;
 
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
-import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
-import org.apache.calcite.adapter.file.FileSchema;
-import org.apache.calcite.test.CalciteAssert;
 
-import com.google.common.collect.ImmutableMap;
-
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.parallel.Isolated;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -217,7 +210,7 @@ public class MarkdownTableTest {
         while (tables.next()) {
           tableNames.add(tables.getString("TABLE_NAME"));
         }
-        
+
         assertTrue(tableNames.contains("products__current_products"),
             "Should have products__current_products table");
         assertTrue(tableNames.contains("quarterly_report__sales_summary"),
@@ -255,8 +248,8 @@ public class MarkdownTableTest {
     // Create connection and run query
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
-        ResultSet rs = stmt.executeQuery(
-            "SELECT * FROM \"FILES\".\"products__current_products\" WHERE CAST(\"price\" AS DECIMAL) >= 15.75");
+        ResultSet rs =
+            stmt.executeQuery("SELECT * FROM \"FILES\".\"products__current_products\" WHERE CAST(\"price\" AS DECIMAL) >= 15.75");
         int count = 0;
         while (rs.next()) {
           count++;

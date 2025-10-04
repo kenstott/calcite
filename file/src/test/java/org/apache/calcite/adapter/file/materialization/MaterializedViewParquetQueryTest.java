@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file.materialization;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
@@ -27,11 +26,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
-import java.nio.file.Files;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -59,9 +57,9 @@ public class MaterializedViewParquetQueryTest {
     String engineStr = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     assumeFalse(engineStr != null && ("LINQ4J".equalsIgnoreCase(engineStr) || "ARROW".equalsIgnoreCase(engineStr)),
         "Skipping materialized view test for " + engineStr + " engine (not supported)");
-    
+
     tempDir = Files.createTempDirectory("mv-test-").toFile();
-    
+
     // Create sales data
     File salesCsv = new File(tempDir, "sales.csv");
     try (FileWriter writer = new FileWriter(salesCsv, StandardCharsets.UTF_8)) {
@@ -78,14 +76,14 @@ public class MaterializedViewParquetQueryTest {
     // This simulates what would happen if the MV SQL was executed and results stored
     createMaterializedViewParquetFile();
   }
-  
+
   @AfterEach
   public void cleanup() throws Exception {
     if (tempDir != null && tempDir.exists()) {
       deleteDirectory(tempDir);
     }
   }
-  
+
   private void deleteDirectory(File dir) {
     if (dir.isDirectory()) {
       File[] files = dir.listFiles();
@@ -102,7 +100,7 @@ public class MaterializedViewParquetQueryTest {
     // Create .materialized_views directory
     File mvDir = new File(tempDir, ".materialized_views");
     mvDir.mkdirs();
-    
+
     // Also create schema-specific subdirectory for schema-aware caching
     File schemaMvDir = new File(mvDir, "schema_parquet_mv_test");
     schemaMvDir.mkdirs();
@@ -110,7 +108,7 @@ public class MaterializedViewParquetQueryTest {
     // For this test, we'll create a CSV file that represents the materialized view
     // In a real implementation, this would be a Parquet file created by executing the MV SQL
     File mvCsvFile = new File(mvDir, "daily_summary_mv.csv");
-    
+
     // Also create in schema-specific directory
     File schemaMvCsvFile = new File(schemaMvDir, "daily_summary_mv.csv");
 
@@ -121,7 +119,7 @@ public class MaterializedViewParquetQueryTest {
       writer.write("2024-01-02,2,23,982.50\n");
       writer.write("2024-01-03,2,32,1110.00\n");
     }
-    
+
     // Also write to schema-specific location
     try (FileWriter writer = new FileWriter(schemaMvCsvFile, StandardCharsets.UTF_8)) {
       writer.write("date:string,transaction_count:long,total_quantity:long,total_revenue:double\n");

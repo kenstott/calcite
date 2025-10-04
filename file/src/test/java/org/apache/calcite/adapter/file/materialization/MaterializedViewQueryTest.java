@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file;
 
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -70,7 +69,7 @@ public class MaterializedViewQueryTest {
       writer.write("    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("    \"operand\": {\n");
       writer.write("      \"directory\": \"" + tempDir.toString().replace("\\", "\\\\") + "\",\n");
-      
+
       // Use global engine configuration if set, otherwise default to parquet
       String engineType = System.getenv("CALCITE_FILE_ENGINE_TYPE");
       if (engineType != null && !engineType.isEmpty()) {
@@ -78,7 +77,7 @@ public class MaterializedViewQueryTest {
       } else {
         writer.write("      \"executionEngine\": \"parquet\",\n");
       }
-      
+
       writer.write("      \"ephemeralCache\": true,\n");
       writer.write("      \"materializations\": [{\n");
       writer.write("        \"view\": \"daily_summary\",\n");

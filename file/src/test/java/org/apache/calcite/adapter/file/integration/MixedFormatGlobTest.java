@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.file.integration;
 
 import org.apache.calcite.adapter.file.BaseFileTest;
-import org.apache.calcite.adapter.file.FileSchemaFactory;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
@@ -27,12 +26,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -186,7 +185,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
 
       // Should see CSV and JSON files matching the glob pattern, plus converted HTML table
       Set<String> tableNames = schema.getTableNames();
-      
+
       // Glob pattern *.{csv,json} matches 4 source files, plus 1 converted HTML table
       assertEquals(5, tableNames.size());
       assertTrue(tableNames.contains("sales_2023"));
@@ -262,7 +261,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
       org.junit.jupiter.api.Assumptions.assumeTrue(false,
           "Skipping Parquet-specific test for " + engineStr + " engine");
     }
-    
+
     // Create mixed format files
     createCsvFile(new File(tempDir, "data1.csv"));
     createJsonFile(new File(tempDir, "data2.json"));
