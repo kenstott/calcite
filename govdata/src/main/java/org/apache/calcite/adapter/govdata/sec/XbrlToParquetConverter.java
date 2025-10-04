@@ -101,20 +101,37 @@ public class XbrlToParquetConverter implements FileConverter {
 
   @Override public List<File> convert(File sourceFile, File targetDirectory,
       ConversionMetadata metadata) throws IOException {
-    LOGGER.debug(" XbrlToParquetConverter.convert() START for file: " + sourceFile.getAbsolutePath());
+    // Delegate to String-based method for S3 compatibility
+    return convertInternal(sourceFile.getAbsolutePath(), targetDirectory.getAbsolutePath(), metadata);
+  }
+
+  /**
+   * Converts XBRL/HTML file to Parquet format using String paths (S3-compatible).
+   *
+   * @param sourceFilePath Path to source XBRL/HTML file (local filesystem only)
+   * @param targetDirectoryPath Path to target directory (may be S3 URI)
+   * @param metadata Conversion metadata tracker
+   * @return List of created files (File objects are placeholders for S3 paths)
+   * @throws IOException If conversion fails
+   */
+  public List<File> convertInternal(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
+    LOGGER.debug(" XbrlToParquetConverter.convert() START for file: " + sourceFilePath);
     List<File> outputFiles = new ArrayList<>();
-    
+
     // Extract accession from metadata if available
     String accession = null;
     if (metadata != null && metadata.getAllConversions() != null) {
       for (ConversionMetadata.ConversionRecord record : metadata.getAllConversions().values()) {
-        if (sourceFile.getAbsolutePath().equals(record.originalFile)) {
+        if (sourceFilePath.equals(record.originalFile)) {
           // We stored accession in sourceFile field
           accession = record.sourceFile;
           break;
         }
       }
     }
+
+    File sourceFile = new File(sourceFilePath);
 
     try {
       Document doc = null;
@@ -226,14 +243,14 @@ public class XbrlToParquetConverter implements FileConverter {
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
       if (isInsiderForm(doc, filingType)) {
         LOGGER.debug("Processing as insider form: " + sourceFile.getName());
-        return convertInsiderForm(doc, sourceFile, targetDirectory, cik, filingType, filingDate, accession);
+        return convertInsiderForm(doc, sourceFile, targetDirectoryPath, cik, filingType, filingDate, accession);
       }
-      
+
       LOGGER.debug("Not an insider form, proceeding to facts extraction: " + sourceFile.getName());
-      
+
       // Check if this is an 8-K filing with potential earnings exhibits
       if (is8KFiling(filingType)) {
-        List<File> extraFiles = extract8KExhibits(sourceFile, targetDirectory, cik, filingType, filingDate, accession);
+        List<File> extraFiles = extract8KExhibits(sourceFile, targetDirectoryPath, cik, filingType, filingDate, accession);
         outputFiles.addAll(extraFiles);
       }
 
@@ -246,9 +263,9 @@ public class XbrlToParquetConverter implements FileConverter {
       String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
           cik, normalizedFilingType, partitionYear);
 
-      // For local filesystem only, create actual directories
-      java.nio.file.Path partitionPath = Paths.get(targetDirectory.getAbsolutePath(), relativePartitionPath);
-      if (!targetDirectory.getPath().contains("://")) {
+      // For local filesystem only, create actual directories (S3 doesn't need directory creation)
+      if (!targetDirectoryPath.contains("://")) {
+        java.nio.file.Path partitionPath = Paths.get(targetDirectoryPath, relativePartitionPath);
         Files.createDirectories(partitionPath);
       }
 
@@ -266,8 +283,8 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.debug(" Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsPath);
       try {
         writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, sourceFile);
-        // For File-based return list, create dummy File (only used for count)
-        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_facts.parquet", cik, uniqueId)));
+        // For File-based return list, create dummy File (only used for count, S3 paths are placeholders)
+        outputFiles.add(new File(targetDirectoryPath + "/" + factsPath));
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during facts.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
@@ -277,21 +294,21 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Write filing metadata
       writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_metadata.parquet", cik, uniqueId)));
+      outputFiles.add(new File(targetDirectoryPath + "/" + metadataPath));
 
       // Convert contexts to Parquet
       writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate);
-      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_contexts.parquet", cik, uniqueId)));
+      outputFiles.add(new File(targetDirectoryPath + "/" + contextsPath));
 
       // Extract and write MD&A
       writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_mda.parquet", cik, uniqueId)));
+      outputFiles.add(new File(targetDirectoryPath + "/" + mdaPath));
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsPath);
       try {
         writeRelationshipsToParquet(doc, relationshipsPath, cik, filingType, filingDate, sourceFile);
-        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_relationships.parquet", cik, uniqueId)));
+        outputFiles.add(new File(targetDirectoryPath + "/" + relationshipsPath));
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during relationships.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
@@ -303,7 +320,7 @@ public class XbrlToParquetConverter implements FileConverter {
       if (enableVectorization) {
         String vectorizedPath = relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId);
         writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile);
-        outputFiles.add(new File(partitionPath.toFile(), String.format("%s_%s_vectorized.parquet", cik, uniqueId)));
+        outputFiles.add(new File(targetDirectoryPath + "/" + vectorizedPath));
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
@@ -2566,7 +2583,7 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Convert Form 3/4/5 insider trading forms to Parquet.
    */
-  private List<File> convertInsiderForm(Document doc, File sourceFile, File targetDirectory,
+  private List<File> convertInsiderForm(Document doc, File sourceFile, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession) throws IOException {
     LOGGER.debug(" convertInsiderForm() START for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
     List<File> outputFiles = new ArrayList<>();
@@ -3127,7 +3144,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
   
-  private List<File> extract8KExhibits(File sourceFile, File targetDirectory,
+  private List<File> extract8KExhibits(File sourceFile, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession) {
     List<File> outputFiles = new ArrayList<>();
     
@@ -4150,19 +4167,22 @@ public class XbrlToParquetConverter implements FileConverter {
     return 0;
   }
   
-  private void createEnhancedMetadata(File sourceFile, File targetDirectory, String cik,
+  private void createEnhancedMetadata(File sourceFile, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession, Map<String, String> companyInfo) throws IOException {
-    // Create partition directory
+    // Build partition path
     String normalizedFilingType = filingType.replace("-", "").replace("/", "");
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
-    java.nio.file.Path partitionPath = Paths.get(
-        targetDirectory.getAbsolutePath(),
-        String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear));
-    Files.createDirectories(partitionPath);
+    String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
-    // Create metadata parquet file
-    File metadataFile = partitionPath.resolve(
-        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate)).toFile();
+    // Create partition directory (for local filesystem only)
+    if (!targetDirectoryPath.contains("://")) {
+      java.nio.file.Path partitionPath = Paths.get(targetDirectoryPath, relativePartitionPath);
+      Files.createDirectories(partitionPath);
+    }
+
+    // Build metadata file path (relative)
+    String metadataPath = relativePartitionPath + "/" +
+        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
     
     // Define schema for metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
@@ -4194,22 +4214,25 @@ public class XbrlToParquetConverter implements FileConverter {
     records.add(record);
     
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(metadataFile.getAbsolutePath(), schema, records, "metadata");
+    storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
   }
-  
-  private void createMinimalMetadata(File sourceFile, File targetDirectory, String cik,
+
+  private void createMinimalMetadata(File sourceFile, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession) throws IOException {
-    // Create partition directory
+    // Build partition path
     String normalizedFilingType = filingType.replace("-", "").replace("/", "");
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
-    java.nio.file.Path partitionPath = Paths.get(
-        targetDirectory.getAbsolutePath(),
-        String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear));
-    Files.createDirectories(partitionPath);
+    String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
-    // Create metadata parquet file
-    File metadataFile = partitionPath.resolve(
-        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate)).toFile();
+    // Create partition directory (for local filesystem only)
+    if (!targetDirectoryPath.contains("://")) {
+      java.nio.file.Path partitionPath = Paths.get(targetDirectoryPath, relativePartitionPath);
+      Files.createDirectories(partitionPath);
+    }
+
+    // Build metadata file path (relative)
+    String metadataPath = relativePartitionPath + "/" +
+        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
     
     // Define schema for minimal metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
@@ -4242,7 +4265,7 @@ public class XbrlToParquetConverter implements FileConverter {
     records.add(record);
     
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(metadataFile.getAbsolutePath(), schema, records, "metadata");
+    storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
   }
 
   /**
