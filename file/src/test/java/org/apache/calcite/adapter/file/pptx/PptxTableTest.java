@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
 import org.apache.calcite.adapter.file.converters.PptxTableScanner;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -32,8 +31,6 @@ import org.apache.poi.xslf.usermodel.XSLFTextBox;
 import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
 import org.apache.poi.xslf.usermodel.XSLFTextRun;
 
-import com.google.common.collect.ImmutableMap;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -44,7 +41,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.ResultSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,7 +60,7 @@ public class PptxTableTest extends BaseFileTest {
   public void setUp() throws Exception {
     // Create temporary directory manually
     tempDir = Files.createTempDirectory("pptx-test").toFile();
-    
+
     // Create test PPTX files
     createSimplePptxFile();
     createComplexPptxFile();
@@ -252,8 +248,8 @@ public class PptxTableTest extends BaseFileTest {
     PptxTableScanner.scanAndConvertTables(simplePptxFile, tempDir);
 
     // Check that JSON file was created with slide context (now lowercase)
-    File jsonFile = new File(tempDir,
-        "sales_presentation__q4_sales_results__regional_performance.json");
+    File jsonFile =
+        new File(tempDir, "sales_presentation__q4_sales_results__regional_performance.json");
     assertTrue(jsonFile.exists(), "JSON file should be created from PPTX table");
 
     // Verify content (column names should be lowercase now)
@@ -282,12 +278,12 @@ public class PptxTableTest extends BaseFileTest {
 
     // Check that all JSON files were created (now lowercase)
     // Note: Indices are only added when there are duplicate names
-    File revenueFile = new File(tempDir,
-        "company_overview__financial_overview__revenue_by_quarter.json");
-    File expenseFile = new File(tempDir,
-        "company_overview__financial_overview__operating_expenses.json");
-    File deptFile = new File(tempDir,
-        "company_overview__team_structure__department_headcount.json");
+    File revenueFile =
+        new File(tempDir, "company_overview__financial_overview__revenue_by_quarter.json");
+    File expenseFile =
+        new File(tempDir, "company_overview__financial_overview__operating_expenses.json");
+    File deptFile =
+        new File(tempDir, "company_overview__team_structure__department_headcount.json");
 
     assertTrue(revenueFile.exists(), "Revenue table JSON should be created");
     assertTrue(expenseFile.exists(), "Expense table JSON should be created");
@@ -430,39 +426,72 @@ public class PptxTableTest extends BaseFileTest {
     PptxTableScanner.scanAndConvertTables(complexPptxFile, tempDir);
 
     // Create a model file with views that simplify the complex PPTX table names
-    String modelContent = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"presentations\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"raw_pptx\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\"\n" +
-        "      }\n" +
-        "    },\n" +
-        "    {\n" +
-        "      \"name\": \"presentations\",\n" +
-        "      \"tables\": [\n" +
-        "        {\n" +
-        "          \"name\": \"revenue\",\n" +
-        "          \"type\": \"view\",\n" +
-        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__financial_overview__revenue_by_quarter\\\"\"\n" +
-        "        },\n" +
-        "        {\n" +
-        "          \"name\": \"expenses\",\n" +
-        "          \"type\": \"view\",\n" +
-        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__financial_overview__operating_expenses\\\"\"\n" +
-        "        },\n" +
-        "        {\n" +
-        "          \"name\": \"departments\",\n" +
-        "          \"type\": \"view\",\n" +
-        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__team_structure__department_headcount\\\"\"\n" +
-        "        }\n" +
-        "      ]\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelContent = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"presentations\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"raw_pptx\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\"\n"
+  +
+        "      }\n"
+  +
+        "    },\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"presentations\",\n"
+  +
+        "      \"tables\": [\n"
+  +
+        "        {\n"
+  +
+        "          \"name\": \"revenue\",\n"
+  +
+        "          \"type\": \"view\",\n"
+  +
+        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__financial_overview__revenue_by_quarter\\\"\"\n"
+  +
+        "        },\n"
+  +
+        "        {\n"
+  +
+        "          \"name\": \"expenses\",\n"
+  +
+        "          \"type\": \"view\",\n"
+  +
+        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__financial_overview__operating_expenses\\\"\"\n"
+  +
+        "        },\n"
+  +
+        "        {\n"
+  +
+        "          \"name\": \"departments\",\n"
+  +
+        "          \"type\": \"view\",\n"
+  +
+        "          \"sql\": \"SELECT * FROM \\\"raw_pptx\\\".\\\"company_overview__team_structure__department_headcount\\\"\"\n"
+  +
+        "        }\n"
+  +
+        "      ]\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
 
     // Now query the views with simple names - Oracle lex with TO_LOWER casing, no quotes needed for lowercase

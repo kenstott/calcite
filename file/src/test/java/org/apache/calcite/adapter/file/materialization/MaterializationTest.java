@@ -24,16 +24,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -56,7 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 @Tag("unit")
 public class MaterializationTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(MaterializationTest.class);
-  
+
   private File tempDir;
 
   @BeforeEach
@@ -65,29 +62,29 @@ public class MaterializationTest {
     String engineStr = System.getenv("CALCITE_FILE_ENGINE_TYPE");
     assumeFalse(engineStr != null && ("LINQ4J".equalsIgnoreCase(engineStr) || "ARROW".equalsIgnoreCase(engineStr)),
         "Skipping materialized view test for " + engineStr + " engine (not supported)");
-        
+
     tempDir = Files.createTempDirectory("materialization-test-").toFile();
-    
+
     // Clear any static caches that might interfere with test isolation
     Sources.clearFileCache();
     // Force garbage collection to release any file handles
     forceCleanup();
     createTestData();
   }
-  
+
   @AfterEach
   public void tearDown() throws Exception {
     // Clear caches after each test to prevent contamination
     Sources.clearFileCache();
     // Force cleanup to help with temp directory deletion
     forceCleanup();
-    
+
     // Clean up temp directory
     if (tempDir != null && tempDir.exists()) {
       deleteDirectory(tempDir);
     }
   }
-  
+
   private void deleteDirectory(File dir) {
     if (dir.isDirectory()) {
       File[] files = dir.listFiles();
@@ -147,7 +144,7 @@ public class MaterializationTest {
 
     Connection connection = null;
     CalciteConnection calciteConnection = null;
-    
+
     try {
       connection = DriverManager.getConnection("jdbc:calcite:", info);
       calciteConnection = connection.unwrap(CalciteConnection.class);
@@ -286,7 +283,7 @@ public class MaterializationTest {
         }
       }
     } finally {
-      // Explicit cleanup in finally block  
+      // Explicit cleanup in finally block
       if (calciteConnection != null) {
         try {
           calciteConnection.close();
@@ -316,7 +313,7 @@ public class MaterializationTest {
 
     Connection connection = null;
     CalciteConnection calciteConnection = null;
-    
+
     try {
       connection = DriverManager.getConnection("jdbc:calcite:", info);
       calciteConnection = connection.unwrap(CalciteConnection.class);

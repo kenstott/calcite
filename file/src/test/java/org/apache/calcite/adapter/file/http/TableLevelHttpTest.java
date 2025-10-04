@@ -262,8 +262,7 @@ public class TableLevelHttpTest {
   // TODO: JSON table support needs enhancement to work with StorageProviderSource
   // Commenting out entire test until JSON table support is enhanced
   /*
-  @Test
-  public void testPostJsonTable() throws Exception {
+  @Test public void testPostJsonTable() throws Exception {
     // Test JSON fetch via POST with request body
     String modelJson = "{" +
         "  \"version\": \"1.0\"," +
@@ -402,8 +401,7 @@ public class TableLevelHttpTest {
 
   // TODO: JSON table support needs enhancement to work with StorageProviderSource
   /*
-  @Test
-  public void testMimeTypeOverride() throws Exception {
+  @Test public void testMimeTypeOverride() throws Exception {
     // Test MIME type override for incorrectly served JSON
     String modelJson = "{" +
         "  \"version\": \"1.0\"," +

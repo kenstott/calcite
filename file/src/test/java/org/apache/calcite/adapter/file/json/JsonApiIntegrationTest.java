@@ -16,19 +16,17 @@
  */
 package org.apache.calcite.adapter.file.json;
 
+import org.apache.calcite.adapter.file.BaseFileTest;
+import org.apache.calcite.adapter.file.FileSchema;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
-import org.apache.calcite.adapter.file.FileSchema;
-import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
-import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.schema.SchemaPlus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -55,40 +53,39 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class JsonApiIntegrationTest extends BaseFileTest {
-  
+
   private HttpServer server;
   private int port;
   private String baseUrl;
-  
+
   @TempDir
   Path tempDir;
-  
+
   @BeforeEach
   public void setup() throws IOException {
     // Start a local HTTP server
     server = HttpServer.create(new InetSocketAddress(0), 0);
     port = server.getAddress().getPort();
     baseUrl = "http://localhost:" + port;
-    
+
     setupApiEndpoints();
     server.start();
   }
-  
+
   @AfterEach
   public void tearDown() {
     if (server != null) {
       server.stop(0);
     }
   }
-  
+
   private void setupApiEndpoints() {
     // API endpoint with nested JSON response
     server.createContext("/api/data", new HttpHandler() {
-      @Override
-      public void handle(HttpExchange exchange) throws IOException {
+      @Override public void handle(HttpExchange exchange) throws IOException {
         if ("POST".equals(exchange.getRequestMethod())) {
           String requestBody = readRequestBody(exchange);
-          
+
           String response;
           if (requestBody.contains("\"type\":\"users\"")) {
             response = "{" +
@@ -117,7 +114,7 @@ public class JsonApiIntegrationTest extends BaseFileTest {
           } else {
             response = "{\"status\":\"error\",\"message\":\"Unknown type\"}";
           }
-          
+
           exchange.getResponseHeaders().set("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, response.length());
           try (OutputStream os = exchange.getResponseBody()) {
@@ -130,28 +127,26 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       }
     });
   }
-  
+
   private String readRequestBody(HttpExchange exchange) throws IOException {
     try (InputStream is = exchange.getRequestBody();
          Scanner scanner = new Scanner(is, StandardCharsets.UTF_8.name())) {
       return scanner.useDelimiter("\\A").hasNext() ? scanner.next() : "";
     }
   }
-  
-  @Test
-  public void testPostApiWithJsonPath() throws Exception {
+
+  @Test public void testPostApiWithJsonPath() throws Exception {
     // First fetch the data using HTTP POST and save to files
     // This simulates how the data would be available
-    
+
     // Fetch users data
-    org.apache.calcite.adapter.file.storage.HttpStorageProvider usersProvider = 
+    org.apache.calcite.adapter.file.storage.HttpStorageProvider usersProvider =
         new org.apache.calcite.adapter.file.storage.HttpStorageProvider(
             "POST",
             "{\"type\":\"users\"}",
             java.util.Map.of("Content-Type", "application/json"),
-            null
-        );
-    
+            null);
+
     File usersFile = new File(tempDir.toFile(), "users.json");
     try (InputStream is = usersProvider.openInputStream(baseUrl + "/api/data")) {
       String response = new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -161,16 +156,15 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       com.fasterxml.jackson.databind.JsonNode users = root.at("/data/users");
       Files.writeString(usersFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(users));
     }
-    
+
     // Fetch products data
-    org.apache.calcite.adapter.file.storage.HttpStorageProvider productsProvider = 
+    org.apache.calcite.adapter.file.storage.HttpStorageProvider productsProvider =
         new org.apache.calcite.adapter.file.storage.HttpStorageProvider(
             "POST",
             "{\"type\":\"products\"}",
             java.util.Map.of("Content-Type", "application/json"),
-            null
-        );
-    
+            null);
+
     File productsFile = new File(tempDir.toFile(), "products.json");
     try (InputStream is = productsProvider.openInputStream(baseUrl + "/api/data")) {
       String response = new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -179,37 +173,51 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       com.fasterxml.jackson.databind.JsonNode products = root.at("/data/products");
       Files.writeString(productsFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(products));
     }
-    
+
     // Create model JSON pointing to local files
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"api\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"api\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n" +
-        "        \"columnNameCasing\": \"UNCHANGED\"\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"api\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"api\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n"
+  +
+        "        \"columnNameCasing\": \"UNCHANGED\"\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
-    
+
     File modelFile = new File(tempDir.toFile(), "model.json");
     Files.writeString(modelFile.toPath(), modelJson);
-    
+
     // Create connection using the model
     Properties info = new Properties();
     info.put("model", modelFile.getAbsolutePath());
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
          Statement stmt = conn.createStatement()) {
-      
+
       // Query users table (POST with JSONPath extraction)
       ResultSet rs = stmt.executeQuery("SELECT * FROM \"users\" ORDER BY \"id\"");
-      
+
       int count = 0;
       while (rs.next()) {
         count++;
@@ -217,7 +225,7 @@ public class JsonApiIntegrationTest extends BaseFileTest {
         String name = rs.getString("name");
         String email = rs.getString("email");
         int age = rs.getInt("age");
-        
+
         if (id == 1) {
           assertEquals("Alice", name);
           assertEquals("alice@example.com", email);
@@ -230,17 +238,17 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       }
       assertEquals(3, count);
       rs.close();
-      
+
       // Query products table (different POST body, same endpoint)
       rs = stmt.executeQuery("SELECT * FROM \"products\" WHERE \"price\" < 100 ORDER BY \"price\"");
-      
+
       count = 0;
       while (rs.next()) {
         count++;
         String id = rs.getString("id");
         String name = rs.getString("name");
         double price = rs.getDouble("price");
-        
+
         if (count == 1) {
           assertEquals("P002", id);
           assertEquals("Mouse", name);
@@ -253,7 +261,7 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       }
       assertEquals(2, count); // Only 2 products under $100
       rs.close();
-      
+
       // Test aggregation
       rs = stmt.executeQuery("SELECT COUNT(*) as cnt, AVG(\"age\") as avg_age FROM \"users\"");
       assertTrue(rs.next());
@@ -262,27 +270,31 @@ public class JsonApiIntegrationTest extends BaseFileTest {
       rs.close();
     }
   }
-  
-  @Test
-  public void testProgrammaticApiAccess() throws Exception {
+
+  @Test public void testProgrammaticApiAccess() throws Exception {
     // Test programmatic access using FileSchema directly
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("method", "POST");
     storageConfig.put("body", "{\"type\":\"users\"}");
-    
+
     // Create a temporary directory with a JSON config file
     File configFile = new File(tempDir.toFile(), "api_config.json");
-    String configJson = "{\n" +
-        "  \"url\": \"" + baseUrl + "/api/data\",\n" +
-        "  \"method\": \"POST\",\n" +
-        "  \"body\": \"{\\\"type\\\":\\\"users\\\"}\",\n" +
-        "  \"jsonPath\": \"$.data.users\"\n" +
+    String configJson = "{\n"
+  +
+        "  \"url\": \"" + baseUrl + "/api/data\",\n"
+  +
+        "  \"method\": \"POST\",\n"
+  +
+        "  \"body\": \"{\\\"type\\\":\\\"users\\\"}\",\n"
+  +
+        "  \"jsonPath\": \"$.data.users\"\n"
+  +
         "}";
     Files.writeString(configFile.toPath(), configJson);
-    
+
     // Create FileSchema with HTTP storage
-    FileSchema schema = new FileSchema(
-        null,
+    FileSchema schema =
+        new FileSchema(null,
         "api",
         tempDir.toFile(),
         null,  // directoryPattern
@@ -299,9 +311,8 @@ public class JsonApiIntegrationTest extends BaseFileTest {
         storageConfig,  // storageConfig
         null,  // flatten
         null,   // csvTypeInference
-        false   // primeCache
-    );
-    
+        false);   // primeCache
+
     // Verify the schema was created
     assertNotNull(schema);
     // Note: Actual table creation would depend on file discovery in the temp directory

@@ -54,7 +54,7 @@ public class MetadataCatalogIntegrationTest {
   void setUp() throws Exception {
     // Create temp directory manually
     tempDir = Files.createTempDirectory("metadata-test-").toFile();
-    
+
     // Create test data files
     createTestFile("sales.csv",
         "order_id:int,customer:string,amount:double\n"
@@ -94,7 +94,7 @@ public class MetadataCatalogIntegrationTest {
       writer.write("}\n");
     }
   }
-  
+
   @AfterEach
   void tearDown() {
     // Best effort cleanup - don't fail the test if cleanup fails
@@ -107,7 +107,7 @@ public class MetadataCatalogIntegrationTest {
       }
     }
   }
-  
+
   private void deleteRecursively(Path path) throws IOException {
     if (Files.exists(path)) {
       Files.walk(path)

@@ -44,35 +44,34 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test verifies that JsonMultiTableFactory is properly wired up.
  */
 public class JsonPathExtractionTest {
-  
+
   private HttpServer server;
   private int port;
   private String baseUrl;
-  
+
   @TempDir
   Path tempDir;
-  
+
   @BeforeEach
   public void setup() throws IOException {
     server = HttpServer.create(new InetSocketAddress(0), 0);
     port = server.getAddress().getPort();
     baseUrl = "http://localhost:" + port;
-    
+
     setupApiEndpoint();
     server.start();
   }
-  
+
   @AfterEach
   public void tearDown() {
     if (server != null) {
       server.stop(0);
     }
   }
-  
+
   private void setupApiEndpoint() {
     server.createContext("/api/data", new HttpHandler() {
-      @Override
-      public void handle(HttpExchange exchange) throws IOException {
+      @Override public void handle(HttpExchange exchange) throws IOException {
         // Return nested JSON with multiple arrays
         String response = "{" +
             "\"status\":\"success\"," +
@@ -99,7 +98,7 @@ public class JsonPathExtractionTest {
             "  \"count\":9" +
             "}" +
             "}";
-        
+
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, response.length());
         try (OutputStream os = exchange.getResponseBody()) {
@@ -108,41 +107,60 @@ public class JsonPathExtractionTest {
       }
     });
   }
-  
-  @Test
-  public void testJsonPathExtraction() throws Exception {
+
+  @Test public void testJsonPathExtraction() throws Exception {
     // Create model with JSONPath extraction
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"api\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"api\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"tables\": [\n" +
-        "          {\n" +
-        "            \"name\": \"api_response\",\n" +
-        "            \"url\": \"" + baseUrl + "/api/data\",\n" +
-        "            \"format\": \"json\",\n" +
-        "            \"jsonSearchPaths\": [\"$.data.users\", \"$.data.products\", \"$.data.orders\"]\n" +
-        "          }\n" +
-        "        ]\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"api\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"api\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"tables\": [\n"
+  +
+        "          {\n"
+  +
+        "            \"name\": \"api_response\",\n"
+  +
+        "            \"url\": \"" + baseUrl + "/api/data\",\n"
+  +
+        "            \"format\": \"json\",\n"
+  +
+        "            \"jsonSearchPaths\": [\"$.data.users\", \"$.data.products\", \"$.data.orders\"]\n"
+  +
+        "          }\n"
+  +
+        "        ]\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
-    
+
     Path modelFile = tempDir.resolve("model.json");
     Files.writeString(modelFile, modelJson);
-    
+
     Properties info = new Properties();
     info.put("model", modelFile.toString());
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
          Statement stmt = conn.createStatement()) {
-      
+
       // Query users table (extracted via JSONPath $.data.users)
       try (ResultSet rs = stmt.executeQuery("SELECT * FROM \"users\" ORDER BY \"id\"")) {
         int count = 0;
@@ -151,7 +169,7 @@ public class JsonPathExtractionTest {
           int id = rs.getInt("id");
           String name = rs.getString("name");
           String email = rs.getString("email");
-          
+
           if (id == 1) {
             assertEquals("Alice", name);
             assertEquals("alice@example.com", email);
@@ -165,7 +183,7 @@ public class JsonPathExtractionTest {
         }
         assertEquals(3, count, "Should have 3 users");
       }
-      
+
       // Query products table (extracted via JSONPath $.data.products)
       try (ResultSet rs = stmt.executeQuery("SELECT * FROM \"products\" ORDER BY \"id\"")) {
         int count = 0;
@@ -174,7 +192,7 @@ public class JsonPathExtractionTest {
           String id = rs.getString("id");
           String name = rs.getString("name");
           double price = rs.getDouble("price");
-          
+
           if ("P001".equals(id)) {
             assertEquals("Laptop", name);
             assertEquals(999.99, price, 0.01);
@@ -185,7 +203,7 @@ public class JsonPathExtractionTest {
         }
         assertEquals(3, count, "Should have 3 products");
       }
-      
+
       // Query orders table (extracted via JSONPath $.data.orders)
       try (ResultSet rs = stmt.executeQuery("SELECT * FROM \"orders\" WHERE \"quantity\" > 1")) {
         assertTrue(rs.next());
@@ -195,31 +213,29 @@ public class JsonPathExtractionTest {
         assertEquals(2, rs.getInt("quantity"));
         assertFalse(rs.next(), "Should have only one order with quantity > 1");
       }
-      
+
       // Verify the source table itself is NOT available
       try {
         stmt.executeQuery("SELECT * FROM \"api_response\"");
         fail("Source table should not exist when JSONPath extraction is used");
       } catch (Exception e) {
         // Expected - the source table should not exist
-        assertTrue(e.getMessage().contains("api_response") || 
+        assertTrue(e.getMessage().contains("api_response") ||
                    e.getMessage().contains("not found"),
                    "Error should indicate table not found");
       }
     }
   }
-  
-  @Test
-  public void testJsonPathWithPostRequest() throws Exception {
+
+  @Test public void testJsonPathWithPostRequest() throws Exception {
     // Test with POST request and headers
     server.createContext("/graphql", new HttpHandler() {
-      @Override
-      public void handle(HttpExchange exchange) throws IOException {
+      @Override public void handle(HttpExchange exchange) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) {
           exchange.sendResponseHeaders(405, 0);
           return;
         }
-        
+
         String response = "{" +
             "\"data\":{" +
             "  \"company\":{" +
@@ -234,7 +250,7 @@ public class JsonPathExtractionTest {
             "  }" +
             "}" +
             "}";
-        
+
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, response.length());
         try (OutputStream os = exchange.getResponseBody()) {
@@ -242,41 +258,64 @@ public class JsonPathExtractionTest {
         }
       }
     });
-    
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"graphql\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"graphql\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"tables\": [\n" +
-        "          {\n" +
-        "            \"name\": \"company\",\n" +
-        "            \"url\": \"" + baseUrl + "/graphql\",\n" +
-        "            \"format\": \"json\",\n" +
-        "            \"method\": \"POST\",\n" +
-        "            \"body\": \"{\\\"query\\\":\\\"{ company { employees { id name department } departments { id name budget } } }\\\"}\",\n" +
-        "            \"headers\": {\"Content-Type\": \"application/json\"},\n" +
-        "            \"jsonSearchPaths\": [\"$.data.company.employees\", \"$.data.company.departments\"]\n" +
-        "          }\n" +
-        "        ]\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"graphql\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"graphql\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"tables\": [\n"
+  +
+        "          {\n"
+  +
+        "            \"name\": \"company\",\n"
+  +
+        "            \"url\": \"" + baseUrl + "/graphql\",\n"
+  +
+        "            \"format\": \"json\",\n"
+  +
+        "            \"method\": \"POST\",\n"
+  +
+        "            \"body\": \"{\\\"query\\\":\\\"{ company { employees { id name department } departments { id name budget } } }\\\"}\",\n"
+  +
+        "            \"headers\": {\"Content-Type\": \"application/json\"},\n"
+  +
+        "            \"jsonSearchPaths\": [\"$.data.company.employees\", \"$.data.company.departments\"]\n"
+  +
+        "          }\n"
+  +
+        "        ]\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
-    
+
     Path modelFile = tempDir.resolve("graphql_model.json");
     Files.writeString(modelFile, modelJson);
-    
+
     Properties info = new Properties();
     info.put("model", modelFile.toString());
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
          Statement stmt = conn.createStatement()) {
-      
+
       // Query employees table
       try (ResultSet rs = stmt.executeQuery("SELECT * FROM \"employees\"")) {
         int count = 0;
@@ -285,7 +324,7 @@ public class JsonPathExtractionTest {
         }
         assertEquals(2, count, "Should have 2 employees");
       }
-      
+
       // Query departments table
       try (ResultSet rs = stmt.executeQuery("SELECT * FROM \"departments\" WHERE \"budget\" > 600000")) {
         assertTrue(rs.next());

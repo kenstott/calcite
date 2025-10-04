@@ -26,7 +26,6 @@ import org.opentest4j.TestAbortedException;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +33,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.Locale;
 
 /**
  * Test materialized views with Parquet execution engine.
@@ -47,7 +45,7 @@ public class MaterializedViewParquetTest {
   public void setUp() throws Exception {
     // Create temporary directory manually to avoid JUnit automatic cleanup issues
     tempDir = Files.createTempDirectory("materialized-view-test-");
-    
+
     // Create sales data
     File salesCsv = new File(tempDir.toFile(), "sales.csv");
     try (FileWriter writer = new FileWriter(salesCsv, StandardCharsets.UTF_8)) {
@@ -79,7 +77,7 @@ public class MaterializedViewParquetTest {
       // Log but don't fail the test for cache cleanup issues
       System.err.println("Warning: Failed to clear file cache during cleanup: " + e.getMessage());
     }
-    
+
     // Force cleanup to help with temp directory deletion
     try {
       forceCleanup();
@@ -87,7 +85,7 @@ public class MaterializedViewParquetTest {
       // Log but don't fail the test for cleanup issues
       System.err.println("Warning: Failed during resource cleanup: " + e.getMessage());
     }
-    
+
     // Clean up temp directory - failures should never be fatal
     if (tempDir != null) {
       deleteTempDirectoryRecursively(tempDir.toFile());
@@ -116,7 +114,7 @@ public class MaterializedViewParquetTest {
     if (currentEngine == null) {
       currentEngine = System.getProperty("CALCITE_FILE_ENGINE_TYPE", "PARQUET");
     }
-    
+
     if (!"PARQUET".equals(currentEngine) && !"DUCKDB".equals(currentEngine)) {
       throw new TestAbortedException("Skipping test - materialized views only supported with PARQUET or DUCKDB engines, current: " + currentEngine);
     }
@@ -131,7 +129,7 @@ public class MaterializedViewParquetTest {
     if (directory == null || !directory.exists()) {
       return;
     }
-    
+
     try {
       File[] files = directory.listFiles();
       if (files != null) {
@@ -145,7 +143,7 @@ public class MaterializedViewParquetTest {
           }
         }
       }
-      
+
       if (!directory.delete()) {
         System.err.println("Warning: Could not delete temp directory: " + directory.getAbsolutePath());
       }
@@ -157,7 +155,7 @@ public class MaterializedViewParquetTest {
 
   @Test public void testMaterializedViewsWithParquetEngine() throws Exception {
     skipIfEngineDoesNotSupportMaterializedViews();
-    
+
     System.out.println("\n=== MATERIALIZED VIEWS WITH PARQUET ENGINE TEST ===");
 
     // Create model.json file with proper configuration
@@ -231,7 +229,7 @@ public class MaterializedViewParquetTest {
         writer.write("  }]\n");
         writer.write("}\n");
       }
-      
+
       try (Connection linq4jConn = DriverManager.getConnection("jdbc:calcite:model=" + linq4jModelFile.getAbsolutePath())) {
         System.out.println("   Created schema with LINQ4J engine and materializations");
         System.out.println("   Expected: Error message that MV only works with Parquet");
