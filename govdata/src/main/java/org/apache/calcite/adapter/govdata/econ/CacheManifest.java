@@ -124,6 +124,49 @@ public class CacheManifest {
   }
 
   /**
+   * Check if parquet conversion is complete for the given data.
+   */
+  public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+
+    if (entry == null || entry.parquetPath == null || entry.parquetConvertedAt == 0) {
+      return false;
+    }
+
+    // Check if parquet file still exists (resolve relative path using cache directory)
+    File parquetFile = cacheDir != null ? new File(cacheDir, entry.parquetPath) : new File(entry.parquetPath);
+    if (!parquetFile.exists()) {
+      LOGGER.debug("Parquet file no longer exists: {}", entry.parquetPath);
+      entry.parquetPath = null;
+      entry.parquetConvertedAt = 0;
+      return false;
+    }
+
+    LOGGER.debug("Parquet already converted for {} year={}: {}", dataType, year, entry.parquetPath);
+    return true;
+  }
+
+  /**
+   * Mark parquet conversion as complete for cached data.
+   */
+  public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+
+    if (entry == null) {
+      LOGGER.warn("Cannot mark parquet converted - no cache entry for {} year={}", dataType, year);
+      return;
+    }
+
+    entry.parquetPath = parquetPath;
+    entry.parquetConvertedAt = System.currentTimeMillis();
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, parquetPath);
+  }
+
+  /**
    * Mark data as cached with default 24-hour refresh for current year, infinite for historical.
    * Consider using {@link #markCached(String, int, Map, String, long, long, String)} with explicit refresh time for more control.
    */
@@ -312,6 +355,12 @@ public class CacheManifest {
 
     @JsonProperty("refreshReason")
     public String refreshReason;  // e.g., "current_year_daily", "historical_immutable", "market_close"
+
+    @JsonProperty("parquetPath")
+    public String parquetPath;  // Path to converted parquet file (null if not converted yet)
+
+    @JsonProperty("parquetConvertedAt")
+    public long parquetConvertedAt;  // Timestamp when parquet conversion completed (0 if not converted)
   }
 
   /**

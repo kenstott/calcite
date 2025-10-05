@@ -57,6 +57,40 @@ public class TigerDataDownloader {
 
   private static final String TIGER_BASE_URL = "https://www2.census.gov/geo/tiger";
 
+  /**
+   * TIGER/Line Shapefile Support:
+   * - 2010: Supported (different URL structure with /2010/ subdirectory and file suffixes)
+   * - 2011+: Supported (standard TIGER{year} structure)
+   * - Pre-2010: Not currently supported (uses incompatible formats and directory structures)
+   */
+
+  /**
+   * Get the TIGER directory path for a specific year.
+   * TIGER data URL structure varies by year.
+   */
+  private String getTigerYearPath(int year) {
+    return "TIGER" + year;
+  }
+
+  /**
+   * Get the subdirectory path for TIGER 2010 data.
+   * 2010 data has an additional /2010/ subdirectory.
+   */
+  private String getTiger2010Subdir(int year) {
+    return (year == 2010) ? "/2010" : "";
+  }
+
+  /**
+   * Get the file suffix for TIGER data based on year.
+   * 2010 uses different suffixes (e.g., state10, county10, place10).
+   */
+  private String getTigerFileSuffix(int year, String type) {
+    if (year == 2010) {
+      return type + "10";
+    }
+    return type;
+  }
+
   private final File cacheDir;
   private final List<Integer> dataYears;
   private final boolean autoDownload;
@@ -98,8 +132,6 @@ public class TigerDataDownloader {
    * Download all TIGER data for the specified year range (matching ECON pattern).
    */
   public void downloadAll(int startYear, int endYear) throws IOException {
-    LOGGER.info("Downloading all TIGER data for years {} to {}", startYear, endYear);
-
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download states
@@ -168,8 +200,9 @@ public class TigerDataDownloader {
    * Download state boundary shapefile for a specific year.
    */
   public File downloadStatesForYear(int year) throws IOException {
-    String filename = String.format("tl_%d_us_state.zip", year);
-    String url = String.format("%s/TIGER%d/STATE/%s", TIGER_BASE_URL, year, filename);
+    String fileSuffix = getTigerFileSuffix(year, "state");
+    String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
+    String url = String.format("%s/%s/STATE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
     // Create year-partitioned directory structure
     File yearDir = new File(cacheDir, String.format("year=%d", year));
@@ -188,10 +221,18 @@ public class TigerDataDownloader {
 
     LOGGER.info("Downloading states shapefile for year {} from: {}", year, url);
     targetDir.mkdirs();
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, targetDir);
 
-    return targetDir;
+    try {
+      downloadFile(url, zipFile);
+      extractZipFile(zipFile, targetDir);
+      return targetDir;
+    } catch (IOException e) {
+      if (e.getMessage().contains("404")) {
+        LOGGER.warn("TIGER data not available for year {} at URL: {} - skipping", year, url);
+        return null;
+      }
+      throw e;
+    }
   }
 
   /**
@@ -218,8 +259,9 @@ public class TigerDataDownloader {
    * Download county boundary shapefile for a specific year.
    */
   public File downloadCountiesForYear(int year) throws IOException {
-    String filename = String.format("tl_%d_us_county.zip", year);
-    String url = String.format("%s/TIGER%d/COUNTY/%s", TIGER_BASE_URL, year, filename);
+    String fileSuffix = getTigerFileSuffix(year, "county");
+    String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
+    String url = String.format("%s/%s/COUNTY%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "counties");
@@ -237,10 +279,18 @@ public class TigerDataDownloader {
 
     LOGGER.info("Downloading counties shapefile for year {} from: {}", year, url);
     targetDir.mkdirs();
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, targetDir);
 
-    return targetDir;
+    try {
+      downloadFile(url, zipFile);
+      extractZipFile(zipFile, targetDir);
+      return targetDir;
+    } catch (IOException e) {
+      if (e.getMessage().contains("404")) {
+        LOGGER.warn("TIGER data not available for year {} at URL: {} - skipping", year, url);
+        return null;
+      }
+      throw e;
+    }
   }
 
   /**
@@ -258,8 +308,9 @@ public class TigerDataDownloader {
    * Note: Places are downloaded by state FIPS code.
    */
   public File downloadPlacesForYear(int year, String stateFips) throws IOException {
-    String filename = String.format("tl_%d_%s_place.zip", year, stateFips);
-    String url = String.format("%s/TIGER%d/PLACE/%s", TIGER_BASE_URL, year, filename);
+    String fileSuffix = getTigerFileSuffix(year, "place");
+    String filename = String.format("tl_%d_%s_%s.zip", year, stateFips, fileSuffix);
+    String url = String.format("%s/%s/PLACE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "places/" + stateFips);
@@ -320,8 +371,11 @@ public class TigerDataDownloader {
    * Download ZIP Code Tabulation Areas (ZCTAs) shapefile for a specific year.
    */
   public File downloadZctasForYear(int year) throws IOException {
-    String filename = String.format("tl_%d_us_zcta520.zip", year);
-    String url = String.format("%s/TIGER%d/ZCTA520/%s", TIGER_BASE_URL, year, filename);
+    // ZCTA5 (5-digit ZCTAs) were used in 2010, ZCTA520 is used in later years
+    String zctaType = (year == 2010) ? "ZCTA5" : "ZCTA520";
+    String fileSuffix = (year == 2010) ? "zcta510" : "zcta520";
+    String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
+    String url = String.format("%s/%s/%s%s/%s", TIGER_BASE_URL, getTigerYearPath(year), zctaType, getTiger2010Subdir(year), filename);
 
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "zctas");
@@ -340,10 +394,18 @@ public class TigerDataDownloader {
     LOGGER.info("Downloading ZCTAs shapefile from: {}", url);
     LOGGER.warn("Note: ZCTA file is large (~200MB), this may take a while...");
     targetDir.mkdirs();
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, targetDir);
 
-    return targetDir;
+    try {
+      downloadFile(url, zipFile);
+      extractZipFile(zipFile, targetDir);
+      return targetDir;
+    } catch (IOException e) {
+      if (e.getMessage().contains("404")) {
+        LOGGER.warn("TIGER ZCTA data not available for year {} at URL: {} - skipping", year, url);
+        return null;
+      }
+      throw e;
+    }
   }
 
   /**
@@ -382,7 +444,7 @@ public class TigerDataDownloader {
     targetDir.mkdirs();
     for (String state : stateFips) {
       String filename = String.format("tl_%d_%s_cd%s.zip", year, state, congressNum);
-      String url = String.format("%s/TIGER%d/CD/%s", TIGER_BASE_URL, year, filename);
+      String url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
       File zipFile = new File(targetDir, filename);
 
       if (!zipFile.exists()) {
@@ -515,8 +577,9 @@ public class TigerDataDownloader {
     String[] stateFips = {"06", "48", "36", "12"};
 
     for (String fips : stateFips) {
-      String filename = String.format("tl_%d_%s_tract.zip", year, fips);
-      String url = String.format("%s/TIGER%d/TRACT/%s", TIGER_BASE_URL, year, filename);
+      String fileSuffix = getTigerFileSuffix(year, "tract");
+      String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
+      String url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
       File stateDir = new File(targetDir, fips);
       File zipFile = new File(stateDir, filename);
@@ -533,7 +596,11 @@ public class TigerDataDownloader {
         downloadFile(url, zipFile);
         extractZipFile(zipFile, stateDir);
       } catch (IOException e) {
-        LOGGER.warn("Failed to download census tracts for state {}: {}", fips, e.getMessage());
+        if (e.getMessage().contains("404")) {
+          LOGGER.warn("TIGER census tract data not available for state {} year {} at URL: {} - skipping", fips, year, url);
+        } else {
+          LOGGER.warn("Failed to download census tracts for state {}: {}", fips, e.getMessage());
+        }
         // Continue with other states even if one fails
       }
     }
@@ -576,8 +643,9 @@ public class TigerDataDownloader {
     String[] stateFips = {"06", "48", "36", "12"};
 
     for (String fips : stateFips) {
-      String filename = String.format("tl_%d_%s_bg.zip", year, fips);
-      String url = String.format("%s/TIGER%d/BG/%s", TIGER_BASE_URL, year, filename);
+      String fileSuffix = getTigerFileSuffix(year, "bg");
+      String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
+      String url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
       File stateDir = new File(targetDir, fips);
       File zipFile = new File(stateDir, filename);
@@ -594,7 +662,11 @@ public class TigerDataDownloader {
         downloadFile(url, zipFile);
         extractZipFile(zipFile, stateDir);
       } catch (IOException e) {
-        LOGGER.warn("Failed to download block groups for state {}: {}", fips, e.getMessage());
+        if (e.getMessage().contains("404")) {
+          LOGGER.warn("TIGER block group data not available for state {} year {} at URL: {} - skipping", fips, year, url);
+        } else {
+          LOGGER.warn("Failed to download block groups for state {}: {}", fips, e.getMessage());
+        }
         // Continue with other states even if one fails
       }
     }
@@ -616,7 +688,7 @@ public class TigerDataDownloader {
    */
   public File downloadCbsasForYear(int year) throws IOException {
     String filename = String.format("tl_%d_us_cbsa.zip", year);
-    String url = String.format("%s/TIGER%d/CBSA/%s", TIGER_BASE_URL, year, filename);
+    String url = String.format("%s/%s/CBSA/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
 
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "cbsa");
@@ -694,7 +766,7 @@ public class TigerDataDownloader {
       for (String type : districtTypes) {
         String filename = String.format("tl_%d_%s_%s.zip", year, fips, type);
         String urlPath = type.toUpperCase();
-        String url = String.format("%s/TIGER%d/%s/%s", TIGER_BASE_URL, year, urlPath, filename);
+        String url = String.format("%s/%s/%s/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename);
 
         File stateDir = new File(targetDir, fips);
         File zipFile = new File(stateDir, filename);
