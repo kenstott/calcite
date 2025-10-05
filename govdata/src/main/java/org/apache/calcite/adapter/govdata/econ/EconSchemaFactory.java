@@ -74,21 +74,31 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
     LOGGER.debug("Building ECON schema operand configuration");
 
-    // Read environment variables at runtime (not static initialization)
-    String govdataCacheDir = getGovDataCacheDir();
-    String govdataParquetDir = getGovDataParquetDir();
+    // Use directory from operand if provided (contains full S3 URI or local path)
+    // Otherwise fall back to environment variables
+    String baseDirectory = (String) operand.get("directory");
+    String cacheDirectory = (String) operand.get("cacheDirectory");
 
-    // Check required environment variables
-    if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
+    if (baseDirectory == null) {
+      // Fallback to environment variables
+      String govdataParquetDir = getGovDataParquetDir();
+      if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
+        throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
+      }
+      baseDirectory = govdataParquetDir;
     }
-    if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
+
+    if (cacheDirectory == null) {
+      String govdataCacheDir = getGovDataCacheDir();
+      if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
+        throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
+      }
+      cacheDirectory = govdataCacheDir;
     }
 
     // ECON data directories
-    String econRawDir = govdataCacheDir + "/econ";
-    String econParquetDir = govdataParquetDir + "/source=econ";
+    String econRawDir = cacheDirectory + "/econ";
+    String econParquetDir = baseDirectory + "/source=econ";
 
     // Use unified govdata directory structure (matching GEO pattern)
     LOGGER.debug("Using unified govdata directories - cache: {}, parquet: {}",
