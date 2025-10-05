@@ -149,14 +149,26 @@ public class CacheManifest {
 
   /**
    * Mark parquet conversion as complete for cached data.
+   * Creates a stub cache entry if no raw download entry exists (handles legacy data).
    */
   public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
     String key = buildKey(dataType, year, parameters);
     CacheEntry entry = entries.get(key);
 
     if (entry == null) {
-      LOGGER.warn("Cannot mark parquet converted - no cache entry for {} year={}", dataType, year);
-      return;
+      // Create stub entry for parquet-only data (no raw download tracked)
+      // This handles legacy data created before manifest tracking
+      LOGGER.debug("Creating stub cache entry for parquet-only data: {} year={}", dataType, year);
+      entry = new CacheEntry();
+      entry.dataType = dataType;
+      entry.year = year;
+      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
+      entry.filePath = null;  // No raw download
+      entry.fileSize = 0;
+      entry.cachedAt = System.currentTimeMillis();
+      entry.refreshAfter = Long.MAX_VALUE;  // Never refresh (historical data)
+      entry.refreshReason = "parquet_only";
+      entries.put(key, entry);
     }
 
     entry.parquetPath = parquetPath;
