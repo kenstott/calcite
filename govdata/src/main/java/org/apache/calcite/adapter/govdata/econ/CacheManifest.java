@@ -65,12 +65,14 @@ public class CacheManifest {
       return false;
     }
 
-    // Check if file still exists (resolve relative path using cache directory)
-    File file = cacheDir != null ? new File(cacheDir, entry.filePath) : new File(entry.filePath);
-    if (!file.exists()) {
-      LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
-      entries.remove(key);
-      return false;
+    // Check if file still exists (skip if filePath is null for parquet-only or unavailable entries)
+    if (entry.filePath != null) {
+      File file = cacheDir != null ? new File(cacheDir, entry.filePath) : new File(entry.filePath);
+      if (!file.exists()) {
+        LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
+        entries.remove(key);
+        return false;
+      }
     }
 
     // Check if refresh time has passed
@@ -240,12 +242,15 @@ public class CacheManifest {
     entries.entrySet().removeIf(entry -> {
       CacheEntry cacheEntry = entry.getValue();
 
-      // Remove if file doesn't exist (resolve relative path using cache directory)
-      File file = cacheDir != null ? new File(cacheDir, cacheEntry.filePath) : new File(cacheEntry.filePath);
-      if (!file.exists()) {
-        LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
-        removed[0]++;
-        return true;
+      // Skip file existence check if filePath is null (parquet-only or unavailable entries)
+      if (cacheEntry.filePath != null) {
+        // Remove if file doesn't exist (resolve relative path using cache directory)
+        File file = cacheDir != null ? new File(cacheDir, cacheEntry.filePath) : new File(cacheEntry.filePath);
+        if (!file.exists()) {
+          LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
+          removed[0]++;
+          return true;
+        }
       }
 
       // Remove if refresh time has passed
