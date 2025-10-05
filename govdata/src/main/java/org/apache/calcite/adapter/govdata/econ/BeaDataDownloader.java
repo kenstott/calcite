@@ -58,6 +58,7 @@ public class BeaDataDownloader {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final String cacheDir;
+  private final String parquetDir;
   private final String apiKey;
   private final HttpClient httpClient;
   private final StorageProvider storageProvider;
@@ -115,8 +116,9 @@ public class BeaDataDownloader {
     public static final String COMPENSATION_BY_INDUSTRY = "4";              // Compensation by Industry
   }
 
-  public BeaDataDownloader(String cacheDir, String apiKey, StorageProvider storageProvider) {
+  public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider) {
     this.cacheDir = cacheDir;
+    this.parquetDir = parquetDir;
     this.apiKey = apiKey;
     this.storageProvider = storageProvider;
     this.httpClient = HttpClient.newBuilder()
@@ -128,6 +130,7 @@ public class BeaDataDownloader {
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
   public BeaDataDownloader(String cacheDir, String apiKey) {
     this.cacheDir = cacheDir;
+    this.parquetDir = cacheDir; // For compatibility, use same dir
     this.apiKey = apiKey;
     this.storageProvider = org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir);
     this.httpClient = HttpClient.newBuilder()
@@ -190,8 +193,6 @@ public class BeaDataDownloader {
    * Downloads all BEA data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading all BEA data for years {} to {}", startYear, endYear);
-
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download GDP components
@@ -208,7 +209,6 @@ public class BeaDataDownloader {
 
       // Download trade statistics for single year
       try {
-        LOGGER.debug("Downloading trade statistics for year {}", year);
         downloadTradeStatisticsForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download trade statistics for year {}: {}", year, e.getMessage());
@@ -216,7 +216,6 @@ public class BeaDataDownloader {
 
       // Download ITA data for single year
       try {
-        LOGGER.debug("Downloading ITA data for year {}", year);
         downloadItaDataForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download ITA data for year {}: {}", year, e.getMessage());
@@ -224,7 +223,6 @@ public class BeaDataDownloader {
 
       // Download industry GDP for single year
       try {
-        LOGGER.debug("Downloading industry GDP data for year {}", year);
         downloadIndustryGdpForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download industry GDP data for year {}: {}", year, e.getMessage());
@@ -232,7 +230,6 @@ public class BeaDataDownloader {
 
       // Download state GDP for single year
       try {
-        LOGGER.debug("Downloading state GDP data for year {}", year);
         downloadStateGdpForYear(year);
       } catch (Exception e) {
         LOGGER.warn("Failed to download state GDP data for year {}: {}", year, e.getMessage());
@@ -271,12 +268,11 @@ public class BeaDataDownloader {
     File jsonFile = new File(outputDir, "gdp_components.json");
     if (jsonFile.exists() && jsonFile.length() > 100) {  // Check file has real data
       LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
-      cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
+      cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
       cacheManifest.save(cacheDir);
       return;
     }
-
-    LOGGER.debug("Downloading BEA GDP components for year {}", year);
 
     // Create local cache directory
     outputDir.mkdirs();
@@ -288,6 +284,8 @@ public class BeaDataDownloader {
         String.format("UserID=%s&method=GetData&datasetname=%s&TableName=%s&Frequency=A&Year=%d&ResultFormat=JSON", apiKey, Datasets.NIPA, NipaTables.GDP_COMPONENTS, year);
 
     String url = BEA_API_BASE + "?" + params;
+
+    LOGGER.debug("Downloading BEA GDP components for year {}", year);
 
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
@@ -386,8 +384,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("gdp_components", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
+    cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -405,8 +404,6 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-
-    LOGGER.info("Downloading BEA GDP components for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath = String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet",
@@ -708,8 +705,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("regional_income", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/regional_income.json";
+    cacheManifest.markCached("regional_income", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -817,6 +815,13 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check if parquet file already exists (skip download if already converted)
+    String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
+    if (storageProvider.exists(tradeParquetPath)) {
+      LOGGER.debug("Found existing trade statistics parquet for year {} - skipping download", year);
+      return;
+    }
+
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "trade_statistics");
@@ -922,8 +927,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("trade_statistics", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
+    cacheManifest.markCached("trade_statistics", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -1163,6 +1169,13 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check if parquet file already exists (skip download if already converted)
+    String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/ita_data.parquet");
+    if (storageProvider.exists(itaParquetPath)) {
+      LOGGER.debug("Found existing ITA parquet for year {} - skipping download", year);
+      return;
+    }
+
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "ita_data");
@@ -1173,11 +1186,11 @@ public class BeaDataDownloader {
       return;
     }
 
-    LOGGER.debug("Downloading BEA ITA data for year {}", year);
-
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
+
+    LOGGER.debug("Downloading BEA ITA data for year {}", year);
 
     List<ItaData> itaRecords = new ArrayList<>();
 
@@ -1298,8 +1311,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("ita_data", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
+    cacheManifest.markCached("ita_data", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -1311,8 +1325,6 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-
-    LOGGER.info("Downloading BEA ITA data for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath = String.format("source=econ/type=ita_data/year_range=%d_%d/ita_data.parquet",
@@ -1468,6 +1480,13 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
+    // Check if parquet file already exists (skip download if already converted)
+    String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/industry_gdp.parquet");
+    if (storageProvider.exists(industryGdpParquetPath)) {
+      LOGGER.debug("Found existing industry GDP parquet for year {} - skipping download", year);
+      return;
+    }
+
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "industry_gdp");
@@ -1478,11 +1497,11 @@ public class BeaDataDownloader {
       return;
     }
 
-    LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
-
     // Create local cache directory
     File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
+
+    LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
 
     List<IndustryGdpData> industryData = new ArrayList<>();
 
@@ -1588,8 +1607,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("industry_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
+    cacheManifest.markCached("industry_gdp", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -1602,8 +1622,6 @@ public class BeaDataDownloader {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
-
-    LOGGER.info("Downloading BEA GDP by Industry data for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath = String.format("source=econ/type=industry_gdp/year_range=%d_%d/industry_gdp.parquet",
@@ -2053,8 +2071,6 @@ public class BeaDataDownloader {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
 
-    LOGGER.info("Downloading BEA state GDP data for {}-{}", startYear, endYear);
-
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath = String.format("source=econ/type=state_gdp/year_range=%d_%d/state_gdp.parquet",
         startYear, endYear);
@@ -2187,7 +2203,8 @@ public class BeaDataDownloader {
     File jsonFile = new File(outputDir, "state_gdp.json");
     if (jsonFile.exists()) {
       LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
-      cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+      String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
+      cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
       cacheManifest.save(cacheDir);
       return;
     }
@@ -2203,8 +2220,6 @@ public class BeaDataDownloader {
     for (int i = 0; i < lineCodes.length; i++) {
       String lineCode = lineCodes[i];
       String description = descriptions[i];
-
-      LOGGER.debug("Downloading state GDP data for year {} LineCode {}", year, lineCode);
 
       String params =
           String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=%s&GeoFips=STATE&Year=%d&ResultFormat=JSON", apiKey, Datasets.REGIONAL, lineCode, year);
@@ -2298,8 +2313,9 @@ public class BeaDataDownloader {
 
     LOGGER.debug("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("state_gdp", year, cacheParams, jsonFile.getAbsolutePath(), jsonFile.length());
+    // Mark as cached in manifest (use relative path)
+    String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
+    cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
     cacheManifest.save(cacheDir);
   }
 
@@ -2413,13 +2429,17 @@ public class BeaDataDownloader {
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.debug("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
+    // Extract year and data type
+    int year = extractYearFromPath(targetFilePath);
+    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
 
-    // Skip if target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+    // Check manifest/file existence
+    if (shouldSkipParquetConversion(targetFilePath, year, dataType)) {
       return;
     }
+
+    LOGGER.debug("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
+
 
     List<Map<String, Object>> components = new ArrayList<>();
 
@@ -2460,6 +2480,9 @@ public class BeaDataDownloader {
     writeGdpComponentsMapParquet(components, targetFilePath);
 
     LOGGER.debug("Converted BEA data to parquet: {} ({} components)", targetFilePath, components.size());
+
+    // Mark parquet conversion complete
+    markParquetConversionComplete(targetFilePath, year, dataType);
   }
 
   @SuppressWarnings("deprecation")
@@ -2982,5 +3005,58 @@ public class BeaDataDownloader {
 
     storageProvider.writeAvroParquet(targetFilePath, schema, records, "GdpStatistics");
     LOGGER.debug("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
+  }
+
+  /**
+   * Extract year from Hive-partitioned path.
+   */
+  private int extractYearFromPath(String path) {
+    // Match pattern "year=YYYY"
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    // Fallback to current year if pattern not found
+    return LocalDate.now().getYear();
+  }
+
+  /**
+   * Check if parquet conversion should be skipped (already converted per manifest or file exists).
+   * Updates manifest if file exists but isn't tracked.
+   *
+   * @return true if conversion should be skipped, false if conversion should proceed
+   */
+  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) throws IOException {
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+
+    // Check manifest first
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+      return true;
+    }
+
+    // Defensive check if file exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Mark parquet conversion as complete in the manifest.
+   */
+  private void markParquetConversionComplete(String targetFilePath, int year, String dataType) {
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+    cacheManifest.save(cacheDir);
+    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
   }
 }

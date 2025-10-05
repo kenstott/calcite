@@ -544,11 +544,26 @@ public class WorldBankDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    // Extract year and data type
+    int year = extractYearFromPath(targetFilePath);
+    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
+
+    // Check manifest first
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+      return;
+    }
+
     LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFilePath);
 
-    // Skip if target file already exists
+    // Skip if target file already exists (defensive check)
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -592,6 +607,11 @@ public class WorldBankDataDownloader {
     writeWorldIndicatorsMapParquet(indicators, targetFilePath);
 
     LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFilePath, indicators.size());
+
+    // Mark parquet conversion complete in manifest
+    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+    cacheManifest.save(cacheDir);
+    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
   }
 
   private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)
@@ -623,5 +643,19 @@ public class WorldBankDataDownloader {
 
     // Write parquet using StorageProvider
     storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
+  }
+
+  /**
+   * Extract year from Hive-partitioned path.
+   */
+  private int extractYearFromPath(String path) {
+    // Match pattern "year=YYYY"
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    // Fallback to current year if pattern not found
+    return java.time.LocalDate.now().getYear();
   }
 }

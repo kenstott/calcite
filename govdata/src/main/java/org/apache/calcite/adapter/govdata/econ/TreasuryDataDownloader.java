@@ -102,8 +102,6 @@ public class TreasuryDataDownloader {
    * Downloads all Treasury data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading Treasury data for years {} to {}", startYear, endYear);
-
     // Download treasury yields data
     downloadTreasuryYields(startYear, endYear);
 
@@ -178,8 +176,6 @@ public class TreasuryDataDownloader {
    * Downloads daily treasury yield curve data.
    */
   public File downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading treasury yields for {}-{}", startYear, endYear);
-
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -207,6 +203,8 @@ public class TreasuryDataDownloader {
       }
 
       // Fetch data from Treasury API for this year
+      LOGGER.info("Downloading treasury yields for year {}", year);
+
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
 
@@ -253,8 +251,6 @@ public class TreasuryDataDownloader {
    * Downloads federal debt statistics.
    */
   public File downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading federal debt data for {}-{}", startYear, endYear);
-
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -282,6 +278,8 @@ public class TreasuryDataDownloader {
       }
 
       // Fetch debt to the penny data for this year
+      LOGGER.info("Downloading federal debt data for year {}", year);
+
       String startDate = year + "-01-01";
       String endDate = year + "-12-31";
 
@@ -440,11 +438,29 @@ public class TreasuryDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    // Extract year from path
+    int year = extractYearFromPath(targetFilePath);
+
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Check manifest first
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+      return;
+    }
+
     LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDir, targetFilePath);
 
-    // Skip if target file already exists
+    // Skip if target file already exists (defensive check)
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -483,6 +499,11 @@ public class TreasuryDataDownloader {
     // Create parquet file
     writeTreasuryYieldsParquet(yields, targetFilePath);
     LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
+
+    // Mark parquet conversion complete in manifest
+    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+    cacheManifest.save(cacheDir);
+    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
   }
 
   /**
@@ -492,11 +513,29 @@ public class TreasuryDataDownloader {
    * @param targetFilePath Target parquet file path to create
    */
   public void convertFederalDebtToParquet(File sourceDir, String targetFilePath) throws IOException {
+    // Extract year from path
+    int year = extractYearFromPath(targetFilePath);
+
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Check manifest first
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+      return;
+    }
+
     LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDir, targetFilePath);
 
-    // Skip if target file already exists
+    // Skip if target file already exists (defensive check)
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -547,5 +586,24 @@ public class TreasuryDataDownloader {
     // Create parquet file
     writeFederalDebtParquet(debtRecords, targetFilePath);
     LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFilePath, debtRecords.size());
+
+    // Mark parquet conversion complete in manifest
+    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+    cacheManifest.save(cacheDir);
+    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+  }
+
+  /**
+   * Extract year from Hive-partitioned path.
+   */
+  private int extractYearFromPath(String path) {
+    // Match pattern "year=YYYY"
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    // Fallback to current year if pattern not found
+    return LocalDate.now().getYear();
   }
 }

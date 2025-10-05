@@ -188,8 +188,6 @@ public class BlsDataDownloader {
    * Downloads all BLS data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading BLS data for years {} to {}", startYear, endYear);
-
     // Download employment statistics
     downloadEmploymentStatistics(startYear, endYear);
 
@@ -214,8 +212,6 @@ public class BlsDataDownloader {
    * Downloads employment statistics data and converts to Parquet.
    */
   public File downloadEmploymentStatistics(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading employment statistics for {}-{}", startYear, endYear);
-
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -282,8 +278,6 @@ public class BlsDataDownloader {
    * Downloads inflation metrics data and converts to Parquet.
    */
   public File downloadInflationMetrics(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading inflation metrics for {}-{}", startYear, endYear);
-
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -349,8 +343,6 @@ public class BlsDataDownloader {
    * Downloads wage growth data and converts to Parquet.
    */
   public File downloadWageGrowth(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading wage growth data for {}-{}", startYear, endYear);
-
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -401,8 +393,6 @@ public class BlsDataDownloader {
    * Downloads regional employment data for selected states.
    */
   public File downloadRegionalEmployment(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading regional employment data for {}-{}", startYear, endYear);
-
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -923,18 +913,31 @@ public class BlsDataDownloader {
    * Converts cached BLS employment data to Parquet format.
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    LOGGER.info("Converting BLS data from {} to parquet: {}", sourceDir, targetFilePath);
+    // Extract year from path (format: "type=indicators/year=2020/employment_statistics.parquet")
+    int year = extractYearFromPath(targetFilePath);
 
-    // Extract just the filename from the full path
+    // Extract data type from filename
     String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
+    String dataType = fileName.replace(".parquet", "");
 
-    // Check if file already exists using the full path
-    // Note: The individual converter methods use storageProvider which handles the full path internally
-    File targetFile = new File(targetFilePath);
-    if (targetFile.exists()) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+    // Check manifest first
+    Map<String, String> params = new HashMap<>();
+    params.put("type", dataType);
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
       return;
     }
+
+    // Check if target file already exists (defensive check)
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir);
+      return;
+    }
+
+    LOGGER.debug("Converting BLS data from {} to parquet: {}", sourceDir, targetFilePath);
 
     // Read employment statistics JSON files and convert to employment_statistics.parquet
     if (fileName.equals("employment_statistics.parquet")) {
@@ -946,6 +949,25 @@ public class BlsDataDownloader {
     } else if (fileName.equals("regional_employment.parquet")) {
       convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
     }
+
+    // Mark parquet conversion complete in manifest
+    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+    cacheManifest.save(cacheDir);
+    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+  }
+
+  /**
+   * Extract year from Hive-partitioned path.
+   */
+  private int extractYearFromPath(String path) {
+    // Match pattern "year=YYYY"
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    // Fallback to current year if pattern not found
+    return LocalDate.now().getYear();
   }
 
   private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {
