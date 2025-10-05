@@ -560,7 +560,14 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
       LOGGER.info("Successfully downloaded {} data for year {}", tableName, year);
     } catch (Exception e) {
-      LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, e.getMessage());
+      // Check if this is a 404 (data not released yet) or 400 (invalid variables for this year)
+      String errorMsg = e.getMessage();
+      if (errorMsg != null && (errorMsg.contains("404") || errorMsg.contains("400"))) {
+        LOGGER.debug("Census data not available for {} year {} ({})", tableName, year,
+            errorMsg.contains("404") ? "not released yet" : "variables unavailable");
+      } else {
+        LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, errorMsg);
+      }
     }
   }
 
