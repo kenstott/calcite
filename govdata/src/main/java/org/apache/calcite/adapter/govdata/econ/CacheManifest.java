@@ -179,6 +179,36 @@ public class CacheManifest {
   }
 
   /**
+   * Mark data as unavailable (404 or similar) with TTL for retry.
+   * Prevents repeated failed requests while allowing automatic retry once TTL expires.
+   *
+   * @param dataType Type of data that was unavailable
+   * @param year Year of the data
+   * @param parameters Additional parameters
+   * @param retryAfterDays Number of days before retrying (default: 7 for unreleased data)
+   * @param reason Description of why unavailable (e.g., "404_not_released", "400_invalid_variables")
+   */
+  public void markUnavailable(String dataType, int year, Map<String, String> parameters,
+                              int retryAfterDays, String reason) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = new CacheEntry();
+    entry.dataType = dataType;
+    entry.year = year;
+    entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
+    entry.filePath = null;  // No file - unavailable
+    entry.fileSize = 0;
+    entry.cachedAt = System.currentTimeMillis();
+    entry.refreshAfter = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
+    entry.refreshReason = reason;
+
+    entries.put(key, entry);
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.info("Marked {} year={} as unavailable (retry in {} days): {}",
+        dataType, year, retryAfterDays, reason);
+  }
+
+  /**
    * Mark data as cached with default 24-hour refresh for current year, infinite for historical.
    * Consider using {@link #markCached(String, int, Map, String, long, long, String)} with explicit refresh time for more control.
    */
