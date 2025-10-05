@@ -161,12 +161,38 @@ public class ConceptualVariableMapper {
         return null;
       }
 
-      // Check for year-specific mapping
+      // Check for year-specific mapping (exact year match)
       JsonNode yearMapping = censusTypeNode.path(String.valueOf(year));
       if (!yearMapping.isMissingNode()) {
         String dataset = yearMapping.path("dataset").asText();
         String variable = yearMapping.path("variable").asText();
         return new VariableMapping(dataset, variable, conceptualName, dataType);
+      }
+
+      // Check for year range mappings (e.g., "2007-2011")
+      Iterator<String> fieldNames = censusTypeNode.fieldNames();
+      while (fieldNames.hasNext()) {
+        String fieldName = fieldNames.next();
+        if (fieldName.contains("-")) {
+          String[] range = fieldName.split("-");
+          if (range.length == 2) {
+            try {
+              int startYear = Integer.parseInt(range[0]);
+              int endYear = Integer.parseInt(range[1]);
+              if (year >= startYear && year <= endYear) {
+                JsonNode rangeMapping = censusTypeNode.path(fieldName);
+                String variable = rangeMapping.path("variable").asText();
+                String dataset = rangeMapping.path("dataset").asText();
+                if (dataset.isEmpty()) {
+                  dataset = getDefaultDataset(censusType, year);
+                }
+                return new VariableMapping(dataset, variable, conceptualName, dataType);
+              }
+            } catch (NumberFormatException e) {
+              // Skip invalid range
+            }
+          }
+        }
       }
 
       // Check for allYears mapping

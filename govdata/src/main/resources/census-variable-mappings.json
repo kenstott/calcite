@@ -136,6 +136,8 @@
       "description": "Population 25 years and over with bachelor's degree or higher",
       "dataType": "LONG",
       "acs": {
+        "2007-2011": {"variable": "B15002_015E"},
+        "2012": {"variable": "B15003_022E"},
         "allYears": {"variable": "B15003_022E"}
       }
     },
@@ -143,6 +145,8 @@
       "description": "Population 25 years and over with high school diploma",
       "dataType": "LONG",
       "acs": {
+        "2007-2011": {"variable": "B15002_011E"},
+        "2012": {"variable": "B15003_017E"},
         "allYears": {"variable": "B15003_017E"}
       }
     },
@@ -150,6 +154,8 @@
       "description": "Total population 25 years and over for education statistics",
       "dataType": "LONG",
       "acs": {
+        "2007-2011": {"variable": "B15002_001E"},
+        "2012": {"variable": "B15003_001E"},
         "allYears": {"variable": "B15003_001E"}
       }
     },
@@ -223,6 +229,8 @@
       "description": "Population with health insurance coverage",
       "dataType": "LONG",
       "acs": {
+        "2007-2012": {"variable": "B992701_002E"},
+        "2013": {"variable": "B27001_004E"},
         "allYears": {"variable": "B27001_004E"}
       }
     },
@@ -230,6 +238,8 @@
       "description": "Population with no health insurance coverage",
       "dataType": "LONG",
       "acs": {
+        "2007-2012": {"variable": "B992701_003E"},
+        "2013": {"variable": "B27001_007E"},
         "allYears": {"variable": "B27001_007E"}
       }
     },
@@ -237,6 +247,8 @@
       "description": "Total population for health insurance status",
       "dataType": "LONG",
       "acs": {
+        "2007-2012": {"variable": "B992701_001E"},
+        "2013": {"variable": "B27001_001E"},
         "allYears": {"variable": "B27001_001E"}
       }
     },
@@ -265,6 +277,8 @@
       "description": "Civilian noninstitutionalized population with a disability",
       "dataType": "LONG",
       "acs": {
+        "2007-2012": {"variable": "B18101_001E"},
+        "2013": {"variable": "B18101_004E"},
         "allYears": {"variable": "B18101_004E"}
       }
     },
@@ -272,6 +286,8 @@
       "description": "Civilian noninstitutionalized population with no disability",
       "dataType": "LONG",
       "acs": {
+        "2007-2012": {"variable": "B18101_020E"},
+        "2013": {"variable": "B18101_007E"},
         "allYears": {"variable": "B18101_007E"}
       }
     },
@@ -361,6 +377,9 @@
         "2022": {"variable": "POP_2022"},
         "2023": {"variable": "POP"},
         "allYears": {"variable": "POP"}
+      },
+      "acs": {
+        "allYears": {"variable": "B01001_001E"}
       }
     }
   },
@@ -590,7 +609,7 @@
     "population": {
       "2010-2019": {
         "primary": "pep",
-        "fallbacks": []
+        "fallbacks": ["acs/acs5"]
       },
       "2020": {
         "primary": "charagegroups",
