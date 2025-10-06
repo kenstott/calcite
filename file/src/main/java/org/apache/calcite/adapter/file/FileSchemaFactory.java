@@ -418,8 +418,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Step 2: Now create DuckDB JDBC schema that reads the files
       // Pass the FileSchema so it stays alive for refresh handling
+      // Pass directoryPath as String to support both local and S3 URIs
       LOGGER.debug("FileSchemaFactory: Now creating DuckDB JDBC schema");
-      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, directoryFile, recursive, fileSchema);
+      // Use getPath() instead of getAbsolutePath() to support S3 URIs (fake File objects)
+      String directoryPath = directoryFile != null ? directoryFile.getPath() : directory;
+      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema);
       LOGGER.info("FileSchemaFactory: DuckDB JDBC schema created successfully");
 
       // Wrap the schema with constraint metadata if available

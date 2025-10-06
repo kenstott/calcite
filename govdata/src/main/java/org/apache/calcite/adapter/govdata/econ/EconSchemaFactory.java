@@ -81,7 +81,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     if (baseDirectory == null) {
       // Fallback to environment variables
-      String govdataParquetDir = getGovDataParquetDir();
+      String govdataParquetDir = getGovDataParquetDir(operand);
       if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
         throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
       }
@@ -89,7 +89,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     if (cacheDirectory == null) {
-      String govdataCacheDir = getGovDataCacheDir();
+      String govdataCacheDir = getGovDataCacheDir(operand);
       if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
         throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
       }
@@ -234,31 +234,34 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       int startYear, int endYear, StorageProvider storageProvider,
       List<String> customFredSeries, Map<String, Object> fredSeriesGroups, String defaultPartitionStrategy) throws IOException {
 
-    LOGGER.debug("Downloading economic data to: {}", cacheDir);
-
-    // Create cache and parquet directories
+    // Create cache directory (always local)
     File cacheDirFile = new File(cacheDir);
-    File parquetDirFile = new File(parquetDir);
     if (!cacheDirFile.exists()) {
       cacheDirFile.mkdirs();
     }
-    if (!parquetDirFile.exists()) {
-      parquetDirFile.mkdirs();
+
+    // Create parquet directories only if not using S3 (storage provider handles S3 directory creation)
+    if (!parquetDir.startsWith("s3://")) {
+      File parquetDirFile = new File(parquetDir);
+      if (!parquetDirFile.exists()) {
+        parquetDirFile.mkdirs();
+      }
+
+      // Create hive-partitioned subdirectories
+      File timeSeriesDir = new File(parquetDir, "type=timeseries");
+      File indicatorsDir = new File(parquetDir, "type=indicators");
+      File regionalDir = new File(parquetDir, "type=regional");
+      timeSeriesDir.mkdirs();
+      indicatorsDir.mkdirs();
+      regionalDir.mkdirs();
     }
 
-    // Create hive-partitioned subdirectories
-    File timeSeriesDir = new File(parquetDir, "type=timeseries");
-    File indicatorsDir = new File(parquetDir, "type=indicators");
-    File regionalDir = new File(parquetDir, "type=regional");
-    timeSeriesDir.mkdirs();
-    indicatorsDir.mkdirs();
-    regionalDir.mkdirs();
-
+    // Load or create cache manifest for tracking parquet conversions
+    CacheManifest cacheManifest = CacheManifest.load(cacheDir);
 
     // Download BLS data if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading BLS data for years {}-{}", startYear, endYear);
         BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, storageProvider);
 
         // Download all BLS data for the year range
@@ -268,7 +271,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         for (int year = startYear; year <= endYear; year++) {
           // Convert employment statistics
           String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/employment_statistics.parquet");
-          String cacheYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String cacheYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
           blsDownloader.convertToParquet(new File(cacheYearPath), employmentParquetPath);
 
           // Convert inflation metrics
@@ -293,7 +296,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download FRED data if enabled
     if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading FRED data for years {}-{}", startYear, endYear);
         FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredApiKey, storageProvider);
 
         // Download all FRED data for the year range
@@ -302,11 +304,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
-          String cacheFredYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String cacheFredYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
           fredDownloader.convertToParquet(new File(cacheFredYearPath), fredParquetPath);
         }
-
-        LOGGER.debug("FRED data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED data", e);
       }
@@ -316,7 +316,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()
         && (customFredSeries != null || fredSeriesGroups != null)) {
       try {
-        LOGGER.debug("Processing custom FRED series configuration");
         downloadCustomFredSeries(cacheDir, parquetDir, fredApiKey, storageProvider,
             customFredSeries, fredSeriesGroups, defaultPartitionStrategy, startYear, endYear);
       } catch (Exception e) {
@@ -327,7 +326,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download Treasury data if enabled (no API key required)
     if (enabledSources.contains("treasury")) {
       try {
-        LOGGER.info("Downloading Treasury data for years {}-{}", startYear, endYear);
         TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir, storageProvider);
 
         // Download all Treasury data for the year range
@@ -336,7 +334,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/treasury_yields.parquet");
-          String cacheTimeseriesYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=timeseries/year=" + year);
+          String cacheTimeseriesYearPath = storageProvider.resolvePath(cacheDir, "type=timeseries/year=" + year);
           treasuryDownloader.convertToParquet(new File(cacheTimeseriesYearPath), yieldsParquetPath);
 
           // Convert federal debt data to parquet
@@ -353,15 +351,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download BEA data if enabled
     if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading BEA data for years {}-{}", startYear, endYear);
-        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, beaApiKey, storageProvider);
+        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, parquetDir, beaApiKey, storageProvider);
 
         // Download all BEA data for the year range
         beaDownloader.downloadAll(startYear, endYear);
 
         // Convert to parquet files for each year using StorageProvider
         for (int year = startYear; year <= endYear; year++) {
-          String cacheIndicatorsYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String cacheIndicatorsYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
 
           // Convert GDP components using StorageProvider
           String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
@@ -399,7 +396,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download World Bank data if enabled (no API key required)
     if (enabledSources.contains("worldbank")) {
       try {
-        LOGGER.info("Downloading World Bank data for years {}-{}", startYear, endYear);
         WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir, storageProvider);
 
         // Download all World Bank data for the year range
@@ -408,7 +404,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
-          String cacheWorldBankYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String cacheWorldBankYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
           worldBankDownloader.convertToParquet(new File(cacheWorldBankYearPath), worldParquetPath);
         }
 
@@ -424,10 +420,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading FRED series catalog");
-        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider);
+        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider, cacheManifest);
         catalogDownloader.downloadCatalog();
-        LOGGER.debug("FRED catalog download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED catalog", e);
       }
@@ -435,7 +429,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.warn("Skipping FRED catalog download - API key not available");
     }
 
-    LOGGER.info("ECON data download completed");
+    // Save cache manifest after all downloads
+    if (cacheManifest != null) {
+      cacheManifest.save(cacheDir);
+    }
   }
 
   /**
@@ -444,8 +441,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadCustomFredSeries(String cacheDir, String parquetDir, String fredApiKey,
       StorageProvider storageProvider, List<String> customFredSeries, Map<String, Object> fredSeriesGroups,
       String defaultPartitionStrategy, int startYear, int endYear) throws IOException {
-
-    LOGGER.debug("Downloading custom FRED series with smart partitioning");
 
     // Initialize partition analyzer
     FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
@@ -476,7 +471,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         try {
           strategy = FredSeriesGroup.PartitionStrategy.valueOf(strategyStr.toUpperCase());
         } catch (IllegalArgumentException e) {
-          LOGGER.warn("Invalid partition strategy '{}' for group '{}', using default: {}",
+          LOGGER.warn("Invalid partition strategy '{}' for group '{}'. Valid strategies are: NONE, AUTO, MANUAL. " +
+              "To partition by specific fields like year and maturity, use partitionStrategy='MANUAL' with " +
+              "partitionFields=['year','maturity']. Using default: {}",
               strategyStr, groupName, defaultPartitionStrategy);
           strategy = FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase());
         }
@@ -511,15 +508,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       String groupCacheDir = storageProvider.resolvePath(cacheDir, "fred_custom/" + groupTableName);
       String groupParquetDir = parquetDir;
 
-      // Create directories
-      new File(groupCacheDir).mkdirs();
-      new File(groupParquetDir).mkdirs();
+      // Create directories only if not using S3
+      if (!groupCacheDir.startsWith("s3://")) {
+        new File(groupCacheDir).mkdirs();
+      }
+      if (!groupParquetDir.startsWith("s3://")) {
+        new File(groupParquetDir).mkdirs();
+      }
 
       // Download each series in the group
       for (String seriesId : group.getSeries()) {
         try {
-          LOGGER.debug("Downloading FRED series: {} for group: {}", seriesId, group.getGroupName());
-
           // Download raw series data
           fredDownloader.downloadSeries(seriesId, startYear, endYear);
 
@@ -567,8 +566,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         if (!inGroup) {
           try {
-            LOGGER.debug("Downloading ungrouped FRED series: {}", seriesId);
-
             // Download raw series data
             fredDownloader.downloadSeries(seriesId, startYear, endYear);
 
@@ -597,8 +594,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     }
-
-    LOGGER.debug("Custom FRED series download completed");
   }
 
   /**

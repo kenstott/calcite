@@ -177,12 +177,46 @@ public interface GovDataSubSchemaFactory {
     if (operand != null) {
       String dir = (String) operand.get("parquetDirectory");
       if (dir != null && !dir.isEmpty()) {
-        return dir;
+        return normalizeParquetDir(dir);
       }
     }
     // Fall back to environment variable
     String dir = System.getenv("GOVDATA_PARQUET_DIR");
-    return dir != null ? dir : System.getProperty("GOVDATA_PARQUET_DIR");
+    if (dir == null) {
+      dir = System.getProperty("GOVDATA_PARQUET_DIR");
+    }
+    return normalizeParquetDir(dir);
+  }
+
+  /**
+   * Normalize parquet directory path - ensure S3 paths have proper s3:// prefix.
+   */
+  default String normalizeParquetDir(String dir) {
+    if (dir == null || dir.isEmpty()) {
+      return dir;
+    }
+    // If it looks like an S3 bucket path but missing s3:// prefix, add it
+    // Only auto-correct paths that start with known bucket names
+    if (!dir.startsWith("s3://") && !dir.startsWith("/") && !dir.contains("://")) {
+      // Check if it starts with a known S3 bucket name
+      if (dir.startsWith("usgovdata/") || dir.equals("usgovdata")) {
+        dir = "s3://" + dir;
+        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
+            .info("Auto-corrected parquet directory to S3 URI: {}", dir);
+      } else if (dir.equals("govdata-production") || dir.startsWith("govdata-production/")) {
+        // Known production path - prepend bucket
+        dir = "s3://usgovdata/" + dir;
+        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
+            .info("Auto-corrected parquet directory to S3 URI: {}", dir);
+      } else {
+        // For other patterns, error and provide guidance
+        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
+            .error("GOVDATA_PARQUET_DIR has invalid S3 path: '{}'. " +
+                "Expected format: 's3://usgovdata/govdata-production' or 'usgovdata/govdata-production'. " +
+                "Current value '{}' will cause S3 operations to fail.", dir, dir);
+      }
+    }
+    return dir;
   }
 
   /**
