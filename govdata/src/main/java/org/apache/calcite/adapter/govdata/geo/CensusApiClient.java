@@ -74,17 +74,23 @@ public class CensusApiClient {
   private final Semaphore rateLimiter;
   private final AtomicLong lastRequestTime;
   private final StorageProvider storageProvider;
+  private final GeoCacheManifest cacheManifest;
 
   public CensusApiClient(String apiKey, File cacheDir) {
-    this(apiKey, cacheDir, new ArrayList<>(), null);
+    this(apiKey, cacheDir, new ArrayList<>(), null, null);
   }
 
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears) {
-    this(apiKey, cacheDir, censusYears, null);
+    this(apiKey, cacheDir, censusYears, null, null);
   }
 
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider) {
+    this(apiKey, cacheDir, censusYears, storageProvider, null);
+  }
+
+  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
     this.censusYears = censusYears;
@@ -92,6 +98,7 @@ public class CensusApiClient {
     this.rateLimiter = new Semaphore(MAX_REQUESTS_PER_SECOND);
     this.lastRequestTime = new AtomicLong(0);
     this.storageProvider = storageProvider;
+    this.cacheManifest = cacheManifest;
 
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
@@ -176,21 +183,32 @@ public class CensusApiClient {
    * Download economic indicators for a specific year.
    */
   private void downloadEconomicIndicators(int year) throws IOException {
+    // Skip economic indicators for 2010 and earlier - many ACS variables not available
+    if (year <= 2010) {
+      LOGGER.debug("Skipping economic indicators for year {} - ACS variables not fully available", year);
+      return;
+    }
+
     String variables = Variables.MEDIAN_HOUSEHOLD_INCOME + "," +
                       Variables.PER_CAPITA_INCOME + "," +
                       Variables.LABOR_FORCE + "," +
                       Variables.EMPLOYED + "," +
                       Variables.UNEMPLOYED;
 
-    // Download state-level data
-    JsonNode stateData = getAcsData(year, variables, "state:*");
-    saveJsonToYearCache(year, "economic_indicators_states.json", stateData);
+    try {
+      // Download state-level data
+      JsonNode stateData = getAcsData(year, variables, "state:*");
+      saveJsonToYearCache(year, "economic_indicators_states.json", stateData);
 
-    // Download county-level data for selected states
-    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    for (String state : stateFips) {
-      JsonNode countyData = getAcsData(year, variables, "county:*&in=state:" + state);
-      saveJsonToYearCache(year, "economic_indicators_county_" + state + ".json", countyData);
+      // Download county-level data for selected states
+      String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+      for (String state : stateFips) {
+        JsonNode countyData = getAcsData(year, variables, "county:*&in=state:" + state);
+        saveJsonToYearCache(year, "economic_indicators_county_" + state + ".json", countyData);
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Economic indicators not available for year {} - skipping: {}", year, e.getMessage());
+      // Continue processing - some years may not have all variables
     }
   }
 
@@ -413,11 +431,20 @@ public class CensusApiClient {
 
     for (String ds : datasetsToTry) {
       try {
-        // Population Estimates API path structure
-        String url =
-            String.format("%s/%d/pep/%s?get=%s&for=%s&key=%s", BASE_URL, year, ds, variables, geography, apiKey);
+        String url;
+        String varsToUse = variables;
 
-        LOGGER.debug("Trying population API call with dataset '{}': {}", ds, url);
+        // Check if this is an ACS dataset (contains "acs")
+        if (ds.contains("acs")) {
+          // Use ACS endpoint and remap variables
+          varsToUse = remapVariablesForAcs(variables, year);
+          url = String.format("%s/%d/%s?get=%s&for=%s&key=%s", BASE_URL, year, ds, varsToUse, geography, apiKey);
+          LOGGER.debug("Trying ACS fallback with dataset '{}': {}", ds, url);
+        } else {
+          // Use PEP endpoint
+          url = String.format("%s/%d/pep/%s?get=%s&for=%s&key=%s", BASE_URL, year, ds, varsToUse, geography, apiKey);
+          LOGGER.debug("Trying population API call with dataset '{}': {}", ds, url);
+        }
 
         // Make API request with rate limiting
         JsonNode response = makeApiRequest(url);
@@ -438,6 +465,40 @@ public class CensusApiClient {
     throw new IOException(
         String.format("All datasets failed for population year %d with variables %s: %s",
         year, variables, lastException != null ? lastException.getMessage() : "unknown error"));
+  }
+
+  /**
+   * Remap PEP variables to their ACS equivalents.
+   *
+   * @param pepVariables Comma-separated PEP variable names (e.g., "POP,POPEST")
+   * @param year Year for context
+   * @return Comma-separated ACS variable names
+   */
+  private String remapVariablesForAcs(String pepVariables, int year) {
+    String[] vars = pepVariables.split(",");
+    StringBuilder acsVars = new StringBuilder();
+
+    for (int i = 0; i < vars.length; i++) {
+      String var = vars[i].trim();
+      String acsVar;
+
+      // Map PEP variables to ACS equivalents
+      if (var.equals("POP") || var.equals("POPEST") || var.startsWith("POP_")) {
+        acsVar = "B01001_001E";  // Total population
+      } else {
+        // Unknown variable - keep as is and let API fail if invalid
+        LOGGER.warn("Unknown PEP variable '{}' - cannot remap to ACS", var);
+        acsVar = var;
+      }
+
+      if (i > 0) {
+        acsVars.append(",");
+      }
+      acsVars.append(acsVar);
+    }
+
+    LOGGER.debug("Remapped PEP variables '{}' to ACS variables '{}'", pepVariables, acsVars.toString());
+    return acsVars.toString();
   }
 
   /**
@@ -618,17 +679,39 @@ public class CensusApiClient {
    */
   @SuppressWarnings("deprecation")
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    LOGGER.info("Converting Census data from {} to parquet: {}", sourceDir, targetFilePath);
+    // Extract year from path (pattern: year=YYYY)
+    int year = extractYearFromPath(targetFilePath);
 
-    // Skip if target file already exists
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Check manifest first (avoids S3 check)
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+        LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+        return;
+      }
+    }
+
+    // Defensive check if file already exists (for backfill/legacy data)
     if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("type", dataType);
+        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        cacheManifest.save(cacheDir.getAbsolutePath());
+      }
       return;
     }
 
-    // Determine which type of data to convert based on the target file name
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+    LOGGER.info("Converting Census data from {} to parquet: {}", sourceDir, targetFilePath);
 
+    // Determine which type of data to convert based on the file name
     if (fileName.contains("population_demographics")) {
       convertPopulationDemographicsToParquet(sourceDir, targetFilePath);
     } else if (fileName.contains("housing_characteristics")) {
@@ -637,7 +720,28 @@ public class CensusApiClient {
       convertEconomicIndicatorsToParquet(sourceDir, targetFilePath);
     } else {
       LOGGER.warn("Unknown Census data type for conversion: {}", fileName);
+      return;
     }
+
+    // Mark parquet conversion complete in manifest
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir.getAbsolutePath());
+    }
+  }
+
+  /**
+   * Extract year from path containing year=YYYY pattern.
+   */
+  private int extractYearFromPath(String path) {
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    throw new IllegalArgumentException("Could not extract year from path: " + path);
   }
 
   /**
@@ -650,13 +754,13 @@ public class CensusApiClient {
     // Create Avro schema for population demographics
     Schema schema = SchemaBuilder.record("PopulationDemographics")
         .fields()
-        .name("geo_id").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("total_population").type().nullable().longType().noDefault()
-        .name("male_population").type().nullable().longType().noDefault()
-        .name("female_population").type().nullable().longType().noDefault()
-        .name("state_fips").type().nullable().stringType().noDefault()
-        .name("county_fips").type().nullable().stringType().noDefault()
+        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
+        .name("year").doc("Census survey year").type().intType().noDefault()
+        .name("total_population").doc("Total population count").type().nullable().longType().noDefault()
+        .name("male_population").doc("Male population count").type().nullable().longType().noDefault()
+        .name("female_population").doc("Female population count").type().nullable().longType().noDefault()
+        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
+        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -723,14 +827,14 @@ public class CensusApiClient {
     // Create Avro schema for housing characteristics
     Schema schema = SchemaBuilder.record("HousingCharacteristics")
         .fields()
-        .name("geo_id").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("total_housing_units").type().nullable().longType().noDefault()
-        .name("occupied_units").type().nullable().longType().noDefault()
-        .name("vacant_units").type().nullable().longType().noDefault()
-        .name("median_home_value").type().nullable().doubleType().noDefault()
-        .name("state_fips").type().nullable().stringType().noDefault()
-        .name("county_fips").type().nullable().stringType().noDefault()
+        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
+        .name("year").doc("Census survey year").type().intType().noDefault()
+        .name("total_housing_units").doc("Total number of housing units").type().nullable().longType().noDefault()
+        .name("occupied_units").doc("Number of occupied housing units").type().nullable().longType().noDefault()
+        .name("vacant_units").doc("Number of vacant housing units").type().nullable().longType().noDefault()
+        .name("median_home_value").doc("Median home value in dollars").type().nullable().doubleType().noDefault()
+        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
+        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -799,15 +903,15 @@ public class CensusApiClient {
     // Create Avro schema for economic indicators
     Schema schema = SchemaBuilder.record("EconomicIndicators")
         .fields()
-        .name("geo_id").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("median_household_income").type().nullable().doubleType().noDefault()
-        .name("per_capita_income").type().nullable().doubleType().noDefault()
-        .name("labor_force").type().nullable().longType().noDefault()
-        .name("employed").type().nullable().longType().noDefault()
-        .name("unemployed").type().nullable().longType().noDefault()
-        .name("state_fips").type().nullable().stringType().noDefault()
-        .name("county_fips").type().nullable().stringType().noDefault()
+        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
+        .name("year").doc("Census survey year").type().intType().noDefault()
+        .name("median_household_income").doc("Median household income in dollars").type().nullable().doubleType().noDefault()
+        .name("per_capita_income").doc("Per capita income in dollars").type().nullable().doubleType().noDefault()
+        .name("labor_force").doc("Total civilian labor force count").type().nullable().longType().noDefault()
+        .name("employed").doc("Number of employed persons").type().nullable().longType().noDefault()
+        .name("unemployed").doc("Number of unemployed persons").type().nullable().longType().noDefault()
+        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
+        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
