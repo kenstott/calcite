@@ -2767,13 +2767,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public void convertIndustryGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
     String sourceDirPath = sourceDir.getAbsolutePath();
 
-    LOGGER.debug("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
-
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
       return;
     }
+
+    LOGGER.debug("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Read JSON file
     File jsonFile = new File(sourceDir, "industry_gdp.json");
