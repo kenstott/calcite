@@ -130,19 +130,33 @@ public class CacheManifest {
    */
   public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
+    LOGGER.debug("isParquetConverted - looking for key: {}", key);
     CacheEntry entry = entries.get(key);
 
     if (entry == null || entry.parquetPath == null || entry.parquetConvertedAt == 0) {
       return false;
     }
 
-    // Check if parquet file still exists (resolve relative path using cache directory)
-    File parquetFile = cacheDir != null ? new File(cacheDir, entry.parquetPath) : new File(entry.parquetPath);
-    if (!parquetFile.exists()) {
-      LOGGER.debug("Parquet file no longer exists: {}", entry.parquetPath);
-      entry.parquetPath = null;
-      entry.parquetConvertedAt = 0;
+    // Check if entry has expired based on TTL
+    long now = System.currentTimeMillis();
+    if (now >= entry.refreshAfter) {
+      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
+      LOGGER.debug("Parquet entry expired for {} year={} (age: {} hours, policy: {})",
+          dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
+      entries.remove(key);
       return false;
+    }
+
+    // Only check file existence for local paths (not S3)
+    // S3 paths are tracked in manifest without existence verification to avoid costly S3 API calls
+    if (!entry.parquetPath.startsWith("s3://")) {
+      File parquetFile = cacheDir != null ? new File(cacheDir, entry.parquetPath) : new File(entry.parquetPath);
+      if (!parquetFile.exists()) {
+        LOGGER.debug("Parquet file no longer exists: {}", entry.parquetPath);
+        entry.parquetPath = null;
+        entry.parquetConvertedAt = 0;
+        return false;
+      }
     }
 
     LOGGER.debug("Parquet already converted for {} year={}: {}", dataType, year, entry.parquetPath);
@@ -155,12 +169,13 @@ public class CacheManifest {
    */
   public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
     String key = buildKey(dataType, year, parameters);
+    LOGGER.debug("markParquetConverted - using key: {}", key);
     CacheEntry entry = entries.get(key);
 
     if (entry == null) {
       // Create stub entry for parquet-only data (no raw download tracked)
       // This handles legacy data created before manifest tracking
-      LOGGER.debug("Creating stub cache entry for parquet-only data: {} year={}", dataType, year);
+      LOGGER.debug("Creating stub cache entry for parquet-only data: {} year={} (key not found: {})", dataType, year, key);
       entry = new CacheEntry();
       entry.dataType = dataType;
       entry.year = year;

@@ -97,17 +97,20 @@ public class FredCatalogDownloader {
   private final String cacheDir;
   private final String parquetDir;
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+  private final CacheManifest cacheManifest;
 
   private long lastRequestTime = 0;
   private final Set<String> processedSeriesIds = new HashSet<>();
   private final Map<String, List<Map<String, Object>>> partitionedSeries = new HashMap<>();
 
   public FredCatalogDownloader(String fredApiKey, String cacheDir, String parquetDir,
-                               org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+                               org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+                               CacheManifest cacheManifest) {
     this.fredApiKey = fredApiKey;
     this.cacheDir = cacheDir;
     this.parquetDir = parquetDir;
     this.storageProvider = storageProvider;
+    this.cacheManifest = cacheManifest;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(30))
         .build();
@@ -874,6 +877,45 @@ public class FredCatalogDownloader {
       return;
     }
 
+    // Build parquet path and check if it already exists
+    String parquetFile = parquetDir + "/type=catalog" +
+        "/category=" + categoryName +
+        "/frequency=" + frequency +
+        "/source=" + sourceName +
+        "/status=" + seriesStatus +
+        "/fred_data_series_catalog.parquet";
+
+    // Check manifest first (avoids S3 check)
+    if (cacheManifest != null) {
+      Map<String, String> params = new HashMap<>();
+      params.put("type", "catalog");
+      params.put("category", categoryName);
+      params.put("frequency", frequency);
+      params.put("source", sourceName);
+      params.put("status", seriesStatus);
+      if (cacheManifest.isParquetConverted("fred_catalog", 0, params)) {
+        LOGGER.debug("Parquet file already converted per manifest for partition {}/{}/{}/{}, skipping conversion", categoryName, frequency, sourceName, seriesStatus);
+        return;
+      }
+    }
+
+    // Defensive check if file already exists (for backfill/legacy data)
+    if (storageProvider.exists(parquetFile)) {
+      LOGGER.debug("Parquet file already exists for partition {}/{}/{}/{}, updating manifest", categoryName, frequency, sourceName, seriesStatus);
+      // Update manifest since file exists but wasn't tracked
+      if (cacheManifest != null) {
+        Map<String, String> params = new HashMap<>();
+        params.put("type", "catalog");
+        params.put("category", categoryName);
+        params.put("frequency", frequency);
+        params.put("source", sourceName);
+        params.put("status", seriesStatus);
+        cacheManifest.markParquetConverted("fred_catalog", 0, params, parquetFile);
+        cacheManifest.save(cacheDir);
+      }
+      return;
+    }
+
     LOGGER.debug("Converting partition {}/{}/{}/{} with {} series", categoryName, frequency, sourceName, seriesStatus, seriesList.size());
 
     // Transform data to match expected schema
@@ -911,19 +953,23 @@ public class FredCatalogDownloader {
       transformedSeries.add(transformed);
     }
 
-    // Create parquet file path with partitioned structure
-    String parquetFile = parquetDir + "/type=catalog" +
-        "/category=" + categoryName +
-        "/frequency=" + frequency +
-        "/source=" + sourceName +
-        "/status=" + seriesStatus +
-        "/fred_data_series_catalog.parquet";
-
-    // Write Parquet file using StorageProvider
+    // Write Parquet file using StorageProvider (parquetFile already constructed above)
     writeParquetWithStorageProvider(parquetFile, transformedSeries);
 
     LOGGER.debug("Created Parquet file for partition {}/{}/{}/{}: {} series",
         categoryName, frequency, sourceName, seriesStatus, transformedSeries.size());
+
+    // Update manifest after successful conversion
+    if (cacheManifest != null) {
+      Map<String, String> params = new HashMap<>();
+      params.put("type", "catalog");
+      params.put("category", categoryName);
+      params.put("frequency", frequency);
+      params.put("source", sourceName);
+      params.put("status", seriesStatus);
+      cacheManifest.markParquetConverted("fred_catalog", 0, params, parquetFile);
+      cacheManifest.save(cacheDir);
+    }
   }
 
   /**
@@ -944,25 +990,25 @@ public class FredCatalogDownloader {
     return SchemaBuilder.record("FredCatalogSeries")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("series_id").type().stringType().noDefault()
-        .name("title").type().nullable().stringType().noDefault()
-        .name("observation_start").type().nullable().stringType().noDefault()
-        .name("observation_end").type().nullable().stringType().noDefault()
-        .name("frequency").type().nullable().stringType().noDefault()
-        .name("frequency_short").type().nullable().stringType().noDefault()
-        .name("units").type().nullable().stringType().noDefault()
-        .name("units_short").type().nullable().stringType().noDefault()
-        .name("seasonal_adjustment").type().nullable().stringType().noDefault()
-        .name("seasonal_adjustment_short").type().nullable().stringType().noDefault()
-        .name("last_updated").type().nullable().stringType().noDefault()
-        .name("popularity").type().nullable().intType().noDefault()
-        .name("group_popularity").type().nullable().intType().noDefault()
-        .name("notes").type().nullable().stringType().noDefault()
-        .name("category_id").type().nullable().intType().noDefault()
-        .name("category_name").type().nullable().stringType().noDefault()
-        .name("source_id").type().nullable().intType().noDefault()
-        .name("source_name").type().nullable().stringType().noDefault()
-        .name("series_status").type().nullable().stringType().noDefault()
+        .name("series_id").doc("Unique FRED series identifier (e.g., 'UNRATE', 'GDP')").type().stringType().noDefault()
+        .name("title").doc("Full descriptive title of the economic data series").type().nullable().stringType().noDefault()
+        .name("observation_start").doc("Date of first available observation (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("observation_end").doc("Date of most recent observation (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')").type().nullable().stringType().noDefault()
+        .name("frequency_short").doc("Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')").type().nullable().stringType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Percent', 'Billions of Dollars')").type().nullable().stringType().noDefault()
+        .name("units_short").doc("Abbreviated units code").type().nullable().stringType().noDefault()
+        .name("seasonal_adjustment").doc("Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')").type().nullable().stringType().noDefault()
+        .name("seasonal_adjustment_short").doc("Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')").type().nullable().stringType().noDefault()
+        .name("last_updated").doc("Timestamp of last data update (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("popularity").doc("FRED popularity score indicating usage/interest level").type().nullable().intType().noDefault()
+        .name("group_popularity").doc("Popularity score within category group").type().nullable().intType().noDefault()
+        .name("notes").doc("Detailed description, methodology, and source information").type().nullable().stringType().noDefault()
+        .name("category_id").doc("FRED category ID for hierarchical classification").type().nullable().intType().noDefault()
+        .name("category_name").doc("Human-readable category name (e.g., 'National Accounts', 'Labor Markets')").type().nullable().stringType().noDefault()
+        .name("source_id").doc("Data source identifier").type().nullable().intType().noDefault()
+        .name("source_name").doc("Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')").type().nullable().stringType().noDefault()
+        .name("series_status").doc("Series status: 'active' (currently updated) or 'discontinued' (no longer updated)").type().nullable().stringType().noDefault()
         .endRecord();
   }
 

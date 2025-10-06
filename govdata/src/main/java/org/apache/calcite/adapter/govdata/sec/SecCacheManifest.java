@@ -66,11 +66,13 @@ public class SecCacheManifest {
       return false;
     }
 
-    // Check if file still exists
-    if (!new File(entry.filePath).exists()) {
-      LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
-      entries.remove(cik);
-      return false;
+    // Check if file still exists (skip for S3 paths to avoid File API on URIs)
+    if (!entry.filePath.startsWith("s3://")) {
+      if (!new File(entry.filePath).exists()) {
+        LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
+        entries.remove(cik);
+        return false;
+      }
     }
 
     // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
@@ -152,9 +154,10 @@ public class SecCacheManifest {
   }
 
   /**
-   * Mark submissions.json as cached with default 24-hour refresh (no ETag).
+   * Mark submissions.json as cached without metadata.
+   * Falls back to 24-hour TTL when ETag/Last-Modified not available.
    * Consider using {@link #markCached(String, String, String, long, long, String)}
-   * with explicit ETag for better caching efficiency.
+   * with explicit ETag or Last-Modified for better caching efficiency.
    *
    * @param cik The CIK
    * @param filePath Path to the cached submissions.json file
@@ -162,7 +165,7 @@ public class SecCacheManifest {
    */
   public void markCached(String cik, String filePath, long fileSize) {
     long refreshAfter = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24);
-    markCached(cik, filePath, null, fileSize, refreshAfter, "daily_fallback_no_etag");
+    markCached(cik, filePath, null, fileSize, refreshAfter, "daily_fallback_no_metadata");
   }
 
   /**
@@ -178,11 +181,13 @@ public class SecCacheManifest {
     entries.entrySet().removeIf(entry -> {
       SubmissionCacheEntry cacheEntry = entry.getValue();
 
-      // Remove if file doesn't exist
-      if (!new File(cacheEntry.filePath).exists()) {
-        LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
-        removed[0]++;
-        return true;
+      // Remove if file doesn't exist (skip for S3 paths to avoid File API on URIs)
+      if (!cacheEntry.filePath.startsWith("s3://")) {
+        if (!new File(cacheEntry.filePath).exists()) {
+          LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
+          removed[0]++;
+          return true;
+        }
       }
 
       // Don't remove entries with ETags based on time - let server decide via 304/200
@@ -284,6 +289,8 @@ public class SecCacheManifest {
 
   /**
    * Cache entry metadata for SEC submissions.json files.
+   * Note: SEC adapter uses a different pattern - submissions.json tracks available filings,
+   * and parquet conversion is tracked separately via processed_filings.manifest
    */
   public static class SubmissionCacheEntry {
     @JsonProperty("cik")
@@ -302,7 +309,7 @@ public class SecCacheManifest {
     public long downloadedAt;
 
     @JsonProperty("refreshAfter")
-    public long refreshAfter = Long.MAX_VALUE;  // Fallback if no ETag
+    public long refreshAfter = Long.MAX_VALUE;  // TTL - fallback if no ETag
 
     @JsonProperty("refreshReason")
     public String refreshReason;  // e.g., "etag_based", "daily_fallback_no_etag"

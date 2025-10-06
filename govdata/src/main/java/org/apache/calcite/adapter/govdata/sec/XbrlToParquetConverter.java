@@ -663,19 +663,19 @@ public class XbrlToParquetConverter implements FileConverter {
     // They are encoded in the directory structure for Hive-style partitioning
     Schema schema = SchemaBuilder.record("XbrlFact")
         .fields()
-        .requiredString("filing_date")
-        .requiredString("concept")
-        .optionalString("context_ref")
-        .optionalString("unit_ref")
-        .optionalString("value")
-        .optionalString("full_text")  // Full text content for TextBlocks
-        .optionalDouble("numeric_value")
-        .optionalString("period_start")
-        .optionalString("period_end")
-        .optionalBoolean("is_instant")
-        .optionalString("footnote_refs")  // Footnote references if any
-        .optionalString("element_id")  // Element ID for linking
-        .requiredString("type")  // Required by DuckDB for table identification
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("concept").doc("XBRL concept name (e.g., 'us-gaap:Assets', 'dei:EntityRegistrantName')").type().stringType().noDefault()
+        .name("context_ref").doc("Reference to context element defining the reporting period and entity").type().nullable().stringType().noDefault()
+        .name("unit_ref").doc("Reference to unit element defining measurement units (e.g., 'USD', 'shares')").type().nullable().stringType().noDefault()
+        .name("value").doc("Text value of the fact element").type().nullable().stringType().noDefault()
+        .name("full_text").doc("Full text content for TextBlock elements (narrative disclosures)").type().nullable().stringType().noDefault()
+        .name("numeric_value").doc("Numeric value for monetary and numeric facts").type().nullable().doubleType().noDefault()
+        .name("period_start").doc("Start date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("period_end").doc("End date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("is_instant").doc("Whether this is an instant-in-time fact (true) or duration fact (false)").type().nullable().booleanType().noDefault()
+        .name("footnote_refs").doc("Comma-separated list of footnote references").type().nullable().stringType().noDefault()
+        .name("element_id").doc("Unique element identifier for linking to other elements").type().nullable().stringType().noDefault()
+        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
         .endRecord();
 
     // Extract all fact elements
@@ -859,24 +859,24 @@ public class XbrlToParquetConverter implements FileConverter {
     // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
     Schema schema = SchemaBuilder.record("FilingMetadata")
         .fields()
-        .requiredString("accession_number")
-        .requiredString("filing_date")
-        .optionalString("company_name")
-        .optionalString("state_of_incorporation")
-        .optionalString("fiscal_year_end")
-        .optionalString("business_address")
-        .optionalString("mailing_address")
-        .optionalString("phone")
-        .optionalString("document_type")
-        .optionalString("period_end_date")
-        .optionalLong("sic_code")
-        .optionalString("irs_number")
-        .requiredString("type")  // Required by DuckDB for table identification
+        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
+        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
+        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
+        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
+        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
+        .name("phone").doc("Company phone number").type().nullable().stringType().noDefault()
+        .name("document_type").doc("Type of filing document (e.g., '10-K', '10-Q', '8-K')").type().nullable().stringType().noDefault()
+        .name("period_end_date").doc("Period end date for the reporting period").type().nullable().stringType().noDefault()
+        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().longType().noDefault()
+        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
+        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
     GenericRecord record = new GenericData.Record(schema);
-    
+
     // Extract accession number from filename
     String accessionNumber = extractAccessionNumber(sourceFile.getName());
     record.put("accession_number", accessionNumber != null ? accessionNumber : "");
@@ -994,16 +994,16 @@ public class XbrlToParquetConverter implements FileConverter {
     // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
     Schema schema = SchemaBuilder.record("XbrlContext")
         .fields()
-        .requiredString("filing_date")
-        .requiredString("context_id")
-        .optionalString("entity_identifier")
-        .optionalString("entity_scheme")
-        .optionalString("period_start")
-        .optionalString("period_end")
-        .optionalString("period_instant")
-        .optionalString("segment")
-        .optionalString("scenario")
-        .requiredString("type")  // Required by DuckDB for table identification
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("context_id").doc("Unique identifier for this context element").type().stringType().noDefault()
+        .name("entity_identifier").doc("Entity identifier (typically CIK number)").type().nullable().stringType().noDefault()
+        .name("entity_scheme").doc("Entity identifier scheme (e.g., 'http://www.sec.gov/CIK')").type().nullable().stringType().noDefault()
+        .name("period_start").doc("Start date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("period_end").doc("End date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("period_instant").doc("Instant date for point-in-time facts (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("segment").doc("Segment dimension information (XML fragment)").type().nullable().stringType().noDefault()
+        .name("scenario").doc("Scenario dimension information (XML fragment)").type().nullable().stringType().noDefault()
+        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
         .endRecord();
 
     // Extract context elements
@@ -1444,12 +1444,12 @@ public class XbrlToParquetConverter implements FileConverter {
     // Create schema for MD&A paragraphs
     Schema schema = SchemaBuilder.record("MDASection")
         .fields()
-        .requiredString("filing_date")
-        .requiredString("section")  // e.g., "Item 7", "Item 7A"
-        .requiredString("subsection")  // e.g., "Overview", "Results of Operations"
-        .requiredInt("paragraph_number")
-        .requiredString("paragraph_text")
-        .optionalString("footnote_refs")
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("section").doc("Item section identifier (e.g., 'Item 7', 'Item 7A')").type().stringType().noDefault()
+        .name("subsection").doc("Subsection name (e.g., 'Overview', 'Results of Operations')").type().stringType().noDefault()
+        .name("paragraph_number").doc("Sequential paragraph number within the subsection").type().intType().noDefault()
+        .name("paragraph_text").doc("Full text content of the paragraph").type().stringType().noDefault()
+        .name("footnote_refs").doc("Comma-separated list of footnote references").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -1801,14 +1801,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // Create schema for relationships
     Schema schema = SchemaBuilder.record("XbrlRelationship")
         .fields()
-        .requiredString("filing_date")
-        .requiredString("linkbase_type")  // presentation, calculation, definition
-        .requiredString("arc_role")  // e.g., parent-child, summation-item
-        .requiredString("from_concept")
-        .requiredString("to_concept")
-        .optionalDouble("weight")  // For calculation linkbase
-        .optionalInt("order")  // For presentation linkbase
-        .optionalString("preferred_label")
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("linkbase_type").doc("Type of linkbase relationship (presentation, calculation, definition)").type().stringType().noDefault()
+        .name("arc_role").doc("Arc role defining relationship type (e.g., parent-child, summation-item)").type().stringType().noDefault()
+        .name("from_concept").doc("Source concept in the relationship").type().stringType().noDefault()
+        .name("to_concept").doc("Target concept in the relationship").type().stringType().noDefault()
+        .name("weight").doc("Calculation weight (+1 for addition, -1 for subtraction)").type().nullable().doubleType().noDefault()
+        .name("order").doc("Presentation order for display sequencing").type().nullable().intType().noDefault()
+        .name("preferred_label").doc("Preferred label role for presentation").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -2963,24 +2963,24 @@ public class XbrlToParquetConverter implements FileConverter {
     return SchemaBuilder.record("InsiderTransaction")
         .namespace("org.apache.calcite.adapter.sec")
         .fields()
-        .requiredString("cik")
-        .requiredString("filing_date")
-        .requiredString("filing_type")
-        .optionalString("reporting_person_cik")
-        .optionalString("reporting_person_name")
-        .requiredBoolean("is_director")
-        .requiredBoolean("is_officer")
-        .requiredBoolean("is_ten_percent_owner")
-        .optionalString("officer_title")
-        .optionalString("transaction_date")
-        .optionalString("transaction_code")
-        .optionalString("security_title")
-        .optionalDouble("shares_transacted")
-        .optionalDouble("price_per_share")
-        .optionalDouble("shares_owned_after")
-        .optionalString("acquired_disposed_code")
-        .optionalString("ownership_type")
-        .optionalString("footnotes")
+        .name("cik").doc("Central Index Key of the issuer company").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the Form 3/4/5 filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("filing_type").doc("Type of insider filing (Form 3, Form 4, Form 5)").type().stringType().noDefault()
+        .name("reporting_person_cik").doc("CIK of the reporting insider").type().nullable().stringType().noDefault()
+        .name("reporting_person_name").doc("Name of the reporting insider").type().nullable().stringType().noDefault()
+        .name("is_director").doc("Whether the insider is a director").type().booleanType().noDefault()
+        .name("is_officer").doc("Whether the insider is an officer").type().booleanType().noDefault()
+        .name("is_ten_percent_owner").doc("Whether the insider owns 10% or more of the company").type().booleanType().noDefault()
+        .name("officer_title").doc("Title of the officer (if applicable)").type().nullable().stringType().noDefault()
+        .name("transaction_date").doc("Date of the transaction (ISO 8601 format)").type().nullable().stringType().noDefault()
+        .name("transaction_code").doc("Transaction code (P=purchase, S=sale, A=award, etc.)").type().nullable().stringType().noDefault()
+        .name("security_title").doc("Title of the security transacted").type().nullable().stringType().noDefault()
+        .name("shares_transacted").doc("Number of shares bought or sold").type().nullable().doubleType().noDefault()
+        .name("price_per_share").doc("Price per share in the transaction").type().nullable().doubleType().noDefault()
+        .name("shares_owned_after").doc("Shares beneficially owned after the transaction").type().nullable().doubleType().noDefault()
+        .name("acquired_disposed_code").doc("Whether shares were acquired (A) or disposed (D)").type().nullable().stringType().noDefault()
+        .name("ownership_type").doc("Type of ownership (direct or indirect)").type().nullable().stringType().noDefault()
+        .name("footnotes").doc("Additional footnotes and explanations").type().nullable().stringType().noDefault()
         .endRecord();
   }
   
@@ -3069,15 +3069,15 @@ public class XbrlToParquetConverter implements FileConverter {
     Schema embeddingField = SchemaBuilder.array().items().floatType();
     Schema schema = SchemaBuilder.record("VectorizedBlob")
         .fields()
-        .requiredString("vector_id")
-        .requiredString("original_blob_id")
-        .requiredString("blob_type")
-        .requiredString("blob_content")
-        .name("embedding").type(embeddingField).noDefault()
-        .requiredString("cik")
-        .requiredString("filing_date")
-        .requiredString("filing_type")
-        .name("accession_number").type().nullable().stringType().noDefault()
+        .name("vector_id").doc("Unique identifier for this vector").type().stringType().noDefault()
+        .name("original_blob_id").doc("Identifier of the original text blob").type().stringType().noDefault()
+        .name("blob_type").doc("Type of text blob (insider_remark, insider_footnote)").type().stringType().noDefault()
+        .name("blob_content").doc("Original text content of the blob").type().stringType().noDefault()
+        .name("embedding").doc("Vector embedding of the text (float array)").type(embeddingField).noDefault()
+        .name("cik").doc("Central Index Key of the company").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("filing_type").doc("Type of filing (Form 3, Form 4, Form 5)").type().stringType().noDefault()
+        .name("accession_number").doc("SEC accession number").type().nullable().stringType().noDefault()
         .endRecord();
     
     List<GenericRecord> records = new ArrayList<>();
@@ -3390,15 +3390,15 @@ public class XbrlToParquetConverter implements FileConverter {
     return SchemaBuilder.record("EarningsTranscript")
         .namespace("org.apache.calcite.adapter.sec")
         .fields()
-        .requiredString("cik")
-        .requiredString("filing_date")
-        .requiredString("filing_type")
-        .optionalString("exhibit_number")
-        .optionalString("section_type")
-        .requiredInt("paragraph_number")
-        .requiredString("paragraph_text")
-        .optionalString("speaker_name")
-        .optionalString("speaker_role")
+        .name("cik").doc("Central Index Key of the company").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("filing_type").doc("Type of filing (typically 8-K for earnings)").type().stringType().noDefault()
+        .name("exhibit_number").doc("Exhibit number within the filing").type().nullable().stringType().noDefault()
+        .name("section_type").doc("Section type (prepared_remarks, qa_session)").type().nullable().stringType().noDefault()
+        .name("paragraph_number").doc("Sequential paragraph number").type().intType().noDefault()
+        .name("paragraph_text").doc("Full text of the paragraph").type().stringType().noDefault()
+        .name("speaker_name").doc("Name of the speaker (for Q&A sections)").type().nullable().stringType().noDefault()
+        .name("speaker_role").doc("Role/title of the speaker").type().nullable().stringType().noDefault()
         .endRecord();
   }
 
@@ -3413,18 +3413,18 @@ public class XbrlToParquetConverter implements FileConverter {
     Schema embeddingField = SchemaBuilder.array().items().floatType();
     Schema schema = SchemaBuilder.record("VectorizedBlob")
         .fields()
-        .requiredString("vector_id")
-        .requiredString("original_blob_id")
-        .requiredString("blob_type")  // footnote, mda_paragraph, concept_group
-        .requiredString("filing_date")
-        .requiredString("original_text")
-        .requiredString("enriched_text")
-        .name("embedding").type(embeddingField).noDefault()  // 256-dimensional float array
-        .optionalString("parent_section")
-        .optionalString("relationships")  // JSON string of relationships
-        .optionalString("financial_concepts")  // Comma-separated concepts
-        .optionalInt("tokens_used")
-        .optionalInt("token_budget")
+        .name("vector_id").doc("Unique identifier for this vector").type().stringType().noDefault()
+        .name("original_blob_id").doc("Identifier of the original text blob").type().stringType().noDefault()
+        .name("blob_type").doc("Type of text blob (footnote, mda_paragraph, concept_group)").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("original_text").doc("Original text before enrichment").type().stringType().noDefault()
+        .name("enriched_text").doc("Text after adding financial context and relationships").type().stringType().noDefault()
+        .name("embedding").doc("Vector embedding of the enriched text (256-dimensional float array)").type(embeddingField).noDefault()
+        .name("parent_section").doc("Parent section identifier (e.g., 'Item 7', 'Note 1')").type().nullable().stringType().noDefault()
+        .name("relationships").doc("JSON string of relationships to other blobs").type().nullable().stringType().noDefault()
+        .name("financial_concepts").doc("Comma-separated list of referenced financial concepts").type().nullable().stringType().noDefault()
+        .name("tokens_used").doc("Number of tokens used for this embedding").type().nullable().intType().noDefault()
+        .name("token_budget").doc("Token budget allocated for this blob").type().nullable().intType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -4187,18 +4187,18 @@ public class XbrlToParquetConverter implements FileConverter {
     // Define schema for metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
         .fields()
-        .requiredString("accession_number")
-        .requiredString("filing_date")
-        .optionalString("company_name")
-        .optionalString("state_of_incorporation")
-        .optionalString("fiscal_year_end")
-        .optionalString("sic_code")
-        .optionalString("irs_number")
-        .optionalString("business_address")
-        .optionalString("mailing_address")
-        .requiredString("filing_url")
+        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
+        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
+        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
+        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().stringType().noDefault()
+        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
+        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
+        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
+        .name("filing_url").doc("URL or filename of the source filing document").type().stringType().noDefault()
         .endRecord();
-    
+
     List<GenericRecord> records = new ArrayList<>();
     GenericRecord record = new GenericData.Record(schema);
     record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
@@ -4237,18 +4237,18 @@ public class XbrlToParquetConverter implements FileConverter {
     // Define schema for minimal metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
         .fields()
-        .requiredString("accession_number")
-        .requiredString("filing_date")
-        .optionalString("company_name")
-        .optionalString("state_of_incorporation")
-        .optionalString("fiscal_year_end")
-        .optionalString("sic_code")
-        .optionalString("irs_number")
-        .optionalString("business_address")
-        .optionalString("mailing_address")
-        .requiredString("filing_url")
+        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
+        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
+        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
+        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
+        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
+        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().stringType().noDefault()
+        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
+        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
+        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
+        .name("filing_url").doc("URL or filename of the source filing document").type().stringType().noDefault()
         .endRecord();
-    
+
     List<GenericRecord> records = new ArrayList<>();
     GenericRecord record = new GenericData.Record(schema);
     record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
