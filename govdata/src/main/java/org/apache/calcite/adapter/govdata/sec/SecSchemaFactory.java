@@ -866,27 +866,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         // Check if vectorized file exists for this accession in the parquet directory
-        File parquetDir = secParquetDir;
-        if (parquetDir.exists()) {
-          // Look for vectorized files with this accession number
+        try {
+          String parquetPath = secParquetDir.getAbsolutePath();
           String accessionNoHyphens = accession.replace("-", "");
-          File[] cikDirs = parquetDir.listFiles((dir, name) -> name.startsWith("cik="));
-          for (File ckDir : cikDirs != null ? cikDirs : new File[0]) {
-            File[] filingTypeDirs = ckDir.listFiles((dir, name) -> name.startsWith("filing_type="));
-            for (File ftDir : filingTypeDirs != null ? filingTypeDirs : new File[0]) {
-              File[] yearDirs = ftDir.listFiles((dir, name) -> name.startsWith("year="));
-              for (File yDir : yearDirs != null ? yearDirs : new File[0]) {
-                File[] vectorizedFiles = yDir.listFiles((dir, name) ->
-                    name.equals(cik + "_" + accessionNoHyphens + "_vectorized.parquet"));
-                if (vectorizedFiles != null && vectorizedFiles.length > 0) {
-                  hasVectorized = true;
-                  break;
-                }
-              }
-              if (hasVectorized) break;
-            }
-            if (hasVectorized) break;
-          }
+          String vectorizedFileName = cik + "_" + accessionNoHyphens + "_vectorized.parquet";
+
+          // Use StorageProvider to check for vectorized files (works for both local and S3)
+          List<StorageProvider.FileEntry> files = storageProvider.listFiles(parquetPath, true);
+          hasVectorized = files.stream()
+              .anyMatch(f -> !f.isDirectory() && f.getName().equals(vectorizedFileName));
+        } catch (IOException e) {
+          LOGGER.debug("Could not check for vectorized files in parquet directory: {}", e.getMessage());
         }
       }
 
@@ -1228,11 +1218,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           conn.setRequestProperty("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
           conn.setRequestProperty("Accept", "application/json");
 
-          // Add If-None-Match header if we have an ETag
+          // Add conditional GET header if we have cached metadata
           String cachedETag = (cacheManifest != null) ? cacheManifest.getETag(normalizedCik) : null;
           if (cachedETag != null && !cachedETag.isEmpty()) {
-            conn.setRequestProperty("If-None-Match", cachedETag);
-            LOGGER.debug("Sending conditional GET with ETag: {}", cachedETag);
+            // Check if it's a Last-Modified value (prefixed with "lm:")
+            if (cachedETag.startsWith("lm:")) {
+              String lastModified = cachedETag.substring(3);
+              conn.setRequestProperty("If-Modified-Since", lastModified);
+              LOGGER.debug("Sending conditional GET with Last-Modified: {}", lastModified);
+            } else {
+              conn.setRequestProperty("If-None-Match", cachedETag);
+              LOGGER.debug("Sending conditional GET with ETag: {}", cachedETag);
+            }
           }
 
           int responseCode = conn.getResponseCode();
@@ -1244,6 +1241,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           } else if (responseCode == 200) {
             // New or updated content - download and cache
             String newETag = conn.getHeaderField("ETag");
+            String lastModified = conn.getHeaderField("Last-Modified");
 
             try (InputStream is = conn.getInputStream();
                  FileOutputStream fos = new FileOutputStream(submissionsFile)) {
@@ -1257,13 +1255,26 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Clean up macOS metadata files after writing
             storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
 
-            // Update manifest with new ETag
+            // Update manifest with ETag or Last-Modified
             if (cacheManifest != null) {
               long fileSize = submissionsFile.length();
-              long refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+              // Prefer ETag, fallback to Last-Modified, final fallback to 24-hour TTL
+              String refreshReason;
+              long refreshAfter;
+              if (newETag != null) {
+                refreshAfter = Long.MAX_VALUE;
+                refreshReason = "etag_based";
+              } else if (lastModified != null) {
+                refreshAfter = Long.MAX_VALUE;
+                refreshReason = "last_modified_based";
+                // Store Last-Modified as "ETag" for conditional request
+                newETag = "lm:" + lastModified;
+              } else {
+                refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+                refreshReason = "daily_fallback_no_metadata";
+              }
               cacheManifest.markCached(normalizedCik, submissionsFile.getAbsolutePath(),
-                                      newETag, fileSize, refreshAfter,
-                                      newETag != null ? "etag_based" : "daily_fallback");
+                                      newETag, fileSize, refreshAfter, refreshReason);
 
               // Save manifest immediately to avoid losing cache metadata on interruption
               String cacheDir = getGovDataCacheDir();
@@ -2680,14 +2691,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Bulk cleanup of macOS metadata files at the end of processing
       cleanupAllMacOSMetadataFiles(secParquetDir);
 
-      LOGGER.debug("DEBUG: Checking what was created in secParquetDir after conversion");
-      File[] afterConversion = secParquetDir.listFiles();
-      if (afterConversion != null) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("DEBUG: Found {} items in secParquetDir", afterConversion.length);
-          for (File f : afterConversion) {
-            LOGGER.debug("DEBUG: - {} (isDir={}, size={})", f.getName(), f.isDirectory(), f.length());
+      // Debug logging: List directory contents using StorageProvider
+      if (LOGGER.isDebugEnabled()) {
+        try {
+          String secParquetPath = secParquetDir.getAbsolutePath();
+          LOGGER.debug("DEBUG: Checking what was created in secParquetDir after conversion");
+          List<StorageProvider.FileEntry> afterConversion = storageProvider.listFiles(secParquetPath, false);
+          LOGGER.debug("DEBUG: Found {} items in secParquetDir", afterConversion.size());
+          for (StorageProvider.FileEntry f : afterConversion) {
+            LOGGER.debug("DEBUG: - {} (isDir={}, size={})", f.getName(), f.isDirectory(), f.getSize());
           }
+        } catch (IOException e) {
+          LOGGER.debug("DEBUG: Could not list parquet directory: {}", e.getMessage());
         }
       }
 
@@ -2729,16 +2744,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Create Avro schema for SEC filings metadata
       org.apache.avro.Schema schema = SchemaBuilder.record("SecFiling")
           .fields()
-          .requiredString("cik")
-          .requiredString("accession_number")
-          .requiredString("filing_type")
-          .requiredString("filing_date")
-          .optionalString("primary_document")
-          .optionalString("company_name")
-          .optionalString("period_of_report")
-          .optionalString("acceptance_datetime")
-          .optionalLong("file_size")
-          .requiredInt("fiscal_year")
+          .name("cik").doc("Central Index Key (unique company identifier)").type().stringType().noDefault()
+          .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
+          .name("filing_type").doc("Type of SEC filing (e.g., '10-K', '10-Q', '8-K', 'DEF 14A')").type().stringType().noDefault()
+          .name("filing_date").doc("Date the filing was submitted to SEC (ISO 8601 format)").type().stringType().noDefault()
+          .name("primary_document").doc("Primary document filename in the filing").type().nullable().stringType().noDefault()
+          .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
+          .name("period_of_report").doc("Reporting period end date (ISO 8601 format)").type().nullable().stringType().noDefault()
+          .name("acceptance_datetime").doc("Date and time the filing was accepted by SEC").type().nullable().stringType().noDefault()
+          .name("file_size").doc("Total size of filing in bytes").type().nullable().longType().noDefault()
+          .name("fiscal_year").doc("Fiscal year of the reporting period").type().intType().noDefault()
           .endRecord();
 
       List<GenericRecord> allRecords = new ArrayList<>();
@@ -3234,13 +3249,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * This is run at the end of processing to clean up any ._* files that were created.
    */
   private void cleanupAllMacOSMetadataFiles(File directory) {
-    if (directory == null || !directory.exists()) {
+    if (directory == null) {
+      return;
+    }
+
+    String dirPath = directory.getAbsolutePath();
+
+    // Use StorageProvider to check directory existence (works for both local and S3)
+    try {
+      if (!storageProvider.exists(dirPath)) {
+        return;
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check if parquet directory exists: {}", e.getMessage());
       return;
     }
 
     try {
-      storageProvider.cleanupMacosMetadata(directory.getAbsolutePath());
-      LOGGER.info("Bulk cleanup: Removed macOS metadata files from " + directory.getAbsolutePath());
+      storageProvider.cleanupMacosMetadata(dirPath);
+      LOGGER.info("Bulk cleanup: Removed macOS metadata files from " + dirPath);
     } catch (Exception e) {
       LOGGER.debug("Error during bulk macOS metadata cleanup: " + e.getMessage());
     }

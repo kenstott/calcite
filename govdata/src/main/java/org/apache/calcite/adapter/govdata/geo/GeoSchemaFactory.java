@@ -99,8 +99,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Building GEO schema operand configuration");
 
     // Get cache directories from interface methods
-    String govdataCacheDir = getGovDataCacheDir();
-    String govdataParquetDir = getGovDataParquetDir();
+    String govdataCacheDir = getGovDataCacheDir(operand);
+    String govdataParquetDir = getGovDataParquetDir(operand);
 
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -329,6 +329,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     long geoDataTtlMillis = geoCacheTtlDays * 24L * 60 * 60 * 1000; // Convert days to milliseconds
     long currentTime = System.currentTimeMillis();
 
+    // Load or create cache manifest for tracking parquet conversions
+    GeoCacheManifest cacheManifest = GeoCacheManifest.load(cacheDir);
+
     // Download TIGER data if enabled
     if (Arrays.asList(enabledSources).contains("tiger") && !tigerYears.isEmpty()) {
 
@@ -377,50 +380,74 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       } else {
         // Use simple cache directory structure for raw data downloads
         File tigerCacheDir = new File(cacheDir, "tiger");
-        TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider);
+        TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider, cacheManifest);
 
         try {
-          LOGGER.info("Downloading TIGER/Line data for years: {}", tigerYears);
-          // Use the new downloadAll pattern matching ECON standard
+          // Download and convert TIGER data for each year
+          // Pass parquet paths to download methods so they can skip if parquet already exists
           int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
           int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
-          tigerDownloader.downloadAll(startYear, endYear);
 
-          LOGGER.info("TIGER download completed, starting Parquet conversion for years: {}", tigerYears);
+          for (int year = startYear; year <= endYear; year++) {
+            LOGGER.info("Processing TIGER data for year {}", year);
 
-          // Convert shapefiles to Parquet for each year
-          for (int year : tigerYears) {
-            LOGGER.info("Converting TIGER data for year {}", year);
+            // Download and convert each dataset, passing parquet path to optimize downloads
             String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
+            tigerDownloader.downloadStatesForYear(year);
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
 
             String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
+            tigerDownloader.downloadCountiesForYear(year);
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
 
             String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
+            tigerDownloader.downloadPlacesForYear(year, "06"); // California
+            tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
+            tigerDownloader.downloadPlacesForYear(year, "36"); // New York
+            tigerDownloader.downloadPlacesForYear(year, "12"); // Florida
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
 
             String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
+            tigerDownloader.downloadZctasForYear(year);
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
 
             String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
+            tigerDownloader.downloadCensusTractsForYear(year);
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
 
             String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
+            tigerDownloader.downloadBlockGroupsForYear(year);
             tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
 
             String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
+            try {
+              tigerDownloader.downloadCbsasForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to download/convert CBSAs for year {}: {}", year, e.getMessage());
+            }
 
             String congressionalParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/congressional_districts.parquet");
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
+            try {
+              tigerDownloader.downloadCongressionalDistrictsForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to download/convert congressional districts for year {}: {}", year, e.getMessage());
+            }
 
             String schoolParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/school_districts.parquet");
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+            try {
+              tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to download/convert school districts for year {}: {}", year, e.getMessage());
+            }
           }
 
+          LOGGER.info("TIGER data processing completed for years {} to {}", startYear, endYear);
+
         } catch (Exception e) {
-          LOGGER.error("Error downloading TIGER data", e);
+          LOGGER.error("Error processing TIGER data", e);
         }
       }
     }
@@ -476,9 +503,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         HudCrosswalkFetcher hudFetcher;
 
         if (hudToken != null && !hudToken.isEmpty()) {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider, cacheManifest);
         } else {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudCacheDir, storageProvider);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider, cacheManifest);
         }
 
         try {
@@ -554,7 +581,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         // Use simple cache directory structure for raw data downloads
         File censusCacheDir = new File(cacheDir, "census");
         File demographicParquetDir = new File(geoParquetDir, DEMOGRAPHIC_TYPE);
-        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, censusYears, storageProvider);
+        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, censusYears, storageProvider, cacheManifest);
 
         try {
           LOGGER.info("Downloading Census demographic data for years: {}", censusYears);
