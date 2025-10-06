@@ -95,16 +95,26 @@ public class TigerDataDownloader {
   private final List<Integer> dataYears;
   private final boolean autoDownload;
   private final StorageProvider storageProvider;
+  private final GeoCacheManifest cacheManifest;
 
   /**
    * Constructor with year list and StorageProvider (matching ECON pattern).
    */
   public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider) {
+    this(cacheDir, dataYears, autoDownload, storageProvider, null);
+  }
+
+  /**
+   * Constructor with year list, StorageProvider, and cacheManifest.
+   */
+  public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.cacheDir = cacheDir;
     this.dataYears = dataYears;
     this.autoDownload = autoDownload;
     this.storageProvider = storageProvider;
+    this.cacheManifest = cacheManifest;
 
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
@@ -425,7 +435,7 @@ public class TigerDataDownloader {
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "congressional_districts");
 
-    // Check if we already have some CD files
+    // Check if we already have CD shapefile
     if (targetDir.exists() && targetDir.listFiles((dir, name) -> name.endsWith(".shp")).length > 0) {
       LOGGER.info("Congressional districts shapefiles already exist for year {}", year);
       return targetDir;
@@ -436,25 +446,24 @@ public class TigerDataDownloader {
       return null;
     }
 
-    // Congressional districts are state-level files
-    // Download a few major states as samples for testing
-    String[] stateFips = {"01", "06", "12", "36", "48"}; // AL, CA, FL, NY, TX
-    String congressNum = year >= 2024 ? "119" : "118";
+    // Calculate correct Congress number: ((year - 1789) / 2) + 1
+    // Each Congress serves 2 years starting in odd years
+    // 116th Congress: 2019-2020, 117th: 2021-2022, 118th: 2023-2024, etc.
+    int congressNum = ((year - 1789) / 2) + 1;
+
+    // Congressional districts are provided as a nationwide file (not per-state)
+    String filename = String.format("tl_%d_us_cd%d.zip", year, congressNum);
+    String url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+    File zipFile = new File(targetDir, filename);
 
     targetDir.mkdirs();
-    for (String state : stateFips) {
-      String filename = String.format("tl_%d_%s_cd%s.zip", year, state, congressNum);
-      String url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
-      File zipFile = new File(targetDir, filename);
-
-      if (!zipFile.exists()) {
-        try {
-          LOGGER.info("Downloading CD shapefile for state {} year {}", state, year);
-          downloadFile(url, zipFile);
-          extractZipFile(zipFile, targetDir);
-        } catch (IOException e) {
-          LOGGER.warn("Failed to download CD for state {}: {}", state, e.getMessage());
-        }
+    if (!zipFile.exists()) {
+      try {
+        LOGGER.info("Downloading CD shapefile for year {} (Congress {})", year, congressNum);
+        downloadFile(url, zipFile);
+        extractZipFile(zipFile, targetDir);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to download CD for year {}: {}", year, e.getMessage());
       }
     }
 
@@ -687,8 +696,10 @@ public class TigerDataDownloader {
    * Download Core Based Statistical Areas (CBSAs) shapefile for a specific year.
    */
   public File downloadCbsasForYear(int year) throws IOException {
-    String filename = String.format("tl_%d_us_cbsa.zip", year);
-    String url = String.format("%s/%s/CBSA/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+    // 2010 has special naming: cbsa10 instead of cbsa
+    String cbsaSuffix = (year == 2010) ? "10" : "";
+    String filename = String.format("tl_%d_us_cbsa%s.zip", year, cbsaSuffix);
+    String url = String.format("%s/%s/CBSA%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "cbsa");
@@ -739,6 +750,22 @@ public class TigerDataDownloader {
    * Download school districts shapefile for a specific year.
    */
   public File downloadSchoolDistrictsForYear(int year) throws IOException {
+    return downloadSchoolDistrictsForYear(year, null);
+  }
+
+  /**
+   * Download school districts shapefile for a specific year.
+   * @param year The year to download
+   * @param parquetPath Optional parquet path - if provided and file exists, skip download
+   */
+  public File downloadSchoolDistrictsForYear(int year, String parquetPath) throws IOException {
+    // Check if parquet already exists (skip raw download if converted file exists)
+    if (parquetPath != null && shouldSkipDownload("school_districts", year, parquetPath)) {
+      LOGGER.info("Skipping school districts download for year {} - parquet already exists", year);
+      File yearDir = new File(cacheDir, String.format("year=%d", year));
+      return new File(yearDir, "school_districts");
+    }
+
     // School districts are organized by state, so we'll download for selected states
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "school_districts");
@@ -772,7 +799,7 @@ public class TigerDataDownloader {
         File zipFile = new File(stateDir, filename);
 
         if (zipFile.exists()) {
-          LOGGER.info("School district shapefile already exists for state {} type {}: {}", fips, type, zipFile);
+          LOGGER.debug("School district shapefile already exists for state {} type {}: {}", fips, type, zipFile);
           continue;
         }
 
@@ -793,15 +820,57 @@ public class TigerDataDownloader {
   }
 
   /**
+   * Helper to check if we should skip downloading raw file (manifest says already converted).
+   * Does NOT check parquet existence - that happens later during conversion.
+   */
+  private boolean shouldSkipDownload(String dataType, int year, String parquetPath) {
+    // Only check manifest - if it says converted, we can skip download
+    // We don't check parquet existence here because we want the raw file regardless
+    // (for potential re-processing, debugging, etc.)
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+        LOGGER.debug("Manifest indicates parquet already converted, skipping download");
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Convert TIGER shapefiles to Parquet format (matching ECON pattern).
    * This is a placeholder that should invoke ShapefileToParquetConverter.
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    LOGGER.info("Converting TIGER data from {} to parquet: {}", sourceDir, targetFilePath);
+    // Extract year from path (pattern: year=YYYY)
+    int year = extractYearFromPath(targetFilePath);
 
-    // Skip if target file already exists
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Check manifest first (avoids S3 check)
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+        LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+        return;
+      }
+    }
+
+    // Defensive check if file already exists (for backfill/legacy data)
     if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("type", dataType);
+        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        cacheManifest.save(cacheDir.getAbsolutePath());
+      }
       return;
     }
 
@@ -810,23 +879,39 @@ public class TigerDataDownloader {
       return;
     }
 
-    LOGGER.info("Target file does not exist, proceeding with conversion: {}", targetFilePath);
+    LOGGER.info("Converting TIGER data from {} to parquet: {}", sourceDir, targetFilePath);
 
     // Use ShapefileToParquetConverter for actual conversion
     ShapefileToParquetConverter converter = new ShapefileToParquetConverter(storageProvider);
-    // The targetFilePath is already the full path we want to write to
-    // Just extract the table type from the filename
-    String tableType = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1)
-        .replace(".parquet", "");
 
-    LOGGER.info("Calling converter for table type: {} with source: {}", tableType, sourceDir);
+    LOGGER.info("Calling converter for table type: {} with source: {}", dataType, sourceDir);
 
     try {
       // Convert based on the table type
-      converter.convertSingleShapefileType(sourceDir, targetFilePath, tableType);
+      converter.convertSingleShapefileType(sourceDir, targetFilePath, dataType);
+
+      // Mark parquet conversion complete in manifest
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("type", dataType);
+        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        cacheManifest.save(cacheDir.getAbsolutePath());
+      }
     } catch (Exception e) {
-      LOGGER.error("Error converting {} to Parquet", tableType, e);
+      LOGGER.error("Error converting {} to Parquet", dataType, e);
     }
+  }
+
+  /**
+   * Extract year from path containing year=YYYY pattern.
+   */
+  private int extractYearFromPath(String path) {
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    throw new IllegalArgumentException("Could not extract year from path: " + path);
   }
 
   /**

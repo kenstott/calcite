@@ -75,28 +75,35 @@ public class HudCrosswalkFetcher {
   private final File cacheDir;
   private final ObjectMapper objectMapper;
   private final StorageProvider storageProvider;
+  private final GeoCacheManifest cacheManifest;
 
   public HudCrosswalkFetcher(String username, String password, File cacheDir) {
-    this(username, password, null, cacheDir, null);
+    this(username, password, null, cacheDir, null, null);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir) {
-    this(username, password, token, cacheDir, null);
+    this(username, password, token, cacheDir, null, null);
   }
 
   public HudCrosswalkFetcher(String username, String password, File cacheDir,
       StorageProvider storageProvider) {
-    this(username, password, null, cacheDir, storageProvider);
+    this(username, password, null, cacheDir, storageProvider, null);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
       StorageProvider storageProvider) {
+    this(username, password, token, cacheDir, storageProvider, null);
+  }
+
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.username = username;
     this.password = password;
     this.token = token;
     this.cacheDir = cacheDir;
     this.objectMapper = new ObjectMapper();
     this.storageProvider = storageProvider;
+    this.cacheManifest = cacheManifest;
 
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
@@ -454,17 +461,39 @@ public class HudCrosswalkFetcher {
    */
   @SuppressWarnings("deprecation")
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    LOGGER.info("Converting HUD crosswalk data from {} to parquet: {}", sourceDir, targetFilePath);
+    // Extract year from path (pattern: year=YYYY)
+    int year = extractYearFromPath(targetFilePath);
 
-    // Skip if target file already exists
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Check manifest first (avoids S3 check)
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+        LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+        return;
+      }
+    }
+
+    // Defensive check if file already exists (for backfill/legacy data)
     if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      // Update manifest since file exists but wasn't tracked
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("type", dataType);
+        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        cacheManifest.save(cacheDir.getAbsolutePath());
+      }
       return;
     }
 
-    // Determine which type of crosswalk to convert based on the target file name
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
+    LOGGER.info("Converting HUD crosswalk data from {} to parquet: {}", sourceDir, targetFilePath);
 
+    // Determine which type of crosswalk to convert based on the file name
     if (fileName.contains("zip_county")) {
       convertZipCountyCrosswalkToParquet(sourceDir, targetFilePath);
     } else if (fileName.contains("zip_cbsa")) {
@@ -473,7 +502,28 @@ public class HudCrosswalkFetcher {
       convertTractZipCrosswalkToParquet(sourceDir, targetFilePath);
     } else {
       LOGGER.warn("Unknown crosswalk type for conversion: {}", fileName);
+      return;
     }
+
+    // Mark parquet conversion complete in manifest
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("type", dataType);
+      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      cacheManifest.save(cacheDir.getAbsolutePath());
+    }
+  }
+
+  /**
+   * Extract year from path containing year=YYYY pattern.
+   */
+  private int extractYearFromPath(String path) {
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
+    java.util.regex.Matcher matcher = pattern.matcher(path);
+    if (matcher.find()) {
+      return Integer.parseInt(matcher.group(1));
+    }
+    throw new IllegalArgumentException("Could not extract year from path: " + path);
   }
 
   /**
@@ -486,12 +536,12 @@ public class HudCrosswalkFetcher {
     // Create Avro schema for ZIP-County crosswalk
     Schema schema = SchemaBuilder.record("ZipCountyCrosswalk")
         .fields()
-        .name("zip").type().stringType().noDefault()
-        .name("county_fips").type().stringType().noDefault()
-        .name("res_ratio").type().doubleType().noDefault()
-        .name("bus_ratio").type().doubleType().noDefault()
-        .name("oth_ratio").type().doubleType().noDefault()
-        .name("tot_ratio").type().doubleType().noDefault()
+        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
+        .name("county_fips").doc("5-digit county FIPS code").type().stringType().noDefault()
+        .name("res_ratio").doc("Ratio of residential addresses in this ZIP that are in this county").type().doubleType().noDefault()
+        .name("bus_ratio").doc("Ratio of business addresses in this ZIP that are in this county").type().doubleType().noDefault()
+        .name("oth_ratio").doc("Ratio of other addresses in this ZIP that are in this county").type().doubleType().noDefault()
+        .name("tot_ratio").doc("Ratio of total addresses in this ZIP that are in this county").type().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -531,12 +581,12 @@ public class HudCrosswalkFetcher {
     // Create Avro schema for ZIP-CBSA crosswalk
     Schema schema = SchemaBuilder.record("ZipCbsaCrosswalk")
         .fields()
-        .name("zip").type().stringType().noDefault()
-        .name("cbsa_code").type().stringType().noDefault()
-        .name("res_ratio").type().doubleType().noDefault()
-        .name("bus_ratio").type().doubleType().noDefault()
-        .name("oth_ratio").type().doubleType().noDefault()
-        .name("tot_ratio").type().doubleType().noDefault()
+        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
+        .name("cbsa_code").doc("5-digit CBSA code for Core Based Statistical Area").type().stringType().noDefault()
+        .name("res_ratio").doc("Ratio of residential addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
+        .name("bus_ratio").doc("Ratio of business addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
+        .name("oth_ratio").doc("Ratio of other addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
+        .name("tot_ratio").doc("Ratio of total addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -576,12 +626,12 @@ public class HudCrosswalkFetcher {
     // Create Avro schema for Tract-ZIP crosswalk
     Schema schema = SchemaBuilder.record("TractZipCrosswalk")
         .fields()
-        .name("tract_fips").type().stringType().noDefault()
-        .name("zip").type().stringType().noDefault()
-        .name("res_ratio").type().doubleType().noDefault()
-        .name("bus_ratio").type().doubleType().noDefault()
-        .name("oth_ratio").type().doubleType().noDefault()
-        .name("tot_ratio").type().doubleType().noDefault()
+        .name("tract_fips").doc("11-digit census tract FIPS code").type().stringType().noDefault()
+        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
+        .name("res_ratio").doc("Ratio of residential addresses in this tract that are in this ZIP").type().doubleType().noDefault()
+        .name("bus_ratio").doc("Ratio of business addresses in this tract that are in this ZIP").type().doubleType().noDefault()
+        .name("oth_ratio").doc("Ratio of other addresses in this tract that are in this ZIP").type().doubleType().noDefault()
+        .name("tot_ratio").doc("Ratio of total addresses in this tract that are in this ZIP").type().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();

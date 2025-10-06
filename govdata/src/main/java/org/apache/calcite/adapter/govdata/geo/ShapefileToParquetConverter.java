@@ -105,13 +105,13 @@ public class ShapefileToParquetConverter {
       // Create schema with TIGER state attributes
       Schema schema = SchemaBuilder.record("State")
           .fields()
-          .name("state_fips").type().stringType().noDefault()
-          .name("state_code").type().stringType().noDefault()
-          .name("state_name").type().stringType().noDefault()
-          .name("state_abbr").type().nullable().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("state_fips").doc("2-digit FIPS code identifying the state (e.g., '06' for California)").type().stringType().noDefault()
+          .name("state_code").doc("Geographic identifier (GEOID) for the state, matches state_fips").type().stringType().noDefault()
+          .name("state_name").doc("Full state name (e.g., 'California')").type().stringType().noDefault()
+          .name("state_abbr").doc("2-letter postal abbreviation (e.g., 'CA')").type().nullable().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of state boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/states.parquet";
@@ -174,13 +174,13 @@ public class ShapefileToParquetConverter {
       // Create schema for counties
       Schema schema = SchemaBuilder.record("County")
           .fields()
-          .name("county_fips").type().stringType().noDefault()
-          .name("state_fips").type().stringType().noDefault()
-          .name("county_name").type().stringType().noDefault()
-          .name("county_code").type().nullable().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("county_fips").doc("5-digit FIPS code for county (state + county, e.g., '06037' for Los Angeles County)").type().stringType().noDefault()
+          .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+          .name("county_name").doc("Full county name (e.g., 'Los Angeles County')").type().stringType().noDefault()
+          .name("county_code").doc("Geographic identifier (GEOID) for the county").type().nullable().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of county boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/counties.parquet";
@@ -243,11 +243,11 @@ public class ShapefileToParquetConverter {
       // Create schema for places
       Schema schema = SchemaBuilder.record("Place")
           .fields()
-          .name("place_fips").type().stringType().noDefault()
-          .name("state_fips").type().stringType().noDefault()
-          .name("place_name").type().stringType().noDefault()
-          .name("place_type").type().nullable().stringType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("place_fips").doc("7-digit FIPS code for place (state + place code, e.g., '0644000' for Los Angeles city)").type().stringType().noDefault()
+          .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+          .name("place_name").doc("Name of incorporated place or census-designated place").type().stringType().noDefault()
+          .name("place_type").doc("Classification of place (e.g., 'city', 'town', 'CDP')").type().nullable().stringType().noDefault()
+          .name("geometry").doc("WKT representation of place boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/places.parquet";
@@ -316,10 +316,10 @@ public class ShapefileToParquetConverter {
       // Create schema for ZCTAs
       Schema schema = SchemaBuilder.record("ZCTA")
           .fields()
-          .name("zcta").type().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("zcta").doc("5-digit ZIP Code Tabulation Area code approximating USPS ZIP Code delivery areas").type().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of ZCTA boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/zctas.parquet";
@@ -390,13 +390,13 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("State")
         .fields()
-        .name("state_fips").type().stringType().noDefault()
-        .name("state_code").type().stringType().noDefault()
-        .name("state_name").type().stringType().noDefault()
-        .name("state_abbr").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code identifying the state (e.g., '06' for California)").type().stringType().noDefault()
+        .name("state_code").doc("Geographic identifier (GEOID) for the state, matches state_fips").type().stringType().noDefault()
+        .name("state_name").doc("Full state name (e.g., 'California')").type().stringType().noDefault()
+        .name("state_abbr").doc("2-letter postal abbreviation (e.g., 'CA')").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of state boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -439,13 +439,13 @@ public class ShapefileToParquetConverter {
       // Create schema for census tracts
       Schema schema = SchemaBuilder.record("CensusTract")
           .fields()
-          .name("tract_fips").type().stringType().noDefault()
-          .name("state_fips").type().stringType().noDefault()
-          .name("county_fips").type().stringType().noDefault()
-          .name("tract_name").type().nullable().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("tract_fips").doc("11-digit FIPS code for census tract (state + county + tract)").type().stringType().noDefault()
+          .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+          .name("county_fips").doc("5-digit FIPS code of the parent county").type().stringType().noDefault()
+          .name("tract_name").doc("Census tract number (e.g., '4201.02')").type().nullable().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of census tract boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/census_tracts.parquet";
@@ -505,13 +505,13 @@ public class ShapefileToParquetConverter {
       // Create schema for block groups
       Schema schema = SchemaBuilder.record("BlockGroup")
           .fields()
-          .name("block_group_fips").type().stringType().noDefault()
-          .name("state_fips").type().stringType().noDefault()
-          .name("county_fips").type().stringType().noDefault()
-          .name("tract_fips").type().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("block_group_fips").doc("12-digit FIPS code for block group (state + county + tract + block group)").type().stringType().noDefault()
+          .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+          .name("county_fips").doc("5-digit FIPS code of the parent county").type().stringType().noDefault()
+          .name("tract_fips").doc("11-digit FIPS code of the parent census tract").type().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of block group boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/block_groups.parquet";
@@ -571,12 +571,12 @@ public class ShapefileToParquetConverter {
       // Create schema for CBSA (Core Based Statistical Areas)
       Schema schema = SchemaBuilder.record("CBSA")
           .fields()
-          .name("cbsa_fips").type().stringType().noDefault()
-          .name("cbsa_name").type().nullable().stringType().noDefault()
-          .name("metro_micro").type().nullable().stringType().noDefault()
-          .name("land_area").type().nullable().doubleType().noDefault()
-          .name("water_area").type().nullable().doubleType().noDefault()
-          .name("geometry").type().nullable().stringType().noDefault()
+          .name("cbsa_fips").doc("5-digit CBSA code for Core Based Statistical Area").type().stringType().noDefault()
+          .name("cbsa_name").doc("Name of metropolitan or micropolitan statistical area").type().nullable().stringType().noDefault()
+          .name("metro_micro").doc("LSAD code indicating Metropolitan or Micropolitan designation").type().nullable().stringType().noDefault()
+          .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+          .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+          .name("geometry").doc("WKT representation of CBSA boundary polygon").type().nullable().stringType().noDefault()
           .endRecord();
 
       String outputRelativePath = targetRelativePath + "/cbsa.parquet";
@@ -711,13 +711,13 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("State")
         .fields()
-        .name("state_fips").type().stringType().noDefault()
-        .name("state_code").type().stringType().noDefault()
-        .name("state_name").type().stringType().noDefault()
-        .name("state_abbr").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code identifying the state (e.g., '06' for California)").type().stringType().noDefault()
+        .name("state_code").doc("Geographic identifier (GEOID) for the state, matches state_fips").type().stringType().noDefault()
+        .name("state_name").doc("Full state name (e.g., 'California')").type().stringType().noDefault()
+        .name("state_abbr").doc("2-letter postal abbreviation (e.g., 'CA')").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of state boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     String expectedPrefix = "tl_" + year + "_us_state";
@@ -750,13 +750,13 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("County")
         .fields()
-        .name("county_fips").type().stringType().noDefault()
-        .name("state_fips").type().stringType().noDefault()
-        .name("county_name").type().stringType().noDefault()
-        .name("county_code").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("county_fips").doc("5-digit FIPS code for county (state + county, e.g., '06037' for Los Angeles County)").type().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+        .name("county_name").doc("Full county name (e.g., 'Los Angeles County')").type().stringType().noDefault()
+        .name("county_code").doc("Geographic identifier (GEOID) for the county").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of county boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     String expectedPrefix = "tl_" + year + "_us_county";
@@ -789,13 +789,13 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("Place")
         .fields()
-        .name("place_fips").type().stringType().noDefault()
-        .name("state_fips").type().stringType().noDefault()
-        .name("place_name").type().stringType().noDefault()
-        .name("place_type").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("place_fips").doc("7-digit FIPS code for place (state + place code, e.g., '0644000' for Los Angeles city)").type().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+        .name("place_name").doc("Name of incorporated place or census-designated place").type().stringType().noDefault()
+        .name("place_type").doc("Classification of place (e.g., 'city', 'town', 'CDP')").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of place boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> allRecords = new ArrayList<>();
@@ -839,10 +839,10 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("ZCTA")
         .fields()
-        .name("zcta").type().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("zcta").doc("5-digit ZIP Code Tabulation Area code approximating USPS ZIP Code delivery areas").type().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of ZCTA boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     String expectedPrefix = "tl_" + year + "_us_zcta520";
@@ -872,12 +872,12 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("CensusTract")
         .fields()
-        .name("tract_code").type().stringType().noDefault()
-        .name("county_fips").type().stringType().noDefault()
-        .name("tract_name").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("tract_code").doc("11-digit FIPS code for census tract (state + county + tract)").type().stringType().noDefault()
+        .name("county_fips").doc("5-digit FIPS code of the parent county").type().stringType().noDefault()
+        .name("tract_name").doc("Census tract number (e.g., '4201.02')").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of census tract boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> allRecords = new ArrayList<>();
@@ -921,11 +921,11 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("BlockGroup")
         .fields()
-        .name("block_group_code").type().stringType().noDefault()
-        .name("tract_code").type().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("block_group_code").doc("12-digit FIPS code for block group (state + county + tract + block group)").type().stringType().noDefault()
+        .name("tract_code").doc("11-digit FIPS code of the parent census tract").type().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of block group boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> allRecords = new ArrayList<>();
@@ -971,12 +971,12 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("CBSA")
         .fields()
-        .name("cbsa_fips").type().stringType().noDefault()
-        .name("cbsa_name").type().nullable().stringType().noDefault()
-        .name("metro_micro").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("cbsa_fips").doc("5-digit CBSA code for Core Based Statistical Area").type().stringType().noDefault()
+        .name("cbsa_name").doc("Name of metropolitan or micropolitan statistical area").type().nullable().stringType().noDefault()
+        .name("metro_micro").doc("LSAD code indicating Metropolitan or Micropolitan designation").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of CBSA boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     String expectedPrefix = "tl_" + year + "_us_cbsa";
@@ -1008,12 +1008,12 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("CongressionalDistrict")
         .fields()
-        .name("cd_fips").type().stringType().noDefault()
-        .name("state_fips").type().stringType().noDefault()
-        .name("cd_name").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("cd_fips").doc("4-digit congressional district code (state + district number)").type().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+        .name("cd_name").doc("Congressional district name or number").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of congressional district boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     // Congressional districts are state-level files - parse all state CD files
@@ -1059,13 +1059,13 @@ public class ShapefileToParquetConverter {
 
     Schema schema = SchemaBuilder.record("SchoolDistrict")
         .fields()
-        .name("sd_lea").type().stringType().noDefault()
-        .name("state_fips").type().stringType().noDefault()
-        .name("sd_name").type().nullable().stringType().noDefault()
-        .name("sd_type").type().nullable().stringType().noDefault()
-        .name("land_area").type().nullable().doubleType().noDefault()
-        .name("water_area").type().nullable().doubleType().noDefault()
-        .name("geometry").type().nullable().stringType().noDefault()
+        .name("sd_lea").doc("Local Education Agency (LEA) code identifying the school district").type().stringType().noDefault()
+        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
+        .name("sd_name").doc("School district name").type().nullable().stringType().noDefault()
+        .name("sd_type").doc("School district type (elementary, secondary, or unified)").type().nullable().stringType().noDefault()
+        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
+        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
+        .name("geometry").doc("WKT representation of school district boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> allRecords = new ArrayList<>();
