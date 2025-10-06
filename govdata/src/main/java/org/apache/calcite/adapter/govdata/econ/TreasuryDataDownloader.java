@@ -51,24 +51,28 @@ import java.util.Map;
  *
  * <p>Uses the Treasury Fiscal Data API which requires no authentication.
  */
-public class TreasuryDataDownloader {
+public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(TreasuryDataDownloader.class);
   private static final String TREASURY_API_BASE = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
-  private final String cacheDir;
-  private final HttpClient httpClient;
-  private final CacheManifest cacheManifest;
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
-
   public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this.cacheDir = cacheDir;
-    this.storageProvider = storageProvider;
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
+    super(cacheDir, storageProvider);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return 0; // Treasury API has no rate limit
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 3;
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 2000; // 2 seconds
   }
 
   /**
@@ -179,25 +183,15 @@ public class TreasuryDataDownloader {
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      // Check cache manifest first
+      String relativePath = "source=econ/type=timeseries/year=" + year + "/treasury_yields.json";
+
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "treasury_yields");
       cacheParams.put("year", String.valueOf(year));
 
-      String relativePath = "source=econ/type=timeseries/year=" + year + "/treasury_yields.json";
-      File jsonFile = new File(cacheDir, relativePath);
-
-      if (cacheManifest.isCached("treasury_yields", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("treasury_yields", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
-        lastFile = new File(relativePath);
-        continue;
-      }
-
-      // Check if file exists but not in manifest - update manifest
-      if (jsonFile.exists()) {
-        LOGGER.info("Found existing treasury yields file for year {} - updating manifest", year);
-        cacheManifest.markCached("treasury_yields", year, cacheParams, relativePath, 0L);
-        cacheManifest.save(cacheDir);
         lastFile = new File(relativePath);
         continue;
       }
@@ -225,15 +219,8 @@ public class TreasuryDataDownloader {
         continue;
       }
 
-      // Save raw JSON data to cache directory
-      jsonFile.getParentFile().mkdirs();
-      Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("treasury_yields", year, cacheParams, relativePath, response.body().length());
-      cacheManifest.save(cacheDir);
-
-      LOGGER.info("Treasury yields raw data saved for year {}: {}", year, relativePath);
+      // Save to cache using base class helper
+      saveToCache("treasury_yields", year, cacheParams, relativePath, response.body());
       lastFile = new File(relativePath);
     }
 
@@ -254,25 +241,15 @@ public class TreasuryDataDownloader {
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      // Check cache manifest first
+      String relativePath = "source=econ/type=timeseries/year=" + year + "/federal_debt.json";
+
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "federal_debt");
       cacheParams.put("year", String.valueOf(year));
 
-      String relativePath = "source=econ/type=timeseries/year=" + year + "/federal_debt.json";
-      File jsonFile = new File(cacheDir, relativePath);
-
-      if (cacheManifest.isCached("federal_debt", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("federal_debt", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached federal debt for year {} - skipping download", year);
-        lastFile = new File(relativePath);
-        continue;
-      }
-
-      // Check if file exists but not in manifest - update manifest
-      if (jsonFile.exists()) {
-        LOGGER.info("Found existing federal debt file for year {} - updating manifest", year);
-        cacheManifest.markCached("federal_debt", year, cacheParams, relativePath, 0L);
-        cacheManifest.save(cacheDir);
         lastFile = new File(relativePath);
         continue;
       }
@@ -300,15 +277,8 @@ public class TreasuryDataDownloader {
         continue;
       }
 
-      // Save raw JSON data to cache directory
-      jsonFile.getParentFile().mkdirs();
-      Files.writeString(jsonFile.toPath(), response.body(), StandardCharsets.UTF_8);
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("federal_debt", year, cacheParams, relativePath, response.body().length());
-      cacheManifest.save(cacheDir);
-
-      LOGGER.info("Federal debt raw data saved for year {}: {}", year, relativePath);
+      // Save to cache using base class helper
+      saveToCache("federal_debt", year, cacheParams, relativePath, response.body());
       lastFile = new File(relativePath);
     }
 
@@ -358,11 +328,11 @@ public class TreasuryDataDownloader {
     Schema schema = SchemaBuilder.record("TreasuryYield")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredInt("maturity_months")
-        .requiredString("maturity_label")
-        .requiredDouble("yield_percent")
-        .requiredString("yield_type")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("maturity_months").doc("Maturity period in months (e.g., 1, 3, 6, 12, 60, 120, 360)").type().intType().noDefault()
+        .name("maturity_label").doc("Human-readable maturity label (e.g., '1-Month', '10-Year', '30-Year')").type().stringType().noDefault()
+        .name("yield_percent").doc("Yield rate as a percentage (e.g., 4.25 for 4.25%)").type().doubleType().noDefault()
+        .name("yield_type").doc("Type of Treasury security (e.g., 'Treasury Bill', 'Treasury Note', 'Treasury Bond')").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -384,13 +354,13 @@ public class TreasuryDataDownloader {
     Schema schema = SchemaBuilder.record("FederalDebt")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredString("debt_type")
-        .requiredDouble("amount_billions")
-        .optionalDouble("percent_of_gdp")
-        .requiredString("holder_category")
-        .requiredDouble("debt_held_by_public")
-        .requiredDouble("intragovernmental_holdings")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("debt_type").doc("Type of federal debt (e.g., 'Total Public Debt', 'Marketable', 'Non-Marketable')").type().stringType().noDefault()
+        .name("amount_billions").doc("Total debt amount in billions of dollars").type().doubleType().noDefault()
+        .name("percent_of_gdp").doc("Debt as a percentage of GDP (may be null if GDP data unavailable)").type().nullable().doubleType().noDefault()
+        .name("holder_category").doc("Category of debt holder (e.g., 'Public', 'Federal Reserve', 'Foreign')").type().stringType().noDefault()
+        .name("debt_held_by_public").doc("Portion of debt held by the public in billions of dollars").type().doubleType().noDefault()
+        .name("intragovernmental_holdings").doc("Intragovernmental debt holdings in billions of dollars").type().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -438,31 +408,12 @@ public class TreasuryDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Extract year from path
-    int year = extractYearFromPath(targetFilePath);
-
-    // Extract data type from filename
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Check manifest first
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+    // Check if already converted per manifest (uses base class helper)
+    if (isParquetConverted(targetFilePath)) {
       return;
     }
 
     LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDir, targetFilePath);
-
-    // Skip if target file already exists (defensive check)
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
-      return;
-    }
 
     List<TreasuryYield> yields = new ArrayList<>();
 
@@ -500,10 +451,8 @@ public class TreasuryDataDownloader {
     writeTreasuryYieldsParquet(yields, targetFilePath);
     LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
 
-    // Mark parquet conversion complete in manifest
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+    // Mark conversion complete in manifest (uses base class helper)
+    markParquetConverted(targetFilePath);
   }
 
   /**
@@ -513,31 +462,12 @@ public class TreasuryDataDownloader {
    * @param targetFilePath Target parquet file path to create
    */
   public void convertFederalDebtToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Extract year from path
-    int year = extractYearFromPath(targetFilePath);
-
-    // Extract data type from filename
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Check manifest first
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+    // Check if already converted using base class helper
+    if (isParquetConverted(targetFilePath)) {
       return;
     }
 
     LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDir, targetFilePath);
-
-    // Skip if target file already exists (defensive check)
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
-      return;
-    }
 
     List<FederalDebt> debtRecords = new ArrayList<>();
 
@@ -587,23 +517,8 @@ public class TreasuryDataDownloader {
     writeFederalDebtParquet(debtRecords, targetFilePath);
     LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFilePath, debtRecords.size());
 
-    // Mark parquet conversion complete in manifest
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+    // Mark parquet conversion complete using base class helper
+    markParquetConverted(targetFilePath);
   }
 
-  /**
-   * Extract year from Hive-partitioned path.
-   */
-  private int extractYearFromPath(String path) {
-    // Match pattern "year=YYYY"
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    // Fallback to current year if pattern not found
-    return LocalDate.now().getYear();
-  }
 }

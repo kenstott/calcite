@@ -51,10 +51,9 @@ import java.util.Map;
  *
  * <p>Requires a FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html
  */
-public class FredDataDownloader {
+public class FredDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(FredDataDownloader.class);
   private static final String FRED_API_BASE = "https://api.stlouisfed.org/fred/";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
   // FRED API pagination limits
@@ -63,16 +62,11 @@ public class FredDataDownloader {
 
   // Rate limiting: FRED API allows 120 requests per minute
   // Safe rate: 500ms between requests = 120 requests/minute exactly
-  private long lastRequestTime = 0;
   private static final long MIN_REQUEST_INTERVAL_MS = 500; // 500ms between requests (120 req/min)
   private static final int MAX_RETRIES = 5; // Increased retries for rate limit recovery
   private static final long RETRY_DELAY_MS = 5000; // 5 seconds initial retry delay (more conservative)
 
-  private final String cacheDir;
   private final String apiKey;
-  private final HttpClient httpClient;
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
-  private final CacheManifest cacheManifest;
 
   // Key FRED series IDs for economic indicators
   public static class Series {
@@ -214,13 +208,23 @@ public class FredDataDownloader {
       Series.PERSONAL_SAVING_RATE);
 
   public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this.cacheDir = cacheDir;
+    super(cacheDir, storageProvider);
     this.apiKey = apiKey;
-    this.storageProvider = storageProvider;
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return MIN_REQUEST_INTERVAL_MS;
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return MAX_RETRIES;
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return RETRY_DELAY_MS;
   }
 
   /**
@@ -333,25 +337,15 @@ public class FredDataDownloader {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
     }
 
-    // Check cache manifest first
+    String relativePath = "source=econ/type=indicators/year=" + year + "/fred_indicators.json";
+
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "fred_indicators");
     cacheParams.put("year", String.valueOf(year));
 
-    String relativePath = "source=econ/type=indicators/year=" + year + "/fred_indicators.json";
-
-    if (cacheManifest.isCached("fred_indicators", year, cacheParams)) {
+    // Check cache using base class helper
+    if (isCachedOrExists("fred_indicators", year, cacheParams, relativePath)) {
       LOGGER.info("Found cached FRED data for year {} - skipping download", year);
-      return;
-    }
-
-    // Check if file exists but not in manifest - update manifest
-    File jsonFile = new File(cacheDir, relativePath);
-    if (jsonFile.exists()) {
-      LOGGER.info("Found existing FRED file for year {} - updating manifest", year);
-      long fileSize = jsonFile.length();
-      cacheManifest.markCached("fred_indicators", year, cacheParams, relativePath, fileSize);
-      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -414,16 +408,10 @@ public class FredDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // Save raw JSON data to local cache directory
-    jsonFile = new File(cacheDir, relativePath);
-    jsonFile.getParentFile().mkdirs();
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    // Mark as cached in manifest
-    cacheManifest.markCached("fred_indicators", year, cacheParams, relativePath, jsonContent.length());
-    cacheManifest.save(cacheDir);
-
-    LOGGER.info("FRED indicators saved to: {} ({} observations)", relativePath, observations.size());
+    // Save to cache using base class helper
+    saveToCache("fred_indicators", year, cacheParams, relativePath, jsonContent);
+    LOGGER.info("Downloaded {} FRED observations for year {}", observations.size(), year);
   }
 
   /**
@@ -737,33 +725,13 @@ public class FredDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+    // Check if already converted using base class helper
+    if (isParquetConverted(targetFilePath)) {
+      return;
+    }
+
     String sourceDirPath = sourceDir.getAbsolutePath();
-
-    // Extract year from path
-    int year = extractYearFromPath(targetFilePath);
-
-    // Extract data type from filename
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Check manifest first
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
-      return;
-    }
-
     LOGGER.info("Converting FRED data from {} to parquet: {}", sourceDirPath, targetFilePath);
-
-    // Skip if target file already exists (defensive check)
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
-      return;
-    }
 
     // Directories are created automatically by StorageProvider when writing files
 
@@ -805,10 +773,8 @@ public class FredDataDownloader {
 
     LOGGER.info("Converted FRED data to parquet: {} ({} observations)", targetFilePath, observations.size());
 
-    // Mark parquet conversion complete in manifest
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+    // Mark parquet conversion complete using base class helper
+    markParquetConverted(targetFilePath);
   }
 
   @SuppressWarnings("deprecation")
@@ -817,12 +783,12 @@ public class FredDataDownloader {
     Schema schema = SchemaBuilder.record("FredIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("series_id")
-        .requiredString("series_name")
-        .requiredString("date")
-        .requiredDouble("value")
-        .requiredString("units")
-        .requiredString("frequency")
+        .name("series_id").doc("FRED series identifier").type().stringType().noDefault()
+        .name("series_name").doc("Descriptive name of the economic data series").type().stringType().noDefault()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("value").doc("Observed value for this date").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Percent', 'Billions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -842,20 +808,6 @@ public class FredDataDownloader {
   }
 
   /**
-   * Extract year from Hive-partitioned path.
-   */
-  private int extractYearFromPath(String path) {
-    // Match pattern "year=YYYY"
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    // Fallback to current year if pattern not found
-    return java.time.LocalDate.now().getYear();
-  }
-
-  /**
    * Download a specific FRED series for a date range.
    *
    * @param seriesId FRED series identifier
@@ -872,6 +824,9 @@ public class FredDataDownloader {
     String startDate = startYear + "-01-01";
     String endDate = endYear + "-12-31";
 
+    String relativePath = String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json",
+        seriesId, seriesId, startYear, endYear);
+
     // Check if we already have this data cached
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("type", "custom_fred_series");
@@ -879,21 +834,9 @@ public class FredDataDownloader {
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
-    String relativePath = String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json",
-        seriesId, seriesId, startYear, endYear);
-
-    if (cacheManifest.isCached("custom_fred_series", startYear, cacheParams)) {
+    // Check cache using base class helper
+    if (isCachedOrExists("custom_fred_series", startYear, cacheParams, relativePath)) {
       LOGGER.debug("Found cached FRED series {} data - skipping download", seriesId);
-      return;
-    }
-
-    // Check if file exists but not in manifest
-    File jsonFile = new File(cacheDir, relativePath);
-    if (jsonFile.exists()) {
-      LOGGER.debug("Found existing FRED series {} file - updating manifest", seriesId);
-      long fileSize = jsonFile.length();
-      cacheManifest.markCached("custom_fred_series", startYear, cacheParams, relativePath, fileSize);
-      cacheManifest.save(cacheDir);
       return;
     }
 
@@ -950,15 +893,9 @@ public class FredDataDownloader {
 
     String jsonContent = MAPPER.writeValueAsString(data);
 
-    // Save to cache
-    jsonFile.getParentFile().mkdirs();
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
-
-    // Mark as cached in manifest
-    cacheManifest.markCached("custom_fred_series", startYear, cacheParams, relativePath, jsonContent.length());
-    cacheManifest.save(cacheDir);
-
-    LOGGER.info("FRED series {} saved to: {} ({} observations)", seriesId, relativePath, observations.size());
+    // Save to cache using base class helper
+    saveToCache("custom_fred_series", startYear, cacheParams, relativePath, jsonContent);
+    LOGGER.info("Downloaded FRED series {}: {} observations", seriesId, observations.size());
   }
 
   /**
@@ -971,9 +908,24 @@ public class FredDataDownloader {
   public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields)
       throws IOException {
 
-    // Skip if target file already exists
-    if (storageProvider.exists(targetPath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetPath);
+    // For custom series, we need to track conversion per series_id, not just by path
+    // Extract year and dataType from target path for cache key
+    int year = extractYearFromPath(targetPath);
+    String fileName = targetPath.substring(targetPath.lastIndexOf('/') + 1);
+    String dataType = fileName.replace(".parquet", "");
+
+    // Extract ALL partition params from path (maturity, frequency, etc.)
+    Map<String, String> params = extractPartitionParams(targetPath);
+    // Add series_id to uniquely identify which series this conversion is for
+    params.put("series_id", seriesId);
+    // Add type from filename
+    params.put("type", dataType);
+
+    // DEBUG: Log the cache key being used
+    LOGGER.debug("Checking parquet conversion - dataType={}, year={}, params={}", dataType, year, params);
+
+    // Check if already converted
+    if (cacheManifest.isParquetConverted(dataType, year, params)) {
       return;
     }
 
@@ -1008,6 +960,10 @@ public class FredDataDownloader {
 
     LOGGER.info("Converted FRED series {} to parquet: {} ({} observations)",
         seriesId, targetPath, seriesObservations.size());
+
+    // Mark parquet conversion complete with series_id in params
+    cacheManifest.markParquetConverted(dataType, year, params, targetPath);
+    cacheManifest.save(cacheDir);
   }
 
   /**

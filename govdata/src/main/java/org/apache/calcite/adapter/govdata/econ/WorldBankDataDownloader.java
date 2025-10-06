@@ -50,15 +50,9 @@ import java.util.Map;
  *
  * <p>Uses the World Bank API which requires no authentication.
  */
-public class WorldBankDataDownloader {
+public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(WorldBankDataDownloader.class);
   private static final String WORLD_BANK_API_BASE = "https://api.worldbank.org/v2/";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
-
-  private final String cacheDir;
-  private final HttpClient httpClient;
-  private final CacheManifest cacheManifest;
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
 
   // Key economic indicators to download
   public static class Indicators {
@@ -89,12 +83,22 @@ public class WorldBankDataDownloader {
   }
 
   public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this.cacheDir = cacheDir;
-    this.storageProvider = storageProvider;
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
+    super(cacheDir, storageProvider);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return 0; // World Bank API has no strict rate limit
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 3;
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 2000; // 2 seconds
   }
 
   /**
@@ -497,13 +501,13 @@ public class WorldBankDataDownloader {
     Schema schema = SchemaBuilder.record("WorldIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("country_code")
-        .requiredString("country_name")
-        .requiredString("indicator_code")
-        .requiredString("indicator_name")
-        .requiredDouble("value")
-        .optionalString("unit")
-        .optionalString("scale")
+        .name("country_code").doc("ISO 3-letter country code (e.g., 'USA', 'CHN')").type().stringType().noDefault()
+        .name("country_name").doc("Full country name").type().stringType().noDefault()
+        .name("indicator_code").doc("World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)").type().stringType().noDefault()
+        .name("indicator_name").doc("Full description of the World Bank indicator").type().stringType().noDefault()
+        .name("value").doc("Indicator value for the given country and year").type().doubleType().noDefault()
+        .name("unit").doc("Unit of measurement (e.g., 'current US$', 'percent')").type().nullable().stringType().noDefault()
+        .name("scale").doc("Scale factor (e.g., 'Millions', 'Billions')").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -544,28 +548,12 @@ public class WorldBankDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Extract year and data type
-    int year = extractYearFromPath(targetFilePath);
-    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
-
-    // Check manifest first
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
+    // Check if already converted using base class helper
+    if (isParquetConverted(targetFilePath)) {
       return;
     }
 
     LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFilePath);
-
-    // Skip if target file already exists (defensive check)
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.info("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
-      return;
-    }
 
     // Directories are created automatically by StorageProvider when writing files
 
@@ -608,10 +596,8 @@ public class WorldBankDataDownloader {
 
     LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFilePath, indicators.size());
 
-    // Mark parquet conversion complete in manifest
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+    // Mark parquet conversion complete using base class helper
+    markParquetConverted(targetFilePath);
   }
 
   private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)
@@ -619,13 +605,13 @@ public class WorldBankDataDownloader {
     Schema schema = SchemaBuilder.record("WorldIndicator")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("country_code")
-        .requiredString("country_name")
-        .requiredString("indicator_code")
-        .requiredString("indicator_name")
-        .requiredDouble("value")
-        .optionalString("unit")
-        .optionalString("scale")
+        .name("country_code").doc("ISO 3-letter country code (e.g., 'USA', 'CHN')").type().stringType().noDefault()
+        .name("country_name").doc("Full country name").type().stringType().noDefault()
+        .name("indicator_code").doc("World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)").type().stringType().noDefault()
+        .name("indicator_name").doc("Full description of the World Bank indicator").type().stringType().noDefault()
+        .name("value").doc("Indicator value for the given country and year").type().doubleType().noDefault()
+        .name("unit").doc("Unit of measurement (e.g., 'current US$', 'percent')").type().nullable().stringType().noDefault()
+        .name("scale").doc("Scale factor (e.g., 'Millions', 'Billions')").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -645,17 +631,4 @@ public class WorldBankDataDownloader {
     storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
   }
 
-  /**
-   * Extract year from Hive-partitioned path.
-   */
-  private int extractYearFromPath(String path) {
-    // Match pattern "year=YYYY"
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    // Fallback to current year if pattern not found
-    return java.time.LocalDate.now().getYear();
-  }
 }

@@ -48,19 +48,13 @@ import java.util.Map;
  * Downloads and converts BLS economic data to Parquet format.
  * Supports employment statistics, inflation metrics, wage growth, and regional employment data.
  */
-public class BlsDataDownloader {
+public class BlsDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BlsDataDownloader.class);
   private static final String BLS_API_BASE = "https://api.bls.gov/publicAPI/v2/";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final String apiKey;
-  private final String cacheDir;
-  private final HttpClient httpClient;
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
-  private final CacheManifest cacheManifest;
 
   // Rate limiting: BLS enforces requests per second limit
-  private long lastRequestTime = 0;
   private static final long MIN_REQUEST_INTERVAL_MS = 1100; // 1.1 seconds between requests (safe margin)
   private static final int MAX_RETRIES = 3;
   private static final long RETRY_DELAY_MS = 2000; // 2 seconds initial retry delay
@@ -88,13 +82,23 @@ public class BlsDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    super(cacheDir, storageProvider);
     this.apiKey = apiKey;
-    this.cacheDir = cacheDir;
-    this.storageProvider = storageProvider;
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return MIN_REQUEST_INTERVAL_MS;
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return MAX_RETRIES;
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return RETRY_DELAY_MS;
   }
 
   // Removed - using storageProvider.writeParquetFile directly now
@@ -216,28 +220,15 @@ public class BlsDataDownloader {
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
       String outputDirPath = "source=econ/type=indicators/year=" + year;
-      // Directories are created automatically by StorageProvider when writing files
+      String jsonFilePath = outputDirPath + "/employment_statistics.json";
 
-      // Check cache manifest first
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "employment_statistics");
       cacheParams.put("year", String.valueOf(year));
 
-      String jsonFilePath = outputDirPath + "/employment_statistics.json";
-
-      if (cacheManifest.isCached("employment_statistics", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("employment_statistics", year, cacheParams, jsonFilePath)) {
         LOGGER.info("Found cached employment statistics for year {} - skipping download", year);
-        lastFile = new File(jsonFilePath);
-        continue;
-      }
-
-      // Check if file exists but not in manifest - update manifest
-      File jsonFile = new File(cacheDir, jsonFilePath);
-      if (jsonFile.exists()) {
-        LOGGER.info("Found existing employment statistics file for year {} - updating manifest", year);
-        long fileSize = jsonFile.length();
-        cacheManifest.markCached("employment_statistics", year, cacheParams, jsonFilePath, fileSize);
-        cacheManifest.save(cacheDir);
         lastFile = new File(jsonFilePath);
         continue;
       }
@@ -250,17 +241,8 @@ public class BlsDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to cache directory
-      // Save raw JSON data to local cache directory
-      jsonFile = new File(cacheDir, jsonFilePath);
-      jsonFile.getParentFile().mkdirs();
-      Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("employment_statistics", year, cacheParams, jsonFilePath, rawJson.length());
-      cacheManifest.save(cacheDir);
-
-      LOGGER.info("Employment statistics raw data saved for year {}: {}", year, jsonFilePath);
+      // Save to cache using base class helper
+      saveToCache("employment_statistics", year, cacheParams, jsonFilePath, rawJson);
       lastFile = new File(jsonFilePath);
     }
 
@@ -282,28 +264,15 @@ public class BlsDataDownloader {
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
       String outputDirPath = "source=econ/type=indicators/year=" + year;
-      // Directories are created automatically by StorageProvider when writing files
+      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
 
-      // Check cache manifest first
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "inflation_metrics");
       cacheParams.put("year", String.valueOf(year));
 
-      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
-
-      if (cacheManifest.isCached("inflation_metrics", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("inflation_metrics", year, cacheParams, jsonFilePath)) {
         LOGGER.info("Found cached inflation metrics for year {} - skipping download", year);
-        lastFile = new File(jsonFilePath);
-        continue;
-      }
-
-      // Check if file exists but not in manifest - update manifest
-      File jsonFile = new File(cacheDir, jsonFilePath);
-      if (jsonFile.exists()) {
-        LOGGER.info("Found existing inflation metrics file for year {} - updating manifest", year);
-        long fileSize = jsonFile.length();
-        cacheManifest.markCached("inflation_metrics", year, cacheParams, jsonFilePath, fileSize);
-        cacheManifest.save(cacheDir);
         lastFile = new File(jsonFilePath);
         continue;
       }
@@ -315,17 +284,8 @@ public class BlsDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to cache directory
-      // Save raw JSON data to local cache directory
-      jsonFile = new File(cacheDir, jsonFilePath);
-      jsonFile.getParentFile().mkdirs();
-      Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("inflation_metrics", year, cacheParams, jsonFilePath, rawJson.length());
-      cacheManifest.save(cacheDir);
-
-      LOGGER.info("Inflation metrics raw data saved for year {}: {}", year, jsonFilePath);
+      // Save to cache using base class helper
+      saveToCache("inflation_metrics", year, cacheParams, jsonFilePath, rawJson);
       lastFile = new File(jsonFilePath);
     }
 
@@ -346,14 +306,14 @@ public class BlsDataDownloader {
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      // Check cache first
+      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "wage_growth");
       cacheParams.put("year", String.valueOf(year));
 
-      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
-
-      if (cacheManifest.isCached("wage_growth", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached wage growth data for year {} - skipping download", year);
         lastFile = new File(relativePath);
         continue;
@@ -365,17 +325,8 @@ public class BlsDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, relativePath);
-      jsonFile.getParentFile().mkdirs();
-      Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-
-      LOGGER.info("Wage growth raw data saved for year {}: {}", year, relativePath);
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("wage_growth", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(cacheDir);
-
+      // Save to cache using base class helper
+      saveToCache("wage_growth", year, cacheParams, relativePath, rawJson);
       lastFile = new File(relativePath);
     }
 
@@ -396,14 +347,14 @@ public class BlsDataDownloader {
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      // Check cache first
+      String relativePath = "source=econ/type=regional/year=" + year + "/regional_employment.json";
+
       Map<String, String> cacheParams = new HashMap<>();
       cacheParams.put("type", "regional_employment");
       cacheParams.put("year", String.valueOf(year));
 
-      String relativePath = "source=econ/type=regional/year=" + year + "/regional_employment.json";
-
-      if (cacheManifest.isCached("regional_employment", year, cacheParams)) {
+      // Check cache using base class helper
+      if (isCachedOrExists("regional_employment", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached regional employment data for year {} - skipping download", year);
         lastFile = new File(relativePath);
         continue;
@@ -417,17 +368,8 @@ public class BlsDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save raw JSON data to local cache directory
-      File jsonFile = new File(cacheDir, relativePath);
-      jsonFile.getParentFile().mkdirs();
-      Files.write(jsonFile.toPath(), rawJson.getBytes(StandardCharsets.UTF_8));
-
-      LOGGER.info("Regional employment raw data saved for year {}: {}", year, relativePath);
-
-      // Mark as cached in manifest
-      cacheManifest.markCached("regional_employment", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(cacheDir);
-
+      // Save to cache using base class helper
+      saveToCache("regional_employment", year, cacheParams, relativePath, rawJson);
       lastFile = new File(relativePath);
     }
 
@@ -596,16 +538,16 @@ public class BlsDataDownloader {
     Schema schema = SchemaBuilder.record("employment_statistics")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredString("series_id")
-        .requiredString("series_name")
-        .requiredDouble("value")
-        .optionalString("unit")
-        .optionalBoolean("seasonally_adjusted")
-        .optionalDouble("percent_change_month")
-        .optionalDouble("percent_change_year")
-        .optionalString("category")
-        .optionalString("subcategory")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier (e.g., 'LNS14000000' for unemployment rate)").type().stringType().noDefault()
+        .name("series_name").doc("Descriptive name of employment series").type().stringType().noDefault()
+        .name("value").doc("Employment statistic value (e.g., unemployment rate as percentage)").type().doubleType().noDefault()
+        .name("unit").doc("Unit of measurement (e.g., 'Percent', 'Thousands of Persons')").type().nullable().stringType().noDefault()
+        .name("seasonally_adjusted").doc("Whether data is seasonally adjusted").type().nullable().booleanType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .name("category").doc("Employment category (e.g., 'Labor Force', 'Employment Level')").type().nullable().stringType().noDefault()
+        .name("subcategory").doc("Employment subcategory for detailed classification").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -637,16 +579,16 @@ public class BlsDataDownloader {
     Schema schema = SchemaBuilder.record("inflation_metrics")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredString("index_type")
-        .requiredString("item_code")
-        .requiredString("area_code")
-        .requiredString("item_name")
-        .requiredDouble("index_value")
-        .optionalDouble("percent_change_month")
-        .optionalDouble("percent_change_year")
-        .optionalString("area_name")
-        .optionalBoolean("seasonally_adjusted")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("index_type").doc("Price index type (CPI=Consumer Price Index, PPI=Producer Price Index)").type().stringType().noDefault()
+        .name("item_code").doc("BLS item code identifying specific goods/services category").type().stringType().noDefault()
+        .name("area_code").doc("BLS area code (e.g., 'U'=U.S. city average, regional codes)").type().stringType().noDefault()
+        .name("item_name").doc("Description of goods/services category (e.g., 'Food', 'Energy', 'All items')").type().stringType().noDefault()
+        .name("index_value").doc("Price index value (typically base period = 100)").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change in price index").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change in price index").type().nullable().doubleType().noDefault()
+        .name("area_name").doc("Geographic area name (e.g., 'U.S. City Average', 'Los Angeles')").type().nullable().stringType().noDefault()
+        .name("seasonally_adjusted").doc("Whether price index is seasonally adjusted").type().nullable().booleanType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -679,16 +621,16 @@ public class BlsDataDownloader {
     Schema schema = SchemaBuilder.record("wage_growth")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredString("series_id")
-        .requiredString("industry_code")
-        .requiredString("occupation_code")
-        .optionalString("industry_name")
-        .optionalString("occupation_name")
-        .optionalDouble("average_hourly_earnings")
-        .optionalDouble("average_weekly_earnings")
-        .optionalDouble("employment_cost_index")
-        .optionalDouble("percent_change_year")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier for wage/earnings data").type().stringType().noDefault()
+        .name("industry_code").doc("NAICS industry code (e.g., '00'=All industries)").type().stringType().noDefault()
+        .name("occupation_code").doc("SOC occupation code (e.g., '000000'=All occupations)").type().stringType().noDefault()
+        .name("industry_name").doc("Industry name or sector description").type().nullable().stringType().noDefault()
+        .name("occupation_name").doc("Occupation title or job category").type().nullable().stringType().noDefault()
+        .name("average_hourly_earnings").doc("Average hourly earnings in dollars").type().nullable().doubleType().noDefault()
+        .name("average_weekly_earnings").doc("Average weekly earnings in dollars").type().nullable().doubleType().noDefault()
+        .name("employment_cost_index").doc("Employment Cost Index measuring compensation costs").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change in wages/earnings").type().nullable().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -726,16 +668,16 @@ public class BlsDataDownloader {
     Schema schema = SchemaBuilder.record("regional_employment")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("date")
-        .requiredString("area_code")
-        .requiredString("area_name")
-        .requiredString("area_type")
-        .optionalString("state_code")
-        .optionalDouble("unemployment_rate")
-        .optionalLong("employment_level")
-        .optionalLong("labor_force")
-        .optionalDouble("participation_rate")
-        .optionalDouble("employment_population_ratio")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("area_code").doc("BLS area code identifying geographic region").type().stringType().noDefault()
+        .name("area_name").doc("Geographic area name (state, metropolitan area, or county)").type().stringType().noDefault()
+        .name("area_type").doc("Type of geographic area (state, metro, county)").type().stringType().noDefault()
+        .name("state_code").doc("2-letter state postal code (e.g., 'CA', 'NY')").type().nullable().stringType().noDefault()
+        .name("unemployment_rate").doc("Unemployment rate as percentage of labor force").type().nullable().doubleType().noDefault()
+        .name("employment_level").doc("Total employed persons in thousands").type().nullable().longType().noDefault()
+        .name("labor_force").doc("Total civilian labor force in thousands").type().nullable().longType().noDefault()
+        .name("participation_rate").doc("Labor force participation rate as percentage of population").type().nullable().doubleType().noDefault()
+        .name("employment_population_ratio").doc("Employment-to-population ratio as percentage").type().nullable().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -913,31 +855,15 @@ public class BlsDataDownloader {
    * Converts cached BLS employment data to Parquet format.
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Extract year from path (format: "type=indicators/year=2020/employment_statistics.parquet")
-    int year = extractYearFromPath(targetFilePath);
-
-    // Extract data type from filename
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Check manifest first
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
-      return;
-    }
-
-    // Check if target file already exists (defensive check)
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
+    // Check if already converted using base class helper
+    if (isParquetConverted(targetFilePath)) {
       return;
     }
 
     LOGGER.debug("Converting BLS data from {} to parquet: {}", sourceDir, targetFilePath);
+
+    // Extract data type from filename
+    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
 
     // Read employment statistics JSON files and convert to employment_statistics.parquet
     if (fileName.equals("employment_statistics.parquet")) {
@@ -950,24 +876,8 @@ public class BlsDataDownloader {
       convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
     }
 
-    // Mark parquet conversion complete in manifest
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
-  }
-
-  /**
-   * Extract year from Hive-partitioned path.
-   */
-  private int extractYearFromPath(String path) {
-    // Match pattern "year=YYYY"
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    // Fallback to current year if pattern not found
-    return LocalDate.now().getYear();
+    // Mark parquet conversion complete using base class helper
+    markParquetConverted(targetFilePath);
   }
 
   private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {
@@ -1148,14 +1058,14 @@ public class BlsDataDownloader {
 
     Schema schema = SchemaBuilder.record("ConsumerPriceIndex")
         .fields()
-        .requiredString("date")
-        .requiredString("index_type")
-        .requiredString("item_code")
-        .requiredString("area_code")
-        .requiredDouble("value")
-        .optionalDouble("percent_change_month")
-        .optionalDouble("percent_change_year")
-        .requiredString("seasonally_adjusted")
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("index_type").doc("CPI series type (CPI-U=Urban Consumers, CPI-W=Urban Wage Earners)").type().stringType().noDefault()
+        .name("item_code").doc("BLS item code for goods/services category").type().stringType().noDefault()
+        .name("area_code").doc("BLS area code for geographic region").type().stringType().noDefault()
+        .name("value").doc("Consumer price index value (base period = 100)").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change (inflation rate)").type().nullable().doubleType().noDefault()
+        .name("seasonally_adjusted").doc("Seasonal adjustment status ('SA'=Seasonally Adjusted, 'NSA'=Not Seasonally Adjusted)").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();

@@ -52,17 +52,12 @@ import java.util.Map;
  *
  * <p>Requires a BEA API key from https://apps.bea.gov/api/signup/
  */
-public class BeaDataDownloader {
+public class BeaDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaDataDownloader.class);
   private static final String BEA_API_BASE = "https://apps.bea.gov/api/data";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private final String cacheDir;
   private final String parquetDir;
   private final String apiKey;
-  private final HttpClient httpClient;
-  private final StorageProvider storageProvider;
-  private final CacheManifest cacheManifest;
 
   // BEA dataset names - comprehensive coverage of all available datasets
   public static class Datasets {
@@ -117,26 +112,31 @@ public class BeaDataDownloader {
   }
 
   public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider) {
-    this.cacheDir = cacheDir;
+    super(cacheDir, storageProvider);
     this.parquetDir = parquetDir;
     this.apiKey = apiKey;
-    this.storageProvider = storageProvider;
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
   public BeaDataDownloader(String cacheDir, String apiKey) {
-    this.cacheDir = cacheDir;
+    super(cacheDir, org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir));
     this.parquetDir = cacheDir; // For compatibility, use same dir
     this.apiKey = apiKey;
-    this.storageProvider = org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir);
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
-    this.cacheManifest = CacheManifest.load(cacheDir);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return 0; // BEA API has no strict rate limit
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 3;
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 2000; // 2 seconds
   }
 
   /**
@@ -1119,17 +1119,17 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("TradeStatistic")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("table_id").type().stringType().noDefault()
-        .name("line_number").type().intType().noDefault()
-        .name("line_description").type().stringType().noDefault()
-        .name("series_code").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("trade_type").type().stringType().noDefault()
-        .name("category").type().stringType().noDefault()
-        .name("trade_balance").type().doubleType().noDefault()
+        .name("table_id").doc("BEA table identifier for trade statistics").type().stringType().noDefault()
+        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
+        .name("line_description").doc("Description of the trade statistic line item").type().stringType().noDefault()
+        .name("series_code").doc("BEA series code for this trade statistic").type().stringType().noDefault()
+        .name("year").doc("Year of the trade observation").type().intType().noDefault()
+        .name("value").doc("Trade value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("trade_type").doc("Type of trade: 'Exports', 'Imports', or 'Other'").type().stringType().noDefault()
+        .name("category").doc("Trade category: 'Goods', 'Services', or 'Total'").type().stringType().noDefault()
+        .name("trade_balance").doc("Calculated trade balance (exports minus imports) in millions of dollars").type().doubleType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -1433,15 +1433,15 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("ItaData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("indicator").type().stringType().noDefault()
-        .name("indicator_description").type().stringType().noDefault()
-        .name("area_or_country").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("time_series_id").type().stringType().noDefault()
-        .name("time_series_description").type().stringType().noDefault()
+        .name("indicator").doc("BEA indicator code for international transactions").type().stringType().noDefault()
+        .name("indicator_description").doc("Full description of the ITA indicator").type().stringType().noDefault()
+        .name("area_or_country").doc("Geographic area or country name for the transaction").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("year").doc("Year of the ITA observation").type().intType().noDefault()
+        .name("value").doc("Transaction value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("time_series_id").doc("Unique identifier for the time series").type().stringType().noDefault()
+        .name("time_series_description").doc("Description of the time series").type().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecords
@@ -1796,15 +1796,15 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("IndustryGdpData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("table_id").type().intType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("quarter").type().stringType().noDefault()
-        .name("industry_code").type().stringType().noDefault()
-        .name("industry_description").type().stringType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("note_ref").type().nullable().stringType().noDefault()
+        .name("table_id").doc("BEA table identifier for industry GDP data").type().intType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("year").doc("Year of the observation").type().intType().noDefault()
+        .name("quarter").doc("Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data").type().stringType().noDefault()
+        .name("industry_code").doc("NAICS industry code").type().stringType().noDefault()
+        .name("industry_description").doc("Full description of the industry").type().stringType().noDefault()
+        .name("value").doc("GDP value for the industry in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("note_ref").doc("Reference to footnotes or data quality notes").type().nullable().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecords
@@ -1833,14 +1833,14 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("GdpComponent")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("table_id")
-        .requiredInt("line_number")
-        .requiredString("line_description")
-        .requiredString("series_code")
-        .requiredInt("year")
-        .requiredDouble("value")
-        .requiredString("units")
-        .requiredString("frequency")
+        .name("table_id").doc("BEA table identifier for GDP components").type().stringType().noDefault()
+        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
+        .name("line_description").doc("Description of the GDP component").type().stringType().noDefault()
+        .name("series_code").doc("BEA series code for this component").type().stringType().noDefault()
+        .name("year").doc("Year of the observation").type().intType().noDefault()
+        .name("value").doc("Component value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecords
@@ -1869,14 +1869,14 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("RegionalIncome")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("geo_fips").type().stringType().noDefault()
-        .name("geo_name").type().stringType().noDefault()
-        .name("metric").type().nullable().stringType().noDefault()
-        .name("line_code").type().stringType().noDefault()
-        .name("line_description").type().stringType().noDefault()
+        .name("geo_fips").doc("FIPS code for the geographic area (state or county)").type().stringType().noDefault()
+        .name("geo_name").doc("Name of the geographic area").type().stringType().noDefault()
+        .name("metric").doc("Income metric type (e.g., 'Personal Income', 'Per Capita Income')").type().nullable().stringType().noDefault()
+        .name("line_code").doc("BEA line code for the income statistic").type().stringType().noDefault()
+        .name("line_description").doc("Description of the income line item").type().stringType().noDefault()
         // year removed - it's a partition key from directory structure
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().nullable().stringType().noDefault()
+        .name("value").doc("Income value in thousands of dollars or dollars (depending on metric)").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Thousands of dollars', 'Dollars')").type().nullable().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -2325,11 +2325,11 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("StateGdp")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("geo_fips").type().stringType().noDefault()
-        .name("geo_name").type().stringType().noDefault()
-        .name("metric").type().stringType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
+        .name("geo_fips").doc("State FIPS code (2 digits)").type().stringType().noDefault()
+        .name("geo_name").doc("State name").type().stringType().noDefault()
+        .name("metric").doc("GDP metric or component description").type().stringType().noDefault()
+        .name("value").doc("GDP value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -2491,14 +2491,14 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("GdpComponent")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .requiredString("table_id")
-        .requiredInt("line_number")
-        .requiredString("line_description")
-        .requiredString("series_code")
-        .requiredInt("year")
-        .requiredDouble("value")
-        .requiredString("units")
-        .requiredString("frequency")
+        .name("table_id").doc("BEA table identifier for GDP components").type().stringType().noDefault()
+        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
+        .name("line_description").doc("Description of the GDP component").type().stringType().noDefault()
+        .name("series_code").doc("BEA series code for this component").type().stringType().noDefault()
+        .name("year").doc("Year of the observation").type().intType().noDefault()
+        .name("value").doc("Component value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -2611,16 +2611,16 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("TradeStatistics")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("table_id").type().stringType().noDefault()
-        .name("line_number").type().intType().noDefault()
-        .name("line_description").type().stringType().noDefault()
-        .name("series_code").type().stringType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("trade_type").type().stringType().noDefault()
-        .name("category").type().stringType().noDefault()
-        .name("trade_balance").type().doubleType().noDefault()
+        .name("table_id").doc("BEA table identifier for trade statistics").type().stringType().noDefault()
+        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
+        .name("line_description").doc("Description of the trade statistic line item").type().stringType().noDefault()
+        .name("series_code").doc("BEA series code for this trade statistic").type().stringType().noDefault()
+        .name("value").doc("Trade value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("trade_type").doc("Type of trade: 'Exports', 'Imports', or 'Other'").type().stringType().noDefault()
+        .name("category").doc("Trade category: 'Goods', 'Services', or 'Total'").type().stringType().noDefault()
+        .name("trade_balance").doc("Calculated trade balance (exports minus imports) in millions of dollars").type().doubleType().noDefault()
         .endRecord();
 
     // Convert to GenericRecord list
@@ -2729,15 +2729,15 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("ItaData")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("indicator").type().stringType().noDefault()
-        .name("indicator_description").type().stringType().noDefault()
-        .name("area_or_country").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("year").type().intType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("time_series_id").type().stringType().noDefault()
-        .name("time_series_description").type().stringType().noDefault()
+        .name("indicator").doc("BEA indicator code for international transactions").type().stringType().noDefault()
+        .name("indicator_description").doc("Full description of the ITA indicator").type().stringType().noDefault()
+        .name("area_or_country").doc("Geographic area or country name for the transaction").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("year").doc("Year of the ITA observation").type().intType().noDefault()
+        .name("value").doc("Transaction value in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("time_series_id").doc("Unique identifier for the time series").type().stringType().noDefault()
+        .name("time_series_description").doc("Description of the time series").type().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecord list
@@ -2849,14 +2849,14 @@ public class BeaDataDownloader {
     Schema schema = SchemaBuilder.record("IndustryGdp")
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
-        .name("table_id").type().stringType().noDefault()
-        .name("quarter").type().stringType().noDefault()
-        .name("industry_code").type().stringType().noDefault()
-        .name("industry_description").type().stringType().noDefault()
-        .name("value").type().doubleType().noDefault()
-        .name("units").type().stringType().noDefault()
-        .name("frequency").type().stringType().noDefault()
-        .name("note_ref").type().stringType().noDefault()
+        .name("table_id").doc("BEA table identifier for industry GDP data").type().stringType().noDefault()
+        .name("quarter").doc("Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data").type().stringType().noDefault()
+        .name("industry_code").doc("NAICS industry code").type().stringType().noDefault()
+        .name("industry_description").doc("Full description of the industry").type().stringType().noDefault()
+        .name("value").doc("GDP value for the industry in millions of dollars").type().doubleType().noDefault()
+        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
+        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
+        .name("note_ref").doc("Reference to footnotes or data quality notes").type().stringType().noDefault()
         .endRecord();
 
     // Convert to GenericRecords
@@ -2938,12 +2938,12 @@ public class BeaDataDownloader {
 
     Schema schema = SchemaBuilder.record("GdpStatistics")
         .fields()
-        .requiredInt("year")
-        .optionalInt("quarter")
-        .requiredString("metric")
-        .requiredDouble("value")
-        .optionalDouble("percent_change")
-        .requiredString("seasonally_adjusted")
+        .name("year").doc("Year of the GDP observation").type().intType().noDefault()
+        .name("quarter").doc("Quarter number (1-4) for quarterly data, null for annual data").type().nullable().intType().noDefault()
+        .name("metric").doc("GDP metric name (e.g., 'Nominal GDP', 'Real GDP', 'Personal Consumption')").type().stringType().noDefault()
+        .name("value").doc("GDP value in millions of dollars").type().doubleType().noDefault()
+        .name("percent_change").doc("Percent change from previous period").type().nullable().doubleType().noDefault()
+        .name("seasonally_adjusted").doc("Whether the data is seasonally adjusted ('Yes' or 'No')").type().stringType().noDefault()
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
@@ -3008,55 +3008,20 @@ public class BeaDataDownloader {
   }
 
   /**
-   * Extract year from Hive-partitioned path.
-   */
-  private int extractYearFromPath(String path) {
-    // Match pattern "year=YYYY"
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    // Fallback to current year if pattern not found
-    return LocalDate.now().getYear();
-  }
-
-  /**
-   * Check if parquet conversion should be skipped (already converted per manifest or file exists).
-   * Updates manifest if file exists but isn't tracked.
+   * Check if parquet conversion should be skipped (already converted per manifest).
+   * Uses base class helper to check manifest only (no redundant storage checks).
    *
    * @return true if conversion should be skipped, false if conversion should proceed
    */
-  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) throws IOException {
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-
-    // Check manifest first
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
-      return true;
-    }
-
-    // Defensive check if file exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir);
-      return true;
-    }
-
-    return false;
+  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) {
+    return isParquetConverted(targetFilePath);
   }
 
   /**
    * Mark parquet conversion as complete in the manifest.
+   * Uses base class helper.
    */
   private void markParquetConversionComplete(String targetFilePath, int year, String dataType) {
-    Map<String, String> params = new HashMap<>();
-    params.put("type", dataType);
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-    LOGGER.debug("Marked parquet conversion complete in manifest: {}", targetFilePath);
+    markParquetConverted(targetFilePath);
   }
 }
