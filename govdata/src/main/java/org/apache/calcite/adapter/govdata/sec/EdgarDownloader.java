@@ -162,11 +162,18 @@ public class EdgarDownloader {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
 
-    // Add conditional GET header if we have a cached ETag
+    // Add conditional GET header if we have cached metadata
     String cachedETag = cacheManifest.getETag(cik);
     if (cachedETag != null && !cachedETag.isEmpty()) {
-      conn.setRequestProperty("If-None-Match", cachedETag);
-      LOGGER.debug("Using cached ETag for conditional GET: {}", cachedETag);
+      // Check if it's a Last-Modified value (prefixed with "lm:")
+      if (cachedETag.startsWith("lm:")) {
+        String lastModified = cachedETag.substring(3);
+        conn.setRequestProperty("If-Modified-Since", lastModified);
+        LOGGER.debug("Using cached Last-Modified for conditional GET: {}", lastModified);
+      } else {
+        conn.setRequestProperty("If-None-Match", cachedETag);
+        LOGGER.debug("Using cached ETag for conditional GET: {}", cachedETag);
+      }
     }
 
     // Rate limiting - SEC allows 10 requests per second
@@ -193,6 +200,7 @@ public class EdgarDownloader {
     } else if (responseCode == 200) {
       // New or updated content - download and cache
       String newETag = conn.getHeaderField("ETag");
+      String lastModified = conn.getHeaderField("Last-Modified");
 
       try (BufferedReader reader =
           new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
@@ -213,11 +221,27 @@ public class EdgarDownloader {
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(cacheFile, submissions);
 
         long fileSize = cacheFile.length();
-        long refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+        // Prefer ETag, fallback to Last-Modified, final fallback to 24-hour TTL
+        // With ETag or Last-Modified: never expire (header tells us when to refresh)
+        // Without either: fall back to 24-hour TTL
+        String refreshReason;
+        long refreshAfter;
+        if (newETag != null) {
+          refreshAfter = Long.MAX_VALUE;
+          refreshReason = "etag_based";
+        } else if (lastModified != null) {
+          refreshAfter = Long.MAX_VALUE;
+          refreshReason = "last_modified_based";
+          // Store Last-Modified as "ETag" for conditional request
+          newETag = "lm:" + lastModified;
+        } else {
+          refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+          refreshReason = "daily_fallback_no_metadata";
+        }
 
-        // Update manifest with ETag
+        // Update manifest with ETag or Last-Modified
         cacheManifest.markCached(cik, cacheFile.getAbsolutePath(), newETag, fileSize,
-                                 refreshAfter, newETag != null ? "etag_based" : "daily_fallback");
+                                 refreshAfter, refreshReason);
 
         if (newETag != null) {
           LOGGER.info("Downloaded and cached submissions for CIK {} (size: {} bytes, ETag: {})",
