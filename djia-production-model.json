@@ -9,6 +9,7 @@
       "operand": {
         "dataSource": "econ",
         "executionEngine": "DUCKDB",
+        "ephemeralCache": false,
         "s3Config": {
           "region": "${AWS_REGION:us-east-1}",
           "accessKeyId": "${AWS_ACCESS_KEY_ID}",

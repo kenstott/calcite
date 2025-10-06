@@ -107,3 +107,4 @@ geo-credentials.properties
 
 # Production environment files (contain credentials)
 djia-production-env.sh
+govdata-production-cache/
