@@ -40,6 +40,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
 
 /**
@@ -58,7 +59,7 @@ public class DuckDBJdbcSchemaFactory {
    * Configures with Oracle Lex and unquoted casing to lower.
    */
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName, File directory) {
-    return create(parentSchema, schemaName, directory, false);
+    return create(parentSchema, schemaName, directory.getPath(), false, null);
   }
 
   /**
@@ -68,7 +69,17 @@ public class DuckDBJdbcSchemaFactory {
    */
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName,
                                  File directory, boolean recursive) {
-    return create(parentSchema, schemaName, directory, recursive, null);
+    return create(parentSchema, schemaName, directory.getPath(), recursive, null);
+  }
+
+  /**
+   * Creates a JDBC schema for DuckDB with files registered as views (String path version).
+   * Creates a single persistent connection that lives with the schema.
+   * Configures with Oracle Lex and unquoted casing to lower.
+   */
+  public static JdbcSchema create(SchemaPlus parentSchema, String schemaName,
+                                 String directoryPath, boolean recursive) {
+    return create(parentSchema, schemaName, directoryPath, recursive, null);
   }
 
   /**
@@ -78,11 +89,11 @@ public class DuckDBJdbcSchemaFactory {
    * @param fileSchema The FileSchema that handles conversions and refreshes (kept alive)
    */
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName,
-                                 File directory, boolean recursive,
+                                 String directoryPath, boolean recursive,
                                  org.apache.calcite.adapter.file.FileSchema fileSchema) {
     LOGGER.debug("[DuckDBJdbcSchemaFactory] create() called with fileSchema for schema: {}", schemaName);
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={})",
-                directory, schemaName, recursive, fileSchema != null);
+                directoryPath, schemaName, recursive, fileSchema != null);
 
     try {
       Class.forName("org.duckdb.DuckDBDriver");
@@ -117,6 +128,45 @@ public class DuckDBJdbcSchemaFactory {
 
       setupConn.createStatement().execute("SET scalar_subquery_error_on_multiple_rows = false");  // Allow Calcite's scalar subquery rewriting
 
+      // Install and load S3/HTTPFS extension for cloud storage support
+      try {
+        setupConn.createStatement().execute("INSTALL httpfs");
+        setupConn.createStatement().execute("LOAD httpfs");
+        LOGGER.info("DuckDB httpfs extension installed and loaded for S3 support");
+
+        // Configure S3 credentials - check operands first, then environment variables
+        String s3Region = null;
+        String s3AccessKey = null;
+        String s3SecretKey = null;
+
+        // Try to get from FileSchema's storage config first
+        if (fileSchema != null && fileSchema.getStorageConfig() != null) {
+          Map<String, Object> storageConfig = fileSchema.getStorageConfig();
+          s3Region = (String) storageConfig.get("awsRegion");
+          s3AccessKey = (String) storageConfig.get("awsAccessKeyId");
+          s3SecretKey = (String) storageConfig.get("awsSecretAccessKey");
+          if (s3AccessKey != null && s3SecretKey != null) {
+            LOGGER.info("Using S3 credentials from schema operands");
+          }
+        }
+
+        // Fall back to environment variables if not in operands
+        if (s3Region == null) s3Region = System.getenv("AWS_REGION");
+        if (s3AccessKey == null) s3AccessKey = System.getenv("AWS_ACCESS_KEY_ID");
+        if (s3SecretKey == null) s3SecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+
+        if (s3AccessKey != null && s3SecretKey != null) {
+          setupConn.createStatement().execute("SET s3_region='" + (s3Region != null ? s3Region : "us-east-1") + "'");
+          setupConn.createStatement().execute("SET s3_access_key_id='" + s3AccessKey + "'");
+          setupConn.createStatement().execute("SET s3_secret_access_key='" + s3SecretKey + "'");
+          LOGGER.info("DuckDB S3 credentials configured (region: {})", s3Region != null ? s3Region : "us-east-1");
+        } else {
+          LOGGER.info("No S3 credentials found in operands or environment - S3 access will use default AWS credentials");
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to configure S3 support: {} - S3 URIs will not work", e.getMessage());
+      }
+
       // Register similarity functions as DuckDB UDFs
       registerSimilarityFunctions(setupConn);
 
@@ -131,7 +181,7 @@ public class DuckDBJdbcSchemaFactory {
       // Register Parquet files as views
       // FileSchemaFactory has already run conversions via FileSchema
       // Pass the FileSchema to use its unique instance ID for cache lookup
-      registerFilesAsViews(setupConn, directory, recursive, duckdbSchema, schemaName, fileSchema);
+      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName, fileSchema);
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
@@ -188,7 +238,7 @@ public class DuckDBJdbcSchemaFactory {
 
       // DuckDB named databases use the database name as catalog and our created schema
       DuckDBJdbcSchema schema =
-                                                    new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema, directory, recursive, setupConn, fileSchema);
+                                                    new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema, directoryPath, recursive, setupConn, fileSchema);
 
       return schema;
 
@@ -351,7 +401,7 @@ public class DuckDBJdbcSchemaFactory {
    * Registers tables from the FileSchema's conversion registry as DuckDB views.
    * This ensures all tables discovered by FileSchema are available in DuckDB.
    */
-  private static void registerFilesAsViews(Connection conn, File directory, boolean recursive,
+  private static void registerFilesAsViews(Connection conn, String directoryPath, boolean recursive,
                                           String duckdbSchema, String calciteSchemaName,
                                           org.apache.calcite.adapter.file.FileSchema fileSchema)
       throws SQLException {
@@ -459,19 +509,30 @@ public class DuckDBJdbcSchemaFactory {
         } else if (key.endsWith(".json")) {
           // For JSON files, try to find corresponding Parquet cache file
           // Schema-aware cache uses pattern: baseDirectory/.parquet_cache/tableName.parquet
-          File baseDir = fileSchema.getBaseDirectory();
-          File parquetCacheDir = new File(baseDir, ".parquet_cache");
-          File parquetFile = new File(parquetCacheDir, tableName + ".parquet");
-          if (parquetFile.exists()) {
-            parquetPath = parquetFile.getAbsolutePath();
-            LOGGER.debug("Found Parquet cache for legacy JSON table '{}': {}", tableName, parquetFile.getName());
+          // Note: For S3 storage, baseDirectory will be s3:// URI, so File operations won't work
+          // This legacy path should only execute for local storage
+          String baseDirPath = fileSchema.getBaseDirectory().getPath();
+          String parquetCachePath = baseDirPath + "/.parquet_cache/" + tableName + ".parquet";
+
+          // Check if this might be cloud storage
+          if (baseDirPath.startsWith("s3://") || baseDirPath.startsWith("http")) {
+            // For cloud storage, assume the parquet file exists at the expected path
+            parquetPath = parquetCachePath;
+            LOGGER.debug("Using cloud storage Parquet cache path for legacy JSON table '{}': {}", tableName, parquetPath);
           } else {
-            // Try original ParquetConversionUtil location pattern
-            File conversionDir = ParquetConversionUtil.getParquetCacheDir(new File(key).getParentFile(), null, calciteSchemaName);
-            File altParquetFile = new File(conversionDir, tableName + ".parquet");
-            if (altParquetFile.exists()) {
-              parquetPath = altParquetFile.getAbsolutePath();
-              LOGGER.debug("Found Parquet cache for legacy JSON table '{}' in alt location: {}", tableName, altParquetFile.getName());
+            // Local storage - check existence
+            File parquetFile = new File(parquetCachePath);
+            if (parquetFile.exists()) {
+              parquetPath = parquetCachePath;
+              LOGGER.debug("Found Parquet cache for legacy JSON table '{}': {}", tableName, parquetFile.getName());
+            } else {
+              // Try original ParquetConversionUtil location pattern
+              File conversionDir = ParquetConversionUtil.getParquetCacheDir(new File(key).getParentFile(), null, calciteSchemaName);
+              File altParquetFile = new File(conversionDir, tableName + ".parquet");
+              if (altParquetFile.exists()) {
+                parquetPath = altParquetFile.getAbsolutePath();
+                LOGGER.debug("Found Parquet cache for legacy JSON table '{}' in alt location: {}", tableName, altParquetFile.getName());
+              }
             }
           }
         }
@@ -589,15 +650,10 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.info("Creating DuckDB view with glob pattern: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
             }
           } else {
-            // Single file
-            File parquetFile = new File(parquetPath);
-            if (parquetFile.exists()) {
-              sql =
-                                String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetFile.getAbsolutePath());
-              LOGGER.info("Creating DuckDB view: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetFile.getName());
-            } else {
-              LOGGER.warn("Parquet file does not exist for table '{}': {}", tableName, parquetPath);
-            }
+            // Single file - use parquetPath string directly (works for both local and S3)
+            sql =
+                              String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetPath);
+            LOGGER.info("Creating DuckDB view: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
           }
 
           if (sql != null) {
