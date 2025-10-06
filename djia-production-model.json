@@ -30,64 +30,18 @@
           "treasury_rates": {
             "tableName": "fred_treasury_rates",
             "series": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2", "DGS3", "DGS5", "DGS7", "DGS10", "DGS20", "DGS30"],
-            "partitionStrategy": "YEAR_MATURITY",
+            "partitionStrategy": "MANUAL",
             "partitionFields": ["year", "maturity"],
             "comment": "U.S. Treasury constant maturity rates for all standard maturities"
           },
           "employment_indicators": {
             "tableName": "fred_employment_indicators",
             "series": ["UNRATE", "PAYEMS", "CIVPART", "EMRATIO", "U6RATE"],
-            "partitionStrategy": "YEAR",
+            "partitionStrategy": "MANUAL",
             "partitionFields": ["year"],
             "comment": "Employment and labor force participation indicators"
           }
         }
-      }
-    },
-    {
-      "name": "geo",
-      "type": "custom",
-      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-      "operand": {
-        "dataSource": "geo",
-        "executionEngine": "DUCKDB",
-        "storageProvider": "S3",
-        "s3Config": {
-          "region": "${AWS_REGION:us-east-1}",
-          "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
-        },
-        "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
-        "startYear": 2010,
-        "endYear": 2024,
-        "autoDownload": true,
-        "enabledSources": ["tiger", "census"],
-        "censusApiKey": "${CENSUS_API_KEY}",
-        "geographicScope": "USA",
-        "includeStates": true,
-        "includeCounties": true,
-        "includeZipCodes": true
-      }
-    },
-    {
-      "name": "census",
-      "type": "custom",
-      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
-      "operand": {
-        "dataSource": "census",
-        "executionEngine": "DUCKDB",
-        "s3Config": {
-          "region": "${AWS_REGION:us-east-1}",
-          "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
-        },
-        "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
-        "startYear": 2010,
-        "endYear": 2024,
-        "autoDownload": true,
-        "censusApiKey": "${CENSUS_API_KEY}"
       }
     }
   ]
