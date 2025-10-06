@@ -38,7 +38,7 @@ import javax.sql.DataSource;
 public class DuckDBJdbcSchema extends JdbcSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBJdbcSchema.class);
 
-  private final File directory;
+  private final String directoryPath;
   private final boolean recursive;
   private final Connection persistentConnection;
   private final org.apache.calcite.adapter.file.FileSchema fileSchema; // Keep reference for refreshes
@@ -46,19 +46,19 @@ public class DuckDBJdbcSchema extends JdbcSchema {
 
   public DuckDBJdbcSchema(DataSource dataSource, SqlDialect dialect,
                          JdbcConvention convention, String catalog, String schema,
-                         File directory, boolean recursive, Connection persistentConnection,
+                         String directoryPath, boolean recursive, Connection persistentConnection,
                          org.apache.calcite.adapter.file.FileSchema fileSchema) {
     // DuckDB uses in-memory databases where catalog concept is irrelevant
     // Always pass null as catalog to ensure 2-part naming (schema.table)
     super(dataSource, dialect, convention, null, schema);
-    this.directory = directory;
+    this.directoryPath = directoryPath;
     this.recursive = recursive;
     this.persistentConnection = persistentConnection;
     this.fileSchema = fileSchema; // Keep FileSchema alive for refresh handling
     this.schemaName = schema; // Keep local copy
 
     LOGGER.info("Created DuckDB JDBC schema for directory: {} (recursive={}) with persistent connection",
-                directory, recursive);
+                directoryPath, recursive);
 
     // Register refresh listener to recreate views when parquet files are updated
     if (fileSchema != null) {
@@ -77,8 +77,11 @@ public class DuckDBJdbcSchema extends JdbcSchema {
    */
   private void recreateView(String tableName, File parquetFile) {
     try {
+      // Support both local file paths and S3 URIs
+      String parquetPath = parquetFile.getAbsolutePath();
+
       String viewSql =
-                                    String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", schemaName, tableName, parquetFile.getAbsolutePath());
+                                    String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", schemaName, tableName, parquetPath);
 
       LOGGER.info("Recreating DuckDB view after refresh: \"{}.{}\" -> {}",
                   schemaName, tableName, parquetFile.getName());

@@ -4376,6 +4376,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Get the storage configuration map.
+   * @return Storage configuration, or null if not configured
+   */
+  public Map<String, Object> getStorageConfig() {
+    return storageConfig;
+  }
+
+  /**
    * Writes content to storage (local filesystem or cloud storage like S3).
    * If a storage provider is configured, uses it; otherwise writes to local filesystem.
    * Creates parent directories as needed.

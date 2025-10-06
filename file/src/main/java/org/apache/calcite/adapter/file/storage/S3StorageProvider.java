@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.storage.cache.PersistentStorageCache;
 import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
@@ -33,6 +34,9 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -48,6 +52,7 @@ import java.util.List;
  * Storage provider implementation for Amazon S3.
  */
 public class S3StorageProvider implements StorageProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(S3StorageProvider.class);
 
   private final AmazonS3 s3Client;
 
@@ -79,7 +84,15 @@ public class S3StorageProvider implements StorageProvider {
   private S3StorageProvider(AmazonS3 s3Client, java.util.Map<String, Object> config) {
     // Build or use provided S3 client
     if (s3Client == null) {
-      AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
+      // Configure client with longer timeouts for large file uploads (e.g., 100MB+ parquet files)
+      // Socket timeout: 15 minutes (sufficient for large files over slow connections)
+      // Connection timeout: 60 seconds (DNS + TCP handshake)
+      ClientConfiguration clientConfig = new ClientConfiguration();
+      clientConfig.setSocketTimeout(15 * 60 * 1000); // 15 minutes
+      clientConfig.setConnectionTimeout(60 * 1000);   // 60 seconds
+
+      AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+          .withClientConfiguration(clientConfig);
 
       if (config != null) {
         // Use provided credentials if available, otherwise fall back to default chain
@@ -251,8 +264,11 @@ public class S3StorageProvider implements StorageProvider {
   @Override public boolean exists(String path) throws IOException {
     try {
       S3Uri s3Uri = parseS3Uri(path);
-      return s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
+      boolean exists = s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
+      LOGGER.debug("S3 exists check: {} -> {}", path, exists);
+      return exists;
     } catch (Exception e) {
+      LOGGER.warn("S3 exists check failed for {}: {} - assuming does not exist", path, e.getMessage());
       return false;
     }
   }
