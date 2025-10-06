@@ -55,5 +55,7 @@
     <logger name="org.apache.calcite.adapter.file.refresh.RefreshablePartitionedParquetTable" level="ERROR"/>
     <!-- Enable debug logging for BeaDataDownloader to see API responses -->
     <logger name="org.apache.calcite.adapter.govdata.econ.BeaDataDownloader" level="DEBUG"/>
+    <!-- Enable debug logging for S3 storage to see exists() checks -->
+    <logger name="org.apache.calcite.adapter.file.storage.S3StorageProvider" level="DEBUG"/>
   </Loggers>
 </Configuration>
