@@ -347,7 +347,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Get the operand configuration from EconSchemaFactory
-    return factory.buildOperand(operand, storageProvider);
+    Map<String, Object> builtOperand = factory.buildOperand(operand, storageProvider);
+
+    // Mark that this is ECON data so we can register the custom converter after FileSchema creation
+    builtOperand.put("_econData", true);
+
+    return builtOperand;
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation

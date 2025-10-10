@@ -212,6 +212,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private final List<org.apache.calcite.adapter.file.refresh.TableRefreshListener> refreshListeners =
       new ArrayList<>();
 
+  // Custom converters for domain-specific raw-to-parquet transformations
+  private final List<org.apache.calcite.adapter.file.converters.RawToParquetConverter> rawToParquetConverters =
+      new ArrayList<>();
+
   /**
    * Creates a file schema with all features including storage provider support.
    *
@@ -2381,10 +2385,37 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             File cacheDir =
                 ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
 
-            // Convert to Parquet
-            File parquetFile =
-                ParquetConversionUtil.convertToParquet(source, tableName,
-                    originalTable, cacheDir, parentSchema, name, tableNameCasing);
+            // Try custom converters first, then fall back to default conversion
+            File parquetFile = null;
+            boolean customConverted = false;
+            String targetParquetPath = new File(cacheDir, tableName + ".parquet").getAbsolutePath();
+
+            for (org.apache.calcite.adapter.file.converters.RawToParquetConverter converter : rawToParquetConverters) {
+              if (converter.canConvert(source.path(), conversionMetadata)) {
+                LOGGER.info("Using custom converter {} for file: {}",
+                    converter.getClass().getSimpleName(), source.path());
+                try {
+                  if (converter.convertToParquet(source.path(), targetParquetPath, storageProvider)) {
+                    parquetFile = new File(targetParquetPath);
+                    customConverted = true;
+                    LOGGER.info("Custom converter successfully converted {} to {}",
+                        source.path(), targetParquetPath);
+                    break;
+                  }
+                } catch (IOException conversionException) {
+                  LOGGER.warn("Custom converter {} failed for {}, trying next converter: {}",
+                      converter.getClass().getSimpleName(), source.path(), conversionException.getMessage());
+                  // Continue to next converter
+                }
+              }
+            }
+
+            // Fall back to default conversion if no custom converter handled it
+            if (!customConverted) {
+              LOGGER.debug("No custom converter handled {}, using default ParquetConversionUtil", source.path());
+              parquetFile = ParquetConversionUtil.convertToParquet(source, tableName,
+                  originalTable, cacheDir, parentSchema, name, tableNameCasing);
+            }
 
             // DuckDB engine will be handled same as PARQUET for initial setup
             // FileSchemaFactory will create the actual DuckDB JDBC adapter later
@@ -4568,6 +4599,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Error notifying refresh listener for table '{}': {}", tableName, e.getMessage(), e);
       }
     }
+  }
+
+  /**
+   * Registers a custom raw-to-parquet converter for domain-specific transformations.
+   * Custom converters are checked before FileSchema's default conversion.
+   *
+   * @param converter The converter to register
+   */
+  public void registerRawToParquetConverter(org.apache.calcite.adapter.file.converters.RawToParquetConverter converter) {
+    rawToParquetConverters.add(converter);
+    LOGGER.info("Registered raw-to-parquet converter: {}", converter.getClass().getName());
   }
 
   /**
