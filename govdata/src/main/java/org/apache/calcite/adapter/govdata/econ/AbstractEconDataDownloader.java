@@ -50,10 +50,10 @@ import java.util.Map;
  * 5. Mark as cached in manifest
  *
  * Conversion Flow:
- * 1. Extract year and dataType from target path
- * 2. Check manifest.isParquetConverted() → if true, skip conversion
- * 3. Convert JSON to Parquet via API-specific implementation
- * 4. Mark as converted in manifest
+ * 1. Check storageProvider.exists(targetPath) → if true, skip conversion
+ * 2. Convert JSON to Parquet via API-specific implementation
+ * 3. FileSchema's conversion registry automatically tracks the conversion
+ * 4. No need to mark as converted - FileSchema handles this
  * </pre>
  *
  * <h3>Subclass Responsibilities</h3>
@@ -97,9 +97,22 @@ public abstract class AbstractEconDataDownloader {
    * @param storageProvider Provider for parquet file operations
    */
   protected AbstractEconDataDownloader(String cacheDir, StorageProvider storageProvider) {
+    this(cacheDir, storageProvider, null);
+  }
+
+  /**
+   * Constructs base downloader with required infrastructure and shared cache manifest.
+   * This constructor should be used when multiple downloaders share the same manifest
+   * to avoid stale cache issues.
+   *
+   * @param cacheDir Local directory for caching raw JSON data
+   * @param storageProvider Provider for parquet file operations
+   * @param sharedManifest Shared cache manifest (if null, will load from disk)
+   */
+  protected AbstractEconDataDownloader(String cacheDir, StorageProvider storageProvider, CacheManifest sharedManifest) {
     this.cacheDir = cacheDir;
     this.storageProvider = storageProvider;
-    this.cacheManifest = CacheManifest.load(cacheDir);
+    this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(cacheDir);
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
@@ -185,50 +198,10 @@ public abstract class AbstractEconDataDownloader {
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
   }
 
-  /**
-   * Checks if parquet conversion is already done per manifest.
-   * Returns true if conversion should be skipped.
-   *
-   * @param targetFilePath Target parquet file path
-   * @return true if already converted (skip conversion), false if needs conversion
-   */
-  protected final boolean isParquetConverted(String targetFilePath) {
-    // Extract year and data type from target path
-    int year = extractYearFromPath(targetFilePath);
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Extract ALL Hive-style partition parameters from path (not just type)
-    Map<String, String> params = extractPartitionParams(targetFilePath);
-    params.put("type", dataType);  // Also include type for consistency
-
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
-      LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Marks parquet conversion as complete in manifest.
-   * This is the final step in the conversion flow pattern.
-   *
-   * @param targetFilePath Target parquet file path
-   */
-  protected final void markParquetConverted(String targetFilePath) {
-    // Extract year and data type from target path
-    int year = extractYearFromPath(targetFilePath);
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Extract ALL Hive-style partition parameters from path (not just type)
-    Map<String, String> params = extractPartitionParams(targetFilePath);
-    params.put("type", dataType);  // Also include type for consistency
-
-    cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-    cacheManifest.save(cacheDir);
-  }
+  // REMOVED: isParquetConverted() and markParquetConverted()
+  // Parquet conversion tracking is now handled by FileSchema's conversion registry.
+  // Downloaders should check file existence using storageProvider.exists() and
+  // let FileSchema's conversion metadata track the conversions centrally.
 
   /**
    * Enforces rate limiting by ensuring minimum interval between API requests.

@@ -218,6 +218,15 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Add constraint metadata to operand so FileSchemaFactory can pass it to FileSchema
     mutableOperand.put("tableConstraints", econConstraints);
 
+    // NOTE: We cannot create and register the RawToParquetConverter here because:
+    // 1. EconSchemaFactory only builds operand configuration, doesn't create FileSchema
+    // 2. The downloaders are created inside downloadEconData() which already finished
+    // 3. GovDataSchemaFactory creates the FileSchema after this method returns
+    //
+    // SOLUTION: GovDataSchemaFactory will need to create the converter and downloaders
+    // after schema creation, then cast FileSchema and call registerRawToParquetConverter()
+    // This requires downloaders to be recreated in GovDataSchemaFactory.buildEconOperand()
+
     return mutableOperand;
   }
 
@@ -441,7 +450,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadCustomFredSeries(String cacheDir, String parquetDir, String fredApiKey,
       StorageProvider storageProvider, List<String> customFredSeries, Map<String, Object> fredSeriesGroups,
-      String defaultPartitionStrategy, int startYear, int endYear, CacheManifest cacheManifest) throws IOException {
+      String defaultPartitionStrategy, int startYear, int endYear, CacheManifest sharedManifest) throws IOException {
 
     // Initialize partition analyzer
     FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
@@ -494,8 +503,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Download data for each series group
-    FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredApiKey, storageProvider, cacheManifest);
+    // Download data for each series group - use shared manifest passed from caller
+    FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredApiKey, storageProvider, sharedManifest);
 
     for (FredSeriesGroup group : parsedGroups) {
       LOGGER.debug("Processing FRED series group: {}", group.getGroupName());

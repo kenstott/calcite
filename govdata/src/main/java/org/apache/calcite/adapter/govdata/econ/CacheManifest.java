@@ -125,75 +125,10 @@ public class CacheManifest {
         dataType, year, fileSize, hoursUntilRefresh, refreshReason);
   }
 
-  /**
-   * Check if parquet conversion is complete for the given data.
-   */
-  public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
-    String key = buildKey(dataType, year, parameters);
-    LOGGER.debug("isParquetConverted - looking for key: {}", key);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null || entry.parquetPath == null || entry.parquetConvertedAt == 0) {
-      return false;
-    }
-
-    // Check if entry has expired based on TTL
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.debug("Parquet entry expired for {} year={} (age: {} hours, policy: {})",
-          dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      return false;
-    }
-
-    // Only check file existence for local paths (not S3)
-    // S3 paths are tracked in manifest without existence verification to avoid costly S3 API calls
-    if (!entry.parquetPath.startsWith("s3://")) {
-      File parquetFile = cacheDir != null ? new File(cacheDir, entry.parquetPath) : new File(entry.parquetPath);
-      if (!parquetFile.exists()) {
-        LOGGER.debug("Parquet file no longer exists: {}", entry.parquetPath);
-        entry.parquetPath = null;
-        entry.parquetConvertedAt = 0;
-        return false;
-      }
-    }
-
-    LOGGER.debug("Parquet already converted for {} year={}: {}", dataType, year, entry.parquetPath);
-    return true;
-  }
-
-  /**
-   * Mark parquet conversion as complete for cached data.
-   * Creates a stub cache entry if no raw download entry exists (handles legacy data).
-   */
-  public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
-    String key = buildKey(dataType, year, parameters);
-    LOGGER.debug("markParquetConverted - using key: {}", key);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      // Create stub entry for parquet-only data (no raw download tracked)
-      // This handles legacy data created before manifest tracking
-      LOGGER.debug("Creating stub cache entry for parquet-only data: {} year={} (key not found: {})", dataType, year, key);
-      entry = new CacheEntry();
-      entry.dataType = dataType;
-      entry.year = year;
-      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-      entry.filePath = null;  // No raw download
-      entry.fileSize = 0;
-      entry.cachedAt = System.currentTimeMillis();
-      entry.refreshAfter = Long.MAX_VALUE;  // Never refresh (historical data)
-      entry.refreshReason = "parquet_only";
-      entries.put(key, entry);
-    }
-
-    entry.parquetPath = parquetPath;
-    entry.parquetConvertedAt = System.currentTimeMillis();
-    lastUpdated = System.currentTimeMillis();
-
-    LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, parquetPath);
-  }
+  // REMOVED: isParquetConverted() and markParquetConverted()
+  // Parquet conversion tracking is now handled by FileSchema's conversion registry
+  // to avoid duplication and stale path issues. The cache manifest focuses solely
+  // on download management (tracking raw JSON data from APIs).
 
   /**
    * Mark data as unavailable (404 or similar) with TTL for retry.
@@ -392,6 +327,8 @@ public class CacheManifest {
 
   /**
    * Cache entry metadata with explicit refresh timestamp.
+   * Tracks raw JSON data downloads only - parquet conversion tracking
+   * is handled by FileSchema's conversion registry.
    */
   public static class CacheEntry {
     @JsonProperty("dataType")
@@ -418,11 +355,8 @@ public class CacheManifest {
     @JsonProperty("refreshReason")
     public String refreshReason;  // e.g., "current_year_daily", "historical_immutable", "market_close"
 
-    @JsonProperty("parquetPath")
-    public String parquetPath;  // Path to converted parquet file (null if not converted yet)
-
-    @JsonProperty("parquetConvertedAt")
-    public long parquetConvertedAt;  // Timestamp when parquet conversion completed (0 if not converted)
+    // REMOVED: parquetPath and parquetConvertedAt
+    // Parquet tracking is now handled by FileSchema's .conversions.json
   }
 
   /**

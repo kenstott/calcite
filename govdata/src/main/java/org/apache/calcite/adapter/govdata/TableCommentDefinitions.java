@@ -468,7 +468,6 @@ public final class TableCommentDefinitions {
     federalDebtCols.put("date", "Observation date");
     federalDebtCols.put("debt_type", "Type of debt measurement (Total, Held by Public, Intragovernmental)");
     federalDebtCols.put("amount_billions", "Debt amount in billions of dollars");
-    federalDebtCols.put("percent_of_gdp", "Debt as percentage of GDP (when available)");
     federalDebtCols.put("holder_category", "Category of debt holder");
     federalDebtCols.put("debt_held_by_public", "Portion held by public in billions");
     federalDebtCols.put("intragovernmental_holdings", "Portion held by government accounts in billions");
