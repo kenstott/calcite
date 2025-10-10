@@ -501,8 +501,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private int periodToMonth(String period) {
     if (period.startsWith("M")) {
       return Integer.parseInt(period.substring(1));
+    } else if (period.startsWith("Q")) {
+      // Convert quarterly periods to first month of quarter
+      // Q01 -> January (1), Q02 -> April (4), Q03 -> July (7), Q04 -> October (10)
+      int quarter = Integer.parseInt(period.substring(1));
+      return (quarter - 1) * 3 + 1;
     }
-    return 0; // Annual or other non-monthly data
+    return 1; // Default to January for annual or other data (avoid invalid month 0)
   }
 
   /**
