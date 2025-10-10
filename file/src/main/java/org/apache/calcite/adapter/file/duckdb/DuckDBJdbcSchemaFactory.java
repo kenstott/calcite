@@ -462,11 +462,12 @@ public class DuckDBJdbcSchemaFactory {
           // We'll handle this below with iceberg_scan
           parquetPath = null; // Will be handled specially
         } else {
-          // Determine the Parquet file path for non-Iceberg tables
-          if (record.getParquetCacheFile() != null) {
-            parquetPath = record.getParquetCacheFile();
-            LOGGER.debug("Table '{}' has cached Parquet file: {}", tableName, parquetPath);
-          } else if (record.getSourceFile() != null && record.getSourceFile().endsWith(".parquet")) {
+          // CRITICAL FIX: NEVER use getParquetCacheFile() - it may contain stale S3 paths
+          // Always use sourceFile or convertedFile which are computed fresh at runtime
+          // The parquetCacheFile field was incorrectly storing S3 paths that became stale
+          // when schema changes were made locally
+
+          if (record.getSourceFile() != null && record.getSourceFile().endsWith(".parquet")) {
             parquetPath = record.getSourceFile();
             LOGGER.debug("Table '{}' is native Parquet: {}", tableName, parquetPath);
           } else if (record.getConvertedFile() != null) {
@@ -480,6 +481,8 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.debug("Table '{}' has multiple Parquet files (glob pattern): {}", tableName, parquetPath);
             }
           }
+          // NOTE: Removed getParquetCacheFile() check - parquet paths must always be computed
+          // at runtime based on current storage configuration, never read from cache
         }
       } else {
         // Legacy record format - try to extract table name from file path
@@ -501,10 +504,9 @@ public class DuckDBJdbcSchemaFactory {
           }
         }
 
-        // For legacy records, check parquet cache file first
-        if (record.getParquetCacheFile() != null) {
-          parquetPath = record.getParquetCacheFile();
-        } else if (key.endsWith(".parquet")) {
+        // For legacy records, NEVER use getParquetCacheFile() - may contain stale paths
+        // Always compute paths fresh from sourceFile/convertedFile
+        if (key.endsWith(".parquet")) {
           parquetPath = key;
         } else if (key.endsWith(".json")) {
           // For JSON files, try to find corresponding Parquet cache file
