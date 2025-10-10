@@ -16,6 +16,9 @@
 # limitations under the License.
 #
 
+# Force Java 17 for Hadoop compatibility
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+
 # Load environment configuration
 source "$(dirname "$0")/djia-production-env.sh"
 
@@ -26,4 +29,8 @@ if [ ! -f "build/libs/sqllineClasspath.jar" ]; then
 fi
 
 # Run SqlLine using the classpath JAR
-exec java ${JAVA_OPTS} -Dlog4j.configurationFile=govdata/src/test/resources/log4j2.xml -jar build/libs/sqllineClasspath.jar
+exec java ${JAVA_OPTS} \
+  -Dlog4j.configurationFile=govdata/src/test/resources/log4j2.xml \
+  -jar build/libs/sqllineClasspath.jar \
+  -u "jdbc:calcite:model=/Users/kennethstott/calcite/djia-production-model.json;lex=ORACLE;unquotedCasing=TO_LOWER" \
+  -n "" -p ""

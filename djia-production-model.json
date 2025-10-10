@@ -10,13 +10,8 @@
         "dataSource": "econ",
         "executionEngine": "DUCKDB",
         "ephemeralCache": false,
-        "s3Config": {
-          "region": "${AWS_REGION:us-east-1}",
-          "accessKeyId": "${AWS_ACCESS_KEY_ID}",
-          "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
-        },
-        "cacheDirectory": "${GOVDATA_CACHE_DIR:/tmp/govdata-cache}",
-        "directory": "s3://${GOVDATA_S3_BUCKET}/${GOVDATA_PARQUET_DIR:/tmp/govdata-parquet}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
+        "directory": "${GOVDATA_PARQUET_DIR:govdata-parquet}",
         "startYear": 2010,
         "endYear": 2024,
         "autoDownload": true,
