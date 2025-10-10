@@ -65,7 +65,7 @@ public class JsonPathConverter {
         .writeValueAsString(extractedData);
 
     // Write to temporary file first for atomic operation
-    File tempFile = new File(outputFile.getAbsolutePath() + ".tmp." + Thread.currentThread().getId());
+    File tempFile = new File(outputFile.getAbsolutePath() + ".tmp." + Thread.currentThread().hashCode());
 
     try (FileWriter writer = new FileWriter(tempFile, StandardCharsets.UTF_8)) {
       writer.write(jsonOutput);
