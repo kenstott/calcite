@@ -83,7 +83,7 @@ public class ConcurrentSpilloverManager {
     Path spillDir = getSpilloverDirectory(connectionId);
     String fileName = prefix + "_" + System.currentTimeMillis()
         + "_"
-        + Thread.currentThread().threadId() + ".tmp";
+        + Thread.currentThread().getId() + ".tmp";
     return spillDir.resolve(fileName).toFile();
   }
 
