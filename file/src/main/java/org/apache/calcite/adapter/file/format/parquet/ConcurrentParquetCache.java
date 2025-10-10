@@ -124,7 +124,7 @@ public class ConcurrentParquetCache {
 
     // Perform the actual conversion to a temp file
     File tempFile = new File(parquetFile.getAbsolutePath() + ".tmp."
-        + Thread.currentThread().getId());
+        + Thread.currentThread().hashCode());
 
     try {
       callback.convert(tempFile);
