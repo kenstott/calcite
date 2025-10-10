@@ -430,7 +430,7 @@ public class HtmlToJsonConverter {
     LOGGER.info("JSON content to write (first 200 chars): " + jsonContent.substring(0, Math.min(200, jsonContent.length())));
 
     // Write to temporary file first for atomic operation
-    File tempFile = new File(jsonFile.getAbsolutePath() + ".tmp." + Thread.currentThread().threadId());
+    File tempFile = new File(jsonFile.getAbsolutePath() + ".tmp." + Thread.currentThread().getId());
 
     try (FileWriter writer = new FileWriter(tempFile, StandardCharsets.UTF_8)) {
       writer.write(jsonContent);

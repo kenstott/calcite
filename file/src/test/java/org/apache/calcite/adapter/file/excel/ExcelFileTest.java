@@ -53,7 +53,7 @@ public class ExcelFileTest {
   public void setUp() throws IOException {
     // Create manual temp directory with timestamp
     String tmpDir = System.getProperty("java.io.tmpdir");
-    tempDir = Path.of(tmpDir, "calcite_test_" + System.currentTimeMillis() + "_" + Thread.currentThread().threadId());
+    tempDir = Path.of(tmpDir, "calcite_test_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId());
     Files.createDirectories(tempDir);
   }
 
