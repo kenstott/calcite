@@ -885,34 +885,9 @@ public class FredCatalogDownloader {
         "/status=" + seriesStatus +
         "/fred_data_series_catalog.parquet";
 
-    // Check manifest first (avoids S3 check)
-    if (cacheManifest != null) {
-      Map<String, String> params = new HashMap<>();
-      params.put("type", "catalog");
-      params.put("category", categoryName);
-      params.put("frequency", frequency);
-      params.put("source", sourceName);
-      params.put("status", seriesStatus);
-      if (cacheManifest.isParquetConverted("fred_catalog", 0, params)) {
-        LOGGER.debug("Parquet file already converted per manifest for partition {}/{}/{}/{}, skipping conversion", categoryName, frequency, sourceName, seriesStatus);
-        return;
-      }
-    }
-
-    // Defensive check if file already exists (for backfill/legacy data)
+    // Check if parquet file already exists
     if (storageProvider.exists(parquetFile)) {
-      LOGGER.debug("Parquet file already exists for partition {}/{}/{}/{}, updating manifest", categoryName, frequency, sourceName, seriesStatus);
-      // Update manifest since file exists but wasn't tracked
-      if (cacheManifest != null) {
-        Map<String, String> params = new HashMap<>();
-        params.put("type", "catalog");
-        params.put("category", categoryName);
-        params.put("frequency", frequency);
-        params.put("source", sourceName);
-        params.put("status", seriesStatus);
-        cacheManifest.markParquetConverted("fred_catalog", 0, params, parquetFile);
-        cacheManifest.save(cacheDir);
-      }
+      LOGGER.debug("Parquet file already exists for partition {}/{}/{}/{}, skipping conversion", categoryName, frequency, sourceName, seriesStatus);
       return;
     }
 
@@ -959,17 +934,7 @@ public class FredCatalogDownloader {
     LOGGER.debug("Created Parquet file for partition {}/{}/{}/{}: {} series",
         categoryName, frequency, sourceName, seriesStatus, transformedSeries.size());
 
-    // Update manifest after successful conversion
-    if (cacheManifest != null) {
-      Map<String, String> params = new HashMap<>();
-      params.put("type", "catalog");
-      params.put("category", categoryName);
-      params.put("frequency", frequency);
-      params.put("source", sourceName);
-      params.put("status", seriesStatus);
-      cacheManifest.markParquetConverted("fred_catalog", 0, params, parquetFile);
-      cacheManifest.save(cacheDir);
-    }
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   /**

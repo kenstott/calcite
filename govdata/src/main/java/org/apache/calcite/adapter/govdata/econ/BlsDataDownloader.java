@@ -82,7 +82,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    super(cacheDir, storageProvider);
+    this(apiKey, cacheDir, storageProvider, null);
+  }
+
+  public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -223,8 +227,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/employment_statistics.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "employment_statistics");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("employment_statistics", year, cacheParams, jsonFilePath)) {
@@ -267,8 +269,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/inflation_metrics.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "inflation_metrics");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("inflation_metrics", year, cacheParams, jsonFilePath)) {
@@ -309,8 +309,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "wage_growth");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
@@ -350,8 +348,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String relativePath = "source=econ/type=regional/year=" + year + "/regional_employment.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "regional_employment");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("regional_employment", year, cacheParams, relativePath)) {
@@ -855,8 +851,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Converts cached BLS employment data to Parquet format.
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Check if already converted using base class helper
-    if (isParquetConverted(targetFilePath)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
@@ -876,8 +873,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
     }
 
-    // Mark parquet conversion complete using base class helper
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {

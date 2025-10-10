@@ -83,7 +83,11 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   }
 
   public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    super(cacheDir, storageProvider);
+    this(cacheDir, storageProvider, null);
+  }
+
+  public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, storageProvider, sharedManifest);
   }
 
   @Override
@@ -306,7 +310,6 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "world_indicators");
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
@@ -423,7 +426,6 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "global_gdp");
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
@@ -548,8 +550,9 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Check if already converted using base class helper
-    if (isParquetConverted(targetFilePath)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
@@ -596,8 +599,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Converted World Bank data to parquet: {} ({} indicators)", targetFilePath, indicators.size());
 
-    // Mark parquet conversion complete using base class helper
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)

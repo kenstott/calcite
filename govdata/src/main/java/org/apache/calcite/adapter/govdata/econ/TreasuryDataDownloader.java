@@ -57,7 +57,11 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
   public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    super(cacheDir, storageProvider);
+    this(cacheDir, storageProvider, null);
+  }
+
+  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, storageProvider, sharedManifest);
   }
 
   @Override
@@ -186,8 +190,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
       String relativePath = "source=econ/type=timeseries/year=" + year + "/treasury_yields.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "treasury_yields");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("treasury_yields", year, cacheParams, relativePath)) {
@@ -244,8 +246,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
       String relativePath = "source=econ/type=timeseries/year=" + year + "/federal_debt.json";
 
       Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("type", "federal_debt");
-      cacheParams.put("year", String.valueOf(year));
 
       // Check cache using base class helper
       if (isCachedOrExists("federal_debt", year, cacheParams, relativePath)) {
@@ -355,10 +355,9 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
         .namespace("org.apache.calcite.adapter.govdata.econ")
         .fields()
         .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("debt_type").doc("Type of federal debt (e.g., 'Total Public Debt', 'Marketable', 'Non-Marketable')").type().stringType().noDefault()
+        .name("debt_type").doc("Type of federal debt (e.g., 'Total Public Debt Outstanding')").type().stringType().noDefault()
         .name("amount_billions").doc("Total debt amount in billions of dollars").type().doubleType().noDefault()
-        .name("percent_of_gdp").doc("Debt as a percentage of GDP (may be null if GDP data unavailable)").type().nullable().doubleType().noDefault()
-        .name("holder_category").doc("Category of debt holder (e.g., 'Public', 'Federal Reserve', 'Foreign')").type().stringType().noDefault()
+        .name("holder_category").doc("Category of debt holder (always 'All' for total debt)").type().stringType().noDefault()
         .name("debt_held_by_public").doc("Portion of debt held by the public in billions of dollars").type().doubleType().noDefault()
         .name("intragovernmental_holdings").doc("Intragovernmental debt holdings in billions of dollars").type().doubleType().noDefault()
         .endRecord();
@@ -369,7 +368,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
       record.put("date", debt.date);
       record.put("debt_type", debt.debtType);
       record.put("amount_billions", debt.totalDebt);
-      record.put("percent_of_gdp", null); // Would need GDP data to calculate
       record.put("holder_category", debt.holderCategory);
       record.put("debt_held_by_public", debt.debtHeldByPublic);
       record.put("intragovernmental_holdings", debt.intragovDebt);
@@ -408,8 +406,9 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Check if already converted per manifest (uses base class helper)
-    if (isParquetConverted(targetFilePath)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
@@ -451,8 +450,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     writeTreasuryYieldsParquet(yields, targetFilePath);
     LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
 
-    // Mark conversion complete in manifest (uses base class helper)
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   /**
@@ -462,8 +460,9 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param targetFilePath Target parquet file path to create
    */
   public void convertFederalDebtToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Check if already converted using base class helper
-    if (isParquetConverted(targetFilePath)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
@@ -517,8 +516,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     writeFederalDebtParquet(debtRecords, targetFilePath);
     LOGGER.info("Converted federal debt data to parquet: {} ({} records)", targetFilePath, debtRecords.size());
 
-    // Mark parquet conversion complete using base class helper
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
 }

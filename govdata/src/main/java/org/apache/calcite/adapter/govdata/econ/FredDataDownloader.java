@@ -208,7 +208,11 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       Series.PERSONAL_SAVING_RATE);
 
   public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    super(cacheDir, storageProvider);
+    this(cacheDir, apiKey, storageProvider, null);
+  }
+
+  public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -340,8 +344,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     String relativePath = "source=econ/type=indicators/year=" + year + "/fred_indicators.json";
 
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "fred_indicators");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year and type are already separate params
 
     // Check cache using base class helper
     if (isCachedOrExists("fred_indicators", year, cacheParams, relativePath)) {
@@ -725,8 +728,9 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @param targetFile Target parquet file to create
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Check if already converted using base class helper
-    if (isParquetConverted(targetFilePath)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
@@ -773,8 +777,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Converted FRED data to parquet: {} ({} observations)", targetFilePath, observations.size());
 
-    // Mark parquet conversion complete using base class helper
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   @SuppressWarnings("deprecation")
@@ -816,6 +819,19 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    */
   public void downloadSeries(String seriesId, int startYear, int endYear)
       throws IOException, InterruptedException {
+    downloadSeries(seriesId, startYear, endYear, null);
+  }
+
+  /**
+   * Download a specific FRED series for a date range with explicit table name.
+   *
+   * @param seriesId FRED series identifier
+   * @param startYear Start year (inclusive)
+   * @param endYear End year (inclusive)
+   * @param tableName Table name for cache key (null to use default "custom_fred_series")
+   */
+  public void downloadSeries(String seriesId, int startYear, int endYear, String tableName)
+      throws IOException, InterruptedException {
 
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
@@ -827,15 +843,16 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     String relativePath = String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json",
         seriesId, seriesId, startYear, endYear);
 
+    // Use tableName for cache key if provided, otherwise use default
+    String dataType = tableName != null ? tableName : "custom_fred_series";
+
     // Check if we already have this data cached
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "custom_fred_series");
+    // Only include unique identifiers - year and type are already separate params
     cacheParams.put("series_id", seriesId);
-    cacheParams.put("start_year", String.valueOf(startYear));
-    cacheParams.put("end_year", String.valueOf(endYear));
 
-    // Check cache using base class helper
-    if (isCachedOrExists("custom_fred_series", startYear, cacheParams, relativePath)) {
+    // Check cache using base class helper (use dataType for consistent cache key)
+    if (isCachedOrExists(dataType, startYear, cacheParams, relativePath)) {
       LOGGER.debug("Found cached FRED series {} data - skipping download", seriesId);
       return;
     }
@@ -893,8 +910,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     String jsonContent = MAPPER.writeValueAsString(data);
 
-    // Save to cache using base class helper
-    saveToCache("custom_fred_series", startYear, cacheParams, relativePath, jsonContent);
+    // Save to cache using base class helper - use dataType not hardcoded string
+    saveToCache(dataType, startYear, cacheParams, relativePath, jsonContent);
     LOGGER.info("Downloaded FRED series {}: {} observations", seriesId, observations.size());
   }
 
@@ -908,24 +925,9 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields)
       throws IOException {
 
-    // For custom series, we need to track conversion per series_id, not just by path
-    // Extract year and dataType from target path for cache key
-    int year = extractYearFromPath(targetPath);
-    String fileName = targetPath.substring(targetPath.lastIndexOf('/') + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Extract ALL partition params from path (maturity, frequency, etc.)
-    Map<String, String> params = extractPartitionParams(targetPath);
-    // Add series_id to uniquely identify which series this conversion is for
-    params.put("series_id", seriesId);
-    // Add type from filename
-    params.put("type", dataType);
-
-    // DEBUG: Log the cache key being used
-    LOGGER.debug("Checking parquet conversion - dataType={}, year={}, params={}", dataType, year, params);
-
-    // Check if already converted
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+    // Check if parquet file already exists
+    if (storageProvider.exists(targetPath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetPath);
       return;
     }
 
@@ -961,9 +963,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converted FRED series {} to parquet: {} ({} observations)",
         seriesId, targetPath, seriesObservations.size());
 
-    // Mark parquet conversion complete with series_id in params
-    cacheManifest.markParquetConverted(dataType, year, params, targetPath);
-    cacheManifest.save(cacheDir);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   /**

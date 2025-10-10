@@ -112,7 +112,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider) {
-    super(cacheDir, storageProvider);
+    this(cacheDir, parquetDir, apiKey, storageProvider, null);
+  }
+
+  public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, storageProvider, sharedManifest);
     this.parquetDir = parquetDir;
     this.apiKey = apiKey;
   }
@@ -255,8 +259,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache before downloading
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "gdp_components");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("gdp_components", year, cacheParams)) {
       LOGGER.debug("Found cached GDP components for year {} - skipping download", year);
@@ -543,8 +546,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "regional_income");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("regional_income", year, cacheParams)) {
       LOGGER.debug("Found cached regional income data for year {} - skipping download", year);
@@ -824,8 +826,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "trade_statistics");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("trade_statistics", year, cacheParams)) {
       LOGGER.debug("Found cached trade statistics for year {} - skipping download", year);
@@ -1178,8 +1179,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "ita_data");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("ita_data", year, cacheParams)) {
       LOGGER.debug("Found cached ITA data for year {} - skipping download", year);
@@ -1489,8 +1489,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "industry_gdp");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("industry_gdp", year, cacheParams)) {
       LOGGER.debug("Found cached industry GDP data for year {} - skipping download", year);
@@ -2187,8 +2186,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("type", "state_gdp");
-    cacheParams.put("year", String.valueOf(year));
+    // Don't include redundant params - year is already a parameter, type is the dataType
 
     if (cacheManifest.isCached("state_gdp", year, cacheParams)) {
       LOGGER.debug("Found cached state GDP data for year {} - skipping download", year);
@@ -3008,20 +3006,24 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Check if parquet conversion should be skipped (already converted per manifest).
-   * Uses base class helper to check manifest only (no redundant storage checks).
+   * Check if parquet conversion should be skipped (file already exists).
+   * Checks file existence directly via StorageProvider.
    *
    * @return true if conversion should be skipped, false if conversion should proceed
    */
-  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) {
-    return isParquetConverted(targetFilePath);
+  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) throws IOException {
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Mark parquet conversion as complete in the manifest.
-   * Uses base class helper.
+   * Mark parquet conversion as complete.
+   * FileSchema's conversion registry automatically tracks conversions.
    */
   private void markParquetConversionComplete(String targetFilePath, int year, String dataType) {
-    markParquetConverted(targetFilePath);
+    // FileSchema's conversion registry automatically tracks this conversion
   }
 }
