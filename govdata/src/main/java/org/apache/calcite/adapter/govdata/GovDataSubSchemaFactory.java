@@ -150,9 +150,7 @@ public interface GovDataSubSchemaFactory {
         return dir;
       }
     }
-    // Fall back to environment variable
-    String dir = System.getenv("GOVDATA_CACHE_DIR");
-    return dir != null ? dir : System.getProperty("GOVDATA_CACHE_DIR");
+    return null;
   }
 
   /**
@@ -166,56 +164,29 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
-   * Get the parquet directory from operand, environment variable, or system property.
-   * Checks in order: operand.parquetDirectory, GOVDATA_PARQUET_DIR env, GOVDATA_PARQUET_DIR property.
+   * Get the parquet directory from operand ONLY.
+   * Does NOT fall back to environment variables - directory must be explicit in model.json.
    *
    * @param operand Configuration map (optional)
    * @return Parquet directory path or null if not set
    */
   default String getGovDataParquetDir(Map<String, Object> operand) {
-    // First check operand
+    // ONLY check operand - NO environment variable fallback
     if (operand != null) {
-      String dir = (String) operand.get("parquetDirectory");
+      String dir = (String) operand.get("directory");
       if (dir != null && !dir.isEmpty()) {
-        return normalizeParquetDir(dir);
+        return dir;
       }
     }
-    // Fall back to environment variable
-    String dir = System.getenv("GOVDATA_PARQUET_DIR");
-    if (dir == null) {
-      dir = System.getProperty("GOVDATA_PARQUET_DIR");
-    }
-    return normalizeParquetDir(dir);
+    return null;
   }
 
   /**
-   * Normalize parquet directory path - ensure S3 paths have proper s3:// prefix.
+   * Normalize parquet directory path - NO automatic S3 conversion.
+   * If you want S3, specify it explicitly as "s3://bucket/path" in model.json.
    */
   default String normalizeParquetDir(String dir) {
-    if (dir == null || dir.isEmpty()) {
-      return dir;
-    }
-    // If it looks like an S3 bucket path but missing s3:// prefix, add it
-    // Only auto-correct paths that start with known bucket names
-    if (!dir.startsWith("s3://") && !dir.startsWith("/") && !dir.contains("://")) {
-      // Check if it starts with a known S3 bucket name
-      if (dir.startsWith("usgovdata/") || dir.equals("usgovdata")) {
-        dir = "s3://" + dir;
-        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
-            .info("Auto-corrected parquet directory to S3 URI: {}", dir);
-      } else if (dir.equals("govdata-production") || dir.startsWith("govdata-production/")) {
-        // Known production path - prepend bucket
-        dir = "s3://usgovdata/" + dir;
-        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
-            .info("Auto-corrected parquet directory to S3 URI: {}", dir);
-      } else {
-        // For other patterns, error and provide guidance
-        org.slf4j.LoggerFactory.getLogger(GovDataSubSchemaFactory.class)
-            .error("GOVDATA_PARQUET_DIR has invalid S3 path: '{}'. " +
-                "Expected format: 's3://usgovdata/govdata-production' or 'usgovdata/govdata-production'. " +
-                "Current value '{}' will cause S3 operations to fail.", dir, dir);
-      }
-    }
+    // Just return the directory as-is - no magic conversions
     return dir;
   }
 
