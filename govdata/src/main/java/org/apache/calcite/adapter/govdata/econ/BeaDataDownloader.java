@@ -2924,6 +2924,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Convert GDP statistics data to Parquet format.
    */
   public void convertGdpStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
+    // Extract year and data type for cache check
+    int targetYear = extractYearFromPath(targetFilePath);
+    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
+
+    // Check if conversion should be skipped (file already exists)
+    if (shouldSkipParquetConversion(targetFilePath, targetYear, dataType)) {
+      return;
+    }
+
     File jsonFile = new File(sourceDir, "gdp_components.json");
     if (!jsonFile.exists()) {
       LOGGER.warn("No gdp_components.json found in {}", sourceDir);

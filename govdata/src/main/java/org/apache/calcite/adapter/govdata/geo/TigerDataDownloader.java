@@ -453,7 +453,15 @@ public class TigerDataDownloader {
 
     // Congressional districts are provided as a nationwide file (not per-state)
     String filename = String.format("tl_%d_us_cd%d.zip", year, congressNum);
-    String url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+
+    // 2010 has a different directory structure with congress subdirectory
+    String url;
+    if (year == 2010) {
+      url = String.format("%s/%s/CD/%d/%s", TIGER_BASE_URL, getTigerYearPath(year), congressNum, filename);
+    } else {
+      url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+    }
+
     File zipFile = new File(targetDir, filename);
 
     targetDir.mkdirs();
@@ -463,7 +471,12 @@ public class TigerDataDownloader {
         downloadFile(url, zipFile);
         extractZipFile(zipFile, targetDir);
       } catch (IOException e) {
+        if (e.getMessage().contains("404")) {
+          LOGGER.warn("Congressional districts data not available for year {} (Congress {}) - skipping", year, congressNum);
+          return null;
+        }
         LOGGER.warn("Failed to download CD for year {}: {}", year, e.getMessage());
+        throw e;
       }
     }
 
@@ -770,10 +783,23 @@ public class TigerDataDownloader {
     File yearDir = new File(cacheDir, String.format("year=%d", year));
     File targetDir = new File(yearDir, "school_districts");
 
-    // Check if we already have school district data
-    if (targetDir.exists() && targetDir.listFiles() != null && targetDir.listFiles().length > 0) {
-      LOGGER.info("School districts already downloaded for year {}: {}", year, targetDir);
-      return targetDir;
+    // Check if we already have school district shapefiles (not just empty directories)
+    if (targetDir.exists()) {
+      boolean hasShapefiles = false;
+      File[] stateDirs = targetDir.listFiles(File::isDirectory);
+      if (stateDirs != null) {
+        for (File stateDir : stateDirs) {
+          File[] shpFiles = stateDir.listFiles((dir, name) -> name.endsWith(".shp"));
+          if (shpFiles != null && shpFiles.length > 0) {
+            hasShapefiles = true;
+            break;
+          }
+        }
+      }
+      if (hasShapefiles) {
+        LOGGER.info("School districts already downloaded for year {}: {}", year, targetDir);
+        return targetDir;
+      }
     }
 
     if (!autoDownload) {
@@ -791,9 +817,14 @@ public class TigerDataDownloader {
       String[] districtTypes = {"unsd", "elsd", "scsd"}; // Unified, Elementary, Secondary
 
       for (String type : districtTypes) {
-        String filename = String.format("tl_%d_%s_%s.zip", year, fips, type);
+        // 2010 has different naming: subdirectory "2010" and type suffix "10" (e.g., unsd10)
+        String typeSuffix = (year == 2010) ? type + "10" : type;
+        String filename = String.format("tl_%d_%s_%s.zip", year, fips, typeSuffix);
         String urlPath = type.toUpperCase();
-        String url = String.format("%s/%s/%s/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename);
+        // 2010 has additional subdirectory level
+        String url = (year == 2010)
+            ? String.format("%s/%s/%s/2010/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename)
+            : String.format("%s/%s/%s/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename);
 
         File stateDir = new File(targetDir, fips);
         File zipFile = new File(stateDir, filename);
@@ -814,6 +845,24 @@ public class TigerDataDownloader {
           // Continue with other types/states even if one fails
         }
       }
+    }
+
+    // Check if any shapefiles were successfully downloaded
+    boolean hasShapefiles = false;
+    File[] stateDirs = targetDir.listFiles(File::isDirectory);
+    if (stateDirs != null) {
+      for (File stateDir : stateDirs) {
+        File[] shpFiles = stateDir.listFiles((dir, name) -> name.endsWith(".shp"));
+        if (shpFiles != null && shpFiles.length > 0) {
+          hasShapefiles = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasShapefiles) {
+      LOGGER.warn("No school district shapefiles were successfully downloaded for year {}", year);
+      return null;
     }
 
     return targetDir;
