@@ -3,6 +3,33 @@
   "defaultSchema": "sec",
   "schemas": [
     {
+      "name": "sec",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "sec",
+        "executionEngine": "DUCKDB",
+        "ephemeralCache": false,
+        "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
+        "directory": "${GOVDATA_PARQUET_DIR:govdata-parquet}",
+        "startYear": 2010,
+        "endYear": 2025,
+        "autoDownload": true,
+        "ciks": ["DJIA"],
+        "filingTypes": ["10-K", "10-Q", "8-K", "DEF 14A", "3", "4", "5"],
+        "fetchStockPrices": true,
+        "extractFootnotes": true,
+        "extractMDA": true,
+        "extractRiskFactors": true,
+        "textSimilarity": {
+          "enabled": true,
+          "embeddingDimension": 384,
+          "provider": "local",
+          "maxTextLength": 16384
+        }
+      }
+    },
+    {
       "name": "econ",
       "type": "custom",
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
