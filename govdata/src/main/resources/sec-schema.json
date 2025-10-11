@@ -2,47 +2,47 @@
   "partitionedTables": [
     {
       "name": "financial_line_items",
-      "pattern": "type=filings/year=*/financial_line_items.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_facts.parquet",
       "comment": "XBRL financial statement data including balance sheet, income statement, and cash flow line items from SEC filings. Includes quarterly and annual data with standard GAAP classifications."
     },
     {
       "name": "filing_metadata",
-      "pattern": "type=filings/year=*/filing_metadata.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_metadata.parquet",
       "comment": "SEC filing metadata including form types (10-K, 10-Q, 8-K), company information, filing dates, and document URLs. Core reference table for all SEC data."
     },
     {
       "name": "filing_contexts",
-      "pattern": "type=filings/year=*/filing_contexts.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_contexts.parquet",
       "comment": "XBRL context metadata defining reporting periods, business segments, and dimensional qualifiers for financial data. Links financial facts to their reporting context."
     },
     {
       "name": "mda_sections",
-      "pattern": "type=filings/year=*/mda_sections.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_mda.parquet",
       "comment": "Management Discussion and Analysis (MD&A) sections extracted from 10-K and 10-Q filings. Contains management narrative about company performance and outlook."
     },
     {
       "name": "xbrl_relationships",
-      "pattern": "type=filings/year=*/xbrl_relationships.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_relationships.parquet",
       "comment": "XBRL calculation and presentation linkbase relationships showing how financial concepts relate to each other in SEC filings."
     },
     {
       "name": "insider_transactions",
-      "pattern": "type=ownership/year=*/insider_transactions.parquet",
-      "comment": "Form 4 insider trading transactions by company officers, directors, and shareholders. Includes buy/sell transactions with prices and volumes."
+      "pattern": "cik=*/filing_type=*/year=*/*_insider.parquet",
+      "comment": "Form 3/4/5 insider trading transactions by company officers, directors, and shareholders. Includes buy/sell transactions with prices and volumes."
     },
     {
       "name": "earnings_transcripts",
-      "pattern": "type=disclosures/year=*/earnings_transcripts.parquet",
-      "comment": "Quarterly earnings call transcripts with management presentations and Q&A sessions. Extracted from earnings webcast transcripts and calls."
+      "pattern": "cik=*/filing_type=*/year=*/*_earnings.parquet",
+      "comment": "Quarterly earnings data extracted from 8-K filings. Contains earnings paragraphs and exhibits."
     },
     {
       "name": "stock_prices",
-      "pattern": "type=market/year=*/stock_prices.parquet",
+      "pattern": "stock_prices/ticker=*/year=*/*_prices.parquet",
       "comment": "Daily stock price data including open, high, low, close, and volume for SEC-reporting companies. Historical equity market data."
     },
     {
       "name": "vectorized_blobs",
-      "pattern": "type=vectors/year=*/vectorized_blobs.parquet",
+      "pattern": "cik=*/filing_type=*/year=*/*_vectorized.parquet",
       "comment": "Text embeddings and vector representations of SEC filing content for semantic search and analysis. Optional table for AI/ML applications."
     }
   ],
