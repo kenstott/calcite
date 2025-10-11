@@ -314,7 +314,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
-          String cacheFredYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
+          String cacheFredYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
           fredDownloader.convertToParquet(new File(cacheFredYearPath), fredParquetPath);
         }
       } catch (Exception e) {
@@ -368,7 +368,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert to parquet files for each year using StorageProvider
         for (int year = startYear; year <= endYear; year++) {
-          String cacheIndicatorsYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
+          String cacheIndicatorsYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
 
           // Convert GDP components using StorageProvider
           String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
@@ -414,7 +414,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
           String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
-          String cacheWorldBankYearPath = storageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
+          String cacheWorldBankYearPath = storageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
           worldBankDownloader.convertToParquet(new File(cacheWorldBankYearPath), worldParquetPath);
         }
 
