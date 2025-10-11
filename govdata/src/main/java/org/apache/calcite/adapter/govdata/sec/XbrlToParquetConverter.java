@@ -256,9 +256,9 @@ public class XbrlToParquetConverter implements FileConverter {
       String normalizedFilingType = filingType.replace("-", "").replace("/", "");
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
-      // Build RELATIVE partition path (StorageProvider will add base path)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
       String relativePartitionPath =
-          String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+          String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // For local filesystem only, create actual directories (S3 doesn't need directory creation)
       if (!targetDirectoryPath.contains("://")) {
@@ -269,19 +269,19 @@ public class XbrlToParquetConverter implements FileConverter {
       // Use accession for file naming if available, otherwise fall back to filing date
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
 
-      // Build RELATIVE paths for all outputs
-      String factsPath = relativePartitionPath + "/" + String.format("%s_%s_facts.parquet", cik, uniqueId);
-      String metadataPath = relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId);
-      String contextsPath = relativePartitionPath + "/" + String.format("%s_%s_contexts.parquet", cik, uniqueId);
-      String mdaPath = relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId);
-      String relationshipsPath = relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId);
+      // Build FULL paths for all outputs (StorageProvider needs absolute paths)
+      String factsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_facts.parquet", cik, uniqueId));
+      String metadataPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+      String contextsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_contexts.parquet", cik, uniqueId));
+      String mdaPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId));
+      String relationshipsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId));
 
       // Convert financial facts to Parquet
       LOGGER.debug(" Starting facts.parquet generation for: " + sourceFile.getName() + " -> " + factsPath);
       try {
         writeFactsToParquet(doc, factsPath, cik, filingType, filingDate, sourceFile);
-        // For File-based return list, create dummy File (only used for count, S3 paths are placeholders)
-        outputFiles.add(new File(targetDirectoryPath + "/" + factsPath));
+        // Paths are already full paths from storageProvider.resolvePath()
+        outputFiles.add(new File(factsPath));
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during facts.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
@@ -291,21 +291,21 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Write filing metadata
       writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(new File(targetDirectoryPath + "/" + metadataPath));
+      outputFiles.add(new File(metadataPath));
 
       // Convert contexts to Parquet
       writeContextsToParquet(doc, contextsPath, cik, filingType, filingDate);
-      outputFiles.add(new File(targetDirectoryPath + "/" + contextsPath));
+      outputFiles.add(new File(contextsPath));
 
       // Extract and write MD&A
       writeMDAToParquet(doc, mdaPath, cik, filingType, filingDate, sourceFile);
-      outputFiles.add(new File(targetDirectoryPath + "/" + mdaPath));
+      outputFiles.add(new File(mdaPath));
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + sourceFile.getName() + " -> " + relationshipsPath);
       try {
         writeRelationshipsToParquet(doc, relationshipsPath, cik, filingType, filingDate, sourceFile);
-        outputFiles.add(new File(targetDirectoryPath + "/" + relationshipsPath));
+        outputFiles.add(new File(relationshipsPath));
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
         LOGGER.error("DEBUG: Exception during relationships.parquet creation for " + sourceFile.getName() + ": " + e.getMessage());
@@ -315,9 +315,10 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Create vectorized blobs with contextual enrichment if enabled
       if (enableVectorization) {
-        String vectorizedPath = relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId);
+        String vectorizedPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
         writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile);
-        outputFiles.add(new File(targetDirectoryPath + "/" + vectorizedPath));
+        outputFiles.add(new File(vectorizedPath));
       }
 
       // Metadata is updated by FileConversionManager after successful conversion
@@ -2423,11 +2424,11 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private String extractBaseUrl(File htmlFile, String xsdHref) {
     // Try to extract CIK and accession from file path
-    // File path pattern: /path/to/cache/sec/sec-data/{CIK}/{ACCESSION_NUMBER}/filename.htm
+    // File path pattern: /path/to/cache/sec/{CIK}/{ACCESSION_NUMBER}/filename.htm
     String filePath = htmlFile.getAbsolutePath();
 
-    // Look for SEC EDGAR file path pattern
-    Pattern pathPattern = Pattern.compile("/sec-data/([0-9]+)/([^/]+)/[^/]+\\.htm");
+    // Look for SEC EDGAR file path pattern (CIK is 10 digits, accession is variable)
+    Pattern pathPattern = Pattern.compile("/sec/([0-9]{10})/([^/]+)/[^/]+\\.htm");
     Matcher pathMatcher = pathPattern.matcher(filePath);
 
     if (pathMatcher.find()) {
@@ -2605,9 +2606,9 @@ public class XbrlToParquetConverter implements FileConverter {
       String normalizedFilingType = filingType.replace("/", "").replace("-", "");
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
-      // Build RELATIVE partition path (StorageProvider will add base path)
+      // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
       String relativePartitionPath =
-          String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+          String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // Extract insider transactions
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
@@ -2616,7 +2617,8 @@ public class XbrlToParquetConverter implements FileConverter {
       // Always write insider.parquet file (even if empty) to indicate processing completed
       // This prevents unnecessary reprocessing during cache validation
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-      String outputPath = relativePartitionPath + "/" + String.format("%s_%s_insider.parquet", cik, uniqueId);
+      String outputPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_insider.parquet", cik, uniqueId));
 
       if (!transactions.isEmpty()) {
         LOGGER.debug(" Writing " + transactions.size() + " transactions to parquet file: " + outputPath);
@@ -2635,8 +2637,9 @@ public class XbrlToParquetConverter implements FileConverter {
       // Note: For now, we're creating a minimal vectorized file for insider forms
       // This could be enhanced to vectorize transaction narratives or remarks
       if (enableVectorization) {
-        // Reuse uniqueId from above
-        String vectorizedPath = relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId);
+        // Reuse uniqueId from above - build FULL path with StorageProvider
+        String vectorizedPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
 
         try {
           writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile, accession);
@@ -3202,11 +3205,11 @@ public class XbrlToParquetConverter implements FileConverter {
         String normalizedFilingType = filingType.replace("/", "").replace("-", "");
         String partitionYear = filingDate.substring(0, 4); // 8-K filings use filing year
 
-        // Build RELATIVE partition path (StorageProvider will add base path)
+        // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
         String relativePartitionPath =
-            String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
-        String outputPath =
-            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
+            String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+        String outputPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
         writeParquetFile(earningsRecords, earningsSchema, outputPath);
 
@@ -3947,7 +3950,7 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private String extractCikFromPath(String path) {
-    // Extract CIK from path like "/sec-data/0000320193/000032019323000106/"
+    // Extract CIK from path like "/sec/0000320193/000032019323000106/"
     Pattern pattern = Pattern.compile("/(\\d{10})/");
     Matcher matcher = pattern.matcher(path);
     if (matcher.find()) {
@@ -4022,7 +4025,7 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   private String extractAccessionFromPath(String path) {
-    // Extract accession from path like "/sec-data/0000320193/000032019323000106/"
+    // Extract accession from path like "/sec/0000320193/000032019323000106/"
     Pattern pattern = Pattern.compile("/(\\d{18})/");
     Matcher matcher = pattern.matcher(path);
     if (matcher.find()) {
@@ -4172,15 +4175,9 @@ public class XbrlToParquetConverter implements FileConverter {
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
     String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
-    // Create partition directory (for local filesystem only)
-    if (!targetDirectoryPath.contains("://")) {
-      java.nio.file.Path partitionPath = Paths.get(targetDirectoryPath, relativePartitionPath);
-      Files.createDirectories(partitionPath);
-    }
-
-    // Build metadata file path (relative)
-    String metadataPath = relativePartitionPath + "/" +
-        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
+    // Build metadata file path with FULL path from StorageProvider
+    String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+        relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
     // Define schema for metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
@@ -4222,15 +4219,9 @@ public class XbrlToParquetConverter implements FileConverter {
     String partitionYear = filingDate.substring(0, 4); // For metadata without doc context, use filing year
     String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
-    // Create partition directory (for local filesystem only)
-    if (!targetDirectoryPath.contains("://")) {
-      java.nio.file.Path partitionPath = Paths.get(targetDirectoryPath, relativePartitionPath);
-      Files.createDirectories(partitionPath);
-    }
-
-    // Build metadata file path (relative)
-    String metadataPath = relativePartitionPath + "/" +
-        String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
+    // Build metadata file path with FULL path from StorageProvider
+    String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+        relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
     // Define schema for minimal metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")

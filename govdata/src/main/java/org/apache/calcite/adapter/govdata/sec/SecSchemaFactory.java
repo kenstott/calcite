@@ -104,6 +104,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private Map<String, Object> currentOperand; // Store operand for table auto-discovery
   private RSSRefreshMonitor rssMonitor; // RSS monitor for automatic refresh
 
+  /**
+   * Override to use stored operand from buildOperand().
+   * This allows helper methods to access directory configuration without passing operand around.
+   */
+  @Override
+  public String getGovDataCacheDir() {
+    return getGovDataCacheDir(this.currentOperand);
+  }
+
+  /**
+   * Override to use stored operand from buildOperand().
+   * This allows helper methods to access directory configuration without passing operand around.
+   */
+  @Override
+  public String getGovDataParquetDir() {
+    return getGovDataParquetDir(this.currentOperand);
+  }
+
   public static final SecSchemaFactory INSTANCE = new SecSchemaFactory();
 
   // Constraint metadata support
@@ -495,7 +513,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // SEC data directories
     String secRawDir = govdataCacheDir + "/sec";
-    String secParquetDir = govdataParquetDir + "/source=sec";
+    String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
     LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}'", govdataParquetDir, secParquetDir);
 
     // Determine cache directory
@@ -1030,29 +1048,30 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Starting SEC data download");
     LOGGER.debug("downloadSecData() called - STARTING SEC DATA DOWNLOAD");
 
+    // Store operand for use by helper methods (e.g. createSecTablesFromXbrl)
+    this.currentOperand = operand;
+
     // Clear download tracking for the new cycle
     downloadedInThisCycle.clear();
 
     try {
-      // Check if directory is specified in config, otherwise use default
-      String configuredDir = (String) operand.get("directory");
-      if (configuredDir == null) {
-        configuredDir = (String) operand.get("cacheDirectory");
+      // Raw SEC files should use cacheDirectory, NOT directory (which is for parquet files)
+      // getGovDataCacheDir() resolves environment variables like ${GOVDATA_CACHE_DIR:default}
+      String cacheHome = getGovDataCacheDir();
+      if (cacheHome == null) {
+        // Fall back to default cache location
+        cacheHome = System.getProperty("user.home") + "/.govdata-cache";
       }
-      // Get cache directories from interface methods
-      String govdataCacheDir = getGovDataCacheDir();
-      String secRawDir = govdataCacheDir != null ? govdataCacheDir + "/sec" : null;
-      String cacheHome = configuredDir != null ? configuredDir : secRawDir;
 
       // XBRL files are immutable - once downloaded, they never change
-      // Use configured cache directory
-      File baseDir = new File(cacheHome, "sec-data");
+      // Use sec subdirectory (consistent with econ, geo, census patterns)
+      File baseDir = new File(cacheHome, "sec");
       baseDir.mkdirs();
 
-      LOGGER.info("Using SEC cache directory: {}", baseDir.getAbsolutePath());
+      // Keep secRawDir for cache manifest operations
+      String secRawDir = baseDir.getAbsolutePath();
 
-      // Update operand to use our cache directory
-      operand.put("directory", baseDir.getAbsolutePath());
+      LOGGER.info("Using SEC cache directory: {}", baseDir.getAbsolutePath());
 
       // Check if we should use mock data instead of downloading
       Boolean useMockData = (Boolean) operand.get("useMockData");
@@ -1663,9 +1682,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String year = getPartitionYear(form, filingDate);
       String govdataParquetDir = getGovDataParquetDir();
 
-      // Build path as a string to support S3 URLs
-      String yearDirPath = govdataParquetDir + "/source=sec/cik=" + cik +
-          "/filing_type=" + form.replace("-", "") + "/year=" + year;
+      // Build path using StorageProvider
+      String yearDirPath = storageProvider.resolvePath(govdataParquetDir,
+          "source=sec/cik=" + cik + "/filing_type=" + form.replace("-", "") + "/year=" + year);
 
       String accessionClean = accession.replace("-", "");
       boolean isInsiderForm = form.matches("[345]");
@@ -1725,7 +1744,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     try {
       // Get parquet directory from interface method
       String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir + "/source=sec";
+      String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
       // Don't create File or call mkdirs() for parquet directory - it may be S3
       // StorageProvider will create directories as needed when writing files
 
@@ -2408,11 +2427,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     try {
-      // baseDir is already the sec-data directory, don't nest another level
+      // baseDir points to {cache}/sec where CIK subdirectories are located
       File secRawDir = baseDir;
       // Get parquet directory from interface method
       String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
+      String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
       // Parquet directory uses unified GOVDATA_PARQUET_DIR structure
       // Don't create File or call mkdirs() - parquet path may be S3
       // StorageProvider will create directories as needed when writing files
@@ -2619,7 +2638,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
             // Extract accession number from file path (parent directory name)
-            // Path is like: /sec-data/0000789019/000078901922000007/ownership.xml
+            // Path is like: /sec/0000789019/000078901922000007/ownership.xml
             String accession = xbrlFile.getParentFile().getName();
 
             // Create a simple ConversionMetadata to pass accession to converter (S3-compatible)
@@ -2732,7 +2751,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File secRawDir = new File(baseDir, "sec-raw");
       // Get parquet directory from interface method
       String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir != null ? govdataParquetDir + "/source=sec" : null;
+      String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
       // Don't create File or call mkdirs() - parquet path may be S3
       // StorageProvider will create directories as needed when writing files
 
@@ -2860,7 +2879,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // baseDir is the cache directory (sec-cache)
       // We need to create files in govdata-parquet/source=sec/stock_prices
       String govdataParquetDir = getGovDataParquetDir();
-      String stockPricesDir = govdataParquetDir + "/source=sec/stock_prices";
+      String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "source=sec/stock_prices");
       LOGGER.debug("Creating mock stock prices in: {}", stockPricesDir);
 
       // For each CIK, create mock price data
@@ -3009,7 +3028,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("GOVDATA_PARQUET_DIR not set, skipping stock price download");
         return;
       }
-      String basePath = govdataParquetDir + "/source=sec";
+      String basePath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
 
       // Check if stock prices are already cached and up-to-date (daily refresh)
       if (areStockPricesCached(basePath, ciks, startYear, endYear)) {
