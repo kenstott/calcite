@@ -34,7 +34,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -128,18 +127,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     this.apiKey = apiKey;
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return 0; // BEA API has no strict rate limit
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 3;
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 2000; // 2 seconds
   }
 
@@ -409,8 +405,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet", startYear, endYear);
 
     List<GdpComponent> components = new ArrayList<>();
 
@@ -724,8 +720,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading BEA regional income data for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=regional_income/year_range=%d_%d/regional_income.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=regional_income/year_range=%d_%d/regional_income.parquet", startYear, endYear);
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
@@ -946,8 +942,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading BEA trade statistics for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=trade_statistics/year_range=%d_%d/trade_statistics.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=trade_statistics/year_range=%d_%d/trade_statistics.parquet", startYear, endYear);
 
     List<TradeStatistic> tradeData = new ArrayList<>();
 
@@ -1327,8 +1323,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=ita_data/year_range=%d_%d/ita_data.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=ita_data/year_range=%d_%d/ita_data.parquet", startYear, endYear);
 
     List<ItaData> itaRecords = new ArrayList<>();
 
@@ -1623,8 +1619,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=industry_gdp/year_range=%d_%d/industry_gdp.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=industry_gdp/year_range=%d_%d/industry_gdp.parquet", startYear, endYear);
 
     List<IndustryGdpData> industryData = new ArrayList<>();
 
@@ -2071,8 +2067,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=state_gdp/year_range=%d_%d/state_gdp.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=state_gdp/year_range=%d_%d/state_gdp.parquet", startYear, endYear);
 
     List<StateGdp> gdpData = new ArrayList<>();
 
@@ -2976,14 +2972,56 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       // Year is stored as Integer in the JSON
       int year = ((Number) components.get(0).get("year")).intValue();
 
-      // Add annual metrics
+      // Try to load previous year's data for calculating percent changes
+      Map<String, Double> previousYearMetrics = new HashMap<>();
+      File previousYearFile = new File(sourceDir.getParentFile(), "year=" + (year - 1) + "/gdp_components.json");
+      if (previousYearFile.exists()) {
+        try {
+          Map<String, Object> previousData = MAPPER.readValue(previousYearFile, Map.class);
+          List<Map<String, Object>> previousComponents = (List<Map<String, Object>>) previousData.get("components");
+          if (previousComponents != null && !previousComponents.isEmpty()) {
+            for (Map<String, Object> component : previousComponents) {
+              String lineDesc = (String) component.get("line_description");
+              Double value = ((Number) component.get("value")).doubleValue();
+
+              if (lineDesc.contains("Gross domestic product")) {
+                previousYearMetrics.put("Nominal GDP", value);
+              } else if (lineDesc.contains("Real gross domestic product")) {
+                previousYearMetrics.put("Real GDP", value);
+              } else if (lineDesc.contains("Personal consumption")) {
+                previousYearMetrics.put("Personal Consumption", value);
+              } else if (lineDesc.contains("Gross private domestic investment")) {
+                previousYearMetrics.put("Private Investment", value);
+              } else if (lineDesc.contains("Government consumption")) {
+                previousYearMetrics.put("Government Spending", value);
+              } else if (lineDesc.contains("Net exports")) {
+                previousYearMetrics.put("Net Exports", value);
+              }
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.debug("Could not load previous year data from {}: {}", previousYearFile, e.getMessage());
+        }
+      }
+
+      // Add annual metrics with percent changes
       for (Map.Entry<String, Double> entry : gdpMetrics.entrySet()) {
         GenericRecord record = new GenericData.Record(schema);
         record.put("year", year);
         record.put("quarter", null);
         record.put("metric", entry.getKey());
         record.put("value", entry.getValue());
-        record.put("percent_change", null); // Would need historical data for this
+
+        // Calculate percent change if previous year data exists
+        Double percentChange = null;
+        if (previousYearMetrics.containsKey(entry.getKey())) {
+          double currentValue = entry.getValue();
+          double previousValue = previousYearMetrics.get(entry.getKey());
+          if (previousValue != 0) {
+            percentChange = ((currentValue - previousValue) / previousValue) * 100.0;
+          }
+        }
+        record.put("percent_change", percentChange);
         record.put("seasonally_adjusted", "Y");
         records.add(record);
       }
@@ -2994,8 +3032,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         record.put("year", year);
         record.put("quarter", null);
         record.put("metric", "GDP Growth Rate");
-        record.put("value", 2.5); // Placeholder - would need YoY calculation
-        record.put("percent_change", 2.5);
+
+        // Calculate actual growth rate from Real GDP
+        Double growthRate = null;
+        if (previousYearMetrics.containsKey("Real GDP")) {
+          double currentRealGdp = gdpMetrics.get("Real GDP");
+          double previousRealGdp = previousYearMetrics.get("Real GDP");
+          if (previousRealGdp != 0) {
+            growthRate = ((currentRealGdp - previousRealGdp) / previousRealGdp) * 100.0;
+          }
+        }
+
+        record.put("value", growthRate != null ? growthRate : null);
+        record.put("percent_change", growthRate);
         record.put("seasonally_adjusted", "Y");
         records.add(record);
       }
