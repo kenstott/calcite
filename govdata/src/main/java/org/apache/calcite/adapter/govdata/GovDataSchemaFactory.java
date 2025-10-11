@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.FileSchema;
+import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchema;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
@@ -373,16 +374,28 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * This allows ECON data sources (BLS, FRED, Treasury, BEA, World Bank) to properly
    * register their parquet conversions in FileSchema's conversion registry.
    *
-   * @param schema The created FileSchema instance
+   * <p>When using executionEngine: "DUCKDB", the schema will be a DuckDBJdbcSchema
+   * which wraps an internal FileSchema. This method extracts the internal FileSchema
+   * and registers the converter on it.
+   *
+   * @param schema The created Schema instance (FileSchema or DuckDBJdbcSchema)
    * @param operand The original ECON operand configuration
    */
   private void registerEconConverter(Schema schema, Map<String, Object> operand) {
-    if (!(schema instanceof FileSchema)) {
-      LOGGER.warn("Schema is not a FileSchema, cannot register ECON converter");
-      return;
+    FileSchema fileSchema = null;
+
+    // Handle DuckDB execution engine case
+    if (schema instanceof DuckDBJdbcSchema) {
+      fileSchema = ((DuckDBJdbcSchema) schema).getFileSchema();
+      LOGGER.debug("Extracted internal FileSchema from DuckDBJdbcSchema for converter registration");
+    } else if (schema instanceof FileSchema) {
+      fileSchema = (FileSchema) schema;
     }
 
-    FileSchema fileSchema = (FileSchema) schema;
+    if (fileSchema == null) {
+      LOGGER.warn("Schema is not a FileSchema or DuckDBJdbcSchema, cannot register ECON converter");
+      return;
+    }
 
     // Extract cache directory from operand
     String cacheDirectory = (String) operand.get("cacheDirectory");
