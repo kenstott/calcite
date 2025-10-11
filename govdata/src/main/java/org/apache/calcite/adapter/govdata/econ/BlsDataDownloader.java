@@ -854,6 +854,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Converts cached BLS employment data to Parquet format.
+   *
+   * <p>Note: This method only creates the parquet file. For the file to be discoverable
+   * by FileSchema's table discovery, the EconRawToParquetConverter must be registered
+   * with FileSchema (which happens in GovDataSchemaFactory.registerEconConverter()).
    */
   public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
     // Check if parquet file already exists
@@ -877,8 +881,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     } else if (fileName.equals("regional_employment.parquet")) {
       convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
     }
-
-    // FileSchema's conversion registry automatically tracks this conversion
   }
 
   private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {
