@@ -37,7 +37,7 @@ public class PartitionExtractionTest {
 
     assertNotNull(info, "Partition info should not be null");
     assertEquals(3, info.getPartitionColumns().size(), "Should detect 3 partition columns");
-    
+
     // Verify partition columns
     assertEquals("0000320193", info.getPartitionValues().get("cik"));
     assertEquals("10K", info.getPartitionValues().get("filing_type"));

@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.util.Sources;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -30,12 +31,10 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.HadoopOutputFile;
 import org.apache.parquet.io.OutputFile;
 
-import org.apache.calcite.util.Sources;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;

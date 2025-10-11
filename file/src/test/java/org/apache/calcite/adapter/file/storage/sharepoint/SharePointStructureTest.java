@@ -39,34 +39,34 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class SharePointStructureTest {
-  
+
   private static String tenantId;
   private static String clientId;
   private static String certificatePath;
   private static String certificatePassword;
   private static String siteUrl;
-  
+
   @BeforeAll
   static void setup() {
     Properties props = loadProperties();
-    
+
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
     if (certFile.exists()) {
       certificatePath = certFile.getAbsolutePath();
     }
-    
-    if (tenantId == null || clientId == null || siteUrl == null || 
+
+    if (tenantId == null || clientId == null || siteUrl == null ||
         certificatePath == null || certificatePassword == null) {
       System.out.println("SharePoint certificate authentication not fully configured.");
       return;
     }
   }
-  
+
   private static Properties loadProperties() {
     Properties props = new Properties();
     File propsFile = new File("local-test.properties");
@@ -76,7 +76,7 @@ public class SharePointStructureTest {
     if (!propsFile.exists()) {
       propsFile = new File("/Users/kennethstott/ndc-calcite/calcite-rs-jni/calcite/file/local-test.properties");
     }
-    
+
     if (propsFile.exists()) {
       try (InputStream is = new FileInputStream(propsFile)) {
         Properties fileProps = new Properties();
@@ -88,44 +88,43 @@ public class SharePointStructureTest {
     }
     return props;
   }
-  
-  @Test
-  void analyzeSharePointStructure() throws Exception {
+
+  @Test void analyzeSharePointStructure() throws Exception {
     if (certificatePath == null || certificatePassword == null) {
       System.out.println("Skipping test - certificate not configured");
       return;
     }
-    
+
     System.out.println("\n=== SHAREPOINT STRUCTURE ANALYSIS ===\n");
-    
-    SharePointCertificateTokenManager tokenManager = 
-        new SharePointCertificateTokenManager(tenantId, clientId, 
+
+    SharePointCertificateTokenManager tokenManager =
+        new SharePointCertificateTokenManager(tenantId, clientId,
             certificatePath, certificatePassword, siteUrl);
-    
+
     SharePointRestStorageProvider provider = new SharePointRestStorageProvider(tokenManager);
-    
+
     // Test 1: List root of site
     System.out.println("1. ROOT OF SITE (empty path):");
     System.out.println("--------------------------------");
     try {
       List<StorageProvider.FileEntry> rootEntries = provider.listFiles("", false);
       for (StorageProvider.FileEntry entry : rootEntries) {
-        System.out.println("  " + (entry.isDirectory() ? "[DIR] " : "[FILE]") + 
+        System.out.println("  " + (entry.isDirectory() ? "[DIR] " : "[FILE]") +
                           " " + entry.getName() + " (path: " + entry.getPath() + ")");
       }
     } catch (Exception e) {
       System.out.println("  Error: " + e.getMessage());
     }
-    
+
     // Test 2: List "Shared Documents" (the document library)
     System.out.println("\n2. DOCUMENT LIBRARY LEVEL (/Shared Documents):");
     System.out.println("------------------------------------------------");
     try {
       List<StorageProvider.FileEntry> libEntries = provider.listFiles("/Shared Documents", false);
       for (StorageProvider.FileEntry entry : libEntries) {
-        System.out.println("  " + (entry.isDirectory() ? "[DIR] " : "[FILE]") + 
+        System.out.println("  " + (entry.isDirectory() ? "[DIR] " : "[FILE]") +
                           " " + entry.getName() + " (path: " + entry.getPath() + ")");
-        
+
         // Check if there's a nested "Shared Documents" folder
         if (entry.isDirectory() && entry.getName().equals("Shared Documents")) {
           System.out.println("  ⚠️  WARNING: Found nested 'Shared Documents' folder inside the library!");
@@ -135,7 +134,7 @@ public class SharePointStructureTest {
     } catch (Exception e) {
       System.out.println("  Error: " + e.getMessage());
     }
-    
+
     // Test 3: Try different paths to understand the structure
     System.out.println("\n3. TESTING VARIOUS PATH FORMATS:");
     System.out.println("----------------------------------");
@@ -147,13 +146,13 @@ public class SharePointStructureTest {
         "Documents",
         "/Documents"
     };
-    
+
     for (String path : testPaths) {
       System.out.println("\nPath: '" + path + "'");
       try {
         List<StorageProvider.FileEntry> entries = provider.listFiles(path, false);
         System.out.println("  ✓ Success - Found " + entries.size() + " items");
-        
+
         // Count CSV files
         long csvCount = entries.stream()
             .filter(e -> !e.isDirectory() && e.getName().endsWith(".csv"))
@@ -161,27 +160,27 @@ public class SharePointStructureTest {
         if (csvCount > 0) {
           System.out.println("    → Contains " + csvCount + " CSV files");
         }
-        
+
         // Show first few entries
-        entries.stream().limit(3).forEach(e -> 
+        entries.stream().limit(3).forEach(e ->
             System.out.println("      " + (e.isDirectory() ? "[D]" : "[F]") + " " + e.getName()));
-            
+
       } catch (Exception e) {
         System.out.println("  ✗ Failed: " + e.getMessage());
       }
     }
-    
+
     // Test 4: Check if files can be accessed at root level
     System.out.println("\n4. ATTEMPTING DIRECT FILE ACCESS:");
     System.out.println("-----------------------------------");
     String[] filePaths = {
         "departments.csv",
-        "Shared Documents/departments.csv", 
+        "Shared Documents/departments.csv",
         "/Shared Documents/departments.csv",
         "Shared Documents/Shared Documents/departments.csv",
         "/Shared Documents/Shared Documents/departments.csv"
     };
-    
+
     for (String filePath : filePaths) {
       System.out.print("File: '" + filePath + "' - ");
       try {
@@ -191,7 +190,7 @@ public class SharePointStructureTest {
         System.out.println("✗ ERROR: " + e.getMessage());
       }
     }
-    
+
     System.out.println("\n=== DIAGNOSIS ===");
     System.out.println("If your files are ONLY accessible at 'Shared Documents/Shared Documents',");
     System.out.println("this indicates someone created a 'Shared Documents' folder inside the ");

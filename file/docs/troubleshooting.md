@@ -74,7 +74,7 @@ Schema names must be unique within the same connection. This validation prevents
    // Wrong - duplicate names
    {"name": "data", "operand": {"directory": "/sales"}},
    {"name": "data", "operand": {"directory": "/hr"}}
-   
+
    // Correct - unique names
    {"name": "sales", "operand": {"directory": "/sales"}},
    {"name": "hr", "operand": {"directory": "/hr"}}
@@ -459,7 +459,7 @@ java.net.SocketTimeoutException: Read timed out
    props.setProperty("httpTimeout", "60000");  // 60 second timeout
    props.setProperty("httpRetries", "5");       // Retry 5 times
    ```
-   
+
    **Note:** The adapter currently only supports simple retry counts, not advanced retry policies with exponential backoff or specific error handling.
 
 3. **Use connection pooling:**
@@ -593,7 +593,7 @@ java.sql.SQLException: DuckDB connection failed
    ```sql
    -- With HLL optimization: 0ms (instant)
    SELECT COUNT(DISTINCT column) FROM table;
-   
+
    -- Without HLL: Time depends on data size
    -- 10K rows: 1-3ms
    -- 1M rows: 100-500ms
@@ -668,10 +668,10 @@ DEBUG org.apache.calcite.adapter.file.cache - Cache hit for file: data.csv
 
 ```sql
 -- Analyze query plan
-EXPLAIN PLAN FOR 
-SELECT customer_id, SUM(amount) 
-FROM sales 
-WHERE date_col >= '2024-01-01' 
+EXPLAIN PLAN FOR
+SELECT customer_id, SUM(amount)
+FROM sales
+WHERE date_col >= '2024-01-01'
 GROUP BY customer_id;
 ```
 
@@ -700,7 +700,7 @@ java -version  # Verify Java 11+
 
 **Operating System:**
 - Linux: Full support
-- Windows: Full support  
+- Windows: Full support
 - macOS: Full support
 - Docker: Supported with proper volume mounts
 

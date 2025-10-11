@@ -16,7 +16,7 @@ erDiagram
     %% ===========================
     %% SEC SCHEMA (Financial Data)
     %% ===========================
-    
+
     %% SEC.financial_line_items
     financial_line_items {
         string cik PK
@@ -31,7 +31,7 @@ erDiagram
         string segment
         date filing_date
     }
-    
+
     %% SEC.filing_contexts
     filing_contexts {
         string cik PK
@@ -45,7 +45,7 @@ erDiagram
         string segment
         date filing_date
     }
-    
+
     %% SEC.filing_metadata (central reference table)
     filing_metadata {
         string cik PK
@@ -60,7 +60,7 @@ erDiagram
         string business_phone
         date filing_date
     }
-    
+
     %% SEC.mda_sections
     mda_sections {
         string cik PK,FK
@@ -72,7 +72,7 @@ erDiagram
         int section_order
         date filing_date
     }
-    
+
     %% SEC.footnotes
     footnotes {
         string cik PK,FK
@@ -85,7 +85,7 @@ erDiagram
         int footnote_number
         date filing_date
     }
-    
+
     %% SEC.xbrl_relationships
     xbrl_relationships {
         string cik PK
@@ -98,7 +98,7 @@ erDiagram
         string arc_role
         date filing_date
     }
-    
+
     %% SEC.insider_transactions
     insider_transactions {
         string cik PK
@@ -114,7 +114,7 @@ erDiagram
         decimal price_per_share
         date filing_date
     }
-    
+
     %% SEC.earnings_transcripts
     earnings_transcripts {
         string cik PK,FK
@@ -126,7 +126,7 @@ erDiagram
         int sequence
         date filing_date
     }
-    
+
     %% SEC.stock_prices
     stock_prices {
         string ticker PK
@@ -139,7 +139,7 @@ erDiagram
         bigint volume
         decimal adjusted_close
     }
-    
+
     %% SEC.vectorized_blobs
     vectorized_blobs {
         string cik PK,FK
@@ -156,11 +156,11 @@ erDiagram
         int end_offset
         date filing_date
     }
-    
+
     %% =============================
     %% ECON SCHEMA (Economic Data)
     %% =============================
-    
+
     %% ECON.employment_statistics
     employment_statistics {
         date date PK
@@ -174,7 +174,7 @@ erDiagram
         string category
         string subcategory
     }
-    
+
     %% ECON.inflation_metrics
     inflation_metrics {
         date date PK
@@ -188,7 +188,7 @@ erDiagram
         string area_name
         boolean seasonally_adjusted
     }
-    
+
     %% ECON.wage_growth
     wage_growth {
         date date PK
@@ -202,7 +202,7 @@ erDiagram
         decimal employment_cost_index
         decimal percent_change_year
     }
-    
+
     %% ECON.regional_employment
     regional_employment {
         date date PK
@@ -216,7 +216,7 @@ erDiagram
         decimal participation_rate
         decimal employment_population_ratio
     }
-    
+
     %% ECON.treasury_yields
     treasury_yields {
         date date PK
@@ -229,7 +229,7 @@ erDiagram
         bigint accepted_amount
         bigint tendered_amount
     }
-    
+
     %% ECON.federal_debt
     federal_debt {
         date date PK
@@ -240,7 +240,7 @@ erDiagram
         decimal percent_of_total
         decimal year_over_year_change
     }
-    
+
     %% ECON.world_indicators
     world_indicators {
         string country_code PK
@@ -253,7 +253,7 @@ erDiagram
         string region
         string income_group
     }
-    
+
     %% ECON.fred_indicators
     fred_indicators {
         string series_id PK
@@ -265,7 +265,7 @@ erDiagram
         boolean seasonally_adjusted
         date last_updated
     }
-    
+
     %% ECON.gdp_components
     gdp_components {
         string table_id PK,FK
@@ -278,7 +278,7 @@ erDiagram
         decimal contribution_to_growth
         string data_source
     }
-    
+
     %% ECON.regional_income
     regional_income {
         string geo_fips PK,FK
@@ -291,11 +291,11 @@ erDiagram
         decimal per_capita_value
         decimal percent_change_year
     }
-    
+
     %% =============================
     %% GEO SCHEMA (Geographic Data)
     %% =============================
-    
+
     %% GEO.tiger_states (bridges FIPS and 2-letter codes)
     tiger_states {
         string state_fips PK
@@ -305,7 +305,7 @@ erDiagram
         decimal land_area
         decimal water_area
     }
-    
+
     %% GEO.tiger_counties
     tiger_counties {
         string county_fips PK
@@ -315,7 +315,7 @@ erDiagram
         decimal land_area
         decimal water_area
     }
-    
+
     %% GEO.census_places
     census_places {
         string place_code PK
@@ -325,7 +325,7 @@ erDiagram
         decimal median_income
         geometry boundary
     }
-    
+
     %% GEO.hud_zip_county
     hud_zip_county {
         string zip PK
@@ -336,7 +336,7 @@ erDiagram
         decimal oth_ratio
         decimal tot_ratio
     }
-    
+
     %% GEO.hud_zip_tract
     hud_zip_tract {
         string zip PK
@@ -348,7 +348,7 @@ erDiagram
         decimal oth_ratio
         decimal tot_ratio
     }
-    
+
     %% GEO.hud_zip_cbsa
     hud_zip_cbsa {
         string zip PK
@@ -360,7 +360,7 @@ erDiagram
         decimal oth_ratio
         decimal tot_ratio
     }
-    
+
     %% Relationships within SEC domain
     financial_line_items ||--o{ filing_contexts : "has context"
     financial_line_items }o--|| filing_metadata : "belongs to filing"
@@ -370,18 +370,18 @@ erDiagram
     footnotes }o--|| xbrl_relationships : "references relationships"
     earnings_transcripts }o--|| filing_metadata : "from 8-K filing"
     insider_transactions }o--|| filing_metadata : "reported in filing"
-    
+
     %% Vectorized blobs relationships (contains embeddings of text content)
     vectorized_blobs }o--|| filing_metadata : "text from filing"
     vectorized_blobs }o--|| mda_sections : "vectorizes MD&A text"
     vectorized_blobs }o--|| footnotes : "vectorizes footnote text"
     vectorized_blobs }o--|| earnings_transcripts : "vectorizes transcript text"
-    
+
     %% Relationships within ECON domain
     employment_statistics }o--|| fred_indicators : "series_id → series_id (BLS to FRED overlap)"
     inflation_metrics }o--|| regional_employment : "area_code → area_code (geographic overlap)"
     gdp_components }o--|| fred_indicators : "table_id → series_id (GDP series temporal)"
-    
+
     %% Relationships within GEO domain
     tiger_counties }o--|| tiger_states : "belongs to"
     census_places }o--|| tiger_states : "located in"
@@ -390,16 +390,16 @@ erDiagram
     hud_zip_tract }o--|| tiger_counties : "within"
     hud_zip_tract }o--|| tiger_states : "zip in state"
     hud_zip_cbsa }o--|| tiger_states : "zip in state"
-    
+
     %% Cross-schema relationships (using tiger_states.state_code)
     filing_metadata }o--|| tiger_states : "state_of_incorporation → state_code"
     regional_employment }o--|| tiger_states : "state_code → state_code"
     regional_income }o--|| tiger_states : "geo_fips → state_fips (2-digit state FIPS)"
-    
+
     %% Other cross-schema relationships
     stock_prices }o--|| filing_metadata : "belongs to company"
     inflation_metrics }o--o{ tiger_counties : "regional inflation"
-    
+
     %% Cross-domain relationships (SEC to ECON)
     financial_line_items ||--o{ employment_statistics : "correlates with economy"
     stock_prices ||--o{ inflation_metrics : "affected by inflation"
@@ -421,12 +421,12 @@ This allows true referential integrity without requiring data transformation.
 1. **filing_metadata.state_of_incorporation → tiger_states.state_code**
    - Format: 2-letter state codes (e.g., "CA", "TX")
    - Implementation: `defineCrossDomainConstraintsForSec()`
-   
+
 2. **regional_employment.state_code → tiger_states.state_code**
    - Format: 2-letter state codes
    - Implementation: `defineCrossDomainConstraintsForEcon()`
-   
-3. **regional_income.geo_fips → tiger_states.state_fips** 
+
+3. **regional_income.geo_fips → tiger_states.state_fips**
    - Format: FIPS codes (partial - state-level only)
    - Note: Only works for 2-digit state FIPS, not 5-digit county FIPS
    - Implementation: `defineCrossDomainConstraintsForEcon()`
@@ -515,7 +515,7 @@ This allows true referential integrity without requiring data transformation.
 ```sql
 -- Companies incorporated in California with their stock performance
 -- Joins across SEC and GEO schemas
-SELECT 
+SELECT
     m.company_name,
     m.state_of_incorporation,
     s.state_name,
@@ -527,13 +527,13 @@ WHERE s.state_name = 'California'
 GROUP BY m.company_name, m.state_of_incorporation, s.state_name;
 
 -- Financial performance by state of incorporation
-SELECT 
+SELECT
     s.state_name,
     COUNT(DISTINCT f.cik) as company_count,
     AVG(f.value) as avg_net_income
 FROM financial_line_items f
-JOIN filing_metadata m ON f.cik = m.cik 
-    AND f.filing_type = m.filing_type 
+JOIN filing_metadata m ON f.cik = m.cik
+    AND f.filing_type = m.filing_type
     AND f.year = m.year
 JOIN tiger_states s ON m.state_of_incorporation = s.state_code
 WHERE f.concept = 'NetIncomeLoss'
@@ -541,7 +541,7 @@ GROUP BY s.state_name
 ORDER BY avg_net_income DESC;
 
 -- Geographic concentration of tech companies (using SIC codes)
-SELECT 
+SELECT
     s.state_name,
     COUNT(DISTINCT m.cik) as tech_company_count
 FROM filing_metadata m
@@ -551,7 +551,7 @@ GROUP BY s.state_name
 ORDER BY tech_company_count DESC;
 
 -- Company performance vs. economic indicators (SEC + ECON)
-SELECT 
+SELECT
     f.year,
     f.cik,
     m.company_name,
@@ -559,13 +559,13 @@ SELECT
     e.value as unemployment_rate,
     i.percent_change_year as inflation_rate,
     LAG(f.value) OVER (PARTITION BY f.cik ORDER BY f.year) as prev_revenue,
-    (f.value - LAG(f.value) OVER (PARTITION BY f.cik ORDER BY f.year)) / 
+    (f.value - LAG(f.value) OVER (PARTITION BY f.cik ORDER BY f.year)) /
         LAG(f.value) OVER (PARTITION BY f.cik ORDER BY f.year) * 100 as revenue_growth
 FROM financial_line_items f
-JOIN filing_metadata m ON f.cik = m.cik 
-    AND f.filing_type = m.filing_type 
+JOIN filing_metadata m ON f.cik = m.cik
+    AND f.filing_type = m.filing_type
     AND f.year = m.year
-JOIN employment_statistics e ON YEAR(e.date) = f.year 
+JOIN employment_statistics e ON YEAR(e.date) = f.year
     AND e.series_id = 'UNRATE'
     AND MONTH(e.date) = 12  -- December data
 JOIN inflation_metrics i ON YEAR(i.date) = f.year
@@ -577,7 +577,7 @@ WHERE f.concept = 'Revenues'
 ORDER BY f.year, revenue_growth DESC;
 
 -- Regional employment impact on local companies (ECON + GEO + SEC)
-SELECT 
+SELECT
     re.state_code,
     s.state_name,
     re.unemployment_rate,
@@ -587,7 +587,7 @@ SELECT
 FROM regional_employment re
 JOIN tiger_states s ON re.state_code = s.state_code
 JOIN filing_metadata m ON m.state_of_incorporation = s.state_code
-LEFT JOIN stock_prices sp ON m.cik = sp.cik 
+LEFT JOIN stock_prices sp ON m.cik = sp.cik
     AND YEAR(sp.trade_date) = YEAR(re.date)
 WHERE re.area_type = 'state'
     AND re.date = (SELECT MAX(date) FROM regional_employment)
@@ -595,7 +595,7 @@ GROUP BY re.state_code, s.state_name, re.unemployment_rate, re.employment_level
 ORDER BY re.unemployment_rate ASC;
 
 -- Wage growth vs. company compensation expenses (ECON + SEC)
-SELECT 
+SELECT
     w.industry_name,
     AVG(w.average_hourly_earnings) as avg_hourly_wage,
     AVG(w.percent_change_year) as wage_growth_rate,
@@ -653,8 +653,8 @@ Temporal relationships between schemas are NOT implemented as foreign key constr
    -- Example: Join SEC filing with economic data from same quarter
    SELECT f.*, e.*
    FROM filing_metadata f
-   JOIN employment_statistics e 
-     ON YEAR(e.date) = f.year 
+   JOIN employment_statistics e
+     ON YEAR(e.date) = f.year
      AND QUARTER(e.date) = QUARTER(f.filing_date)
    WHERE e.series_id = 'UNRATE'
    ```

@@ -16,13 +16,11 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -37,12 +35,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("unit")
 public class UniqueFileJoinTest extends BaseFileTest {
 
-  @Test
-  public void testJoinWithUniqueFiles() throws Exception {
+  @Test public void testJoinWithUniqueFiles() throws Exception {
     // Create unique temporary directory and files
     File tempDir = new File(System.getProperty("java.io.tmpdir"), "test-" + System.nanoTime());
     tempDir.mkdirs();
-    
+
     try {
       // Create unique EMPS file with predictable table name
       File empsFile = new File(tempDir, "EMPSJOINREORDER.html");
@@ -116,14 +113,14 @@ public class UniqueFileJoinTest extends BaseFileTest {
       // Create a model that uses our unique files with ephemeralCache for test isolation
       String model = createUniqueModel(tempDir);
       String modelWithCache = addEphemeralCacheToModel(model);
-      
+
       Properties info = new Properties();
       info.setProperty("model", "inline:" + modelWithCache);
       applyEngineDefaults(info); // Apply default connection properties for consistency
-      
+
       try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
            Statement statement = connection.createStatement()) {
-        
+
         // Verify we can access the tables (they get the __t1 suffix from the file adapter)
         // Note: DuckDB returns VIEWs not TABLEs for these entries
         ResultSet tables = connection.getMetaData().getTables(null, "SALES", null, new String[]{"TABLE", "VIEW"});
@@ -134,50 +131,50 @@ public class UniqueFileJoinTest extends BaseFileTest {
           if ("deptsjoinreorder__t1".equals(tableName)) foundDepts = true;
         }
         tables.close();
-        
+
         assertTrue(foundEmps, "Should find empsjoinreorder__t1 table");
         assertTrue(foundDepts, "Should find deptsjoinreorder__t1 table");
-        
+
         // Test the join with unique files - this should work without cache conflicts
         String sql = "select e.\"empno\", e.\"name\", d.\"deptno\" " +
                      "from \"SALES\".\"empsjoinreorder__t1\" e " +
                      "join \"SALES\".\"deptsjoinreorder__t1\" d " +
                      "on e.\"name\" = d.\"name\"";
-        
+
         try (ResultSet rs = statement.executeQuery(sql)) {
           // Verify we get results from the join
           assertTrue(rs.next(), "Join should return at least one result");
-          
+
           int empno = rs.getInt("empno");
           String empName = rs.getString("name");
           int deptno = rs.getInt("deptno");
-          
+
           // Verify the join worked correctly
           assertTrue(empno == 100 || empno == 110, "Should get employee 100 or 110");
           assertTrue("Sales".equals(empName) || "Marketing".equals(empName), "Should get Sales or Marketing employee");
           assertTrue(deptno == 10 || deptno == 20, "Should get department 10 or 20");
-          
+
           // Check if we get a second result
           if (rs.next()) {
             int empno2 = rs.getInt("empno");
             String empName2 = rs.getString("name");
             int deptno2 = rs.getInt("deptno");
-            
-            // Verify the second join result  
+
+            // Verify the second join result
             assertTrue(empno2 == 100 || empno2 == 110, "Should get employee 100 or 110");
             assertTrue("Sales".equals(empName2) || "Marketing".equals(empName2), "Should get Sales or Marketing employee");
             assertTrue(deptno2 == 10 || deptno2 == 20, "Should get department 10 or 20");
           }
         }
       }
-      
-      
+
+
     } finally {
       // Cleanup - delete temporary files
       deleteDirectoryQuietly(tempDir);
     }
   }
-  
+
   private String createUniqueModel(File tempDir) {
     String engineLine = "";
     String engine = getExecutionEngine();
@@ -186,24 +183,38 @@ public class UniqueFileJoinTest extends BaseFileTest {
     }
     // Note: ephemeralCache will be added by addEphemeralCacheToModel() for test isolation
     // This ensures each test run gets its own temporary cache directory
-    return "{\n" +
-           "  \"version\": \"1.0\",\n" +
-           "  \"defaultSchema\": \"SALES\",\n" +
-           "  \"schemas\": [\n" +
-           "    {\n" +
-           "      \"name\": \"SALES\",\n" +
-           "      \"type\": \"custom\",\n" +
-           "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n" +
-           "      \"operand\": {\n" +
-           "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n" +
+    return "{\n"
+  +
+           "  \"version\": \"1.0\",\n"
+  +
+           "  \"defaultSchema\": \"SALES\",\n"
+  +
+           "  \"schemas\": [\n"
+  +
+           "    {\n"
+  +
+           "      \"name\": \"SALES\",\n"
+  +
+           "      \"type\": \"custom\",\n"
+  +
+           "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+  +
+           "      \"operand\": {\n"
+  +
+           "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+  +
            engineLine +
-           "        \"flavor\": \"TRANSLATABLE\"\n" +
-           "      }\n" +
-           "    }\n" +
-           "  ]\n" +
+           "        \"flavor\": \"TRANSLATABLE\"\n"
+  +
+           "      }\n"
+  +
+           "    }\n"
+  +
+           "  ]\n"
+  +
            "}";
   }
-  
+
   private void deleteDirectoryQuietly(File directory) {
     try {
       if (directory.isDirectory()) {

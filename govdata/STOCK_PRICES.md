@@ -97,18 +97,18 @@ sec-parquet/
 -- Get recent prices for a ticker
 SELECT date, close, volume
 FROM stock_prices
-WHERE ticker = 'AAPL' 
+WHERE ticker = 'AAPL'
   AND year = 2023
 ORDER BY date DESC
 LIMIT 30;
 
 -- Calculate returns
-SELECT 
+SELECT
   ticker,
   date,
   close,
   LAG(close) OVER (PARTITION BY ticker ORDER BY date) as prev_close,
-  (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) / 
+  (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) /
    LAG(close) OVER (PARTITION BY ticker ORDER BY date) * 100 as daily_return
 FROM stock_prices
 WHERE ticker = 'MSFT' AND year = 2023;
@@ -118,7 +118,7 @@ WHERE ticker = 'MSFT' AND year = 2023;
 
 ```sql
 -- Stock performance around earnings releases
-SELECT 
+SELECT
   s.ticker,
   f.filing_date,
   f.filing_type,
@@ -127,13 +127,13 @@ SELECT
   f.net_income
 FROM stock_prices s
 JOIN financial_line_items f ON s.cik = f.cik
-WHERE s.date BETWEEN DATE_SUB(f.filing_date, INTERVAL 7 DAY) 
+WHERE s.date BETWEEN DATE_SUB(f.filing_date, INTERVAL 7 DAY)
                  AND f.filing_date
   AND f.filing_type = '10-Q'
 GROUP BY s.ticker, f.filing_date, f.filing_type, f.revenue, f.net_income;
 
 -- Price-to-Earnings ratio over time
-SELECT 
+SELECT
   s.ticker,
   s.date,
   s.close as stock_price,
@@ -149,7 +149,7 @@ WHERE YEAR(s.date) = f.fiscal_year
   AND QUARTER(s.date) = f.fiscal_quarter;
 
 -- Market cap calculation
-SELECT 
+SELECT
   c.company_name,
   s.ticker,
   s.date,
@@ -165,32 +165,32 @@ ORDER BY market_cap DESC;
 
 ```sql
 -- Volatility calculation (30-day rolling)
-SELECT 
+SELECT
   ticker,
   date,
   close,
   STDDEV(close) OVER (
-    PARTITION BY ticker 
-    ORDER BY date 
+    PARTITION BY ticker
+    ORDER BY date
     ROWS BETWEEN 29 PRECEDING AND CURRENT ROW
   ) as volatility_30d
 FROM stock_prices
 WHERE year = 2023;
 
 -- Correlation between companies
-SELECT 
+SELECT
   s1.ticker as ticker1,
   s2.ticker as ticker2,
   CORR(s1.daily_return, s2.daily_return) as correlation
 FROM (
   SELECT ticker, date,
-    (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) / 
+    (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) /
      LAG(close) OVER (PARTITION BY ticker ORDER BY date) as daily_return
   FROM stock_prices
 ) s1
 JOIN (
   SELECT ticker, date,
-    (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) / 
+    (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) /
      LAG(close) OVER (PARTITION BY ticker ORDER BY date) as daily_return
   FROM stock_prices
 ) s2 ON s1.date = s2.date

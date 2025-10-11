@@ -172,14 +172,14 @@ Create a new `pub` (public data) schema within the govdata adapter to provide SQ
 
 ### Links to Government Data (SEC, GEO, ECON, SAFETY)
 - **Company Intelligence**: SEC companies linked to Wikipedia articles and Wikidata entities
-- **Executive Networks**: Corporate leadership mapped through biographical data and career histories  
+- **Executive Networks**: Corporate leadership mapped through biographical data and career histories
 - **Geographic Enhancement**: Government geographic data enriched with OSM building-level detail
 - **Research Validation**: Economic and policy research correlated with academic literature
 
 ### Entity Resolution Examples
 ```sql
 -- Link SEC companies to comprehensive public knowledge
-SELECT 
+SELECT
     s.company_name,
     s.cik,
     w.wikipedia_url,
@@ -189,7 +189,7 @@ SELECT
     osm.building_details,
     research.related_publications
 FROM sec.company_metadata s
-JOIN pub.entity_mappings em ON s.cik = em.source_id 
+JOIN pub.entity_mappings em ON s.cik = em.source_id
 JOIN pub.wikipedia_entities w ON em.target_id = w.page_id
 JOIN pub.wikidata_entities wd ON w.wikidata_id = wd.entity_id
 JOIN pub.osm_buildings osm ON ST_Contains(osm.geometry, wd.headquarters_coordinates)
@@ -199,7 +199,7 @@ JOIN pub.research_publications research ON research.company_mentions LIKE '%' ||
 ### Geographic Intelligence Integration
 ```sql
 -- Enhanced location risk assessment with building-level detail
-SELECT 
+SELECT
     geo.county_name,
     safety.crime_rate,
     econ.unemployment_rate,
@@ -220,7 +220,7 @@ JOIN pub.research_institutions research ON ST_Contains(geo.geometry, research.lo
 
 ### Phase 1: Wikipedia Foundation (Months 1-3)
 1. Set up Wikipedia API integration with rate limiting and caching
-2. Implement wikipedia_articles table with full-text search capabilities  
+2. Implement wikipedia_articles table with full-text search capabilities
 3. Create wikipedia_entities table with structured data extraction
 4. Build entity linking to SEC companies and geographic locations
 5. Add wikipedia_links and categories for relationship mapping
@@ -251,7 +251,7 @@ JOIN pub.research_institutions research ON ST_Contains(geo.geometry, research.lo
 ### Corporate Intelligence Enhancement
 ```sql
 -- Comprehensive company background analysis
-SELECT 
+SELECT
     s.company_name,
     w.founded_date,
     w.founder_biographies,
@@ -270,7 +270,7 @@ WHERE s.fiscal_year = 2023;
 ### Location Intelligence and Site Selection
 ```sql
 -- Advanced location analysis with multiple data dimensions
-SELECT 
+SELECT
     osm.address,
     osm.building_type,
     safety.crime_incidents_nearby,
@@ -284,14 +284,14 @@ JOIN safety.crime_incidents safety ON ST_DWithin(osm.geometry, safety.location, 
 JOIN econ.census_blocks econ ON ST_Contains(econ.geometry, osm.geometry)
 JOIN pub.wikipedia_entities wiki ON wiki.coordinates = ST_Centroid(osm.geometry)
 JOIN pub.research_institutions research ON ST_DWithin(osm.geometry, research.location, 5000)
-WHERE osm.building_type = 'commercial' 
+WHERE osm.building_type = 'commercial'
   AND osm.country_code = 'US';
 ```
 
 ### Research and Innovation Analysis
 ```sql
 -- Academic research impact on local economic development
-SELECT 
+SELECT
     uni.institution_name,
     geo.county_name,
     COUNT(pub.publication_id) as research_output,
@@ -311,7 +311,7 @@ GROUP BY uni.institution_id, geo.county_fips;
 ### Cross-Domain Knowledge Discovery
 ```sql
 -- Natural language query: "Companies founded by Stanford alumni in low-crime areas"
-SELECT 
+SELECT
     companies.company_name,
     founders.name as founder_name,
     founders.education,

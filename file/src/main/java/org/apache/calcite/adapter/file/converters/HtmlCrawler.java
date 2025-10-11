@@ -20,6 +20,8 @@ import org.apache.calcite.adapter.file.converters.HtmlLinkCache.ExtractedLinks;
 import org.apache.calcite.adapter.file.converters.HtmlTableScanner.TableInfo;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -36,8 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Crawler that discovers and processes HTML tables and linked data files.

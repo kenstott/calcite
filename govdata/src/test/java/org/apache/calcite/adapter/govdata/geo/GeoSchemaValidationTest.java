@@ -57,8 +57,7 @@ public class GeoSchemaValidationTest {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  // No timeout - let it download all data
+  @Test // No timeout - let it download all data
   public void testGeoSchemaWithRealData() throws Exception {
     System.out.println("\n==============================================================");
     System.out.println("GEO SCHEMA VALIDATION TEST - REAL DATA");
@@ -374,31 +373,48 @@ public class GeoSchemaValidationTest {
     }
   }
 
-  @Test
-  @Timeout(value = 5, unit = TimeUnit.MINUTES)
+  @Test @Timeout(value = 5, unit = TimeUnit.MINUTES)
   public void testGeoSchemaConstraints() throws Exception {
     System.out.println("\n==============================================================");
     System.out.println("GEO SCHEMA CONSTRAINT VALIDATION TEST");
     System.out.println("==============================================================");
 
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"geo\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"geo\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"dataSource\": \"geo\",\n" +
-        "        \"cacheDirectory\": \"/tmp/geo-constraint-test\",\n" +
-        "        \"autoDownload\": true,\n" +
-        "        \"startYear\": 2024,\n" +
-        "        \"endYear\": 2024,\n" +
-        "        \"enableConstraints\": true\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"geo\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"geo\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"dataSource\": \"geo\",\n"
+  +
+        "        \"cacheDirectory\": \"/tmp/geo-constraint-test\",\n"
+  +
+        "        \"autoDownload\": true,\n"
+  +
+        "        \"startYear\": 2024,\n"
+  +
+        "        \"endYear\": 2024,\n"
+  +
+        "        \"enableConstraints\": true\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
 
     File tempDir = Files.createTempDirectory("geo-constraint").toFile();

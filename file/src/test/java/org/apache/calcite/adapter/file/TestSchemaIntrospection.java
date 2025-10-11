@@ -1,25 +1,41 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.adapter.file;
 
 import org.junit.jupiter.api.Test;
+
 import java.sql.*;
 import java.util.Properties;
 
 public class TestSchemaIntrospection {
-  
-  @Test
-  void introspectCsvInferSchema() throws Exception {
+
+  @Test void introspectCsvInferSchema() throws Exception {
     Properties info = new Properties();
     String engineType = "DUCKDB";
     String modelJson = buildModelJson(engineType);
     info.put("model", "inline:" + modelJson);
     info.put("lex", "ORACLE");
     info.put("unquotedCasing", "TO_LOWER");
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
       DatabaseMetaData metaData = conn.getMetaData();
-      
+
       System.out.println("=== Introspecting csv_infer schema ===\n");
-      
+
       // List all schemas
       System.out.println("Available schemas:");
       try (ResultSet schemas = metaData.getSchemas()) {
@@ -27,7 +43,7 @@ public class TestSchemaIntrospection {
           System.out.println("  - " + schemas.getString("TABLE_SCHEM"));
         }
       }
-      
+
       System.out.println("\nTables in csv_infer schema:");
       try (ResultSet tables = metaData.getTables(null, "csv_infer", "%", new String[]{"TABLE"})) {
         while (tables.next()) {
@@ -35,7 +51,7 @@ public class TestSchemaIntrospection {
           System.out.println("  Table: " + table);
         }
       }
-      
+
       // Also try with uppercase
       System.out.println("\nTables in CSV_INFER schema:");
       try (ResultSet tables = metaData.getTables(null, "CSV_INFER", "%", new String[]{"TABLE"})) {
@@ -44,12 +60,12 @@ public class TestSchemaIntrospection {
           System.out.println("  Table: " + table);
         }
       }
-      
+
       // Try SQL query
       System.out.println("\nUsing INFORMATION_SCHEMA:");
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT table_schema, table_name FROM TABLE(INFORMATION_SCHEMA.TABLES())")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT table_schema, table_name FROM TABLE(INFORMATION_SCHEMA.TABLES())")) {
         while (rs.next()) {
           String schema = rs.getString("TABLE_SCHEMA");
           String table = rs.getString("TABLE_NAME");
@@ -60,16 +76,16 @@ public class TestSchemaIntrospection {
       }
     }
   }
-  
+
   private static String buildModelJson(String engineType) {
     String resourceDir = CsvTypeInferenceTest.class.getResource("/csv-type-inference").getFile();
-    
+
     StringBuilder model = new StringBuilder();
     model.append("{\n");
     model.append("  \"version\": \"1.0\",\n");
     model.append("  \"defaultSchema\": \"csv_infer\",\n");
     model.append("  \"schemas\": [\n");
-    
+
     model.append("    {\n");
     model.append("      \"name\": \"csv_infer\",\n");
     model.append("      \"type\": \"custom\",\n");
@@ -91,10 +107,10 @@ public class TestSchemaIntrospection {
     model.append("        }\n");
     model.append("      }\n");
     model.append("    }\n");
-    
+
     model.append("  ]\n");
     model.append("}\n");
-    
+
     return model.toString();
   }
 }

@@ -16,8 +16,8 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;

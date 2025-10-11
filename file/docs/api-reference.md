@@ -169,9 +169,9 @@ Map<String, Table> tables = factory.createTables(jsonSource, jsonConfig);
 High-performance table implementation for Parquet files.
 
 ```java
-public class ParquetScannableTable extends AbstractTable 
+public class ParquetScannableTable extends AbstractTable
     implements ScannableTable, FilterableTable {
-    
+
     public Enumerable<Object[]> scan(DataContext root);
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters);
 }
@@ -192,7 +192,7 @@ Configure execution engine selection and parameters.
 ```java
 public class ExecutionEngineConfig {
     public enum EngineType { PARQUET, DUCKDB, ARROW, LINQ4J }
-    
+
     public void setEngineType(EngineType type);
     public void setEngineOptions(Map<String, Object> options);
 }
@@ -452,8 +452,8 @@ Pre-computed query results stored as Parquet.
 
 ```java
 public class MaterializedViewTable extends AbstractTable implements TranslatableTable {
-    public MaterializedViewTable(SchemaPlus parentSchema, String schemaName, 
-                                String viewName, String sql, File parquetFile, 
+    public MaterializedViewTable(SchemaPlus parentSchema, String schemaName,
+                                String viewName, String sql, File parquetFile,
                                 Map<String, Table> existingTables);
     // Materializes on first access, stores as Parquet
 }
@@ -562,7 +562,7 @@ FileAdapterEventListener listener = new FileAdapterEventListener() {
     public void onQueryExecuted(String sql, long executionTimeMs) {
         logger.info("Query executed in {}ms: {}", executionTimeMs, sql);
     }
-    
+
     @Override
     public void onError(Exception error, String context) {
         logger.error("Error in {}: {}", context, error.getMessage());
@@ -673,17 +673,17 @@ while (rs.next()) {
 ```java
 @Configuration
 public class FileAdapterConfig {
-    
+
     @Bean
     public DataSource fileAdapterDataSource() {
         Map<String, Object> config = FileSchemaConfigBuilder.create()
             .directory("/data")
             .executionEngine("parquet")
             .build();
-            
+
         return new CalciteDataSource(config);
     }
-    
+
     @Bean
     public JdbcTemplate fileAdapterJdbcTemplate() {
         return new JdbcTemplate(fileAdapterDataSource());

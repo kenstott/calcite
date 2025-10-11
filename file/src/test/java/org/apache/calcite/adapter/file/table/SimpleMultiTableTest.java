@@ -16,10 +16,8 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
-import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;

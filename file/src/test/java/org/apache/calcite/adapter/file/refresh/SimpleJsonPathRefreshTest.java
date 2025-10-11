@@ -20,11 +20,8 @@ import org.apache.calcite.adapter.file.converters.JsonPathConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.parallel.Isolated;import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.parallel.Isolated;import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.parallel.Isolated;import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Isolated;import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
@@ -43,26 +40,25 @@ public class SimpleJsonPathRefreshTest {
 
   @TempDir
   Path tempDir;
-  
+
   private File schemaDir;
-  
+
   @BeforeEach
   public void setupTestFiles() throws Exception {
     schemaDir = tempDir.toFile();
-    
+
     // Metadata now stored directly in the test directory
     // This avoids conflicts when tests run in parallel
   }
-  
+
   @AfterEach
   public void cleanup() throws Exception {
     // No longer need to reset central metadata directory
   }
-  
-  @Test
-  public void testJsonPathConversionRecordsMetadata() throws Exception {
+
+  @Test public void testJsonPathConversionRecordsMetadata() throws Exception {
     System.out.println("\n=== TEST: JSONPath Conversion Metadata Recording ===");
-    
+
     // Create a source JSON file
     File sourceJsonFile = new File(schemaDir, "source.json");
     try (FileWriter writer = new FileWriter(sourceJsonFile, StandardCharsets.UTF_8)) {
@@ -75,34 +71,33 @@ public class SimpleJsonPathRefreshTest {
       writer.write("  }\n");
       writer.write("}\n");
     }
-    
+
     // Extract using JSONPath
     File extractedFile = new File(schemaDir, "users_extracted.json");
     JsonPathConverter.extract(sourceJsonFile, extractedFile, "$.data.users", schemaDir);
-    
+
     // Verify extraction worked
     assertTrue(extractedFile.exists(), "Extracted file should exist");
     String content = Files.readString(extractedFile.toPath());
     System.out.println("Extracted content: " + content);
     assertTrue(content.contains("Alice"), "Should contain Alice");
     assertTrue(content.contains("Bob"), "Should contain Bob");
-    
+
     // Verify metadata was recorded
     ConversionMetadata metadata = new ConversionMetadata(schemaDir);
     File foundSource = metadata.findOriginalSource(extractedFile);
     assertNotNull(foundSource, "JSONPath conversion should be recorded in metadata");
     assertEquals(sourceJsonFile.getCanonicalPath(), foundSource.getCanonicalPath());
-    
+
     System.out.println("✅ JSONPath conversion automatically recorded metadata");
     System.out.println("  Source: " + sourceJsonFile.getName());
     System.out.println("  Extracted: " + extractedFile.getName());
     System.out.println("  Found source: " + foundSource.getName());
   }
-  
-  @Test
-  public void testJsonPathExtractionFileContent() throws Exception {
+
+  @Test public void testJsonPathExtractionFileContent() throws Exception {
     System.out.println("\n=== TEST: JSONPath Extraction File Content ===");
-    
+
     // Create a more complex source JSON
     File sourceJsonFile = new File(schemaDir, "api_response.json");
     try (FileWriter writer = new FileWriter(sourceJsonFile, StandardCharsets.UTF_8)) {
@@ -119,15 +114,15 @@ public class SimpleJsonPathRefreshTest {
       writer.write("  }\n");
       writer.write("}\n");
     }
-    
+
     // Extract users
     File usersFile = new File(schemaDir, "users_only.json");
     JsonPathConverter.extract(sourceJsonFile, usersFile, "$.data.users", schemaDir);
-    
-    // Extract products  
+
+    // Extract products
     File productsFile = new File(schemaDir, "products_only.json");
     JsonPathConverter.extract(sourceJsonFile, productsFile, "$.data.products", schemaDir);
-    
+
     // Verify users extraction
     assertTrue(usersFile.exists(), "Users file should exist");
     String usersContent = Files.readString(usersFile.toPath());
@@ -135,7 +130,7 @@ public class SimpleJsonPathRefreshTest {
     assertTrue(usersContent.contains("Alice"), "Should contain Alice");
     assertTrue(usersContent.contains("admin"), "Should contain admin role");
     assertFalse(usersContent.contains("Laptop"), "Should not contain product data");
-    
+
     // Verify products extraction
     assertTrue(productsFile.exists(), "Products file should exist");
     String productsContent = Files.readString(productsFile.toPath());
@@ -143,18 +138,18 @@ public class SimpleJsonPathRefreshTest {
     assertTrue(productsContent.contains("Laptop"), "Should contain Laptop");
     assertTrue(productsContent.contains("999.99"), "Should contain price");
     assertFalse(productsContent.contains("Alice"), "Should not contain user data");
-    
+
     // Verify both conversions were recorded
     ConversionMetadata metadata = new ConversionMetadata(schemaDir);
-    
+
     File usersSource = metadata.findOriginalSource(usersFile);
     assertNotNull(usersSource, "Users conversion should be recorded");
     assertEquals(sourceJsonFile.getCanonicalPath(), usersSource.getCanonicalPath());
-    
+
     File productsSource = metadata.findOriginalSource(productsFile);
     assertNotNull(productsSource, "Products conversion should be recorded");
     assertEquals(sourceJsonFile.getCanonicalPath(), productsSource.getCanonicalPath());
-    
+
     System.out.println("✅ Multiple JSONPath extractions from same source recorded correctly");
   }
 }

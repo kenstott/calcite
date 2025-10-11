@@ -104,7 +104,7 @@ Within the ECON schema, tables share common dimensions but don't have strict FK 
 ### Joining ECON with GEO data (using FK)
 ```sql
 -- Regional employment with full state information
-SELECT 
+SELECT
     re.date,
     re.state_code,
     ts.state_name,
@@ -121,14 +121,14 @@ WHERE re.area_type = 'state'
 ### Attempting conceptual join (no FK, requires careful filtering)
 ```sql
 -- Regional income for states only (geo_fips must be 2-digit)
-SELECT 
+SELECT
     ri.geo_name,
     ri.year,
     ri.value as personal_income,
     ts.state_name,
     ts.population
 FROM econ.regional_income ri
-LEFT JOIN geo.tiger_states ts 
+LEFT JOIN geo.tiger_states ts
     ON ri.geo_fips = ts.state_fips
     AND LENGTH(ri.geo_fips) = 2  -- Only state-level FIPS
 WHERE ri.metric = 'Total Personal Income'
@@ -164,7 +164,7 @@ Constraints can be accessed programmatically through:
 
 The ECON schema implements:
 - **10 Primary Keys**: One for each table, ensuring data integrity
-- **6 Foreign Keys**: 
+- **6 Foreign Keys**:
   - 2 Cross-schema FKs to GEO schema (regional_employment, regional_income)
   - 3 Intra-schema FKs within ECON (employment_statistics, inflation_metrics, gdp_components)
   - 1 Cross-schema FK from SEC to GEO (documented for completeness)

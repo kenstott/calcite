@@ -82,8 +82,8 @@ Each data type has its own partitioning scheme optimized for common queries.
 ```sql
 -- Find all Apple 10-K filings
 SELECT * FROM govdata
-WHERE source = 'sec' 
-  AND type = 'filing' 
+WHERE source = 'sec'
+  AND type = 'filing'
   AND filing_type = '10K'
   AND cik = '0000320193';
 
@@ -95,14 +95,14 @@ WHERE source = 'geo'
   AND state_fips = '06';
 
 -- Join company locations with demographics
-SELECT 
+SELECT
   s.company_name,
   s.zip,
   g.median_income,
   g.population
 FROM govdata s
 JOIN govdata g ON s.zip = g.zip
-WHERE s.source = 'sec' 
+WHERE s.source = 'sec'
   AND g.source = 'geo'
   AND g.type = 'demographic';
 ```

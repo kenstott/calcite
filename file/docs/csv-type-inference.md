@@ -27,7 +27,7 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
         "directory": "/path/to/csv/files",
-        
+
         // CSV Type Inference Configuration
         "csvTypeInference": {
           "enabled": true,                    // Enable type inference (default: false)
@@ -65,7 +65,7 @@ You can override type inference settings for specific tables:
     },
     {
       "name": "LARGE_LOG",
-      "type": "csv", 
+      "type": "csv",
       "path": "large_log.csv",
       "csvTypeInference": {
         "enabled": true,
@@ -222,7 +222,7 @@ To maintain backward compatibility, type inference is **disabled by default**. E
 
 ```java
 // Create configuration
-CsvTypeInferrer.TypeInferenceConfig config = 
+CsvTypeInferrer.TypeInferenceConfig config =
     CsvTypeInferrer.TypeInferenceConfig.builder()
         .enabled(true)
         .samplingRate(0.1)
@@ -231,12 +231,12 @@ CsvTypeInferrer.TypeInferenceConfig config =
         .build();
 
 // Infer types
-List<CsvTypeInferrer.ColumnTypeInfo> types = 
+List<CsvTypeInferrer.ColumnTypeInfo> types =
     CsvTypeInferrer.inferTypes(source, config, "UNCHANGED");
 
 // Use inferred types
 for (ColumnTypeInfo info : types) {
-    System.out.println(info.columnName + ": " + info.inferredType + 
+    System.out.println(info.columnName + ": " + info.inferredType +
                       " (nullable=" + info.nullable + ")");
 }
 ```

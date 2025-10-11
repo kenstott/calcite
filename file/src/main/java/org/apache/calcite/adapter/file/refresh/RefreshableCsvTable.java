@@ -27,13 +27,13 @@ import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.util.Source;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Refreshable CSV table that re-reads the source file when modified.

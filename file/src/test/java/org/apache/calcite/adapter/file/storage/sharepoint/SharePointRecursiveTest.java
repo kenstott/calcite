@@ -46,35 +46,35 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class SharePointRecursiveTest {
-  
+
   private static String tenantId;
   private static String clientId;
   private static String certificatePath;
   private static String certificatePassword;
   private static String siteUrl;
   private static String clientSecret;
-  
+
   @BeforeAll
   static void setup() {
     Properties props = loadProperties();
-    
+
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
     clientSecret = props.getProperty("SHAREPOINT_CLIENT_SECRET");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
     if (certFile.exists()) {
       certificatePath = certFile.getAbsolutePath();
     }
-    
+
     System.out.println("SharePoint Test Configuration:");
     System.out.println("  Site URL: " + siteUrl);
     System.out.println("  Client ID: " + clientId);
     System.out.println("  Certificate: " + (certificatePath != null ? "configured" : "not found"));
   }
-  
+
   private static Properties loadProperties() {
     Properties props = new Properties();
     File propsFile = new File("local-test.properties");
@@ -84,7 +84,7 @@ public class SharePointRecursiveTest {
     if (!propsFile.exists()) {
       propsFile = new File("/Users/kennethstott/ndc-calcite/calcite-rs-jni/calcite/file/local-test.properties");
     }
-    
+
     if (propsFile.exists()) {
       try (InputStream is = new FileInputStream(propsFile)) {
         Properties fileProps = new Properties();
@@ -97,16 +97,15 @@ public class SharePointRecursiveTest {
     }
     return props;
   }
-  
-  @Test
-  void testRecursiveDiscovery() throws Exception {
+
+  @Test void testRecursiveDiscovery() throws Exception {
     if (siteUrl == null || clientId == null) {
       System.out.println("Skipping test - SharePoint not configured");
       return;
     }
-    
+
     System.out.println("\n=== TESTING RECURSIVE FILE DISCOVERY ===\n");
-    
+
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
@@ -121,10 +120,10 @@ public class SharePointRecursiveTest {
           "/Shared Documents",     // Document library root
           ""                       // Empty path
       };
-      
+
       for (String startPath : startPaths) {
         System.out.println("\n--- Testing with directory: '" + startPath + "' and recursive=true ---");
-        
+
         Map<String, Object> operand = new HashMap<>();
         operand.put("directory", startPath);
         operand.put("storageType", "sharepoint");
@@ -135,7 +134,7 @@ public class SharePointRecursiveTest {
         storageConfig.put("siteUrl", siteUrl);
         storageConfig.put("tenantId", tenantId);
         storageConfig.put("clientId", clientId);
-        
+
         // Use certificate if available, otherwise fall back to client secret
         if (certificatePath != null && certificatePassword != null) {
           storageConfig.put("certificatePath", certificatePath);
@@ -149,41 +148,41 @@ public class SharePointRecursiveTest {
           System.out.println("No authentication method available");
           continue;
         }
-        
+
         operand.put("storageConfig", storageConfig);
 
         FileSchemaFactory factory = FileSchemaFactory.INSTANCE;
         String schemaName = "sp_" + startPath.replace("/", "_").replace(" ", "_");
         if (schemaName.equals("sp_")) schemaName = "sp_root";
-        
+
         try {
           Schema schema = factory.create(rootSchema, schemaName, operand);
-          
+
           // Add the schema to the root schema
           rootSchema.add(schemaName, schema);
-          
+
           // Use reflection to get table map
           if (schema instanceof FileSchema) {
             FileSchema fs = (FileSchema) schema;
             Method method = FileSchema.class.getDeclaredMethod("getTableMap");
             method.setAccessible(true);
             Map<String, ?> tables = (Map<String, ?>) method.invoke(fs);
-            
+
             System.out.println("Found " + tables.size() + " tables:");
             for (String tableName : tables.keySet()) {
               System.out.println("  - " + tableName);
-              
+
               // Check if it's a CSV file
-              if (tableName.toLowerCase().contains("departments") || 
+              if (tableName.toLowerCase().contains("departments") ||
                   tableName.toLowerCase().contains("employees")) {
                 System.out.println("    ✓ Found expected CSV table!");
               }
             }
-            
+
             if (tables.isEmpty()) {
               System.out.println("  ⚠️  No tables found with recursive=true from path: " + startPath);
             }
-            
+
             // Try to query if we found tables
             if (tables.size() > 0) {
               String firstTable = tables.keySet().iterator().next();
@@ -205,7 +204,7 @@ public class SharePointRecursiveTest {
           e.printStackTrace();
         }
       }
-      
+
       System.out.println("\n=== CONCLUSION ===");
       System.out.println("With recursive=true, the FileSchema should discover all CSV files");
       System.out.println("regardless of their location in the directory tree.");

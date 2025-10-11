@@ -33,13 +33,13 @@ public class WikipediaScraperTest {
 
       assertNotNull(constituents, "Constituents list should not be null");
       assertTrue(constituents.size() > 0, "Should find at least one constituent");
-      
+
       // Verify each constituent is a valid ticker/CIK
       for (String constituent : constituents) {
         assertNotNull(constituent, "Constituent should not be null");
         assertFalse(constituent.trim().isEmpty(), "Constituent should not be empty");
       }
-      
+
       // Should find approximately 30 DJIA constituents
       assertTrue(constituents.size() >= 25 && constituents.size() <= 35,
           "Expected 25-35 DJIA constituents, found " + constituents.size());

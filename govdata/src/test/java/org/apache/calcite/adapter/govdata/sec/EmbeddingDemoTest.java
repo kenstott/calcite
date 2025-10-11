@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.similarity.SimilarityFunctions;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +28,8 @@ import org.junit.jupiter.api.Test;
 public class EmbeddingDemoTest {
 
   @Test public void demonstrateEmbeddings() {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("XBRL FINANCIAL TEXT EMBEDDING DEMONSTRATION");
 
     // Sample financial texts
@@ -171,7 +173,8 @@ public class EmbeddingDemoTest {
       System.out.printf("  Best matching context: %s (similarity: %.3f)\n", bestContext, bestSim);
     }
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("DEMONSTRATION COMPLETE");
   }
 }

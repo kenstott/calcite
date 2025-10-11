@@ -8,7 +8,7 @@ Tests are organized into three main categories using JUnit 5 tags:
 
 ### Unit Tests (`@Tag("unit")`)
 - **Purpose**: Test individual components in isolation
-- **Characteristics**: 
+- **Characteristics**:
   - Run quickly (typically under 1 second)
   - No external dependencies or credentials required
   - Use mocks/stubs for external dependencies
@@ -199,7 +199,7 @@ Static test data is located in:
 ### Large Test Datasets
 Performance tests generate synthetic data:
 - **Small**: 1,000 rows (quick validation)
-- **Medium**: 100,000 rows (realistic testing) 
+- **Medium**: 100,000 rows (realistic testing)
 - **Large**: 1,000,000+ rows (performance benchmarking)
 
 ## Test Execution Environments
@@ -238,10 +238,10 @@ Performance tests generate synthetic data:
 public class MyIntegrationTest {
   @BeforeEach
   void checkCredentials() {
-    assumeTrue(hasRequiredCredentials(), 
+    assumeTrue(hasRequiredCredentials(),
         "Skipping - credentials not available");
   }
-  
+
   private boolean hasRequiredCredentials() {
     return System.getProperty("service.host") != null
         && System.getProperty("service.auth") != null;
@@ -255,17 +255,17 @@ public class MyIntegrationTest {
 public class MyPerformanceTest {
   @BeforeEach
   void checkEnabled() {
-    assumeTrue(Boolean.getBoolean("enablePerformanceTests"), 
+    assumeTrue(Boolean.getBoolean("enablePerformanceTests"),
         "Performance tests disabled - use -DenablePerformanceTests=true");
   }
-  
+
   @Test
   void measurePerformance() {
     // Warmup runs
     for (int i = 0; i < WARMUP_RUNS; i++) {
       runOperation();
     }
-    
+
     // Measurement runs
     long totalTime = 0;
     for (int i = 0; i < TEST_RUNS; i++) {
@@ -273,7 +273,7 @@ public class MyPerformanceTest {
       runOperation();
       totalTime += System.currentTimeMillis() - start;
     }
-    
+
     System.out.printf("Average time: %d ms%n", totalTime / TEST_RUNS);
   }
 }

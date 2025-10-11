@@ -15,7 +15,7 @@ The File Adapter supports environment variable substitution in all configuration
 
 Environment variables are automatically converted to appropriate JSON types:
 - **Numbers**: `"${PORT:8080}"` → `8080` (unquoted number)
-- **Booleans**: `"${ENABLED:true}"` → `true` (unquoted boolean)  
+- **Booleans**: `"${ENABLED:true}"` → `true` (unquoted boolean)
 - **Strings**: `"${NAME:value}"` → `"value"` (quoted string)
 
 ### Resolution Order
@@ -145,7 +145,7 @@ Each schema operates as an independent instance with its own:
     },
     {
       "name": "data_lake",
-      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory", 
+      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
         "storageType": "s3",
         "bucket": "company-data-lake",
@@ -188,12 +188,12 @@ With multiple schemas configured with different engines, you can:
 1. **Query across engines seamlessly:**
 ```sql
 -- Join in-memory cached data with S3 data lake
-SELECT 
+SELECT
   cache.user_id,
   cache.session_data,
   lake.historical_purchases
 FROM hot_cache.active_users cache
-JOIN data_lake.purchase_history lake 
+JOIN data_lake.purchase_history lake
   ON cache.user_id = lake.customer_id
 WHERE cache.last_active > CURRENT_TIMESTAMP - INTERVAL '1' HOUR;
 ```
@@ -381,7 +381,7 @@ The File Adapter's DuckDB integration includes a sophisticated pre-optimizer lay
    ```sql
    -- This query returns instantly (0ms) with HLL optimization
    SELECT COUNT(DISTINCT customer_id) FROM large_table;
-   
+
    -- Without HLL: DuckDB would scan all data (1-3ms for 10K rows, seconds for millions)
    -- With HLL: Returns pre-computed estimate immediately
    ```
@@ -715,7 +715,7 @@ Configure Iceberg tables within the file adapter for advanced time travel and te
 ```json
 {
   "name": "orders_timeline",
-  "format": "iceberg", 
+  "format": "iceberg",
   "url": "/path/to/iceberg/orders",
   "timeRange": {
     "start": "2024-01-01T00:00:00Z",
@@ -771,7 +771,7 @@ Once configured, you can run powerful temporal analytics:
 
 ```sql
 -- Trend analysis across snapshots
-SELECT 
+SELECT
   snapshot_time,
   COUNT(*) as daily_orders,
   AVG(amount) as avg_order_value
@@ -780,11 +780,11 @@ GROUP BY snapshot_time
 ORDER BY snapshot_time;
 
 -- Compare first and last snapshots
-SELECT 
+SELECT
   customer_id,
-  SUM(CASE WHEN snapshot_time = (SELECT MIN(snapshot_time) FROM sales_history) 
+  SUM(CASE WHEN snapshot_time = (SELECT MIN(snapshot_time) FROM sales_history)
            THEN amount ELSE 0 END) as initial_spend,
-  SUM(CASE WHEN snapshot_time = (SELECT MAX(snapshot_time) FROM sales_history) 
+  SUM(CASE WHEN snapshot_time = (SELECT MAX(snapshot_time) FROM sales_history)
            THEN amount ELSE 0 END) as final_spend
 FROM sales_history
 GROUP BY customer_id;
@@ -811,11 +811,11 @@ Control which linked data files are discovered and processed:
     "crawlConfig": {
       "enabled": true,
       "maxDepth": 2,
-      
+
       // Pattern-based data file discovery
       "dataFilePattern": ".*\\.(csv|xlsx?|parquet|json)$",  // Regex for included files
       "dataFileExcludePattern": ".*(test|temp|backup).*",    // Regex for excluded files
-      
+
       // Set to null to disable data file processing entirely
       // "dataFilePattern": null
     }

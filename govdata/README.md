@@ -10,7 +10,7 @@ The GovData Adapter provides unified SQL access to various U.S. government data 
 GovData transforms disparate government APIs and data formats into queryable SQL tables, allowing you to:
 
 - **Analyze SEC filings** alongside economic indicators
-- **Join financial data** with geographic boundaries  
+- **Join financial data** with geographic boundaries
 - **Correlate company performance** with regional employment statistics
 - **Build composite views** across multiple government data sources
 

@@ -89,7 +89,7 @@ High-performance analytical engine with advanced SQL features, SIMD optimization
 Specialized for in-memory columnar processing with advanced SIMD vectorization and ColumnBatch optimizations.
 
 **Best For:**
-- **Datasets that fit in memory (< 2GB)** 
+- **Datasets that fit in memory (< 2GB)**
 - **Real-time analytics** requiring microsecond latency
 - **SIMD-accelerated operations** (aggregations, filters)
 - **Interactive dashboards** with fast response times
@@ -213,7 +213,7 @@ Set appropriate JVM heap size based on dataset size:
 # For large datasets (> 10GB)
 -Xmx8g -Xms4g
 
-# For medium datasets (1-10GB)  
+# For medium datasets (1-10GB)
 -Xmx4g -Xms2g
 
 # For small datasets (< 1GB)
@@ -244,7 +244,7 @@ Recommended GC settings for different workloads:
 # For throughput-focused workloads
 -XX:+UseG1GC -XX:MaxGCPauseMillis=200
 
-# For latency-sensitive workloads  
+# For latency-sensitive workloads
 -XX:+UseZGC -XX:UnlockExperimentalVMOptions
 
 # For mixed workloads
@@ -395,7 +395,7 @@ Configuration:
 Query optimization:
 ```sql
 -- Efficient: Only scans January 2024 partition
-SELECT * FROM sales 
+SELECT * FROM sales
 WHERE year = 2024 AND month = 1;
 ```
 
@@ -557,13 +557,13 @@ Use consistent benchmarking for optimization:
 -- Test query performance
 EXPLAIN PLAN FOR
 SELECT region, SUM(sales) as total_sales
-FROM sales_data 
+FROM sales_data
 WHERE year = 2024
 GROUP BY region
 ORDER BY total_sales DESC;
 
 -- Measure execution time
-SELECT 
+SELECT
   query_id,
   execution_time_ms,
   rows_processed,

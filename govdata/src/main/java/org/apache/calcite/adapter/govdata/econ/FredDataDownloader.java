@@ -22,7 +22,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -216,18 +214,15 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     this.apiKey = apiKey;
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return MIN_REQUEST_INTERVAL_MS;
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return MAX_RETRIES;
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return RETRY_DELAY_MS;
   }
 
@@ -491,8 +486,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Convert to Parquet format
     String parquetFileName =
         String.format("fred_indicators_%s_%s.parquet", startDate.substring(0, 10), endDate.substring(0, 10));
-    String relativePath = String.format("source=econ/type=fred_indicators/date_range=%s_%s/%s",
-        startDate.substring(0, 10), endDate.substring(0, 10), parquetFileName);
+    String relativePath =
+        String.format("source=econ/type=fred_indicators/date_range=%s_%s/%s", startDate.substring(0, 10), endDate.substring(0, 10), parquetFileName);
     convertToParquet(observations, relativePath);
 
     // For compatibility, return a File representing the Parquet file
@@ -742,34 +737,40 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     List<Map<String, Object>> observations = new ArrayList<>();
 
     // Look for FRED indicators JSON files in the source directory
-    // We use direct file operations since these are JSON cache files
-    File sourceDirFile = new File(cacheDir, sourceDir.getName());
-    File[] files = sourceDirFile.listFiles((dir, name) -> name.equals("fred_indicators.json"));
+    File[] files = sourceDir.listFiles((dir, name) -> name.equals("fred_indicators.json"));
 
-    if (files != null) {
-      for (File file : files) {
-        try {
-          String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-          JsonNode obsArray = root.get("observations");
+    if (files == null || files.length == 0) {
+      LOGGER.warn("No fred_indicators.json found in {}", sourceDir);
+      return;
+    }
 
-          if (obsArray != null && obsArray.isArray()) {
-            for (JsonNode obs : obsArray) {
-              Map<String, Object> observation = new HashMap<>();
-              observation.put("series_id", obs.get("series_id").asText());
-              observation.put("series_name", obs.get("series_name").asText());
-              observation.put("date", obs.get("date").asText());
-              observation.put("value", obs.get("value").asDouble());
-              observation.put("units", obs.get("units").asText());
-              observation.put("frequency", obs.get("frequency").asText());
+    for (File file : files) {
+      try {
+        String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        JsonNode root = MAPPER.readTree(content);
+        JsonNode obsArray = root.get("observations");
 
-              observations.add(observation);
-            }
+        if (obsArray != null && obsArray.isArray()) {
+          for (JsonNode obs : obsArray) {
+            Map<String, Object> observation = new HashMap<>();
+            observation.put("series_id", obs.get("series_id").asText());
+            observation.put("series_name", obs.get("series_name").asText());
+            observation.put("date", obs.get("date").asText());
+            observation.put("value", obs.get("value").asDouble());
+            observation.put("units", obs.get("units").asText());
+            observation.put("frequency", obs.get("frequency").asText());
+
+            observations.add(observation);
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to process FRED JSON file {}: {}", file.getPath(), e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.error("Failed to process FRED JSON file {}: {}", file.getPath(), e.getMessage(), e);
       }
+    }
+
+    if (observations.isEmpty()) {
+      LOGGER.warn("No observations found in FRED indicators JSON files");
+      return;
     }
 
     // Write parquet file
@@ -840,8 +841,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     String startDate = startYear + "-01-01";
     String endDate = endYear + "-12-31";
 
-    String relativePath = String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json",
-        seriesId, seriesId, startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, startYear, endYear);
 
     // Use tableName for cache key if provided, otherwise use default
     String dataType = tableName != null ? tableName : "custom_fred_series";

@@ -241,7 +241,7 @@ Create a new `safety` (public safety) schema within the govdata adapter to provi
 ### Public Safety Risk Assessment
 ```sql
 -- Comprehensive safety analysis for business location
-SELECT 
+SELECT
     g.county_name,
     g.state_name,
     s.violent_crime_rate_per_100k,
@@ -251,7 +251,7 @@ SELECT
     s.overall_safety_score,
     s.safety_rank_in_state,
     e.unemployment_rate,
-    CASE 
+    CASE
         WHEN s.overall_safety_score >= 8.0 THEN 'LOW RISK'
         WHEN s.overall_safety_score >= 6.0 THEN 'MODERATE RISK'
         ELSE 'HIGH RISK'
@@ -259,7 +259,7 @@ SELECT
 FROM safety.public_safety_index s
 JOIN geo.counties g ON s.area_code = g.county_fips
 JOIN econ.regional_employment e ON g.county_fips = e.area_code
-WHERE s.area_type = 'county' 
+WHERE s.area_type = 'county'
   AND s.year = 2023
   AND g.state_code IN ('CA', 'TX', 'FL', 'NY')
 ORDER BY s.overall_safety_score DESC;
@@ -268,7 +268,7 @@ ORDER BY s.overall_safety_score DESC;
 ### Crime Pattern Analysis
 ```sql
 -- Identify crime trends and hotspots
-SELECT 
+SELECT
     l.agency_name,
     l.state_code,
     COUNT(*) as total_incidents,
@@ -290,7 +290,7 @@ LIMIT 20;
 ### Disaster Impact Assessment
 ```sql
 -- Analyze disaster frequency and costs by region
-SELECT 
+SELECT
     g.state_name,
     COUNT(DISTINCT d.disaster_number) as disaster_count,
     STRING_AGG(DISTINCT d.incident_type, ', ') as disaster_types,
@@ -310,7 +310,7 @@ ORDER BY federal_cost_millions DESC;
 ### Traffic Safety Corridor Analysis
 ```sql
 -- Identify high-risk traffic corridors for transportation planning
-SELECT 
+SELECT
     t.county_fips,
     g.county_name,
     g.state_name,
@@ -333,7 +333,7 @@ LIMIT 25;
 ### Cross-Domain Business Risk Analysis
 ```sql
 -- Comprehensive business location risk combining safety, economic, and demographic factors
-SELECT 
+SELECT
     c.company_name,
     c.facility_city,
     c.facility_state,
@@ -344,7 +344,7 @@ SELECT
     e.unemployment_rate,
     e.median_household_income,
     census.poverty_rate,
-    CASE 
+    CASE
         WHEN s.overall_safety_score >= 7.5 AND e.unemployment_rate <= 5.0 THEN 'PREFERRED'
         WHEN s.overall_safety_score >= 6.0 AND e.unemployment_rate <= 7.5 THEN 'ACCEPTABLE'
         ELSE 'HIGH_RISK'
@@ -353,7 +353,7 @@ FROM sec.company_facilities c
 JOIN safety.public_safety_index s ON c.county_fips = s.area_code
 JOIN (
     SELECT county_fips, COUNT(*) as disaster_count_5year
-    FROM safety.disaster_declarations 
+    FROM safety.disaster_declarations
     WHERE declaration_date >= CURRENT_DATE - INTERVAL '5 years'
     GROUP BY county_fips
 ) d ON c.county_fips = d.county_fips
@@ -412,7 +412,7 @@ ORDER BY s.overall_safety_score DESC, e.unemployment_rate;
     "operand": {
       "dataSource": "safety",
       "fbiApiKey": "${FBI_API_KEY}",
-      "femaApiKey": "${FEMA_API_KEY}",  
+      "femaApiKey": "${FEMA_API_KEY}",
       "nhtsaApiKey": "${NHTSA_API_KEY}",
       "updateFrequency": "monthly",
       "historicalDepth": "5 years",
@@ -439,13 +439,13 @@ ORDER BY s.overall_safety_score DESC, e.unemployment_rate;
 ### External Libraries
 - FBI Crime Data Explorer API client
 - NHTSA FARS API integration
-- OpenFEMA API client  
+- OpenFEMA API client
 - Socrata/CKAN API adapters for local data
 - Spatial analysis libraries (JTS, GeoTools)
 - Time series analysis for trend calculation
 
 ### Data Processing Pipeline
-- ETL framework for multi-source data harmonization  
+- ETL framework for multi-source data harmonization
 - Geocoding services for address standardization
 - Statistical libraries for trend analysis and scoring
 - Caching layer with geographic indexing
@@ -480,7 +480,7 @@ ORDER BY s.overall_safety_score DESC, e.unemployment_rate;
 3. **Emergency Management**: Shelter capacity, evacuation route planning
 4. **Public Health Integration**: Injury surveillance, substance abuse treatment data
 
-### Real-Time Capabilities  
+### Real-Time Capabilities
 1. **Streaming Crime Data**: Real-time incident feeds from participating agencies
 2. **Emergency Alert Integration**: Active disaster monitoring and business impact alerts
 3. **Traffic Incident Feeds**: Real-time crash data for supply chain disruption analysis

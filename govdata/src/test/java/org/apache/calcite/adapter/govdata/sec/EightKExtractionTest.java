@@ -1,11 +1,26 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.Tag;
-import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -16,6 +31,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Integration test to verify 8K earnings call paragraphs are being extracted and vectorized.
@@ -36,8 +53,7 @@ public class EightKExtractionTest {
     modelPath = createTestModel();
   }
 
-  @Test
-  void testAvailableTables() throws Exception {
+  @Test void testAvailableTables() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
@@ -56,34 +72,33 @@ public class EightKExtractionTest {
     }
   }
 
-  @Test
-  void test8KEarningsCallExtraction() throws Exception {
+  @Test void test8KEarningsCallExtraction() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
-      
+
       // Check if we have 8K earnings data - first count total entries
       String countSql = "SELECT COUNT(*) as total FROM sec.earnings WHERE filing_type = '8K'";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(countSql)) {
-        
+
         rs.next();
         int total8K = rs.getInt("total");
         System.out.println("Total 8K entries in earnings table: " + total8K);
-        
+
         if (total8K > 0) {
           // Now look for actual earnings-related content
           String sql = "SELECT * FROM sec.earnings WHERE filing_type = '8K' LIMIT 3";
-          
+
           try (ResultSet dataRs = stmt.executeQuery(sql)) {
             int count = 0;
             while (dataRs.next() && count < 3) {
               count++;
               System.out.println("\n--- 8K Earnings Entry " + count + " ---");
-              
+
               // Print all columns available to see the schema
               ResultSetMetaData rsmd = dataRs.getMetaData();
               for (int i = 1; i <= rsmd.getColumnCount(); i++) {
@@ -96,7 +111,7 @@ public class EightKExtractionTest {
                 System.out.println(colName + ": " + valueStr);
               }
             }
-            
+
             assertTrue(count > 0 || total8K == 0, "Should have some data if total > 0");
             System.out.println("\n✓ 8K earnings call text extraction verified - found " + total8K + " entries");
           }
@@ -107,14 +122,13 @@ public class EightKExtractionTest {
     }
   }
 
-  @Test
-  void test8KSectionTypes() throws Exception {
+  @Test void test8KSectionTypes() throws Exception {
     Properties props = new Properties();
-    props.setProperty("lex", "ORACLE"); 
+    props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
-      
+
       // Check what sections are being extracted from 8K filings
       String sql = "SELECT DISTINCT section, COUNT(*) as section_count " +
           "FROM sec.vectorized_blobs " +
@@ -133,10 +147,10 @@ public class EightKExtractionTest {
           String section = rs.getString("section");
           int count = rs.getInt("section_count");
           totalSections++;
-          
+
           assertNotNull(section, "Section name should not be null");
           assertTrue(count > 0, "Section count should be positive");
-          
+
           System.out.println("- " + section + ": " + count + " entries");
         }
 
@@ -160,32 +174,55 @@ public class EightKExtractionTest {
   }
 
   private String createTestModel() throws Exception {
-    // Use the existing Apple/Microsoft cache for testing - but use SecSchemaFactory  
+    // Use the existing Apple/Microsoft cache for testing - but use SecSchemaFactory
     String existingCacheDir = "/Volumes/T9/sec-test-aapl-msft-cache";
-    
-    String model = String.format("{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"sec\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"sec\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"directory\": \"%s\",\n" +
-        "      \"ciks\": [\"0000320193\", \"0000789019\"],\n" +
-        "      \"filingTypes\": [\"8-K\"],\n" +
-        "      \"autoDownload\": false,\n" +
-        "      \"startYear\": 2022,\n" +
-        "      \"endYear\": 2024,\n" +
-        "      \"executionEngine\": \"duckdb\",\n" +
-        "      \"testMode\": false,\n" +
-        "      \"ephemeralCache\": false,\n" +
-        "      \"textSimilarity\": {\n" +
-        "        \"enabled\": true,\n" +
-        "        \"embeddingDimension\": 256\n" +
-        "      }\n" +
-        "    }\n" +
-        "  }]\n" +
+
+    String model = String.format("{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"sec\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"sec\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"directory\": \"%s\",\n"
+  +
+        "      \"ciks\": [\"0000320193\", \"0000789019\"],\n"
+  +
+        "      \"filingTypes\": [\"8-K\"],\n"
+  +
+        "      \"autoDownload\": false,\n"
+  +
+        "      \"startYear\": 2022,\n"
+  +
+        "      \"endYear\": 2024,\n"
+  +
+        "      \"executionEngine\": \"duckdb\",\n"
+  +
+        "      \"testMode\": false,\n"
+  +
+        "      \"ephemeralCache\": false,\n"
+  +
+        "      \"textSimilarity\": {\n"
+  +
+        "        \"enabled\": true,\n"
+  +
+        "        \"embeddingDimension\": 256\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}", existingCacheDir);
 
     Path modelFile = Paths.get(testDataDir, "model.json");

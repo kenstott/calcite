@@ -17,9 +17,8 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -53,24 +51,42 @@ public class SecConstraintMetadataTest {
   @BeforeEach
   void setUp() throws Exception {
     // Create test model with constraint support enabled
-    String model = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"SEC\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"SEC\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"directory\": \"" + testDataDir + "\",\n" +
-        "      \"ephemeralCache\": true,\n" +
-        "      \"testMode\": true,\n" +
-        "      \"useMockData\": true,\n" +
-        "      \"enableConstraints\": true,\n" +
-        "      \"ciks\": [\"TEST\"],\n" +
-        "      \"startYear\": 2023,\n" +
-        "      \"endYear\": 2023\n" +
-        "    }\n" +
-        "  }]\n" +
+    String model = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"SEC\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"SEC\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"directory\": \"" + testDataDir + "\",\n"
+  +
+        "      \"ephemeralCache\": true,\n"
+  +
+        "      \"testMode\": true,\n"
+  +
+        "      \"useMockData\": true,\n"
+  +
+        "      \"enableConstraints\": true,\n"
+  +
+        "      \"ciks\": [\"TEST\"],\n"
+  +
+        "      \"startYear\": 2023,\n"
+  +
+        "      \"endYear\": 2023\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     Path modelFile = Paths.get(testDataDir).resolve("model.json");
@@ -78,14 +94,13 @@ public class SecConstraintMetadataTest {
     modelPath = modelFile.toString();
   }
 
-  @Test
-  void testPrimaryKeyMetadata() throws Exception {
+  @Test void testPrimaryKeyMetadata() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       DatabaseMetaData metadata = conn.getMetaData();
       assertNotNull(metadata);
@@ -109,14 +124,13 @@ public class SecConstraintMetadataTest {
     }
   }
 
-  @Test
-  void testForeignKeyMetadata() throws Exception {
+  @Test void testForeignKeyMetadata() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       DatabaseMetaData metadata = conn.getMetaData();
 
@@ -128,40 +142,57 @@ public class SecConstraintMetadataTest {
           String pkColumnName = rs.getString("PKCOLUMN_NAME");
           String fkColumnName = rs.getString("FKCOLUMN_NAME");
 
-          if ("filing_contexts".equals(pkTableName) && 
+          if ("filing_contexts".equals(pkTableName) &&
               "context_id".equals(pkColumnName) &&
               "context_ref".equals(fkColumnName)) {
             foundContextFK = true;
           }
         }
 
-        assertTrue(foundContextFK, 
+        assertTrue(foundContextFK,
             "Should find foreign key from financial_line_items.context_ref to filing_contexts.context_id");
       }
     }
   }
 
-  @Test
-  void testConstraintsCanBeDisabled() throws Exception {
+  @Test void testConstraintsCanBeDisabled() throws Exception {
     // Create model with constraints disabled
-    String model = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"SEC\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"SEC\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"directory\": \"" + testDataDir + "\",\n" +
-        "      \"ephemeralCache\": true,\n" +
-        "      \"testMode\": true,\n" +
-        "      \"useMockData\": true,\n" +
-        "      \"enableConstraints\": false,\n" +
-        "      \"ciks\": [\"TEST\"],\n" +
-        "      \"startYear\": 2023,\n" +
-        "      \"endYear\": 2023\n" +
-        "    }\n" +
-        "  }]\n" +
+    String model = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"SEC\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"SEC\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"directory\": \"" + testDataDir + "\",\n"
+  +
+        "      \"ephemeralCache\": true,\n"
+  +
+        "      \"testMode\": true,\n"
+  +
+        "      \"useMockData\": true,\n"
+  +
+        "      \"enableConstraints\": false,\n"
+  +
+        "      \"ciks\": [\"TEST\"],\n"
+  +
+        "      \"startYear\": 2023,\n"
+  +
+        "      \"endYear\": 2023\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     Path modelFile = Paths.get(testDataDir).resolve("model-no-constraints.json");
@@ -171,8 +202,8 @@ public class SecConstraintMetadataTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelFile, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props)) {
 
       DatabaseMetaData metadata = conn.getMetaData();
 
@@ -183,14 +214,13 @@ public class SecConstraintMetadataTest {
     }
   }
 
-  @Test
-  void testTableMetadataWithConstraints() throws Exception {
+  @Test void testTableMetadataWithConstraints() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       DatabaseMetaData metadata = conn.getMetaData();
 

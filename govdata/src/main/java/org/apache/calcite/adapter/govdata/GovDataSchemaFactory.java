@@ -37,7 +37,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -441,8 +440,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         new WorldBankDataDownloader(econCacheDir, storageProvider, cacheManifest);
 
     // Create and register the ECON converter
-    EconRawToParquetConverter econConverter = new EconRawToParquetConverter(
-        blsDownloader, fredDownloader, treasuryDownloader, beaDownloader, worldBankDownloader);
+    EconRawToParquetConverter econConverter =
+        new EconRawToParquetConverter(blsDownloader, fredDownloader, treasuryDownloader, beaDownloader, worldBankDownloader);
 
     fileSchema.registerRawToParquetConverter(econConverter);
 

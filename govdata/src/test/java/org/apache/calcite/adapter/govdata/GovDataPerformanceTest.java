@@ -29,7 +29,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -108,8 +107,7 @@ public class GovDataPerformanceTest {
     LOGGER.info("Running GovData performance tests with cache directory: {}", cacheDir);
   }
 
-  @Test
-  void testSchemaCreationPerformance() throws SQLException {
+  @Test void testSchemaCreationPerformance() throws SQLException {
     LOGGER.info("Testing schema creation performance");
 
     Properties props = new Properties();
@@ -132,8 +130,8 @@ public class GovDataPerformanceTest {
       // Verify all schemas are accessible
       String[] schemas = {"SEC", "ECON", "GEO"};
       for (String schemaName : schemas) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = ?")) {
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT schema_name FROM information_schema.schemata WHERE schema_name = ?")) {
           stmt.setString(1, schemaName);
           try (ResultSet rs = stmt.executeQuery()) {
             assertTrue(rs.next(), schemaName + " schema should exist");
@@ -144,8 +142,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testSimpleQueryPerformance() throws SQLException {
+  @Test void testSimpleQueryPerformance() throws SQLException {
     LOGGER.info("Testing simple query performance");
 
     Properties props = new Properties();
@@ -178,8 +175,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testComplexJoinPerformance() throws SQLException {
+  @Test void testComplexJoinPerformance() throws SQLException {
     LOGGER.info("Testing complex join query performance");
 
     Properties props = new Properties();
@@ -220,8 +216,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testAggregationPerformance() throws SQLException {
+  @Test void testAggregationPerformance() throws SQLException {
     LOGGER.info("Testing aggregation query performance");
 
     Properties props = new Properties();
@@ -267,8 +262,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testPreparedStatementOptimization() throws SQLException {
+  @Test void testPreparedStatementOptimization() throws SQLException {
     LOGGER.info("Testing prepared statement optimization performance");
 
     Properties props = new Properties();
@@ -311,8 +305,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testConcurrentQueryPerformance() throws SQLException, InterruptedException {
+  @Test void testConcurrentQueryPerformance() throws SQLException, InterruptedException {
     LOGGER.info("Testing concurrent query performance");
 
     Properties props = new Properties();
@@ -376,8 +369,7 @@ public class GovDataPerformanceTest {
         String.format("Concurrent execution took %d ms, which seems excessive", overallTime));
   }
 
-  @Test
-  void testMemoryUsageMonitoring() throws SQLException {
+  @Test void testMemoryUsageMonitoring() throws SQLException {
     LOGGER.info("Testing memory usage during large result set processing");
 
     Properties props = new Properties();
@@ -419,8 +411,7 @@ public class GovDataPerformanceTest {
     }
   }
 
-  @Test
-  void testCacheEffectiveness() throws SQLException {
+  @Test void testCacheEffectiveness() throws SQLException {
     LOGGER.info("Testing cache effectiveness for repeated queries");
 
     Properties props = new Properties();

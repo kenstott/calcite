@@ -55,11 +55,11 @@ try (MappingIterator<Map<String,Object>> it = reader.readValues(source.reader())
 ```java
 public class RefreshableJsonlTable extends AbstractRefreshableTable {
     private JsonlMetadataManager metadataManager;
-    
+
     protected void doRefresh() {
         long lastPosition = metadataManager.getLastPosition();
         File file = source.file();
-        
+
         // Check file changes
         if (file.length() < lastPosition) {
             // File truncated/replaced - full refresh
@@ -161,7 +161,7 @@ public class RefreshCoordinator {
     private final ScheduledExecutorService executor;
     private final Map<String, ScheduledFuture<?>> pendingRefreshes;
     private final Duration debounceWindow = Duration.ofSeconds(5);
-    
+
     // Register when a table refreshes
     public void notifyTableRefreshed(String tableName) {
         Set<String> dependents = dependencyGraph.get(tableName);
@@ -171,7 +171,7 @@ public class RefreshCoordinator {
             }
         }
     }
-    
+
     // Debounced scheduling - if multiple dependencies refresh quickly
     private void scheduleDebounced(String mvName) {
         // Cancel existing scheduled refresh
@@ -179,7 +179,7 @@ public class RefreshCoordinator {
         if (existing != null && !existing.isDone()) {
             existing.cancel(false);
         }
-        
+
         // Schedule new refresh after debounce window
         ScheduledFuture<?> future = executor.schedule(
             () -> refreshMV(mvName),
@@ -195,7 +195,7 @@ public class RefreshCoordinator {
 ```
 Without debouncing:
 10:00:00 - table1 refreshes → triggers MV refresh
-10:00:01 - table2 refreshes → triggers ANOTHER MV refresh  
+10:00:01 - table2 refreshes → triggers ANOTHER MV refresh
 10:00:02 - table3 refreshes → triggers THIRD MV refresh
 = MV refreshes 3 times wastefully
 
@@ -282,7 +282,7 @@ Enable SQL queries over gRPC services by treating RPC methods as virtual tables,
     "type": "grpc",
     "options": {
       "endpoint": "grpc://api.example.com:50051",
-      "service": "UserService", 
+      "service": "UserService",
       "method": "StreamUsers",
       "proto": "schemas/user_service.proto",
       "timeout": "30s",
@@ -316,7 +316,7 @@ message User {
 service DataService {
   // Server-side streaming for large results
   rpc QueryTable(QueryRequest) returns (stream Row);
-  
+
   // Bidirectional for interactive queries
   rpc InteractiveQuery(stream QueryRequest) returns (stream Row);
 }
@@ -341,23 +341,23 @@ public class GrpcTable extends AbstractTable implements FilterableTable, Project
     private final ManagedChannel channel;
     private final ServiceDescriptor serviceDescriptor;
     private final MethodDescriptor streamMethod;
-    
+
     @Override
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters, int[] projects) {
         // Build gRPC request with pushed predicates
         QueryRequest.Builder request = QueryRequest.newBuilder();
-        
+
         // Convert Calcite filters to gRPC filter expression
         if (filters != null) {
             String filterExpr = convertFiltersToExpression(filters);
             request.setFilterExpression(filterExpr);
         }
-        
+
         // Add projection
         if (projects != null) {
             request.addAllColumns(getColumnNames(projects));
         }
-        
+
         // Stream results
         Iterator<Row> stream = stub.queryTable(request.build());
         return Linq4j.asEnumerable(() -> new GrpcEnumerator(stream, rowType));
@@ -372,9 +372,9 @@ public class GrpcTable extends AbstractTable implements FilterableTable, Project
 public class GrpcConnectionManager {
     private final Map<String, ManagedChannel> channels = new ConcurrentHashMap<>();
     private final ChannelPool pool;
-    
+
     public ManagedChannel getChannel(String endpoint) {
-        return channels.computeIfAbsent(endpoint, e -> 
+        return channels.computeIfAbsent(endpoint, e ->
             ManagedChannelBuilder.forTarget(e)
                 .usePlaintext()
                 .maxInboundMessageSize(maxMessageSize)
@@ -390,11 +390,11 @@ public class GrpcEnumerator implements Enumerator<Object[]> {
     private final Iterator<Row> stream;
     private final BlockingQueue<Row> buffer;
     private final StreamObserver<Row> observer;
-    
+
     public GrpcEnumerator(ClientCall<QueryRequest, Row> call) {
         // Handle backpressure with buffering
         this.buffer = new ArrayBlockingQueue<>(bufferSize);
-        
+
         // Async streaming with flow control
         call.start(new ClientCall.Listener<Row>() {
             @Override
@@ -410,12 +410,12 @@ public class GrpcEnumerator implements Enumerator<Object[]> {
 
 1. **Federated Queries Across Services:**
 ```sql
-SELECT 
+SELECT
     u.name,
     COUNT(o.id) as order_count,
     SUM(p.amount) as total_spent
 FROM grpc.user_service.users u
-JOIN grpc.order_service.orders o ON u.id = o.user_id  
+JOIN grpc.order_service.orders o ON u.id = o.user_id
 JOIN grpc.payment_service.payments p ON o.id = p.order_id
 WHERE u.created_at > CURRENT_DATE - INTERVAL '30' DAY
 GROUP BY u.name
@@ -424,7 +424,7 @@ GROUP BY u.name
 2. **Real-time Analytics:**
 ```sql
 -- Live dashboard from production services
-SELECT 
+SELECT
     status,
     COUNT(*) as count,
     AVG(processing_time) as avg_time
@@ -436,7 +436,7 @@ GROUP BY status
 3. **Service Mesh Observability:**
 ```sql
 -- Query Envoy/Istio metrics via gRPC
-SELECT 
+SELECT
     source_service,
     destination_service,
     p99_latency,
@@ -530,11 +530,11 @@ public class DeltaTable extends AbstractTable implements TranslatableTable {
     private final String tablePath;
     private final DeltaLog deltaLog;
     private final Snapshot snapshot;
-    
+
     public DeltaTable(String path, Map<String, Object> options) {
         this.tablePath = path;
         this.deltaLog = DeltaLog.forTable(new Configuration(), path);
-        
+
         // Handle time travel options
         if (options.containsKey("versionAsOf")) {
             Long version = (Long) options.get("versionAsOf");
@@ -547,7 +547,7 @@ public class DeltaTable extends AbstractTable implements TranslatableTable {
             this.snapshot = deltaLog.snapshot();
         }
     }
-    
+
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
         // Convert Delta schema to Calcite RelDataType
@@ -561,30 +561,30 @@ public class DeltaTable extends AbstractTable implements TranslatableTable {
 ```java
 public class DeltaEnumerator implements Enumerator<Object[]> {
     private final Iterator<Row> rows;
-    
+
     public DeltaEnumerator(Snapshot snapshot, List<String> projectedColumns) {
         // Get active files (considering deletes)
         List<AddFile> files = snapshot.getAllFiles()
             .filter(f -> !f.isDeleted())
             .collect(Collectors.toList());
-        
+
         // Read Parquet files with Delta metadata
         Dataset<Row> df = spark.read()
             .format("parquet")
             .load(files.stream()
                 .map(AddFile::getPath)
                 .toArray(String[]::new));
-        
+
         // Apply deletion vectors if present
         if (snapshot.getMetadata().isDeletionVectorsEnabled()) {
             df = applyDeletionVectors(df, snapshot);
         }
-        
+
         // Project columns
         if (projectedColumns != null) {
             df = df.select(projectedColumns.toArray(new String[0]));
         }
-        
+
         this.rows = df.toLocalIterator();
     }
 }
@@ -599,7 +599,7 @@ SELECT * FROM delta_table VERSION AS OF 10;
 SELECT * FROM delta_table TIMESTAMP AS OF '2024-01-01T00:00:00Z';
 
 -- Compare versions
-SELECT 
+SELECT
     curr.*,
     prev.*
 FROM delta_table VERSION AS OF 100 curr
@@ -617,13 +617,13 @@ public class DeltaCDCTable extends DeltaTable {
             deltaLog.getChanges(startVersion, endVersion),
             snapshot.getMetadata().getSchema()
         );
-        
+
         // Include CDC metadata columns
         changes = changes
             .withColumn("_change_type", col("_change_type"))
             .withColumn("_commit_version", col("_commit_version"))
             .withColumn("_commit_timestamp", col("_commit_timestamp"));
-        
+
         return new SparkDatasetEnumerable(changes);
     }
 }
@@ -631,7 +631,7 @@ public class DeltaCDCTable extends DeltaTable {
 
 ```sql
 -- Query CDC data
-SELECT 
+SELECT
     *,
     _change_type,
     _commit_timestamp
@@ -646,15 +646,15 @@ public class DeltaTableScan extends TableScan {
     public RelNode optimize(RelOptPlanner planner) {
         // Push filters to Delta
         List<Filter> deltaFilters = convertCalciteFilters(filters);
-        
+
         // Use Delta statistics for partition pruning
         Snapshot prunedSnapshot = snapshot.filesForScan(deltaFilters);
-        
+
         // Z-order optimization for better data skipping
         if (snapshot.getMetadata().getZOrderColumns() != null) {
             return optimizeWithZOrder(prunedSnapshot, filters);
         }
-        
+
         return this;
     }
 }
@@ -670,7 +670,7 @@ public class EvolvableDeltaTable extends DeltaTable {
             StructType mergedSchema = deltaLog.snapshot()
                 .getMetadata()
                 .getSchema();
-            
+
             // Include columns from all versions
             for (long v = 0; v <= deltaLog.snapshot().version(); v++) {
                 StructType versionSchema = deltaLog
@@ -679,7 +679,7 @@ public class EvolvableDeltaTable extends DeltaTable {
                     .getSchema();
                 mergedSchema = mergeSchemas(mergedSchema, versionSchema);
             }
-            
+
             return convertDeltaSchema(mergedSchema, typeFactory);
         }
         return super.getRowType(typeFactory);
@@ -697,7 +697,7 @@ public class RefreshableDeltaTable extends DeltaTable implements RefreshableTabl
         // Update to latest snapshot
         deltaLog.update();
         this.snapshot = deltaLog.snapshot();
-        
+
         // Clear any cached data
         clearCache();
     }
@@ -708,7 +708,7 @@ public class RefreshableDeltaTable extends DeltaTable implements RefreshableTabl
 ```sql
 -- Create MV on specific Delta version
 CREATE MATERIALIZED VIEW sales_summary AS
-SELECT region, SUM(amount) 
+SELECT region, SUM(amount)
 FROM delta_sales VERSION AS OF 100
 GROUP BY region;
 ```
@@ -742,7 +742,7 @@ import io.delta.standalone.data.CloseableIterator;
 public class StandaloneDeltaTable {
     // Lighter implementation without Spark dependency
     private final DeltaLog deltaLog;
-    
+
     public CloseableIterator<RowRecord> scan() {
         return snapshot.open();
     }
@@ -799,35 +799,35 @@ public class OrcTable extends AbstractTable implements FilterableTable, Projecta
     private final Source source;
     private final Reader orcReader;
     private final TypeDescription schema;
-    
+
     public OrcTable(Source source, Map<String, Object> options) {
         this.source = source;
         Configuration conf = new Configuration();
-        
+
         // Open ORC file
         Path path = new Path(source.path());
-        this.orcReader = OrcFile.createReader(path, 
+        this.orcReader = OrcFile.createReader(path,
             OrcFile.readerOptions(conf));
         this.schema = orcReader.getSchema();
     }
-    
+
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
         return convertOrcSchema(schema, typeFactory);
     }
-    
+
     @Override
-    public Enumerable<Object[]> scan(DataContext root, 
-                                     List<RexNode> filters, 
+    public Enumerable<Object[]> scan(DataContext root,
+                                     List<RexNode> filters,
                                      int[] projects) {
         // Build ORC SearchArgument from Calcite filters
         SearchArgument sarg = buildSearchArgument(filters, schema);
-        
+
         // Configure reader with pushdowns
         Reader.Options options = orcReader.options()
             .searchArgument(sarg, new String[]{})
             .include(buildIncludedColumns(projects));
-        
+
         RecordReader rows = orcReader.rows(options);
         return new OrcEnumerable(rows, schema);
     }
@@ -840,7 +840,7 @@ public class OrcPushdownOptimizer {
     // Use ORC's built-in indexes
     public SearchArgument buildSearchArgument(List<RexNode> filters) {
         SearchArgument.Builder builder = SearchArgumentFactory.newBuilder();
-        
+
         for (RexNode filter : filters) {
             if (filter instanceof RexCall) {
                 RexCall call = (RexCall) filter;
@@ -848,10 +848,10 @@ public class OrcPushdownOptimizer {
                 convertToOrcPredicate(call, builder);
             }
         }
-        
+
         return builder.build();
     }
-    
+
     // Leverage bloom filters for point lookups
     public boolean canUseBLoomFilter(RexNode filter) {
         // Check if column has bloom filter index
@@ -870,7 +870,7 @@ public class OrcPushdownOptimizer {
 
 ## Avro Support - Schema Evolution and Streaming
 
-### Overview  
+### Overview
 Add support for Apache Avro format, focusing on schema evolution capabilities and streaming data scenarios.
 
 ### Motivation
@@ -904,29 +904,29 @@ public class AvroTable extends AbstractTable implements ScannableTable {
     private final Source source;
     private final Schema avroSchema;
     private final Schema readerSchema;
-    
+
     public AvroTable(Source source, Map<String, Object> options) {
         this.source = source;
-        
+
         // Get schema (from file or external)
         if (options.containsKey("schema")) {
             this.avroSchema = new Schema.Parser()
                 .parse(new File((String) options.get("schema")));
         } else {
             // Read embedded schema from Avro file
-            try (DataFileReader<GenericRecord> reader = 
-                new DataFileReader<>(source.file(), 
+            try (DataFileReader<GenericRecord> reader =
+                new DataFileReader<>(source.file(),
                     new GenericDatumReader<>())) {
                 this.avroSchema = reader.getSchema();
             }
         }
-        
+
         // Handle schema evolution
         this.readerSchema = options.containsKey("readerSchema")
             ? new Schema.Parser().parse(new File((String) options.get("readerSchema")))
             : avroSchema;
     }
-    
+
     @Override
     public Enumerable<Object[]> scan(DataContext root) {
         return new AvroEnumerable(source, avroSchema, readerSchema);
@@ -938,19 +938,19 @@ public class AvroTable extends AbstractTable implements ScannableTable {
 ```java
 public class AvroSchemaEvolution {
     // Handle schema compatibility
-    public RelDataType mergeSchemas(Schema writerSchema, 
+    public RelDataType mergeSchemas(Schema writerSchema,
                                    Schema readerSchema,
                                    RelDataTypeFactory typeFactory) {
         // Avro handles missing fields with defaults
         // New fields are ignored if not in reader schema
-        
+
         List<RelDataType> types = new ArrayList<>();
         List<String> names = new ArrayList<>();
-        
+
         for (Schema.Field field : readerSchema.getFields()) {
             // Check if field exists in writer schema
             Schema.Field writerField = writerSchema.getField(field.name());
-            
+
             if (writerField != null) {
                 // Use writer's type
                 types.add(convertAvroType(writerField.schema(), typeFactory));
@@ -960,7 +960,7 @@ public class AvroSchemaEvolution {
             }
             names.add(field.name());
         }
-        
+
         return typeFactory.createStructType(types, names);
     }
 }
@@ -1013,12 +1013,12 @@ public class S3SelectTable extends AbstractTable implements FilterableTable {
     private final String bucket;
     private final String key;
     private final InputSerialization inputFormat;
-    
+
     @Override
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
         // Convert Calcite filters to S3 Select SQL
         String s3SelectQuery = buildS3SelectQuery(filters, projections);
-        
+
         // Build S3 Select request
         SelectObjectContentRequest request = SelectObjectContentRequest.builder()
             .bucket(bucket)
@@ -1030,13 +1030,13 @@ public class S3SelectTable extends AbstractTable implements FilterableTable {
                 .json(JSONOutput.builder().recordDelimiter("\n").build())
                 .build())
             .build();
-        
+
         // Stream results
-        SelectObjectContentResponseHandler handler = 
+        SelectObjectContentResponseHandler handler =
             new SelectObjectContentResponseHandler();
         CompletableFuture<Void> future = s3Client
             .selectObjectContent(request, handler);
-        
+
         return new S3SelectEnumerable(handler);
     }
 }
@@ -1045,11 +1045,11 @@ public class S3SelectTable extends AbstractTable implements FilterableTable {
 #### 3. Query Pushdown Translation
 ```java
 public class S3SelectQueryBuilder {
-    public String buildS3SelectQuery(List<RexNode> filters, 
+    public String buildS3SelectQuery(List<RexNode> filters,
                                     int[] projections,
                                     RelDataType rowType) {
         StringBuilder sql = new StringBuilder("SELECT ");
-        
+
         // Build projection
         if (projections != null) {
             String cols = Arrays.stream(projections)
@@ -1059,18 +1059,18 @@ public class S3SelectQueryBuilder {
         } else {
             sql.append("*");
         }
-        
+
         sql.append(" FROM S3Object s");
-        
+
         // Build WHERE clause
         if (filters != null && !filters.isEmpty()) {
             sql.append(" WHERE ");
             sql.append(convertFiltersToS3SQL(filters));
         }
-        
+
         return sql.toString();
     }
-    
+
     // Handle S3 Select limitations
     public boolean canPushdown(RexNode filter) {
         // S3 Select supports basic operators
@@ -1083,18 +1083,18 @@ public class S3SelectQueryBuilder {
 #### 4. Cost-Based Optimization
 ```java
 public class S3SelectCostModel {
-    public boolean shouldUseS3Select(RelOptPlanner planner, 
+    public boolean shouldUseS3Select(RelOptPlanner planner,
                                     double selectivity,
                                     long fileSize) {
         // Estimate costs
         double s3SelectCost = calculateS3SelectCost(fileSize, selectivity);
         double downloadCost = calculateFullDownloadCost(fileSize);
-        
+
         // Use S3 Select if:
         // - Selectivity < 20% (filtering out 80%+ of data)
         // - File size > 100MB
         // - Simple predicates that S3 can handle
-        
+
         return s3SelectCost < downloadCost * 0.5;  // 50% cost threshold
     }
 }
@@ -1105,12 +1105,12 @@ public class S3SelectCostModel {
 public class S3SelectMultiFile {
     public Enumerable<Object[]> scanMultiple(List<String> keys) {
         // Parallel S3 Select on multiple files
-        List<CompletableFuture<List<Object[]>>> futures = 
+        List<CompletableFuture<List<Object[]>>> futures =
             keys.stream()
-                .map(key -> CompletableFuture.supplyAsync(() -> 
+                .map(key -> CompletableFuture.supplyAsync(() ->
                     selectFromFile(key)))
                 .collect(Collectors.toList());
-        
+
         // Combine results
         return new CompositeEnumerable(futures);
     }
@@ -1170,26 +1170,26 @@ SELECT * FROM sys.mv_status;
 #### 2. Core Implementation
 ```java
 public class MaterializedViewManager {
-    
+
     public static void registerSystemProcedures(SchemaPlus schema) {
         schema.add("refresh_mv", new RefreshMVProcedure());
         schema.add("refresh_all_mvs", new RefreshAllMVsProcedure());
         schema.add("mv_status", new MVStatusTableFunction());
     }
-    
+
     private static class RefreshMVProcedure implements Procedure {
         public void execute(String... mvNames) {
             for (String mvName : mvNames) {
                 refreshSingleMV(mvName);
             }
         }
-        
+
         private void refreshSingleMV(String mvName) {
             Table table = schema.getTable(mvName);
-            
+
             if (table instanceof MaterializedViewTable) {
                 MaterializedViewTable mv = (MaterializedViewTable) table;
-                
+
                 // Simple refresh - delete parquet and reset flag
                 if (mv.parquetFile.exists()) {
                     boolean deleted = mv.parquetFile.delete();
@@ -1197,19 +1197,19 @@ public class MaterializedViewManager {
                         throw new RuntimeException("Failed to delete MV cache: " + mvName);
                     }
                 }
-                
+
                 // Reset materialized flag to force regeneration
                 mv.materialized.set(false);
-                
+
                 // Log the refresh
                 LOGGER.info("Materialized view '{}' marked for refresh", mvName);
-                
+
             } else if (table instanceof RefreshableTable) {
                 // Handle other refreshable tables
                 ((RefreshableTable) table).forceRefresh();
-                
+
             } else {
-                throw new IllegalArgumentException("Table '" + mvName + 
+                throw new IllegalArgumentException("Table '" + mvName +
                     "' is not a materialized view");
             }
         }
@@ -1222,7 +1222,7 @@ public class MaterializedViewManager {
 // Use from Java application
 try (Connection conn = DriverManager.getConnection("jdbc:calcite:");
      CallableStatement stmt = conn.prepareCall("{CALL sys.refresh_mv(?)}")) {
-    
+
     stmt.setString(1, "sales_summary");
     stmt.execute();
 }
@@ -1238,21 +1238,21 @@ try (Statement stmt = conn.createStatement()) {
 public class BatchRefreshProcedure {
     public ResultSet execute(String... mvNames) {
         List<RefreshResult> results = new ArrayList<>();
-        
+
         for (String mvName : mvNames) {
             long startTime = System.currentTimeMillis();
-            
+
             try {
                 refreshSingleMV(mvName);
                 long duration = System.currentTimeMillis() - startTime;
-                
+
                 results.add(new RefreshResult(
-                    mvName, 
-                    "SUCCESS", 
+                    mvName,
+                    "SUCCESS",
                     duration,
                     null
                 ));
-                
+
             } catch (Exception e) {
                 results.add(new RefreshResult(
                     mvName,
@@ -1262,7 +1262,7 @@ public class BatchRefreshProcedure {
                 ));
             }
         }
-        
+
         return convertToResultSet(results);
     }
 }
@@ -1273,24 +1273,24 @@ public class BatchRefreshProcedure {
 public class MVStatusTableFunction implements TableFunction {
     public Table eval() {
         List<MVStatus> statuses = new ArrayList<>();
-        
+
         for (String tableName : schema.getTableNames()) {
             Table table = schema.getTable(tableName);
-            
+
             if (table instanceof MaterializedViewTable) {
                 MaterializedViewTable mv = (MaterializedViewTable) table;
-                
+
                 statuses.add(new MVStatus(
                     tableName,
                     mv.parquetFile.exists(),
-                    mv.parquetFile.exists() ? 
+                    mv.parquetFile.exists() ?
                         new Timestamp(mv.parquetFile.lastModified()) : null,
                     mv.parquetFile.length(),
                     extractSourceTables(mv.sql)  // Simple regex extraction
                 ));
             }
         }
-        
+
         return new MVStatusTable(statuses);
     }
 }
@@ -1314,8 +1314,8 @@ CALL sys.refresh_all_mvs();
 #### 3. Conditional Refresh
 ```sql
 -- Check staleness and refresh if needed
-SELECT mv_name 
-FROM sys.mv_status 
+SELECT mv_name
+FROM sys.mv_status
 WHERE last_refresh < CURRENT_TIMESTAMP - INTERVAL '1' HOUR;
 
 -- Then refresh those MVs
@@ -1375,23 +1375,23 @@ public class RefreshMaterializedViewFunction {
         // Get current schema context from DataContext
         CalciteConnection connection = getConnectionFromContext();
         SchemaPlus schema = connection.getRootSchema();
-        
+
         Table table = schema.getTable(mvName);
         if (table instanceof MaterializedViewTable) {
             MaterializedViewTable mv = (MaterializedViewTable) table;
-            
+
             // Simple refresh - same pattern as RefreshableMaterializedViewTable
             if (mv.parquetFile.exists()) {
                 mv.parquetFile.delete();  // Delete cached parquet
             }
             mv.materialized.set(false);  // Force regeneration on next access
-            
+
             LOGGER.info("Materialized view '{}' marked for refresh", mvName);
         } else {
             throw new IllegalArgumentException("Table '" + mvName + "' is not a materialized view");
         }
     }
-    
+
     // Overloaded for multiple MVs
     public static void refreshMV(String... mvNames) {
         for (String mvName : mvNames) {
@@ -1404,14 +1404,14 @@ public class RefreshMaterializedViewFunction {
 #### Step 2: Register Function in FileSchema (15 minutes)
 ```java
 // In FileSchema.java, override getFunctionMap():
-@Override 
+@Override
 protected Map<String, Function> getFunctionMap() {
     Map<String, Function> functions = new HashMap<>();
-    
+
     // Register refresh function
-    functions.put("REFRESH_MV", 
+    functions.put("REFRESH_MV",
         ScalarFunctionImpl.create(RefreshMaterializedViewFunction.class, "refreshMV"));
-    
+
     return functions;
 }
 ```
@@ -1421,7 +1421,7 @@ protected Map<String, Function> getFunctionMap() {
 -- Single MV refresh
 SELECT REFRESH_MV('sales_summary');
 
--- Multiple MV refresh  
+-- Multiple MV refresh
 SELECT REFRESH_MV('sales_summary', 'product_summary');
 
 -- Use in scripts/ETL
@@ -1494,7 +1494,7 @@ Enable CREATE TABLE directly from file discovery results, automating schema crea
 #### 1. CREATE TABLE AS from Discovery
 ```sql
 -- Discover and create single table
-CREATE TABLE sales AS 
+CREATE TABLE sales AS
 SELECT * FROM TABLE(DISCOVER_FILE('data/sales.csv'));
 
 -- Discover and create multiple tables from pattern
@@ -1508,11 +1508,11 @@ SELECT * FROM TABLE(INFER_AND_LOAD('logs/events.jsonl'));
 #### 2. Implementation Pattern
 ```java
 public class DiscoveryFunctions {
-    
+
     // Returns a scannable table directly
     public static Table discoverFile(String path) {
         Source source = Sources.of(new File(path));
-        
+
         if (path.endsWith(".csv")) {
             return new CsvTranslatableTable(source, null);
         } else if (path.endsWith(".json") || path.endsWith(".jsonl")) {
@@ -1522,11 +1522,11 @@ public class DiscoveryFunctions {
         }
         // Auto-detect format and return appropriate table
     }
-    
+
     // Batch discovery and registration
     public static void createTablesFromPattern(String pattern) {
         List<File> files = glob(pattern);
-        
+
         for (File file : files) {
             String tableName = deriveTableName(file);
             Table table = discoverFile(file.getPath());
@@ -1541,7 +1541,7 @@ public class DiscoveryFunctions {
 **Auto-discovery with type inference:**
 ```sql
 -- Create all CSV files as tables with inferred types
-CALL CREATE_TABLES_FROM_PATTERN('data/*.csv', 
+CALL CREATE_TABLES_FROM_PATTERN('data/*.csv',
     OPTIONS => 'inferTypes=true,sampleRows=1000');
 
 -- Create partitioned table from multiple files
@@ -1564,9 +1564,9 @@ SELECT * FROM TABLE(TEST_GLOB_PATTERN('*.csv'));
 -- Returns: file_path, size, modified, estimated_rows
 
 -- Then create what you want
-CREATE TABLE sales AS 
+CREATE TABLE sales AS
 SELECT * FROM TABLE(LOAD_FILE(
-    SELECT file_path FROM TABLE(TEST_GLOB_PATTERN('*sales*.csv')) 
+    SELECT file_path FROM TABLE(TEST_GLOB_PATTERN('*sales*.csv'))
     ORDER BY modified DESC LIMIT 1
 ));
 ```
@@ -1587,7 +1587,7 @@ public static Table loadFile(String path) {
 }
 ```
 - No refresh configuration
-- No persistence  
+- No persistence
 - Just dynamic table creation
 - **This alone provides 80% of the value!**
 
@@ -1613,7 +1613,7 @@ public static Table loadFile(String path) {
 
 ```sql
 -- One command to load entire directory structure
-CALL DISCOVER_AND_CREATE_ALL('/data', 
+CALL DISCOVER_AND_CREATE_ALL('/data',
     OPTIONS => 'recursive=true, formats=csv,json,parquet');
 
 -- Result: All files are now queryable tables!
@@ -1644,7 +1644,7 @@ SELECT REFRESH_TABLE('sales');
 2. **Explicit refresh configuration**
 ```sql
 -- Create with refresh interval
-CREATE TABLE sales WITH (refreshInterval='5m') AS 
+CREATE TABLE sales WITH (refreshInterval='5m') AS
 SELECT * FROM TABLE(DISCOVER_FILE('sales.csv'));
 ```
 
@@ -1674,7 +1674,7 @@ Default to **no automatic refresh** for safety, with explicit opt-in:
 CREATE TABLE sales AS SELECT * FROM TABLE(DISCOVER_FILE('sales.csv'));
 
 -- Explicit refresh if wanted
-CREATE REFRESHABLE TABLE sales WITH (interval='5m') AS 
+CREATE REFRESHABLE TABLE sales WITH (interval='5m') AS
 SELECT * FROM TABLE(DISCOVER_FILE('sales.csv'));
 ```
 
@@ -1701,7 +1701,7 @@ Export the entire file adapter schema (tables, views, MVs, configurations) as a 
 SELECT EXPORT_SCHEMA('/path/to/my_database.json');
 
 -- Export with data samples for documentation
-SELECT EXPORT_SCHEMA('/path/to/my_database.json', 
+SELECT EXPORT_SCHEMA('/path/to/my_database.json',
     OPTIONS => 'includeSamples=true, includeStats=true');
 ```
 
@@ -1797,7 +1797,7 @@ SELECT IMPORT_SCHEMA('https://github.com/company/schemas/sales.json');
 SELECT EXPORT_SCHEMA_TEMPLATE('template.json');
 
 -- Others instantiate with their paths
-SELECT INSTANTIATE_TEMPLATE('template.json', 
+SELECT INSTANTIATE_TEMPLATE('template.json',
     BASE_PATH => '/their/data/location');
 ```
 
@@ -1824,21 +1824,21 @@ SELECT * FROM TABLE(COMPARE_SCHEMAS('production.json'));
 public class SchemaExporter {
     public static void exportSchema(String path) {
         FileSchema schema = getCurrentSchema();
-        
+
         Map<String, Object> export = new HashMap<>();
         export.put("version", "1.0");
         export.put("exported", Instant.now());
-        
+
         // Export tables
         List<Map<String, Object>> tables = new ArrayList<>();
         for (Entry<String, Table> entry : schema.getTableMap().entrySet()) {
             tables.add(serializeTable(entry.getKey(), entry.getValue()));
         }
         export.put("tables", tables);
-        
+
         // Export views (already in memory)
         export.put("views", serializeViews());
-        
+
         // Write JSON
         mapper.writeValue(new File(path), export);
     }
@@ -1882,7 +1882,7 @@ CREATE VIEW sales_summary AS SELECT region, SUM(amount) FROM sales GROUP BY regi
 CREATE MATERIALIZED VIEW daily_report AS SELECT date, COUNT(*) FROM sales GROUP BY date;
 
 -- Phase 2: Export discovered schema
-SELECT EXPORT_SCHEMA('discovered_model.json', 
+SELECT EXPORT_SCHEMA('discovered_model.json',
     OPTIONS => 'includeDiscovered=true, format=model');
 
 -- Result: Standard model.json that others can use
@@ -1999,7 +1999,7 @@ Create a complete development-to-production workflow where developers work in is
 
 ### Motivation
 - Currently no safe way to develop and test analytics before production
-- Direct production changes break dashboards and reports  
+- Direct production changes break dashboards and reports
 - No version control or audit trail for schema changes
 - Teams need software engineering workflows for analytics
 - Local development eliminates fear of breaking production
@@ -2011,23 +2011,23 @@ Create a complete development-to-production workflow where developers work in is
 public class ImmutableStartupSchema extends FileSchema {
     private final Set<String> startupObjects = new HashSet<>();
     private final Path personalDir = Paths.get(System.getProperty("user.home"), ".calcite");
-    
+
     @Override
     protected void init() {
         super.init();
         // Everything from model.json is read-only
         startupObjects.addAll(getTableNames());
-        startupObjects.addAll(getViewNames()); 
+        startupObjects.addAll(getViewNames());
         startupObjects.addAll(getMaterializedViewNames());
     }
-    
+
     @Override
     public void createTable(String name, Table table) {
         // New objects ALWAYS go to personal space
         Path personalPath = personalDir.resolve("tables").resolve(name);
         super.createTable(name, new PersonalTable(table, personalPath));
     }
-    
+
     @Override
     public void dropTable(String name) {
         if (startupObjects.contains(name)) {
@@ -2072,7 +2072,7 @@ CREATE MATERIALIZED VIEW my_dashboard AS SELECT * FROM my_analysis;
 SELECT * FROM my_dashboard;
 
 -- Promote to production when ready
-SELECT PROMOTE_TO_MODEL('my_dashboard', 
+SELECT PROMOTE_TO_MODEL('my_dashboard',
     CREATE_PR => true,
     DESCRIPTION => 'New regional dashboard for 2024'
 );
@@ -2081,13 +2081,13 @@ SELECT PROMOTE_TO_MODEL('my_dashboard',
 #### 4. Promotion System
 ```java
 public class PromotionManager {
-    
+
     public void promoteToModel(String objectName, Map<String, Object> options) {
         // 1. Validate object exists and is personal
         if (startupObjects.contains(objectName)) {
             throw new IllegalArgumentException("Already in production");
         }
-        
+
         // 2. Analyze dependencies
         Set<String> deps = analyzeDependencies(objectName);
         for (String dep : deps) {
@@ -2095,10 +2095,10 @@ public class PromotionManager {
                 throw new IllegalStateException("Depends on personal object: " + dep);
             }
         }
-        
+
         // 3. Generate model.json changes
         ModelUpdate update = generateModelUpdate(objectName);
-        
+
         // 4. Create git branch and PR
         if (options.get("create_pr")) {
             String branch = "promote-" + objectName;
@@ -2106,13 +2106,13 @@ public class PromotionManager {
             updateModelJson(update);
             git.commit("Promote " + objectName + " to production");
             git.push(branch);
-            
+
             PullRequest pr = github.createPR(
                 branch,
                 "Promote " + objectName,
                 generatePRDescription(objectName, update)
             );
-            
+
             System.out.println("Created PR: " + pr.getUrl());
         }
     }
@@ -2130,13 +2130,13 @@ jobs:
     steps:
       - name: Check SQL Syntax
         run: calcite --validate-syntax $CHANGED_FILES
-      
+
       - name: Check Naming Convention
         run: calcite --check-naming $CHANGED_FILES
-      
+
       - name: Estimate Query Cost
         run: calcite --explain-cost $CHANGED_FILES
-      
+
       - name: Test Compatibility
         run: calcite --test-compatibility $CHANGED_FILES
 ```
@@ -2248,7 +2248,7 @@ Embrace the file adapter's nature as a read-only query engine over immutable fil
 public class ReadOnlyFileAdapter {
     // These methods don't exist
     // No insert(), update(), delete(), alter()
-    
+
     // Only these exist
     public Table select(String query) { ... }
     public View createView(String sql) { ... }      // Derived, not mutation
@@ -2331,7 +2331,7 @@ REVOKE UPDATE ON sales FROM user;   # Can't UPDATE anyway
 
 #### 1. **Simplicity**
 - No transaction manager
-- No lock manager  
+- No lock manager
 - No WAL/redo logs
 - No vacuum/analyze
 - No permission system
@@ -2361,7 +2361,7 @@ REVOKE UPDATE ON sales FROM user;   # Can't UPDATE anyway
 ```sql
 -- Clear error messages
 UPDATE sales SET amount = 100;
-ERROR: File adapter does not support UPDATE. 
+ERROR: File adapter does not support UPDATE.
        Modify source files through your ETL pipeline.
 
 DELETE FROM sales;
@@ -2391,7 +2391,7 @@ def update_sales():
     df.to_parquet('sales_updated.parquet')
     atomic_swap('sales.parquet', 'sales_updated.parquet')
 
-# Instead of DELETE  
+# Instead of DELETE
 def delete_old_records():
     df = pd.read_parquet('events.parquet')
     df_filtered = df[df['date'] >= '2024-01-01']
@@ -2427,7 +2427,7 @@ public class SingleMachineOptimizer {
     // Optimize for local execution
     private final long AVAILABLE_MEMORY = Runtime.getRuntime().maxMemory();
     private final int AVAILABLE_CORES = Runtime.getRuntime().availableProcessors();
-    
+
     public ExecutionPlan optimize(Query query) {
         // Choose engine based on local resources
         if (canFitInMemory(query)) {
@@ -2444,17 +2444,17 @@ public class SingleMachineOptimizer {
 #### 2. Intelligent Engine Selection
 ```yaml
 Query Routing:
-  Small (<1GB): 
+  Small (<1GB):
     → In-memory vectorized execution
-  
+
   Medium (1GB-100GB):
     → DuckDB with local NVMe
-  
+
   Large (100GB-1TB):
     → DuckDB with memory mapping
     → Streaming aggregations
     → Partition pruning
-  
+
   Huge (>1TB):
     → Document: "Consider Spark/Trino for this workload"
 ```
@@ -2489,13 +2489,13 @@ SELECT /*+ USE_MEMORY_IF_FITS */ * FROM large_table;
 
 ### When You DON'T Need Distribution
 - Daily/weekly aggregations (<100GB)
-- Customer analytics (<50GB)  
+- Customer analytics (<50GB)
 - Financial reports (<10GB)
 - Marketing analytics (<5GB)
 - Data exploration (<100GB)
 - Feature engineering (<50GB)
 
-### When You DO Need Distribution  
+### When You DO Need Distribution
 - Training on ImageNet (>1TB)
 - Processing all logs (>10TB active)
 - Graph algorithms on social networks
@@ -2559,7 +2559,7 @@ Single Machine (sufficient):
 ```bash
 # Distributed development
 - Start cluster: 5 minutes
-- Deploy code: 2 minutes  
+- Deploy code: 2 minutes
 - Run query: 30 seconds
 - Debug failure: 30 minutes (logs across nodes)
 Total: ~40 minutes per iteration
@@ -2657,31 +2657,31 @@ public class ConcurrentFileAdapter {
         // Just read - file system handles concurrent reads
         return new ParquetTable(path);
     }
-    
+
     // Cache writes use file locking
     public void writeMaterializedView(String name, Data data) {
         Path cachePath = getCachePath(name);
         Path tempPath = cachePath.resolveSibling(name + ".tmp." + UUID.randomUUID());
-        
+
         // Write to temp file first
         writeToFile(tempPath, data);
-        
+
         // Atomic rename with lock
         try (FileLock lock = acquireLock(cachePath + ".lock")) {
             Files.move(tempPath, cachePath, StandardCopyOption.ATOMIC_MOVE);
         }
     }
-    
+
     // Cache reads handle concurrent updates
     public Table readMaterializedView(String name) {
         Path cachePath = getCachePath(name);
-        
+
         // Check if being updated
         if (Files.exists(cachePath + ".lock")) {
             // Read from source instead
             return computeFromSource(name);
         }
-        
+
         return readCachedTable(cachePath);
     }
 }
@@ -2725,13 +2725,13 @@ spec:
 ```java
 public class SharedCacheManager {
     private final Path cacheDir = Paths.get("/shared/cache");
-    
+
     public void refreshMV(String mvName) {
         Path lockFile = cacheDir.resolve(mvName + ".lock");
-        
+
         try (RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw");
              FileLock lock = raf.getChannel().lock()) {
-            
+
             // Only one instance refreshes at a time
             if (needsRefresh(mvName)) {
                 computeAndWriteMV(mvName);
@@ -2745,12 +2745,12 @@ public class SharedCacheManager {
 ```java
 public class AffinityCacheManager {
     private final String instanceId = System.getenv("HOSTNAME");
-    
+
     public Path getCachePath(String mvName) {
         // Each instance has its own cache
         return Paths.get("/shared/cache", instanceId, mvName + ".parquet");
     }
-    
+
     // Load balancer uses session affinity to route
     // same queries to same instance for cache hits
 }
@@ -2761,12 +2761,12 @@ public class AffinityCacheManager {
 public class ReadThroughCache {
     public Table getMV(String mvName) {
         Path cachePath = getCachePath(mvName);
-        
+
         // All instances read same cache
         if (Files.exists(cachePath) && !isStale(cachePath)) {
             return readCache(cachePath);
         }
-        
+
         // First instance to detect staleness refreshes
         if (tryAcquireRefreshLock(mvName)) {
             refreshCache(mvName);
@@ -2784,15 +2784,15 @@ public class ReadThroughCache {
 ```java
 public class S3OptimizedAdapter {
     // S3 doesn't support file locking, use different strategy
-    
+
     public void writeMV(String mvName, Data data) {
         String key = "cache/" + mvName + "/" + System.currentTimeMillis() + ".parquet";
         s3.putObject(bucket, key, data);
-        
+
         // Write marker for latest version
         s3.putObject(bucket, "cache/" + mvName + "/LATEST", key);
     }
-    
+
     public Table readMV(String mvName) {
         // Read marker to find latest version
         String latestKey = s3.getObject(bucket, "cache/" + mvName + "/LATEST");
@@ -2949,14 +2949,14 @@ public boolean supportsLocking(Path path) {
 public class PerformanceOptimizedReader {
     // Connection pooling for cloud storage
     private final S3ConnectionPool s3Pool;
-    
+
     // Read-ahead for sequential access
     private final int readAheadBuffer = 10 * 1024 * 1024; // 10MB
-    
+
     // Parallel reads for large files
-    private final ExecutorService readExecutor = 
+    private final ExecutorService readExecutor =
         Executors.newFixedThreadPool(10);
-    
+
     // Local cache for hot data
     private final LoadingCache<String, Table> hotCache;
 }
@@ -3138,7 +3138,7 @@ public class CacheManagementFunctions {
         // Delete them
         return "Cache cleared";
     }
-    
+
     public static String clearParquetCache(String tableName) {
         // Find cache file for specific table
         // Delete it
@@ -3147,13 +3147,13 @@ public class CacheManagementFunctions {
 }
 
 // Registration in FileSchema
-@Override 
+@Override
 protected Map<String, Function> getFunctionMap() {
     Map<String, Function> functions = new HashMap<>();
-    
-    functions.put("CLEAR_PARQUET_CACHE", 
+
+    functions.put("CLEAR_PARQUET_CACHE",
         ScalarFunctionImpl.create(CacheManagementFunctions.class, "clearParquetCache"));
-    
+
     return functions;
 }
 ```
@@ -3161,7 +3161,7 @@ protected Map<String, Function> getFunctionMap() {
 ### Benefits by Category
 
 **Cache Management**: Direct control over performance-critical caches
-**File Discovery**: Explore data without creating formal tables  
+**File Discovery**: Explore data without creating formal tables
 **Storage Operations**: Debug remote connectivity issues
 **Data Quality**: Validate data before processing
 **Performance**: Monitor and optimize query execution
@@ -3176,7 +3176,7 @@ protected Map<String, Function> getFunctionMap() {
 4. `REFRESH_STATISTICS` - Performance tuning
 
 **Medium Value (1-2 hours each)**:
-5. `PARQUET_CACHE_STATUS` - Operational visibility  
+5. `PARQUET_CACHE_STATUS` - Operational visibility
 6. `INFER_SCHEMA` - Automate table creation
 7. `TEST_STORAGE_CONNECTION` - Remote debugging
 
@@ -3289,14 +3289,14 @@ All follow the same simple pattern: static method + function registration = powe
 
 ### 🥇 **Tier 1: Quick Wins (Hours of effort, immediate value)**
 
-**1. Imperative MV Refresh** 
+**1. Imperative MV Refresh**
 - **Effort:** 45 minutes
 - **Impact:** Solves immediate user pain point
 - **ROI Score:** 10/10
 - **Why:** Trivial implementation, desperately needed
 
 **2. CLEAR_PARQUET_CACHE Function**
-- **Effort:** 30 minutes  
+- **Effort:** 30 minutes
 - **Impact:** Essential for debugging/development
 - **ROI Score:** 9.5/10
 - **Why:** Everyone needs this, constantly
@@ -3414,7 +3414,7 @@ Adding file formats (JSONL, Avro, ORC) is straightforward engineering with predi
 **SQL Functions Rule:**
 Any operational capability exposed as a SQL function has multiplicative value because it's:
 - Discoverable in SQL tools
-- Scriptable in ETL pipelines  
+- Scriptable in ETL pipelines
 - Usable without Java knowledge
 - Composable with other SQL
 
@@ -3493,7 +3493,7 @@ Enable CREATE/ALTER/DROP operations for views and materialized views through SQL
 ```java
 public class FileSchemaWithDDL extends FileSchema {
     private final MetadataStore metadataStore;
-    
+
     @Override
     public void execute(SqlNode node, CalcitePrepare.Context context) {
         if (node instanceof SqlCreateView) {
@@ -3504,31 +3504,31 @@ public class FileSchemaWithDDL extends FileSchema {
             handleCreateMaterializedView((SqlCreateMaterializedView) node);
         }
     }
-    
+
     private void handleCreateView(SqlCreateView create) {
         String viewName = create.getViewName();
         String viewSql = create.getQuery().toString();
-        
+
         // Add to runtime schema
         ViewTable view = new ViewTable(viewSql, this);
         addTable(viewName, view);
-        
+
         // Persist to metadata
         metadataStore.addView(viewName, viewSql);
         metadataStore.save();
     }
-    
+
     private void handleCreateMaterializedView(SqlCreateMaterializedView create) {
         String mvName = create.getViewName();
         String mvSql = create.getQuery().toString();
         File parquetFile = new File(".calcite/cache/" + mvName + ".parquet");
-        
+
         // Create MV table
         MaterializedViewTable mv = new MaterializedViewTable(
             this, schemaName, mvName, mvSql, parquetFile, getTables()
         );
         addTable(mvName, mv);
-        
+
         // Persist to metadata
         metadataStore.addMaterializedView(mvName, mvSql, parquetFile.getPath());
         metadataStore.save();
@@ -3539,15 +3539,15 @@ public class FileSchemaWithDDL extends FileSchema {
 #### 3. SQL Syntax Support
 ```sql
 -- Create regular view
-CREATE VIEW sales_by_region AS 
-SELECT region, SUM(amount) as total 
-FROM sales 
+CREATE VIEW sales_by_region AS
+SELECT region, SUM(amount) as total
+FROM sales
 GROUP BY region;
 
 -- Create or replace view
 CREATE OR REPLACE VIEW sales_by_region AS
 SELECT region, SUM(amount) as total, COUNT(*) as count
-FROM sales 
+FROM sales
 GROUP BY region;
 
 -- Create materialized view
@@ -3575,13 +3575,13 @@ GROUP BY region, product;
 public class MetadataStore {
     private final File metadataDir;
     private ViewMetadata metadata;
-    
+
     public MetadataStore(File baseDir) {
         this.metadataDir = new File(baseDir, ".calcite/metadata");
         this.metadataDir.mkdirs();
         this.metadata = load();
     }
-    
+
     private ViewMetadata load() {
         File metadataFile = new File(metadataDir, "views.json");
         if (metadataFile.exists()) {
@@ -3589,13 +3589,13 @@ public class MetadataStore {
         }
         return new ViewMetadata();
     }
-    
+
     public void save() {
         File metadataFile = new File(metadataDir, "views.json");
         mapper.writerWithDefaultPrettyPrinter()
             .writeValue(metadataFile, metadata);
     }
-    
+
     // Merge with model.json views on startup
     public void mergeWithModel(List<Map<String, Object>> modelViews) {
         // Model.json views take precedence (backward compatibility)
@@ -3610,20 +3610,20 @@ public class PersistentFileSchema extends FileSchema {
     @Override
     protected Map<String, Table> getTableMap() {
         Map<String, Table> tables = super.getTableMap();
-        
+
         // Load persisted views
         MetadataStore store = new MetadataStore(baseDirectory);
-        
+
         // Add persisted views to schema
         for (ViewDef view : store.getViews()) {
             tables.put(view.name, new ViewTable(view.sql, this));
         }
-        
+
         // Add persisted MVs to schema
         for (MaterializedViewDef mv : store.getMaterializedViews()) {
             tables.put(mv.name, new MaterializedViewTable(...));
         }
-        
+
         return tables;
     }
 }
@@ -3656,7 +3656,7 @@ public class PersistentFileSchema extends FileSchema {
 
 ### Implementation Effort
 - **Parser Integration:** 2-3 days
-- **Metadata Store:** 1-2 days  
+- **Metadata Store:** 1-2 days
 - **DDL Handlers:** 2-3 days
 - **Testing:** 2-3 days
 - **Total:** 1-2 weeks
@@ -3697,12 +3697,12 @@ public class DDLRewritingHook implements Hook {
         }
         return sql; // Pass through non-DDL
     }
-    
+
     private String rewriteCreateView(String sql) {
         // CREATE VIEW sales_summary AS SELECT * FROM sales
         // becomes:
         // SELECT CREATE_VIEW('sales_summary', 'SELECT * FROM sales')
-        
+
         Pattern p = Pattern.compile(
             "(?i)CREATE\\s+(?:OR\\s+REPLACE\\s+)?VIEW\\s+(\\w+)\\s+AS\\s+(.+)",
             Pattern.DOTALL
@@ -3711,17 +3711,17 @@ public class DDLRewritingHook implements Hook {
         if (m.matches()) {
             String viewName = m.group(1);
             String viewSql = m.group(2);
-            return String.format("SELECT CREATE_VIEW('%s', '%s')", 
+            return String.format("SELECT CREATE_VIEW('%s', '%s')",
                 viewName, viewSql.replace("'", "''"));
         }
         return sql;
     }
-    
+
     private String rewriteDropView(String sql) {
         // DROP VIEW sales_summary
         // becomes:
         // SELECT DROP_VIEW('sales_summary')
-        
+
         Pattern p = Pattern.compile(
             "(?i)DROP\\s+VIEW\\s+(?:IF\\s+EXISTS\\s+)?(\\w+)"
         );
@@ -3755,11 +3755,11 @@ public class FileSchemaWithDDL extends FileSchema {
 1. **Create rewriting hook** (1 hour)
    - Regex patterns for CREATE/DROP/ALTER VIEW
    - Transform to function calls
-   
+
 2. **Implement backing functions** (30 minutes)
    - CREATE_VIEW, DROP_VIEW, etc.
    - Reuse metadata store pattern
-   
+
 3. **Install hook in connection** (30 minutes)
    - Add to FileSchema initialization
    - Test with various DDL patterns
@@ -3767,7 +3767,7 @@ public class FileSchemaWithDDL extends FileSchema {
 #### What Users See:
 ```sql
 -- They write normal DDL
-CREATE VIEW regional_sales AS 
+CREATE VIEW regional_sales AS
 SELECT region, SUM(amount) FROM sales GROUP BY region;
 
 -- It gets rewritten behind the scenes to:
@@ -3802,11 +3802,11 @@ After investigation, Calcite already has full support for:
 ```java
 public class PersistentFileSchema extends FileSchema {
     private final MetadataStore metadataStore = new MetadataStore(".calcite/metadata");
-    
+
     @Override
     public void add(String name, Table table) {
         super.add(name, table);  // Let Calcite do all the work
-        
+
         // Just persist what Calcite created
         if (table instanceof ViewTableMacro) {
             metadataStore.saveView(name, extractSql(table));
@@ -3814,7 +3814,7 @@ public class PersistentFileSchema extends FileSchema {
             metadataStore.saveMaterializedView(name, extractSql(table));
         }
     }
-    
+
     @Override
     protected void init() {
         super.init();
@@ -3846,7 +3846,7 @@ public class PersistentFileSchema extends FileSchema {
 Example:
 ```sql
 -- Source is CSV, but MV stored as Parquet
-CREATE MATERIALIZED VIEW sales_summary AS 
+CREATE MATERIALIZED VIEW sales_summary AS
 SELECT region, SUM(amount) FROM csv_sales GROUP BY region;
 
 -- View works with any engine

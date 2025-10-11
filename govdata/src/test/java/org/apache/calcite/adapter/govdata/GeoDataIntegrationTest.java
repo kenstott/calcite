@@ -78,8 +78,7 @@ public class GeoDataIntegrationTest {
     LOGGER.info("Running GEO integration tests with cache directory: {}", cacheDir);
   }
 
-  @Test
-  void testGeoSchemaCreation() throws SQLException {
+  @Test void testGeoSchemaCreation() throws SQLException {
     LOGGER.info("Testing GEO schema creation and basic connectivity");
 
     Properties props = new Properties();
@@ -92,8 +91,8 @@ public class GeoDataIntegrationTest {
       assertFalse(connection.isClosed(), "Connection should be open");
 
       // Verify schema exists
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'GEO'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'GEO'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "GEO schema should exist");
           assertEquals("GEO", rs.getString("schema_name"));
@@ -102,8 +101,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGeoTableAvailability() throws SQLException {
+  @Test void testGeoTableAvailability() throws SQLException {
     LOGGER.info("Testing GEO table availability and metadata");
 
     Properties props = new Properties();
@@ -124,8 +122,8 @@ public class GeoDataIntegrationTest {
       };
 
       for (String tableName : expectedTables) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT table_name FROM information_schema.tables " +
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT table_name FROM information_schema.tables " +
             "WHERE table_schema = 'GEO' AND table_name = ?")) {
           stmt.setString(1, tableName);
           try (ResultSet rs = stmt.executeQuery()) {
@@ -138,8 +136,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testTigerStatesData() throws SQLException {
+  @Test void testTigerStatesData() throws SQLException {
     LOGGER.info("Testing TIGER states boundary data access");
 
     Properties props = new Properties();
@@ -149,8 +146,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test TIGER states data structure
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT state_fips, state_code, state_name FROM tiger_states " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT state_fips, state_code, state_name FROM tiger_states " +
           "WHERE state_code IN ('CA', 'NY', 'TX') ORDER BY state_name")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -175,8 +172,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testTigerCountiesData() throws SQLException {
+  @Test void testTigerCountiesData() throws SQLException {
     LOGGER.info("Testing TIGER counties boundary data access");
 
     Properties props = new Properties();
@@ -186,8 +182,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test TIGER counties data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT state_fips, county_fips, county_name FROM tiger_counties " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT state_fips, county_fips, county_name FROM tiger_counties " +
           "WHERE state_fips = '06' LIMIT 5")) { // California counties
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -212,8 +208,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testTigerPlacesData() throws SQLException {
+  @Test void testTigerPlacesData() throws SQLException {
     LOGGER.info("Testing TIGER places (cities) data access");
 
     Properties props = new Properties();
@@ -223,8 +218,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test TIGER places data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT state_fips, place_fips, place_name FROM tiger_places " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT state_fips, place_fips, place_name FROM tiger_places " +
           "WHERE place_name LIKE '%San Francisco%' OR place_name LIKE '%Los Angeles%' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -248,8 +243,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testTigerZcta5Data() throws SQLException {
+  @Test void testTigerZcta5Data() throws SQLException {
     LOGGER.info("Testing TIGER ZIP Code Tabulation Areas (ZCTA5) data access");
 
     Properties props = new Properties();
@@ -259,8 +253,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test TIGER ZCTA5 data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT zcta5_code, land_area, water_area FROM tiger_zcta5 " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT zcta5_code, land_area, water_area FROM tiger_zcta5 " +
           "WHERE zcta5_code BETWEEN '90210' AND '90220' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -283,8 +277,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testHudUspsCrosswalkData() throws SQLException {
+  @Test void testHudUspsCrosswalkData() throws SQLException {
     LOGGER.info("Testing HUD USPS crosswalk data access");
 
     Properties props = new Properties();
@@ -294,8 +287,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test HUD USPS crosswalk data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT zip, county, state FROM hud_usps_crosswalk " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT zip, county, state FROM hud_usps_crosswalk " +
           "WHERE state = 'CA' AND zip BETWEEN '90210' AND '90220' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -319,8 +312,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testCensusPopulationData() throws SQLException {
+  @Test void testCensusPopulationData() throws SQLException {
     LOGGER.info("Testing Census population data access");
 
     Properties props = new Properties();
@@ -330,8 +322,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test Census population data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT geo_id, name, total_population FROM census_population " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT geo_id, name, total_population FROM census_population " +
           "WHERE name LIKE '%California%' OR name LIKE '%New York%' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -354,8 +346,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testCensusHousingData() throws SQLException {
+  @Test void testCensusHousingData() throws SQLException {
     LOGGER.info("Testing Census housing data access");
 
     Properties props = new Properties();
@@ -365,8 +356,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test Census housing data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT geo_id, name, total_housing_units, occupied_housing_units FROM census_housing " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT geo_id, name, total_housing_units, occupied_housing_units FROM census_housing " +
           "WHERE name LIKE '%County%' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -390,8 +381,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGeoJoinQueries() throws SQLException {
+  @Test void testGeoJoinQueries() throws SQLException {
     LOGGER.info("Testing GEO cross-table join functionality");
 
     Properties props = new Properties();
@@ -401,8 +391,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test join between TIGER states and counties
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT s.state_name, s.state_code, c.county_name " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT s.state_name, s.state_code, c.county_name " +
           "FROM tiger_states s " +
           "INNER JOIN tiger_counties c ON s.state_fips = c.state_fips " +
           "WHERE s.state_code = 'CA' LIMIT 5")) {
@@ -428,8 +418,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGeographicHierarchy() throws SQLException {
+  @Test void testGeographicHierarchy() throws SQLException {
     LOGGER.info("Testing geographic hierarchy relationships");
 
     Properties props = new Properties();
@@ -439,8 +428,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test geographic hierarchy: State -> County -> Place
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT s.state_name, c.county_name, p.place_name " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT s.state_name, c.county_name, p.place_name " +
           "FROM tiger_states s " +
           "INNER JOIN tiger_counties c ON s.state_fips = c.state_fips " +
           "INNER JOIN tiger_places p ON c.state_fips = p.state_fips " +
@@ -467,8 +456,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGeoDataTypes() throws SQLException {
+  @Test void testGeoDataTypes() throws SQLException {
     LOGGER.info("Testing GEO data type handling and validation");
 
     Properties props = new Properties();
@@ -478,8 +466,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test area calculations and numeric data validation
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT zcta5_code, land_area, " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT zcta5_code, land_area, " +
           "CASE WHEN land_area ~ '^[0-9]+\\.?[0-9]*$' THEN 'NUMERIC' ELSE 'TEXT' END as area_type " +
           "FROM tiger_zcta5 WHERE land_area IS NOT NULL LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
@@ -498,8 +486,7 @@ public class GeoDataIntegrationTest {
     }
   }
 
-  @Test
-  void testGeoErrorHandling() throws SQLException {
+  @Test void testGeoErrorHandling() throws SQLException {
     LOGGER.info("Testing GEO error handling and edge cases");
 
     Properties props = new Properties();
@@ -509,8 +496,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test query with non-existent state code
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT COUNT(*) as count FROM tiger_states WHERE state_code = 'ZZ'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT COUNT(*) as count FROM tiger_states WHERE state_code = 'ZZ'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "Query should execute successfully");
           assertEquals(0, rs.getInt("count"), "Non-existent state code should return 0 results");
@@ -519,16 +506,15 @@ public class GeoDataIntegrationTest {
 
       // Test invalid table reference (should fail gracefully)
       assertThrows(SQLException.class, () -> {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT * FROM nonexistent_geo_table")) {
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT * FROM nonexistent_geo_table")) {
           stmt.executeQuery();
         }
       }, "Query on non-existent table should throw SQLException");
     }
   }
 
-  @Test
-  void testGeospatialQueries() throws SQLException {
+  @Test void testGeospatialQueries() throws SQLException {
     LOGGER.info("Testing geospatial query patterns and capabilities");
 
     Properties props = new Properties();
@@ -538,8 +524,8 @@ public class GeoDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test proximity-based queries using ZIP codes
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT h.zip, h.county, h.state, z.zcta5_code " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT h.zip, h.county, h.state, z.zcta5_code " +
           "FROM hud_usps_crosswalk h " +
           "LEFT JOIN tiger_zcta5 z ON h.zip = z.zcta5_code " +
           "WHERE h.zip BETWEEN '90210' AND '90220' LIMIT 5")) {

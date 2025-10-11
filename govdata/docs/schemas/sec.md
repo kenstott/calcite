@@ -226,7 +226,7 @@ This enables efficient queries filtering by company and time period.
 ### Financial Analysis
 ```sql
 -- Revenue and income by company
-SELECT 
+SELECT
     f.company_name,
     l.year,
     MAX(CASE WHEN l.concept = 'Revenues' THEN l.value END) as revenue,
@@ -241,7 +241,7 @@ ORDER BY f.company_name, l.year;
 ### Geographic Analysis
 ```sql
 -- Companies by state of incorporation
-SELECT 
+SELECT
     s.state_name,
     COUNT(DISTINCT f.cik) as company_count,
     AVG(l.value) as avg_revenue
@@ -256,7 +256,7 @@ ORDER BY company_count DESC;
 ### Insider Trading Analysis
 ```sql
 -- Recent insider transactions by company
-SELECT 
+SELECT
     f.company_name,
     i.insider_name,
     i.transaction_date,

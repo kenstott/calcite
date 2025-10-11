@@ -19,7 +19,6 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -45,45 +44,79 @@ public class SecConstraintsIntegrationTest {
   /**
    * Test that SEC adapter supports constraint metadata in model files.
    */
-  @Test
-  @SuppressWarnings("deprecation")
+  @Test @SuppressWarnings("deprecation")
   public void testConstraintMetadataInModelFile() throws Exception {
     // Create a temporary model file with constraint definitions
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"SEC\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"SEC\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.sec.SecSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"directory\": \"/tmp/test-sec-data\",\n" +
-        "      \"executionEngine\": \"DUCKDB\",\n" +
-        "      \"ephemeralCache\": true\n" +
-        "    },\n" +
-        "    \"tables\": [{\n" +
-        "      \"name\": \"financial_line_items\",\n" +
-        "      \"constraints\": {\n" +
-        "        \"primaryKey\": [\"cik\", \"filing_type\", \"year\", \"concept\"],\n" +
-        "        \"uniqueKeys\": [\n" +
-        "          [\"filing_url\"]\n" +
-        "        ],\n" +
-        "        \"foreignKeys\": [{\n" +
-        "          \"columns\": [\"cik\"],\n" +
-        "          \"targetTable\": [\"company_info\"],\n" +
-        "          \"targetColumns\": [\"cik\"]\n" +
-        "        }]\n" +
-        "      }\n" +
-        "    }, {\n" +
-        "      \"name\": \"company_info\",\n" +
-        "      \"constraints\": {\n" +
-        "        \"primaryKey\": [\"cik\"],\n" +
-        "        \"uniqueKeys\": [\n" +
-        "          [\"company_name\"]\n" +
-        "        ]\n" +
-        "      }\n" +
-        "    }]\n" +
-        "  }]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"SEC\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"SEC\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.sec.SecSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"directory\": \"/tmp/test-sec-data\",\n"
+  +
+        "      \"executionEngine\": \"DUCKDB\",\n"
+  +
+        "      \"ephemeralCache\": true\n"
+  +
+        "    },\n"
+  +
+        "    \"tables\": [{\n"
+  +
+        "      \"name\": \"financial_line_items\",\n"
+  +
+        "      \"constraints\": {\n"
+  +
+        "        \"primaryKey\": [\"cik\", \"filing_type\", \"year\", \"concept\"],\n"
+  +
+        "        \"uniqueKeys\": [\n"
+  +
+        "          [\"filing_url\"]\n"
+  +
+        "        ],\n"
+  +
+        "        \"foreignKeys\": [{\n"
+  +
+        "          \"columns\": [\"cik\"],\n"
+  +
+        "          \"targetTable\": [\"company_info\"],\n"
+  +
+        "          \"targetColumns\": [\"cik\"]\n"
+  +
+        "        }]\n"
+  +
+        "      }\n"
+  +
+        "    }, {\n"
+  +
+        "      \"name\": \"company_info\",\n"
+  +
+        "      \"constraints\": {\n"
+  +
+        "        \"primaryKey\": [\"cik\"],\n"
+  +
+        "        \"uniqueKeys\": [\n"
+  +
+        "          [\"company_name\"]\n"
+  +
+        "        ]\n"
+  +
+        "      }\n"
+  +
+        "    }]\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     // Create temporary model file
@@ -104,13 +137,13 @@ public class SecConstraintsIntegrationTest {
 
       // Test JDBC metadata for primary keys
       DatabaseMetaData metadata = connection.getMetaData();
-      
+
       try (ResultSet rs = metadata.getPrimaryKeys(null, "SEC", "FINANCIAL_LINE_ITEMS")) {
         int pkColumnCount = 0;
         while (rs.next()) {
           pkColumnCount++;
           String columnName = rs.getString("COLUMN_NAME");
-          assertTrue(columnName.matches("(?i)(cik|filing_type|year|concept)"), 
+          assertTrue(columnName.matches("(?i)(cik|filing_type|year|concept)"),
                     "Primary key column should be one of the expected columns: " + columnName);
         }
         assertTrue(pkColumnCount > 0, "Should find primary key columns in metadata");
@@ -124,7 +157,7 @@ public class SecConstraintsIntegrationTest {
           String fkColumnName = rs.getString("FKCOLUMN_NAME");
           String pkTableName = rs.getString("PKTABLE_NAME");
           String pkColumnName = rs.getString("PKCOLUMN_NAME");
-          
+
           assertEquals("cik", fkColumnName.toLowerCase(), "Foreign key column should be cik");
           assertEquals("company_info", pkTableName.toLowerCase(), "Referenced table should be company_info");
           assertEquals("cik", pkColumnName.toLowerCase(), "Referenced column should be cik");
@@ -141,23 +174,35 @@ public class SecConstraintsIntegrationTest {
   /**
    * Test that SEC adapter supports constraints without breaking backward compatibility.
    */
-  @Test
-  @SuppressWarnings("deprecation")
+  @Test @SuppressWarnings("deprecation")
   public void testBackwardCompatibilityWithoutConstraints() throws Exception {
     // Create a model file WITHOUT constraint definitions (legacy format)
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"SEC\",\n" +
-        "  \"schemas\": [{\n" +
-        "    \"name\": \"SEC\",\n" +
-        "    \"type\": \"custom\",\n" +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.sec.SecSchemaFactory\",\n" +
-        "    \"operand\": {\n" +
-        "      \"directory\": \"/tmp/test-sec-data-legacy\",\n" +
-        "      \"executionEngine\": \"DUCKDB\",\n" +
-        "      \"ephemeralCache\": true\n" +
-        "    }\n" +
-        "  }]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"SEC\",\n"
+  +
+        "  \"schemas\": [{\n"
+  +
+        "    \"name\": \"SEC\",\n"
+  +
+        "    \"type\": \"custom\",\n"
+  +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.sec.SecSchemaFactory\",\n"
+  +
+        "    \"operand\": {\n"
+  +
+        "      \"directory\": \"/tmp/test-sec-data-legacy\",\n"
+  +
+        "      \"executionEngine\": \"DUCKDB\",\n"
+  +
+        "      \"ephemeralCache\": true\n"
+  +
+        "    }\n"
+  +
+        "  }]\n"
+  +
         "}";
 
     // Create temporary model file
@@ -191,14 +236,13 @@ public class SecConstraintsIntegrationTest {
   /**
    * Test that SecSchemaFactory properly implements ConstraintCapableSchemaFactory.
    */
-  @Test
-  public void testSecSchemaFactoryConstraintCapability() {
+  @Test public void testSecSchemaFactoryConstraintCapability() {
     SecSchemaFactory factory = new SecSchemaFactory();
-    
+
     // Test that it implements the constraint capability interface
-    assertTrue(factory instanceof org.apache.calcite.schema.ConstraintCapableSchemaFactory, 
+    assertTrue(factory instanceof org.apache.calcite.schema.ConstraintCapableSchemaFactory,
                "SecSchemaFactory should implement ConstraintCapableSchemaFactory");
-    
+
     // Test that it supports constraints
     assertTrue(factory.supportsConstraints(), "SecSchemaFactory should support constraints");
   }

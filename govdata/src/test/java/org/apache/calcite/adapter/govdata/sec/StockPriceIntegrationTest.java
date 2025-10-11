@@ -18,7 +18,6 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -40,7 +39,6 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,7 +56,7 @@ public class StockPriceIntegrationTest {
   @BeforeEach
   void setUp(TestInfo testInfo) throws Exception {
     this.testInfo = testInfo;
-    
+
     // Create unique test directory
     String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     String testName = testInfo.getTestMethod().get().getName();
@@ -72,41 +70,39 @@ public class StockPriceIntegrationTest {
     modelPath = createTestModel();
   }
 
-  @Test
-  void testStockPriceTableExists() throws Exception {
+  @Test void testStockPriceTableExists() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       // Query information schema to check if stock_prices table exists
       // Using a simpler query to avoid case sensitivity issues
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT * FROM stock_prices WHERE 1=0")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT * FROM stock_prices WHERE 1=0")) {
         // If we get here without exception, the table exists
         assertNotNull(rs.getMetaData());
       }
     }
   }
 
-  @Test
-  void testStockPriceSchema() throws Exception {
+  @Test void testStockPriceSchema() throws Exception {
     // This test uses mock data created by SecSchemaFactory when testMode=true
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       // First check what columns are in the information schema
       // Note: information_schema columns are uppercase due to unquotedCasing=TO_LOWER
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT \"COLUMN_NAME\", \"DATA_TYPE\" " +
+           ResultSet rs =
+               stmt.executeQuery("SELECT \"COLUMN_NAME\", \"DATA_TYPE\" " +
                "FROM information_schema.\"columns\" " +
                "WHERE \"TABLE_NAME\" = 'stock_prices'")) {
         System.out.println("Columns from information_schema:");
@@ -114,13 +110,13 @@ public class StockPriceIntegrationTest {
           System.out.println("  - " + rs.getString("COLUMN_NAME") + " (" + rs.getString("DATA_TYPE") + ")");
         }
       }
-      
+
       // First test with specific columns to verify they work
       // Note: 'date' and 'close' are reserved words so we need to quote them
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT ticker, cik, \"date\", \"close\", volume FROM stock_prices LIMIT 1")) {
-        
+           ResultSet rs =
+               stmt.executeQuery("SELECT ticker, cik, \"date\", \"close\", volume FROM stock_prices LIMIT 1")) {
+
         // Check if we got any rows and print values
         assertTrue(rs.next(), "Should get at least one row");
         System.out.println("Got a row of data:");
@@ -130,29 +126,29 @@ public class StockPriceIntegrationTest {
         System.out.println("  close: " + rs.getDouble("close"));
         System.out.println("  volume: " + rs.getLong("volume"));
       }
-      
+
       // Now test with SELECT * to get all columns
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT * FROM stock_prices LIMIT 1")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT * FROM stock_prices LIMIT 1")) {
 
         ResultSetMetaData meta = rs.getMetaData();
         int columnCount = meta.getColumnCount();
-        
+
         System.out.println("\nAll columns from SELECT *:");
         for (int i = 1; i <= columnCount; i++) {
           System.out.println("  Column " + i + ": " + meta.getColumnName(i) + " (" + meta.getColumnTypeName(i) + ")");
         }
-        
+
         // Check we have the expected columns (8 data columns + 2 partition columns = 10)
         assertTrue(columnCount >= 10, "Expected at least 10 columns, got " + columnCount);
-        
+
         // Check column names (may be in different order)
         Set<String> columnNames = new HashSet<>();
         for (int i = 1; i <= columnCount; i++) {
           columnNames.add(meta.getColumnName(i).toLowerCase());
         }
-        
+
         assertTrue(columnNames.contains("ticker"));
         assertTrue(columnNames.contains("cik"));
         assertTrue(columnNames.contains("date"));
@@ -167,20 +163,19 @@ public class StockPriceIntegrationTest {
     }
   }
 
-  @Test
-  void testSimpleStockPriceQuery() throws Exception {
+  @Test void testSimpleStockPriceQuery() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       // Just try to count rows
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) FROM stock_prices")) {
-        
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) FROM stock_prices")) {
+
         assertTrue(rs.next(), "Should get a count result");
         int count = rs.getInt(1);
         System.out.println("Stock prices row count: " + count);
@@ -188,21 +183,20 @@ public class StockPriceIntegrationTest {
       }
     }
   }
-  
-  @Test
-  void testQueryStockPrices() throws Exception {
+
+  @Test void testQueryStockPrices() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       // Query stock prices (may be empty if download fails or in test mode)
       // Note: 'date' and 'close' are reserved words
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT ticker, \"date\", \"close\", volume " +
+           ResultSet rs =
+               stmt.executeQuery("SELECT ticker, \"date\", \"close\", volume " +
                "FROM stock_prices " +
                "WHERE ticker = 'AAPL' " +
                "LIMIT 10")) {
@@ -213,7 +207,7 @@ public class StockPriceIntegrationTest {
         assertEquals("date", meta.getColumnName(2).toLowerCase());
         assertEquals("close", meta.getColumnName(3).toLowerCase());
         assertEquals("volume", meta.getColumnName(4).toLowerCase());
-        
+
         // Note: Results may be empty in test mode
         while (rs.next()) {
           assertNotNull(rs.getString("ticker"));
@@ -224,14 +218,13 @@ public class StockPriceIntegrationTest {
     }
   }
 
-  @Test
-  void testJoinStockPricesWithFilings() throws Exception {
+  @Test void testJoinStockPricesWithFilings() throws Exception {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-            "jdbc:calcite:model=" + modelPath, props)) {
+    try (Connection conn =
+            DriverManager.getConnection("jdbc:calcite:model=" + modelPath, props)) {
 
       // Test join query structure (may return empty in test mode)
       String sql = "SELECT f.cik, f.filing_type, s.ticker, s.\"close\" " +
@@ -245,7 +238,7 @@ public class StockPriceIntegrationTest {
 
         ResultSetMetaData meta = rs.getMetaData();
         assertEquals(4, meta.getColumnCount());
-        
+
         // Verify column names
         assertEquals("cik", meta.getColumnName(1).toLowerCase());
         assertEquals("filing_type", meta.getColumnName(2).toLowerCase());

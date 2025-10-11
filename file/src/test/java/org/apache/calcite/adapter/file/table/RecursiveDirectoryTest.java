@@ -16,16 +16,14 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
-import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.util.Sources;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -115,7 +113,7 @@ public class RecursiveDirectoryTest extends BaseFileTest {
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
-      
+
       // FileSchema will create tempDir/.aperio/FILES as the actual base directory
       rootSchema.add("FILES",
           new FileSchema(rootSchema, "FILES", tempDir.toFile(), tempDir.toFile(), null, null,
@@ -158,7 +156,7 @@ public class RecursiveDirectoryTest extends BaseFileTest {
          CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
-      
+
       // FileSchema will create tempDir/.aperio/FILES as the actual base directory
       rootSchema.add("FILES",
           new FileSchema(rootSchema, "FILES", tempDir.toFile(), tempDir.toFile(), null, null,

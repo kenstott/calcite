@@ -45,7 +45,7 @@ While government data provides the foundation for comprehensive risk and opportu
 **Structured Data Extraction**:
 ```sql
 -- Example: Enhanced company information
-SELECT 
+SELECT
     s.cik,
     s.company_name,
     s.revenue,
@@ -100,7 +100,7 @@ WHERE s.fiscal_year = 2023;
 **Precise Location Analysis**:
 ```sql
 -- Example: Business location risk assessment
-SELECT 
+SELECT
     c.company_name,
     c.facility_address,
     osm.building_type,
@@ -149,7 +149,7 @@ JOIN econ.census_blocks econ ON ST_Contains(econ.geometry, c.location_point);
 **Entity Relationships**:
 ```sql
 -- Example: Corporate leadership network analysis
-SELECT 
+SELECT
     company.name,
     executive.name,
     executive.previous_companies,
@@ -159,7 +159,7 @@ SELECT
 FROM wikidata.organizations company
 JOIN wikidata.employment_relations emp ON company.id = emp.organization_id
 JOIN wikidata.persons executive ON emp.person_id = executive.id
-JOIN wikidata.employment_relations shared_executives 
+JOIN wikidata.employment_relations shared_executives
     ON executive.id = shared_executives.person_id
 WHERE company.industry = 'technology'
 GROUP BY company.id, executive.id;
@@ -206,7 +206,7 @@ GROUP BY company.id, executive.id;
 **Integration Opportunities**:
 ```sql
 -- Example: Research impact on local economic development
-SELECT 
+SELECT
     university.name,
     university.location,
     COUNT(publications.id) as research_output,

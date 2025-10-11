@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -42,22 +43,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 class XmlToJsonConverterTest {
-  
+
   @TempDir
   Path tempDir;
-  
+
   private ObjectMapper mapper;
   private File outputDir;
-  
+
   @BeforeEach
   void setUp() {
     mapper = new ObjectMapper();
     outputDir = tempDir.resolve("output").toFile();
     outputDir.mkdirs();
   }
-  
-  @Test
-  void testSimpleProductCatalog() throws IOException {
+
+  @Test void testSimpleProductCatalog() throws IOException {
     // Create test XML
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<catalog>\n"
@@ -77,39 +77,38 @@ class XmlToJsonConverterTest {
         + "    <category>Hardware</category>\n"
         + "  </product>\n"
         + "</catalog>";
-    
+
     File xmlFile = createTempXmlFile("catalog.xml", xmlContent);
-    
+
     // Convert
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     // Verify
     assertEquals(1, jsonFiles.size());
-    
+
     File jsonFile = jsonFiles.get(0);
     assertTrue(jsonFile.exists());
     assertEquals("catalog__product.json", jsonFile.getName());
-    
+
     // Parse and verify JSON content
     JsonNode jsonArray = mapper.readTree(jsonFile);
     assertTrue(jsonArray.isArray());
     assertEquals(3, jsonArray.size());
-    
+
     // Verify first product
     JsonNode firstProduct = jsonArray.get(0);
     assertEquals("1", firstProduct.get("id").asText());
     assertEquals("Widget", firstProduct.get("name").asText());
     assertEquals("9.99", firstProduct.get("price").asText());
     assertEquals("Electronics", firstProduct.get("category").asText());
-    
+
     // Verify second product
     JsonNode secondProduct = jsonArray.get(1);
     assertEquals("2", secondProduct.get("id").asText());
     assertEquals("Gadget", secondProduct.get("name").asText());
   }
-  
-  @Test
-  void testNestedElements() throws IOException {
+
+  @Test void testNestedElements() throws IOException {
     // Create test XML with nested structure
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<customers>\n"
@@ -134,22 +133,22 @@ class XmlToJsonConverterTest {
         + "    <phone>555-5678</phone>\n"
         + "  </customer>\n"
         + "</customers>";
-    
+
     File xmlFile = createTempXmlFile("customers.xml", xmlContent);
-    
+
     // Convert
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     // Verify
     assertEquals(1, jsonFiles.size());
-    
+
     File jsonFile = jsonFiles.get(0);
     assertEquals("customers__customer.json", jsonFile.getName());
-    
+
     // Parse and verify JSON content
     JsonNode jsonArray = mapper.readTree(jsonFile);
     assertEquals(2, jsonArray.size());
-    
+
     // Verify flattened structure
     JsonNode firstCustomer = jsonArray.get(0);
     assertEquals("1", firstCustomer.get("id").asText());
@@ -160,9 +159,8 @@ class XmlToJsonConverterTest {
     assertEquals("10001", firstCustomer.get("address__zip").asText());
     assertEquals("555-1234", firstCustomer.get("phone").asText());
   }
-  
-  @Test
-  void testMultipleTablePatterns() throws IOException {
+
+  @Test void testMultipleTablePatterns() throws IOException {
     // Create test XML with multiple repeating patterns
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<company>\n"
@@ -194,32 +192,32 @@ class XmlToJsonConverterTest {
         + "    </employee>\n"
         + "  </employees>\n"
         + "</company>";
-    
+
     File xmlFile = createTempXmlFile("company.xml", xmlContent);
-    
+
     // Convert
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     // Verify - should create 2 tables
     assertEquals(2, jsonFiles.size());
-    
+
     // Check file names
     boolean foundDepartments = false;
     boolean foundEmployees = false;
-    
+
     for (File jsonFile : jsonFiles) {
       if (jsonFile.getName().equals("company__department.json")) {
         foundDepartments = true;
-        
+
         // Verify departments content
         JsonNode jsonArray = mapper.readTree(jsonFile);
         assertEquals(2, jsonArray.size());
         assertEquals("Engineering", jsonArray.get(0).get("name").asText());
         assertEquals("100000", jsonArray.get(0).get("budget").asText());
-        
+
       } else if (jsonFile.getName().equals("company__employee.json")) {
         foundEmployees = true;
-        
+
         // Verify employees content
         JsonNode jsonArray = mapper.readTree(jsonFile);
         assertEquals(3, jsonArray.size());
@@ -227,13 +225,12 @@ class XmlToJsonConverterTest {
         assertEquals("Engineering", jsonArray.get(0).get("department").asText());
       }
     }
-    
+
     assertTrue(foundDepartments, "Should create departments table");
     assertTrue(foundEmployees, "Should create employees table");
   }
-  
-  @Test
-  void testXPathTargeting() throws IOException {
+
+  @Test void testXPathTargeting() throws IOException {
     // Create test XML
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<data>\n"
@@ -257,26 +254,25 @@ class XmlToJsonConverterTest {
         + "    </category>\n"
         + "  </categories>\n"
         + "</data>";
-    
+
     File xmlFile = createTempXmlFile("data.xml", xmlContent);
-    
+
     // Convert with XPath targeting only products
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, "//product", outputDir);
-    
+
     // Verify - should only create products table
     assertEquals(1, jsonFiles.size());
-    
+
     File jsonFile = jsonFiles.get(0);
     assertEquals("data__product.json", jsonFile.getName());
-    
+
     // Verify content
     JsonNode jsonArray = mapper.readTree(jsonFile);
     assertEquals(2, jsonArray.size());
     assertEquals("Item A", jsonArray.get(0).get("name").asText());
   }
-  
-  @Test
-  void testColumnNameCasing() throws IOException {
+
+  @Test void testColumnNameCasing() throws IOException {
     // Create test XML with mixed case elements
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<root>\n"
@@ -291,31 +287,30 @@ class XmlToJsonConverterTest {
         + "    <isAvailable>false</isAvailable>\n"
         + "  </testItem>\n"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("test.xml", xmlContent);
-    
+
     // Convert with LOWER casing
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, null, "LOWER", outputDir);
-    
+
     assertEquals(1, jsonFiles.size());
     File jsonFile = jsonFiles.get(0);
-    
+
     // Verify column names are lowercase
     JsonNode jsonArray = mapper.readTree(jsonFile);
     JsonNode firstItem = jsonArray.get(0);
-    
+
     assertTrue(firstItem.has("id"));
     assertTrue(firstItem.has("itemname"));
     assertTrue(firstItem.has("itemprice"));
     assertTrue(firstItem.has("isavailable"));
-    
+
     // Verify values are preserved
     assertEquals("1", firstItem.get("id").asText());
     assertEquals("Test Item", firstItem.get("itemname").asText());
   }
-  
-  @Test
-  void testArrayElements() throws IOException {
+
+  @Test void testArrayElements() throws IOException {
     // Create test XML with array-like structures
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<library>\n"
@@ -337,22 +332,22 @@ class XmlToJsonConverterTest {
         + "    <isbn>987654321</isbn>\n"
         + "  </book>\n"
         + "</library>";
-    
+
     File xmlFile = createTempXmlFile("library.xml", xmlContent);
-    
+
     // Convert
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     assertEquals(1, jsonFiles.size());
     File jsonFile = jsonFiles.get(0);
-    
+
     // Verify array handling
     JsonNode jsonArray = mapper.readTree(jsonFile);
     JsonNode firstBook = jsonArray.get(0);
-    
+
     assertEquals("Book One", firstBook.get("title").asText());
     assertEquals("123456789", firstBook.get("isbn").asText());
-    
+
     // Verify authors array (flattened as authors__author)
     assertTrue(firstBook.has("authors__author"));
     JsonNode authors = firstBook.get("authors__author");
@@ -361,9 +356,8 @@ class XmlToJsonConverterTest {
     assertEquals("Author A", authors.get(0).get("_content").asText());
     assertEquals("Author B", authors.get(1).get("_content").asText());
   }
-  
-  @Test
-  void testEmptyAndMissingElements() throws IOException {
+
+  @Test void testEmptyAndMissingElements() throws IOException {
     // Create test XML with empty and missing elements
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<records>\n"
@@ -380,68 +374,66 @@ class XmlToJsonConverterTest {
         + "    <name>Minimal Record</name>\n"
         + "  </record>\n"
         + "</records>";
-    
+
     File xmlFile = createTempXmlFile("records.xml", xmlContent);
-    
+
     // Convert
     List<File> jsonFiles = XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     assertEquals(1, jsonFiles.size());
     File jsonFile = jsonFiles.get(0);
-    
+
     // Verify handling of empty/missing elements
     JsonNode jsonArray = mapper.readTree(jsonFile);
     assertEquals(3, jsonArray.size());
-    
+
     // First record - complete
     JsonNode record1 = jsonArray.get(0);
     assertEquals("Complete Record", record1.get("name").asText());
     assertEquals("Has all fields", record1.get("description").asText());
     assertEquals("active", record1.get("status").asText());
-    
+
     // Second record - empty description
     JsonNode record2 = jsonArray.get(1);
     assertEquals("Partial Record", record2.get("name").asText());
     assertFalse(record2.has("description") || (record2.get("description") != null && !record2.get("description").asText().isEmpty()));
-    
+
     // Third record - minimal
     JsonNode record3 = jsonArray.get(2);
     assertEquals("Minimal Record", record3.get("name").asText());
     assertFalse(record3.has("description"));
     assertFalse(record3.has("status"));
   }
-  
-  @Test
-  void testHasExtractedFiles() throws IOException {
+
+  @Test void testHasExtractedFiles() throws IOException {
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<root>"
         + "<item>test1</item>"
         + "<item>test2</item>"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("test.xml", xmlContent);
-    
+
     // Initially no extracted files
     assertFalse(XmlToJsonConverter.hasExtractedFiles(xmlFile, outputDir));
-    
+
     // Convert
     XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
-    
+
     // Now should have extracted files
     assertTrue(XmlToJsonConverter.hasExtractedFiles(xmlFile, outputDir));
   }
-  
-  @Test
-  void testInvalidXml() throws IOException {
+
+  @Test void testInvalidXml() throws IOException {
     // Create invalid XML
     String invalidXml = "<?xml version=\"1.0\"?>\n"
         + "<root>\n"
         + "  <unclosed>This tag is not closed\n"
         + "  <item>Valid item</item>\n"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("invalid.xml", invalidXml);
-    
+
     // Should throw IOException
     try {
       XmlToJsonConverter.convert(xmlFile, outputDir, outputDir);
@@ -452,7 +444,7 @@ class XmlToJsonConverterTest {
       assertNotNull(e.getMessage());
     }
   }
-  
+
   /**
    * Helper method to create temporary XML file.
    */

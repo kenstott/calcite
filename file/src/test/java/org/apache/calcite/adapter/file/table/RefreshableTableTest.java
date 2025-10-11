@@ -16,14 +16,8 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.apache.calcite.adapter.file.BaseFileTest;
-
 import org.apache.calcite.adapter.file.refresh.RefreshInterval;
-import org.apache.calcite.adapter.file.refresh.RefreshableTable;
-import org.apache.calcite.adapter.file.refresh.RefreshableJsonTable;
 import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -35,12 +29,9 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -55,13 +46,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Tests for refreshable table functionality.
@@ -122,13 +112,12 @@ public class RefreshableTableTest extends BaseFileTest {
     assertNull(RefreshInterval.getEffectiveInterval(null, null));
   }
 
-  @Test
-  public void testRefreshableJsonTable() throws Exception {
+  @Test public void testRefreshableJsonTable() throws Exception {
     assumeFalse(!isRefreshSupported(), "Refresh functionality only supported by PARQUET and DUCKDB engines");
-    
+
     // Build model with refresh configuration
-    String model = buildTestModel("test", tempDir.toString(),
-        "refreshInterval", "2 seconds");
+    String model =
+        buildTestModel("test", tempDir.toString(), "refreshInterval", "2 seconds");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
@@ -186,8 +175,8 @@ public class RefreshableTableTest extends BaseFileTest {
     // Create schema with default refresh interval
     // Build model with refresh configuration and table override
     String tablesJson = "[{\"name\": \"FAST_REFRESH\", \"url\": \"" + testFile.getName() + "\", \"refreshInterval\": \"1 second\"}]";
-    String model = buildTestModel("test", tempDir.toString(),
-        "refreshInterval", "10 minutes",
+    String model =
+        buildTestModel("test", tempDir.toString(), "refreshInterval", "10 minutes",
         "tables", tablesJson);
 
     Properties connectionProps = new Properties();
@@ -239,8 +228,8 @@ public class RefreshableTableTest extends BaseFileTest {
     writeJsonData(file2, "[{\"id\": 2}]");
 
     // Build model with refresh configuration
-    String model = buildTestModel("test", tempDir.toString(),
-        "refreshInterval", "1 second");
+    String model =
+        buildTestModel("test", tempDir.toString(), "refreshInterval", "1 second");
 
     Properties connectionProps = new Properties();
     applyEngineDefaults(connectionProps);
@@ -295,7 +284,7 @@ public class RefreshableTableTest extends BaseFileTest {
           System.out.println("✓ .conversions.json file found and contains expected tables for DUCKDB compatibility");
         } else {
           System.out.println("WARNING: .conversions.json not found at: " + conversionFile.getAbsolutePath());
-          
+
           // Check if it's in the conversions subdirectory
           File conversionsDir = new File(cacheDir, "conversions");
           if (conversionsDir.exists()) {
@@ -305,7 +294,7 @@ public class RefreshableTableTest extends BaseFileTest {
               System.out.println("=== .conversions.json found in conversions/ subdirectory ===");
               System.out.println(conversionContent);
               System.out.println("=================================");
-              
+
               // Log the content for debugging but don't assert - with concurrent tests this may find wrong directory
               // The fact that DUCKDB queries work proves the file is written correctly
               System.out.println("Note: .conversions.json found in conversions/, DUCKDB table discovery is working");
@@ -320,7 +309,7 @@ public class RefreshableTableTest extends BaseFileTest {
               }
             }
           }
-          
+
           System.out.println("Files in cache directory:");
           File[] files = cacheDir.listFiles();
           if (files != null) {
@@ -438,8 +427,8 @@ public class RefreshableTableTest extends BaseFileTest {
     String partitionedTablesJson = "[{\"name\": \"sales\", \"pattern\": \"**/*.parquet\", " +
         "\"partitions\": {\"style\": \"hive\", \"columns\": [" +
         "{\"name\": \"year\", \"type\": \"INTEGER\"}, {\"name\": \"month\", \"type\": \"INTEGER\"}]}}]";
-    String model = buildTestModel("partitioned", salesDir.toString(),
-        "refreshInterval", "1 second",
+    String model =
+        buildTestModel("partitioned", salesDir.toString(), "refreshInterval", "1 second",
         "partitionedTables", partitionedTablesJson);
 
     Properties connectionProps = new Properties();
@@ -592,7 +581,7 @@ public class RefreshableTableTest extends BaseFileTest {
     // Custom regex partitions extract virtual columns from filenames that don't exist in the parquet files
     // DUCKDB can't handle these virtual columns - it only understands real columns or Hive-style partitions
     String engine = getExecutionEngine();
-    assumeFalse("DUCKDB".equals(engine), 
+    assumeFalse("DUCKDB".equals(engine),
         "Custom regex partitions not supported by DUCKDB engine (requires real columns)");
     // Create directory structure for custom partition naming: sales_2023_01.parquet
     File salesDir = new File(tempDir.toFile(), "sales_data");
@@ -643,11 +632,11 @@ public class RefreshableTableTest extends BaseFileTest {
         "  ]" +
         "}" +
         "}]";
-    
-    String model = buildTestModel("CUSTOM", tempDir.toString(),
-        "refreshInterval", "1 second",
+
+    String model =
+        buildTestModel("CUSTOM", tempDir.toString(), "refreshInterval", "1 second",
         "partitionedTables", partitionedTablesJson);
-    
+
     System.out.println("[DEBUG] Model configuration: " + model);
 
     Properties connectionProps = new Properties();

@@ -98,8 +98,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
     this.worldBankDownloader = worldBankDownloader;
   }
 
-  @Override
-  public boolean canConvert(String rawFilePath, ConversionMetadata metadata) {
+  @Override public boolean canConvert(String rawFilePath, ConversionMetadata metadata) {
     // Check if this is an ECON data file by looking for source=econ in path
     boolean canConvert = rawFilePath.contains("source=econ/");
     if (canConvert) {
@@ -108,8 +107,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
     return canConvert;
   }
 
-  @Override
-  public boolean convertToParquet(String rawFilePath, String targetParquetPath,
+  @Override public boolean convertToParquet(String rawFilePath, String targetParquetPath,
       StorageProvider storageProvider) throws IOException {
 
     LOGGER.info("EconRawToParquetConverter processing: {} -> {}", rawFilePath, targetParquetPath);

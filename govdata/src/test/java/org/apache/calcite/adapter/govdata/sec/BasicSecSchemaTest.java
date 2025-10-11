@@ -37,8 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class BasicSecSchemaTest {
 
-  @Test
-  @org.junit.jupiter.api.Disabled("GovDataTestModels not available")
+  @Test @org.junit.jupiter.api.Disabled("GovDataTestModels not available")
   public void testSchemaWithAllTables() throws Exception {
 
     // Load test model from resources
@@ -55,17 +54,17 @@ public class BasicSecSchemaTest {
 
       // Get database metadata
       DatabaseMetaData metaData = connection.getMetaData();
-      
+
       // List all tables in SEC schema
       Set<String> tables = new HashSet<>();
-      
+
       try (ResultSet rs = metaData.getTables(null, "sec", "%", null)) {
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME");
           tables.add(tableName.toLowerCase());
         }
       }
-      
+
       // Verify expected tables exist
       assertTrue(tables.contains("financial_line_items"), "financial_line_items table should exist");
       assertTrue(tables.contains("financial_facts"), "financial_facts table should exist");
@@ -73,7 +72,7 @@ public class BasicSecSchemaTest {
       assertTrue(tables.contains("company_metadata"), "company_metadata table should exist");
       assertTrue(tables.contains("insider_transactions"), "insider_transactions table should exist");
       assertTrue(tables.contains("earnings_transcripts"), "earnings_transcripts table should exist");
-      
+
       assertTrue(tables.size() >= 6, "Should have at least 6 expected tables, found " + tables.size());
     }
   }

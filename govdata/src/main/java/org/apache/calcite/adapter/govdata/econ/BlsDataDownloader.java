@@ -22,7 +22,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -32,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -90,18 +88,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     this.apiKey = apiKey;
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return MIN_REQUEST_INTERVAL_MS;
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return MAX_RETRIES;
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return RETRY_DELAY_MS;
   }
 
@@ -385,6 +380,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     requestBody.set("seriesid", seriesArray);
     requestBody.put("startyear", String.valueOf(startYear));
     requestBody.put("endyear", String.valueOf(endYear));
+    requestBody.put("calculations", true); // Enable percent change calculations
 
     if (apiKey != null && !apiKey.isEmpty()) {
       requestBody.put("registrationkey", apiKey);
@@ -561,6 +557,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value") != null ? dataPoint.get("value") : 0.0);
         record.put("unit", getUnit(entry.getKey()));
         record.put("seasonally_adjusted", isSeasonallyAdjusted(entry.getKey()));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
         record.put("category", "Employment");
         record.put("subcategory", getSubcategory(entry.getKey()));
         records.add(record);
@@ -603,6 +601,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("area_code", "0000");  // National
         record.put("item_name", dataPoint.get("series_name") != null ? dataPoint.get("series_name") : getSeriesName(seriesId));
         record.put("index_value", dataPoint.get("value") != null ? dataPoint.get("value") : 0.0);
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
         record.put("area_name", "U.S. city average");
         record.put("seasonally_adjusted", isSeasonallyAdjusted(seriesId));
         records.add(record);
@@ -648,8 +648,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         if (seriesId.equals(Series.AVG_HOURLY_EARNINGS)) {
           record.put("average_hourly_earnings", dataPoint.get("value"));
+          // Set percent_change_year if available for earnings series
+          record.put("percent_change_year", dataPoint.get("percent_change_year"));
         } else if (seriesId.equals(Series.EMPLOYMENT_COST_INDEX)) {
           record.put("employment_cost_index", dataPoint.get("value"));
+          // Set percent_change_year if available for ECI series
+          record.put("percent_change_year", dataPoint.get("percent_change_year"));
         }
 
         records.add(record);
@@ -906,6 +910,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                   dataPoint.put("date", dataNode.get("year").asText() + "-" +
                     String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                   dataPoint.put("value", dataNode.get("value").asDouble());
+
+                  // Extract percentage changes from BLS API calculations
+                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                    if (pctChanges.has("1")) {
+                      dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                    }
+                    if (pctChanges.has("12")) {
+                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                    }
+                  }
+
                   dataPoints.add(dataPoint);
                 }
               }
@@ -946,6 +962,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                   dataPoint.put("date", dataNode.get("year").asText() + "-" +
                     String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                   dataPoint.put("value", dataNode.get("value").asDouble());
+
+                  // Extract percentage changes from BLS API calculations
+                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                    if (pctChanges.has("1")) {
+                      dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                    }
+                    if (pctChanges.has("12")) {
+                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                    }
+                  }
+
                   dataPoints.add(dataPoint);
                 }
               }
@@ -986,6 +1014,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                   dataPoint.put("date", dataNode.get("year").asText() + "-" +
                     String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                   dataPoint.put("value", dataNode.get("value").asDouble());
+
+                  // Extract year-over-year percentage change from BLS API calculations
+                  // BLS API provides calculations.pct_changes.12 for 12-month change
+                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                    if (pctChanges.has("12")) {
+                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                    }
+                  }
+
                   dataPoints.add(dataPoint);
                 }
               }
@@ -1006,45 +1044,60 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void convertRegionalEmploymentToParquet(File sourceDir, String targetPath) throws IOException {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
 
-    // Regional employment data is in type=regional subdirectory, not type=indicators
-    // Adjust path to look in the regional directory
-    File regionalDir =
-        new File(sourceDir.getParentFile().getParentFile(), "type=regional/year=" + sourceDir.getName().replace("year=", ""));
+    // Look for regional employment JSON files in the source directory
+    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("regional_employment.json"));
+    if (jsonFiles == null || jsonFiles.length == 0) {
+      LOGGER.warn("No regional_employment.json found in {}", sourceDir);
+      return;
+    }
 
-    // Look for regional employment JSON files
-    File[] jsonFiles = regionalDir.listFiles((dir, name) -> name.equals("regional_employment.json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
+    for (File jsonFile : jsonFiles) {
+      try {
+        String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+        JsonNode root = MAPPER.readTree(content);
 
-          if (root.has("Results") && root.get("Results").has("series")) {
-            JsonNode series = root.get("Results").get("series");
-            for (JsonNode seriesNode : series) {
-              String seriesId = seriesNode.get("seriesID").asText();
-              List<Map<String, Object>> dataPoints = new ArrayList<>();
+        if (root.has("Results") && root.get("Results").has("series")) {
+          JsonNode series = root.get("Results").get("series");
+          for (JsonNode seriesNode : series) {
+            String seriesId = seriesNode.get("seriesID").asText();
+            List<Map<String, Object>> dataPoints = new ArrayList<>();
 
-              if (seriesNode.has("data")) {
-                for (JsonNode dataNode : seriesNode.get("data")) {
-                  Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
-                    String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
-                  dataPoint.put("value", dataNode.get("value").asDouble());
-                  dataPoints.add(dataPoint);
+            if (seriesNode.has("data")) {
+              for (JsonNode dataNode : seriesNode.get("data")) {
+                Map<String, Object> dataPoint = new HashMap<>();
+                dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                  String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+                dataPoint.put("value", dataNode.get("value").asDouble());
+
+                // Extract percentage changes from BLS API calculations (if available)
+                if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                  JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                  if (pctChanges.has("1")) {
+                    dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                  }
+                  if (pctChanges.has("12")) {
+                    dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                  }
                 }
+
+                dataPoints.add(dataPoint);
               }
-              seriesData.put(seriesId, dataPoints);
             }
+            seriesData.put(seriesId, dataPoints);
           }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading BLS regional employment JSON file {}: {}", jsonFile, e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.error("Error reading BLS regional employment JSON file {}: {}", jsonFile, e.getMessage(), e);
       }
     }
 
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in regional employment JSON files");
+      return;
+    }
+
     // Write to parquet using regional employment schema
-    LOGGER.info("Converting regional employment data with {} series to parquet", seriesData.size());
+    LOGGER.info("Converting regional employment data with {} series to parquet: {}", seriesData.size(), targetPath);
     writeRegionalEmploymentParquet(seriesData, targetPath);
     LOGGER.info("Converted BLS regional employment data to parquet: {}", targetPath);
   }

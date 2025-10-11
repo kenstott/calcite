@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager
 import org.apache.calcite.adapter.file.storage.SharePointRestStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderSource;
-import org.apache.calcite.util.Source;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -42,45 +41,45 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class SharePointDirectReadTest {
-  
+
   private static String tenantId;
   private static String clientId;
   private static String certificatePath;
   private static String certificatePassword;
   private static String siteUrl;
-  
+
   @BeforeAll
   static void setup() {
     Properties props = loadProperties();
-    
+
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     // Check if certificate file exists
     File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
     if (certFile.exists()) {
       certificatePath = certFile.getAbsolutePath();
       System.out.println("Found certificate at: " + certificatePath);
     }
-    
-    if (tenantId == null || clientId == null || siteUrl == null || 
+
+    if (tenantId == null || clientId == null || siteUrl == null ||
         certificatePath == null || certificatePassword == null) {
       System.out.println("SharePoint certificate authentication not fully configured.");
       return;
     }
-    
+
     System.out.println("SharePoint Test Configuration:");
     System.out.println("  Site URL: " + siteUrl);
     System.out.println("  Client ID: " + clientId);
     System.out.println("  Tenant ID: " + tenantId);
     System.out.println("  Certificate: " + certificatePath);
   }
-  
+
   private static Properties loadProperties() {
     Properties props = new Properties();
-    
+
     // Load from properties file
     File propsFile = new File("local-test.properties");
     if (!propsFile.exists()) {
@@ -89,7 +88,7 @@ public class SharePointDirectReadTest {
     if (!propsFile.exists()) {
       propsFile = new File("/Users/kennethstott/ndc-calcite/calcite-rs-jni/calcite/file/local-test.properties");
     }
-    
+
     if (propsFile.exists()) {
       try (InputStream is = new FileInputStream(propsFile)) {
         Properties fileProps = new Properties();
@@ -100,34 +99,33 @@ public class SharePointDirectReadTest {
         System.err.println("Failed to load properties: " + e.getMessage());
       }
     }
-    
+
     return props;
   }
-  
-  @Test
-  void testDirectFileRead() throws Exception {
+
+  @Test void testDirectFileRead() throws Exception {
     if (certificatePath == null || certificatePassword == null) {
       System.out.println("Skipping test - certificate not configured");
       return;
     }
-    
+
     System.out.println("\n=== Testing Direct File Read ===");
-    
+
     // Create token manager with certificate
-    SharePointCertificateTokenManager tokenManager = 
-        new SharePointCertificateTokenManager(tenantId, clientId, 
+    SharePointCertificateTokenManager tokenManager =
+        new SharePointCertificateTokenManager(tenantId, clientId,
             certificatePath, certificatePassword, siteUrl);
-    
+
     // Create storage provider
     SharePointRestStorageProvider provider = new SharePointRestStorageProvider(tokenManager);
-    
+
     // First list files to find a CSV
     System.out.println("Listing files in /Shared Documents/Shared Documents...");
     List<StorageProvider.FileEntry> entries = provider.listFiles("/Shared Documents/Shared Documents", false);
-    
+
     assertNotNull(entries, "Should be able to list files");
     System.out.println("Found " + entries.size() + " files");
-    
+
     StorageProvider.FileEntry csvFile = null;
     for (StorageProvider.FileEntry entry : entries) {
       if (!entry.isDirectory() && entry.getName().endsWith(".csv")) {
@@ -136,9 +134,9 @@ public class SharePointDirectReadTest {
         break;
       }
     }
-    
+
     assertNotNull(csvFile, "Should find at least one CSV file");
-    
+
     // Test 1: Read file using openInputStream
     System.out.println("\n--- Test 1: openInputStream ---");
     try (InputStream stream = provider.openInputStream(csvFile.getPath())) {
@@ -150,7 +148,7 @@ public class SharePointDirectReadTest {
       System.out.println("First 100 bytes: " + content);
       assertTrue(content.contains(","), "CSV should contain commas");
     }
-    
+
     // Test 2: Read file using openReader
     System.out.println("\n--- Test 2: openReader ---");
     try (Reader reader = provider.openReader(csvFile.getPath())) {
@@ -162,13 +160,13 @@ public class SharePointDirectReadTest {
       System.out.println("First 100 chars: " + content);
       assertTrue(content.contains(","), "CSV should contain commas");
     }
-    
+
     // Test 3: Create Source and read through it
     System.out.println("\n--- Test 3: StorageProviderSource ---");
     StorageProviderSource source = new StorageProviderSource(csvFile, provider);
     assertNotNull(source, "Source should not be null");
     assertEquals(csvFile.getPath(), source.path(), "Path should match");
-    
+
     try (Reader reader = source.reader()) {
       assertNotNull(reader, "Reader from source should not be null");
       BufferedReader br = new BufferedReader(reader);
@@ -176,7 +174,7 @@ public class SharePointDirectReadTest {
       assertNotNull(firstLine, "Should read first line");
       System.out.println("First line from Source: " + firstLine);
       assertTrue(firstLine.contains(","), "First line should contain commas");
-      
+
       // Read a few more lines
       for (int i = 0; i < 3; i++) {
         String line = br.readLine();
@@ -185,25 +183,24 @@ public class SharePointDirectReadTest {
         }
       }
     }
-    
+
     System.out.println("\n✅ All direct read tests passed!");
   }
-  
-  @Test
-  void testPathNormalization() throws Exception {
+
+  @Test void testPathNormalization() throws Exception {
     if (certificatePath == null || certificatePassword == null) {
       System.out.println("Skipping test - certificate not configured");
       return;
     }
-    
+
     System.out.println("\n=== Testing Path Normalization ===");
-    
-    SharePointCertificateTokenManager tokenManager = 
-        new SharePointCertificateTokenManager(tenantId, clientId, 
+
+    SharePointCertificateTokenManager tokenManager =
+        new SharePointCertificateTokenManager(tenantId, clientId,
             certificatePath, certificatePassword, siteUrl);
-    
+
     SharePointRestStorageProvider provider = new SharePointRestStorageProvider(tokenManager);
-    
+
     // Test different path formats
     String[] testPaths = {
         "Shared Documents/Shared Documents/departments.csv",
@@ -211,7 +208,7 @@ public class SharePointDirectReadTest {
         "shared_documents_departments",  // Table name format
         "departments.csv"  // Just filename
     };
-    
+
     for (String path : testPaths) {
       System.out.println("\nTrying path: " + path);
       try {

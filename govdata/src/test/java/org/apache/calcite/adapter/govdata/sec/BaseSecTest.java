@@ -40,7 +40,7 @@ public abstract class BaseSecTest {
 
   /**
    * Create a connection to Calcite using the specified model resource.
-   * 
+   *
    * @param modelResourcePath Path to model file in resources (e.g., "/sec-default-model.json")
    * @return Connection to Calcite
    * @throws SQLException if connection fails
@@ -52,7 +52,7 @@ public abstract class BaseSecTest {
 
   /**
    * Create a connection to Calcite using a file path.
-   * 
+   *
    * @param modelPath Absolute path to model file
    * @return Connection to Calcite
    * @throws SQLException if connection fails
@@ -65,7 +65,7 @@ public abstract class BaseSecTest {
 
   /**
    * Get default connection properties for SEC tests.
-   * 
+   *
    * @return Properties with standard settings
    */
   protected Properties getDefaultConnectionProperties() {
