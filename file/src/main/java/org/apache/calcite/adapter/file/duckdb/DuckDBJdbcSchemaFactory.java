@@ -98,12 +98,22 @@ public class DuckDBJdbcSchemaFactory {
     try {
       Class.forName("org.duckdb.DuckDBDriver");
 
-      // Use a named in-memory database that persists across connections
-      // The name is based on the schema name and a unique ID to ensure isolation
-      String dbName = "calcite_" + schemaName + "_" + System.nanoTime();
-      String jdbcUrl = "jdbc:duckdb:" + dbName;
+      // Determine catalog path - check for explicit configuration first
+      String catalogPath = determineCatalogPath(schemaName, directoryPath);
+      String jdbcUrl;
+      String dbName;
 
-      LOGGER.info("Using named DuckDB in-memory database: {}", dbName);
+      if (catalogPath != null) {
+        // Use persistent file-based catalog
+        jdbcUrl = "jdbc:duckdb:" + catalogPath;
+        dbName = new File(catalogPath).getName().replace(".duckdb", "");
+        LOGGER.info("Using persistent DuckDB catalog: {}", catalogPath);
+      } else {
+        // Fallback to named in-memory database
+        dbName = "calcite_" + schemaName + "_" + System.nanoTime();
+        jdbcUrl = "jdbc:duckdb:" + dbName;
+        LOGGER.info("Using ephemeral in-memory DuckDB database: {}", dbName);
+      }
 
       // Create initial connection for setup
       Connection setupConn = DriverManager.getConnection(jdbcUrl);
@@ -346,6 +356,36 @@ public class DuckDBJdbcSchemaFactory {
         .withLex(Lex.ORACLE)
         .withUnquotedCasing(Casing.TO_LOWER)
         .withQuotedCasing(Casing.UNCHANGED);
+  }
+
+  /**
+   * Determines the catalog path for the DuckDB database.
+   * Priority:
+   * 1. DUCKDB_CATALOG_PATH environment variable
+   * 2. duckdb.catalog.path system property
+   * 3. null (fallback to in-memory database)
+   *
+   * @param schemaName The schema name
+   * @param directoryPath The data directory path
+   * @return The catalog file path, or null for in-memory
+   */
+  private static String determineCatalogPath(String schemaName, String directoryPath) {
+    // Check environment variable first (highest priority)
+    String catalogPath = System.getenv("DUCKDB_CATALOG_PATH");
+    if (catalogPath != null && !catalogPath.isEmpty()) {
+      LOGGER.debug("Using catalog path from DUCKDB_CATALOG_PATH: {}", catalogPath);
+      return catalogPath;
+    }
+
+    // Check system property
+    catalogPath = System.getProperty("duckdb.catalog.path");
+    if (catalogPath != null && !catalogPath.isEmpty()) {
+      LOGGER.debug("Using catalog path from system property: {}", catalogPath);
+      return catalogPath;
+    }
+
+    // No explicit configuration - return null to use in-memory database
+    return null;
   }
 
   /**
