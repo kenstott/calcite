@@ -845,12 +845,18 @@ public class ShapefileToParquetConverter {
         .name("geometry").doc("WKT representation of ZCTA boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
-    String expectedPrefix = "tl_" + year + "_us_zcta520";
+    // 2010 uses different naming: zcta510 instead of zcta520, and field suffix "10" instead of "20"
+    boolean is2010 = "2010".equals(year);
+    String expectedPrefix = is2010 ? "tl_2010_us_zcta510" : "tl_" + year + "_us_zcta520";
+    String zctaField = is2010 ? "ZCTA5CE10" : "ZCTA5CE20";
+    String alandField = is2010 ? "ALAND10" : "ALAND20";
+    String awaterField = is2010 ? "AWATER10" : "AWATER20";
+
     List<Object[]> zctasData = TigerShapefileParser.parseShapefile(zctasDir, expectedPrefix, feature -> {
       return new Object[]{
-          TigerShapefileParser.getStringAttribute(feature, "ZCTA5CE20"),
-          TigerShapefileParser.getDoubleAttribute(feature, "ALAND20"),
-          TigerShapefileParser.getDoubleAttribute(feature, "AWATER20"),
+          TigerShapefileParser.getStringAttribute(feature, zctaField),
+          TigerShapefileParser.getDoubleAttribute(feature, alandField),
+          TigerShapefileParser.getDoubleAttribute(feature, awaterField),
           TigerShapefileParser.getGeometryAttribute(feature)
       };
     });
@@ -1016,8 +1022,17 @@ public class ShapefileToParquetConverter {
         .name("geometry").doc("WKT representation of congressional district boundary polygon").type().nullable().stringType().noDefault()
         .endRecord();
 
-    // Congressional districts are state-level files - parse all state CD files
-    String congressNum = Integer.parseInt(year) >= 2024 ? "119" : "118";
+    // Calculate correct Congress number: ((year - 1789) / 2) + 1
+    int yearNum = Integer.parseInt(year);
+    int congressNum = ((yearNum - 1789) / 2) + 1;
+
+    // 2010 has different field naming (suffix "10" instead of no suffix)
+    boolean is2010 = yearNum == 2010;
+    String geoidField = is2010 ? "GEOID10" : "GEOID";
+    String statefpField = is2010 ? "STATEFP10" : "STATEFP";
+    String namelsadField = is2010 ? "NAMELSAD10" : "NAMELSAD";
+    String alandField = is2010 ? "ALAND10" : "ALAND";
+    String awaterField = is2010 ? "AWATER10" : "AWATER";
 
     List<Object[]> allCdData = new ArrayList<>();
     File[] shpFiles = cdDir.listFiles((dir, name) -> name.endsWith(".shp") && name.contains("_cd" + congressNum));
@@ -1028,11 +1043,11 @@ public class ShapefileToParquetConverter {
         String expectedPrefix = shpFile.getName().replace(".shp", "");
         List<Object[]> stateData = TigerShapefileParser.parseShapefile(cdDir, expectedPrefix, feature -> {
           return new Object[]{
-              TigerShapefileParser.getStringAttribute(feature, "GEOID"),
-              TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
-              TigerShapefileParser.getStringAttribute(feature, "NAMELSAD"),
-              TigerShapefileParser.getDoubleAttribute(feature, "ALAND"),
-              TigerShapefileParser.getDoubleAttribute(feature, "AWATER"),
+              TigerShapefileParser.getStringAttribute(feature, geoidField),
+              TigerShapefileParser.getStringAttribute(feature, statefpField),
+              TigerShapefileParser.getStringAttribute(feature, namelsadField),
+              TigerShapefileParser.getDoubleAttribute(feature, alandField),
+              TigerShapefileParser.getDoubleAttribute(feature, awaterField),
               TigerShapefileParser.getGeometryAttribute(feature)
           };
         });
@@ -1079,16 +1094,26 @@ public class ShapefileToParquetConverter {
         // Try different school district types
         String[] districtTypes = {"unsd", "elsd", "scsd"};
         for (String type : districtTypes) {
-          String expectedPrefix = "tl_" + year + "_" + stateFips + "_" + type;
+          // 2010 has different naming with type suffix "10" (e.g., unsd10)
+          String typeSuffix = "2010".equals(year) ? type + "10" : type;
+          String expectedPrefix = "tl_" + year + "_" + stateFips + "_" + typeSuffix;
+
+          // 2010 also has different field naming (suffix "10" instead of no suffix)
+          boolean is2010 = "2010".equals(year);
+          String geoidField = is2010 ? "GEOID10" : "GEOID";
+          String statefpField = is2010 ? "STATEFP10" : "STATEFP";
+          String nameField = is2010 ? "NAME10" : "NAME";
+          String alandField = is2010 ? "ALAND10" : "ALAND";
+          String awaterField = is2010 ? "AWATER10" : "AWATER";
 
           List<Object[]> sdData = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
             return new Object[]{
-                TigerShapefileParser.getStringAttribute(feature, "GEOID"),
-                TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
-                TigerShapefileParser.getStringAttribute(feature, "NAME"),
+                TigerShapefileParser.getStringAttribute(feature, geoidField),
+                TigerShapefileParser.getStringAttribute(feature, statefpField),
+                TigerShapefileParser.getStringAttribute(feature, nameField),
                 type.toUpperCase(),
-                TigerShapefileParser.getDoubleAttribute(feature, "ALAND"),
-                TigerShapefileParser.getDoubleAttribute(feature, "AWATER"),
+                TigerShapefileParser.getDoubleAttribute(feature, alandField),
+                TigerShapefileParser.getDoubleAttribute(feature, awaterField),
                 TigerShapefileParser.getGeometryAttribute(feature)
             };
           });

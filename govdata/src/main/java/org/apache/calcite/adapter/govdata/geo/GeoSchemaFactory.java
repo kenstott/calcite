@@ -335,116 +335,165 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     // Download TIGER data if enabled
     if (Arrays.asList(enabledSources).contains("tiger") && !tigerYears.isEmpty()) {
 
-      // Check if TIGER parquet files already exist for all years - following SEC pattern with TTL
+      // Check which years need TIGER data processing (per-year granularity)
+      String[] tigerFiles = {"states.parquet", "counties.parquet", "places.parquet", "zctas.parquet",
+          "census_tracts.parquet", "block_groups.parquet", "cbsa.parquet", "congressional_districts.parquet", "school_districts.parquet"};
 
-      boolean allTigerFilesCached = true;
+      List<Integer> yearsToProcess = new ArrayList<>();
       for (int year : tigerYears) {
-        String[] tigerFiles = {"states.parquet", "counties.parquet", "places.parquet", "zctas.parquet",
-            "census_tracts.parquet", "block_groups.parquet", "cbsa.parquet", "congressional_districts.parquet", "school_districts.parquet"};
+        boolean yearFullyCached = true;
 
         for (String filename : tigerFiles) {
           String parquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/" + filename);
           try {
             if (!storageProvider.exists(parquetPath)) {
-              allTigerFilesCached = false;
-              LOGGER.info("Missing TIGER parquet file: {}", parquetPath);
+              yearFullyCached = false;
+              LOGGER.debug("Missing TIGER parquet file: {}", parquetPath);
               break;
             } else {
               StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
               if (metadata.getSize() == 0) {
-                allTigerFilesCached = false;
-                LOGGER.info("Empty TIGER parquet file: {}", parquetPath);
+                yearFullyCached = false;
+                LOGGER.debug("Empty TIGER parquet file: {}", parquetPath);
                 break;
               }
 
               // Check TTL - GEO data expires after 90 days
               long fileAge = currentTime - metadata.getLastModified();
               if (fileAge > geoDataTtlMillis) {
-                allTigerFilesCached = false;
-                LOGGER.info("Expired TIGER parquet file (age: {} days): {}",
+                yearFullyCached = false;
+                LOGGER.debug("Expired TIGER parquet file (age: {} days): {}",
                     fileAge / (24 * 60 * 60 * 1000), parquetPath);
                 break;
               }
             }
           } catch (IOException e) {
-            allTigerFilesCached = false;
-            LOGGER.info("Cannot access TIGER parquet file: {}", parquetPath);
+            yearFullyCached = false;
+            LOGGER.debug("Cannot access TIGER parquet file: {}", parquetPath);
             break;
           }
         }
-        if (!allTigerFilesCached) break;
+
+        if (!yearFullyCached) {
+          yearsToProcess.add(year);
+        }
       }
 
-      if (allTigerFilesCached) {
+      if (yearsToProcess.isEmpty()) {
         LOGGER.info("TIGER data already fully cached for years: {}", tigerYears);
       } else {
+        LOGGER.info("TIGER data needs processing for years: {}", yearsToProcess);
         // Use simple cache directory structure for raw data downloads
         File tigerCacheDir = new File(cacheDir, "tiger");
         TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider, cacheManifest);
 
         try {
-          // Download and convert TIGER data for each year
-          // Pass parquet paths to download methods so they can skip if parquet already exists
-          int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
-          int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
-
-          for (int year = startYear; year <= endYear; year++) {
+          // Download and convert TIGER data only for years that need processing
+          for (int year : yearsToProcess) {
             LOGGER.info("Processing TIGER data for year {}", year);
 
-            // Download and convert each dataset, passing parquet path to optimize downloads
+            // Download and convert each dataset only if parquet doesn't exist
             String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
-            tigerDownloader.downloadStatesForYear(year);
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
+            if (!storageProvider.exists(statesParquetPath)) {
+              tigerDownloader.downloadStatesForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
+            }
 
             String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
-            tigerDownloader.downloadCountiesForYear(year);
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
+            if (!storageProvider.exists(countiesParquetPath)) {
+              tigerDownloader.downloadCountiesForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
+            }
 
             String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
-            tigerDownloader.downloadPlacesForYear(year, "06"); // California
-            tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
-            tigerDownloader.downloadPlacesForYear(year, "36"); // New York
-            tigerDownloader.downloadPlacesForYear(year, "12"); // Florida
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
+            if (!storageProvider.exists(placesParquetPath)) {
+              tigerDownloader.downloadPlacesForYear(year, "06"); // California
+              tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
+              tigerDownloader.downloadPlacesForYear(year, "36"); // New York
+              tigerDownloader.downloadPlacesForYear(year, "12"); // Florida
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
+            }
 
             String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
-            tigerDownloader.downloadZctasForYear(year);
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
+            if (!storageProvider.exists(zctasParquetPath)) {
+              File zctasDir = tigerDownloader.downloadZctasForYear(year);
+              if (zctasDir != null) {
+                tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
+              } else {
+                // Create zero-row marker file for missing data (e.g., ZCTAs only exist for decennial census years)
+                LOGGER.info("Creating zero-row marker for ZCTAs year {} (data not available)", year);
+                createZeroRowTigerParquet(zctasParquetPath, "zctas", storageProvider);
+              }
+            }
 
             String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
-            tigerDownloader.downloadCensusTractsForYear(year);
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
+            if (!storageProvider.exists(tractsParquetPath)) {
+              tigerDownloader.downloadCensusTractsForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
+            }
 
             String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
-            tigerDownloader.downloadBlockGroupsForYear(year);
-            tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
+            if (!storageProvider.exists(blockGroupsParquetPath)) {
+              tigerDownloader.downloadBlockGroupsForYear(year);
+              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
+            }
 
             String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
-            try {
-              tigerDownloader.downloadCbsasForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
-            } catch (Exception e) {
-              LOGGER.warn("Failed to download/convert CBSAs for year {}: {}", year, e.getMessage());
+            if (!storageProvider.exists(cbsaParquetPath)) {
+              try {
+                File cbsaDir = tigerDownloader.downloadCbsasForYear(year);
+                if (cbsaDir != null) {
+                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
+                } else {
+                  // Create zero-row marker file for missing data
+                  LOGGER.info("Creating zero-row marker for CBSAs year {} (data not available)", year);
+                  createZeroRowTigerParquet(cbsaParquetPath, "cbsa", storageProvider);
+                }
+              } catch (Exception e) {
+                LOGGER.warn("Failed to download/convert CBSAs for year {}: {}", year, e.getMessage());
+                // Create zero-row marker on exception (likely 404)
+                try {
+                  createZeroRowTigerParquet(cbsaParquetPath, "cbsa", storageProvider);
+                } catch (IOException markerEx) {
+                  LOGGER.error("Failed to create zero-row marker for CBSAs year {}: {}", year, markerEx.getMessage());
+                }
+              }
             }
 
             String congressionalParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/congressional_districts.parquet");
-            try {
-              tigerDownloader.downloadCongressionalDistrictsForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
-            } catch (Exception e) {
-              LOGGER.warn("Failed to download/convert congressional districts for year {}: {}", year, e.getMessage());
+            if (!storageProvider.exists(congressionalParquetPath)) {
+              try {
+                File cdDir = tigerDownloader.downloadCongressionalDistrictsForYear(year);
+                if (cdDir != null) {
+                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
+                } else {
+                  // Create zero-row marker file for missing data
+                  LOGGER.info("Creating zero-row marker for congressional districts year {} (data not available)", year);
+                  createZeroRowTigerParquet(congressionalParquetPath, "congressional_districts", storageProvider);
+                }
+              } catch (Exception e) {
+                LOGGER.warn("Failed to download/convert congressional districts for year {}: {}", year, e.getMessage());
+              }
             }
 
             String schoolParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/school_districts.parquet");
-            try {
-              tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
-            } catch (Exception e) {
-              LOGGER.warn("Failed to download/convert school districts for year {}: {}", year, e.getMessage());
+            if (!storageProvider.exists(schoolParquetPath)) {
+              try {
+                File schoolDir = tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
+                if (schoolDir != null) {
+                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+                } else {
+                  // Create zero-row marker file for missing data
+                  LOGGER.info("Creating zero-row marker for school districts year {} (data not available)", year);
+                  createZeroRowTigerParquet(schoolParquetPath, "school_districts", storageProvider);
+                }
+              } catch (Exception e) {
+                LOGGER.warn("Failed to download/convert school districts for year {}: {}", year, e.getMessage());
+              }
             }
           }
 
-          LOGGER.info("TIGER data processing completed for years {} to {}", startYear, endYear);
+          LOGGER.info("TIGER data processing completed for years: {}", yearsToProcess);
 
         } catch (Exception e) {
           LOGGER.error("Error processing TIGER data", e);
@@ -694,5 +743,35 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         startYear, endYear, censusYears);
 
     return censusYears;
+  }
+
+  /**
+   * Create a zero-row parquet file for TIGER data that doesn't exist (e.g., 404).
+   * This prevents repeated download attempts on subsequent startups.
+   */
+  private void createZeroRowTigerParquet(String targetPath, String dataType,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) throws IOException {
+    LOGGER.info("Creating zero-row TIGER parquet file: {}", targetPath);
+
+    // Create minimal schema with geoid column (common to all TIGER tables)
+    org.apache.avro.SchemaBuilder.RecordBuilder<org.apache.avro.Schema> recordBuilder =
+        org.apache.avro.SchemaBuilder
+            .record(dataType)
+            .namespace("org.apache.calcite.adapter.govdata.geo")
+            .doc("TIGER " + dataType + " data (zero rows - data not available for this year)");
+
+    org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fields = recordBuilder.fields();
+    fields = fields.name("geoid").type().stringType().noDefault();
+    fields = fields.name("name").type().nullable().stringType().noDefault();
+
+    org.apache.avro.Schema avroSchema = fields.endRecord();
+
+    // Create empty record list
+    java.util.List<org.apache.avro.generic.GenericRecord> emptyRecords = new java.util.ArrayList<>();
+
+    // Write empty parquet file using storageProvider
+    storageProvider.writeAvroParquet(targetPath, avroSchema, emptyRecords, "GenericRecord");
+
+    LOGGER.info("Successfully created zero-row TIGER parquet file: {}", targetPath);
   }
 }
