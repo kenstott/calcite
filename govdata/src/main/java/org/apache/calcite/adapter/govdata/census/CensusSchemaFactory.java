@@ -105,16 +105,16 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   @Override public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
     LOGGER.info("Building CENSUS schema operand configuration");
 
-    // Get cache directories from interface methods
-    String govdataCacheDir = getGovDataCacheDir();
-    String govdataParquetDir = getGovDataParquetDir();
+    // Get cache directories from operand
+    String govdataCacheDir = getGovDataCacheDir(operand);
+    String govdataParquetDir = getGovDataParquetDir(operand);
 
-    // Check required environment variables
+    // Check required configuration
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
+      throw new IllegalStateException("cacheDirectory must be set in model.json operand");
     }
     if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-      throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
+      throw new IllegalStateException("directory must be set in model.json operand");
     }
 
     // Build CENSUS data directories
@@ -315,19 +315,35 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
             break;
           } else {
             StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
-            if (metadata.getSize() == 0) {
-              needsAcsUpdate = true;
-              LOGGER.info("Empty ACS parquet file: {}", parquetPath);
-              break;
-            }
-
-            // Check TTL
             long fileAge = currentTime - metadata.getLastModified();
-            if (fileAge > censusDataTtlMillis) {
-              needsAcsUpdate = true;
-              LOGGER.info("Expired ACS parquet file (age: {} days): {}",
-                  fileAge / (24 * 60 * 60 * 1000), parquetPath);
-              break;
+
+            if (metadata.getSize() == 0) {
+              // Zero-row marker - use different TTL based on year
+              int currentYear = java.time.Year.now().getValue();
+              boolean isRecentYear = year >= (currentYear - 2) && year <= currentYear;
+
+              if (isRecentYear) {
+                // Recent year (within 2-year window): use 1-week TTL
+                // Data might be published soon, recheck weekly
+                long oneWeekMillis = 7 * 24 * 60 * 60 * 1000L;
+                if (fileAge > oneWeekMillis) {
+                  needsAcsUpdate = true;
+                  LOGGER.info("Expired zero-row ACS marker (age: {} days, rechecking for year {}): {}",
+                      fileAge / (24 * 60 * 60 * 1000), year, parquetPath);
+                  break;
+                }
+              }
+              // Old year (outside 2-year window): permanent TTL
+              // Data truly unavailable, never recheck
+              // (No expiry check - marker stays valid forever)
+            } else {
+              // Real data - use normal TTL
+              if (fileAge > censusDataTtlMillis) {
+                needsAcsUpdate = true;
+                LOGGER.info("Expired ACS parquet file (age: {} days): {}",
+                    fileAge / (24 * 60 * 60 * 1000), parquetPath);
+                break;
+              }
             }
           }
         } catch (IOException e) {
@@ -350,7 +366,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         int endYear = acsYears.isEmpty() ? 2023 : acsYears.get(acsYears.size() - 1);
 
         // Download comprehensive ACS data
-        downloadAcsData(censusClient, startYear, endYear);
+        downloadAcsData(censusClient, startYear, endYear, censusParquetDir, storageProvider);
 
         // Convert to Parquet format
         LOGGER.info("Converting ACS data to Parquet for years: {}", acsYears);
@@ -507,7 +523,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Download comprehensive ACS data for all table types.
    */
-  private void downloadAcsData(CensusApiClient censusClient, int startYear, int endYear) throws IOException {
+  private void downloadAcsData(CensusApiClient censusClient, int startYear, int endYear,
+      String censusParquetDir, StorageProvider storageProvider) throws IOException {
     LOGGER.info("Downloading comprehensive ACS data for years {} to {}", startYear, endYear);
 
     // The CensusApiClient.downloadAll already handles the core demographics, housing, and economic data
@@ -518,19 +535,19 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     for (int year = startYear; year <= endYear; year++) {
       try {
         // Download data for each ACS table type using ConceptualVariableMapper
-        downloadAcsTableData(censusClient, year, "acs_population");
-        downloadAcsTableData(censusClient, year, "acs_demographics");
-        downloadAcsTableData(censusClient, year, "acs_poverty");
-        downloadAcsTableData(censusClient, year, "acs_employment");
-        downloadAcsTableData(censusClient, year, "acs_education");
-        downloadAcsTableData(censusClient, year, "acs_housing_costs");
-        downloadAcsTableData(censusClient, year, "acs_commuting");
-        downloadAcsTableData(censusClient, year, "acs_health_insurance");
-        downloadAcsTableData(censusClient, year, "acs_language");
-        downloadAcsTableData(censusClient, year, "acs_disability");
-        downloadAcsTableData(censusClient, year, "acs_veterans");
-        downloadAcsTableData(censusClient, year, "acs_migration");
-        downloadAcsTableData(censusClient, year, "acs_occupation");
+        downloadAcsTableData(censusClient, year, "acs_population", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_demographics", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_poverty", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_employment", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_education", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_housing_costs", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_commuting", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_health_insurance", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_language", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_disability", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_veterans", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_migration", censusParquetDir, storageProvider);
+        downloadAcsTableData(censusClient, year, "acs_occupation", censusParquetDir, storageProvider);
 
         LOGGER.info("Downloaded comprehensive ACS data for year {}", year);
       } catch (Exception e) {
@@ -542,7 +559,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Download ACS data for a specific table type.
    */
-  private void downloadAcsTableData(CensusApiClient censusClient, int year, String tableName) throws IOException {
+  private void downloadAcsTableData(CensusApiClient censusClient, int year, String tableName,
+      String censusParquetDir, StorageProvider storageProvider) throws IOException {
     String[] variables = ConceptualVariableMapper.getVariablesToDownload(tableName, year, "acs");
     if (variables.length == 0) {
       LOGGER.info("No variables available for {} in year {} - skipping download", tableName, year);
@@ -562,9 +580,20 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     } catch (Exception e) {
       // Check if this is a 404 (data not released yet) or 400 (invalid variables for this year)
       String errorMsg = e.getMessage();
-      if (errorMsg != null && (errorMsg.contains("404") || errorMsg.contains("400"))) {
-        LOGGER.debug("Census data not available for {} year {} ({})", tableName, year,
-            errorMsg.contains("404") ? "not released yet" : "variables unavailable");
+      if (errorMsg != null && errorMsg.contains("404")) {
+        LOGGER.warn("Census data not available for {} year {} (404 - not released yet)", tableName, year);
+        // Create zero-row marker so we don't keep retrying
+        try {
+          String parquetPath =
+              storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+          createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "acs");
+          LOGGER.info("Created zero-row marker for {} year {} (will recheck based on TTL)", tableName, year);
+        } catch (Exception markerEx) {
+          LOGGER.error("Failed to create zero-row marker for {} year {}: {}",
+              tableName, year, markerEx.getMessage());
+        }
+      } else if (errorMsg != null && errorMsg.contains("400")) {
+        LOGGER.debug("Census data not available for {} year {} (400 - variables unavailable)", tableName, year);
       } else {
         LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, errorMsg);
       }
@@ -868,14 +897,32 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
           return true;
         }
         StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
-        if (metadata.getSize() == 0) {
-          LOGGER.info("Empty Population Estimates parquet file: {}", parquetPath);
-          return true;
-        }
         long fileAge = currentTime - metadata.getLastModified();
-        if (fileAge > censusDataTtlMillis) {
-          LOGGER.info("Expired Population Estimates parquet file: {}", parquetPath);
-          return true;
+
+        if (metadata.getSize() == 0) {
+          // Zero-row marker - use different TTL based on year
+          int currentYear = java.time.Year.now().getValue();
+          boolean isRecentYear = year >= (currentYear - 2) && year <= currentYear;
+
+          if (isRecentYear) {
+            // Recent year (within 2-year window): use 1-week TTL
+            // Data might be published soon, recheck weekly
+            long oneWeekMillis = 7 * 24 * 60 * 60 * 1000L;
+            if (fileAge > oneWeekMillis) {
+              LOGGER.info("Expired zero-row Population Estimates marker (age: {} days, rechecking for year {}): {}",
+                  fileAge / (24 * 60 * 60 * 1000), year, parquetPath);
+              return true;
+            }
+          }
+          // Old year (outside 2-year window): permanent TTL
+          // Data truly unavailable, never recheck
+          // (No expiry check - marker stays valid forever)
+        } else {
+          // Real data - use normal TTL
+          if (fileAge > censusDataTtlMillis) {
+            LOGGER.info("Expired Population Estimates parquet file: {}", parquetPath);
+            return true;
+          }
         }
       } catch (IOException e) {
         LOGGER.info("Cannot access Population Estimates parquet file: {}", parquetPath);
@@ -940,6 +987,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     boolean stateSuccess = false;
     boolean countySuccess = false;
+    IOException stateException = null;
+    IOException countyException = null;
 
     // Download state-level data
     try {
@@ -947,6 +996,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       stateSuccess = true;
       LOGGER.info("Successfully downloaded state-level population_estimates data for year {}", year);
     } catch (IOException e) {
+      stateException = e;
       LOGGER.warn("Failed to download state-level population_estimates for year {}: {}", year, e.getMessage());
     }
 
@@ -956,12 +1006,28 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       countySuccess = true;
       LOGGER.info("Successfully downloaded county-level population_estimates data for year {}", year);
     } catch (IOException e) {
+      countyException = e;
       LOGGER.warn("Failed to download county-level population_estimates for year {}: {}", year, e.getMessage());
     }
 
     // Throw only if both failed
     if (!stateSuccess && !countySuccess) {
-      throw new IOException("Failed to download population_estimates for year " + year + " at both state and county levels");
+      // Check if both failures were 404s (data not available yet)
+      boolean stateIs404 = stateException != null && stateException.getMessage() != null &&
+          stateException.getMessage().contains("404");
+      boolean countyIs404 = countyException != null && countyException.getMessage() != null &&
+          countyException.getMessage().contains("404");
+
+      if (stateIs404 && countyIs404) {
+        // Both are 404s - data not released yet
+        throw new IOException("404: Population Estimates data not available for year " + year);
+      } else {
+        // Real error - include original messages
+        throw new IOException("Failed to download population_estimates for year " + year +
+            " at both state and county levels. State error: " +
+            (stateException != null ? stateException.getMessage() : "unknown") +
+            ", County error: " + (countyException != null ? countyException.getMessage() : "unknown"));
+      }
     }
 
     LOGGER.info("Successfully downloaded population_estimates data for year {} (state: {}, county: {})",
