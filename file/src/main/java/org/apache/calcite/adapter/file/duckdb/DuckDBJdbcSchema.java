@@ -97,6 +97,16 @@ public class DuckDBJdbcSchema extends JdbcSchema {
   }
 
 
+  /**
+   * Returns the internal FileSchema that manages file discovery and conversion.
+   * This is needed by GovDataSchemaFactory to register custom converters.
+   *
+   * @return the internal FileSchema, or null if not available
+   */
+  public org.apache.calcite.adapter.file.FileSchema getFileSchema() {
+    return fileSchema;
+  }
+
   @Override public Set<String> getTableNames() {
     Set<String> tableNames = super.getTableNames();
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
