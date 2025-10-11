@@ -315,8 +315,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Create vectorized blobs with contextual enrichment if enabled
       if (enableVectorization) {
-        String vectorizedPath = storageProvider.resolvePath(targetDirectoryPath,
-            relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+        String vectorizedPath =
+            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
         writeVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile);
         outputFiles.add(new File(vectorizedPath));
       }
@@ -2617,8 +2617,8 @@ public class XbrlToParquetConverter implements FileConverter {
       // Always write insider.parquet file (even if empty) to indicate processing completed
       // This prevents unnecessary reprocessing during cache validation
       String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
-      String outputPath = storageProvider.resolvePath(targetDirectoryPath,
-          relativePartitionPath + "/" + String.format("%s_%s_insider.parquet", cik, uniqueId));
+      String outputPath =
+          storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_insider.parquet", cik, uniqueId));
 
       if (!transactions.isEmpty()) {
         LOGGER.debug(" Writing " + transactions.size() + " transactions to parquet file: " + outputPath);
@@ -2638,8 +2638,8 @@ public class XbrlToParquetConverter implements FileConverter {
       // This could be enhanced to vectorize transaction narratives or remarks
       if (enableVectorization) {
         // Reuse uniqueId from above - build FULL path with StorageProvider
-        String vectorizedPath = storageProvider.resolvePath(targetDirectoryPath,
-            relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
+        String vectorizedPath =
+            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_vectorized.parquet", cik, uniqueId));
 
         try {
           writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourceFile, accession);
@@ -3208,8 +3208,8 @@ public class XbrlToParquetConverter implements FileConverter {
         // Build RELATIVE partition path (relative to targetDirectoryPath which already includes source=sec)
         String relativePartitionPath =
             String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
-        String outputPath = storageProvider.resolvePath(targetDirectoryPath,
-            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
+        String outputPath =
+            storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
         writeParquetFile(earningsRecords, earningsSchema, outputPath);
 
@@ -4176,8 +4176,8 @@ public class XbrlToParquetConverter implements FileConverter {
     String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
     // Build metadata file path with FULL path from StorageProvider
-    String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
-        relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
+    String metadataPath =
+        storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
     // Define schema for metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
@@ -4220,8 +4220,8 @@ public class XbrlToParquetConverter implements FileConverter {
     String relativePartitionPath = String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
     // Build metadata file path with FULL path from StorageProvider
-    String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
-        relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
+    String metadataPath =
+        storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
     // Define schema for minimal metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
