@@ -55,6 +55,22 @@
         "endYear": 2024,
         "autoDownload": true
       }
+    },
+    {
+      "name": "census",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "census",
+        "executionEngine": "DUCKDB",
+        "ephemeralCache": false,
+        "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
+        "directory": "${GOVDATA_PARQUET_DIR:govdata-parquet}",
+        "startYear": 2019,
+        "endYear": 2023,
+        "autoDownload": true,
+        "censusApiKey": "${CENSUS_API_KEY}"
+      }
     }
   ]
 }
