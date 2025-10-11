@@ -10,7 +10,7 @@ Create a new `econ` (economic) schema within the govdata adapter to provide SQL 
 - **Base API URL**: `https://api.bls.gov/publicAPI/v2/`
 - **Documentation**: https://www.bls.gov/developers/
 - **Registration**: https://data.bls.gov/registrationEngine/
-- **Authentication**: 
+- **Authentication**:
   - **Optional but recommended**: API key increases rate limits
   - **Without key**: 25 requests/day, 10 years of data
   - **With key**: 500 requests/day, 20 years of data
@@ -19,7 +19,7 @@ Create a new `econ` (economic) schema within the govdata adapter to provide SQL 
   2. Verify email address
   3. API key sent via email immediately
   4. No approval process - instant access
-- **Rate Limits**: 
+- **Rate Limits**:
   - 25 queries/day without key
   - 500 queries/day with key
   - No per-second rate limit
@@ -59,7 +59,7 @@ Create a new `econ` (economic) schema within the govdata adapter to provide SQL 
 ### U.S. Treasury
 - **Base URL**: `https://api.fiscaldata.treasury.gov/services/api/fiscal_service/`
 - **Documentation**: https://fiscaldata.treasury.gov/api-documentation/
-- **Authentication**: 
+- **Authentication**:
   - **None required**: Completely open API
   - **No registration needed**: Direct access
 - **Rate Limits**:
@@ -98,7 +98,7 @@ Create a new `econ` (economic) schema within the govdata adapter to provide SQL 
 ### World Bank (for international context)
 - **Base API URL**: `https://api.worldbank.org/v2/`
 - **Documentation**: https://datahelpdesk.worldbank.org/knowledgebase/articles/889392
-- **Authentication**: 
+- **Authentication**:
   - **None required**: Open access
   - **No registration needed**
 - **Rate Limits**:
@@ -507,7 +507,7 @@ curl -s "https://apps.bea.gov/api/data/?UserID=$BEA_API_KEY&method=GetParameterL
 
 ```sql
 -- Current economic dashboard
-SELECT 
+SELECT
     'Unemployment Rate' as indicator,
     value as current_value,
     percent_change_year as yoy_change
@@ -515,7 +515,7 @@ FROM econ.employment_statistics
 WHERE series_id = 'LNS14000000'  -- Unemployment rate series
   AND date = (SELECT MAX(date) FROM econ.employment_statistics)
 UNION ALL
-SELECT 
+SELECT
     'CPI Inflation' as indicator,
     index_value as current_value,
     percent_change_year as yoy_change
@@ -524,7 +524,7 @@ WHERE index_type = 'CPI-U'
   AND item_name = 'All items'
   AND date = (SELECT MAX(date) FROM econ.inflation_metrics)
 UNION ALL
-SELECT 
+SELECT
     'Average Hourly Earnings' as indicator,
     average_hourly_earnings as current_value,
     percent_change_year as yoy_change
@@ -533,7 +533,7 @@ WHERE series_id = 'CES0500000003'
   AND date = (SELECT MAX(date) FROM econ.wage_growth);
 
 -- Company performance vs. economic conditions
-SELECT 
+SELECT
     s.company_name,
     s.fiscal_year,
     s.revenue_growth_yoy,
@@ -541,21 +541,21 @@ SELECT
     e.unemployment_rate,
     e.cpi_inflation_yoy,
     CORR(s.revenue_growth_yoy, e.gdp_growth_yoy) OVER (
-        PARTITION BY s.cik 
-        ORDER BY s.fiscal_year 
+        PARTITION BY s.cik
+        ORDER BY s.fiscal_year
         ROWS BETWEEN 4 PRECEDING AND CURRENT ROW
     ) as revenue_gdp_correlation
 FROM (
-    SELECT 
+    SELECT
         cik,
         company_name,
         fiscal_year,
-        (revenue - LAG(revenue) OVER (PARTITION BY cik ORDER BY fiscal_year)) 
+        (revenue - LAG(revenue) OVER (PARTITION BY cik ORDER BY fiscal_year))
             / LAG(revenue) OVER (PARTITION BY cik ORDER BY fiscal_year) * 100 as revenue_growth_yoy
     FROM sec.financial_metrics
 ) s
 JOIN (
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM date) as year,
         AVG(CASE WHEN series_id = 'GDP' THEN percent_change_year END) as gdp_growth_yoy,
         AVG(CASE WHEN series_id = 'UNRATE' THEN value END) as unemployment_rate,
@@ -565,7 +565,7 @@ JOIN (
 ) e ON s.fiscal_year = e.year;
 
 -- Regional unemployment analysis
-SELECT 
+SELECT
     g.state_name,
     g.county_name,
     r.unemployment_rate,
@@ -574,7 +574,7 @@ SELECT
 FROM econ.regional_employment r
 JOIN geo.counties g ON r.area_code = g.county_fips
 JOIN (
-    SELECT 
+    SELECT
         LEFT(area_code, 2) as state_fips,
         AVG(unemployment_rate) as state_avg_unemployment
     FROM econ.regional_employment
@@ -586,18 +586,18 @@ WHERE r.date = (SELECT MAX(date) FROM econ.regional_employment)
   AND r.area_type = 'county';
 
 -- Wage growth analysis by industry
-SELECT 
+SELECT
     industry_name,
     date,
     average_hourly_earnings,
     percent_change_year as wage_growth_yoy,
     AVG(percent_change_year) OVER (
-        PARTITION BY industry_code 
-        ORDER BY date 
+        PARTITION BY industry_code
+        ORDER BY date
         ROWS BETWEEN 11 PRECEDING AND CURRENT ROW
     ) as rolling_12m_avg_growth,
     RANK() OVER (
-        PARTITION BY date 
+        PARTITION BY date
         ORDER BY percent_change_year DESC
     ) as wage_growth_rank
 FROM econ.wage_growth

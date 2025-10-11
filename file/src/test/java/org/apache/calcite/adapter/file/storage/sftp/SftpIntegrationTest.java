@@ -70,7 +70,7 @@ public class SftpIntegrationTest {
     StorageProvider provider = null;
     String workingUrl = null;
     String serverName = null;
-    
+
     for (String[] server : servers) {
       try {
         System.out.println("Trying " + server[1] + "...");
@@ -112,14 +112,14 @@ public class SftpIntegrationTest {
 
     // Test specific file operations - look for any text file
     StorageProvider.FileEntry textFile = entries.stream()
-        .filter(e -> !e.isDirectory() && 
+        .filter(e -> !e.isDirectory() &&
                 (e.getName().endsWith(".txt") || e.getName().endsWith(".md")))
         .findFirst()
         .orElse(entries.stream()
             .filter(e -> !e.isDirectory())
             .findFirst()
             .orElse(null));
-    
+
     if (textFile != null) {
       testFileOperations(provider, textFile, workingUrl);
     }
@@ -148,10 +148,10 @@ public class SftpIntegrationTest {
         "sftp://demo:demo@demo.wftpserver.com:2222/",
         "sftp://demo:password@test.rebex.net/"
     };
-    
+
     StorageProvider provider = null;
     String sftpUrl = null;
-    
+
     for (String url : sftpUrls) {
       try {
         provider = StorageProviderFactory.createFromUrl(url);
@@ -163,7 +163,7 @@ public class SftpIntegrationTest {
         // Try next server
       }
     }
-    
+
     if (provider == null || sftpUrl == null) {
       System.out.println("WARNING: Could not connect to any SFTP server - skipping test");
       return;
@@ -218,10 +218,10 @@ public class SftpIntegrationTest {
         "sftp://demo:demo@demo.wftpserver.com:2222/",
         "sftp://demo:password@test.rebex.net/"
     };
-    
+
     StorageProvider provider = null;
     String sftpUrl = null;
-    
+
     for (String url : sftpUrls) {
       try {
         provider = StorageProviderFactory.createFromUrl(url);
@@ -233,7 +233,7 @@ public class SftpIntegrationTest {
         // Try next server
       }
     }
-    
+
     if (provider == null || sftpUrl == null) {
       System.out.println("WARNING: Could not connect to any SFTP server - skipping test");
       return;
@@ -324,7 +324,7 @@ public class SftpIntegrationTest {
       // Test operations
       List<StorageProvider.FileEntry> entries = provider.listFiles(sftpUrl, false);
       System.out.println("Found " + entries.size() + " entries in " + path);
-      
+
       entries.stream().limit(10).forEach(entry -> {
         System.out.printf(Locale.ROOT, "  %s %-30s %10d bytes%n",
             entry.isDirectory() ? "[D]" : "[F]",
@@ -414,10 +414,10 @@ public class SftpIntegrationTest {
         "sftp://demo:demo@demo.wftpserver.com:2222/",
         "sftp://demo:password@test.rebex.net/"
     };
-    
+
     StorageProvider provider = null;
     String sftpUrl = null;
-    
+
     for (String url : sftpUrls) {
       try {
         provider = StorageProviderFactory.createFromUrl(url);
@@ -429,7 +429,7 @@ public class SftpIntegrationTest {
         // Try next server
       }
     }
-    
+
     if (provider == null || sftpUrl == null) {
       System.out.println("WARNING: Could not connect to any SFTP server - skipping test");
       return;

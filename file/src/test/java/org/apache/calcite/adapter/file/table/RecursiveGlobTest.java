@@ -17,25 +17,18 @@
 package org.apache.calcite.adapter.file.table;
 
 import org.apache.calcite.adapter.file.BaseFileTest;
-import org.apache.calcite.adapter.file.FileSchema;
-import org.apache.calcite.adapter.file.FileSchemaFactory;
-import org.apache.calcite.jdbc.CalciteSchema;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.Sources;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -71,7 +64,7 @@ public class RecursiveGlobTest {
     // Create unique temp directory for this test with full UUID to ensure uniqueness
     File uniqueTempDir = new File(tempDir, "recursive_includes_test_" + UUID.randomUUID().toString());
     assertTrue(uniqueTempDir.mkdirs());
-    
+
     // Create test files in root directory with unique names
     createCsvFile(new File(uniqueTempDir, "recursive_root1.csv"), "id,name\n1,Alice\n");
     createCsvFile(new File(uniqueTempDir, "recursive_root2.csv"), "id,value\n1,100\n");
@@ -135,7 +128,7 @@ public class RecursiveGlobTest {
     // Create unique temp directory for this test with full UUID to ensure uniqueness
     File uniqueTempDir = new File(tempDir, "nonrecursive_only_test_" + UUID.randomUUID().toString());
     assertTrue(uniqueTempDir.mkdirs());
-    
+
     // Create test files in root directory with unique names
     createCsvFile(new File(uniqueTempDir, "nonrec_root1.csv"), "id,name\n1,Alice\n");
     createCsvFile(new File(uniqueTempDir, "nonrec_root2.csv"), "id,value\n1,100\n");
@@ -192,7 +185,7 @@ public class RecursiveGlobTest {
     // Create unique temp directory for this test with full UUID to ensure uniqueness
     File uniqueTempDir = new File(tempDir, "customglob_patterns_test_" + UUID.randomUUID().toString());
     assertTrue(uniqueTempDir.mkdirs());
-    
+
     // Create test files
     createCsvFile(new File(uniqueTempDir, "data.csv"), "id,name\n1,Alice\n");
 

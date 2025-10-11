@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.similarity.SimilarityFunctions;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class StaticModelTest {
 
   @Test public void testStaticModelLoading() {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("STATIC MODEL FILE LOADING TEST");
 
     // Get the singleton instance
@@ -112,12 +114,14 @@ public class StaticModelTest {
     assertSame(loader, loader2, "Should return same instance");
     System.out.println("✓ Singleton pattern verified");
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("STATIC MODEL TEST PASSED");
   }
 
   @Test public void testModelFileUpdate() {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("MODEL FILE UPDATE SIMULATION");
 
     EmbeddingModelLoader loader = EmbeddingModelLoader.getInstance();
@@ -140,6 +144,7 @@ public class StaticModelTest {
     System.out.println("  Current version: 1.0 (from context-mappings.json)");
     System.out.println("  No code changes needed for model updates!");
 
-    System.out.println("\n" + "=".repeat(80) + "\n");
+    System.out.println("\n"
+  + "=".repeat(80) + "\n");
   }
 }

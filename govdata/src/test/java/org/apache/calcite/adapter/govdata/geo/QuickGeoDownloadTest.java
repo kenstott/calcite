@@ -37,49 +37,48 @@ public class QuickGeoDownloadTest {
     System.out.println("===================================");
   }
 
-  @Test
-  public void testStatesDownloadToUnifiedStructure() throws Exception {
+  @Test public void testStatesDownloadToUnifiedStructure() throws Exception {
     // Use the unified directory on T9
     String baseDir = System.getenv("GOVDATA_PARQUET_DIR");
     if (baseDir == null) {
       baseDir = "/Volumes/T9/govdata-parquet";
     }
-    
+
     System.out.println("Base directory: " + baseDir);
-    
+
     // Create hive-partitioned structure
     File geoDir = new File(baseDir, "source=geo");
     File boundaryDir = new File(geoDir, "type=boundary");
     boundaryDir.mkdirs();
-    
+
     System.out.println("Target boundary directory: " + boundaryDir);
-    
+
     // Download just states (small file ~5MB)
     System.out.println("Downloading states shapefile...");
     TigerDataDownloader tiger = new TigerDataDownloader(boundaryDir, 2024, true);
     File statesDir = tiger.downloadStatesFirstYear();
-    
+
     // Verify download
     assertNotNull(statesDir, "States directory should be created");
     assertTrue(statesDir.exists(), "States directory should exist");
-    
+
     File[] stateFiles = statesDir.listFiles();
     assertTrue(stateFiles != null && stateFiles.length > 0, "States directory should contain files");
-    
+
     System.out.println("✓ States downloaded to: " + statesDir);
     System.out.println("  Files downloaded: " + stateFiles.length);
-    
+
     // Show the structure
     System.out.println("\nHive-partitioned structure created:");
     showStructure(geoDir, "");
-    
+
     // Verify the hive partitioning
     assertTrue(statesDir.getAbsolutePath().contains("source=geo"), "Should be in geo partition");
     assertTrue(statesDir.getAbsolutePath().contains("type=boundary"), "Should be in boundary partition");
-    
+
     System.out.println("\n✓ SUCCESS: Geographic data downloaded into unified hive-partitioned structure!");
   }
-  
+
   private static void showStructure(File dir, String indent) {
     if (!dir.exists()) return;
     System.out.println(indent + dir.getName() + "/");

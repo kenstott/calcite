@@ -37,8 +37,7 @@ public class GovDataSchemaFactoryTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GovDataSchemaFactoryTest.class);
 
-  @Test
-  void testCreateSecSchema() {
+  @Test void testCreateSecSchema() {
     LOGGER.debug("Testing SEC schema creation logic");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -59,8 +58,7 @@ public class GovDataSchemaFactoryTest {
     assertEquals("AAPL", operand.get("ciks"));
   }
 
-  @Test
-  void testDefaultsToSec() {
+  @Test void testDefaultsToSec() {
     LOGGER.debug("Testing default data source (SEC)");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -80,8 +78,7 @@ public class GovDataSchemaFactoryTest {
     assertEquals("AAPL", operand.get("ciks"));
   }
 
-  @Test
-  void testEconSchemaCreation() {
+  @Test void testEconSchemaCreation() {
     LOGGER.debug("Testing Economic data schema creation logic");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -101,8 +98,7 @@ public class GovDataSchemaFactoryTest {
     assertTrue((Boolean) operand.get("testMode"));
   }
 
-  @Test
-  void testGeoSchemaCreation() {
+  @Test void testGeoSchemaCreation() {
     LOGGER.debug("Testing Geographic data schema creation logic");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -122,8 +118,7 @@ public class GovDataSchemaFactoryTest {
     assertTrue((Boolean) operand.get("testMode"));
   }
 
-  @Test
-  void testConfigurationValidation() {
+  @Test void testConfigurationValidation() {
     LOGGER.debug("Testing configuration parameter validation");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -154,8 +149,7 @@ public class GovDataSchemaFactoryTest {
     assertEquals("AAPL,MSFT", fullConfig.get("ciks"));
   }
 
-  @Test
-  void testCacheConfigurationOptions() {
+  @Test void testCacheConfigurationOptions() {
     LOGGER.debug("Testing cache configuration options");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -181,8 +175,7 @@ public class GovDataSchemaFactoryTest {
     assertEquals("sec", persistentConfig.get("dataSource"));
   }
 
-  @Test
-  void testUnsupportedDataSource() {
+  @Test void testUnsupportedDataSource() {
     LOGGER.debug("Testing unsupported data source validation");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -202,8 +195,7 @@ public class GovDataSchemaFactoryTest {
     assertFalse("pub".equals(dataSource.toLowerCase()));
   }
 
-  @Test
-  void testCensusNotImplemented() {
+  @Test void testCensusNotImplemented() {
     LOGGER.debug("Testing future data source (census) validation");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -219,8 +211,7 @@ public class GovDataSchemaFactoryTest {
     assertTrue("census".equals(dataSource.toLowerCase()));
   }
 
-  @Test
-  void testNullParameterHandling() {
+  @Test void testNullParameterHandling() {
     LOGGER.debug("Testing null parameter handling");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
@@ -240,8 +231,7 @@ public class GovDataSchemaFactoryTest {
     assertNull(operand.get("invalidKey")); // Non-existent keys return null
   }
 
-  @Test
-  void testParameterTypeValidation() {
+  @Test void testParameterTypeValidation() {
     LOGGER.debug("Testing parameter type validation");
 
     GovDataSchemaFactory factory = new GovDataSchemaFactory();

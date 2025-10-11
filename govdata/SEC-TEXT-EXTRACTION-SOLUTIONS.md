@@ -171,7 +171,7 @@ public class SecTextExtractor extends HtmlToJsonConverter {
     protected void extractSections(Document doc, JsonGenerator gen) {
         // Use file adapter's HTML processing
         super.extractSections(doc, gen);
-        
+
         // Add SEC-specific extraction
         extractMDA(doc, gen);
         extractRiskFactors(doc, gen);
@@ -213,10 +213,10 @@ public void testMDAExtraction() throws Exception {
         "MSFT/2023/10-K",
         "GOOGL/2023/10-K"
     };
-    
+
     for (String filing : testFilings) {
         List<String> mda = extractMDA(filing);
-        assertFalse(mda.isEmpty(), 
+        assertFalse(mda.isEmpty(),
             "Should extract MD&A from " + filing);
     }
 }
@@ -231,7 +231,7 @@ public class ExtractionMetrics {
     private final Counter fallbackCount;
     private final Counter failureCount;
     private final Histogram paragraphCount;
-    
+
     public void recordExtraction(ExtractionResult result) {
         if (result.isSuccess()) {
             successCount.increment();

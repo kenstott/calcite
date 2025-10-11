@@ -30,8 +30,6 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -170,8 +168,8 @@ public class AppleMicrosoftTest {
 
         // Check that we have footnotes and MD&A
         try (Statement stmt2 = conn.createStatement();
-             ResultSet rs2 = stmt2.executeQuery(
-               "SELECT blob_type, COUNT(*) as cnt FROM sec.vectorized_blobs " +
+             ResultSet rs2 =
+               stmt2.executeQuery("SELECT blob_type, COUNT(*) as cnt FROM sec.vectorized_blobs " +
                "GROUP BY blob_type ORDER BY blob_type")) {
           while (rs2.next()) {
             System.out.println("    - " + rs2.getString("blob_type") + ": " + rs2.getInt("cnt"));
@@ -454,7 +452,7 @@ public class AppleMicrosoftTest {
       }
 
       // Test 1: Verify vectorized_blobs (footnotes) exist
-      String footnoteQuery = 
+      String footnoteQuery =
         "SELECT cik, filing_type, \"year\", blob_type, original_text " +
         "FROM sec.vectorized_blobs " +
         "WHERE blob_type = 'footnote' AND cik = '0000320193' " +
@@ -466,7 +464,7 @@ public class AppleMicrosoftTest {
           footnoteCount++;
           String blobType = rs.getString("blob_type");
           String text = rs.getString("original_text");
-          
+
           System.out.printf("  Footnote %d: %s%n", footnoteCount, blobType);
           if (text != null && text.length() > 0) {
             System.out.printf("    Text preview: %.100s...%n", text.replace("\n", " "));
@@ -478,13 +476,13 @@ public class AppleMicrosoftTest {
 
       // Test 2: Check if stock prices table exists and test conditionally
       boolean hasStockPrices = false;
-      
+
       try (ResultSet tables = metaData.getTables(null, "SEC", "stock_prices", null)) {
         hasStockPrices = tables.next();
       }
-      
+
       if (hasStockPrices) {
-        String stockQuery = 
+        String stockQuery =
           "SELECT ticker, \"date\", \"close\", volume " +
           "FROM sec.stock_prices " +
           "WHERE ticker IN ('AAPL', 'MSFT') " +
@@ -499,8 +497,8 @@ public class AppleMicrosoftTest {
             String date = rs.getString("date");
             double close = rs.getDouble("close");
             long volume = rs.getLong("volume");
-            
-            System.out.printf("  %s on %s: $%.2f (volume: %,d)%n", 
+
+            System.out.printf("  %s on %s: $%.2f (volume: %,d)%n",
                 ticker, date, close, volume);
           }
           // Success message removed for compliance
@@ -509,7 +507,7 @@ public class AppleMicrosoftTest {
       }
 
       // Test 3: Test cosine similarity search on available blobs (if function available)
-      
+
       // First check what blob types we have
       String blobTypesQuery = "SELECT blob_type, COUNT(*) as cnt FROM sec.vectorized_blobs GROUP BY blob_type";
       try (ResultSet rs = stmt.executeQuery(blobTypesQuery)) {
@@ -517,12 +515,12 @@ public class AppleMicrosoftTest {
           System.out.printf("    - %s: %d records%n", rs.getString("blob_type"), rs.getInt("cnt"));
         }
       }
-      
+
       // Try to test similarity search if the function is available
       // Skip if COSINE_SIMILARITY function is not recognized
       try {
         // Just test a simple query to see if we have the data
-        String simpleQuery = 
+        String simpleQuery =
           "SELECT blob_type, original_text " +
           "FROM sec.vectorized_blobs " +
           "WHERE cik = '0000320193' " +
@@ -533,7 +531,7 @@ public class AppleMicrosoftTest {
           while (rs.next()) {
             resultCount++;
             String blobType = rs.getString("blob_type");
-            
+
             System.out.printf("  Record %d: %s%n", resultCount, blobType);
           }
           assertTrue(resultCount > 0, "Should have vectorized blob data");
@@ -547,7 +545,7 @@ public class AppleMicrosoftTest {
       }
 
       // Test 4: Test core SEC financial data
-      String financialQuery = 
+      String financialQuery =
         "SELECT cik, filing_type, \"year\", concept, \"value\" " +
         "FROM sec.financial_line_items " +
         "WHERE cik IN ('0000320193', '0000789019') " +
@@ -562,7 +560,7 @@ public class AppleMicrosoftTest {
           String cik = rs.getString("cik");
           String concept = rs.getString("concept");
           String value = rs.getString("value");
-          
+
           System.out.printf("  CIK %s: %s = %s%n", cik, concept, value);
         }
         assertTrue(financialCount > 0, "Should have financial data");
@@ -571,7 +569,7 @@ public class AppleMicrosoftTest {
 
       // Test 5: Conditional join test only if stock prices exist
       if (hasStockPrices) {
-        String joinQuery = 
+        String joinQuery =
           "SELECT f.cik, f.filing_type, s.ticker, s.\"close\" " +
           "FROM sec.financial_line_items f " +
           "LEFT JOIN sec.stock_prices s ON f.cik = s.cik " +
@@ -586,7 +584,7 @@ public class AppleMicrosoftTest {
             String cik = rs.getString("cik");
             String ticker = rs.getString("ticker");
             double close = rs.getDouble("close");
-            
+
             System.out.printf("  CIK %s (%s): $%.2f%n", cik, ticker, close);
           }
           // Success message removed for compliance

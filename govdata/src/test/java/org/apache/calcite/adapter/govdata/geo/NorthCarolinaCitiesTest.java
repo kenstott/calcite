@@ -30,7 +30,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,8 +44,7 @@ public class NorthCarolinaCitiesTest {
     System.out.println("=================================================");
   }
 
-  @Test
-  public void testNorthCarolinaCitiesFromHudCrosswalk() throws Exception {
+  @Test public void testNorthCarolinaCitiesFromHudCrosswalk() throws Exception {
     // Create inline model with actual credentials (following SEC test pattern)
     String modelJson = "{"
         + "\"version\": \"1.0\","
@@ -72,14 +70,14 @@ public class NorthCarolinaCitiesTest {
     java.io.File modelFile = java.io.File.createTempFile("nc-cities-test", ".json");
     modelFile.deleteOnExit();
     java.nio.file.Files.writeString(modelFile.toPath(), modelJson);
-    
+
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath(), props)) {
       System.out.println("✓ Connected to Calcite with geo model");
-      
+
       // First, let's see what tables are available
       System.out.println("\nChecking available tables...");
       DatabaseMetaData metaData = conn.getMetaData();
@@ -89,7 +87,7 @@ public class NorthCarolinaCitiesTest {
           System.out.println("  - " + rs.getString("TABLE_NAME"));
         }
       }
-      
+
       // Query HUD crosswalk data for North Carolina cities with population from Census
       String query = "SELECT DISTINCT " +
                     "  h.city, " +
@@ -103,56 +101,56 @@ public class NorthCarolinaCitiesTest {
                     "GROUP BY h.city, c.population " +
                     "ORDER BY c.population DESC NULLS LAST, h.city " +
                     "LIMIT 30";
-      
+
       System.out.println("\nExecuting query: " + query);
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
-        
+
         Set<String> cities = new TreeSet<>();
         int recordCount = 0;
-        
+
         System.out.println("\nNorth Carolina Cities with Population:");
         System.out.println("=====================================");
         System.out.printf("%-3s %-25s %8s %12s\n", "#", "City", "ZIPs", "Population");
         System.out.println("---------------------------------------------------");
-        
+
         while (rs.next()) {
           recordCount++;
           String city = rs.getString("city");
           int zipCount = rs.getInt("zip_count");
           Object population = rs.getObject("population");
-          
+
           cities.add(city);
-          
+
           String popStr = population != null ? String.format("%,d", ((Number)population).intValue()) : "N/A";
           System.out.printf("%2d. %-25s %4d %12s\n", recordCount, city, zipCount, popStr);
         }
-        
+
         // Assertions
         assertTrue(recordCount > 0, "Should have NC city records");
         System.out.println("\n✓ SUCCESS: Found " + recordCount + " NC cities through geo model");
-        
+
       } catch (SQLException e) {
         System.out.println("⚠ Query failed (may need table implementation): " + e.getMessage());
-        
+
         // Fallback: Try simpler query to just get HUD cities
         String simpleQuery = "SELECT DISTINCT city FROM geo.hud_zip_county WHERE state = 'NC' ORDER BY city LIMIT 25";
         System.out.println("\nTrying simpler query: " + simpleQuery);
-        
+
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(simpleQuery)) {
-          
+
           int count = 0;
           System.out.println("\nNC Cities from HUD data:");
           while (rs.next()) {
             count++;
             System.out.printf("%2d. %s\n", count, rs.getString("city"));
           }
-          
+
           assertTrue(count > 0, "Should find NC cities from HUD");
           System.out.println("\n✓ SUCCESS: Found " + count + " NC cities");
-          
+
         }
       }
     }

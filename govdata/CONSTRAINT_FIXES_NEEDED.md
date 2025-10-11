@@ -7,7 +7,7 @@
 ### 1. ✅ SEC Tables - Primary Key Alignment
 **Issue:** ERD showed PKs using `filing_date` but code uses `accession_number`
 
-**Fix Applied:** 
+**Fix Applied:**
 - Updated ERD in SCHEMA_RELATIONSHIPS.md to use `accession_number` as part of primary keys
 - All SEC tables now correctly show `accession_number` in their PKs
 - `filing_date` moved to non-PK column in all tables
@@ -17,7 +17,7 @@
 
 **Fix Applied in GeoSchemaFactory.java:**
 - Added `state_fips` → `tiger_states.state_fips` FK to `hud_zip_county`
-- Added `state_fips` → `tiger_states.state_fips` FK to `hud_zip_tract`  
+- Added `state_fips` → `tiger_states.state_fips` FK to `hud_zip_tract`
 - Added `state_fips` → `tiger_states.state_fips` FK to `hud_zip_cbsa`
 - All ZIP tables now properly reference their parent state
 
@@ -70,7 +70,7 @@
 ## Testing Recommendations
 
 1. Test that DatabaseMetaData.getExportedKeys() returns correct FKs
-2. Test that DatabaseMetaData.getPrimaryKeys() returns correct PKs  
+2. Test that DatabaseMetaData.getPrimaryKeys() returns correct PKs
 3. Verify cross-schema FKs work with multi-schema queries
 4. Test constraint validation in query planning
 5. Validate that JOINs between schemas use the state_code column correctly

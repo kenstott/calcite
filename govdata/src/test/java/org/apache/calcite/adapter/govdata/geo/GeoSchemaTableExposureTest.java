@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -48,8 +49,7 @@ public class GeoSchemaTableExposureTest {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  public void testAllTablesAreQueryable() throws Exception {
+  @Test public void testAllTablesAreQueryable() throws Exception {
     // Create model JSON using GovDataSchemaFactory
     String modelJson =
         "{"
@@ -99,8 +99,8 @@ public class GeoSchemaTableExposureTest {
     expectedTables.add("zip_cbsa_crosswalk");
     expectedTables.add("tract_zip_crosswalk");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Test each table by sampling data and checking for rows
@@ -152,8 +152,7 @@ public class GeoSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testTableConstraintsExist() throws Exception {
+  @Test public void testTableConstraintsExist() throws Exception {
     // Create model JSON using GovDataSchemaFactory
     String modelJson =
         "{"
@@ -181,8 +180,8 @@ public class GeoSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Query primary key constraints using proper SQL syntax
@@ -247,8 +246,7 @@ public class GeoSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testStatesTableExists() throws Exception {
+  @Test public void testStatesTableExists() throws Exception {
     // Create model JSON
     String modelJson =
         "{"
@@ -274,8 +272,8 @@ public class GeoSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Simple test - just try to query states table
@@ -305,8 +303,7 @@ public class GeoSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testCountiesTableExists() throws Exception {
+  @Test public void testCountiesTableExists() throws Exception {
     // Create model JSON
     String modelJson =
         "{"
@@ -332,8 +329,8 @@ public class GeoSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Simple test - just try to query counties table
@@ -363,8 +360,7 @@ public class GeoSchemaTableExposureTest {
     }
   }
 
-  @Test
-  public void testZipCountyCrosswalkTableExists() throws Exception {
+  @Test public void testZipCountyCrosswalkTableExists() throws Exception {
     // Create model JSON
     String modelJson =
         "{"
@@ -390,8 +386,8 @@ public class GeoSchemaTableExposureTest {
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
 
-    try (Connection conn = DriverManager.getConnection(
-        "jdbc:calcite:model=" + modelFile, props);
+    try (Connection conn =
+        DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
          Statement stmt = conn.createStatement()) {
 
       // Simple test - just try to query zip_county_crosswalk table

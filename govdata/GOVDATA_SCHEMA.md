@@ -23,7 +23,7 @@ erDiagram
         string irs_number "IRS employer ID"
         string fiscal_year_end "Company's FY end date"
     }
-    
+
     FINANCIAL_LINE_ITEMS {
         string cik PK,FK "Central Index Key"
         string filing_type PK,FK "Filing type"
@@ -39,7 +39,7 @@ erDiagram
         string segment "Business segment"
         string state_of_incorporation FK "2-letter state code"
     }
-    
+
     FILING_CONTEXTS {
         string cik PK,FK "Central Index Key"
         string filing_type PK,FK "Filing type"
@@ -52,7 +52,7 @@ erDiagram
         string segment "Segment info"
         string scenario "Scenario info"
     }
-    
+
     FOOTNOTES {
         string cik PK,FK "Central Index Key"
         string filing_type PK,FK "Filing type"
@@ -64,7 +64,7 @@ erDiagram
         string concept_ref "Related concept"
         string language "Language code"
     }
-    
+
     INSIDER_TRANSACTIONS {
         string cik PK,FK "Company CIK"
         string filing_type PK,FK "Form 3/4/5"
@@ -80,7 +80,7 @@ erDiagram
         string ownership_type "D=Direct, I=Indirect"
         string insider_title "Job title"
     }
-    
+
     STOCK_PRICES {
         string ticker PK "Stock ticker symbol"
         date date PK "Trading date"
@@ -93,7 +93,7 @@ erDiagram
         bigint volume "Trading volume"
         string exchange "Stock exchange"
     }
-    
+
     %% GEO Schema Tables
     TIGER_STATES {
         string state_fips PK "2-digit FIPS code"
@@ -106,7 +106,7 @@ erDiagram
         decimal lon_center "Longitude of center"
         integer population "Total population"
     }
-    
+
     TIGER_COUNTIES {
         string county_fips PK "5-digit FIPS code"
         string state_fips FK "2-digit state FIPS"
@@ -118,7 +118,7 @@ erDiagram
         decimal lon_center "Longitude of center"
         integer population "Total population"
     }
-    
+
     CENSUS_PLACES {
         string place_code PK "5-digit place code"
         string state_code PK,FK "2-letter state code"
@@ -130,7 +130,7 @@ erDiagram
         decimal lat_center "Latitude"
         decimal lon_center "Longitude"
     }
-    
+
     HUD_ZIP_COUNTY {
         string zip PK "5-digit ZIP code"
         string county_code FK "5-digit county FIPS"
@@ -141,7 +141,7 @@ erDiagram
         string usps_city "USPS city name"
         string state_code "2-letter state code"
     }
-    
+
     HUD_ZIP_TRACT {
         string zip PK "5-digit ZIP code"
         string tract PK "11-digit census tract"
@@ -151,7 +151,7 @@ erDiagram
         decimal oth_ratio "Other ratio"
         decimal tot_ratio "Total ratio"
     }
-    
+
     TIGER_ZCTAS {
         string zcta5 PK "5-digit ZCTA code"
         string namelsad "Name and description"
@@ -167,7 +167,7 @@ erDiagram
         decimal awater_sqmi "Water area (sq miles)"
         decimal pop_density "Population per sq mile"
     }
-    
+
     TIGER_CENSUS_TRACTS {
         string tract_geoid PK "11-digit tract GEOID"
         string state_fips FK "2-digit state FIPS"
@@ -187,7 +187,7 @@ erDiagram
         decimal pop_density "Population per sq mile"
         decimal median_income "Median household income"
     }
-    
+
     TIGER_BLOCK_GROUPS {
         string bg_geoid PK "12-digit block group GEOID"
         string state_fips FK "2-digit state FIPS"
@@ -206,7 +206,7 @@ erDiagram
         decimal aland_sqmi "Land area (sq miles)"
         decimal awater_sqmi "Water area (sq miles)"
     }
-    
+
     TIGER_CBSA {
         string cbsa_code PK "5-digit CBSA code"
         string cbsa_name "CBSA name"
@@ -223,7 +223,7 @@ erDiagram
         decimal aland_sqmi "Land area (sq miles)"
         decimal awater_sqmi "Water area (sq miles)"
     }
-    
+
     HUD_ZIP_CBSA_DIV {
         string zip PK "5-digit ZIP code"
         string cbsadiv PK "CBSA Division code"
@@ -237,7 +237,7 @@ erDiagram
         string usps_city "USPS city name"
         string state_code "2-letter state code"
     }
-    
+
     HUD_ZIP_CONGRESSIONAL {
         string zip PK "5-digit ZIP code"
         string cd PK "Congressional District code"
@@ -251,7 +251,7 @@ erDiagram
         string state_code FK "2-letter state code"
         string state_name "State name"
     }
-    
+
     CENSUS_DEMOGRAPHICS {
         string geo_id PK "Geographic identifier"
         string geo_type "State/County/Place/Tract"
@@ -264,14 +264,14 @@ erDiagram
         string state_code FK "2-letter state code"
         string county_code FK "5-digit county FIPS"
     }
-    
+
     %% Relationships within SEC
     FILING_METADATA ||--o{ FINANCIAL_LINE_ITEMS : "contains"
     FILING_METADATA ||--o{ FILING_CONTEXTS : "defines"
     FILING_METADATA ||--o{ FOOTNOTES : "has"
     FILING_METADATA ||--o{ INSIDER_TRANSACTIONS : "reports"
     FILING_CONTEXTS ||--o{ FINANCIAL_LINE_ITEMS : "contextualizes"
-    
+
     %% Relationships within GEO
     TIGER_STATES ||--o{ TIGER_COUNTIES : "contains"
     TIGER_STATES ||--o{ CENSUS_PLACES : "contains"
@@ -283,7 +283,7 @@ erDiagram
     TIGER_STATES ||--o{ HUD_ZIP_CONGRESSIONAL : "contains"
     TIGER_STATES ||--o{ CENSUS_DEMOGRAPHICS : "aggregates"
     TIGER_COUNTIES ||--o{ CENSUS_DEMOGRAPHICS : "aggregates"
-    
+
     %% Cross-domain relationships (SEC to GEO)
     FINANCIAL_LINE_ITEMS }o--|| TIGER_STATES : "incorporated_in"
     FILING_METADATA }o--|| TIGER_STATES : "incorporated_in"
@@ -366,16 +366,16 @@ This enables queries that combine financial performance with geographic analysis
 
 ### Find companies incorporated in California with their latest revenue
 ```sql
-SELECT 
+SELECT
   f.company_name,
   fl.numeric_value as revenue,
   s.state_name
 FROM sec.filing_metadata f
-JOIN sec.financial_line_items fl 
-  ON f.cik = fl.cik 
+JOIN sec.financial_line_items fl
+  ON f.cik = fl.cik
   AND f.filing_type = fl.filing_type
   AND f.year = fl.year
-JOIN geo.tiger_states s 
+JOIN geo.tiger_states s
   ON f.state_of_incorporation = s.state_code
 WHERE s.state_code = 'CA'
   AND fl.concept = 'Revenue'
@@ -385,14 +385,14 @@ WHERE s.state_code = 'CA'
 
 ### Analyze insider trading by geographic region
 ```sql
-SELECT 
+SELECT
   s.state_name,
   COUNT(*) as transaction_count,
   SUM(it.shares * it.price_per_share) as total_value
 FROM sec.insider_transactions it
-JOIN sec.filing_metadata fm 
+JOIN sec.filing_metadata fm
   ON it.cik = fm.cik
-JOIN geo.tiger_states s 
+JOIN geo.tiger_states s
   ON fm.state_of_incorporation = s.state_code
 WHERE it.transaction_code = 'P'  -- Purchases only
   AND it.year = 2023
@@ -402,16 +402,16 @@ ORDER BY total_value DESC;
 
 ### Population-weighted financial metrics
 ```sql
-SELECT 
+SELECT
   c.county_name,
   c.population,
   AVG(fl.numeric_value) as avg_revenue_per_company
 FROM geo.tiger_counties c
-JOIN geo.tiger_states s 
+JOIN geo.tiger_states s
   ON c.state_fips = s.state_fips
-JOIN sec.filing_metadata fm 
+JOIN sec.filing_metadata fm
   ON s.state_code = fm.state_of_incorporation
-JOIN sec.financial_line_items fl 
+JOIN sec.financial_line_items fl
   ON fm.cik = fl.cik
 WHERE fl.concept = 'Revenue'
   AND fl.year = 2023
@@ -434,7 +434,7 @@ Partitioned by: `cik` / `filing_type` / `year`
 - Enables efficient queries by company, filing type, or time period
 - Supports incremental updates as new filings arrive
 
-### GEO Tables  
+### GEO Tables
 Partitioned by: `source` / `type` / `geographic_level`
 - `source`: tiger, census, hud
 - `type`: boundary, demographic, crosswalk

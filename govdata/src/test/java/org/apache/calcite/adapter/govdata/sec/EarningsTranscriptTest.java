@@ -76,9 +76,9 @@ public class EarningsTranscriptTest {
 
       // Check if earnings_transcripts table exists using INFORMATION_SCHEMA
       System.out.println("\n=== STEP 1: Check Table Schema ===");
-      
+
       // INFORMATION_SCHEMA uses uppercase column names, but the schema name itself is lowercase
-      String tableQuery = 
+      String tableQuery =
           "SELECT \"TABLE_NAME\" " +
           "FROM information_schema.\"TABLES\" " +
           "WHERE \"TABLE_SCHEMA\" = 'sec' " +
@@ -86,7 +86,7 @@ public class EarningsTranscriptTest {
 
       try (Statement stmt = connection.createStatement();
            ResultSet rs = stmt.executeQuery(tableQuery)) {
-        
+
         assertTrue(rs.next(), "earnings_transcripts table should exist");
         assertEquals("earnings_transcripts", rs.getString("TABLE_NAME").toLowerCase());
         System.out.println("✓ earnings_transcripts table exists");
@@ -94,8 +94,8 @@ public class EarningsTranscriptTest {
 
       // Query earnings transcripts
       System.out.println("\n=== STEP 2: Query Earnings Content ===");
-      
-      String transcriptQuery = 
+
+      String transcriptQuery =
           "SELECT " +
           "    filing_date, " +
           "    exhibit_number, " +
@@ -111,11 +111,11 @@ public class EarningsTranscriptTest {
 
       try (Statement stmt = connection.createStatement();
            ResultSet rs = stmt.executeQuery(transcriptQuery)) {
-        
+
         int count = 0;
         System.out.println("\nEarnings Transcript Content:");
         System.out.println("============================================");
-        
+
         while (rs.next()) {
           count++;
           String date = rs.getString("filing_date");
@@ -125,20 +125,20 @@ public class EarningsTranscriptTest {
           String text = rs.getString("paragraph_text");
           String speaker = rs.getString("speaker_name");
           String role = rs.getString("speaker_role");
-          
+
           System.out.printf("\n[%s] Exhibit %s - Section: %s, Para #%d\n",
               date, exhibit, section, paraNum);
-          
+
           if (speaker != null) {
             System.out.printf("Speaker: %s (%s)\n", speaker, role);
           }
-          
+
           // Show first 200 chars of text
-          String preview = text.length() > 200 ? 
+          String preview = text.length() > 200 ?
               text.substring(0, 200) + "..." : text;
           System.out.println("Text: " + preview);
         }
-        
+
         if (count > 0) {
           System.out.println("\n✓ Found " + count + " transcript paragraphs");
         } else {
@@ -148,8 +148,8 @@ public class EarningsTranscriptTest {
 
       // Check for specific earnings indicators
       System.out.println("\n=== STEP 3: Analyze Earnings Content ===");
-      
-      String analysisQuery = 
+
+      String analysisQuery =
           "SELECT " +
           "    COUNT(*) as total_paragraphs, " +
           "    COUNT(DISTINCT exhibit_number) as unique_exhibits, " +
@@ -162,7 +162,7 @@ public class EarningsTranscriptTest {
 
       try (Statement stmt = connection.createStatement();
            ResultSet rs = stmt.executeQuery(analysisQuery)) {
-        
+
         if (rs.next()) {
           int totalParagraphs = rs.getInt("total_paragraphs");
           int uniqueExhibits = rs.getInt("unique_exhibits");
@@ -170,7 +170,7 @@ public class EarningsTranscriptTest {
           int earningsRelease = rs.getInt("earnings_release_count");
           int earningsCall = rs.getInt("earnings_call_count");
           int qAndA = rs.getInt("q_and_a_count");
-          
+
           System.out.println("\nEarnings Content Analysis:");
           System.out.println("==========================");
           System.out.printf("Total Paragraphs: %d\n", totalParagraphs);

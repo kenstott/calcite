@@ -279,7 +279,7 @@ Example XBRL-generated schema:
 
 ### Production Benefits Achieved:
 - ✅ CI/CD pipeline support with environment-specific configs
-- ✅ Docker/Kubernetes integration via environment variables  
+- ✅ Docker/Kubernetes integration via environment variables
 - ✅ Secure credential management (no hardcoded values)
 - ✅ Test automation with dynamic configuration
 - ✅ Multi-environment deployments (dev/staging/prod)
@@ -301,7 +301,7 @@ Example XBRL-generated schema:
 ~~**Proposed Solution**: Add validation when adding schemas to detect and prevent duplicate schema names within the same connection/root schema.~~
 
 **✅ IMPLEMENTATION COMPLETE:**
-- Schema name uniqueness validation in FileSchemaFactory.create() 
+- Schema name uniqueness validation in FileSchemaFactory.create()
 - Clear IllegalArgumentException with existing schema lists for troubleshooting
 - Comprehensive test coverage with updated MultipleSchemaTest (4 test cases)
 - Complete documentation in troubleshooting guide and configuration reference
@@ -351,7 +351,7 @@ Example XBRL-generated schema:
 -- Version-based time travel
 SELECT * FROM delta_table VERSION AS OF 5;
 
--- Timestamp-based time travel  
+-- Timestamp-based time travel
 SELECT * FROM delta_table TIMESTAMP AS OF '2024-01-15T10:30:00Z';
 
 -- Query metadata tables
@@ -606,25 +606,25 @@ public interface DataPipeline {
     String getName();
     String getDescription();
     PipelineConfig getDefaultConfig();
-    
+
     // Lifecycle
     void initialize(PipelineContext context);
     void validate(PipelineConfig config);
     void shutdown();
-    
+
     // Execution
     PipelineResult fetch(FetchRequest request);
     DataFrame transform(DataFrame input, TransformConfig config);
     void materialize(DataFrame data, MaterializationTarget target);
-    
+
     // Schema definition
     RelDataType getSchema(SchemaContext context);
     List<String> getTableNames();
-    
+
     // Scheduling
     Schedule getSchedule();
     boolean shouldRunNow(PipelineState state);
-    
+
     // State management
     PipelineState getState();
     void saveState(PipelineState state);
@@ -745,11 +745,11 @@ public class PipelineExecutor {
     private final ScheduledExecutorService scheduler;
     private final StateManager stateManager;
     private final MaterializationEngine materializationEngine;
-    
+
     public void registerPipeline(DataPipeline pipeline) {
         // Validate pipeline
         pipeline.validate(pipeline.getDefaultConfig());
-        
+
         // Schedule based on configuration
         Schedule schedule = pipeline.getSchedule();
         scheduler.scheduleAtFixedRate(
@@ -759,7 +759,7 @@ public class PipelineExecutor {
             schedule.getTimeUnit()
         );
     }
-    
+
     private void executePipeline(DataPipeline pipeline) {
         try {
             // Check if should run
@@ -767,27 +767,27 @@ public class PipelineExecutor {
             if (!pipeline.shouldRunNow(state)) {
                 return;
             }
-            
+
             // Fetch data
             FetchRequest request = buildFetchRequest(state);
             PipelineResult result = pipeline.fetch(request);
-            
+
             // Transform
             DataFrame transformed = pipeline.transform(
-                result.getData(), 
+                result.getData(),
                 state.getTransformConfig()
             );
-            
+
             // Materialize
             MaterializationTarget target = materializationEngine
                 .getTarget(pipeline.getName());
             pipeline.materialize(transformed, target);
-            
+
             // Update state
             state.setLastRun(Instant.now());
             state.setLastResult(result);
             stateManager.saveState(pipeline, state);
-            
+
         } catch (Exception e) {
             handlePipelineError(pipeline, e);
         }
@@ -861,11 +861,11 @@ CREATE TABLE pipeline_history (
 
 ```sql
 -- Monitor pipeline health
-SELECT 
+SELECT
     pipeline_name,
     last_run_time,
     CURRENT_TIMESTAMP - last_run_time as time_since_run,
-    CASE 
+    CASE
         WHEN last_error IS NOT NULL THEN 'ERROR'
         WHEN CURRENT_TIMESTAMP - last_run_time > INTERVAL '1 day' THEN 'STALE'
         ELSE 'HEALTHY'
@@ -873,7 +873,7 @@ SELECT
 FROM pipeline_state;
 
 -- Pipeline performance metrics
-SELECT 
+SELECT
     pipeline_name,
     AVG(EXTRACT(EPOCH FROM (end_time - start_time))) as avg_duration_seconds,
     SUM(records_written) as total_records,
@@ -890,12 +890,12 @@ GROUP BY pipeline_name;
 ```java
 @PipelinePlugin(name = "twitter", version = "1.0")
 public class TwitterPipeline implements DataPipeline {
-    
+
     @Override
     public PipelineResult fetch(FetchRequest request) {
         // Use Twitter API v2
         TwitterClient client = new TwitterClient(config.getApiKey());
-        
+
         // Get tweets since last checkpoint
         String sinceId = request.getCheckpoint().get("since_id");
         List<Tweet> tweets = client.searchRecent(
@@ -903,14 +903,14 @@ public class TwitterPipeline implements DataPipeline {
             sinceId,
             config.getMaxResults()
         );
-        
+
         // Convert to DataFrame
         return PipelineResult.builder()
             .data(tweetsToDataFrame(tweets))
             .checkpoint(Map.of("since_id", getMaxId(tweets)))
             .build();
     }
-    
+
     @Override
     public RelDataType getSchema(SchemaContext context) {
         return context.getTypeFactory().builder()
@@ -1047,11 +1047,11 @@ A hybrid design that combines the benefits of both approaches while mitigating t
 public class ParquetBatchCacheManager {
     // Single Caffeine cache instance for memory efficiency
     private final Cache<ParquetBatchCacheKey, CachedBatch> globalCache;
-    
+
     // Per-schema configuration and quotas
     private final Map<String, SchemaConfig> schemaConfigs;
     private final Map<String, AtomicLong> schemaUsage;
-    
+
     // Weighted eviction that considers schema quotas and priorities
     private final Weigher<ParquetBatchCacheKey, CachedBatch> schemaAwareWeigher;
 }
@@ -1068,7 +1068,7 @@ public class ParquetBatchCacheKey {
     private final long batchOffset;       // Offset within row group
     private final int batchSize;          // Number of rows in batch
     private final long fileModTime;       // File modification timestamp
-    
+
     // Proper equals/hashCode for cache lookups
     // Include schema name for schema-aware eviction
 }
@@ -1127,11 +1127,11 @@ public class SchemaAwareWeigher implements Weigher<ParquetBatchCacheKey, CachedB
     public int weigh(ParquetBatchCacheKey key, CachedBatch batch) {
         SchemaConfig config = schemaConfigs.get(key.getSchemaName());
         int baseWeight = batch.getMemorySize();
-        
+
         // Apply schema priority as weight multiplier
         // Higher priority = lower weight = less likely to evict
         double priorityMultiplier = 1.0 / (config.getPriority() / 5.0);
-        
+
         return (int)(baseWeight * priorityMultiplier);
     }
 }
@@ -1147,26 +1147,26 @@ public class SpilloverBatchLoader implements CacheLoader<ParquetBatchCacheKey, C
         if (spillFile != null && spillFile.exists()) {
             return loadFromSpillover(spillFile);
         }
-        
+
         // Otherwise load from parquet file
         VectorizedParquetReader reader = new VectorizedParquetReader(
             key.getFilePath(),
             cacheManager  // Pass cache manager for coordination
         );
-        
+
         List<Object[]> batch = reader.readBatch(
             key.getRowGroupIndex(),
             key.getBatchOffset(),
             key.getBatchSize()
         );
-        
+
         // Check if should spill immediately
         CachedBatch cached = new CachedBatch(batch);
         if (cached.getMemorySize() > config.getSpilloverThresholdBytes()) {
             spilloverManager.spillToDisk(key, cached);
             cached.setSpilled(true);
         }
-        
+
         return cached;
     }
 }
@@ -1178,7 +1178,7 @@ public class SpilloverBatchLoader implements CacheLoader<ParquetBatchCacheKey, C
 ```java
 public class VectorizedParquetReader {
     private final ParquetBatchCacheManager cacheManager;
-    
+
     public List<Object[]> readBatch() throws IOException {
         // Generate cache key
         ParquetBatchCacheKey key = new ParquetBatchCacheKey(
@@ -1189,7 +1189,7 @@ public class VectorizedParquetReader {
             batchSize,
             fileModTime
         );
-        
+
         // Try cache first
         if (cacheManager != null) {
             CachedBatch cached = cacheManager.get(key);
@@ -1199,15 +1199,15 @@ public class VectorizedParquetReader {
             }
             cacheStats.recordMiss();
         }
-        
+
         // Read from file
         List<Object[]> batch = readBatchFromFile();
-        
+
         // Cache for future use
         if (cacheManager != null && shouldCache(batch)) {
             cacheManager.put(key, new CachedBatch(batch));
         }
-        
+
         return batch;
     }
 }
@@ -1217,18 +1217,18 @@ public class VectorizedParquetReader {
 ```java
 public class FileSchema extends AbstractSchema {
     private final ParquetBatchCacheManager cacheManager;
-    
+
     public FileSchema(File baseDirectory, Map<String, Object> operand) {
         // Parse cache configuration
-        Map<String, Object> cacheConfig = 
+        Map<String, Object> cacheConfig =
             (Map<String, Object>) operand.get("parquetBatchCache");
-        
+
         if (cacheConfig != null && Boolean.TRUE.equals(cacheConfig.get("enabled"))) {
             this.cacheManager = ParquetBatchCacheManager.getInstance()
                 .registerSchema(this.name, cacheConfig);
         }
     }
-    
+
     @Override
     public void close() {
         if (cacheManager != null) {
@@ -1246,7 +1246,7 @@ public class AdaptiveMemoryManager {
     public void adjustQuotas() {
         // Monitor actual usage patterns
         Map<String, Double> usageRatios = calculateUsageRatios();
-        
+
         // Adjust soft quotas based on demand
         for (String schema : schemaConfigs.keySet()) {
             double ratio = usageRatios.get(schema);
@@ -1266,9 +1266,9 @@ public class MemoryPressureMonitor {
     public void onMemoryPressure() {
         // Progressive response to memory pressure
         MemoryMXBean memory = ManagementFactory.getMemoryMXBean();
-        double usage = memory.getHeapMemoryUsage().getUsed() / 
+        double usage = memory.getHeapMemoryUsage().getUsed() /
                       (double) memory.getHeapMemoryUsage().getMax();
-        
+
         if (usage > 0.9) {
             // Critical: Spill largest batches
             spillLargestBatches(10);
@@ -1289,7 +1289,7 @@ public class MemoryPressureMonitor {
 public class CacheStatistics {
     // Per-schema statistics
     private final Map<String, SchemaStats> schemaStats;
-    
+
     public static class SchemaStats {
         private long hits;
         private long misses;
@@ -1297,16 +1297,16 @@ public class CacheStatistics {
         private long spillovers;
         private long bytesInCache;
         private long bytesSpilled;
-        
+
         public double getHitRate() {
             return hits / (double)(hits + misses);
         }
-        
+
         public long getMemoryUsage() {
             return bytesInCache + bytesSpilled;
         }
     }
-    
+
     // JMX exposure for monitoring
     @MXBean
     public interface CacheStatisticsMXBean {
@@ -1356,22 +1356,22 @@ public interface ParquetCacheProvider {
     // Lifecycle
     void initialize(CacheConfig config);
     void close();
-    
+
     // Basic operations
     CompletableFuture<CachedBatch> get(ParquetBatchCacheKey key);
     CompletableFuture<Void> put(ParquetBatchCacheKey key, CachedBatch batch);
     CompletableFuture<Void> evict(ParquetBatchCacheKey key);
     CompletableFuture<Void> clear();
-    
+
     // Bulk operations
     CompletableFuture<Map<ParquetBatchCacheKey, CachedBatch>> getAll(Set<ParquetBatchCacheKey> keys);
     CompletableFuture<Void> putAll(Map<ParquetBatchCacheKey, CachedBatch> entries);
-    
+
     // Management
     CacheStatistics getStatistics();
     long getMemoryUsage();
     void setEvictionPolicy(EvictionPolicy policy);
-    
+
     // Provider metadata
     String getName();
     Set<String> getSupportedFeatures();
@@ -1398,7 +1398,7 @@ public interface ParquetCacheProvider {
           "recordStats": true
         },
         {
-          "name": "l2-redis", 
+          "name": "l2-redis",
           "provider": "redis",
           "connection": "${REDIS_URL:redis://localhost:6379}",
           "maxSizeGb": 10,
@@ -1425,7 +1425,7 @@ public interface ParquetCacheProvider {
 ```java
 public class CaffeineCacheProvider implements ParquetCacheProvider {
     private Cache<ParquetBatchCacheKey, CachedBatch> cache;
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
         return Set.of("local", "fast", "ttl", "size-eviction", "weight-eviction");
@@ -1439,10 +1439,10 @@ public class CaffeineCacheProvider implements ParquetCacheProvider {
 public class RedisCacheProvider implements ParquetCacheProvider {
     private RedissonClient redisson;
     private RMapCache<String, byte[]> cache;
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
-        return Set.of("distributed", "persistent", "shared", "large-capacity", 
+        return Set.of("distributed", "persistent", "shared", "large-capacity",
                      "pub-sub", "atomic-ops");
     }
 }
@@ -1454,10 +1454,10 @@ public class RedisCacheProvider implements ParquetCacheProvider {
 public class HazelcastCacheProvider implements ParquetCacheProvider {
     private HazelcastInstance hazelcast;
     private IMap<ParquetBatchCacheKey, CachedBatch> cache;
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
-        return Set.of("distributed", "near-cache", "replicated", "queryable", 
+        return Set.of("distributed", "near-cache", "replicated", "queryable",
                      "entry-processor", "continuous-query");
     }
 }
@@ -1469,10 +1469,10 @@ public class HazelcastCacheProvider implements ParquetCacheProvider {
 public class IgniteCacheProvider implements ParquetCacheProvider {
     private Ignite ignite;
     private IgniteCache<ParquetBatchCacheKey, CachedBatch> cache;
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
-        return Set.of("distributed", "compute-grid", "sql-queries", 
+        return Set.of("distributed", "compute-grid", "sql-queries",
                      "collocated-processing", "persistence");
     }
 }
@@ -1484,7 +1484,7 @@ public class IgniteCacheProvider implements ParquetCacheProvider {
 public class DiskCacheProvider implements ParquetCacheProvider {
     private Path cacheDir;
     private ConcurrentHashMap<ParquetBatchCacheKey, Path> index;
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
         return Set.of("persistent", "spillover", "unlimited-size", "low-memory");
@@ -1497,18 +1497,18 @@ public class DiskCacheProvider implements ParquetCacheProvider {
 ```java
 public class TieredCacheProvider implements ParquetCacheProvider {
     private List<ParquetCacheProvider> tiers;
-    
+
     @Override
     public CompletableFuture<CachedBatch> get(ParquetBatchCacheKey key) {
         // Waterfall through tiers
         return getTiered(key, 0);
     }
-    
+
     private CompletableFuture<CachedBatch> getTiered(ParquetBatchCacheKey key, int tier) {
         if (tier >= tiers.size()) {
             return CompletableFuture.completedFuture(null);
         }
-        
+
         return tiers.get(tier).get(key)
             .thenCompose(batch -> {
                 if (batch != null) {
@@ -1531,7 +1531,7 @@ public class S3CacheProvider implements ParquetCacheProvider {
     private S3Client s3Client;
     private String bucket;
     private String prefix;
-    
+
     @Override
     public void initialize(CacheConfig config) {
         this.s3Client = S3Client.builder()
@@ -1540,7 +1540,7 @@ public class S3CacheProvider implements ParquetCacheProvider {
         this.bucket = config.getString("bucket");
         this.prefix = config.getString("prefix", "parquet-cache/");
     }
-    
+
     @Override
     public CompletableFuture<CachedBatch> get(ParquetBatchCacheKey key) {
         return CompletableFuture.supplyAsync(() -> {
@@ -1549,20 +1549,20 @@ public class S3CacheProvider implements ParquetCacheProvider {
                     .bucket(bucket)
                     .key(prefix + key.toS3Key())
                     .build();
-                    
-                ResponseBytes<GetObjectResponse> response = 
+
+                ResponseBytes<GetObjectResponse> response =
                     s3Client.getObjectAsBytes(request);
-                    
+
                 return deserialize(response.asByteArray());
             } catch (NoSuchKeyException e) {
                 return null;
             }
         });
     }
-    
+
     @Override
     public Set<String> getSupportedFeatures() {
-        return Set.of("distributed", "persistent", "serverless", 
+        return Set.of("distributed", "persistent", "serverless",
                      "unlimited-size", "s3-native");
     }
 }
@@ -1572,9 +1572,9 @@ public class S3CacheProvider implements ParquetCacheProvider {
 
 ```java
 public class CacheProviderFactory {
-    private static final Map<String, Class<? extends ParquetCacheProvider>> PROVIDERS = 
+    private static final Map<String, Class<? extends ParquetCacheProvider>> PROVIDERS =
         new ConcurrentHashMap<>();
-    
+
     static {
         // Register built-in providers
         registerProvider("caffeine", CaffeineCacheProvider.class);
@@ -1585,24 +1585,24 @@ public class CacheProviderFactory {
         registerProvider("tiered", TieredCacheProvider.class);
         registerProvider("ehcache", EhcacheCacheProvider.class);
     }
-    
-    public static void registerProvider(String name, 
+
+    public static void registerProvider(String name,
                                        Class<? extends ParquetCacheProvider> providerClass) {
         PROVIDERS.put(name.toLowerCase(), providerClass);
     }
-    
+
     public static ParquetCacheProvider create(String type, CacheConfig config) {
         // Check if it's a class name (custom provider)
         if (type.contains(".")) {
             return createCustomProvider(type, config);
         }
-        
+
         // Built-in provider
         Class<? extends ParquetCacheProvider> providerClass = PROVIDERS.get(type.toLowerCase());
         if (providerClass == null) {
             throw new IllegalArgumentException("Unknown cache provider: " + type);
         }
-        
+
         try {
             ParquetCacheProvider provider = providerClass.getDeclaredConstructor().newInstance();
             provider.initialize(config);
@@ -1662,20 +1662,20 @@ public interface ObservableCacheProvider extends ParquetCacheProvider {
 ```java
 public class FileSchema extends AbstractSchema {
     private ParquetCacheProvider cacheProvider;
-    
+
     public FileSchema(File baseDirectory, Map<String, Object> operand) {
-        Map<String, Object> cacheConfig = 
+        Map<String, Object> cacheConfig =
             (Map<String, Object>) operand.get("parquetBatchCache");
-        
+
         if (cacheConfig != null && Boolean.TRUE.equals(cacheConfig.get("enabled"))) {
             String providerType = (String) cacheConfig.getOrDefault("provider", "caffeine");
-            
+
             // Create provider through factory
             this.cacheProvider = CacheProviderFactory.create(
-                providerType, 
+                providerType,
                 new CacheConfig(cacheConfig)
             );
-            
+
             // Optional: warm cache on startup
             if (cacheProvider instanceof WarmableCacheProvider) {
                 ((WarmableCacheProvider) cacheProvider)
@@ -1709,7 +1709,7 @@ public class FileSchema extends AbstractSchema {
 
 **Problem**: The current web/HTML feature extracts all HTML tables from a single URL, which works well but is limited in scope. Users often need to extract specific tables from multiple sources, target tables by ID or class, or extract tables matching certain patterns.
 
-**Current Implementation**: 
+**Current Implementation**:
 - Single URL per schema
 - Extracts all `<table>` elements from the page
 - Clean and simple - tables are obviously tabular data
@@ -1842,7 +1842,7 @@ SELECT * FROM web.extract_all(
 
 -- Union tables from multiple sources
 WITH combined_prices AS (
-  SELECT 'source1' as source, * 
+  SELECT 'source1' as source, *
   FROM web.extract('https://competitor1.com', 'table.prices')
   UNION ALL
   SELECT 'source2' as source, *
@@ -1856,19 +1856,19 @@ SELECT * FROM combined_prices;
 #### WebTableExtractor Enhancement
 ```java
 public class WebTableExtractor {
-    
+
     public Map<String, DataFrame> extractTables(WebConfig config) {
         Map<String, DataFrame> tables = new HashMap<>();
-        
+
         for (String urlPattern : config.getUrls()) {
             List<String> urls = expandUrlPattern(urlPattern);
-            
+
             for (String url : urls) {
                 Document doc = fetchDocument(url);
-                
+
                 for (Entry<String, SelectorConfig> entry : config.getSelectors().entrySet()) {
                     Elements selected = selectTables(doc, entry.getValue());
-                    
+
                     if (!selected.isEmpty()) {
                         String tableName = generateTableName(entry.getKey(), url);
                         tables.put(tableName, convertToDataFrame(selected));
@@ -1878,23 +1878,23 @@ public class WebTableExtractor {
         }
         return tables;
     }
-    
+
     private Elements selectTables(Document doc, SelectorConfig config) {
         Elements tables = doc.select(config.getSelector());
-        
+
         // Apply filters
         if (config.getContainsText() != null) {
             tables = filterByText(tables, config.getContainsText());
         }
-        
+
         if (config.getRequiredHeaders() != null) {
             tables = filterByHeaders(tables, config.getRequiredHeaders());
         }
-        
+
         if (config.getMinRows() != null) {
             tables = filterByRowCount(tables, config.getMinRows(), config.getMaxRows());
         }
-        
+
         return tables;
     }
 }
@@ -2001,7 +2001,7 @@ WITH current_prices AS (
 previous_prices AS (
   SELECT * FROM price_changes_history
 )
-SELECT 
+SELECT
   c.*,
   p.price as previous_price,
   c.price - p.price as price_change,
@@ -2138,40 +2138,40 @@ public class UrlPatternExpander {
     // Now takes an array of variable dictionaries instead of cartesian product
     public List<ExpandedUrl> expandUrls(String pattern, List<Map<String, Object>> variables) {
         List<ExpandedUrl> expandedUrls = new ArrayList<>();
-        
+
         for (Map<String, Object> variableSet : variables) {
             String url = pattern;
             // Replace each variable in the pattern
             for (Entry<String, Object> var : variableSet.entrySet()) {
                 url = url.replace("{" + var.getKey() + "}", String.valueOf(var.getValue()));
             }
-            
+
             // Store the URL along with its variable values for source tracking
             expandedUrls.add(new ExpandedUrl(url, variableSet));
         }
-        
+
         return expandedUrls;
     }
-    
+
     // For multiple URL patterns (like different stores with same SKU)
-    public List<ExpandedUrl> expandMultiplePatterns(List<String> patterns, 
+    public List<ExpandedUrl> expandMultiplePatterns(List<String> patterns,
                                                      List<Map<String, Object>> variables) {
         List<ExpandedUrl> allUrls = new ArrayList<>();
-        
+
         for (String pattern : patterns) {
             for (Map<String, Object> variableSet : variables) {
                 String url = pattern;
                 for (Entry<String, Object> var : variableSet.entrySet()) {
                     url = url.replace("{" + var.getKey() + "}", String.valueOf(var.getValue()));
                 }
-                
+
                 // Add pattern index for tracking which URL pattern was used
                 Map<String, Object> enrichedVars = new HashMap<>(variableSet);
                 enrichedVars.put("_url_pattern_index", patterns.indexOf(pattern));
                 allUrls.add(new ExpandedUrl(url, enrichedVars));
             }
         }
-        
+
         return allUrls;
     }
 }
@@ -2179,7 +2179,7 @@ public class UrlPatternExpander {
 class ExpandedUrl {
     final String url;
     final Map<String, Object> variables;
-    
+
     ExpandedUrl(String url, Map<String, Object> variables) {
         this.url = url;
         this.variables = variables;
@@ -2192,7 +2192,7 @@ class ExpandedUrl {
 public class BatchWebTableFetcher {
     private final RateLimiter rateLimiter = RateLimiter.create(2.0); // 2 requests/second
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
-    
+
     public List<TableData> fetchTables(List<String> urls, String selector) {
         List<CompletableFuture<TableData>> futures = urls.stream()
             .map(url -> CompletableFuture.supplyAsync(() -> {
@@ -2200,7 +2200,7 @@ public class BatchWebTableFetcher {
                 return fetchSingleTable(url, selector);
             }, executor))
             .collect(Collectors.toList());
-        
+
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
             .thenApply(v -> futures.stream()
                 .map(CompletableFuture::join)
@@ -2216,45 +2216,45 @@ public class BatchWebTableFetcher {
 public class SourceAwareTable extends AbstractTable {
     private final List<String> sourceColumns;
     private final boolean addTimestamp;
-    
+
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
         RelDataTypeFactory.Builder builder = typeFactory.builder();
-        
+
         // Add original columns from scraped table
         for (RelDataTypeField field : baseRowType.getFieldList()) {
             builder.add(field);
         }
-        
+
         // Add requested source tracking columns from variables
         for (String columnName : sourceColumns) {
             builder.add(columnName, SqlTypeName.VARCHAR);
         }
-        
+
         // Add metadata columns
         if (addTimestamp) {
             builder.add("_fetched_at", SqlTypeName.TIMESTAMP);
         }
         builder.add("_source_url", SqlTypeName.VARCHAR);
-        
+
         return builder.build();
     }
-    
+
     // Enrich each row with source variable values
     public Object[] enrichRow(Object[] originalRow, Map<String, Object> variables, String url) {
         List<Object> enrichedRow = new ArrayList<>(Arrays.asList(originalRow));
-        
+
         // Add variable values as columns
         for (String columnName : sourceColumns) {
             enrichedRow.add(variables.get(columnName));
         }
-        
+
         // Add metadata
         if (addTimestamp) {
             enrichedRow.add(new Timestamp(System.currentTimeMillis()));
         }
         enrichedRow.add(url);
-        
+
         return enrichedRow.toArray();
     }
 }
@@ -2287,7 +2287,7 @@ You could even use variables in the selector pattern:
         "product": "Echo Dot"
       },
       {
-        "base_url": "https://walmart.com",  
+        "base_url": "https://walmart.com",
         "sku": "735005303",
         "selector": "span[itemprop='price']",
         "competitor": "Walmart",
@@ -2336,13 +2336,13 @@ This gives you complete flexibility - different URLs, different selectors, all i
 
 ```sql
 -- Compare prices across stores
-SELECT sku, MIN(price) as best_price, 
+SELECT sku, MIN(price) as best_price,
        ARRAY_AGG(DISTINCT _source_url) as available_at
 FROM product_prices
 GROUP BY sku;
 
 -- Track stock movements
-SELECT ticker, 
+SELECT ticker,
        price as current_price,
        LAG(price) OVER (PARTITION BY ticker ORDER BY _fetched_at) as previous_price,
        price - LAG(price) OVER (PARTITION BY ticker ORDER BY _fetched_at) as change
@@ -2352,7 +2352,7 @@ FROM stock_summaries;
 SELECT city, temperature, humidity
 FROM city_weather
 WHERE temperature > (
-    SELECT AVG(temperature) + 2 * STDDEV(temperature) 
+    SELECT AVG(temperature) + 2 * STDDEV(temperature)
     FROM city_weather
 );
 ```
@@ -2366,7 +2366,7 @@ WHERE temperature > (
 
 This focused feature would make the file adapter incredibly powerful for web data aggregation scenarios like:
 - Financial data monitoring
-- E-commerce price tracking  
+- E-commerce price tracking
 - Weather/environmental monitoring
 - Sports statistics aggregation
 - Real estate listings compilation
@@ -2420,7 +2420,7 @@ for (String partition : partitions) {
 // Parallel partition reading with CompletableFuture
 CompletableFuture<List<Object[]>>[] futures = partitions.stream()
     .map(partition -> CompletableFuture.supplyAsync(
-        () -> readPartition(partition), 
+        () -> readPartition(partition),
         ioExecutor))
     .toArray(CompletableFuture[]::new);
 
@@ -2475,23 +2475,23 @@ public List<Object[]> readBatch() {
 public class PrefetchingParquetReader {
     private final BlockingQueue<CompletableFuture<List<Object[]>>> batchQueue;
     private final ExecutorService prefetchExecutor;
-    
+
     public PrefetchingParquetReader() {
         this.batchQueue = new ArrayBlockingQueue<>(prefetchSize);
         // Start background prefetching
         startPrefetching();
     }
-    
+
     private void startPrefetching() {
         prefetchExecutor.submit(() -> {
             while (hasMoreData()) {
-                CompletableFuture<List<Object[]>> future = 
+                CompletableFuture<List<Object[]>> future =
                     CompletableFuture.supplyAsync(this::readNextBatchFromFile);
                 batchQueue.offer(future);
             }
         });
     }
-    
+
     public List<Object[]> readBatch() {
         // Return already-fetched batch
         return batchQueue.poll().join();
@@ -2517,10 +2517,10 @@ for (File csvFile : csvFiles) {
 // Parallel conversion with rate limiting
 ExecutorService conversionPool = Executors.newFixedThreadPool(
     config.getConversionThreads());
-    
+
 List<CompletableFuture<File>> conversions = csvFiles.stream()
     .map(csv -> CompletableFuture.supplyAsync(
-        () -> convertToParquet(csv), 
+        () -> convertToParquet(csv),
         conversionPool))
     .collect(Collectors.toList());
 
@@ -2583,9 +2583,9 @@ Map<String, SqlTypeName> columnTypes = columns.parallelStream()
 #### 8. Parallel Join Scanning
 ```java
 // Scan both sides of join in parallel
-CompletableFuture<List<Row>> leftScan = 
+CompletableFuture<List<Row>> leftScan =
     CompletableFuture.supplyAsync(() -> scanTable(leftTable));
-CompletableFuture<List<Row>> rightScan = 
+CompletableFuture<List<Row>> rightScan =
     CompletableFuture.supplyAsync(() -> scanTable(rightTable));
 
 JoinResult result = CompletableFuture.allOf(leftScan, rightScan)
@@ -2606,7 +2606,7 @@ public class FileAdapterExecutors {
         null, // Default exception handler
         true  // Async mode for better throughput
     );
-    
+
     // I/O-bound tasks (file reading, network operations)
     private static final ExecutorService IO_POOL = new ThreadPoolExecutor(
         4,     // Core pool size
@@ -2624,9 +2624,9 @@ public class FileAdapterExecutors {
         },
         new ThreadPoolExecutor.CallerRunsPolicy() // Backpressure strategy
     );
-    
+
     // Scheduled tasks (cache refresh, statistics update)
-    private static final ScheduledExecutorService SCHEDULED_POOL = 
+    private static final ScheduledExecutorService SCHEDULED_POOL =
         Executors.newScheduledThreadPool(2);
 }
 ```
@@ -2636,13 +2636,13 @@ public class FileAdapterExecutors {
 public class ParallelMemoryManager {
     private final Semaphore memoryPermits;
     private final long maxMemoryBytes;
-    
+
     public ParallelMemoryManager(long maxMemoryBytes) {
         this.maxMemoryBytes = maxMemoryBytes;
         // Each permit represents 1MB of memory
         this.memoryPermits = new Semaphore((int)(maxMemoryBytes / (1024 * 1024)));
     }
-    
+
     public <T> CompletableFuture<T> executeWithMemoryLimit(
             Supplier<T> task, long estimatedMemoryBytes) {
         int permits = (int)(estimatedMemoryBytes / (1024 * 1024));

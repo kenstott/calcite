@@ -16,9 +16,9 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Tag;import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -37,8 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
   @TempDir
   File tempDir;
 
-  @Test
-  void testVectorizedReadingConfiguration() throws Exception {
+  @Test void testVectorizedReadingConfiguration() throws Exception {
     // Create test CSV file
     File csvFile = new File(tempDir, "test_data.csv");
     try (PrintWriter writer = new PrintWriter(csvFile)) {
@@ -47,10 +46,10 @@ import static org.junit.jupiter.api.Assertions.*;
         writer.println(i + ",Name" + i + "," + (i * 10));
       }
     }
-    
+
     // Test with vectorized reading enabled
     System.setProperty("parquet.enable.vectorized.reader", "true");
-    
+
     Properties props = new Properties();
     props.put("model", "inline:"
         + "{\n"
@@ -69,22 +68,21 @@ import static org.junit.jupiter.api.Assertions.*;
         + "    }\n"
         + "  ]\n"
         + "}");
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props);
          Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM test_data")) {
-      
+
       assertTrue(rs.next());
       assertEquals(1000, rs.getInt(1));
-      
+
       System.out.println("Vectorized reading test passed");
     } finally {
       System.clearProperty("parquet.enable.vectorized.reader");
     }
   }
-  
-  @Test
-  void testCachePrimingConfiguration() throws Exception {
+
+  @Test void testCachePrimingConfiguration() throws Exception {
     // Create test CSV files
     for (int i = 1; i <= 3; i++) {
       File csvFile = new File(tempDir, "table" + i + ".csv");
@@ -95,7 +93,7 @@ import static org.junit.jupiter.api.Assertions.*;
         }
       }
     }
-    
+
     // Test with cache priming enabled (default)
     Properties props = new Properties();
     props.put("model", "inline:"
@@ -114,11 +112,11 @@ import static org.junit.jupiter.api.Assertions.*;
         + "    }\n"
         + "  ]\n"
         + "}");
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Wait for cache priming to complete
       Thread.sleep(500);
-      
+
       // Run queries - should use warm cache
       try (Statement stmt = conn.createStatement()) {
         for (int i = 1; i <= 3; i++) {
@@ -128,13 +126,12 @@ import static org.junit.jupiter.api.Assertions.*;
           }
         }
       }
-      
+
       System.out.println("Cache priming test passed");
     }
   }
-  
-  @Test
-  void testCombinedVectorizedAndCachePriming() throws Exception {
+
+  @Test void testCombinedVectorizedAndCachePriming() throws Exception {
     // Create larger test CSV file
     File csvFile = new File(tempDir, "large_table.csv");
     try (PrintWriter writer = new PrintWriter(csvFile)) {
@@ -143,10 +140,10 @@ import static org.junit.jupiter.api.Assertions.*;
         writer.println(i + ",Cat" + (i % 10) + "," + (i * 100));
       }
     }
-    
+
     // Enable both vectorized reading and cache priming
     System.setProperty("parquet.enable.vectorized.reader", "true");
-    
+
     Properties props = new Properties();
     props.put("model", "inline:"
         + "{\n"
@@ -165,21 +162,21 @@ import static org.junit.jupiter.api.Assertions.*;
         + "    }\n"
         + "  ]\n"
         + "}");
-    
+
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Wait for cache priming
       Thread.sleep(500);
-      
+
       // Run aggregation query - should benefit from both optimizations
       String query = "SELECT category, COUNT(*), SUM(value) " +
                     "FROM large_table " +
                     "GROUP BY category";
-      
+
       long start = System.currentTimeMillis();
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
-        
+
         int count = 0;
         while (rs.next()) {
           count++;
@@ -189,10 +186,10 @@ import static org.junit.jupiter.api.Assertions.*;
         }
         assertEquals(10, count);  // 10 categories
       }
-      
+
       long elapsed = System.currentTimeMillis() - start;
       System.out.println("Combined optimization query completed in " + elapsed + " ms");
-      
+
       // Second query should be even faster (fully warm cache)
       start = System.currentTimeMillis();
       try (Statement stmt = conn.createStatement();
@@ -201,10 +198,10 @@ import static org.junit.jupiter.api.Assertions.*;
         assertEquals(10, rs.getInt(1));
       }
       long elapsed2 = System.currentTimeMillis() - start;
-      
+
       System.out.println("Second query (warm cache) completed in " + elapsed2 + " ms");
       assertTrue(elapsed2 <= elapsed, "Second query should be as fast or faster");
-      
+
     } finally {
       System.clearProperty("parquet.enable.vectorized.reader");
     }

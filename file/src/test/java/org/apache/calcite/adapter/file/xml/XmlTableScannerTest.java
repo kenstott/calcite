@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -39,17 +40,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 class XmlTableScannerTest {
-  
+
   @TempDir
   Path tempDir;
-  
+
   @BeforeEach
   void setUp() {
     // Setup if needed
   }
-  
-  @Test
-  void testScanSimpleRepeatingElements() throws IOException {
+
+  @Test void testScanSimpleRepeatingElements() throws IOException {
     // Create test XML with repeating elements
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<catalog>\n"
@@ -66,15 +66,15 @@ class XmlTableScannerTest {
         + "    <price>29.99</price>\n"
         + "  </product>\n"
         + "</catalog>";
-    
+
     File xmlFile = createTempXmlFile("catalog.xml", xmlContent);
-    
+
     // Scan for tables
     List<XmlTableScanner.TableInfo> tables = XmlTableScanner.scanTables(Sources.of(xmlFile));
-    
+
     // Verify results
     assertEquals(1, tables.size());
-    
+
     XmlTableScanner.TableInfo productTable = tables.get(0);
     assertEquals("product", productTable.name);
     assertEquals(3, productTable.count);
@@ -82,9 +82,8 @@ class XmlTableScannerTest {
     assertNotNull(productTable.elements);
     assertEquals(3, productTable.elements.size());
   }
-  
-  @Test
-  void testScanMultipleRepeatingPatterns() throws IOException {
+
+  @Test void testScanMultipleRepeatingPatterns() throws IOException {
     // Create test XML with multiple repeating patterns
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<company>\n"
@@ -114,38 +113,37 @@ class XmlTableScannerTest {
         + "    </employee>\n"
         + "  </employees>\n"
         + "</company>";
-    
+
     File xmlFile = createTempXmlFile("company.xml", xmlContent);
-    
+
     // Scan for tables
     List<XmlTableScanner.TableInfo> tables = XmlTableScanner.scanTables(Sources.of(xmlFile));
-    
+
     // Should find both department and employee patterns
     assertEquals(2, tables.size());
-    
+
     // Find department table
     XmlTableScanner.TableInfo deptTable = tables.stream()
         .filter(t -> "department".equals(t.name))
         .findFirst()
         .orElse(null);
-    
+
     assertNotNull(deptTable);
     assertEquals(3, deptTable.count);
     assertEquals("//department", deptTable.xpath);
-    
+
     // Find employee table
     XmlTableScanner.TableInfo empTable = tables.stream()
         .filter(t -> "employee".equals(t.name))
         .findFirst()
         .orElse(null);
-    
+
     assertNotNull(empTable);
     assertEquals(2, empTable.count);
     assertEquals("//employee", empTable.xpath);
   }
-  
-  @Test
-  void testScanWithXPath() throws IOException {
+
+  @Test void testScanWithXPath() throws IOException {
     // Create test XML
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<data>\n"
@@ -169,28 +167,27 @@ class XmlTableScannerTest {
         + "    <record>Single record</record>\n"
         + "  </other>\n"
         + "</data>";
-    
+
     File xmlFile = createTempXmlFile("data.xml", xmlContent);
-    
+
     // Scan with XPath targeting only section1 items
-    List<XmlTableScanner.TableInfo> tables = 
+    List<XmlTableScanner.TableInfo> tables =
         XmlTableScanner.scanTables(Sources.of(xmlFile), "//section1/item");
-    
+
     // Should find only section1 items
     assertEquals(1, tables.size());
-    
+
     XmlTableScanner.TableInfo table = tables.get(0);
     assertEquals("item", table.name);
     assertEquals(2, table.count);
     assertEquals("//section1/item", table.xpath);
-    
+
     // Verify elements are from section1
     assertEquals("1", table.elements.get(0).getAttribute("id"));
     assertEquals("2", table.elements.get(1).getAttribute("id"));
   }
-  
-  @Test
-  void testScanWithComplexXPath() throws IOException {
+
+  @Test void testScanWithComplexXPath() throws IOException {
     // Create test XML with namespaces and complex structure
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<root>\n"
@@ -212,28 +209,27 @@ class XmlTableScannerTest {
         + "    </book>\n"
         + "  </books>\n"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("books.xml", xmlContent);
-    
+
     // Scan with XPath for all books
-    List<XmlTableScanner.TableInfo> tables = 
+    List<XmlTableScanner.TableInfo> tables =
         XmlTableScanner.scanTables(Sources.of(xmlFile), "//book");
-    
+
     assertEquals(1, tables.size());
-    
+
     XmlTableScanner.TableInfo table = tables.get(0);
     assertEquals("book", table.name);
     assertEquals(3, table.count);
     assertEquals("//book", table.xpath);
-    
+
     // Verify all books found
     assertEquals("fiction", table.elements.get(0).getAttribute("category"));
     assertEquals("non-fiction", table.elements.get(1).getAttribute("category"));
     assertEquals("fiction", table.elements.get(2).getAttribute("category"));
   }
-  
-  @Test
-  void testScanIgnoresSingleElements() throws IOException {
+
+  @Test void testScanIgnoresSingleElements() throws IOException {
     // Create test XML with mostly single elements
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<config>\n"
@@ -251,17 +247,16 @@ class XmlTableScannerTest {
         + "    <enabled>true</enabled>\n"
         + "  </feature>\n"
         + "</config>";
-    
+
     File xmlFile = createTempXmlFile("config.xml", xmlContent);
-    
+
     // Scan for tables - should find no repeating patterns
     List<XmlTableScanner.TableInfo> tables = XmlTableScanner.scanTables(Sources.of(xmlFile));
-    
+
     assertEquals(0, tables.size());
   }
-  
-  @Test
-  void testScanWithMixedContent() throws IOException {
+
+  @Test void testScanWithMixedContent() throws IOException {
     // Create test XML with mixed content types
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<mixed>\n"
@@ -294,18 +289,18 @@ class XmlTableScannerTest {
         + "    </entry>\n"
         + "  </logs>\n"
         + "</mixed>";
-    
+
     File xmlFile = createTempXmlFile("mixed.xml", xmlContent);
-    
+
     // Scan for tables
     List<XmlTableScanner.TableInfo> tables = XmlTableScanner.scanTables(Sources.of(xmlFile));
-    
+
     // Should find users and log entries (both have 2+ similar elements)
     assertEquals(2, tables.size());
-    
+
     boolean foundUsers = false;
     boolean foundEntries = false;
-    
+
     for (XmlTableScanner.TableInfo table : tables) {
       if ("user".equals(table.name)) {
         foundUsers = true;
@@ -315,13 +310,12 @@ class XmlTableScannerTest {
         assertEquals(3, table.count);
       }
     }
-    
+
     assertTrue(foundUsers, "Should find user table");
     assertTrue(foundEntries, "Should find entry table");
   }
-  
-  @Test
-  void testNameSanitization() throws IOException {
+
+  @Test void testNameSanitization() throws IOException {
     // Create test XML with names requiring sanitization
     String xmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         + "<root>\n"
@@ -332,31 +326,30 @@ class XmlTableScannerTest {
         + "    <item-name>Item 2</item-name>\n"
         + "  </product-item>\n"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("products.xml", xmlContent);
-    
+
     // Scan for tables
     List<XmlTableScanner.TableInfo> tables = XmlTableScanner.scanTables(Sources.of(xmlFile));
-    
+
     assertEquals(1, tables.size());
-    
+
     XmlTableScanner.TableInfo table = tables.get(0);
     // Hyphens should be converted to underscores
     assertEquals("product_item", table.name);
     assertEquals(2, table.count);
   }
-  
-  @Test
-  void testInvalidXmlHandling() throws IOException {
+
+  @Test void testInvalidXmlHandling() throws IOException {
     // Create invalid XML
     String invalidXml = "<?xml version=\"1.0\"?>\n"
         + "<root>\n"
         + "  <item>Unclosed tag\n"
         + "  <other>Valid</other>\n"
         + "</root>";
-    
+
     File xmlFile = createTempXmlFile("invalid.xml", invalidXml);
-    
+
     // Should throw IOException
     try {
       XmlTableScanner.scanTables(Sources.of(xmlFile));
@@ -366,7 +359,7 @@ class XmlTableScannerTest {
       assertNotNull(e.getMessage());
     }
   }
-  
+
   /**
    * Helper method to create temporary XML file.
    */

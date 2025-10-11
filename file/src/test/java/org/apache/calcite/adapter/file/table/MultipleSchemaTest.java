@@ -17,13 +17,12 @@
 package org.apache.calcite.adapter.file.table;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -110,9 +109,9 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
 
       // Verify the error message is descriptive
       String expectedMessage = "Schema with name 'data' already exists in parent schema";
-      assertTrue(exception.getMessage().contains(expectedMessage), 
+      assertTrue(exception.getMessage().contains(expectedMessage),
           "Expected error message to contain: " + expectedMessage + ", but got: " + exception.getMessage());
-      
+
       // Verify the original schema still works
       try (Statement stmt = connection.createStatement()) {
         ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total_count FROM data.customers");
@@ -205,18 +204,18 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
         FileSchemaFactory.INSTANCE.create(rootSchema, "test", hrOperand);
       });
-      
+
       // Verify the exception message
       assertTrue(exception.getMessage().contains("Schema with name 'test' already exists"),
           "Exception should mention the duplicate schema name");
-      
+
       // Verify the original schema is still accessible and unchanged
       try (Statement stmt = connection.createStatement()) {
         ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total_count FROM test.customers");
         assertTrue(rs.next());
         int customerCount = rs.getInt("total_count");
         assertTrue(customerCount > 0, "Original schema should still be accessible");
-        
+
         // Verify we can't access HR tables (since replacement was prevented)
         try {
           stmt.executeQuery("SELECT COUNT(*) as total_count FROM test.employees");
@@ -227,7 +226,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       }
     }
   }
-  
+
   @Test public void testDuplicateSchemaDetectionWithDescriptiveError() throws Exception {
     // Test that duplicate schema detection provides clear, descriptive error messages
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
@@ -239,7 +238,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
       rootSchema.add("sales", FileSchemaFactory.INSTANCE.create(rootSchema, "sales", salesOperand));
-      
+
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
       rootSchema.add("hr", FileSchemaFactory.INSTANCE.create(rootSchema, "hr", hrOperand));
@@ -254,11 +253,11 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
 
       // Verify the error message contains expected elements
       String errorMessage = exception.getMessage();
-      assertTrue(errorMessage.contains("Schema with name 'sales' already exists"), 
+      assertTrue(errorMessage.contains("Schema with name 'sales' already exists"),
           "Error message should mention the duplicate schema name");
-      assertTrue(errorMessage.contains("unique name within the same connection"), 
+      assertTrue(errorMessage.contains("unique name within the same connection"),
           "Error message should explain uniqueness requirement");
-      assertTrue(errorMessage.contains("sales") && errorMessage.contains("hr"), 
+      assertTrue(errorMessage.contains("sales") && errorMessage.contains("hr"),
           "Error message should list existing schemas for reference");
     }
   }

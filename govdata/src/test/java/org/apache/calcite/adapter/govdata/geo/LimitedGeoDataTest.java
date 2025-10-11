@@ -27,7 +27,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -52,34 +50,55 @@ public class LimitedGeoDataTest {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  @Timeout(value = 10, unit = TimeUnit.MINUTES)
+  @Test @Timeout(value = 10, unit = TimeUnit.MINUTES)
   public void testLimitedGeoDataDownload() throws Exception {
     System.out.println("\n=== LIMITED GEOGRAPHIC DATA DOWNLOAD TEST ===");
-    
+
     // Create model file with limited geographic data configuration
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"geo\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"geo\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"dataSource\": \"geo\",\n" +
-        "        \"cacheDirectory\": \"${GEO_CACHE_DIR:/Volumes/T9/geo-test-limited}\",\n" +
-        "        \"autoDownload\": true,\n" +
-        "        \"dataYear\": 2024,\n" +
-        "        \"enabledSources\": [\"tiger\", \"census\", \"hud\"],\n" +
-        "        \"limitedMode\": true,\n" +
-        "        \"states\": [\"CA\", \"NY\", \"TX\"],\n" +
-        "        \"censusApiKey\": \"${CENSUS_API_KEY:}\",\n" +
-        "        \"hudUsername\": \"${HUD_USERNAME:}\",\n" +
-        "        \"hudPassword\": \"${HUD_PASSWORD:}\"\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"geo\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"geo\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"dataSource\": \"geo\",\n"
+  +
+        "        \"cacheDirectory\": \"${GEO_CACHE_DIR:/Volumes/T9/geo-test-limited}\",\n"
+  +
+        "        \"autoDownload\": true,\n"
+  +
+        "        \"dataYear\": 2024,\n"
+  +
+        "        \"enabledSources\": [\"tiger\", \"census\", \"hud\"],\n"
+  +
+        "        \"limitedMode\": true,\n"
+  +
+        "        \"states\": [\"CA\", \"NY\", \"TX\"],\n"
+  +
+        "        \"censusApiKey\": \"${CENSUS_API_KEY:}\",\n"
+  +
+        "        \"hudUsername\": \"${HUD_USERNAME:}\",\n"
+  +
+        "        \"hudPassword\": \"${HUD_PASSWORD:}\"\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
 
     File tempDir = Files.createTempDirectory("geo-test").toFile();
@@ -94,7 +113,7 @@ public class LimitedGeoDataTest {
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, info)) {
       System.out.println("\n=== STEP 1: Check Available Tables ===");
-      
+
       List<String> tables = new ArrayList<>();
       // Try different schema names (uppercase and lowercase)
       for (String schemaName : new String[]{"GEO", "geo", null}) {
@@ -113,26 +132,26 @@ public class LimitedGeoDataTest {
           break; // Found tables, no need to try other schema names
         }
       }
-      
+
       // Verify expected tables exist
-      assertTrue(tables.contains("tiger_states") || tables.contains("TIGER_STATES"), 
+      assertTrue(tables.contains("tiger_states") || tables.contains("TIGER_STATES"),
           "Should have tiger_states table");
-      assertTrue(tables.contains("tiger_counties") || tables.contains("TIGER_COUNTIES"), 
+      assertTrue(tables.contains("tiger_counties") || tables.contains("TIGER_COUNTIES"),
           "Should have tiger_counties table");
-      
+
       System.out.println("\n=== STEP 2: Query TIGER States Data ===");
       String statesQuery = "SELECT \"state_fips\", \"state_code\", \"state_name\", \"state_abbr\" " +
                           "FROM \"geo\".\"tiger_states\" " +
                           "WHERE \"state_abbr\" IN ('CA', 'NY', 'TX') " +
                           "ORDER BY \"state_abbr\"";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(statesQuery)) {
-        
+
         System.out.println("\nStates data:");
         System.out.println("FIPS\tCode\tName\t\tAbbr");
         System.out.println("----\t----\t----\t\t----");
-        
+
         int stateCount = 0;
         while (rs.next()) {
           stateCount++;
@@ -142,25 +161,25 @@ public class LimitedGeoDataTest {
               rs.getString("state_name"),
               rs.getString("state_abbr"));
         }
-        
+
         assertTrue(stateCount > 0, "Should have retrieved state data");
         assertTrue(stateCount <= 3, "Should have at most 3 states");
       }
-      
+
       System.out.println("\n=== STEP 3: Query TIGER Counties Data ===");
       String countiesQuery = "SELECT \"state_fips\", \"county_fips\", \"county_name\" " +
                             "FROM \"geo\".\"tiger_counties\" " +
                             "WHERE \"state_fips\" IN ('06', '36', '48') " + // CA, NY, TX FIPS codes
                             "ORDER BY \"state_fips\", \"county_name\" " +
                             "LIMIT 10";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(countiesQuery)) {
-        
+
         System.out.println("\nCounties data (first 10):");
         System.out.println("State\tCounty\tName");
         System.out.println("-----\t------\t----");
-        
+
         int countyCount = 0;
         while (rs.next()) {
           countyCount++;
@@ -169,14 +188,14 @@ public class LimitedGeoDataTest {
               rs.getString("county_fips"),
               rs.getString("county_name"));
         }
-        
+
         assertTrue(countyCount > 0, "Should have retrieved county data");
       }
-      
+
       // Check if Census tables exist (may require API key)
-      boolean hasCensusData = tables.contains("census_population") || 
+      boolean hasCensusData = tables.contains("census_population") ||
                               tables.contains("CENSUS_POPULATION");
-      
+
       if (hasCensusData) {
         System.out.println("\n=== STEP 4: Query Census Population Data ===");
         String popQuery = "SELECT \"state_code\", \"county_code\", \"total_population\" " +
@@ -184,14 +203,14 @@ public class LimitedGeoDataTest {
                          "WHERE \"state_code\" IN ('06', '36', '48') " +
                          "ORDER BY \"total_population\" DESC " +
                          "LIMIT 5";
-        
+
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(popQuery)) {
-          
+
           System.out.println("\nTop 5 counties by population:");
           System.out.println("State\tCounty\tPopulation");
           System.out.println("-----\t------\t----------");
-          
+
           while (rs.next()) {
             System.out.printf("%s\t%s\t%,d\n",
                 rs.getString("state_code"),
@@ -203,11 +222,11 @@ public class LimitedGeoDataTest {
         System.out.println("\n=== STEP 4: Census Data Not Available ===");
         System.out.println("Census data requires CENSUS_API_KEY environment variable");
       }
-      
+
       // Check if HUD tables exist (may require credentials)
-      boolean hasHudData = tables.contains("hud_zip_county") || 
+      boolean hasHudData = tables.contains("hud_zip_county") ||
                            tables.contains("HUD_ZIP_COUNTY");
-      
+
       if (hasHudData) {
         System.out.println("\n=== STEP 5: Query HUD Crosswalk Data ===");
         String hudQuery = "SELECT \"zip\", \"county_code\", \"res_ratio\" " +
@@ -215,14 +234,14 @@ public class LimitedGeoDataTest {
                          "WHERE \"zip\" LIKE '900%' " + // LA area ZIPs
                          "ORDER BY \"zip\" " +
                          "LIMIT 5";
-        
+
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(hudQuery)) {
-          
+
           System.out.println("\nHUD ZIP to County mappings:");
           System.out.println("ZIP\tCounty\tRatio");
           System.out.println("-----\t------\t-----");
-          
+
           while (rs.next()) {
             System.out.printf("%s\t%s\t%.2f\n",
                 rs.getString("zip"),
@@ -234,15 +253,15 @@ public class LimitedGeoDataTest {
         System.out.println("\n=== STEP 5: HUD Data Not Available ===");
         System.out.println("HUD data requires HUD_USERNAME and HUD_PASSWORD environment variables");
       }
-      
+
       System.out.println("\n=== STEP 6: Verify Parquet Files Created ===");
-      
+
       // Check cache directory for parquet files
       String cacheDir = System.getenv("GEO_CACHE_DIR");
       if (cacheDir == null) {
         cacheDir = "/Volumes/T9/geo-test-limited";
       }
-      
+
       File cacheRoot = new File(cacheDir);
       if (cacheRoot.exists()) {
         // Check for boundary data
@@ -256,7 +275,7 @@ public class LimitedGeoDataTest {
             }
           }
         }
-        
+
         // Check for demographic data
         File demoDir = new File(cacheRoot, "source=geo/type=demographic");
         if (demoDir.exists()) {
@@ -265,7 +284,7 @@ public class LimitedGeoDataTest {
             System.out.println("Found " + demoFiles.length + " demographic parquet files");
           }
         }
-        
+
         // Check for crosswalk data
         File crosswalkDir = new File(cacheRoot, "source=geo/type=crosswalk");
         if (crosswalkDir.exists()) {
@@ -275,43 +294,56 @@ public class LimitedGeoDataTest {
           }
         }
       }
-      
+
       System.out.println("\n=== TEST COMPLETED SUCCESSFULLY ===");
     }
   }
-  
-  @Test
-  @Timeout(value = 5, unit = TimeUnit.MINUTES)
+
+  @Test @Timeout(value = 5, unit = TimeUnit.MINUTES)
   public void testGeoSchemaWithConstraints() throws Exception {
     System.out.println("\n=== GEO SCHEMA CONSTRAINT TEST ===");
-    
+
     // Create model with just basic configuration
-    String modelJson = "{\n" +
-        "  \"version\": \"1.0\",\n" +
-        "  \"defaultSchema\": \"geo\",\n" +
-        "  \"schemas\": [\n" +
-        "    {\n" +
-        "      \"name\": \"geo\",\n" +
-        "      \"type\": \"custom\",\n" +
-        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n" +
-        "      \"operand\": {\n" +
-        "        \"dataSource\": \"geo\",\n" +
-        "        \"autoDownload\": false\n" +
-        "      }\n" +
-        "    }\n" +
-        "  ]\n" +
+    String modelJson = "{\n"
+  +
+        "  \"version\": \"1.0\",\n"
+  +
+        "  \"defaultSchema\": \"geo\",\n"
+  +
+        "  \"schemas\": [\n"
+  +
+        "    {\n"
+  +
+        "      \"name\": \"geo\",\n"
+  +
+        "      \"type\": \"custom\",\n"
+  +
+        "      \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+  +
+        "      \"operand\": {\n"
+  +
+        "        \"dataSource\": \"geo\",\n"
+  +
+        "        \"autoDownload\": false\n"
+  +
+        "      }\n"
+  +
+        "    }\n"
+  +
+        "  ]\n"
+  +
         "}";
-    
+
     File tempDir = Files.createTempDirectory("geo-constraint-test").toFile();
     File modelFile = new File(tempDir, "geo-constraint-model.json");
     Files.write(modelFile.toPath(), modelJson.getBytes());
-    
+
     Properties info = new Properties();
     info.setProperty("lex", "ORACLE");
     info.setProperty("unquotedCasing", "TO_LOWER");
-    
+
     String jdbcUrl = "jdbc:calcite:model=" + modelFile.getAbsolutePath();
-    
+
     try (Connection conn = DriverManager.getConnection(jdbcUrl, info)) {
       // Check for primary keys on tiger_states
       try (ResultSet pks = conn.getMetaData().getPrimaryKeys(null, "GEO", "TIGER_STATES")) {
@@ -321,7 +353,7 @@ public class LimitedGeoDataTest {
         }
         System.out.println("Primary key columns on tiger_states: " + pkColumns);
       }
-      
+
       // Check for foreign keys from tiger_counties to tiger_states
       try (ResultSet fks = conn.getMetaData().getImportedKeys(null, "GEO", "TIGER_COUNTIES")) {
         System.out.println("\nForeign keys on tiger_counties:");
@@ -332,7 +364,7 @@ public class LimitedGeoDataTest {
               fks.getString("PKCOLUMN_NAME"));
         }
       }
-      
+
       System.out.println("\n=== CONSTRAINT TEST COMPLETED ===");
     }
   }

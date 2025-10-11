@@ -346,13 +346,13 @@ public class ExecutionEngineConfig {
     // Multiple constructors available
     public ExecutionEngineConfig(String executionEngine, int batchSize) { ... }
     public ExecutionEngineConfig(String executionEngine, int batchSize, String storagePath) { ... }
-    public ExecutionEngineConfig(String executionEngine, int batchSize, 
+    public ExecutionEngineConfig(String executionEngine, int batchSize,
                                 long memoryThreshold, String storagePath) { ... }
 
     // Spillover and memory management are built-in
     public long getMemoryThreshold() { return memoryThreshold; }
     public boolean useCustomStoragePath() { return useCustomStoragePath; }
-    
+
     // Getters...
 }
 ```
@@ -953,7 +953,7 @@ public class AnalyticsJdbcDriver extends FileJdbcDriver {
         new AnalyticsJdbcDriver().register();
     }
 
-    @Override 
+    @Override
     public boolean acceptsURL(String url) {
         return url.startsWith("jdbc:analytics:");
     }
@@ -972,8 +972,8 @@ public class S3JdbcDriver extends FileJdbcDriver {
     public boolean acceptsURL(String url) {
         return url.startsWith("jdbc:s3:");
     }
-    
-    @Override 
+
+    @Override
     public Connection connect(String url, Properties info) throws SQLException {
         // jdbc:s3://bucket/path -> jdbc:calcite:schema=file;storageType=s3;...
         String s3Path = url.substring("jdbc:s3:".length());

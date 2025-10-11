@@ -287,7 +287,7 @@ export BEA_API_KEY=your_bea_api_key      # Bureau of Economic Analysis
 ### Economic Overview
 ```sql
 -- Current economic indicators
-SELECT 
+SELECT
     'GDP' as indicator,
     value as current_value,
     percent_change_year as yoy_change
@@ -295,7 +295,7 @@ FROM gdp_components
 WHERE component_name = 'Gross domestic product'
   AND year = YEAR(CURRENT_DATE) - 1
 UNION ALL
-SELECT 
+SELECT
     'Unemployment',
     value,
     percent_change_year
@@ -303,12 +303,12 @@ FROM employment_statistics
 WHERE series_id = 'UNRATE'
   AND date = (SELECT MAX(date) FROM employment_statistics WHERE series_id = 'UNRATE')
 UNION ALL
-SELECT 
+SELECT
     'Inflation (CPI)',
     index_value,
     percent_change_year
 FROM inflation_metrics
-WHERE index_type = 'CPI-U' 
+WHERE index_type = 'CPI-U'
   AND item_code = 'All Items'
   AND date = (SELECT MAX(date) FROM inflation_metrics);
 ```
@@ -316,7 +316,7 @@ WHERE index_type = 'CPI-U'
 ### Regional Analysis
 ```sql
 -- State unemployment rates with context
-SELECT 
+SELECT
     r.state_code,
     s.state_name,
     r.unemployment_rate,
@@ -333,7 +333,7 @@ ORDER BY r.unemployment_rate;
 ### Time Series Analysis
 ```sql
 -- Recession indicators over time
-SELECT 
+SELECT
     f1.date,
     f1.value as unemployment_rate,
     f2.value as gdp_growth,

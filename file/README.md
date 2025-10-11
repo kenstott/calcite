@@ -6,7 +6,7 @@ The File Adapter is a high-performance data adapter that enables Apache Calcite 
 
 ### Supported File Formats
 - **CSV/TSV** with automatic type inference
-- **JSON** with multi-table extraction and JSONPath support  
+- **JSON** with multi-table extraction and JSONPath support
 - **YAML** structured data files
 - **Parquet** columnar storage format
 - **Apache Arrow** in-memory columnar format
@@ -57,7 +57,7 @@ The File Adapter + DuckDB combination creates a **declarative data pipeline** th
 ```python
 # Multiple steps, explicit data loading, memory management
 df1 = pd.read_csv('sales.csv')
-df2 = pd.read_json('customers.json') 
+df2 = pd.read_json('customers.json')
 df3 = pd.read_parquet('products.parquet')
 merged = df1.merge(df2).merge(df3)
 result = merged.groupby('region').agg({'amount': 'sum'}).sort_values('amount', ascending=False)
@@ -68,7 +68,7 @@ result = merged.groupby('region').agg({'amount': 'sum'}).sort_values('amount', a
 -- Single query, automatic optimization, no memory concerns
 SELECT region, SUM(amount) as total_sales
 FROM sales s
-JOIN customers c ON s.customer_id = c.id  
+JOIN customers c ON s.customer_id = c.id
 JOIN products p ON s.product_id = p.id
 GROUP BY region
 ORDER BY total_sales DESC;
@@ -175,14 +175,14 @@ SELECT COUNT(*) FROM files.sales_data;
 ```sql
 -- Files in /path/to/data/:
 --   sales_2024_q1.csv
---   customer_orders.json  
+--   customer_orders.json
 --   financial_report.xlsx (with sheets: Summary, Details)
 --   sales_data.parquet
 --   customer_info.csv
 
 -- Query CSV file (sales_2024_q1.csv → table: sales_2024_q1)
-SELECT customer_id, order_date, total_amount 
-FROM files.sales_2024_q1 
+SELECT customer_id, order_date, total_amount
+FROM files.sales_2024_q1
 WHERE order_date >= DATE '2024-01-01';
 
 -- Query JSON with nested data (customer_orders.json → table: customer_orders)
@@ -267,7 +267,7 @@ The File Adapter supports multiple storage systems (Local, S3, HTTP/HTTPS, Share
 Or use URL-based auto-detection:
 - `s3://bucket/file.parquet` → S3 Storage
 - `hdfs://namenode:9000/data/file.parquet` → HDFS Storage
-- `https://api.com/data.json` → HTTP Storage  
+- `https://api.com/data.json` → HTTP Storage
 - `/local/path/file.csv` → Local Storage
 
 **HDFS Configuration Example:**
@@ -353,22 +353,22 @@ JOIN warehouse.purchases w ON h.user_id = w.user_id
 WHERE h.last_activity > CURRENT_TIMESTAMP - INTERVAL '1' HOUR;
 
 -- Query combining multiple engines including HDFS data lake
-SELECT 
+SELECT
   a.product_category,
   COUNT(DISTINCT h.user_id) as active_users,
   SUM(w.revenue) as total_revenue,
   AVG(dl.customer_lifetime_value) as avg_clv
 FROM analytics.product_metrics a
-JOIN hot_data.user_activity h ON a.product_id = h.product_id  
+JOIN hot_data.user_activity h ON a.product_id = h.product_id
 JOIN warehouse.sales w ON a.product_id = w.product_id
 JOIN data_lake.customer_profiles dl ON h.user_id = dl.customer_id
 GROUP BY a.product_category;
 
 -- Query enterprise HDFS data directly with DuckDB analytics
-SELECT customer_segment, 
+SELECT customer_segment,
        MEDIAN(purchase_amount) as median_purchase,
        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY purchase_amount) as p95_purchase
-FROM data_lake.customer_transactions 
+FROM data_lake.customer_transactions
 WHERE transaction_date >= CURRENT_DATE - INTERVAL '30' DAY
 GROUP BY customer_segment;
 ```
@@ -433,7 +433,7 @@ Extract multiple tables from various file formats:
       "path": "$.customers[*]"
     },
     {
-      "name": "orders", 
+      "name": "orders",
       "path": "$.orders[*]"
     }
   ]
@@ -496,7 +496,7 @@ Tables can use glob patterns (`*`, `?`, `[]`) to combine multiple files into a s
       "url": "s3://bucket/path/2024-*.csv"  // S3 glob pattern
     },
     {
-      "name": "hdfs_logs", 
+      "name": "hdfs_logs",
       "url": "hdfs://namenode:9000/logs/**/error-*.log"  // HDFS recursive glob pattern
     }
   ]
@@ -680,7 +680,7 @@ SELECT * FROM realtime.live_events WHERE timestamp > NOW() - INTERVAL '1' HOUR;
 SELECT * FROM realtime.active_sessions;
 
 -- Query from analytics schema (DuckDB engine, complex SQL)
-SELECT customer_id, 
+SELECT customer_id,
        SUM(amount) OVER (PARTITION BY region ORDER BY date) as running_total
 FROM analytics.sales_history;
 

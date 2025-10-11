@@ -144,14 +144,14 @@ economicFK.put("targetColumns", Arrays.asList("filing_date")); // Quarterly SEC 
 ### Required Tests
 
 1. **Format Compatibility Tests**: Verify source/target column formats match
-2. **Data Validation Tests**: Check actual data conforms to expected formats  
+2. **Data Validation Tests**: Check actual data conforms to expected formats
 3. **Constraint Violation Tests**: Ensure FKs fail appropriately for invalid data
 4. **Cross-Schema Integration Tests**: Validate multi-schema FK relationships
 
 ### Test Categories
 
 - `@Tag("unit")`: Format validation and constraint definition tests
-- `@Tag("integration")`: Multi-schema FK relationship tests  
+- `@Tag("integration")`: Multi-schema FK relationship tests
 - `@Tag("data-validation")`: Tests with actual government data
 
 ## Future Enhancements
@@ -174,7 +174,7 @@ economicFK.put("targetColumns", Arrays.asList("filing_date")); // Quarterly SEC 
 Foreign key constraints in govdata schemas must prioritize **data format compatibility** over relationship convenience. When formats don't match, use:
 
 1. **Lookup tables** for systematic conversions (state codes ↔ FIPS)
-2. **Application-level joins** for complex relationships  
+2. **Application-level joins** for complex relationships
 3. **Documented partial FKs** for subset relationships
 4. **No FK constraint** when relationship is unclear or data-dependent
 

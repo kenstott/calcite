@@ -18,7 +18,7 @@ Create a new `ip` (intellectual property) schema within the govdata adapter to p
    - Corporate acquisition tracking through IP
    - Searchable database with CSV export
 
-3. **USPTO Trademark Database** (Free, Government)  
+3. **USPTO Trademark Database** (Free, Government)
    - Federal trademark registrations and applications
    - Trademark status, classifications, renewal data
    - TESS (Trademark Electronic Search System) API
@@ -180,7 +180,7 @@ Create a new `ip` (intellectual property) schema within the govdata adapter to p
 ### Cross-Schema Analysis
 ```sql
 -- NIH research funding vs patent output by institution
-SELECT 
+SELECT
     sci.nih_research_grants.institution,
     COUNT(DISTINCT sci.nih_research_grants.grant_id) as nih_grants,
     SUM(sci.nih_research_grants.award_amount) as total_funding,
@@ -190,7 +190,7 @@ FROM sci.nih_research_grants
 LEFT JOIN ip.patent_grants ON sci.nih_research_grants.principal_investigator = ANY(ip.patent_grants.inventors)
 LEFT JOIN (
     SELECT citing_patent, COUNT(*) as citation_count
-    FROM ip.patent_citations 
+    FROM ip.patent_citations
     GROUP BY citing_patent
 ) ip.patent_citations ON ip.patent_grants.patent_number = ip.patent_citations.citing_patent
 WHERE sci.nih_research_grants.start_date >= '2020-01-01'
@@ -198,7 +198,7 @@ GROUP BY sci.nih_research_grants.institution
 ORDER BY patents_generated DESC;
 
 -- Congressional district innovation activity vs economic outcomes
-SELECT 
+SELECT
     pol.congress_members.full_name,
     pol.congress_members.state,
     pol.congress_members.district,
@@ -217,7 +217,7 @@ GROUP BY pol.full_name, pol.state, pol.district, geo.median_income
 ORDER BY district_patents DESC;
 
 -- Pharmaceutical patent landscape vs FDA approvals
-SELECT 
+SELECT
     ip.patent_grants.assignee_name as pharma_company,
     COUNT(ip.patent_grants.patent_number) as pharma_patents,
     COUNT(sci.fda_drug_approvals.application_number) as fda_approvals,
@@ -233,7 +233,7 @@ GROUP BY ip.patent_grants.assignee_name
 ORDER BY pharma_patents DESC;
 
 -- University technology transfer and startup creation
-SELECT 
+SELECT
     ip.patent_grants.assignee_name as university,
     COUNT(ip.patent_grants.patent_number) as university_patents,
     COUNT(ip.patent_assignments.assignment_id) as tech_transfers,
@@ -243,7 +243,7 @@ FROM ip.patent_grants
 JOIN ip.patent_assignments ON ip.patent_grants.patent_number = ip.patent_assignments.patent_number
 LEFT JOIN (
     SELECT assignee_name as company_name, MIN(filing_date) as founding_date
-    FROM ip.patent_grants 
+    FROM ip.patent_grants
     WHERE assignee_type = 'startup'
     GROUP BY assignee_name
 ) startup ON ip.patent_assignments.assignee LIKE '%' || startup.company_name || '%'

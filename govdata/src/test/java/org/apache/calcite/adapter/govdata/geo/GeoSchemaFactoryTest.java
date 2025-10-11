@@ -23,8 +23,8 @@ import org.apache.calcite.schema.SchemaPlus;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -32,15 +32,14 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for the Geographic data adapter.
@@ -72,14 +71,12 @@ public class GeoSchemaFactoryTest {
     System.clearProperty("GOVDATA_PARQUET_DIR");
   }
 
-  @Test
-  public void testGeoSchemaFactoryCreation() {
+  @Test public void testGeoSchemaFactoryCreation() {
     GeoSchemaFactory factory = new GeoSchemaFactory();
     assertNotNull(factory, "GeoSchemaFactory should be created");
   }
 
-  @Test
-  public void testGeoSchemaCreation() throws Exception {
+  @Test public void testGeoSchemaCreation() throws Exception {
     // Create schema using the GovDataSchemaFactory
     org.apache.calcite.adapter.govdata.GovDataSchemaFactory factory = new org.apache.calcite.adapter.govdata.GovDataSchemaFactory();
     operand.put("dataSource", "geo");
@@ -93,8 +90,7 @@ public class GeoSchemaFactoryTest {
     assertTrue(geoSchema instanceof GeoSchema, "Schema should be instance of GeoSchema");
   }
 
-  @Test
-  public void testGovDataFactoryRoutesToGeo() throws Exception {
+  @Test public void testGovDataFactoryRoutesToGeo() throws Exception {
     // Test that GovDataSchemaFactory correctly routes to GeoSchemaFactory
     GovDataSchemaFactory factory = new GovDataSchemaFactory();
 
@@ -107,16 +103,14 @@ public class GeoSchemaFactoryTest {
     assertTrue(schema instanceof GeoSchema, "Should route to GeoSchema");
   }
 
-  @Test
-  public void testCensusApiClientCreation() {
+  @Test public void testCensusApiClientCreation() {
     File cacheDir = new File(tempDir, "census-cache");
     CensusApiClient client = new CensusApiClient("test-api-key", cacheDir);
     assertNotNull(client, "Census API client should be created");
     assertTrue(cacheDir.exists(), "Cache directory should be created");
   }
 
-  @Test
-  public void testTigerDataDownloaderCreation() {
+  @Test public void testTigerDataDownloaderCreation() {
     File cacheDir = new File(tempDir, "tiger-data");
     TigerDataDownloader downloader = new TigerDataDownloader(cacheDir, 2024, false);
     assertNotNull(downloader, "TIGER data downloader should be created");
@@ -127,16 +121,14 @@ public class GeoSchemaFactoryTest {
         "States shapefile should not be available without download");
   }
 
-  @Test
-  public void testHudCrosswalkFetcherCreation() {
+  @Test public void testHudCrosswalkFetcherCreation() {
     File cacheDir = new File(tempDir, "hud-crosswalk");
     HudCrosswalkFetcher fetcher = new HudCrosswalkFetcher("test-user", "test-pass", cacheDir);
     assertNotNull(fetcher, "HUD crosswalk fetcher should be created");
     assertTrue(cacheDir.exists(), "Cache directory should be created");
   }
 
-  @Test
-  public void testGeocodeResultStructure() {
+  @Test public void testGeocodeResultStructure() {
     CensusApiClient.GeocodeResult result = new CensusApiClient.GeocodeResult();
     result.latitude = 38.8977;
     result.longitude = -77.0365;
@@ -149,8 +141,7 @@ public class GeoSchemaFactoryTest {
     assertEquals(expected, result.toString(), "GeocodeResult toString should format correctly");
   }
 
-  @Test
-  public void testCrosswalkRecordStructure() {
+  @Test public void testCrosswalkRecordStructure() {
     HudCrosswalkFetcher.CrosswalkRecord record = new HudCrosswalkFetcher.CrosswalkRecord();
     record.zip = "20001";
     record.geoCode = "11001";
@@ -163,8 +154,7 @@ public class GeoSchemaFactoryTest {
     assertEquals(expected, record.toString(), "CrosswalkRecord toString should format correctly");
   }
 
-  @Test
-  public void testSchemaWithModelJson() throws Exception {
+  @Test public void testSchemaWithModelJson() throws Exception {
     // Create a model JSON string
     String modelJson = "{"
         + "\"version\": \"1.0\","

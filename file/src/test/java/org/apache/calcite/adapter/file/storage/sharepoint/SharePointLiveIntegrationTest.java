@@ -31,7 +31,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -357,9 +356,8 @@ public class SharePointLiveIntegrationTest {
               fullPath = fullPath.substring(1);
             }
             // Create a new FileEntry with corrected path
-            StorageProvider.FileEntry correctedEntry = new StorageProvider.FileEntry(
-                fullPath, entry.getName(), entry.isDirectory(), entry.getSize(), entry.getLastModified()
-            );
+            StorageProvider.FileEntry correctedEntry =
+                new StorageProvider.FileEntry(fullPath, entry.getName(), entry.isDirectory(), entry.getSize(), entry.getLastModified());
             allCsvFiles.add(correctedEntry);
             System.out.println("Found CSV in " + path + ": " + entry.getName() + " (corrected path: " + fullPath + ")");
           }
@@ -373,9 +371,8 @@ public class SharePointLiveIntegrationTest {
                   if (docFullPath.startsWith("/")) {
                     docFullPath = docFullPath.substring(1);
                   }
-                  StorageProvider.FileEntry correctedDocEntry = new StorageProvider.FileEntry(
-                      docFullPath, docEntry.getName(), docEntry.isDirectory(), docEntry.getSize(), docEntry.getLastModified()
-                  );
+                  StorageProvider.FileEntry correctedDocEntry =
+                      new StorageProvider.FileEntry(docFullPath, docEntry.getName(), docEntry.isDirectory(), docEntry.getSize(), docEntry.getLastModified());
                   allCsvFiles.add(correctedDocEntry);
                   System.out.println("Found CSV in " + entry.getPath() + ": " + docEntry.getName() + " (corrected path: " + docFullPath + ")");
                 }
@@ -447,7 +444,7 @@ public class SharePointLiveIntegrationTest {
       storageConfig.put("siteUrl", siteUrl);
       storageConfig.put("tenantId", tenantId);
       storageConfig.put("clientId", clientId);
-      
+
       // Check if certificate is configured
       Properties localProps = loadLocalProperties();
       String certPassword = localProps.getProperty("SHAREPOINT_CERT_PASSWORD");
@@ -471,7 +468,7 @@ public class SharePointLiveIntegrationTest {
         storageConfig.put("clientSecret", clientSecret);
         storageConfig.put("useGraphApi", true);
       }
-      
+
       operand.put("storageConfig", storageConfig);
 
       FileSchemaFactory factory = FileSchemaFactory.INSTANCE;
@@ -699,23 +696,23 @@ public class SharePointLiveIntegrationTest {
     String legacyClientId = localProps.getProperty("SHAREPOINT_LEGACY_CLIENT_ID");
     String legacyClientSecret = localProps.getProperty("SHAREPOINT_LEGACY_CLIENT_SECRET");
     String certPassword = localProps.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     SharePointRestStorageProvider provider;
     if (legacyClientId != null && legacyClientSecret != null) {
       System.out.println("Using legacy SharePoint authentication");
-      SharePointLegacyTokenManager legacyTokenManager = 
+      SharePointLegacyTokenManager legacyTokenManager =
           new SharePointLegacyTokenManager(legacyClientId, legacyClientSecret, siteUrl);
       provider = new SharePointRestStorageProvider(legacyTokenManager);
     } else if (certPassword != null) {
       // Use certificate authentication for SharePoint REST API
       System.out.println("Using certificate-based SharePoint REST authentication");
       String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
-      SharePointCertificateTokenManager certTokenManager = 
+      SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       provider = new SharePointRestStorageProvider(certTokenManager);
     } else {
       System.out.println("Using modern SharePoint REST authentication with client secret");
-      SharePointRestTokenManager restTokenManager = 
+      SharePointRestTokenManager restTokenManager =
           new SharePointRestTokenManager(tenantId, clientId, clientSecret, siteUrl);
       provider = new SharePointRestStorageProvider(restTokenManager);
     }
@@ -752,17 +749,17 @@ public class SharePointLiveIntegrationTest {
     // Test downloading and reading a file from SharePoint using REST API
     Properties localProps = loadLocalProperties();
     String certPassword = localProps.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     SharePointRestStorageProvider provider;
     if (certPassword != null) {
       // Use certificate authentication
       System.out.println("Using certificate-based SharePoint REST authentication for file download");
       String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
-      SharePointCertificateTokenManager certTokenManager = 
+      SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       provider = new SharePointRestStorageProvider(certTokenManager);
     } else {
-      SharePointRestTokenManager restTokenManager = 
+      SharePointRestTokenManager restTokenManager =
           new SharePointRestTokenManager(tenantId, clientId, clientSecret, siteUrl);
       provider = new SharePointRestStorageProvider(restTokenManager);
     }
@@ -808,23 +805,23 @@ public class SharePointLiveIntegrationTest {
   @Test void testCompareGraphApiVsRestApi() throws Exception {
     // Compare results between Graph API and REST API
     System.out.println("=== Comparing Microsoft Graph API vs SharePoint REST API ===");
-    
+
     // Create both providers
     MicrosoftGraphStorageProvider graphProvider = new MicrosoftGraphStorageProvider(tokenManager);
-    
+
     // Use certificate authentication for REST API if available
     Properties localProps = loadLocalProperties();
     String certPassword = localProps.getProperty("SHAREPOINT_CERT_PASSWORD");
-    
+
     SharePointRestStorageProvider restProvider;
     if (certPassword != null) {
       System.out.println("Using certificate-based authentication for REST API");
       String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
-      SharePointCertificateTokenManager certTokenManager = 
+      SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       restProvider = new SharePointRestStorageProvider(certTokenManager);
     } else {
-      SharePointRestTokenManager restTokenManager = 
+      SharePointRestTokenManager restTokenManager =
           new SharePointRestTokenManager(tenantId, clientId, clientSecret, siteUrl);
       restProvider = new SharePointRestStorageProvider(restTokenManager);
     }
@@ -837,7 +834,7 @@ public class SharePointLiveIntegrationTest {
     System.out.println("REST API found " + restEntries.size() + " items");
 
     // Compare file counts
-    assertEquals(graphEntries.size(), restEntries.size(), 
+    assertEquals(graphEntries.size(), restEntries.size(),
         "Both APIs should return the same number of files");
 
     // Compare file names
@@ -849,10 +846,10 @@ public class SharePointLiveIntegrationTest {
     for (StorageProvider.FileEntry restEntry : restEntries) {
       StorageProvider.FileEntry graphEntry = graphMap.get(restEntry.getName());
       assertNotNull(graphEntry, "File " + restEntry.getName() + " should exist in both APIs");
-      assertEquals(graphEntry.isDirectory(), restEntry.isDirectory(), 
+      assertEquals(graphEntry.isDirectory(), restEntry.isDirectory(),
           "File type should match for " + restEntry.getName());
       if (!restEntry.isDirectory()) {
-        assertEquals(graphEntry.getSize(), restEntry.getSize(), 
+        assertEquals(graphEntry.getSize(), restEntry.getSize(),
             "File size should match for " + restEntry.getName());
       }
     }

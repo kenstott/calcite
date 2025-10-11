@@ -30,7 +30,7 @@ Create a new `pol` (political) schema within the govdata adapter to provide SQL 
 2. **`congress_terms`** - Individual terms served
    - Columns: bioguide_id, chamber, state, district, party, start_date, end_date, congress_number
 
-3. **`committees`** - Congressional committees and subcommittees  
+3. **`committees`** - Congressional committees and subcommittees
    - Columns: committee_id, name, chamber, parent_committee_id, jurisdiction
 
 4. **`committee_memberships`** - Member committee assignments
@@ -53,13 +53,13 @@ Create a new `pol` (political) schema within the govdata adapter to provide SQL 
 
 ### Phase 1: Core Legislative Data
 1. Create POL schema factory class extending existing pattern
-2. Implement data providers for GitHub congress-legislators repository  
+2. Implement data providers for GitHub congress-legislators repository
 3. Create Parquet conversion pipeline for Congress member data
 4. Implement core tables: congress_members, congress_terms, committees
 5. Add constraint metadata for relationships between tables
 6. Create model files and integration tests
 
-### Phase 2: Extended Legislative Data  
+### Phase 2: Extended Legislative Data
 1. Add committee_memberships and leadership_positions tables
 2. Implement district_offices table for constituent services
 3. Add Congress.gov API integration for real-time updates
@@ -86,7 +86,7 @@ Create a new `pol` (political) schema within the govdata adapter to provide SQL 
 ### Cross-Schema Analysis
 ```sql
 -- Congressional representatives by district economic indicators
-SELECT 
+SELECT
     pol.congress_members.full_name,
     pol.congress_members.state,
     pol.congress_members.district,
@@ -99,7 +99,7 @@ WHERE pol.congress_members.chamber = 'house'
   AND pol.congress_members.current = true;
 
 -- Committee leadership and tenure analysis
-SELECT 
+SELECT
     cm.full_name,
     c.name as committee_name,
     cm_mb.role,

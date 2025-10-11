@@ -198,7 +198,7 @@ export HDFS_USER=hadoop
 
 This enables cross-domain queries:
 ```sql
-SELECT 
+SELECT
     s.state_name,
     COUNT(DISTINCT f.cik) as companies,
     AVG(e.unemployment_rate) as unemployment

@@ -16,13 +16,12 @@
  */
 package org.apache.calcite.adapter.file.util;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
-import java.util.Arrays;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,7 +39,7 @@ public class SmartCasingTest {
       SmartCasing.clearAllUserMappings();
     }
   }
-  
+
   @AfterEach
   void tearDown() {
     // Clear all user mappings after each test as well for extra safety
@@ -101,11 +100,11 @@ public class SmartCasingTest {
 
   @Test void testAdditionalTerms() {
     // Add custom term mappings
-    SmartCasing.addTermMappings(java.util.Map.of(
+    SmartCasing.addTermMappings(
+        java.util.Map.of(
         "MyCustomAPI", "mycustomapi",
-        "SpecialTerm", "specialterm"
-    ));
-    
+        "SpecialTerm", "specialterm"));
+
     // Test that custom terms are handled as single units
     assertEquals("mycustomapi_client", SmartCasing.toSnakeCase("MyCustomAPIClient"));
     assertEquals("specialterm_handler", SmartCasing.toSnakeCase("SpecialTermHandler"));
@@ -113,11 +112,11 @@ public class SmartCasingTest {
 
   @Test void testUnchangedTerms() {
     // Add terms that should be preserved exactly
-    SmartCasing.overrideTermMappings(java.util.Map.of(
+    SmartCasing.overrideTermMappings(
+        java.util.Map.of(
         "id", "id",
-        "UUID", "UUID"
-    ));
-    
+        "UUID", "UUID"));
+
     // Test that unchanged terms are preserved
     assertEquals("user_id", SmartCasing.toSnakeCase("userID"));
     assertEquals("UUID", SmartCasing.toSnakeCase("UUID"));
@@ -142,10 +141,10 @@ public class SmartCasingTest {
   @Test void testEdgeCases() {
     // Single character
     assertEquals("a", SmartCasing.toSnakeCase("a"));
-    
+
     // Multiple consecutive uppercase
     assertEquals("htmlcssjs", SmartCasing.toSnakeCase("HTMLCSSJS"));
-    
+
     // Mixed with underscores already present
     assertEquals("user_api_key", SmartCasing.toSnakeCase("user_APIKey"));
   }

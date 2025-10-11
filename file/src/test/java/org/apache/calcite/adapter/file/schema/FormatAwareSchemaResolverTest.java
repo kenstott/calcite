@@ -19,12 +19,10 @@ package org.apache.calcite.adapter.file.schema;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
-import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Tag;import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -33,7 +31,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Tag;
 /**
  * Tests for FormatAwareSchemaResolver.
  */
@@ -51,25 +48,23 @@ import org.junit.jupiter.api.Tag;
     resolver = new FormatAwareSchemaResolver(typeFactory);
   }
 
-  @Test
-  public void testSchemaStrategyDefaults() {
+  @Test public void testSchemaStrategyDefaults() {
     SchemaStrategy defaultStrategy = SchemaStrategy.PARQUET_DEFAULT;
-    
+
     assertEquals(SchemaStrategy.ParquetStrategy.LATEST_SCHEMA_WINS, defaultStrategy.getParquetStrategy());
     assertEquals(SchemaStrategy.CsvStrategy.RICHEST_FILE, defaultStrategy.getCsvStrategy());
     assertEquals(SchemaStrategy.JsonStrategy.LATEST_FILE, defaultStrategy.getJsonStrategy());
   }
 
-  @Test
-  public void testCsvSchemaResolution() throws IOException {
+  @Test public void testCsvSchemaResolution() throws IOException {
     // Create CSV files with different column counts
     File csv1 = createCsvFile("test1.csv", "id,name");
     File csv2 = createCsvFile("test2.csv", "id,name,email,phone");  // Richest file
     File csv3 = createCsvFile("test3.csv", "id,name,email");
-    
+
     List<File> files = Arrays.asList(csv1, csv2, csv3);
     RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    
+
     // Should use richest file (csv2 with 4 columns)
     assertEquals(4, schema.getFieldCount());
     assertTrue(schema.getFieldNames().contains("id"));
@@ -78,18 +73,17 @@ import org.junit.jupiter.api.Tag;
     assertTrue(schema.getFieldNames().contains("phone"));
   }
 
-  @Test
-  public void testJsonSchemaResolution() throws IOException {
+  @Test public void testJsonSchemaResolution() throws IOException {
     // Create JSON files with different structures
     File json1 = createJsonFile("old.json", "{\"id\": 1, \"name\": \"old\"}");
-    
+
     // Make json2 newer by setting last modified time
     File json2 = createJsonFile("new.json", "{\"id\": 1, \"name\": \"new\", \"email\": \"test@example.com\"}");
     json2.setLastModified(json1.lastModified() + 1000); // 1 second newer
-    
+
     List<File> files = Arrays.asList(json1, json2);
     RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    
+
     // Should use latest file (json2 with email field)
     assertEquals(3, schema.getFieldCount());
     assertTrue(schema.getFieldNames().contains("id"));
@@ -97,15 +91,14 @@ import org.junit.jupiter.api.Tag;
     assertTrue(schema.getFieldNames().contains("email"));
   }
 
-  @Test
-  public void testMixedFormatResolution() throws IOException {
+  @Test public void testMixedFormatResolution() throws IOException {
     // Create mixed format files
     File csvFile = createCsvFile("data.csv", "id,name,amount");
     File jsonFile = createJsonFile("data.json", "{\"id\": 1, \"title\": \"test\"}");
-    
+
     List<File> files = Arrays.asList(csvFile, jsonFile);
     RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    
+
     // Should prioritize CSV over JSON (based on format priority)
     assertEquals(3, schema.getFieldCount());
     assertTrue(schema.getFieldNames().contains("id"));
@@ -113,33 +106,29 @@ import org.junit.jupiter.api.Tag;
     assertTrue(schema.getFieldNames().contains("amount"));
   }
 
-  @Test
-  public void testEmptyFilesList() {
+  @Test public void testEmptyFilesList() {
     List<File> emptyFiles = Arrays.asList();
     RelDataType schema = resolver.resolveSchema(emptyFiles, SchemaStrategy.PARQUET_DEFAULT);
-    
+
     assertEquals(0, schema.getFieldCount());
   }
 
-  @Test
-  public void testSchemaStrategyParsing() {
+  @Test public void testSchemaStrategyParsing() {
     SchemaStrategy conservative = SchemaStrategy.CONSERVATIVE;
     assertEquals(SchemaStrategy.ParquetStrategy.LATEST_FILE, conservative.getParquetStrategy());
-    
+
     SchemaStrategy aggressive = SchemaStrategy.AGGRESSIVE_UNION;
     assertEquals(SchemaStrategy.ParquetStrategy.UNION_ALL_COLUMNS, aggressive.getParquetStrategy());
   }
 
-  @Test
-  public void testValidationLevels() {
-    SchemaStrategy strategy = new SchemaStrategy(
-        SchemaStrategy.ParquetStrategy.LATEST_SCHEMA_WINS,
+  @Test public void testValidationLevels() {
+    SchemaStrategy strategy =
+        new SchemaStrategy(SchemaStrategy.ParquetStrategy.LATEST_SCHEMA_WINS,
         SchemaStrategy.CsvStrategy.RICHEST_FILE,
         SchemaStrategy.JsonStrategy.LATEST_FILE,
         Arrays.asList("parquet", "csv", "json"),
-        SchemaStrategy.ValidationLevel.ERROR
-    );
-    
+        SchemaStrategy.ValidationLevel.ERROR);
+
     assertEquals(SchemaStrategy.ValidationLevel.ERROR, strategy.getValidationLevel());
   }
 

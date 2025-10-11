@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.file.temporal;
 
-import org.apache.calcite.adapter.file.FileAdapterTest;
 import org.apache.calcite.adapter.file.FileAdapterTests;
 
 import org.junit.jupiter.api.Tag;
@@ -40,10 +39,8 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -125,12 +122,12 @@ public class DualTimestampTypeTest {
       String naiveString = resultSet.getString("naive_ts");
       System.out.println("Row 1 - TIMESTAMP (naive): " + naiveString + " (" + naiveMillis + " ms)");
 
-      // TIMESTAMPTZ column - properly converts timezone for PARQUET/DUCKDB engines  
+      // TIMESTAMPTZ column - properly converts timezone for PARQUET/DUCKDB engines
       long awareMillis = resultSet.getLong("aware_ts");
       String awareString = resultSet.getString("aware_ts");
       System.out.println("Row 1 - TIMESTAMPTZ (aware): " + awareString + " (" + awareMillis + " ms)");
       System.out.println("Difference in milliseconds: " + Math.abs(awareMillis - naiveMillis));
-      
+
       // Check more rows to see timezone conversion behavior
       for (int rowNum = 2; rowNum <= 3 && resultSet.next(); rowNum++) {
         int id = resultSet.getInt("id");
@@ -139,7 +136,7 @@ public class DualTimestampTypeTest {
         String naiveStr2 = resultSet.getString("naive_ts");
         String awareStr2 = resultSet.getString("aware_ts");
         String desc = resultSet.getString("description");
-        
+
         System.out.println("Row " + id + " - " + desc + ":");
         System.out.println("  NAIVE_TS:  " + naiveStr2 + " (" + naive2 + " ms)");
         System.out.println("  AWARE_TS:  " + awareStr2 + " (" + aware2 + " ms)");
@@ -154,22 +151,22 @@ public class DualTimestampTypeTest {
         // For Parquet/DuckDB, check that we got the expected timestamps
         // The naive timestamp should be: 2024-03-15 10:30:45 (no TZ conversion)
         // The aware timestamp depends on how the engine handles the TZ
-        
+
         // Convert to calendar to check date parts
         Calendar naiveCal = Calendar.getInstance();
         naiveCal.setTimeInMillis(naiveMillis);
         Calendar awareCal = Calendar.getInstance();
         awareCal.setTimeInMillis(awareMillis);
-        
+
         // Check that we have valid timestamps
         assertTrue(naiveMillis > 0, "Naive timestamp should be valid");
         assertTrue(awareMillis > 0, "Aware timestamp should be valid");
-        
+
         // The timestamps should represent March 15, 2024
         assertEquals(2024, naiveCal.get(Calendar.YEAR), "Naive timestamp year should be 2024");
         assertEquals(Calendar.MARCH, naiveCal.get(Calendar.MONTH), "Naive timestamp month should be March");
         assertEquals(15, naiveCal.get(Calendar.DAY_OF_MONTH), "Naive timestamp day should be 15");
-        
+
         // Log the actual values for debugging
         System.out.println("DEBUG: Naive timestamp hour: " + naiveCal.get(Calendar.HOUR_OF_DAY));
         System.out.println("DEBUG: Aware timestamp hour: " + awareCal.get(Calendar.HOUR_OF_DAY));
@@ -218,7 +215,7 @@ public class DualTimestampTypeTest {
       Timestamp naiveTs = resultSet.getTimestamp("naive_ts");
       String naiveString = resultSet.getString("naive_ts");
       System.out.println("Row 1 - TIMESTAMP (naive): " + naiveString + " (" + naiveTs.getTime() + " ms)");
-      
+
       // For TIMESTAMP WITHOUT TIME ZONE, the date parts should match exactly what's in the CSV
       // CSV has "2024-03-15 10:30:45"
       Calendar naiveCal = Calendar.getInstance();
@@ -234,30 +231,30 @@ public class DualTimestampTypeTest {
       Timestamp awareTs = resultSet.getTimestamp("aware_ts", Calendar.getInstance(TimeZone.getTimeZone("UTC")));
       String awareString = resultSet.getString("aware_ts");
       System.out.println("Row 1 - TIMESTAMPTZ (aware): " + awareString + " (" + awareTs.getTime() + " ms)");
-      
+
       // For TIMESTAMPTZ, "2024-03-15 10:30:45Z" is UTC
       // When displayed in local time (EDT), it should show the adjusted time
       // But when we get a Timestamp, it's already in local timezone
       Calendar awareCal = Calendar.getInstance();
       awareCal.setTimeInMillis(awareTs.getTime());
-      
+
       // The actual hour will depend on the JVM's timezone offset from UTC
       // In EDT (UTC-4), 10:30:45 UTC would be 06:30:45 EDT
       // In EST (UTC-5), 10:30:45 UTC would be 05:30:45 EST
-      System.out.println("Timezone check: " + TimeZone.getDefault().getID() + 
-                         ", naive hour=" + naiveCal.get(Calendar.HOUR_OF_DAY) + 
+      System.out.println("Timezone check: " + TimeZone.getDefault().getID() +
+                         ", naive hour=" + naiveCal.get(Calendar.HOUR_OF_DAY) +
                          ", aware hour=" + awareCal.get(Calendar.HOUR_OF_DAY));
 
       // All engines should have consistent timestamp behavior
       // UTC timestamp "2024-03-15T10:30:45Z" should display consistently
       // Verify using date parts instead of string matching
       assertThat("Engine provides timestamptz", awareTs, notNullValue());
-      
+
       // Validate date parts from the aware timestamp
       assertEquals(2024, awareCal.get(Calendar.YEAR), "Aware timestamp year should be 2024");
       assertEquals(Calendar.MARCH, awareCal.get(Calendar.MONTH), "Aware timestamp month should be March");
       assertEquals(15, awareCal.get(Calendar.DAY_OF_MONTH), "Aware timestamp day should be 15");
-      
+
       // TZ-aware timestamps should convert to same UTC epoch regardless of source timezone
       // All rows (UTC, IST, PST, EST, RFC2822) should resolve to same UTC moment
       // For "2024-03-15 10:30:45Z" this should be epoch 1710498645000
@@ -272,7 +269,7 @@ public class DualTimestampTypeTest {
         String naiveStr2 = resultSet.getString("naive_ts");
         String awareStr2 = resultSet.getString("aware_ts");
         String desc = resultSet.getString("description");
-        
+
         System.out.println("Row " + id + " - " + desc + ":");
         System.out.println("  NAIVE_TS:  " + naiveStr2 + " (" + naive2 + " ms)");
         System.out.println("  AWARE_TS:  " + awareStr2 + " (" + aware2 + " ms)");
@@ -280,29 +277,29 @@ public class DualTimestampTypeTest {
 
         // Verify that each row has proper data using date parts
         assertThat("Row " + rowNum + " should have correct ID", id, is(rowNum));
-        
+
         // Validate that timestamps have valid numeric values
         assertTrue(naive2 > 0, "Row " + rowNum + " naive timestamp should be positive: " + naive2);
         assertTrue(aware2 > 0, "Row " + rowNum + " aware timestamp should be positive: " + aware2);
-        
+
         // Convert to calendars and validate date parts
         Calendar naiveRowCal = Calendar.getInstance();
         naiveRowCal.setTimeInMillis(naive2);
         Calendar awareRowCal = Calendar.getInstance();
         awareRowCal.setTimeInMillis(aware2);
-        
+
         // All naive timestamps have same CSV value, should produce same epoch values
         if (rowNum == 2) {
           // Store first iteration's naive value as reference
           long referenceNaive = naive2;
         }
-        
+
         // Check that naive timestamps are valid dates in March 2024
         naiveRowCal.setTimeInMillis(naive2);
         assertEquals(2024, naiveRowCal.get(Calendar.YEAR), "Row " + rowNum + " naive year");
         assertEquals(Calendar.MARCH, naiveRowCal.get(Calendar.MONTH), "Row " + rowNum + " naive month");
         assertEquals(15, naiveRowCal.get(Calendar.DAY_OF_MONTH), "Row " + rowNum + " naive day");
-        
+
         // All aware timestamps should resolve to the same UTC epoch regardless of source timezone
         // This validates that timezone parsing works correctly for different timezone formats
         assertEquals(expectedUtcEpoch, aware2, "Row " + rowNum + " aware timestamp should convert to same UTC epoch as Row 1");
@@ -539,7 +536,7 @@ public class DualTimestampTypeTest {
           // For timezone-naive timestamps, check date parts using local calendar
           Calendar localCal = Calendar.getInstance(); // Uses local timezone
           localCal.setTimeInMillis(localTimestamp.getTime());
-          
+
           // All naive timestamps in CSV have same value: "2024-03-15 10:30:45"
           // When interpreted in local timezone, should preserve these date parts
           assertEquals(2024, localCal.get(Calendar.YEAR), "Row " + id + " naive year");
@@ -549,17 +546,17 @@ public class DualTimestampTypeTest {
           assertEquals(30, localCal.get(Calendar.MINUTE), "Row " + id + " naive minute");
           assertEquals(45, localCal.get(Calendar.SECOND), "Row " + id + " naive second");
         }
-        
+
         // Verify TIMESTAMPTZ - each row has different timezone, but all represent same UTC moment
         System.out.println("DEBUG: Attempting to get utc_ts for row " + id);
         try {
           Object utcValue = resultSet.getObject("utc_ts");
-          System.out.println("DEBUG: Raw utc_ts value: " + utcValue + " (type: " + 
+          System.out.println("DEBUG: Raw utc_ts value: " + utcValue + " (type: " +
                            (utcValue != null ? utcValue.getClass().getName() : "null") + ")");
         } catch (Exception e) {
           System.out.println("DEBUG: Failed to get raw utc_ts: " + e.getMessage());
         }
-        
+
         Timestamp utcTimestamp = null;
         try {
           utcTimestamp = resultSet.getTimestamp("utc_ts");
@@ -586,7 +583,7 @@ public class DualTimestampTypeTest {
             throw e; // Re-throw the original exception
           }
         }
-        
+
         if (utcTimestamp != null && localTimestamp != null) {
           // Timezone-aware and timezone-naive timestamps should differ by local timezone offset
           // Local timestamp "2024-03-15 10:30:45" interpreted in local timezone (EDT = UTC-4)
@@ -595,9 +592,9 @@ public class DualTimestampTypeTest {
           long timeDifference = Math.abs(utcTimestamp.getTime() - localTimestamp.getTime());
           System.out.println("DEBUG: Row " + id + " time difference: " + timeDifference + "ms");
           System.out.println("DEBUG: Local epoch: " + localTimestamp.getTime() + ", UTC epoch: " + utcTimestamp.getTime());
-          
+
           // Verify the difference is reasonable (within 0-24 hours due to timezone offsets)
-          assertTrue(timeDifference <= 24 * 60 * 60 * 1000, 
+          assertTrue(timeDifference <= 24 * 60 * 60 * 1000,
               "Row " + id + " timezone difference should be within 24 hours, was " + timeDifference + "ms");
         }
       }

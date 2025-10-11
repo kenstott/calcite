@@ -30,7 +30,7 @@ Create a new `reg` (regulatory/compliance) schema within the govdata adapter to 
    - Enforcement actions, fines, forfeitures
    - Broadband availability and competition data
 
-5. **DOT/FAA APIs** (Free, Government)  
+5. **DOT/FAA APIs** (Free, Government)
    - Aviation regulations, safety directives
    - Transportation safety enforcement
    - Airline consumer complaints and enforcement
@@ -166,7 +166,7 @@ Create a new `reg` (regulatory/compliance) schema within the govdata adapter to 
 ### Cross-Schema Analysis
 ```sql
 -- Regulatory burden vs economic outcomes by congressional district
-SELECT 
+SELECT
     pol.congress_members.full_name,
     pol.congress_members.state,
     COUNT(reg.enforcement_actions.action_id) as enforcement_count,
@@ -181,7 +181,7 @@ GROUP BY pol.full_name, pol.state, geo.median_income
 ORDER BY enforcement_count DESC;
 
 -- SEC enforcement vs company financial performance
-SELECT 
+SELECT
     sec.company_metadata.company_name,
     COUNT(reg.sec_enforcement_actions.release_number) as sec_actions,
     SUM(reg.sec_enforcement_actions.civil_penalty) as total_penalties,
@@ -196,7 +196,7 @@ HAVING sec_actions > 0
 ORDER BY total_penalties DESC;
 
 -- Regulatory impact vs health outcomes
-SELECT 
+SELECT
     reg.regulatory_impact_analyses.agency,
     SUM(reg.regulatory_impact_analyses.estimated_cost) as total_reg_cost,
     AVG(sci.cdc_mortality.death_count) as avg_mortality,
@@ -209,7 +209,7 @@ GROUP BY reg.regulatory_impact_analyses.agency
 ORDER BY total_reg_cost DESC;
 
 -- Public engagement in regulatory process
-SELECT 
+SELECT
     reg.federal_register_documents.agencies[0] as agency,
     reg.proposed_rules.title,
     COUNT(reg.public_comments.comment_id) as comment_count,

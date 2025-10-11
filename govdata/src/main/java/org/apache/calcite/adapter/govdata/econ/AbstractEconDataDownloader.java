@@ -16,9 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -248,8 +248,8 @@ public abstract class AbstractEconDataDownloader {
         enforceRateLimit();
 
         // Execute request
-        HttpResponse<String> response = httpClient.send(request,
-            HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response =
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         // Check for rate limit response (429) or server error (5xx)
         if (response.statusCode() == 429 || response.statusCode() >= 500) {

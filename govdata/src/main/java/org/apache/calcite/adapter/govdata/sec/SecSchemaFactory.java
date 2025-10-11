@@ -2203,8 +2203,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Download and parse FilingSummary.xml
     String accessionClean = accession.replace("-", "");
-    String summaryUrl = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml",
-        cik, accessionClean);
+    String summaryUrl =
+        String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml", cik, accessionClean);
 
     try {
       File summaryFile = new File(accessionDir, "FilingSummary.xml");
@@ -2877,8 +2877,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Create mock data for each year
         for (int year = startYear; year <= endYear; year++) {
           // Build relative path for parquet file - don't use File for S3 compatibility
-          String relativePath = String.format("ticker=%s/year=%d/%s_%d_prices.parquet",
-              ticker, year, ticker, year);
+          String relativePath =
+              String.format("ticker=%s/year=%d/%s_%d_prices.parquet", ticker, year, ticker, year);
           String parquetFilePath = storageProvider.resolvePath(stockPricesDir, relativePath);
           LOGGER.debug("About to create/check file: {}", parquetFilePath);
           try {

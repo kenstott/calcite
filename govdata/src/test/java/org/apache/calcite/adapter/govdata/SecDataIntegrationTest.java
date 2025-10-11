@@ -77,8 +77,7 @@ public class SecDataIntegrationTest {
     LOGGER.info("Running SEC integration tests with cache directory: {}", cacheDir);
   }
 
-  @Test
-  void testSecSchemaCreation() throws SQLException {
+  @Test void testSecSchemaCreation() throws SQLException {
     LOGGER.info("Testing SEC schema creation and basic connectivity");
 
     Properties props = new Properties();
@@ -91,8 +90,8 @@ public class SecDataIntegrationTest {
       assertFalse(connection.isClosed(), "Connection should be open");
 
       // Verify schema exists
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'SEC'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'SEC'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "SEC schema should exist");
           assertEquals("SEC", rs.getString("schema_name"));
@@ -101,8 +100,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecTableAvailability() throws SQLException {
+  @Test void testSecTableAvailability() throws SQLException {
     LOGGER.info("Testing SEC table availability and metadata");
 
     Properties props = new Properties();
@@ -120,8 +118,8 @@ public class SecDataIntegrationTest {
       };
 
       for (String tableName : expectedTables) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT table_name FROM information_schema.tables " +
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT table_name FROM information_schema.tables " +
             "WHERE table_schema = 'SEC' AND table_name = ?")) {
           stmt.setString(1, tableName);
           try (ResultSet rs = stmt.executeQuery()) {
@@ -134,8 +132,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testBasicSecQuery() throws SQLException {
+  @Test void testBasicSecQuery() throws SQLException {
     LOGGER.info("Testing basic SEC data query functionality");
 
     Properties props = new Properties();
@@ -145,8 +142,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test simple count query
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT COUNT(*) as record_count FROM company_tickers WHERE ticker = 'AAPL'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT COUNT(*) as record_count FROM company_tickers WHERE ticker = 'AAPL'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "Query should return results");
           int count = rs.getInt("record_count");
@@ -157,8 +154,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecFilingMetadataQuery() throws SQLException {
+  @Test void testSecFilingMetadataQuery() throws SQLException {
     LOGGER.info("Testing SEC filing metadata queries");
 
     Properties props = new Properties();
@@ -168,8 +164,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test filing metadata structure and basic data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT cik, filing_type, filing_date FROM filing_metadata " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT cik, filing_type, filing_date FROM filing_metadata " +
           "WHERE cik = '0000320193' LIMIT 5")) { // Apple's CIK
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -194,8 +190,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecFinancialDataAccess() throws SQLException {
+  @Test void testSecFinancialDataAccess() throws SQLException {
     LOGGER.info("Testing SEC financial data access patterns");
 
     Properties props = new Properties();
@@ -205,8 +200,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test financial data table structure
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT cik, fact_name, fact_value FROM financial_data " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT cik, fact_name, fact_value FROM financial_data " +
           "WHERE cik = '0000320193' AND fact_name LIKE '%Revenue%' LIMIT 3")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -229,8 +224,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecInsiderDataAccess() throws SQLException {
+  @Test void testSecInsiderDataAccess() throws SQLException {
     LOGGER.info("Testing SEC insider trading data access");
 
     Properties props = new Properties();
@@ -240,8 +234,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test insider data structure
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT cik, insider_name, transaction_type FROM insider " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT cik, insider_name, transaction_type FROM insider " +
           "WHERE cik = '0000320193' LIMIT 3")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
@@ -263,8 +257,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecJoinQueries() throws SQLException {
+  @Test void testSecJoinQueries() throws SQLException {
     LOGGER.info("Testing SEC cross-table join functionality");
 
     Properties props = new Properties();
@@ -274,8 +267,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test join between company_tickers and filing_metadata
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT ct.ticker, ct.company_name, fm.filing_type " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT ct.ticker, ct.company_name, fm.filing_type " +
           "FROM company_tickers ct " +
           "LEFT JOIN filing_metadata fm ON ct.cik = fm.cik " +
           "WHERE ct.ticker = 'AAPL' LIMIT 5")) {
@@ -300,8 +293,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecDataTypes() throws SQLException {
+  @Test void testSecDataTypes() throws SQLException {
     LOGGER.info("Testing SEC data type handling and validation");
 
     Properties props = new Properties();
@@ -311,8 +303,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test data type consistency in financial_data
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT fact_name, fact_value, " +
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT fact_name, fact_value, " +
           "CASE WHEN fact_value ~ '^[0-9]+\\.?[0-9]*$' THEN 'NUMERIC' ELSE 'TEXT' END as value_type " +
           "FROM financial_data WHERE cik = '0000320193' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
@@ -329,8 +321,7 @@ public class SecDataIntegrationTest {
     }
   }
 
-  @Test
-  void testSecErrorHandling() throws SQLException {
+  @Test void testSecErrorHandling() throws SQLException {
     LOGGER.info("Testing SEC error handling and edge cases");
 
     Properties props = new Properties();
@@ -340,8 +331,8 @@ public class SecDataIntegrationTest {
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test query with non-existent CIK
-      try (PreparedStatement stmt = connection.prepareStatement(
-          "SELECT COUNT(*) as count FROM filing_metadata WHERE cik = '9999999999'")) {
+      try (PreparedStatement stmt =
+          connection.prepareStatement("SELECT COUNT(*) as count FROM filing_metadata WHERE cik = '9999999999'")) {
         try (ResultSet rs = stmt.executeQuery()) {
           assertTrue(rs.next(), "Query should execute successfully");
           assertEquals(0, rs.getInt("count"), "Non-existent CIK should return 0 results");
@@ -350,8 +341,8 @@ public class SecDataIntegrationTest {
 
       // Test invalid table reference (should fail gracefully)
       assertThrows(SQLException.class, () -> {
-        try (PreparedStatement stmt = connection.prepareStatement(
-            "SELECT * FROM nonexistent_table")) {
+        try (PreparedStatement stmt =
+            connection.prepareStatement("SELECT * FROM nonexistent_table")) {
           stmt.executeQuery();
         }
       }, "Query on non-existent table should throw SQLException");

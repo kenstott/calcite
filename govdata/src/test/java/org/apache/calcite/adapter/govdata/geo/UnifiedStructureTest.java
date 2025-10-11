@@ -30,54 +30,52 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class UnifiedStructureTest {
 
-  @Test
-  public void testCensusDataToUnifiedStructure() throws Exception {
+  @Test public void testCensusDataToUnifiedStructure() throws Exception {
     String censusKey = System.getenv("CENSUS_API_KEY");
     if (censusKey == null || censusKey.isEmpty()) {
       System.out.println("⚠ Skipping Census test - CENSUS_API_KEY not set");
       return;
     }
-    
+
     System.out.println("Testing Census Data Download to Unified Structure");
     System.out.println("================================================");
-    
+
     // Use the unified directory on T9
     String baseDir = "/Volumes/T9/govdata-parquet";
     File geoDir = new File(baseDir, "source=geo");
     File demographicDir = new File(geoDir, "type=demographic");
     demographicDir.mkdirs();
-    
+
     System.out.println("Target demographic directory: " + demographicDir);
-    
+
     // Download Census data
     CensusApiClient census = new CensusApiClient(censusKey, demographicDir);
-    
+
     // Get data for multiple states
     String[] states = {"06", "36", "48"}; // CA, NY, TX
     for (String state : states) {
       System.out.println("Downloading data for state FIPS: " + state);
-      
-      com.fasterxml.jackson.databind.JsonNode data = census.getAcsData(
-          2022, "NAME,B01003_001E,B19013_001E", "state:" + state
-      );
-      
+
+      com.fasterxml.jackson.databind.JsonNode data =
+          census.getAcsData(2022, "NAME,B01003_001E,B19013_001E", "state:" + state);
+
       assertNotNull(data, "Census data should be returned for state " + state);
       System.out.println("  ✓ Data received for state " + state);
     }
-    
+
     // Check the cache files were created
     File[] cacheFiles = demographicDir.listFiles((dir, name) -> name.endsWith(".json"));
     assertTrue(cacheFiles != null && cacheFiles.length > 0, "Cache files should be created");
-    
+
     System.out.println("\nCache files created:");
     for (File f : cacheFiles) {
       System.out.println("  " + f.getName() + " (" + (f.length()/1024) + " KB)");
     }
-    
+
     System.out.println("\n✓ SUCCESS: Census data cached in unified structure!");
     showUnifiedStructure();
   }
-  
+
   private void showUnifiedStructure() {
     System.out.println("\nUnified Government Data Structure:");
     System.out.println("==================================");
@@ -86,7 +84,7 @@ public class UnifiedStructureTest {
       showStructure(base, "");
     }
   }
-  
+
   private void showStructure(File dir, String indent) {
     System.out.println(indent + dir.getName() + "/");
     File[] files = dir.listFiles();

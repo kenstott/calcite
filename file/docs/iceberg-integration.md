@@ -6,7 +6,7 @@ The Calcite File Adapter includes comprehensive support for Apache Iceberg table
 
 ## Features
 
-### Core Capabilities  
+### Core Capabilities
 - **Direct Table Access**: Query Iceberg tables through SQL
 - **Time Travel**: Query historical snapshots via `snapshotId` or `asOfTimestamp` config
 - **Schema Evolution**: Basic type mapping from Iceberg to SQL types
@@ -79,7 +79,7 @@ With OAuth2 support:
 ```json
 {
   "name": "rest_oauth_table",
-  "format": "iceberg", 
+  "format": "iceberg",
   "catalogType": "rest",
   "uri": "https://rest-catalog.example.com/v1",
   "oauth2-server-uri": "https://auth.example.com/oauth/token",
@@ -127,7 +127,7 @@ The file adapter now includes sophisticated schema resolution strategies that ha
 ```json
 {
   "name": "evolving_table",
-  "format": "iceberg", 
+  "format": "iceberg",
   "timeRange": {
     "start": "2024-01-01T00:00:00Z",
     "end": "2024-12-31T23:59:59Z"
@@ -159,13 +159,13 @@ The file adapter now includes sophisticated schema resolution strategies that ha
 
 ```json
 {
-  "name": "sales_evolution", 
+  "name": "sales_evolution",
   "format": "iceberg",
   "catalogType": "hadoop",
   "warehousePath": "/warehouse",
   "tablePath": "sales.orders",
   "timeRange": {
-    "start": "2024-01-01T00:00:00Z", 
+    "start": "2024-01-01T00:00:00Z",
     "end": "2024-06-01T00:00:00Z"
   },
   "schemaStrategy": "LATEST_SCHEMA_WINS"
@@ -216,7 +216,7 @@ This creates a unified table spanning all snapshots within the time range, with 
 
 ```sql
 -- Trend analysis across time
-SELECT 
+SELECT
   snapshot_time,
   COUNT(*) as order_count,
   AVG(amount) as avg_order_value
@@ -369,8 +369,8 @@ Iceberg metadata tables are being implemented with `$` suffix:
 
 ### Basic Query
 ```sql
-SELECT id, name, created_at 
-FROM iceberg_table 
+SELECT id, name, created_at
+FROM iceberg_table
 WHERE created_at > '2024-01-01';
 ```
 
@@ -380,9 +380,9 @@ WHERE created_at > '2024-01-01';
 SELECT * FROM iceberg_table_snapshot_12345;
 
 -- Query metadata
-SELECT snapshot_id, committed_at, operation 
-FROM iceberg_table$snapshots 
-ORDER BY committed_at DESC 
+SELECT snapshot_id, committed_at, operation
+FROM iceberg_table$snapshots
+ORDER BY committed_at DESC
 LIMIT 10;
 ```
 
@@ -390,13 +390,13 @@ LIMIT 10;
 ```sql
 SELECT t.*, s.committed_at
 FROM iceberg_table t
-JOIN iceberg_table$snapshots s 
+JOIN iceberg_table$snapshots s
   ON s.is_current = true;
 ```
 
 ### Analyze Table History
 ```sql
-SELECT 
+SELECT
   operation,
   COUNT(*) as count,
   MIN(committed_at) as first_operation,
@@ -417,10 +417,10 @@ GROUP BY operation;
 ## Limitations (MVP Implementation)
 
 1. **Write Operations**: Currently read-only; writes not yet supported
-2. **Advanced Catalog Features**: Some advanced catalog operations not implemented  
+2. **Advanced Catalog Features**: Some advanced catalog operations not implemented
 3. **Write Support**: Table modifications not yet supported
 4. **Delete Files**: Position and equality delete files not supported
-5. **Merge-on-Read**: Only copy-on-write tables supported  
+5. **Merge-on-Read**: Only copy-on-write tables supported
 6. **Nested Types**: Complex nested structures have basic support
 7. **Advanced Nested Type Operations**: Complex nested operations have basic support
 
@@ -479,12 +479,12 @@ GROUP BY operation;
 
 ### Cross-Format Joins
 ```sql
-SELECT 
+SELECT
   c.customer_id,
   c.name,
   i.total_orders
 FROM csv_customers c
-JOIN iceberg_orders i 
+JOIN iceberg_orders i
   ON c.customer_id = i.customer_id;
 ```
 
@@ -493,7 +493,7 @@ JOIN iceberg_orders i
 **Near-term (Priority)**:
 1. ✅ **Complete Metadata Tables**: Full implementation of $files, $manifests, $partitions
 2. ✅ **REST Catalog**: Support for Iceberg REST catalog protocol
-3. ✅ **Partition Pruning**: Optimize queries with partition filtering  
+3. ✅ **Partition Pruning**: Optimize queries with partition filtering
 4. ✅ **Column Projection**: Optimize column access for better performance
 
 **Medium-term**:
@@ -502,7 +502,7 @@ JOIN iceberg_orders i
 7. **Delete File Support**: Full support for position and equality deletes
 8. **Statistics Integration**: Use Iceberg statistics for query optimization
 
-**Long-term**: 
+**Long-term**:
 9. **Hive Metastore Catalog**: Support for HMS catalog
 10. **AWS Glue Catalog**: Support for Glue Data Catalog
 11. **Incremental Reads**: Read only changed data between snapshots

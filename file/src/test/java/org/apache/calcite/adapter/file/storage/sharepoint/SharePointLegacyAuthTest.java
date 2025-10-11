@@ -39,23 +39,23 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("integration")
 public class SharePointLegacyAuthTest {
-  
+
   private static String clientId;
   private static String clientSecret;
   private static String siteUrl;
   private static String realm;
   private static boolean skipTest = false;
-  
+
   @BeforeAll
   static void setup() {
     Properties props = loadProperties();
-    
+
     // Check for legacy SharePoint app credentials
     clientId = props.getProperty("SHAREPOINT_LEGACY_CLIENT_ID");
     clientSecret = props.getProperty("SHAREPOINT_LEGACY_CLIENT_SECRET");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     realm = props.getProperty("SHAREPOINT_REALM");
-    
+
     if (clientId == null || clientSecret == null || siteUrl == null) {
       System.out.println("Legacy SharePoint credentials not found. To test legacy auth:");
       System.out.println("1. Register app at: https://[tenant].sharepoint.com/_layouts/15/appregnew.aspx");
@@ -71,18 +71,18 @@ public class SharePointLegacyAuthTest {
       skipTest = true;
       return;
     }
-    
+
     System.out.println("Legacy SharePoint test configuration:");
     System.out.println("  Site URL: " + siteUrl);
     System.out.println("  Client ID: " + clientId);
     System.out.println("  Realm: " + (realm != null ? realm : "will be auto-discovered"));
   }
-  
+
   private static Properties loadProperties() {
     Properties props = new Properties();
-    
+
     // Try environment variables first
-    props.setProperty("SHAREPOINT_LEGACY_CLIENT_ID", 
+    props.setProperty("SHAREPOINT_LEGACY_CLIENT_ID",
         System.getenv().getOrDefault("SHAREPOINT_LEGACY_CLIENT_ID", ""));
     props.setProperty("SHAREPOINT_LEGACY_CLIENT_SECRET",
         System.getenv().getOrDefault("SHAREPOINT_LEGACY_CLIENT_SECRET", ""));
@@ -90,7 +90,7 @@ public class SharePointLegacyAuthTest {
         System.getenv().getOrDefault("SHAREPOINT_SITE_URL", ""));
     props.setProperty("SHAREPOINT_REALM",
         System.getenv().getOrDefault("SHAREPOINT_REALM", ""));
-    
+
     // Then try local properties file
     File propsFile = new File("local-test.properties");
     if (!propsFile.exists()) {
@@ -99,7 +99,7 @@ public class SharePointLegacyAuthTest {
     if (!propsFile.exists()) {
       propsFile = new File("/Users/kennethstott/ndc-calcite/calcite-rs-jni/calcite/file/local-test.properties");
     }
-    
+
     if (propsFile.exists()) {
       try (InputStream is = new FileInputStream(propsFile)) {
         Properties fileProps = new Properties();
@@ -111,64 +111,62 @@ public class SharePointLegacyAuthTest {
         System.err.println("Failed to load properties: " + e.getMessage());
       }
     }
-    
+
     // Remove empty values
     props.entrySet().removeIf(e -> e.getValue().toString().isEmpty());
-    
+
     return props;
   }
-  
-  @Test
-  void testLegacyAuthentication() throws Exception {
+
+  @Test void testLegacyAuthentication() throws Exception {
     if (skipTest) {
       System.out.println("Skipping test - legacy credentials not configured");
       return;
     }
-    
+
     System.out.println("\n=== Testing Legacy SharePoint Authentication ===");
-    
+
     // Create token manager with or without realm
     SharePointLegacyTokenManager tokenManager = realm != null
         ? new SharePointLegacyTokenManager(clientId, clientSecret, siteUrl, realm)
         : new SharePointLegacyTokenManager(clientId, clientSecret, siteUrl);
-    
+
     // Create storage provider
     SharePointRestStorageProvider provider = new SharePointRestStorageProvider(tokenManager);
-    
+
     // Test authentication by listing files
     System.out.println("Attempting to list files in /Shared Documents...");
     List<StorageProvider.FileEntry> entries = provider.listFiles("/Shared Documents", false);
-    
+
     assertNotNull(entries, "Should be able to list files");
     System.out.println("Success! Found " + entries.size() + " items:");
-    
+
     for (StorageProvider.FileEntry entry : entries) {
       String type = entry.isDirectory() ? "[DIR]" : "[FILE]";
-      System.out.println("  " + type + " " + entry.getName() + 
+      System.out.println("  " + type + " " + entry.getName() +
                         " (size: " + entry.getSize() + " bytes)");
     }
   }
-  
-  @Test
-  void testLegacyWithNestedPath() throws Exception {
+
+  @Test void testLegacyWithNestedPath() throws Exception {
     if (skipTest) {
       return;
     }
-    
+
     System.out.println("\n=== Testing Legacy Auth with Nested Path ===");
-    
+
     SharePointLegacyTokenManager tokenManager = realm != null
         ? new SharePointLegacyTokenManager(clientId, clientSecret, siteUrl, realm)
         : new SharePointLegacyTokenManager(clientId, clientSecret, siteUrl);
-    
+
     SharePointRestStorageProvider provider = new SharePointRestStorageProvider(tokenManager);
-    
+
     // Try the nested path that Graph API uses
     System.out.println("Attempting to list files in /Shared Documents/Shared Documents...");
     try {
       List<StorageProvider.FileEntry> entries = provider.listFiles("/Shared Documents/Shared Documents", false);
       System.out.println("Found " + entries.size() + " items in nested path");
-      
+
       for (StorageProvider.FileEntry entry : entries) {
         if (entry.getName().toLowerCase().endsWith(".csv")) {
           System.out.println("  [CSV] " + entry.getName());

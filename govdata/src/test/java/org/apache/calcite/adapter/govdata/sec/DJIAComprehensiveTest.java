@@ -45,7 +45,8 @@ public class DJIAComprehensiveTest {
 
   @BeforeAll
   public static void setUp() throws Exception {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("DJIA COMPREHENSIVE INTEGRATION TEST");
 
     // Create test directory with timestamp
@@ -107,7 +108,8 @@ public class DJIAComprehensiveTest {
   }
 
   @Test public void testComprehensiveDJIAAnalysis() throws Exception {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("PHASE 1: ESTABLISHING CONNECTION AND DOWNLOADING DATA");
 
     Properties props = new Properties();
@@ -126,7 +128,8 @@ public class DJIAComprehensiveTest {
       // Let's verify the schema is available
       try (Statement stmt = conn.createStatement()) {
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
         System.out.println("PHASE 2: VERIFYING DATA AVAILABILITY");
 
         // Check what tables are available
@@ -143,7 +146,8 @@ public class DJIAComprehensiveTest {
         rs.close();
         System.out.println("Total tables: " + tableCount);
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
         System.out.println("PHASE 3: RUNNING ANALYTICS QUERIES");
 
         // Query 1: Count total filings by company
@@ -254,7 +258,8 @@ public class DJIAComprehensiveTest {
           System.out.println("   Financial facts table not available or empty");
         }
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
         System.out.println("PHASE 4: TEST SUMMARY");
 
         long endTime = System.currentTimeMillis();
@@ -293,7 +298,8 @@ public class DJIAComprehensiveTest {
 
   @AfterAll
   public static void tearDown() {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("TEST CLEANUP");
     System.out.println("Test data preserved in: " + testDataDir);
     System.out.println("To clean up manually, run: rm -rf " + testDataDir);

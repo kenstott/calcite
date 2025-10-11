@@ -22,20 +22,19 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Tag;
 /**
  * Simple test to debug FileSchema table discovery.
  */
 @Tag("integration")public class SimpleSharePointTest {
 
-  @Test
-  void testFileSchemaTableDiscovery() throws Exception {
+  @Test void testFileSchemaTableDiscovery() throws Exception {
     System.out.println("=== Simple FileSchema Test ===");
 
     // Create a connection to get the root schema

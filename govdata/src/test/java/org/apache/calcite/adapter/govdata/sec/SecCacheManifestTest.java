@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,8 +36,7 @@ public class SecCacheManifestTest {
   @TempDir
   Path tempDir;
 
-  @Test
-  void testBasicCacheOperationsWithETag() throws IOException {
+  @Test void testBasicCacheOperationsWithETag() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -72,8 +70,7 @@ public class SecCacheManifestTest {
     assertEquals(testFile.toString(), newManifest.getFilePath(cik));
   }
 
-  @Test
-  void testCacheOperationsWithoutETag() throws IOException {
+  @Test void testCacheOperationsWithoutETag() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -91,8 +88,7 @@ public class SecCacheManifestTest {
     assertNull(manifest.getETag(cik));  // No ETag available
   }
 
-  @Test
-  void testETagCacheNeverExpiresBasedOnTime() throws IOException, InterruptedException {
+  @Test void testETagCacheNeverExpiresBasedOnTime() throws IOException, InterruptedException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -117,8 +113,7 @@ public class SecCacheManifestTest {
     assertTrue(manifest.isCached(cik));
   }
 
-  @Test
-  void testCacheWithoutETagExpires() throws IOException, InterruptedException {
+  @Test void testCacheWithoutETagExpires() throws IOException, InterruptedException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -136,8 +131,7 @@ public class SecCacheManifestTest {
     assertFalse(manifest.isCached(cik));
   }
 
-  @Test
-  void testMissingFileHandling() throws IOException {
+  @Test void testMissingFileHandling() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -153,8 +147,7 @@ public class SecCacheManifestTest {
     assertFalse(manifest.isCached(cik));
   }
 
-  @Test
-  void testManifestPersistence() throws IOException {
+  @Test void testManifestPersistence() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -186,8 +179,7 @@ public class SecCacheManifestTest {
     }
   }
 
-  @Test
-  void testCleanupExpiredEntries() throws IOException {
+  @Test void testCleanupExpiredEntries() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -218,8 +210,7 @@ public class SecCacheManifestTest {
     assertFalse(manifest.isCached("0003")); // Expired removed
   }
 
-  @Test
-  void testCacheStats() throws IOException {
+  @Test void testCacheStats() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 
@@ -246,8 +237,7 @@ public class SecCacheManifestTest {
     assertEquals(0, stats.expiredEntries);
   }
 
-  @Test
-  void testETagUpdate() throws IOException {
+  @Test void testETagUpdate() throws IOException {
     String cacheDir = tempDir.toString();
     SecCacheManifest manifest = SecCacheManifest.load(cacheDir);
 

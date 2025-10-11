@@ -25,13 +25,11 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.text.StringEscapeUtils;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import org.jsoup.Jsoup;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -59,8 +57,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
@@ -159,7 +155,7 @@ public class XbrlToParquetConverter implements FileConverter {
         DocumentBuilder builder = factory.newDocumentBuilder();
         doc = builder.parse(sourceFile);
       }
-      
+
       // For inline XBRL files that failed initial parse, try specialized inline XBRL parsing
       if (doc == null && (fileName.endsWith(".htm") || fileName.endsWith(".html"))) {
         LOGGER.debug("Standard XML parsing failed for HTML file, attempting inline XBRL extraction: " + sourceFile.getName());
@@ -178,7 +174,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
           // Track the actual exception with stack trace
           trackParsingError(sourceFile, "inline_xbrl_extraction_exception",
-              "Exception: " + e.getClass().getName() + " - " + e.getMessage() + "\nStack trace:\n" + fullStackTrace);
+              "Exception: " + e.getClass().getName() + " - " + e.getMessage() + "\nStack trace:\n"
+  + fullStackTrace);
         }
 
         // If still no document, don't create minimal parquet files
@@ -210,7 +207,7 @@ public class XbrlToParquetConverter implements FileConverter {
       String filingDate = extractFilingDate(doc, sourceFile);
 
       LOGGER.debug(" Extracted metadata for " + sourceFile.getName() + " - CIK: " + cik + ", Filing Type: " + filingType + ", Date: " + filingDate);
-      
+
       // Skip conversion if we couldn't extract required metadata
       if (cik == null || cik.equals("0000000000")) {
         LOGGER.warn("DEBUG: Skipping conversion due to invalid or missing CIK: " + sourceFile.getName() + " (extracted CIK: " + cik + ")");
@@ -222,7 +219,7 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.warn("DEBUG: Skipping conversion - could not extract filing date from: " + sourceFile.getName());
         return outputFiles; // Skip conversion
       }
-      
+
       // Validate filing date format and year
       if (filingDate.length() >= 4) {
         try {
@@ -239,7 +236,7 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.warn("Filing date too short: " + filingDate + " for " + sourceFile.getName());
         return outputFiles; // Skip conversion
       }
-      
+
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
       if (isInsiderForm(doc, filingType)) {
         LOGGER.debug("Processing as insider form: " + sourceFile.getName());
@@ -260,8 +257,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
       // Build RELATIVE partition path (StorageProvider will add base path)
-      String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
-          cik, normalizedFilingType, partitionYear);
+      String relativePartitionPath =
+          String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // For local filesystem only, create actual directories (S3 doesn't need directory creation)
       if (!targetDirectoryPath.contains("://")) {
@@ -346,7 +343,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       return cik;
     }
-    
+
     // Try to extract from XBRL context
     NodeList contexts = doc.getElementsByTagNameNS("*", "context");
     for (int i = 0; i < contexts.getLength(); i++) {
@@ -401,7 +398,7 @@ public class XbrlToParquetConverter implements FileConverter {
         return docType.substring(0, 1); // Just return "3", "4", or "5"
       }
     }
-    
+
     // Try to extract from document type - check both with and without namespace
     NodeList documentTypes = doc.getElementsByTagNameNS("*", "DocumentType");
     if (documentTypes.getLength() > 0) {
@@ -491,7 +488,7 @@ public class XbrlToParquetConverter implements FileConverter {
   private String extractDateFromHTML(File htmlFile) {
     try {
       org.jsoup.nodes.Document doc = Jsoup.parse(htmlFile, "UTF-8");
-      
+
       // Look for SEC header metadata
       // Pattern: "CONFORMED PERIOD OF REPORT: 20240930"
       Elements elements = doc.getElementsMatchingOwnText("CONFORMED PERIOD OF REPORT:");
@@ -507,7 +504,7 @@ public class XbrlToParquetConverter implements FileConverter {
           }
         }
       }
-      
+
       // Look for FILED AS OF DATE pattern
       elements = doc.getElementsMatchingOwnText("FILED AS OF DATE:");
       for (org.jsoup.nodes.Element elem : elements) {
@@ -522,7 +519,7 @@ public class XbrlToParquetConverter implements FileConverter {
           }
         }
       }
-      
+
       // Look for inline XBRL elements with date
       elements = doc.select("[name*=DocumentPeriodEndDate], [name*=PeriodEndDate]");
       for (org.jsoup.nodes.Element elem : elements) {
@@ -541,14 +538,14 @@ public class XbrlToParquetConverter implements FileConverter {
           }
         }
       }
-      
+
     } catch (IOException e) {
       LOGGER.warn("Failed to parse HTML file for date extraction: " + e.getMessage());
     }
-    
+
     return null;
   }
-  
+
   private String extractFilingDate(Document doc, File sourceFile) {
     // For ownership documents (Form 3/4/5), extract periodOfReport
     NodeList periodOfReports = doc.getElementsByTagName("periodOfReport");
@@ -709,8 +706,7 @@ public class XbrlToParquetConverter implements FileConverter {
             (element.getTextContent() != null &&
              element.getTextContent().trim().matches("^[0-9,.-]+$")) ||
             // Or has a 'name' attribute (inline XBRL without contextRef)
-            element.hasAttribute("name")
-        )) {
+            element.hasAttribute("name"))) {
           isFactElement = true;
         }
       }
@@ -757,8 +753,8 @@ public class XbrlToParquetConverter implements FileConverter {
         String rawValue = element.getTextContent().trim();
 
         // For TextBlocks and narrative content, preserve more formatting
-        boolean isTextBlock = concept != null && (
-                             concept.contains("TextBlock") ||
+        boolean isTextBlock =
+                             concept != null && (concept.contains("TextBlock") ||
                              concept.contains("Disclosure") ||
                              concept.contains("Policy"));
 
@@ -854,7 +850,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
   private void writeMetadataToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile) throws IOException {
-    
+
     // Create Avro schema for filing metadata
     // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
     Schema schema = SchemaBuilder.record("FilingMetadata")
@@ -881,34 +877,34 @@ public class XbrlToParquetConverter implements FileConverter {
     String accessionNumber = extractAccessionNumber(sourceFile.getName());
     record.put("accession_number", accessionNumber != null ? accessionNumber : "");
     record.put("filing_date", filingDate);
-    
+
     // Extract DEI (Document and Entity Information) elements
     // Try different namespaces and formats
     String companyName = extractDeiValue(doc, "EntityRegistrantName", "RegistrantName");
     record.put("company_name", companyName);
-    
-    String stateOfIncorp = extractDeiValue(doc, "EntityIncorporationStateCountryCode", 
-                                           "StateOrCountryOfIncorporation");
+
+    String stateOfIncorp =
+                                           extractDeiValue(doc, "EntityIncorporationStateCountryCode", "StateOrCountryOfIncorporation");
     record.put("state_of_incorporation", stateOfIncorp);
-    
+
     String fiscalYearEnd = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
     record.put("fiscal_year_end", fiscalYearEnd);
-    
+
     String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
     record.put("business_address", businessAddress);
-    
+
     String mailingAddress = extractDeiValue(doc, "EntityAddressMailingAddressLine1", "MailingAddress");
     record.put("mailing_address", mailingAddress);
-    
+
     String phone = extractDeiValue(doc, "EntityPhoneNumber", "Phone");
     record.put("phone", phone);
-    
+
     String docType = extractDeiValue(doc, "DocumentType", "FormType");
     record.put("document_type", docType);
-    
+
     String periodEnd = extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate");
     record.put("period_end_date", periodEnd);
-    
+
     // Try to extract SIC code
     String sicStr = extractDeiValue(doc, "EntityStandardIndustrialClassificationCode", "SicCode");
     if (sicStr != null && !sicStr.isEmpty()) {
@@ -920,20 +916,20 @@ public class XbrlToParquetConverter implements FileConverter {
     } else {
       record.put("sic_code", null);
     }
-    
+
     String irsNumber = extractDeiValue(doc, "EntityTaxIdentificationNumber", "IrsNumber");
     record.put("irs_number", irsNumber);
-    
+
     // Set type field for DuckDB table identification
     record.put("type", "filing_metadata");
-    
+
     records.add(record);
-    
+
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(outputPath, schema, records, "metadata");
     LOGGER.info("Successfully wrote " + records.size() + " metadata records to " + outputPath);
   }
-  
+
   private String extractDeiValue(Document doc, String... possibleTags) {
     // Try to find DEI elements in the XML document
     for (String tag : possibleTags) {
@@ -945,7 +941,7 @@ public class XbrlToParquetConverter implements FileConverter {
           return text.trim();
         }
       }
-      
+
       // Try without namespace
       nodes = doc.getElementsByTagName(tag);
       if (nodes.getLength() > 0) {
@@ -954,7 +950,7 @@ public class XbrlToParquetConverter implements FileConverter {
           return text.trim();
         }
       }
-      
+
       // Try with dei: prefix
       nodes = doc.getElementsByTagName("dei:" + tag);
       if (nodes.getLength() > 0) {
@@ -966,7 +962,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   private String extractAccessionNumber(String filename) {
     // Extract accession number from filename like "0000320193-24-000123.xml"
     if (filename != null) {
@@ -1263,10 +1259,10 @@ public class XbrlToParquetConverter implements FileConverter {
       int factsAdded = 0;
       int factsSkippedNoContextRef = 0;
       int factsSkippedNoName = 0;
-      
+
       for (org.jsoup.nodes.Element ixElement : ixElements) {
         String name = ixElement.attr("name");
-        
+
         // Try multiple ways to extract contextRef (case-insensitive)
         String contextRef = ixElement.attr("contextref");
         if (contextRef == null || contextRef.isEmpty()) {
@@ -1285,12 +1281,12 @@ public class XbrlToParquetConverter implements FileConverter {
             }
           }
         }
-        
+
         // Extract name more robustly
         if (name == null || name.isEmpty()) {
           String tagName = ixElement.tagName();
           // For ix:nonFraction and ix:nonNumeric elements, try name attribute again
-          if (tagName.equals("ix:nonfraction") || tagName.equals("ix:nonnumeric") || 
+          if (tagName.equals("ix:nonfraction") || tagName.equals("ix:nonnumeric") ||
               tagName.equals("ix:nonNumeric") || tagName.equals("ix:nonFraction")) {
             name = ixElement.attr("name");
           } else if (tagName.startsWith("ix:")) {
@@ -1305,21 +1301,21 @@ public class XbrlToParquetConverter implements FileConverter {
                 break;
               }
             }
-            
+
             // If still no name, skip this element
             if (name == null || name.isEmpty()) {
               continue;
             }
           }
         }
-        
+
         if (name == null || name.isEmpty()) {
           factsSkippedNoName++;
           continue;
         }
-        
+
         String value = ixElement.text().trim();
-        
+
         // Create fact element with proper namespace (more lenient - only require contextRef)
         if (contextRef != null && !contextRef.isEmpty()) {
           // Extract namespace and local name
@@ -1330,13 +1326,12 @@ public class XbrlToParquetConverter implements FileConverter {
             namespace = parts[0];
             localName = parts[1];
           }
-          
-          Element fact = doc.createElementNS(
-              "http://fasb.org/us-gaap/2024", 
-              namespace + ":" + localName
-          );
+
+          Element fact =
+              doc.createElementNS("http://fasb.org/us-gaap/2024",
+              namespace + ":" + localName);
           fact.setAttribute("contextRef", contextRef);
-          
+
           // Handle numeric values - remove commas and formatting
           if (ixElement.hasAttr("scale") || ixElement.hasAttr("decimals")) {
             value = value.replaceAll("[,$()]", "").trim();
@@ -1344,7 +1339,7 @@ public class XbrlToParquetConverter implements FileConverter {
               value = "-" + value.substring(1, value.length() - 1);
             }
           }
-          
+
           fact.setTextContent(value);
           root.appendChild(fact);
           factsAdded++;
@@ -1905,7 +1900,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       if (!records.isEmpty()) {
         storageProvider.writeAvroParquet(outputPath, schema, records, "relationships");
-        LOGGER.info(String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
+        LOGGER.info(
+            String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
             records.size(), beforeInlineCount, inlineRelationships, outputPath));
       } else {
         // Create an empty parquet file to indicate that relationship extraction was completed
@@ -2013,7 +2009,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String order = ixRel.getAttribute("order");
       String weight = ixRel.getAttribute("weight");
 
-      LOGGER.debug(String.format("Processing ix:relationship %d: arcrole=%s, fromRefs=%s, toRefs=%s",
+      LOGGER.debug(
+          String.format("Processing ix:relationship %d: arcrole=%s, fromRefs=%s, toRefs=%s",
           i, arcrole, fromRefs, toRefs));
 
       if (arcrole != null && !arcrole.isEmpty() && fromRefs != null && !fromRefs.isEmpty() &&
@@ -2045,7 +2042,8 @@ public class XbrlToParquetConverter implements FileConverter {
           }
         }
       } else {
-        LOGGER.debug(String.format("Skipping ix:relationship %d: missing required attributes (arcrole=%s, fromRefs=%s, toRefs=%s)",
+        LOGGER.debug(
+            String.format("Skipping ix:relationship %d: missing required attributes (arcrole=%s, fromRefs=%s, toRefs=%s)",
             i, arcrole, fromRefs, toRefs));
       }
     }
@@ -2523,8 +2521,8 @@ public class XbrlToParquetConverter implements FileConverter {
         return null;
       }
 
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
         StringBuilder content = new StringBuilder();
         String line;
         while ((line = reader.readLine()) != null) {
@@ -2563,23 +2561,23 @@ public class XbrlToParquetConverter implements FileConverter {
       String outputPath) throws IOException {
     writeRecordsToParquet(records, schema, outputPath, "records");
   }
-  
+
   /**
    * Check if this is an insider trading form (Form 3, 4, or 5).
    */
   private boolean isInsiderForm(Document doc, String filingType) {
     // Check filing type first
-    if (filingType != null && (filingType.equals("3") || filingType.equals("4") 
-        || filingType.equals("5") || filingType.startsWith("3/") 
+    if (filingType != null && (filingType.equals("3") || filingType.equals("4")
+        || filingType.equals("5") || filingType.startsWith("3/")
         || filingType.startsWith("4/") || filingType.startsWith("5/"))) {
       return true;
     }
-    
+
     // Also check for ownershipDocument root element
     NodeList ownershipDocs = doc.getElementsByTagName("ownershipDocument");
     return ownershipDocs.getLength() > 0;
   }
-  
+
   /**
    * Convert Form 3/4/5 insider trading forms to Parquet.
    */
@@ -2608,8 +2606,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String partitionYear = getPartitionYear(filingType, filingDate, doc);
 
       // Build RELATIVE partition path (StorageProvider will add base path)
-      String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
-          cik, normalizedFilingType, partitionYear);
+      String relativePartitionPath =
+          String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // Extract insider transactions
       List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
@@ -2653,7 +2651,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
     return outputFiles;
   }
-  
+
   /**
    * Extract insider transactions from Form 3/4/5.
    */
@@ -2955,7 +2953,7 @@ public class XbrlToParquetConverter implements FileConverter {
       records.add(record);
     }
   }
-  
+
   /**
    * Create schema for insider transactions.
    */
@@ -2983,7 +2981,7 @@ public class XbrlToParquetConverter implements FileConverter {
         .name("footnotes").doc("Additional footnotes and explanations").type().nullable().stringType().noDefault()
         .endRecord();
   }
-  
+
   /**
    * Helper to get element text with optional nested element.
    */
@@ -3002,7 +3000,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   /**
    * Helper to get element text.
    */
@@ -3013,14 +3011,14 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   /**
    * Helper to get element text from parent.
    */
   private String getElementText(Element parent, String tagName) {
     return getElementText(parent, tagName, null);
   }
-  
+
   /**
    * Get footnote text by ID.
    */
@@ -3034,7 +3032,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   /**
    * Write Parquet file using StorageProvider's consolidated method.
    */
@@ -3045,16 +3043,16 @@ public class XbrlToParquetConverter implements FileConverter {
       storageProvider.writeAvroParquet(outputPath, schema, records, "vectorized");
     }
   }
-  
-  
+
+
   /**
    * Check if this is an 8-K filing.
    */
   private boolean is8KFiling(String filingType) {
-    return filingType != null && (filingType.equals("8-K") || filingType.equals("8K") 
+    return filingType != null && (filingType.equals("8-K") || filingType.equals("8K")
         || filingType.startsWith("8-K/"));
   }
-  
+
   /**
    * Extract 8-K exhibits (particularly 99.1 and 99.2 for earnings).
    */
@@ -3064,7 +3062,7 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void writeInsiderVectorizedBlobsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, File sourceFile, String accession) throws IOException {
-    
+
     // Create schema for vectorized blobs
     Schema embeddingField = SchemaBuilder.array().items().floatType();
     Schema schema = SchemaBuilder.record("VectorizedBlob")
@@ -3079,13 +3077,13 @@ public class XbrlToParquetConverter implements FileConverter {
         .name("filing_type").doc("Type of filing (Form 3, Form 4, Form 5)").type().stringType().noDefault()
         .name("accession_number").doc("SEC accession number").type().nullable().stringType().noDefault()
         .endRecord();
-    
+
     List<GenericRecord> records = new ArrayList<>();
-    
+
     // Extract remarks and footnotes from insider forms
     NodeList remarks = doc.getElementsByTagName("remarks");
     NodeList footnotes = doc.getElementsByTagName("footnote");
-    
+
     // Process remarks
     for (int i = 0; i < remarks.getLength(); i++) {
       String remarkText = remarks.item(i).getTextContent().trim();
@@ -3096,21 +3094,21 @@ public class XbrlToParquetConverter implements FileConverter {
         record.put("original_blob_id", "remark_" + i);
         record.put("blob_type", "insider_remark");
         record.put("blob_content", remarkText);
-        
+
         // Generate simple embedding for insider forms
         // For now, use a simple hash-based approach as these are short texts
         List<Float> embedding = generateSimpleEmbedding(remarkText, 384);
         record.put("embedding", embedding);
-        
+
         record.put("cik", cik);
         record.put("filing_date", filingDate);
         record.put("filing_type", filingType);
         record.put("accession_number", accession);
-        
+
         records.add(record);
       }
     }
-    
+
     // Process footnotes
     for (int i = 0; i < footnotes.getLength(); i++) {
       String footnoteText = footnotes.item(i).getTextContent().trim();
@@ -3121,20 +3119,20 @@ public class XbrlToParquetConverter implements FileConverter {
         record.put("original_blob_id", "footnote_" + i);
         record.put("blob_type", "insider_footnote");
         record.put("blob_content", footnoteText);
-        
+
         // Generate simple embedding for insider forms
         List<Float> embedding = generateSimpleEmbedding(footnoteText, 384);
         record.put("embedding", embedding);
-        
+
         record.put("cik", cik);
         record.put("filing_date", filingDate);
         record.put("filing_type", filingType);
         record.put("accession_number", accession);
-        
+
         records.add(record);
       }
     }
-    
+
     // Always write the file, even if empty, to satisfy cache validation
     writeRecordsToParquet(records, schema, outputPath);
     if (!records.isEmpty()) {
@@ -3143,32 +3141,32 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("Created empty vectorized file (no content > 20 chars) for " + outputPath);
     }
   }
-  
+
   private List<File> extract8KExhibits(File sourceFile, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession) {
     List<File> outputFiles = new ArrayList<>();
-    
+
     try {
       // Parse the 8-K filing to find exhibits
       String fileContent = new String(Files.readAllBytes(sourceFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
-      
+
       // Look for Exhibit 99.1 and 99.2 references
       List<GenericRecord> earningsRecords = new ArrayList<>();
       Schema earningsSchema = createEarningsTranscriptSchema();
-      
+
       // Check if this file contains exhibit content directly
       if (fileContent.contains("EX-99.1") || fileContent.contains("EX-99.2")) {
         earningsRecords.addAll(extractEarningsFromExhibit(fileContent, cik, filingType, filingDate));
       }
-      
+
       // Also check for earnings-related content patterns
-      if (fileContent.toLowerCase().contains("financial results") 
+      if (fileContent.toLowerCase().contains("financial results")
           || fileContent.toLowerCase().contains("earnings release")
           || fileContent.toLowerCase().contains("conference call")) {
-        
+
         // Extract paragraphs from earnings content
         List<String> paragraphs = extractEarningsParagraphs(fileContent);
-        
+
         for (int i = 0; i < paragraphs.size(); i++) {
           GenericRecord record = new GenericData.Record(earningsSchema);
           record.put("cik", cik);
@@ -3180,11 +3178,11 @@ public class XbrlToParquetConverter implements FileConverter {
           record.put("paragraph_text", paragraphs.get(i));
           record.put("speaker_name", extractSpeaker(paragraphs.get(i)));
           record.put("speaker_role", extractSpeakerRole(paragraphs.get(i)));
-          
+
           earningsRecords.add(record);
         }
       }
-      
+
       // Write earnings transcripts to Parquet if we found any
       if (!earningsRecords.isEmpty()) {
         // Create partition directory
@@ -3200,28 +3198,28 @@ public class XbrlToParquetConverter implements FileConverter {
           LOGGER.warn("Failed to parse year from filing date: " + filingDate);
           year = java.time.Year.now().getValue();
         }
-        
+
         String normalizedFilingType = filingType.replace("/", "").replace("-", "");
         String partitionYear = filingDate.substring(0, 4); // 8-K filings use filing year
 
         // Build RELATIVE partition path (StorageProvider will add base path)
-        String relativePartitionPath = String.format("source=sec/cik=%s/filing_type=%s/year=%s",
-            cik, normalizedFilingType, partitionYear);
-        String outputPath = relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik,
-            (accession != null && !accession.isEmpty()) ? accession : filingDate);
+        String relativePartitionPath =
+            String.format("source=sec/cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
+        String outputPath =
+            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
 
         writeParquetFile(earningsRecords, earningsSchema, outputPath);
-        
+
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
       }
-      
+
     } catch (Exception e) {
       LOGGER.warn("Failed to extract 8-K exhibits: " + e.getMessage());
     }
-    
+
     return outputFiles;
   }
-  
+
   /**
    * Extract earnings content from exhibit text.
    */
@@ -3229,30 +3227,30 @@ public class XbrlToParquetConverter implements FileConverter {
       String cik, String filingType, String filingDate) {
     List<GenericRecord> records = new ArrayList<>();
     Schema schema = createEarningsTranscriptSchema();
-    
+
     // Parse as HTML to extract text content
     org.jsoup.nodes.Document doc = Jsoup.parse(exhibitContent);
-    
+
     // Remove script and style elements
     doc.select("script, style").remove();
-    
+
     // Extract paragraphs
     Elements paragraphs = doc.select("p, div");
-    
+
     int paragraphNum = 0;
     for (org.jsoup.nodes.Element para : paragraphs) {
       String text = para.text().trim();
-      
+
       // Skip empty or very short paragraphs
       if (text.length() < 50) continue;
-      
+
       // Skip boilerplate
-      if (text.contains("FORWARD-LOOKING STATEMENTS") 
+      if (text.contains("FORWARD-LOOKING STATEMENTS")
           || text.contains("Safe Harbor")
           || text.contains("Copyright")) continue;
-      
+
       paragraphNum++;
-      
+
       GenericRecord record = new GenericData.Record(schema);
       record.put("cik", cik);
       record.put("filing_date", filingDate);
@@ -3263,35 +3261,35 @@ public class XbrlToParquetConverter implements FileConverter {
       record.put("paragraph_text", text);
       record.put("speaker_name", extractSpeaker(text));
       record.put("speaker_role", extractSpeakerRole(text));
-      
+
       records.add(record);
     }
-    
+
     return records;
   }
-  
+
   /**
    * Extract earnings-related paragraphs from text.
    */
   private List<String> extractEarningsParagraphs(String content) {
     List<String> paragraphs = new ArrayList<>();
-    
+
     // Parse as HTML
     org.jsoup.nodes.Document doc = Jsoup.parse(content);
-    
+
     // Look for earnings-related sections
     Elements relevantElements = doc.select("p, div");
-    
+
     boolean inEarningsSection = false;
     for (org.jsoup.nodes.Element elem : relevantElements) {
       String text = elem.text().trim();
-      
+
       // Start capturing when we find earnings indicators
-      if (text.contains("financial results") || text.contains("earnings") 
+      if (text.contains("financial results") || text.contains("earnings")
           || text.contains("revenue") || text.contains("quarter")) {
         inEarningsSection = true;
       }
-      
+
       // Capture relevant paragraphs
       if (inEarningsSection && text.length() > 50) {
         // Skip legal boilerplate
@@ -3299,16 +3297,16 @@ public class XbrlToParquetConverter implements FileConverter {
           paragraphs.add(text);
         }
       }
-      
+
       // Stop at certain sections
       if (text.contains("SIGNATURES") || text.contains("EXHIBIT INDEX")) {
         break;
       }
     }
-    
+
     return paragraphs;
   }
-  
+
   /**
    * Detect exhibit number from content.
    */
@@ -3320,13 +3318,13 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   /**
    * Detect section type from paragraph content.
    */
   private String detectSectionType(String text) {
     String lowerText = text.toLowerCase();
-    
+
     if (lowerText.contains("prepared remarks") || lowerText.contains("opening remarks")) {
       return "prepared_remarks";
     } else if (lowerText.contains("question") || lowerText.contains("answer")) {
@@ -3336,10 +3334,10 @@ public class XbrlToParquetConverter implements FileConverter {
     } else if (lowerText.contains("conference call") || lowerText.contains("transcript")) {
       return "transcript";
     }
-    
+
     return "other";
   }
-  
+
   /**
    * Extract speaker name from paragraph (for transcripts).
    */
@@ -3347,14 +3345,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // Look for patterns like "Name - Title:" or "Name:"
     Pattern speakerPattern = Pattern.compile("^([A-Z][a-z]+ [A-Z][a-z]+)\\s*[-:]");
     Matcher matcher = speakerPattern.matcher(text);
-    
+
     if (matcher.find()) {
       return matcher.group(1);
     }
-    
+
     return null;
   }
-  
+
   /**
    * Extract speaker role from paragraph.
    */
@@ -3362,10 +3360,10 @@ public class XbrlToParquetConverter implements FileConverter {
     // Look for patterns like "Name - CEO:" or "Name, Chief Executive Officer:"
     Pattern rolePattern = Pattern.compile("[-,]\\s*([^:]+):");
     Matcher matcher = rolePattern.matcher(text);
-    
+
     if (matcher.find()) {
       String role = matcher.group(1).trim();
-      
+
       // Normalize common roles
       if (role.contains("Chief Executive") || role.contains("CEO")) {
         return "CEO";
@@ -3376,13 +3374,13 @@ public class XbrlToParquetConverter implements FileConverter {
       } else if (role.contains("Operator")) {
         return "Operator";
       }
-      
+
       return role;
     }
-    
+
     return null;
   }
-  
+
   /**
    * Create schema for earnings transcripts.
    */
@@ -3431,27 +3429,27 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Extract footnotes as TextBlobs
     List<SecTextVectorizer.TextBlob> footnoteBlobs = extractFootnoteBlobs(doc);
-    
+
     // Extract MD&A paragraphs as TextBlobs
     List<SecTextVectorizer.TextBlob> mdaBlobs = extractMDABlobs(doc, sourceFile);
-    
+
     // Build relationship map (who references whom)
     Map<String, List<String>> references = buildReferenceMap(footnoteBlobs, mdaBlobs);
-    
+
     // Extract financial facts for enrichment
     Map<String, SecTextVectorizer.FinancialFact> facts = extractFinancialFactsForVectorization(doc);
 
     // Create vectorizer instance
     SecTextVectorizer vectorizer = new SecTextVectorizer();
-    
+
     // Generate individual enriched chunks
-    List<SecTextVectorizer.ContextualChunk> individualChunks = 
+    List<SecTextVectorizer.ContextualChunk> individualChunks =
         vectorizer.createIndividualChunks(footnoteBlobs, mdaBlobs, references, facts);
 
     // Also generate concept group chunks (existing functionality)
-    List<SecTextVectorizer.ContextualChunk> conceptChunks = 
+    List<SecTextVectorizer.ContextualChunk> conceptChunks =
         vectorizer.createContextualChunks(doc, sourceFile);
-    
+
     // Combine all chunks
     List<SecTextVectorizer.ContextualChunk> allChunks = new ArrayList<>();
     allChunks.addAll(individualChunks);
@@ -3460,21 +3458,21 @@ public class XbrlToParquetConverter implements FileConverter {
     // Convert chunks to Parquet records
     for (SecTextVectorizer.ContextualChunk chunk : allChunks) {
       GenericRecord record = new GenericData.Record(schema);
-      
+
       record.put("vector_id", chunk.context);
       record.put("original_blob_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
       record.put("blob_type", chunk.blobType);
       record.put("filing_date", filingDate);
-      
+
       // Truncate texts if they're too long for Parquet
-      String originalText = chunk.metadata.containsKey("original_text") ? 
+      String originalText = chunk.metadata.containsKey("original_text") ?
           (String) chunk.metadata.get("original_text") : "";
       record.put("original_text", truncateText(originalText, 32000));
       record.put("enriched_text", truncateText(chunk.text, 32000));
-      
+
       // Extract metadata
       record.put("parent_section", chunk.metadata.get("parent_section"));
-      
+
       // Convert relationships to JSON string
       if (chunk.metadata.containsKey("referenced_by") || chunk.metadata.containsKey("references_footnotes")) {
         Map<String, Object> relationships = new HashMap<>();
@@ -3486,13 +3484,13 @@ public class XbrlToParquetConverter implements FileConverter {
         }
         record.put("relationships", toJsonString(relationships));
       }
-      
+
       // Financial concepts
       if (chunk.metadata.containsKey("financial_concepts")) {
         List<String> concepts = (List<String>) chunk.metadata.get("financial_concepts");
         record.put("financial_concepts", String.join(",", concepts));
       }
-      
+
       // Token usage
       if (chunk.metadata.containsKey("tokens_used")) {
         record.put("tokens_used", chunk.metadata.get("tokens_used"));
@@ -3500,7 +3498,7 @@ public class XbrlToParquetConverter implements FileConverter {
       if (chunk.metadata.containsKey("token_budget")) {
         record.put("token_budget", chunk.metadata.get("token_budget"));
       }
-      
+
       // Add embedding vector (convert double[] to List<Float> for Avro)
       if (chunk.embedding != null && chunk.embedding.length > 0) {
         List<Float> embeddingList = new ArrayList<>();
@@ -3509,10 +3507,10 @@ public class XbrlToParquetConverter implements FileConverter {
         }
         record.put("embedding", embeddingList);
       } else {
-        throw new IllegalStateException("Chunk missing embedding vector: " + chunk.context + 
+        throw new IllegalStateException("Chunk missing embedding vector: " + chunk.context +
             " (type: " + chunk.blobType + ")");
       }
-      
+
       records.add(record);
     }
 
@@ -3526,27 +3524,27 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<SecTextVectorizer.TextBlob> extractFootnoteBlobs(Document doc) {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
-    
+
     // Extract footnotes from both traditional XBRL and inline XBRL (iXBRL) TextBlock elements
     // These contain actual narrative text in XBRL filings
     NodeList allElements = doc.getElementsByTagName("*");
     int footnoteCounter = 0;
-    
+
     for (int i = 0; i < allElements.getLength(); i++) {
       Element element = (Element) allElements.item(i);
       String localName = element.getLocalName();
       String namespaceURI = element.getNamespaceURI();
-      
+
       String concept = null;
       String text = null;
-      
+
       // Check for traditional XBRL TextBlock elements
       if (localName != null && localName.endsWith("TextBlock")) {
         text = element.getTextContent().trim();
         concept = extractConceptName(element);
       }
       // Check for inline XBRL (iXBRL) TextBlock elements
-      else if ("nonNumeric".equals(localName) && namespaceURI != null 
+      else if ("nonNumeric".equals(localName) && namespaceURI != null
                && namespaceURI.contains("xbrl")) {
         String name = element.getAttribute("name");
         if (name != null && name.contains("TextBlock")) {
@@ -3556,43 +3554,43 @@ public class XbrlToParquetConverter implements FileConverter {
           concept = name.contains(":") ? name.substring(name.indexOf(":") + 1) : name;
         }
       }
-      
+
       // Process extracted text if found
       if (text != null && text.length() > 200 && !text.startsWith("<")) {
         String contextRef = element.getAttribute("contextRef");
-        
+
         // Determine footnote section from concept name
         String parentSection = determineFootnoteSection(concept);
-        
+
         if (parentSection != null) {
           String id = "footnote_" + (++footnoteCounter);
-          
+
           // Create footnote blob with metadata
           Map<String, String> attributes = new HashMap<>();
           attributes.put("concept", concept != null ? concept : "");
           attributes.put("contextRef", contextRef != null ? contextRef : "");
-          
-          SecTextVectorizer.TextBlob blob = new SecTextVectorizer.TextBlob(
-              id, "footnote", text, parentSection, null, attributes);
+
+          SecTextVectorizer.TextBlob blob =
+              new SecTextVectorizer.TextBlob(id, "footnote", text, parentSection, null, attributes);
           blobs.add(blob);
-          
+
           LOGGER.debug("Extracted footnote: " + id + " from concept: " + concept);
         }
       }
     }
-    
+
     LOGGER.info("Extracted " + blobs.size() + " footnote blobs from XBRL");
     return blobs;
   }
-  
+
   /**
    * Determine the section for a footnote based on its concept name.
    */
   private String determineFootnoteSection(String concept) {
     if (concept == null) return "Notes to Financial Statements";
-    
+
     String lowerConcept = concept.toLowerCase();
-    
+
     // Map common footnote concepts to sections
     if (lowerConcept.contains("accountingpolicy") || lowerConcept.contains("significantaccounting")) {
       return "Significant Accounting Policies";
@@ -3603,7 +3601,7 @@ public class XbrlToParquetConverter implements FileConverter {
     } else if (lowerConcept.contains("equity") || lowerConcept.contains("stock")) {
       return "Stockholders Equity";
     } else if (lowerConcept.contains("segment")) {
-      return "Segment Information";  
+      return "Segment Information";
     } else if (lowerConcept.contains("commitment") || lowerConcept.contains("contingenc")) {
       return "Commitments and Contingencies";
     } else if (lowerConcept.contains("acquisition") || lowerConcept.contains("businesscombination")) {
@@ -3621,7 +3619,7 @@ public class XbrlToParquetConverter implements FileConverter {
     } else if (lowerConcept.contains("textblock") || lowerConcept.contains("disclosure")) {
       return "Notes to Financial Statements";
     }
-    
+
     return "Notes to Financial Statements";  // Default section
   }
 
@@ -3630,21 +3628,21 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<SecTextVectorizer.TextBlob> extractMDABlobs(Document xbrlDoc, File sourceFile) {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
-    
+
     // Extract MD&A from both traditional XBRL and inline XBRL (iXBRL)
     NodeList mdaElements = xbrlDoc.getElementsByTagName("*");
     int mdaCounter = 0;
-    
+
     for (int i = 0; i < mdaElements.getLength(); i++) {
       Element element = (Element) mdaElements.item(i);
       String localName = element.getLocalName();
       String namespaceURI = element.getNamespaceURI();
-      
+
       String elementName = null;
       String text = null;
-      
+
       // Check for traditional XBRL MD&A elements
-      if (localName != null && 
+      if (localName != null &&
           (localName.contains("ManagementDiscussionAndAnalysis") ||
            localName.contains("MDAndA") ||
            localName.contains("Item7"))) {
@@ -3652,10 +3650,10 @@ public class XbrlToParquetConverter implements FileConverter {
         elementName = localName;
       }
       // Check for inline XBRL (iXBRL) MD&A elements
-      else if ("nonNumeric".equals(localName) && namespaceURI != null 
+      else if ("nonNumeric".equals(localName) && namespaceURI != null
                && namespaceURI.contains("xbrl")) {
         String name = element.getAttribute("name");
-        if (name != null && 
+        if (name != null &&
             (name.contains("ManagementDiscussionAndAnalysis") ||
              name.contains("MDAndA") ||
              name.contains("Item7"))) {
@@ -3664,37 +3662,37 @@ public class XbrlToParquetConverter implements FileConverter {
           elementName = name.contains(":") ? name.substring(name.indexOf(":") + 1) : name;
         }
       }
-      
+
       // Process extracted text if found
       if (text != null && text.length() > 200) {
         // Split into paragraphs for better vectorization
         String[] paragraphs = text.split("\\n\\n+|(?<=\\.)\\s+(?=[A-Z])");
-        
+
         for (String paragraph : paragraphs) {
           paragraph = paragraph.trim();
           if (paragraph.length() > 100 && !paragraph.startsWith("<")) {
             String id = "mda_para_" + (++mdaCounter);
             String parentSection = "Management Discussion and Analysis";
             String subsection = detectMDASubsection(paragraph);
-            
+
             Map<String, String> attributes = new HashMap<>();
             attributes.put("source", "xbrl");
             attributes.put("element", elementName != null ? elementName : "");
-            
-            SecTextVectorizer.TextBlob blob = new SecTextVectorizer.TextBlob(
-                id, "mda_paragraph", paragraph, parentSection, subsection, attributes);
+
+            SecTextVectorizer.TextBlob blob =
+                new SecTextVectorizer.TextBlob(id, "mda_paragraph", paragraph, parentSection, subsection, attributes);
             blobs.add(blob);
           }
         }
       }
     }
-    
+
     // If no MD&A in XBRL and source is HTML, extract from HTML
-    if (blobs.isEmpty() && (sourceFile.getName().endsWith(".htm") || 
+    if (blobs.isEmpty() && (sourceFile.getName().endsWith(".htm") ||
                             sourceFile.getName().endsWith(".html"))) {
       blobs.addAll(extractMDAFromHtml(sourceFile));
     }
-    
+
     // If still no MD&A and this is XBRL, look for associated HTML filing
     if (blobs.isEmpty() && sourceFile.getName().endsWith(".xml")) {
       File htmlFile = findAssociatedHtmlFiling(sourceFile);
@@ -3702,11 +3700,11 @@ public class XbrlToParquetConverter implements FileConverter {
         blobs.addAll(extractMDAFromHtml(htmlFile));
       }
     }
-    
+
     LOGGER.info("Extracted " + blobs.size() + " MD&A paragraphs");
     return blobs;
   }
-  
+
   /**
    * Find the associated HTML filing for an XBRL file.
    */
@@ -3714,11 +3712,11 @@ public class XbrlToParquetConverter implements FileConverter {
     // Look for 10-K or 10-Q HTML in same directory
     File parentDir = xbrlFile.getParentFile();
     if (parentDir != null) {
-      File[] htmlFiles = parentDir.listFiles((dir, name) -> 
+      File[] htmlFiles = parentDir.listFiles((dir, name) ->
         (name.endsWith(".htm") || name.endsWith(".html")) &&
         !name.contains("_cal") && !name.contains("_def") && !name.contains("_lab") &&
         !name.contains("_pre") && !name.contains("_ref"));
-      
+
       if (htmlFiles != null && htmlFiles.length > 0) {
         // Prefer files with 10-K or 10-Q in name
         for (File file : htmlFiles) {
@@ -3733,64 +3731,64 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   /**
    * Extract MD&A from HTML filing.
    */
   private List<SecTextVectorizer.TextBlob> extractMDAFromHtml(File htmlFile) {
     List<SecTextVectorizer.TextBlob> blobs = new ArrayList<>();
-    
+
     try {
       org.jsoup.nodes.Document htmlDoc = Jsoup.parse(htmlFile, "UTF-8");
-      
+
       // Find Item 7 or MD&A sections
-      Elements mdaSections = htmlDoc.select(
-        "*:matchesOwn((?i)(item\\s*7[^0-9]|management.*discussion.*analysis))");
-      
+      Elements mdaSections =
+        htmlDoc.select("*:matchesOwn((?i)(item\\s*7[^0-9]|management.*discussion.*analysis))");
+
       int paraCounter = 0;
       for (org.jsoup.nodes.Element section : mdaSections) {
         // Skip if this is table of contents
         if (section.parents().select("table").size() > 0) continue;
-        
+
         // Extract following content until next major item
         org.jsoup.nodes.Element current = section;
         int localCounter = 0;
         boolean inMDA = true;
-        
+
         while (current != null && localCounter < 200 && inMDA) {
           current = current.nextElementSibling();
           if (current == null) break;
-          
+
           String text = current.text().trim();
-          
+
           // Stop at next item
           if (isNextItem(text)) {
             inMDA = false;
             break;
           }
-          
+
           // Extract meaningful paragraphs
           if (text.length() > 100 && !isBoilerplate(text)) {
             String id = "mda_para_" + (++paraCounter);
             String parentSection = "Management Discussion and Analysis";
             String subsection = detectMDASubsection(text);
-            
+
             Map<String, String> attributes = new HashMap<>();
             attributes.put("source", "html");
             attributes.put("file", htmlFile.getName());
-            
-            SecTextVectorizer.TextBlob blob = new SecTextVectorizer.TextBlob(
-                id, "mda_paragraph", text, parentSection, subsection, attributes);
+
+            SecTextVectorizer.TextBlob blob =
+                new SecTextVectorizer.TextBlob(id, "mda_paragraph", text, parentSection, subsection, attributes);
             blobs.add(blob);
           }
-          
+
           localCounter++;
         }
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to parse HTML for MD&A: " + e.getMessage());
     }
-    
+
     return blobs;
   }
 
@@ -3799,9 +3797,9 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private String detectMDASubsection(String text) {
     if (text == null || text.length() < 20) return null;
-    
+
     String lower = text.toLowerCase();
-    
+
     // Check for common MD&A subsections
     if (lower.contains("overview") || lower.contains("executive summary")) {
       return "Overview";
@@ -3822,12 +3820,12 @@ public class XbrlToParquetConverter implements FileConverter {
     } else if (lower.contains("segment") || lower.contains("geographic")) {
       return "Segment Analysis";
     }
-    
+
     return null;  // No specific subsection detected
   }
-  
+
   // Method already exists above - removing duplicate
-  
+
   /**
    * Check if text is boilerplate that should be skipped.
    */
@@ -3848,23 +3846,23 @@ public class XbrlToParquetConverter implements FileConverter {
   private Map<String, List<String>> buildReferenceMap(
       List<SecTextVectorizer.TextBlob> footnotes,
       List<SecTextVectorizer.TextBlob> mdaBlobs) {
-    
+
     Map<String, List<String>> references = new HashMap<>();
-    
+
     // Check each MD&A paragraph for footnote references
     for (SecTextVectorizer.TextBlob mdaBlob : mdaBlobs) {
-      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-          "(?:Note|Footnote)\\s+(\\d+[A-Za-z]?)", java.util.regex.Pattern.CASE_INSENSITIVE);
+      java.util.regex.Pattern pattern =
+          java.util.regex.Pattern.compile("(?:Note|Footnote)\\s+(\\d+[A-Za-z]?)", java.util.regex.Pattern.CASE_INSENSITIVE);
       java.util.regex.Matcher matcher = pattern.matcher(mdaBlob.text);
-      
+
       while (matcher.find()) {
         String footnoteRef = "footnote_" + matcher.group(1);
-        
+
         // Add MD&A paragraph to the footnote's reference list
         references.computeIfAbsent(footnoteRef, k -> new ArrayList<>()).add(mdaBlob.id);
       }
     }
-    
+
     return references;
   }
 
@@ -3883,15 +3881,15 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private List<Float> generateSimpleEmbedding(String text, int dimension) {
     List<Float> embedding = new ArrayList<>(dimension);
-    
+
     // Simple hash-based approach for deterministic embeddings
     int hash = text.hashCode();
     java.util.Random random = new java.util.Random(hash);
-    
+
     for (int i = 0; i < dimension; i++) {
       embedding.add(random.nextFloat() * 2.0f - 1.0f); // Range [-1, 1]
     }
-    
+
     // Normalize the vector
     float sum = 0;
     for (float val : embedding) {
@@ -3903,10 +3901,10 @@ public class XbrlToParquetConverter implements FileConverter {
         embedding.set(i, embedding.get(i) / norm);
       }
     }
-    
+
     return embedding;
   }
-  
+
   /**
    * Convert object to JSON string.
    */
@@ -3947,7 +3945,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return text.substring(0, maxLength - 3) + "...";
   }
-  
+
   private String extractCikFromPath(String path) {
     // Extract CIK from path like "/sec-data/0000320193/000032019323000106/"
     Pattern pattern = Pattern.compile("/(\\d{10})/");
@@ -3957,41 +3955,41 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   private String extractFilingTypeFromPath(File sourceFile) {
     // Try to determine filing type from filename and parent directory
     String filename = sourceFile.getName().toLowerCase();
     String parentName = sourceFile.getParentFile().getName().toLowerCase();
-    
+
     // Check filename patterns
     if (filename.contains("10k") || filename.contains("10-k") || parentName.contains("10k")) {
       return "10-K";
     } else if (filename.contains("10q") || filename.contains("10-q") || parentName.contains("10q")) {
       return "10-Q";
-    } else if (filename.contains("8k") || filename.contains("8-k") || 
+    } else if (filename.contains("8k") || filename.contains("8-k") ||
                filename.contains("_8k") || parentName.contains("8k")) {
       return "8-K";
     } else if (filename.contains("def14a") || parentName.contains("def14a")) {
       return "DEF14A";
     }
-    
+
     // Try to infer from filename patterns
     // Files like "aapl-20240928.htm" are usually 10-K/10-Q based on date
     if (filename.matches(".*-20\\d{6}\\.htm.*")) {
       // Check if it's end of September (Q4 - likely 10-K)
       if (filename.contains("0930") || filename.contains("0928")) {
         return "10-K";
-      } else if (filename.contains("0331") || filename.contains("0330") || 
+      } else if (filename.contains("0331") || filename.contains("0330") ||
                  filename.contains("0630") || filename.contains("0629") ||
                  filename.contains("1231") || filename.contains("1230")) {
         return "10-Q";
       }
     }
-    
+
     // Default to 8-K for other HTML files as they're most common
     return "8-K";
   }
-  
+
   private String extractFilingDateFromFilename(String filename) {
     // Extract date from filename like "aapl-20230930.htm" or "msft-20240630.htm"
     // Also handle 8-K names like "ny20007635x4_8k.htm" or "d447690d8k.htm"
@@ -4017,12 +4015,12 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
     }
-    
+
     // If no valid date found, try to use current year
     // This is a fallback for files without dates in the name
     return "2024-01-01";  // Default date for filing
   }
-  
+
   private String extractAccessionFromPath(String path) {
     // Extract accession from path like "/sec-data/0000320193/000032019323000106/"
     Pattern pattern = Pattern.compile("/(\\d{18})/");
@@ -4034,11 +4032,11 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return null;
   }
-  
+
   private String extractFilingDateFromHtml(File htmlFile) {
     try {
       String content = Files.readString(htmlFile.toPath());
-      
+
       // Try various patterns to find the period end date in iXBRL
       // Pattern 1: ix:nonnumeric with name containing PeriodEndDate
       Pattern pattern1 = Pattern.compile("name=\"[^\"]*PeriodEndDate[^\"]*\"[^>]*>([^<]+)</");
@@ -4047,7 +4045,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String dateStr = matcher1.group(1).trim();
         return normalizeDate(dateStr);
       }
-      
+
       // Pattern 2: contextRef with period end date
       Pattern pattern2 = Pattern.compile("contextref=\"[^\"]*\"[^>]*>\\s*(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}/\\d{1,2}/\\d{4})");
       Matcher matcher2 = pattern2.matcher(content);
@@ -4055,7 +4053,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String dateStr = matcher2.group(1).trim();
         return normalizeDate(dateStr);
       }
-      
+
       // Pattern 3: Look for dei:DocumentPeriodEndDate
       Pattern pattern3 = Pattern.compile("dei:DocumentPeriodEndDate[^>]*>([^<]+)</");
       Matcher matcher3 = pattern3.matcher(content);
@@ -4063,7 +4061,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String dateStr = matcher3.group(1).trim();
         return normalizeDate(dateStr);
       }
-      
+
       // Pattern 4: Look for period end in meta tags
       Pattern pattern4 = Pattern.compile("<meta[^>]*name=\"[^\"]*period[^\"]*\"[^>]*content=\"([^\"]+)\"");
       Matcher matcher4 = pattern4.matcher(content);
@@ -4071,74 +4069,74 @@ public class XbrlToParquetConverter implements FileConverter {
         String dateStr = matcher4.group(1).trim();
         return normalizeDate(dateStr);
       }
-      
+
     } catch (IOException e) {
       LOGGER.warn("Failed to read HTML file for date extraction: " + e.getMessage());
     }
     return null;
   }
-  
+
   private Map<String, String> extractCompanyInfoFromHtml(File htmlFile) {
     Map<String, String> info = new HashMap<>();
     try {
       String content = Files.readString(htmlFile.toPath());
-      
+
       // Extract company name
       Pattern namePattern = Pattern.compile("dei:EntityRegistrantName[^>]*>([^<]+)</");
       Matcher nameMatcher = namePattern.matcher(content);
       if (nameMatcher.find()) {
         info.put("company_name", nameMatcher.group(1).trim());
       }
-      
+
       // Extract state of incorporation
       Pattern statePattern = Pattern.compile("dei:EntityIncorporationStateCountryCode[^>]*>([^<]+)</");
       Matcher stateMatcher = statePattern.matcher(content);
       if (stateMatcher.find()) {
         info.put("state_of_incorporation", stateMatcher.group(1).trim());
       }
-      
+
       // Extract fiscal year end
       Pattern fyPattern = Pattern.compile("dei:CurrentFiscalYearEndDate[^>]*>([^<]+)</");
       Matcher fyMatcher = fyPattern.matcher(content);
       if (fyMatcher.find()) {
         info.put("fiscal_year_end", fyMatcher.group(1).trim());
       }
-      
+
       // Extract SIC code
       Pattern sicPattern = Pattern.compile("dei:EntityStandardIndustrialClassificationCode[^>]*>([^<]+)</");
       Matcher sicMatcher = sicPattern.matcher(content);
       if (sicMatcher.find()) {
         info.put("sic_code", sicMatcher.group(1).trim());
       }
-      
+
     } catch (IOException e) {
       LOGGER.warn("Failed to read HTML file for company info extraction: " + e.getMessage());
     }
     return info;
   }
-  
+
   private String normalizeDate(String dateStr) {
     if (dateStr == null || dateStr.isEmpty()) {
       return null;
     }
-    
+
     // Already in YYYY-MM-DD format
     if (dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
       return dateStr;
     }
-    
+
     // MM/DD/YYYY format
     if (dateStr.matches("\\d{1,2}/\\d{1,2}/\\d{4}")) {
       String[] parts = dateStr.split("/");
-      return String.format("%s-%02d-%02d", parts[2], 
+      return String.format("%s-%02d-%02d", parts[2],
           Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
     }
-    
+
     // YYYYMMDD format
     if (dateStr.matches("\\d{8}")) {
       return dateStr.substring(0, 4) + "-" + dateStr.substring(4, 6) + "-" + dateStr.substring(6, 8);
     }
-    
+
     // Month DD, YYYY format (e.g., "September 30, 2024")
     Pattern monthDayYear = Pattern.compile("(\\w+)\\s+(\\d{1,2}),\\s+(\\d{4})");
     Matcher matcher = monthDayYear.matcher(dateStr);
@@ -4151,10 +4149,10 @@ public class XbrlToParquetConverter implements FileConverter {
         return String.format("%s-%02d-%02d", year, monthNum, Integer.parseInt(day));
       }
     }
-    
+
     return null;
   }
-  
+
   private int getMonthNumber(String month) {
     String[] months = {"january", "february", "march", "april", "may", "june",
                        "july", "august", "september", "october", "november", "december"};
@@ -4166,7 +4164,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     return 0;
   }
-  
+
   private void createEnhancedMetadata(File sourceFile, String targetDirectoryPath, String cik,
       String filingType, String filingDate, String accession, Map<String, String> companyInfo) throws IOException {
     // Build partition path
@@ -4183,7 +4181,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // Build metadata file path (relative)
     String metadataPath = relativePartitionPath + "/" +
         String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
-    
+
     // Define schema for metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
         .fields()
@@ -4212,7 +4210,7 @@ public class XbrlToParquetConverter implements FileConverter {
     record.put("mailing_address", companyInfo.get("mailing_address"));
     record.put("filing_url", sourceFile.getName());
     records.add(record);
-    
+
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
   }
@@ -4233,7 +4231,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // Build metadata file path (relative)
     String metadataPath = relativePartitionPath + "/" +
         String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate);
-    
+
     // Define schema for minimal metadata
     Schema schema = SchemaBuilder.record("FilingMetadata")
         .fields()
@@ -4263,7 +4261,7 @@ public class XbrlToParquetConverter implements FileConverter {
     record.put("mailing_address", null);
     record.put("filing_url", sourceFile.getName());
     records.add(record);
-    
+
     // Use consolidated StorageProvider method for Parquet writing
     storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
   }
@@ -4333,8 +4331,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Format: timestamp | file_path | error_type | error_message
       String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
-      String logEntry = String.format("%s | %s | %s | %s%n",
-          timestamp,
+      String logEntry =
+          String.format("%s | %s | %s | %s%n", timestamp,
           sourceFile.getAbsolutePath(),
           errorType,
           errorMessage);
@@ -4360,8 +4358,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Format: timestamp | file_path | error_type | error_message
       String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
-      String logEntry = String.format("%s | %s | %s | %s%n",
-          timestamp,
+      String logEntry =
+          String.format("%s | %s | %s | %s%n", timestamp,
           sourceFile.getAbsolutePath(),
           errorType,
           errorMessage);

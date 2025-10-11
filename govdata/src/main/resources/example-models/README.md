@@ -116,8 +116,8 @@ Stock prices are enabled by default. To control:
 ### Query Stock Prices
 ```sql
 -- Simple price query
-SELECT date, close, volume 
-FROM stock_prices 
+SELECT date, close, volume
+FROM stock_prices
 WHERE ticker = 'AAPL' AND year = 2023;
 
 -- Join with financials

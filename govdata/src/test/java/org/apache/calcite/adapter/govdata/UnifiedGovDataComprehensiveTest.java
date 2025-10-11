@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -55,8 +54,9 @@ public class UnifiedGovDataComprehensiveTest {
   /**
    * SEC schema expected tables (9 total).
    */
-  private static final Set<String> SEC_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
-      "financial_line_items",
+  private static final Set<String> SEC_EXPECTED_TABLES =
+      new HashSet<>(
+          Arrays.asList("financial_line_items",
       "filing_metadata",
       "filing_contexts",
       "mda_sections",
@@ -65,14 +65,14 @@ public class UnifiedGovDataComprehensiveTest {
       "earnings_transcripts",
       "stock_prices",
       "vectorized_blobs", // Now enabled with textSimilarity configuration
-      "company_info"
-  ));
+      "company_info"));
 
   /**
    * ECON schema expected tables (18 total).
    */
-  private static final Set<String> ECON_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
-      "employment_statistics",
+  private static final Set<String> ECON_EXPECTED_TABLES =
+      new HashSet<>(
+          Arrays.asList("employment_statistics",
       "inflation_metrics",
       "wage_growth",
       "regional_employment",
@@ -91,14 +91,14 @@ public class UnifiedGovDataComprehensiveTest {
       "fred_treasuries",
       "fred_employment_indicators",
       // FRED catalog table
-      "fred_data_series_catalog"
-  ));
+      "fred_data_series_catalog"));
 
   /**
    * GEO schema expected tables (15 total).
    */
-  private static final Set<String> GEO_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
-      "states",
+  private static final Set<String> GEO_EXPECTED_TABLES =
+      new HashSet<>(
+          Arrays.asList("states",
       "counties",
       "places",
       "zctas",
@@ -112,14 +112,14 @@ public class UnifiedGovDataComprehensiveTest {
       "economic_indicators",
       "zip_county_crosswalk",
       "zip_cbsa_crosswalk",
-      "tract_zip_crosswalk"
-  ));
+      "tract_zip_crosswalk"));
 
   /**
    * CENSUS schema expected tables (21 total).
    */
-  private static final Set<String> CENSUS_EXPECTED_TABLES = new HashSet<>(Arrays.asList(
-      // ACS tables (15)
+  private static final Set<String> CENSUS_EXPECTED_TABLES =
+      new HashSet<>(
+          Arrays.asList(// ACS tables (15)
       "acs_population", "acs_demographics", "acs_income", "acs_poverty",
       "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
       "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
@@ -129,16 +129,14 @@ public class UnifiedGovDataComprehensiveTest {
       // Economic tables (2)
       "economic_census", "county_business_patterns",
       // Population estimates (1)
-      "population_estimates"
-  ));
+      "population_estimates"));
 
   @BeforeAll
   public static void setup() {
     TestEnvironmentLoader.ensureLoaded();
   }
 
-  @Test
-  public void testAllThreeDataSourcesComprehensive() throws Exception {
+  @Test public void testAllThreeDataSourcesComprehensive() throws Exception {
     // Create comprehensive model with all four schemas
     String modelJson =
         "{" +

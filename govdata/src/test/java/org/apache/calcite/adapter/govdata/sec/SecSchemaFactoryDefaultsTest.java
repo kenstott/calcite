@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -32,13 +33,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.time.Year;
 import java.util.Comparator;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for SecSchemaFactory default value loading and environment variable substitution.
@@ -80,13 +78,12 @@ public class SecSchemaFactoryDefaultsTest {
     }
   }
 
-  @Test
-  public void testDefaultsAreApplied(TestInfo testInfo) throws Exception {
+  @Test public void testDefaultsAreApplied(TestInfo testInfo) throws Exception {
     String tempDir = createTestDataDir(testInfo);
-    
+
     // Create a minimal model without endYear specified
-    String modelJson = String.format(
-        "{" +
+    String modelJson =
+        String.format("{" +
         "  \"version\": \"1.0\"," +
         "  \"defaultSchema\": \"SEC\"," +
         "  \"schemas\": [{" +
@@ -120,13 +117,12 @@ public class SecSchemaFactoryDefaultsTest {
     }
   }
 
-  @Test
-  public void testEnvironmentVariableSubstitution(TestInfo testInfo) throws Exception {
+  @Test public void testEnvironmentVariableSubstitution(TestInfo testInfo) throws Exception {
     String tempDir = createTestDataDir(testInfo);
-    
+
     // Create a model with environment variable substitution
-    String modelJson = String.format(
-        "{" +
+    String modelJson =
+        String.format("{" +
         "  \"version\": \"1.0\"," +
         "  \"defaultSchema\": \"SEC\"," +
         "  \"schemas\": [{" +
@@ -161,13 +157,12 @@ public class SecSchemaFactoryDefaultsTest {
     }
   }
 
-  @Test
-  public void testFilingTypesDefault(TestInfo testInfo) throws Exception {
+  @Test public void testFilingTypesDefault(TestInfo testInfo) throws Exception {
     String tempDir = createTestDataDir(testInfo);
-    
+
     // Create a model without explicit filingTypes
-    String modelJson = String.format(
-        "{" +
+    String modelJson =
+        String.format("{" +
         "  \"version\": \"1.0\"," +
         "  \"defaultSchema\": \"SEC\"," +
         "  \"schemas\": [{" +
@@ -201,13 +196,12 @@ public class SecSchemaFactoryDefaultsTest {
     }
   }
 
-  @Test
-  public void testTextSimilarityDefaults(TestInfo testInfo) throws Exception {
+  @Test public void testTextSimilarityDefaults(TestInfo testInfo) throws Exception {
     String tempDir = createTestDataDir(testInfo);
-    
+
     // Create a model without explicit textSimilarity configuration
-    String modelJson = String.format(
-        "{" +
+    String modelJson =
+        String.format("{" +
         "  \"version\": \"1.0\"," +
         "  \"defaultSchema\": \"SEC\"," +
         "  \"schemas\": [{" +

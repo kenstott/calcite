@@ -85,18 +85,18 @@ public class TestEnvironmentLoader {
         if (equalsIndex > 0) {
           String key = line.substring(0, equalsIndex).trim();
           String value = line.substring(equalsIndex + 1).trim();
-          
+
           // Remove quotes if present
           if (value.startsWith("\"") && value.endsWith("\"")) {
             value = value.substring(1, value.length() - 1);
           }
-          
+
           ENV_VARS.put(key, value);
           // Also set as system property for Calcite's EnvironmentVariableSubstitutor
           System.setProperty(key, value);
         }
       }
-      
+
       LOGGER.info("Loaded {} environment variables from .env.test", ENV_VARS.size());
       loaded = true;
 
@@ -116,7 +116,7 @@ public class TestEnvironmentLoader {
     if (value != null) {
       return value;
     }
-    
+
     // Then check loaded values
     return ENV_VARS.get(key);
   }

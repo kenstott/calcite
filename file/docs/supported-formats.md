@@ -30,7 +30,7 @@ CSV configuration is handled through the `csvTypeInference` parameter and automa
 
 **Supported Data Types:**
 - `INTEGER` - Whole numbers
-- `BIGINT` - Large integers  
+- `BIGINT` - Large integers
 - `DOUBLE` - Floating point numbers
 - `DECIMAL` - Precise decimal numbers
 - `BOOLEAN` - true/false values
@@ -182,11 +182,11 @@ Results in table with columns: `id`, `name`, `profile_age`, `profile_city`
       "enabled": true,
       "maxDepth": 2,
       "followExternalLinks": false,
-      
+
       // New pattern-based data file discovery
       "dataFilePattern": ".*\\.(csv|xlsx?|parquet)$",  // Regex for data files
       "dataFileExcludePattern": ".*test.*",             // Exclude pattern
-      
+
       // HTML table extraction control
       "generateTablesFromHtml": true,    // Enable/disable HTML table extraction
       "htmlTableMinRows": 2,              // Minimum rows for HTML tables

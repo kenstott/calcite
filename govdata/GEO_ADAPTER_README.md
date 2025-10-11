@@ -104,9 +104,9 @@ No preprocessing needed - just set environment variables and connect!
 
 ```sql
 -- Find all California cities
-SELECT place_name, population 
-FROM geo.places 
-WHERE state_abbr = 'CA' 
+SELECT place_name, population
+FROM geo.places
+WHERE state_abbr = 'CA'
 ORDER BY population DESC;
 
 -- Get demographic data for a ZIP code

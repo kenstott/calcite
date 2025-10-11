@@ -245,7 +245,7 @@ For a comprehensive view of all relationships including the complete ERD diagram
 ### Geographic Aggregation
 ```sql
 -- Companies by state with geographic context
-SELECT 
+SELECT
     s.state_name,
     s.state_code,
     s.land_area / 1000000 as land_area_sq_km,
@@ -259,7 +259,7 @@ ORDER BY company_count DESC;
 ### ZIP Code Analysis
 ```sql
 -- Metropolitan area economic activity
-SELECT 
+SELECT
     c.cbsa_title,
     c.metro_micro,
     COUNT(DISTINCT z.zip) as zip_codes,
@@ -273,7 +273,7 @@ ORDER BY residential_weight DESC;
 ### Spatial Joins
 ```sql
 -- Find all counties in a state
-SELECT 
+SELECT
     c.county_name,
     c.county_fips,
     c.land_area / 1000000 as area_sq_km
@@ -286,7 +286,7 @@ ORDER BY c.county_name;
 ### Cross-Domain Geographic Analysis
 ```sql
 -- Economic indicators by company incorporation state
-SELECT 
+SELECT
     s.state_name,
     COUNT(DISTINCT f.cik) as companies,
     AVG(e.unemployment_rate) as avg_unemployment,

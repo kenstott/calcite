@@ -31,7 +31,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class SimplifiedModelTest {
 
   @Test public void testSimplifiedModels() throws Exception {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("SIMPLIFIED MODEL FILES TEST");
 
     // Load and display the simple model
@@ -126,7 +127,8 @@ public class SimplifiedModelTest {
     System.out.println("    }");
     System.out.println("  }");
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("SIMPLIFIED MODEL TEST PASSED");
   }
 }

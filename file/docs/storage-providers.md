@@ -52,7 +52,7 @@ When defining individual tables, the storage provider is determined by the URL s
       "url": "s3://bucket/data.parquet"
     },
     {
-      "name": "api_data", 
+      "name": "api_data",
       "url": "https://api.example.com/data.json"
     }
   ]
@@ -61,7 +61,7 @@ When defining individual tables, the storage provider is determined by the URL s
 
 **URL Scheme Mapping:**
 - `/local/path/data.csv` → LocalFileStorageProvider
-- `s3://bucket/data.parquet` → S3StorageProvider  
+- `s3://bucket/data.parquet` → S3StorageProvider
 - `https://api.example.com/data.json` → HttpStorageProvider
 
 ### Storage Provider Selection Logic
@@ -138,7 +138,7 @@ Is storageType explicitly configured in schema?
   }]
 }
 ```
-**Result:** 
+**Result:**
 - Discovers local files in `/local/data/`
 - PLUS explicitly defined tables from S3 and HTTP
 
@@ -706,7 +706,7 @@ The File Adapter provides basic error handling for storage providers:
 
 **Note:** The File Adapter does NOT currently support:
 - Exponential backoff retry strategies
-- Circuit breaker patterns  
+- Circuit breaker patterns
 - Health check monitoring
 - Configurable retry policies
 - Custom error recovery strategies

@@ -17,7 +17,7 @@
   - No pattern matching
 
 ### Temporal Types ✅
-- **Status**: ✅ COMPLIANT  
+- **Status**: ✅ COMPLIANT
 - **Findings**: Proper usage of modern temporal types
   - Using `java.time.LocalDate` instead of deprecated `java.sql.Time`
   - No `toLocalDate()` timezone issues found
@@ -40,7 +40,7 @@
 - **Location**: `src/main/java/org/apache/calcite/adapter/govdata/sec/SecSchemaFactory.java`
 - **Issue**: 7 instances of `System.out.println()` in production code
 - **Lines**: 78, 156, 304, 329, 606, 882, 1478
-- **Guidelines Violated**: 
+- **Guidelines Violated**:
   > **NEVER** use `System.out`/`System.err` in production code - always use `logger.debug()`
 
 **Required Fix:**
@@ -48,7 +48,7 @@
 // BAD - Current code
 System.out.println("DEBUG: SecSchemaFactory class loaded!!");
 
-// GOOD - Compliant code  
+// GOOD - Compliant code
 private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
 LOGGER.debug("SecSchemaFactory class loaded");
 ```
@@ -65,7 +65,7 @@ LOGGER.debug("SecSchemaFactory class loaded");
 - **Files Affected**: 4 test files
   - `SecSchemaFactoryDefaultsTest.java`
   - `SecConstraintMetadataTest.java`
-  - `AppleFinancialAnalysisTest.java` 
+  - `AppleFinancialAnalysisTest.java`
   - `SecJdbcIntegrationTest.java`
 - **Guidelines Violated**:
   > **NEVER use JUnit @TempDir** - causes cleanup failures with parallel tests
@@ -103,7 +103,7 @@ private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.cl
 // Line 78:
 LOGGER.debug("SecSchemaFactory class loaded");
 
-// Line 156: 
+// Line 156:
 LOGGER.debug("SecSchemaFactory constructor called");
 
 // Line 304:
@@ -117,7 +117,7 @@ LOGGER.debug("SecSchemaFactory.create() called with operand: {}", operand);
 # Move test files to proper location
 mv test-*.json src/test/resources/
 
-# Remove compiled artifacts  
+# Remove compiled artifacts
 rm -f *.class
 
 # Move scripts to scripts/ directory
@@ -134,8 +134,8 @@ Path tempDir;
 
 // GOOD - Compliant pattern
 private String createUniqueTestDir() {
-  return "build/test-data/" + getClass().getSimpleName() + "/" + 
-         testInfo.getTestMethod().get().getName() + "_" + 
+  return "build/test-data/" + getClass().getSimpleName() + "/" +
+         testInfo.getTestMethod().get().getName() + "_" +
          System.nanoTime();
 }
 
@@ -146,7 +146,7 @@ void cleanup() {
     Files.walk(Paths.get(testDataDir))
       .sorted(Comparator.reverseOrder())
       .forEach(path -> {
-        try { Files.delete(path); } 
+        try { Files.delete(path); }
         catch (IOException e) { /* log warning */ }
       });
   }
@@ -158,7 +158,7 @@ void cleanup() {
 // Add to all integration tests
 @Tag("integration")
 public class StockPriceIntegrationTest {
-  
+
   @Test
   @Tag("integration")  // Or move to class level
   void testStockPriceRetrieval() {
@@ -196,7 +196,7 @@ LOGGER.info("Integration test completed successfully"); // Sparingly
 3. ✅ Clean up root directory organization
 4. ✅ Remove compiled artifacts
 
-### Phase 2: Test Infrastructure (Next)  
+### Phase 2: Test Infrastructure (Next)
 1. ✅ Replace @TempDir with build directory pattern
 2. ✅ Add missing @Tag annotations to all tests
 3. ✅ Implement proper cleanup in affected tests
@@ -220,7 +220,7 @@ LOGGER.info("Integration test completed successfully"); // Sparingly
 - [ ] All tests properly tagged (`@Tag("unit")` or `@Tag("integration")`)
 - [ ] Parallel-safe test execution
 
-### Nice to Have (Phase 3)  
+### Nice to Have (Phase 3)
 - [ ] <100 System.out instances in tests (down from 1,101)
 - [ ] Clean test output focused on failures/key milestones
 - [ ] Consistent test logging patterns
@@ -249,7 +249,7 @@ Priority: **COMPLETED** - All critical violations have been resolved and codebas
 - **Root directory cleanup**: Files moved to proper locations, compiled artifacts removed
 - **Source organization**: Now follows proper Maven/Gradle structure
 
-### ✅ **Test Infrastructure Issues RESOLVED**  
+### ✅ **Test Infrastructure Issues RESOLVED**
 - **@TempDir violations**: Replaced in 4 test files with compliant build directory pattern
 - **Missing test tags**: All tests properly tagged (utility classes appropriately excluded)
 - **System.out reduction**: Major test files cleaned up (AppleMicrosoftTest reduced from 66 to 25 instances)

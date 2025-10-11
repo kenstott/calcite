@@ -93,7 +93,7 @@ Before delegating to FileSchema, GovData enhances the schema with:
 
 #### Table Comments
 ```java
-tableMetadata.put("comment", 
+tableMetadata.put("comment",
   "SEC filing metadata including company details, filing dates, and incorporation state");
 ```
 
@@ -158,13 +158,13 @@ Each data source has specialized downloaders:
 public interface DataDownloader<T> {
     // Check if download needed
     boolean needsUpdate(File existingData);
-    
+
     // Download from API
     void download(DownloadConfig config);
-    
+
     // Parse raw data
     T parseData(File rawData);
-    
+
     // Convert to Parquet
     void convertToParquet(T data, File outputDir);
 }
@@ -178,11 +178,11 @@ The pipeline works with multiple storage backends:
 public interface StorageProvider {
     // Check existence
     boolean exists(String path);
-    
+
     // Read/write operations
     InputStream openInputStream(String path);
     void writeFile(String path, byte[] content);
-    
+
     // Directory operations
     void createDirectories(String path);
     List<String> listFiles(String path);
@@ -220,12 +220,12 @@ for (LocalDate date = lastUpdate; date.isBefore(today); date = date.plusDays(1))
 Execute pipeline stages concurrently:
 
 ```java
-CompletableFuture<Void> secPipeline = CompletableFuture.runAsync(() -> 
+CompletableFuture<Void> secPipeline = CompletableFuture.runAsync(() ->
     downloadSecData(ciks, years));
-    
+
 CompletableFuture<Void> econPipeline = CompletableFuture.runAsync(() ->
     downloadEconData(indicators));
-    
+
 CompletableFuture.allOf(secPipeline, econPipeline).join();
 ```
 

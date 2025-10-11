@@ -49,7 +49,7 @@ public class GeoDataVerificationTest {
                 System.setProperty(parts[0].trim(), parts[1].trim().replaceAll("^\"|\"$", ""));
               }
             });
-        System.out.println("Loaded " + 
+        System.out.println("Loaded " +
             java.nio.file.Files.lines(envFile)
                 .filter(line -> !line.startsWith("#") && line.contains("="))
                 .count() + " environment variables from .env.test");
@@ -59,8 +59,7 @@ public class GeoDataVerificationTest {
     }
   }
 
-  @Test
-  public void testGeoTablesContainData() throws Exception {
+  @Test public void testGeoTablesContainData() throws Exception {
     URL modelUrl = GeoDataVerificationTest.class.getClassLoader()
         .getResource("govdata-geo-test-model.json");
     if (modelUrl == null) {
@@ -104,7 +103,7 @@ public class GeoDataVerificationTest {
         String sampleQuery = "SELECT * FROM geo." + table + " LIMIT 3";
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sampleQuery)) {
-          
+
           int rowCount = 0;
           while (rs.next()) {
             rowCount++;
@@ -112,7 +111,7 @@ public class GeoDataVerificationTest {
               // Print first row details
               System.out.println("  Sample row 1:");
               for (int i = 1; i <= Math.min(rs.getMetaData().getColumnCount(), 5); i++) {
-                System.out.println("    " + rs.getMetaData().getColumnName(i) + ": " + 
+                System.out.println("    " + rs.getMetaData().getColumnName(i) + ": " +
                     truncate(rs.getString(i), 50));
               }
             }
@@ -133,7 +132,7 @@ public class GeoDataVerificationTest {
                          "FROM geo.tiger_states " +
                          "WHERE state_name IN ('California', 'New York', 'Texas') " +
                          "ORDER BY state_name";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(stateQuery)) {
         int stateCount = 0;
@@ -154,7 +153,7 @@ public class GeoDataVerificationTest {
                           "FROM geo.tiger_counties " +
                           "WHERE state_fips = '06' " +
                           "LIMIT 5";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(countyQuery)) {
         int countyCount = 0;
@@ -173,7 +172,7 @@ public class GeoDataVerificationTest {
       String partitionQuery = "SELECT DISTINCT source, type, year " +
                              "FROM geo.tiger_states " +
                              "ORDER BY year";
-      
+
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(partitionQuery)) {
         while (rs.next()) {

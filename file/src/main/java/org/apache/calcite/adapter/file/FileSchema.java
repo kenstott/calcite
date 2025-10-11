@@ -2413,8 +2413,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             // Fall back to default conversion if no custom converter handled it
             if (!customConverted) {
               LOGGER.debug("No custom converter handled {}, using default ParquetConversionUtil", source.path());
-              parquetFile = ParquetConversionUtil.convertToParquet(source, tableName,
-                  originalTable, cacheDir, parentSchema, name, tableNameCasing);
+              parquetFile =
+                  ParquetConversionUtil.convertToParquet(source, tableName, originalTable, cacheDir, parentSchema, name, tableNameCasing);
             }
 
             // DuckDB engine will be handled same as PARQUET for initial setup

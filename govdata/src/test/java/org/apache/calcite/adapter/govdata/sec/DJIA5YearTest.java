@@ -74,7 +74,8 @@ public class DJIA5YearTest {
   }
 
   @Test public void testDJIASampleQuery() throws Exception {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("TESTING DJIA 5-YEAR SEC FILINGS DOWNLOAD");
 
     // Create simple test model instead of loading from file
@@ -177,7 +178,8 @@ public class DJIA5YearTest {
 
     Duration elapsed = Duration.between(start, Instant.now());
 
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("RESULTS:");
     System.out.println("  Total time: " + elapsed.toSeconds() + " seconds");
     System.out.println("  ✓ Successfully connected to DJIA 5-year SEC data");
@@ -185,7 +187,8 @@ public class DJIA5YearTest {
 
   @Test @Tag("unit")
   public void testDJIAQuickQuery() throws Exception {
-    System.out.println("\n" + "=".repeat(80));
+    System.out.println("\n"
+  + "=".repeat(80));
     System.out.println("QUICK DJIA SAMPLE QUERY TEST");
 
     // Create mock data for testing

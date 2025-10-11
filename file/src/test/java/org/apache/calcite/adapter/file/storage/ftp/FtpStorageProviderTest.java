@@ -39,8 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("integration")
 public class FtpStorageProviderTest {
 
-  @Test 
-  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  @Test @Timeout(value = 60, unit = TimeUnit.SECONDS)
   void testPublicFtpServer() throws IOException {
     FtpStorageProvider provider = new FtpStorageProvider();
 
@@ -75,7 +74,7 @@ public class FtpStorageProviderTest {
 
     if (!connected) {
       // Use JUnit assumption to skip test when network is unavailable
-      Assumptions.assumeTrue(false, 
+      Assumptions.assumeTrue(false,
           "Skipping FTP test - could not connect to any public FTP server (network may be blocking FTP)");
       return;
     }
@@ -87,7 +86,7 @@ public class FtpStorageProviderTest {
       entries = provider.listFiles(testUrl, false);
     } catch (SocketTimeoutException e) {
       System.out.println("Timeout while listing files - network may be blocking FTP data connections");
-      Assumptions.assumeTrue(false, 
+      Assumptions.assumeTrue(false,
           "Skipping FTP test - timeout during file listing (network may be blocking FTP data connections)");
       return;
     }
@@ -140,7 +139,7 @@ public class FtpStorageProviderTest {
       metadata = provider.getMetadata(fileUrl);
     } catch (SocketTimeoutException e) {
       System.out.println("Timeout while getting file metadata - network may be blocking FTP");
-      Assumptions.assumeTrue(false, 
+      Assumptions.assumeTrue(false,
           "Skipping FTP test - timeout during metadata retrieval (network may be blocking FTP)");
       return;
     }
@@ -148,7 +147,7 @@ public class FtpStorageProviderTest {
     assertEquals(fileUrl, metadata.getPath());
     // Some FTP servers may not report file size accurately for all files
     // Just verify size is not negative
-    assertTrue(metadata.getSize() >= 0, 
+    assertTrue(metadata.getSize() >= 0,
         "File size should be non-negative, but was: " + metadata.getSize());
 
     // Test file existence

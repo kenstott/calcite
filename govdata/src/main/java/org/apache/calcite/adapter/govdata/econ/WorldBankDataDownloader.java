@@ -22,7 +22,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
@@ -90,18 +88,15 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, storageProvider, sharedManifest);
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return 0; // World Bank API has no strict rate limit
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 3;
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 2000; // 2 seconds
   }
 
@@ -305,8 +300,8 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading world economic indicators for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=world_indicators/year_range=%d_%d/world_indicators.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=world_indicators/year_range=%d_%d/world_indicators.parquet", startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
@@ -421,8 +416,8 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading global GDP data for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath = String.format("source=econ/type=global_gdp/year_range=%d_%d/global_gdp.parquet",
-        startYear, endYear);
+    String relativePath =
+        String.format("source=econ/type=global_gdp/year_range=%d_%d/global_gdp.parquet", startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();

@@ -24,7 +24,7 @@ Create a new `sci` (science/research/health) schema within the govdata adapter t
    - Disease surveillance data
    - Web-based query system with API access
 
-4. **CDC Data API** (Free, Government)  
+4. **CDC Data API** (Free, Government)
    - Chronic disease indicators, behavioral risk factors
    - Vaccination data, disease outbreak information
    - JSON/XML formats
@@ -109,7 +109,7 @@ Create a new `sci` (science/research/health) schema within the govdata adapter t
 ### Phase 1: FDA Core Data
 1. Create SCI schema factory class extending existing pattern
 2. Implement FDA OpenFDA API data providers
-3. Create Parquet conversion pipeline for drug and device data  
+3. Create Parquet conversion pipeline for drug and device data
 4. Implement core tables: fda_drug_approvals, fda_adverse_events, fda_recalls
 5. Add constraint metadata for relationships between tables
 6. Create model files and integration tests
@@ -148,7 +148,7 @@ Create a new `sci` (science/research/health) schema within the govdata adapter t
 
 ## Data Refresh Strategy
 - **FDA data**: Daily updates for adverse events, weekly for approvals
-- **CDC data**: Weekly updates for surveillance, monthly for statistics  
+- **CDC data**: Weekly updates for surveillance, monthly for statistics
 - **NIH data**: Weekly updates for grants, monthly for publications
 - **EPA data**: Daily for air quality, quarterly for toxic releases
 - **NOAA data**: Daily for weather, annual for climate normals
@@ -158,7 +158,7 @@ Create a new `sci` (science/research/health) schema within the govdata adapter t
 ### Cross-Schema Analysis
 ```sql
 -- Drug approvals vs adverse events by geographic region
-SELECT 
+SELECT
     fda.fda_drug_approvals.product_name,
     COUNT(fda.fda_adverse_events.report_id) as adverse_event_count,
     geo.income_limits.state_alpha,
@@ -170,8 +170,8 @@ WHERE fda.approval_date >= '2020-01-01'
 GROUP BY fda.product_name, geo.state_alpha, geo.median_income
 ORDER BY adverse_event_count DESC;
 
--- Research funding vs health outcomes by congressional district  
-SELECT 
+-- Research funding vs health outcomes by congressional district
+SELECT
     pol.congress_members.full_name,
     pol.congress_members.state,
     SUM(sci.nih_research_grants.award_amount) as total_funding,
@@ -184,14 +184,14 @@ GROUP BY pol.full_name, pol.state
 ORDER BY total_funding DESC;
 
 -- Environmental factors vs health outcomes
-SELECT 
+SELECT
     sci.epa_air_quality.state,
     sci.epa_air_quality.county,
     AVG(sci.epa_air_quality.aqi) as avg_air_quality,
     AVG(sci.cdc_mortality.death_count) as avg_mortality,
     sci.noaa_weather_observations.temperature_max
 FROM sci.epa_air_quality
-JOIN sci.cdc_mortality ON sci.epa_air_quality.state = sci.cdc_mortality.state 
+JOIN sci.cdc_mortality ON sci.epa_air_quality.state = sci.cdc_mortality.state
     AND sci.epa_air_quality.county = sci.cdc_mortality.county
 JOIN sci.noaa_weather_observations ON sci.epa_air_quality.date = sci.noaa_weather_observations.date
 WHERE sci.epa_air_quality.date >= '2023-01-01'

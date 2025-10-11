@@ -20,8 +20,8 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -145,7 +145,7 @@ public class TableNameCasingTest {
           System.out.println("  Table: " + tables.getString("TABLE_NAME"));
         }
         tables.close();
-        
+
         statement.executeQuery("SELECT * FROM \"TEST_LOWER_CASING\".\"TEST_DATA\"");
         fail("Expected query to fail with quoted uppercase table name");
       } catch (SQLException e) {

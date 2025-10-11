@@ -22,7 +22,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,13 +29,10 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -64,18 +60,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, storageProvider, sharedManifest);
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return 0; // Treasury API has no rate limit
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 3;
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 2000; // 2 seconds
   }
 
