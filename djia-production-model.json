@@ -39,6 +39,22 @@
           }
         }
       }
+    },
+    {
+      "name": "geo",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
+      "operand": {
+        "dataSource": "geo",
+        "executionEngine": "DUCKDB",
+        "ephemeralCache": false,
+        "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
+        "directory": "${GOVDATA_PARQUET_DIR:govdata-parquet}",
+        "enabledSources": ["tiger", "hud", "census"],
+        "startYear": 2010,
+        "endYear": 2024,
+        "autoDownload": true
+      }
     }
   ]
 }
