@@ -277,23 +277,41 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       }
     }
 
+    // Add directory to storageConfig for all storage types
+    if (storageConfig == null) {
+      storageConfig = new java.util.HashMap<>();
+    }
+    String directory = (String) operand.get("directory");
+    // Resolve environment variable placeholders (${VAR:default} syntax)
+    // This uses the same logic as GovDataSubSchemaFactory.resolveEnvVar()
+    if (directory != null && directory.contains("${")) {
+      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
+      java.util.regex.Matcher matcher = pattern.matcher(directory);
+      if (matcher.find()) {
+        String varName = matcher.group(1);
+        String defaultValue = matcher.group(2);
+        String resolvedValue = System.getenv(varName);
+        if (resolvedValue == null) {
+          resolvedValue = System.getProperty(varName);
+        }
+        if (resolvedValue == null) {
+          resolvedValue = defaultValue;
+        }
+        directory = resolvedValue;
+      }
+    }
+    if (directory != null && !storageConfig.containsKey("directory")) {
+      storageConfig.put("directory", directory);
+    }
+
     // Create the appropriate storage provider using the factory
     if (storageType != null) {
-      // Add directory to storageConfig so S3StorageProvider can use it as baseS3Path
-      if (storageConfig == null) {
-        storageConfig = new java.util.HashMap<>();
-      }
-      String directory = (String) operand.get("directory");
-      if (directory != null && !storageConfig.containsKey("directory")) {
-        storageConfig.put("directory", directory);
-      }
-
       storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
       LOGGER.debug("Initialized {} StorageProvider with directory: {}", storageType, directory);
     } else {
       // Default to local file storage
-      storageProvider = StorageProviderFactory.createFromType("local", null);
-      LOGGER.debug("Initialized default LocalFileStorageProvider");
+      storageProvider = StorageProviderFactory.createFromType("local", storageConfig);
+      LOGGER.debug("Initialized default LocalFileStorageProvider with directory: {}", directory);
     }
   }
 

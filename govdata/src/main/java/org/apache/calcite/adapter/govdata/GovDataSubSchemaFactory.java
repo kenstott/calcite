@@ -147,7 +147,8 @@ public interface GovDataSubSchemaFactory {
     if (operand != null) {
       String dir = (String) operand.get("cacheDirectory");
       if (dir != null && !dir.isEmpty()) {
-        return dir;
+        // Resolve environment variable placeholders like ${VAR:default}
+        return resolveEnvVar(dir);
       }
     }
     return null;
@@ -175,7 +176,8 @@ public interface GovDataSubSchemaFactory {
     if (operand != null) {
       String dir = (String) operand.get("directory");
       if (dir != null && !dir.isEmpty()) {
-        return dir;
+        // Resolve environment variable placeholders like ${VAR:default}
+        return resolveEnvVar(dir);
       }
     }
     return null;
@@ -265,6 +267,43 @@ public interface GovDataSubSchemaFactory {
    */
   default boolean supportsConstraints() {
     return true;
+  }
+
+  /**
+   * Resolve environment variable placeholders in configuration values.
+   * Supports ${VAR_NAME} and ${VAR_NAME:default} syntax.
+   *
+   * @param value Configuration value that may contain ${...} placeholders
+   * @return Resolved value or null if value is null
+   */
+  default String resolveEnvVar(String value) {
+    if (value == null || !value.contains("${")) {
+      return value;
+    }
+
+    // Pattern: ${VAR_NAME} or ${VAR_NAME:default}
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
+    java.util.regex.Matcher matcher = pattern.matcher(value);
+
+    if (matcher.find()) {
+      String varName = matcher.group(1);
+      String defaultValue = matcher.group(2);
+
+      // Try environment variable first
+      String resolvedValue = System.getenv(varName);
+      if (resolvedValue == null) {
+        // Try system property
+        resolvedValue = System.getProperty(varName);
+      }
+      if (resolvedValue == null) {
+        // Use default value if provided
+        resolvedValue = defaultValue;
+      }
+
+      return resolvedValue;
+    }
+
+    return value;
   }
 
   /**
