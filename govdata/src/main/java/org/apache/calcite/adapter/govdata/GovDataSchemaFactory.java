@@ -16,10 +16,18 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
+import org.apache.calcite.adapter.govdata.econ.BeaDataDownloader;
+import org.apache.calcite.adapter.govdata.econ.BlsDataDownloader;
+import org.apache.calcite.adapter.govdata.econ.CacheManifest;
+import org.apache.calcite.adapter.govdata.econ.EconRawToParquetConverter;
 import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
+import org.apache.calcite.adapter.govdata.econ.FredDataDownloader;
+import org.apache.calcite.adapter.govdata.econ.TreasuryDataDownloader;
+import org.apache.calcite.adapter.govdata.econ.WorldBankDataDownloader;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
@@ -29,6 +37,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -109,6 +118,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("Creating single FileSchema with unified operand for {} data", dataSource);
     Schema schema =
         org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
+
+    // Register custom ECON converter if this is ECON data
+    if (unifiedOperand.containsKey("_econData") && Boolean.TRUE.equals(unifiedOperand.get("_econData"))) {
+      registerEconConverter(schema, operand);
+    }
 
     createdSchemas.put(name.toUpperCase(), schema);
     return schema;
@@ -353,6 +367,106 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     builtOperand.put("_econData", true);
 
     return builtOperand;
+  }
+
+  /**
+   * Register the EconRawToParquetConverter with the FileSchema after it's been created.
+   * This allows ECON data sources (BLS, FRED, Treasury, BEA, World Bank) to properly
+   * register their parquet conversions in FileSchema's conversion registry.
+   *
+   * @param schema The created FileSchema instance
+   * @param operand The original ECON operand configuration
+   */
+  private void registerEconConverter(Schema schema, Map<String, Object> operand) {
+    if (!(schema instanceof FileSchema)) {
+      LOGGER.warn("Schema is not a FileSchema, cannot register ECON converter");
+      return;
+    }
+
+    FileSchema fileSchema = (FileSchema) schema;
+
+    // Extract cache directory from operand
+    String cacheDirectory = (String) operand.get("cacheDirectory");
+    if (cacheDirectory == null) {
+      // Try environment variable fallback
+      cacheDirectory = System.getenv("GOVDATA_CACHE_DIR");
+      if (cacheDirectory == null) {
+        cacheDirectory = System.getProperty("GOVDATA_CACHE_DIR");
+      }
+    }
+
+    if (cacheDirectory == null) {
+      LOGGER.warn("Cannot register ECON converter: cacheDirectory not found in operand or environment");
+      return;
+    }
+
+    String econCacheDir = cacheDirectory + "/econ";
+
+    // Load cache manifest
+    CacheManifest cacheManifest = CacheManifest.load(econCacheDir);
+
+    // Extract API keys from environment variables or operand
+    String blsApiKey = extractApiKey(operand, "blsApiKey", "BLS_API_KEY");
+    String fredApiKey = extractApiKey(operand, "fredApiKey", "FRED_API_KEY");
+    String beaApiKey = extractApiKey(operand, "beaApiKey", "BEA_API_KEY");
+
+    // Get directory for parquet files
+    String directory = (String) operand.get("directory");
+    if (directory == null) {
+      directory = System.getenv("GOVDATA_PARQUET_DIR");
+      if (directory == null) {
+        directory = System.getProperty("GOVDATA_PARQUET_DIR");
+      }
+    }
+
+    String econParquetDir = directory != null ? storageProvider.resolvePath(directory, "source=econ") : null;
+
+    // Create downloaders (lightweight - just configuration, no download occurs)
+    BlsDataDownloader blsDownloader = blsApiKey != null
+        ? new BlsDataDownloader(blsApiKey, econCacheDir, storageProvider, cacheManifest)
+        : null;
+
+    FredDataDownloader fredDownloader = fredApiKey != null
+        ? new FredDataDownloader(econCacheDir, fredApiKey, storageProvider, cacheManifest)
+        : null;
+
+    TreasuryDataDownloader treasuryDownloader =
+        new TreasuryDataDownloader(econCacheDir, storageProvider, cacheManifest);
+
+    BeaDataDownloader beaDownloader = beaApiKey != null && econParquetDir != null
+        ? new BeaDataDownloader(econCacheDir, econParquetDir, beaApiKey, storageProvider, cacheManifest)
+        : null;
+
+    WorldBankDataDownloader worldBankDownloader =
+        new WorldBankDataDownloader(econCacheDir, storageProvider, cacheManifest);
+
+    // Create and register the ECON converter
+    EconRawToParquetConverter econConverter = new EconRawToParquetConverter(
+        blsDownloader, fredDownloader, treasuryDownloader, beaDownloader, worldBankDownloader);
+
+    fileSchema.registerRawToParquetConverter(econConverter);
+
+    LOGGER.info("Registered EconRawToParquetConverter with FileSchema for cache directory: {}", econCacheDir);
+  }
+
+  /**
+   * Extract API key from operand or environment variables.
+   */
+  private String extractApiKey(Map<String, Object> operand, String operandKey, String envKey) {
+    // Check operand first
+    String apiKey = (String) operand.get(operandKey);
+    if (apiKey != null) {
+      return apiKey;
+    }
+
+    // Fallback to environment variable
+    apiKey = System.getenv(envKey);
+    if (apiKey != null) {
+      return apiKey;
+    }
+
+    // Fallback to system property
+    return System.getProperty(envKey);
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
