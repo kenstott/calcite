@@ -108,8 +108,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Override to use stored operand from buildOperand().
    * This allows helper methods to access directory configuration without passing operand around.
    */
-  @Override
-  public String getGovDataCacheDir() {
+  @Override public String getGovDataCacheDir() {
     return getGovDataCacheDir(this.currentOperand);
   }
 
@@ -117,8 +116,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Override to use stored operand from buildOperand().
    * This allows helper methods to access directory configuration without passing operand around.
    */
-  @Override
-  public String getGovDataParquetDir() {
+  @Override public String getGovDataParquetDir() {
     return getGovDataParquetDir(this.currentOperand);
   }
 
@@ -1362,7 +1360,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           continue;
         }
 
-        // Skip non-XBRL filings entirely - they have no financial data to extract
+        // Check if this is an insider form (3/4/5) - these are XML but NOT XBRL
+        boolean isInsiderForm = form.equals("3") || form.equals("4") || form.equals("5")
+            || form.equals("3/A") || form.equals("4/A") || form.equals("5/A");
+
+        // Skip non-XBRL filings entirely - UNLESS they're insider forms
+        // Insider forms (3/4/5) are XML ownership documents, not XBRL, but we still want to process them
         // This is a major optimization: prevents downloading, parsing, and manifest checking
         // for filings that would produce no Parquet output anyway
         boolean hasXBRL = false;
@@ -1379,7 +1382,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             hasXBRL = true;  // Inline XBRL counts as XBRL
           }
         }
-        if (!hasXBRL) {
+        if (!hasXBRL && !isInsiderForm) {
           skippedNonXBRL++;
           continue;
         }
@@ -1683,8 +1686,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String govdataParquetDir = getGovDataParquetDir();
 
       // Build path using StorageProvider
-      String yearDirPath = storageProvider.resolvePath(govdataParquetDir,
-          "source=sec/cik=" + cik + "/filing_type=" + form.replace("-", "") + "/year=" + year);
+      String yearDirPath =
+          storageProvider.resolvePath(govdataParquetDir, "source=sec/cik=" + cik + "/filing_type=" + form.replace("-", "") + "/year=" + year);
 
       String accessionClean = accession.replace("-", "");
       boolean isInsiderForm = form.matches("[345]");
@@ -1889,7 +1892,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (primaryDoc.contains("/")) {
         htmlFile.getParentFile().mkdirs();
       }
-      if (!isInsiderForm && (!htmlFile.exists() || htmlFile.length() == 0)) {
+      // Download primary document for ALL filing types (including insider forms)
+      if (!htmlFile.exists() || htmlFile.length() == 0) {
         needHtml = true;
       }
 
