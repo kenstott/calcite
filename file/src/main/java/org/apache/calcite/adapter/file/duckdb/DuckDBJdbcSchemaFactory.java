@@ -462,27 +462,31 @@ public class DuckDBJdbcSchemaFactory {
           // We'll handle this below with iceberg_scan
           parquetPath = null; // Will be handled specially
         } else {
-          // CRITICAL FIX: NEVER use getParquetCacheFile() - it may contain stale S3 paths
-          // Always use sourceFile or convertedFile which are computed fresh at runtime
-          // The parquetCacheFile field was incorrectly storing S3 paths that became stale
-          // when schema changes were made locally
+          // For partitioned tables (PartitionedParquetTable), use parquetCacheFile which contains
+          // the full list of partition files in [file1,file2,...] format
+          // For other tables, avoid parquetCacheFile as it may contain stale S3 paths
+          boolean isPartitionedTable = "PartitionedParquetTable".equals(record.tableType);
 
-          if (record.getSourceFile() != null && record.getSourceFile().endsWith(".parquet")) {
-            parquetPath = record.getSourceFile();
+          if (isPartitionedTable && record.parquetCacheFile != null &&
+              (record.parquetCacheFile.startsWith("[") || record.parquetCacheFile.startsWith("{"))) {
+            // Use the multi-file list for partitioned tables
+            parquetPath = record.parquetCacheFile;
+            LOGGER.info("Table '{}' is PartitionedParquetTable with {} partition files",
+                        tableName, record.parquetCacheFile.split(",").length);
+          } else if (record.sourceFile != null && record.sourceFile.endsWith(".parquet")) {
+            parquetPath = record.sourceFile;
             LOGGER.debug("Table '{}' is native Parquet: {}", tableName, parquetPath);
-          } else if (record.getConvertedFile() != null) {
+          } else if (record.convertedFile != null) {
             // Check if it's a single parquet file or a glob pattern
-            if (record.getConvertedFile().endsWith(".parquet")) {
-              parquetPath = record.getConvertedFile();
+            if (record.convertedFile.endsWith(".parquet")) {
+              parquetPath = record.convertedFile;
               LOGGER.debug("Table '{}' has converted Parquet: {}", tableName, parquetPath);
-            } else if (record.getConvertedFile().startsWith("{") && record.getConvertedFile().endsWith("}")) {
+            } else if (record.convertedFile.startsWith("{") && record.convertedFile.endsWith("}")) {
               // This is a glob pattern for multiple parquet files (e.g., from Iceberg tables)
-              parquetPath = record.getConvertedFile();
+              parquetPath = record.convertedFile;
               LOGGER.debug("Table '{}' has multiple Parquet files (glob pattern): {}", tableName, parquetPath);
             }
           }
-          // NOTE: Removed getParquetCacheFile() check - parquet paths must always be computed
-          // at runtime based on current storage configuration, never read from cache
         }
       } else {
         // Legacy record format - try to extract table name from file path
