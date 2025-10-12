@@ -1761,10 +1761,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Extract accession from file path
       String accession = sourceFile.getParentFile().getName();
 
-      // Use local cache directory for metadata (not S3 parquet directory)
+      // Use .aperio/sec directory for metadata (not cache directory or S3)
       // .conversions.json requires file locking which doesn't work on S3
-      String secCacheDir = getGovDataCacheDir() + "/sec";
-      ConversionMetadata metadata = new ConversionMetadata(secCacheDir);
+      String workingDir = System.getProperty("user.dir");
+      String operatingCacheDir = workingDir + "/.aperio/sec";
+      ConversionMetadata metadata = new ConversionMetadata(operatingCacheDir);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
       record.sourceFile = accession;
@@ -2647,10 +2648,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Path is like: /sec/0000789019/000078901922000007/ownership.xml
             String accession = xbrlFile.getParentFile().getName();
 
-            // Use local cache directory for metadata (not S3 parquet directory)
+            // Use .aperio/sec directory for metadata (not cache directory or S3)
             // .conversions.json requires file locking which doesn't work on S3
-            String secCacheDir = getGovDataCacheDir() + "/sec";
-            ConversionMetadata metadata = new ConversionMetadata(secCacheDir);
+            String workingDir = System.getProperty("user.dir");
+            String operatingCacheDir = workingDir + "/.aperio/sec";
+            ConversionMetadata metadata = new ConversionMetadata(operatingCacheDir);
             ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
             record.originalFile = xbrlFile.getAbsolutePath();
             // Store accession in the sourceFile field for now - converter can extract it
