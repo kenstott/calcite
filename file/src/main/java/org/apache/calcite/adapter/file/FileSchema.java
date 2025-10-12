@@ -184,6 +184,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
   private final ImmutableList<Map<String, Object>> tables;
   private final @Nullable File baseDirectory;
+  private final File operatingCacheDirectory; // Always local .aperio/<schema> for .conversions.json and file locks
   private final @Nullable File sourceDirectory; // Original directory for reading source files
   private final @Nullable String directoryPattern;
   private final ExecutionEngineConfig engineConfig;
@@ -363,14 +364,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       this.sourceDirectory = new File(workingDir).getAbsoluteFile();
     }
 
-    // Determine the root directory for .aperio/<schema>
-    File aperioRoot;
-    if (userConfiguredBaseDirectory != null) {
-      // Use the baseDirectory passed from FileSchemaFactory
-      // (could be user-configured or ephemeral)
-      aperioRoot = userConfiguredBaseDirectory.getAbsoluteFile();
+    // Determine operating cache directory - ALWAYS local filesystem for .conversions.json and file locks
+    // This is separate from the parquet output directory which may be remote (S3, etc.)
+    File operatingCacheRoot;
+    if (userConfiguredBaseDirectory != null
+        && (userConfiguredBaseDirectory.getPath().contains(System.getProperty("java.io.tmpdir"))
+            || userConfiguredBaseDirectory.getPath().contains("/tmp/"))) {
+      // Ephemeral cache - use the provided temp directory
+      operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
+      LOGGER.debug("Using ephemeral temp directory for operating cache: {}", operatingCacheRoot);
     } else {
-      // Default to current working directory
+      // Always use working directory for .aperio (even if parquet directory is remote)
       String userDir = System.getProperty("user.dir");
 
       // Safety check: if user.dir is root, use temp directory instead
@@ -378,21 +382,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.warn("Working directory is root or invalid ('{}'), falling back to temp directory", userDir);
         userDir = System.getProperty("java.io.tmpdir");
       }
-      aperioRoot = new File(userDir).getAbsoluteFile();
+      operatingCacheRoot = new File(userDir).getAbsoluteFile();
+      LOGGER.debug("Using working directory for operating cache: {}", operatingCacheRoot);
     }
 
-    // Always use fully qualified path for .aperio/<schema> as the baseDirectory for cache/conversion operations
-    this.baseDirectory = new File(aperioRoot, "." + BRAND + "/" + name);
-    // Ensure the aperio directory exists
-    if (!this.baseDirectory.exists()) {
-      this.baseDirectory.mkdirs();
-      LOGGER.info("Created {} cache directory: {}", BRAND, this.baseDirectory.getAbsolutePath());
+    // Operating cache is ALWAYS .aperio/<schema> on local filesystem for metadata and locks
+    this.operatingCacheDirectory = new File(operatingCacheRoot, "." + BRAND + "/" + name);
+    if (!this.operatingCacheDirectory.exists()) {
+      this.operatingCacheDirectory.mkdirs();
+      LOGGER.info("Created operating cache directory (always local): {}", this.operatingCacheDirectory.getAbsolutePath());
     }
-    LOGGER.debug("FileSchema baseDirectory setup: aperioRoot={}, baseDirectory={}",
-        aperioRoot.getAbsolutePath(), this.baseDirectory.getAbsolutePath());
 
-    // Initialize conversion metadata for comprehensive table tracking
-    this.conversionMetadata = this.baseDirectory != null ? new ConversionMetadata(this.baseDirectory) : null;
+    // Keep baseDirectory for backward compatibility (points to same location as operatingCacheDirectory)
+    this.baseDirectory = this.operatingCacheDirectory;
+
+    LOGGER.debug("Operating cache directory: {}", this.operatingCacheDirectory.getAbsolutePath());
+
+    // Initialize conversion metadata using operating cache directory (always local for file locking)
+    this.conversionMetadata = new ConversionMetadata(this.operatingCacheDirectory);
     this.directoryPattern = directoryPattern;
     this.engineConfig = engineConfig;
     this.recursive = recursive;
