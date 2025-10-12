@@ -3374,7 +3374,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
         // JSONPath extractions should use regular JSON tables that can be refreshed via re-extraction
         if (isJsonPathExtraction) {
-          return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing);
+          return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
         }
 
         try {
@@ -3452,7 +3452,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     case LINQ4J:
     default:
       if (effectiveInterval != null && tableName != null) {
-        return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing);
+        return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
       }
       return new JsonScannableTable(source, options, columnNameCasing);
     }

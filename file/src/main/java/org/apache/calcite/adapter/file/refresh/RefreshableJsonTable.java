@@ -50,18 +50,24 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
 
   private final Source source;
   private final String columnNameCasing;
+  private final @Nullable File operatingCacheDirectory;
   private @Nullable RelDataType rowType;
   private @Nullable List<Object> dataList;
   private @Nullable ConversionMetadata conversionMetadata;
 
   public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval) {
-    this(source, tableName, refreshInterval, "UNCHANGED");
+    this(source, tableName, refreshInterval, "UNCHANGED", null);
   }
 
   public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval, String columnNameCasing) {
+    this(source, tableName, refreshInterval, columnNameCasing, null);
+  }
+
+  public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval, String columnNameCasing, @Nullable File operatingCacheDirectory) {
     super(tableName, refreshInterval);
     this.source = source;
     this.columnNameCasing = columnNameCasing;
+    this.operatingCacheDirectory = operatingCacheDirectory;
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
@@ -99,9 +105,9 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
     }
 
     // Initialize conversion metadata if not already done
-    if (conversionMetadata == null) {
+    if (conversionMetadata == null && operatingCacheDirectory != null) {
       try {
-        conversionMetadata = new ConversionMetadata(jsonFile.getParentFile());
+        conversionMetadata = new ConversionMetadata(operatingCacheDirectory);
       } catch (Exception e) {
         LOGGER.debug("Could not initialize conversion metadata: {}", e.getMessage());
       }
