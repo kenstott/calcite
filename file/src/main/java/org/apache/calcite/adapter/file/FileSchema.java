@@ -393,10 +393,25 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       LOGGER.info("Created operating cache directory (always local): {}", this.operatingCacheDirectory.getAbsolutePath());
     }
 
-    // Keep baseDirectory for backward compatibility (points to same location as operatingCacheDirectory)
-    this.baseDirectory = this.operatingCacheDirectory;
+    // baseDirectory represents the data directory (where parquet files are stored)
+    // When using StorageProvider, this is the directory passed from operand (could be S3 URI)
+    // When not using StorageProvider, use sourceDirectory or operating cache directory
+    if (storageType != null && sourceDirectory != null) {
+      // Using StorageProvider - baseDirectory is the data location (e.g., S3 URI)
+      this.baseDirectory = sourceDirectory;
+      LOGGER.debug("Using sourceDirectory as baseDirectory for StorageProvider: {}", sourceDirectory);
+    } else if (userConfiguredBaseDirectory != null) {
+      // Legacy: user configured baseDirectory explicitly
+      this.baseDirectory = userConfiguredBaseDirectory;
+      LOGGER.debug("Using userConfiguredBaseDirectory as baseDirectory: {}", userConfiguredBaseDirectory);
+    } else {
+      // Default: use operating cache directory for backward compatibility
+      this.baseDirectory = this.operatingCacheDirectory;
+      LOGGER.debug("Using operatingCacheDirectory as baseDirectory (default): {}", this.operatingCacheDirectory);
+    }
 
     LOGGER.debug("Operating cache directory: {}", this.operatingCacheDirectory.getAbsolutePath());
+    LOGGER.debug("Base directory (data location): {}", this.baseDirectory != null ? this.baseDirectory.getPath() : "null");
 
     // Initialize conversion metadata using operating cache directory (always local for file locking)
     this.conversionMetadata = new ConversionMetadata(this.operatingCacheDirectory);
