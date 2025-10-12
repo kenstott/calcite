@@ -148,6 +148,7 @@ public class DuckDBJdbcSchemaFactory {
         String s3Region = null;
         String s3AccessKey = null;
         String s3SecretKey = null;
+        String s3Endpoint = null;
 
         // Try to get from FileSchema's storage config first
         if (fileSchema != null && fileSchema.getStorageConfig() != null) {
@@ -155,6 +156,7 @@ public class DuckDBJdbcSchemaFactory {
           s3Region = (String) storageConfig.get("awsRegion");
           s3AccessKey = (String) storageConfig.get("awsAccessKeyId");
           s3SecretKey = (String) storageConfig.get("awsSecretAccessKey");
+          s3Endpoint = (String) storageConfig.get("endpoint");
           if (s3AccessKey != null && s3SecretKey != null) {
             LOGGER.info("Using S3 credentials from schema operands");
           }
@@ -164,11 +166,27 @@ public class DuckDBJdbcSchemaFactory {
         if (s3Region == null) s3Region = System.getenv("AWS_REGION");
         if (s3AccessKey == null) s3AccessKey = System.getenv("AWS_ACCESS_KEY_ID");
         if (s3SecretKey == null) s3SecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+        if (s3Endpoint == null) s3Endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
 
         if (s3AccessKey != null && s3SecretKey != null) {
           setupConn.createStatement().execute("SET s3_region='" + (s3Region != null ? s3Region : "us-east-1") + "'");
           setupConn.createStatement().execute("SET s3_access_key_id='" + s3AccessKey + "'");
           setupConn.createStatement().execute("SET s3_secret_access_key='" + s3SecretKey + "'");
+
+          // Configure custom S3 endpoint (for MinIO, Wasabi, etc.)
+          if (s3Endpoint != null) {
+            setupConn.createStatement().execute("SET s3_endpoint='" + s3Endpoint + "'");
+            setupConn.createStatement().execute("SET s3_url_style='path'");
+
+            // Disable SSL if endpoint uses http:// (e.g., MinIO on localhost)
+            if (s3Endpoint.startsWith("http://")) {
+              setupConn.createStatement().execute("SET s3_use_ssl=false");
+              LOGGER.info("DuckDB S3 configured with custom endpoint (HTTP): {}", s3Endpoint);
+            } else {
+              LOGGER.info("DuckDB S3 configured with custom endpoint (HTTPS): {}", s3Endpoint);
+            }
+          }
+
           LOGGER.info("DuckDB S3 credentials configured (region: {})", s3Region != null ? s3Region : "us-east-1");
         } else {
           LOGGER.info("No S3 credentials found in operands or environment - S3 access will use default AWS credentials");
