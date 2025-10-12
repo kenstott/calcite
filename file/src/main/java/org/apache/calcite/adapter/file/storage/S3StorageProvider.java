@@ -351,12 +351,18 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     try {
-      URI parsed = new URI(uri);
+      // URL-encode spaces and other special characters in the path before parsing
+      // S3 keys can contain spaces, but java.net.URI requires them to be encoded
+      String encodedUri = uri.replace(" ", "%20");
+
+      URI parsed = new URI(encodedUri);
       String bucket = parsed.getHost();
       String key = parsed.getPath();
       if (key.startsWith("/")) {
         key = key.substring(1);
       }
+      // Decode the key back for S3 API calls
+      key = java.net.URLDecoder.decode(key, "UTF-8");
       return new S3Uri(bucket, key);
     } catch (Exception e) {
       throw new IOException("Failed to parse S3 URI: " + uri, e);
