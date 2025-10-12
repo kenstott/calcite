@@ -111,6 +111,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Build the unified operand for FileSchemaFactory
     Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, operand);
 
+    // Add storageType and storageConfig to unifiedOperand if storage provider was initialized
+    // This ensures FileSchemaFactory can properly configure DuckDB with S3 endpoint and credentials
+    if (operand.containsKey("storageType")) {
+      unifiedOperand.put("storageType", operand.get("storageType"));
+    }
+    if (operand.containsKey("storageConfig")) {
+      unifiedOperand.put("storageConfig", operand.get("storageConfig"));
+    }
+
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), dataSource.toUpperCase());
 
@@ -304,6 +313,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       storageConfig.put("directory", directory);
     }
 
+    // Add AWS endpoint override to storageConfig if present (for MinIO, Wasabi, etc.)
+    String endpointOverride = System.getenv("AWS_ENDPOINT_OVERRIDE");
+    if (endpointOverride == null) {
+      endpointOverride = System.getProperty("AWS_ENDPOINT_OVERRIDE");
+    }
+    if (endpointOverride != null && !storageConfig.containsKey("endpoint")) {
+      storageConfig.put("endpoint", endpointOverride);
+      LOGGER.info("Added AWS_ENDPOINT_OVERRIDE to storageConfig: {}", endpointOverride);
+    }
+
     // Create the appropriate storage provider using the factory
     if (storageType != null) {
       storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
@@ -313,6 +332,13 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       storageProvider = StorageProviderFactory.createFromType("local", storageConfig);
       LOGGER.debug("Initialized default LocalFileStorageProvider with directory: {}", directory);
     }
+
+    // Add storageType and enriched storageConfig back to operand
+    // This ensures FileSchemaFactory and DuckDB can access the complete storage configuration
+    if (storageType != null) {
+      operand.put("storageType", storageType);
+    }
+    operand.put("storageConfig", storageConfig);
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
