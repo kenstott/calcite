@@ -3659,7 +3659,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           RefreshablePartitionedParquetTable refreshableTable =
               new RefreshablePartitionedParquetTable(config.getName(),
                   sourceDirectory, config.getPattern(), config,
-                  engineConfig, RefreshInterval.parse(this.refreshInterval), constraintConfig, name);
+                  engineConfig, RefreshInterval.parse(this.refreshInterval), constraintConfig, name, this.storageProvider);
           // Set refresh context for DuckDB notifications
           refreshableTable.setRefreshContext(this, config.getName());
           table = refreshableTable;
@@ -3669,7 +3669,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());
           table =
               new PartitionedParquetTable(matchingFiles, partitionInfo,
-                  engineConfig, columnTypes, null, null, constraintConfig, name, config.getName());
+                  engineConfig, columnTypes, null, null, constraintConfig, name, config.getName(), this.storageProvider);
         }
 
         // Check if table was already processed to avoid duplicates

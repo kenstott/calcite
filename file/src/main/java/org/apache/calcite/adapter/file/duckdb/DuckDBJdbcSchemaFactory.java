@@ -574,7 +574,7 @@ public class DuckDBJdbcSchemaFactory {
           // Schema-aware cache uses pattern: baseDirectory/.parquet_cache/tableName.parquet
           // Note: For S3 storage, baseDirectory will be s3:// URI, so File operations won't work
           // This legacy path should only execute for local storage
-          String baseDirPath = fileSchema.getBaseDirectory().getPath();
+          String baseDirPath = fileSchema.getBaseDirectory();
           String parquetCachePath = baseDirPath + "/.parquet_cache/" + tableName + ".parquet";
 
           // Check if this might be cloud storage

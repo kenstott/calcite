@@ -56,6 +56,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
   private @Nullable Instant lastRefreshTime;
   private final @Nullable Map<String, Object> constraintConfig;
   private final @Nullable String schemaName;
+  private final org.apache.calcite.adapter.file.storage.@Nullable StorageProvider storageProvider;
 
   private volatile PartitionedParquetTable currentTable;
   private volatile List<String> lastDiscoveredFiles;
@@ -67,13 +68,21 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
   public RefreshablePartitionedParquetTable(String tableName, File directory,
       String pattern, PartitionedTableConfig config,
       ExecutionEngineConfig engineConfig, @Nullable Duration refreshInterval) {
-    this(tableName, directory, pattern, config, engineConfig, refreshInterval, null, null);
+    this(tableName, directory, pattern, config, engineConfig, refreshInterval, null, null, null);
   }
 
   public RefreshablePartitionedParquetTable(String tableName, File directory,
       String pattern, PartitionedTableConfig config,
       ExecutionEngineConfig engineConfig, @Nullable Duration refreshInterval,
       @Nullable Map<String, Object> constraintConfig, @Nullable String schemaName) {
+    this(tableName, directory, pattern, config, engineConfig, refreshInterval, constraintConfig, schemaName, null);
+  }
+
+  public RefreshablePartitionedParquetTable(String tableName, File directory,
+      String pattern, PartitionedTableConfig config,
+      ExecutionEngineConfig engineConfig, @Nullable Duration refreshInterval,
+      @Nullable Map<String, Object> constraintConfig, @Nullable String schemaName,
+      org.apache.calcite.adapter.file.storage.@Nullable StorageProvider storageProvider) {
     this.tableName = tableName;
     this.directory = directory;
     this.pattern = pattern;
@@ -82,6 +91,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     this.refreshInterval = refreshInterval;
     this.constraintConfig = constraintConfig;
     this.schemaName = schemaName;
+    this.storageProvider = storageProvider;
 
     LOGGER.error("CONSTRUCTOR: Creating RefreshablePartitionedParquetTable for table: {}, hasPartitionConfig: {}",
         tableName, config.getPartitions() != null);
@@ -249,7 +259,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
         // Create new table instance with constraint config and qualified name
         currentTable =
             new PartitionedParquetTable(matchingFiles, partitionInfo,
-                engineConfig, columnTypes, regex, colMappings, constraintConfig, schemaName, tableName);
+                engineConfig, columnTypes, regex, colMappings, constraintConfig, schemaName, tableName, storageProvider);
         lastDiscoveredFiles = matchingFiles;
 
         LOGGER.debug("[RefreshablePartitionedParquetTable] Discovered {} files for table: {}", matchingFiles.size(), tableName);
