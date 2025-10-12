@@ -1764,8 +1764,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Use .aperio/sec directory for metadata (not cache directory or S3)
       // .conversions.json requires file locking which doesn't work on S3
       String workingDir = System.getProperty("user.dir");
-      String operatingCacheDir = workingDir + "/.aperio/sec";
-      ConversionMetadata metadata = new ConversionMetadata(operatingCacheDir);
+      File operatingCacheDirFile = new File(workingDir, ".aperio/sec");
+      if (!operatingCacheDirFile.exists()) {
+        operatingCacheDirFile.mkdirs();
+      }
+      ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
       record.sourceFile = accession;
@@ -2651,8 +2654,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Use .aperio/sec directory for metadata (not cache directory or S3)
             // .conversions.json requires file locking which doesn't work on S3
             String workingDir = System.getProperty("user.dir");
-            String operatingCacheDir = workingDir + "/.aperio/sec";
-            ConversionMetadata metadata = new ConversionMetadata(operatingCacheDir);
+            File operatingCacheDirFile = new File(workingDir, ".aperio/sec");
+            if (!operatingCacheDirFile.exists()) {
+              operatingCacheDirFile.mkdirs();
+            }
+            ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
             ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
             record.originalFile = xbrlFile.getAbsolutePath();
             // Store accession in the sourceFile field for now - converter can extract it
