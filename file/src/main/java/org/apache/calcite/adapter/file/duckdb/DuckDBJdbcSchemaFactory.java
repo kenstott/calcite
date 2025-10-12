@@ -138,6 +138,14 @@ public class DuckDBJdbcSchemaFactory {
 
       setupConn.createStatement().execute("SET scalar_subquery_error_on_multiple_rows = false");  // Allow Calcite's scalar subquery rewriting
 
+      // Declare S3 configuration variables outside try block so they're accessible later
+      String s3Region = null;
+      String s3AccessKey = null;
+      String s3SecretKey = null;
+      String s3Endpoint = null;
+      String endpointHostPort = null;
+      Boolean useSSL = null;
+
       // Install and load S3/HTTPFS extension for cloud storage support
       try {
         setupConn.createStatement().execute("INSTALL httpfs");
@@ -145,10 +153,6 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.info("DuckDB httpfs extension installed and loaded for S3 support");
 
         // Configure S3 credentials - check operands first, then environment variables
-        String s3Region = null;
-        String s3AccessKey = null;
-        String s3SecretKey = null;
-        String s3Endpoint = null;
 
         // Try to get from FileSchema's storage config first
         if (fileSchema != null && fileSchema.getStorageConfig() != null) {
@@ -168,23 +172,32 @@ public class DuckDBJdbcSchemaFactory {
         if (s3SecretKey == null) s3SecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
         if (s3Endpoint == null) s3Endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
 
+        // Process endpoint configuration (needs to be done before making final variables)
+        if (s3Endpoint != null) {
+          // DuckDB expects endpoint without protocol (e.g., "localhost:9000" not "http://localhost:9000")
+          if (s3Endpoint.startsWith("http://")) {
+            endpointHostPort = s3Endpoint.substring("http://".length());
+            useSSL = false;
+          } else if (s3Endpoint.startsWith("https://")) {
+            endpointHostPort = s3Endpoint.substring("https://".length());
+            useSSL = true;
+          } else {
+            endpointHostPort = s3Endpoint;
+            useSSL = true;
+          }
+        }
+
+        // Apply S3 configuration to setup connection
         if (s3AccessKey != null && s3SecretKey != null) {
           setupConn.createStatement().execute("SET s3_region='" + (s3Region != null ? s3Region : "us-east-1") + "'");
           setupConn.createStatement().execute("SET s3_access_key_id='" + s3AccessKey + "'");
           setupConn.createStatement().execute("SET s3_secret_access_key='" + s3SecretKey + "'");
 
-          // Configure custom S3 endpoint (for MinIO, Wasabi, etc.)
-          if (s3Endpoint != null) {
-            setupConn.createStatement().execute("SET s3_endpoint='" + s3Endpoint + "'");
+          if (endpointHostPort != null) {
+            setupConn.createStatement().execute("SET s3_endpoint='" + endpointHostPort + "'");
             setupConn.createStatement().execute("SET s3_url_style='path'");
-
-            // Disable SSL if endpoint uses http:// (e.g., MinIO on localhost)
-            if (s3Endpoint.startsWith("http://")) {
-              setupConn.createStatement().execute("SET s3_use_ssl=false");
-              LOGGER.info("DuckDB S3 configured with custom endpoint (HTTP): {}", s3Endpoint);
-            } else {
-              LOGGER.info("DuckDB S3 configured with custom endpoint (HTTPS): {}", s3Endpoint);
-            }
+            setupConn.createStatement().execute("SET s3_use_ssl=" + useSSL);
+            LOGGER.info("DuckDB S3 configured with custom endpoint: {} (SSL: {})", endpointHostPort, useSSL);
           }
 
           LOGGER.info("DuckDB S3 credentials configured (region: {})", s3Region != null ? s3Region : "us-east-1");
@@ -194,6 +207,13 @@ public class DuckDBJdbcSchemaFactory {
       } catch (Exception e) {
         LOGGER.warn("Failed to configure S3 support: {} - S3 URIs will not work", e.getMessage());
       }
+
+      // Capture S3 configuration for use in DataSource (make final for lambda/anonymous class access)
+      final String finalS3Region = s3Region;
+      final String finalS3AccessKey = s3AccessKey;
+      final String finalS3SecretKey = s3SecretKey;
+      final String finalEndpointHostPort = endpointHostPort;
+      final Boolean finalUseSSL = useSSL;
 
       // Register similarity functions as DuckDB UDFs
       registerSimilarityFunctions(setupConn);
@@ -235,6 +255,19 @@ public class DuckDBJdbcSchemaFactory {
           // Apply critical settings to new connections
           try (Statement stmt = conn.createStatement()) {
             stmt.execute("SET scalar_subquery_error_on_multiple_rows = false");
+
+            // Apply S3 configuration to this connection (required for S3 access in queries)
+            if (finalS3AccessKey != null && finalS3SecretKey != null) {
+              stmt.execute("SET s3_region='" + (finalS3Region != null ? finalS3Region : "us-east-1") + "'");
+              stmt.execute("SET s3_access_key_id='" + finalS3AccessKey + "'");
+              stmt.execute("SET s3_secret_access_key='" + finalS3SecretKey + "'");
+
+              if (finalEndpointHostPort != null) {
+                stmt.execute("SET s3_endpoint='" + finalEndpointHostPort + "'");
+                stmt.execute("SET s3_url_style='path'");
+                stmt.execute("SET s3_use_ssl=" + finalUseSSL);
+              }
+            }
           }
           return conn;
         }
