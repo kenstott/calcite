@@ -1761,8 +1761,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Extract accession from file path
       String accession = sourceFile.getParentFile().getName();
 
-      // Create metadata (S3-compatible)
-      ConversionMetadata metadata = new ConversionMetadata(secParquetDirPath);
+      // Use local cache directory for metadata (not S3 parquet directory)
+      // .conversions.json requires file locking which doesn't work on S3
+      String secCacheDir = getGovDataCacheDir() + "/sec";
+      ConversionMetadata metadata = new ConversionMetadata(secCacheDir);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
       record.sourceFile = accession;
@@ -2645,8 +2647,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Path is like: /sec/0000789019/000078901922000007/ownership.xml
             String accession = xbrlFile.getParentFile().getName();
 
-            // Create a simple ConversionMetadata to pass accession to converter (S3-compatible)
-            ConversionMetadata metadata = new ConversionMetadata(secParquetDirPath);
+            // Use local cache directory for metadata (not S3 parquet directory)
+            // .conversions.json requires file locking which doesn't work on S3
+            String secCacheDir = getGovDataCacheDir() + "/sec";
+            ConversionMetadata metadata = new ConversionMetadata(secCacheDir);
             ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
             record.originalFile = xbrlFile.getAbsolutePath();
             // Store accession in the sourceFile field for now - converter can extract it
