@@ -7,21 +7,16 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
       "operand": {
-        "source": "sec",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR:/Volumes/T9/govdata-production-cache}",
-        "directory": "${GOVDATA_PARQUET_DIR:s3://govdata-parquet/source=sec}",
-        "refreshInterval": "PT24H",
+        "dataSource": "sec",
+        "executionEngine": "DUCKDB",
+        "ephemeralCache": false,
+        "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
+        "directory": "${GOVDATA_PARQUET_DIR:govdata-parquet}",
+        "startYear": 2024,
+        "endYear": 2024,
+        "autoDownload": false,
         "ciks": ["0000320193"],
-        "filingTypes": ["10-K", "10-Q", "8-K"],
-        "startYear": 2023,
-        "endYear": 2025,
-        "s3Config": {
-          "accessKey": "${AWS_ACCESS_KEY_ID}",
-          "secretKey": "${AWS_SECRET_ACCESS_KEY}",
-          "endpoint": "${AWS_ENDPOINT_OVERRIDE:http://localhost:9000}",
-          "region": "${AWS_REGION:us-east-1}",
-          "pathStyleAccess": true
-        }
+        "filingTypes": ["10-K", "10-Q"]
       }
     }
   ]
