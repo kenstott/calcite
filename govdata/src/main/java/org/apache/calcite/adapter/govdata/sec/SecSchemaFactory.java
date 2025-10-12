@@ -1758,20 +1758,31 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
-      // Extract accession from file path
-      String accession = sourceFile.getParentFile().getName();
-
       // Use .aperio/sec directory for metadata (not cache directory or S3)
       // .conversions.json requires file locking which doesn't work on S3
+      // The directory structure must mirror the cache directory structure
       String workingDir = System.getProperty("user.dir");
-      File operatingCacheDirFile = new File(workingDir, ".aperio/sec");
+
+      // Calculate relative path from cache base to source file's parent
+      String cacheHome = getGovDataCacheDir();
+      if (cacheHome == null) {
+        cacheHome = System.getProperty("user.home") + "/.govdata-cache";
+      }
+      File cacheBaseDir = new File(cacheHome, "sec");
+      File sourceParentDir = sourceFile.getParentFile();
+
+      // Get relative path from cache base to source parent
+      String relativePath = cacheBaseDir.toPath().relativize(sourceParentDir.toPath()).toString();
+
+      // Create mirrored directory structure under .aperio/sec
+      File operatingCacheDirFile = new File(workingDir, ".aperio/sec/" + relativePath);
       if (!operatingCacheDirFile.exists()) {
         operatingCacheDirFile.mkdirs();
       }
       ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
-      record.sourceFile = accession;
+      record.sourceFile = sourceFile.getParentFile().getName();  // accession number
       metadata.recordConversion(sourceFile, record);
 
       if (LOGGER.isDebugEnabled()) {
@@ -2647,22 +2658,32 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
             XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
-            // Extract accession number from file path (parent directory name)
-            // Path is like: /sec/0000789019/000078901922000007/ownership.xml
-            String accession = xbrlFile.getParentFile().getName();
-
             // Use .aperio/sec directory for metadata (not cache directory or S3)
             // .conversions.json requires file locking which doesn't work on S3
+            // The directory structure must mirror the cache directory structure
             String workingDir = System.getProperty("user.dir");
-            File operatingCacheDirFile = new File(workingDir, ".aperio/sec");
+
+            // Calculate relative path from cache base to source file's parent
+            String cacheHome = getGovDataCacheDir();
+            if (cacheHome == null) {
+              cacheHome = System.getProperty("user.home") + "/.govdata-cache";
+            }
+            File cacheBaseDir = new File(cacheHome, "sec");
+            File sourceParentDir = xbrlFile.getParentFile();
+
+            // Get relative path from cache base to source parent
+            String relativePath = cacheBaseDir.toPath().relativize(sourceParentDir.toPath()).toString();
+
+            // Create mirrored directory structure under .aperio/sec
+            File operatingCacheDirFile = new File(workingDir, ".aperio/sec/" + relativePath);
             if (!operatingCacheDirFile.exists()) {
               operatingCacheDirFile.mkdirs();
             }
             ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
             ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
             record.originalFile = xbrlFile.getAbsolutePath();
-            // Store accession in the sourceFile field for now - converter can extract it
-            record.sourceFile = accession;
+            // Store accession number (parent directory name) in the sourceFile field
+            record.sourceFile = xbrlFile.getParentFile().getName();
             metadata.recordConversion(xbrlFile, record);
 
             // The converter now properly extracts metadata from the XML content itself
