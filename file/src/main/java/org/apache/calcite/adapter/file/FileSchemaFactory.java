@@ -292,6 +292,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
             : Boolean.TRUE;  // Default to true
 
     File directoryFile = null;
+    String directoryPath = null;
     // Determine sourceDirectory for reading files
     // Only create File objects for local storage, not for cloud storage providers
     if (storageType == null || "local".equals(storageType)) {
@@ -312,16 +313,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       }
       directoryFile = sourceDirectory;
     } else if (directory != null && storageType != null) {
-      // For cloud storage, use the directory as-is (it's a URI like s3://bucket/path)
-      // Create a fake File object that just holds the path
-      directoryFile = new File(directory) {
-        @Override public String getPath() {
-          return directory;
-        }
-        @Override public String getAbsolutePath() {
-          return directory;
-        }
-      };
+      // For cloud storage, keep directory as String (S3 URI, etc.)
+      // Don't create File objects for cloud storage URIs
+      directoryPath = directory;
+      LOGGER.info("Using cloud storage path (no File object): {}", directoryPath);
     }
 
     // If DuckDB engine is selected, first create FileSchema with PARQUET engine for conversions
@@ -374,7 +369,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Create internal FileSchema for DuckDB processing
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, directoryFile, baseConfigDirectory, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, directoryFile, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
 
@@ -420,9 +415,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Pass the FileSchema so it stays alive for refresh handling
       // Pass directoryPath as String to support both local and S3 URIs
       LOGGER.debug("FileSchemaFactory: Now creating DuckDB JDBC schema");
-      // Use getPath() instead of getAbsolutePath() to support S3 URIs (fake File objects)
-      String directoryPath = directoryFile != null ? directoryFile.getPath() : directory;
-      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema);
+      // Use directoryPath if available (cloud storage), otherwise use directoryFile (local storage)
+      String duckdbDirectory = directoryPath != null ? directoryPath
+          : (directoryFile != null ? directoryFile.getPath() : directory);
+      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, duckdbDirectory, recursive, fileSchema);
       LOGGER.info("FileSchemaFactory: DuckDB JDBC schema created successfully");
 
       // Wrap the schema with constraint metadata if available
@@ -453,7 +449,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Pass user-configured baseDirectory or null to let FileSchema use its default
     // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
     FileSchema fileSchema =
-        new FileSchema(parentSchema, name, directoryFile, baseDirectory, directoryPattern, tables, engineConfig, recursive,
+        new FileSchema(parentSchema, name, directoryFile, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
 
