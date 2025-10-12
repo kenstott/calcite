@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -107,25 +108,52 @@ public class S3StorageProvider implements StorageProvider {
           builder.withCredentials(new DefaultAWSCredentialsProviderChain());
         }
 
-        // Use provided region if available
+        // Check for custom endpoint (e.g., MinIO, Wasabi, or other S3-compatible services)
+        // Priority: config > AWS_ENDPOINT_OVERRIDE environment variable
+        String endpoint = (String) config.get("endpoint");
+        if (endpoint == null) {
+          endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+        }
+
         String region = (String) config.get("region");
-        if (region != null) {
-          builder.withRegion(region);
-        } else {
+        if (region == null) {
+          region = System.getenv("AWS_REGION");
+        }
+        if (region == null) {
           try {
-            String defaultRegion = new DefaultAwsRegionProviderChain().getRegion();
-            builder.withRegion(defaultRegion);
+            region = new DefaultAwsRegionProviderChain().getRegion();
           } catch (Exception e) {
-            builder.withRegion("us-west-1");
+            region = "us-east-1"; // Default for custom endpoints
           }
+        }
+
+        // If custom endpoint is provided, use endpoint configuration
+        if (endpoint != null) {
+          builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
+          // Enable path-style access for S3-compatible services like MinIO
+          builder.withPathStyleAccessEnabled(true);
+        } else {
+          // Standard AWS S3 - use region only
+          builder.withRegion(region);
         }
       } else {
         builder.withCredentials(new DefaultAWSCredentialsProviderChain());
+
+        // Check for AWS_ENDPOINT_OVERRIDE even without config
+        String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+
+        String region;
         try {
-          String region = new DefaultAwsRegionProviderChain().getRegion();
-          builder.withRegion(region);
+          region = new DefaultAwsRegionProviderChain().getRegion();
         } catch (Exception e) {
-          builder.withRegion("us-west-1");
+          region = "us-east-1";
+        }
+
+        if (endpoint != null) {
+          builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
+          builder.withPathStyleAccessEnabled(true);
+        } else {
+          builder.withRegion(region);
         }
       }
 
