@@ -78,6 +78,7 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
@@ -183,7 +184,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   private final ImmutableList<Map<String, Object>> tables;
-  private final @Nullable File baseDirectory;
+  private final @Nullable String baseDirectory;
   private final File operatingCacheDirectory; // Always local .aperio/<schema> for .conversions.json and file locks
   private final @Nullable File sourceDirectory; // Original directory for reading source files
   private final @Nullable String directoryPattern;
@@ -348,6 +349,56 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       @Nullable Map<String, Object> csvTypeInference,
       boolean primeCache,
       @Nullable String comment) {
+    this(parentSchema, name, sourceDirectory, userConfiguredBaseDirectory, null, directoryPattern,
+        tables, engineConfig, recursive, materializations, views, partitionedTables,
+        refreshInterval, tableNameCasing, columnNameCasing, storageType, storageConfig,
+        flatten, csvTypeInference, primeCache, comment);
+  }
+
+  /**
+   * Creates a file schema with all features including storage provider support and schema comment.
+   * This constructor accepts directoryPath as String for cloud storage URIs.
+   *
+   * @param parentSchema    Parent schema
+   * @param name            Schema name
+   * @param sourceDirectory Source directory to look for files (for local storage), or null
+   * @param userConfiguredBaseDirectory User-configured base directory for .aperio location from model.json, or null
+   * @param directoryPath   Directory path as String (for cloud storage URIs like s3://), takes precedence over sourceDirectory when storageType is set
+   * @param directoryPattern Directory pattern for file discovery, or null
+   * @param tables          List containing table identifiers, or null
+   * @param engineConfig    Execution engine configuration
+   * @param recursive       Whether to recursively scan subdirectories
+   * @param materializations List of materialized view definitions, or null
+   * @param views           List of view definitions, or null
+   * @param partitionedTables List of partitioned table definitions, or null
+   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
+   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
+   * @param storageConfig   Storage-specific configuration, or null
+   * @param flatten         Whether to flatten JSON/YAML structures, or null
+   * @param csvTypeInference CSV type inference configuration, or null
+   * @param primeCache      Whether to prime statistics cache on initialization (default true)
+   * @param comment         Schema comment for documentation, or null
+   */
+  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
+      @Nullable File userConfiguredBaseDirectory,
+      @Nullable String directoryPath,
+      @Nullable String directoryPattern,
+      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
+      boolean recursive,
+      @Nullable List<Map<String, Object>> materializations,
+      @Nullable List<Map<String, Object>> views,
+      @Nullable List<Map<String, Object>> partitionedTables,
+      @Nullable String refreshInterval,
+      String tableNameCasing,
+      String columnNameCasing,
+      @Nullable String storageType,
+      @Nullable Map<String, Object> storageConfig,
+      @Nullable Boolean flatten,
+      @Nullable Map<String, Object> csvTypeInference,
+      boolean primeCache,
+      @Nullable String comment) {
     this.tables =
         tables == null ? ImmutableList.of()
             : ImmutableList.copyOf(tables);
@@ -396,22 +447,26 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // baseDirectory represents the data directory (where parquet files are stored)
     // When using StorageProvider, this is the directory passed from operand (could be S3 URI)
     // When not using StorageProvider, use sourceDirectory or operating cache directory
-    if (storageType != null && sourceDirectory != null) {
-      // Using StorageProvider - baseDirectory is the data location (e.g., S3 URI)
-      this.baseDirectory = sourceDirectory;
-      LOGGER.debug("Using sourceDirectory as baseDirectory for StorageProvider: {}", sourceDirectory);
+    if (storageType != null && directoryPath != null) {
+      // Using StorageProvider with cloud storage - use String path directly (e.g., S3 URI)
+      this.baseDirectory = directoryPath;
+      LOGGER.debug("Using directoryPath as baseDirectory for StorageProvider: {}", this.baseDirectory);
+    } else if (storageType != null && sourceDirectory != null) {
+      // Using StorageProvider with local storage - convert File to String
+      this.baseDirectory = sourceDirectory.getAbsolutePath();
+      LOGGER.debug("Using sourceDirectory as baseDirectory for StorageProvider: {}", this.baseDirectory);
     } else if (userConfiguredBaseDirectory != null) {
       // Legacy: user configured baseDirectory explicitly
-      this.baseDirectory = userConfiguredBaseDirectory;
-      LOGGER.debug("Using userConfiguredBaseDirectory as baseDirectory: {}", userConfiguredBaseDirectory);
+      this.baseDirectory = userConfiguredBaseDirectory.getAbsolutePath();
+      LOGGER.debug("Using userConfiguredBaseDirectory as baseDirectory: {}", this.baseDirectory);
     } else {
       // Default: use operating cache directory for backward compatibility
-      this.baseDirectory = this.operatingCacheDirectory;
-      LOGGER.debug("Using operatingCacheDirectory as baseDirectory (default): {}", this.operatingCacheDirectory);
+      this.baseDirectory = this.operatingCacheDirectory.getAbsolutePath();
+      LOGGER.debug("Using operatingCacheDirectory as baseDirectory (default): {}", this.baseDirectory);
     }
 
     LOGGER.debug("Operating cache directory: {}", this.operatingCacheDirectory.getAbsolutePath());
-    LOGGER.debug("Base directory (data location): {}", this.baseDirectory != null ? this.baseDirectory.getPath() : "null");
+    LOGGER.debug("Base directory (data location): {}", this.baseDirectory);
 
     // Initialize conversion metadata using operating cache directory (always local for file locking)
     this.conversionMetadata = new ConversionMetadata(this.operatingCacheDirectory);
@@ -1152,7 +1207,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         File outputDir = conversionDir != null ? conversionDir : file.getParentFile();
         // Pass baseDirectory for metadata storage and relativePath for directory preservation
         boolean converted =
-            FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing, baseDirectory, relativePath);
+            FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing,
+                baseDirectory != null ? new File(baseDirectory) : null, relativePath);
         if (converted) {
           LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
         }
@@ -1250,7 +1306,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 conversionDir,
                 columnNameCasing,
                 tableNameCasing,
-                baseDirectory,
+                baseDirectory != null ? new File(baseDirectory) : null,
                 relativePath);
 
             if (converted) {
@@ -1456,9 +1512,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     if (baseDirectory != null) {
       try {
         LOGGER.debug("Looking for conversion metadata for {} in baseDirectory: {}",
-            jsonFile.getName(), baseDirectory.getAbsolutePath());
+            jsonFile.getName(), baseDirectory);
         org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata =
-            new org.apache.calcite.adapter.file.metadata.ConversionMetadata(baseDirectory);
+            new org.apache.calcite.adapter.file.metadata.ConversionMetadata(new File(baseDirectory));
         File originalFile = metadata.findOriginalSource(jsonFile);
         LOGGER.debug("Metadata lookup result for {}: originalFile={}", jsonFile.getName(), originalFile);
         if (originalFile != null) {
@@ -1786,7 +1842,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
                     // Convert to Parquet
                     File cacheDir =
-                        ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+                        ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
                     File createdParquetFile =
                         ParquetConversionUtil.convertToParquet(tableSource, tableName, jsonTable, cacheDir, parentSchema, name, tableNameCasing);
 
@@ -1916,7 +1972,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               // Try to convert Arrow file to Parquet, but fall back to ArrowTable if conversion fails
               try {
                 File cacheDir =
-                    ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+                    ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
                 File parquetFile =
                     ParquetConversionUtil.convertToParquet(source, tableName, arrowTable, cacheDir, parentSchema, this.name, tableNameCasing);
                 Table table = new ParquetTranslatableTable(parquetFile, name);
@@ -1987,7 +2043,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             if (baseDirectory != null) {
               // Use schema-aware cache directory for materialized views
               File cacheDir =
-                  ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+                  ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
               File mvDir = new File(cacheDir, ".materialized_views");
               if (!mvDir.exists()) {
                 mvDir.mkdirs();
@@ -2309,7 +2365,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       try {
         File cacheDir =
-            ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+            ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
         File sourceFile = new File(source.path());
         boolean typeInferenceEnabled = csvTypeInferenceConfig != null && csvTypeInferenceConfig.isEnabled();
         File parquetFile = ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, typeInferenceEnabled, this.tableNameCasing);
@@ -2405,7 +2461,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             if (originalTable != null) {
             // Get cache directory
             File cacheDir =
-                ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+                ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
 
             // Try custom converters first, then fall back to default conversion
             File parquetFile = null;
@@ -2698,12 +2754,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 // Use specific table selector and index - this should create exactly one table
                 LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory, fieldConfigs);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
               } else {
                 // Use regular conversion that processes all tables
                 LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory, null, tableName);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
               }
 
               if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -2956,12 +3012,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               // Use specific table selector and index - this should create exactly one table
               LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory, fieldConfigs);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
             } else {
               // Use regular conversion that processes all tables
               LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory, null, tableName);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
             }
 
             if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3096,12 +3152,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             // Use specific table selector and index - this should create exactly one table
             LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory, fieldConfigs);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
           } else {
             // Use regular conversion that processes all tables
             LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory, null, tableName);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
           }
 
           if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3300,7 +3356,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         try {
           // For Parquet engine with refresh, use RefreshableParquetCacheTable
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new CsvTranslatableTable(source, protoRowType, columnNameCasing, csvTypeInferenceConfig),
               cacheDir, parentSchema, name, tableNameCasing);
@@ -3396,7 +3452,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           // For Parquet engine with refresh, we need to use RefreshableParquetCacheTable
           // First convert JSON to Parquet
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new JsonScannableTable(source, options, columnNameCasing), cacheDir, parentSchema, name, tableNameCasing);
 
@@ -3437,7 +3493,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       if (baseDirectory != null) {
         try {
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new JsonScannableTable(source, options, columnNameCasing), cacheDir, parentSchema, name, tableNameCasing);
 
@@ -3676,51 +3732,78 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private List<String> findMatchingFiles(String pattern) {
     List<String> result = new ArrayList<>();
 
-    if (sourceDirectory == null || pattern == null) {
-      LOGGER.warn("findMatchingFiles: sourceDirectory={}, pattern={} - returning empty",
-                  sourceDirectory, pattern);
+    if (pattern == null) {
+      LOGGER.warn("findMatchingFiles: pattern is null - returning empty");
       return result;
     }
 
-    LOGGER.info("findMatchingFiles: sourceDirectory={}, pattern={}", sourceDirectory.getAbsolutePath(), pattern);
+    // StorageProvider is the ONLY way to access files
+    if (storageProvider == null) {
+      LOGGER.error("findMatchingFiles: storageProvider is null - this is a configuration error");
+      return result;
+    }
+
+    // Determine the base directory to search
+    if (baseDirectory == null) {
+      LOGGER.warn("findMatchingFiles: baseDirectory is null - returning empty");
+      return result;
+    }
+    String searchPath = baseDirectory;
+
+    LOGGER.info("findMatchingFiles: baseDirectory={}, pattern={}, storageType={}",
+                searchPath, pattern, storageProvider.getStorageType());
 
     try {
-      Path basePath = sourceDirectory.toPath();
+      // List all files using StorageProvider
+      boolean recursive = pattern.contains("**") || pattern.contains("/");
+      List<StorageProvider.FileEntry> allFiles = storageProvider.listFiles(searchPath, recursive);
+
+      LOGGER.debug("findMatchingFiles: StorageProvider returned {} files", allFiles.size());
+
+      // Create glob matcher for the pattern
       PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
 
       // Special handling for patterns starting with "**/": also match root files
-      // For example, "**/*.csv" should also match "*.csv" in the root directory
       PathMatcher rootMatcher = null;
       if (pattern.startsWith("**/")) {
         String rootPattern = pattern.substring(3); // Get pattern after "**/"
         rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + rootPattern);
       }
 
-      final PathMatcher finalRootMatcher = rootMatcher;
-      Files.walkFileTree(basePath, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE, new SimpleFileVisitor<Path>() {
-        @Override public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-          // Skip the .aperio directory to avoid finding converted files through source directory scan
-          if (dir.getFileName() != null && dir.getFileName().toString().equals(".aperio")) {
-            return FileVisitResult.SKIP_SUBTREE;
-          }
-          return FileVisitResult.CONTINUE;
+      // Filter files by pattern
+      for (StorageProvider.FileEntry entry : allFiles) {
+        if (entry.isDirectory()) {
+          continue; // Skip directories
         }
 
-        @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-          Path relativePath = basePath.relativize(file);
-          // Match against main pattern OR root pattern (if applicable)
-          if (matcher.matches(relativePath) ||
-              (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
-            result.add(file.toString());
-            LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", file, relativePath);
+        // Get relative path for pattern matching
+        String fullPath = entry.getPath();
+        String relativePath;
+
+        // Extract relative path by removing the base directory prefix
+        if (fullPath.startsWith(searchPath)) {
+          relativePath = fullPath.substring(searchPath.length());
+          // Remove leading slash if present
+          while (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
           }
-          return FileVisitResult.CONTINUE;
+        } else {
+          relativePath = entry.getName();
         }
-      });
+
+        // Convert to Path for glob matching
+        Path relPath = Paths.get(relativePath);
+
+        // Match against main pattern OR root pattern (if applicable)
+        if (matcher.matches(relPath) ||
+            (rootMatcher != null && rootMatcher.matches(relPath))) {
+          result.add(fullPath);
+          LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", fullPath, relativePath);
+        }
+      }
 
     } catch (Exception e) {
-      LOGGER.error("Error scanning for files with pattern: {}", pattern);
-      e.printStackTrace();
+      LOGGER.error("Error scanning for files with pattern '{}': {}", pattern, e.getMessage(), e);
     }
 
     LOGGER.info("findMatchingFiles: Found {} files matching pattern: {}", result.size(), pattern);
@@ -3906,7 +3989,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // Determine the base path to start from
     String basePath = "/";
     if (baseDirectory != null) {
-      basePath = baseDirectory.getPath();
+      basePath = baseDirectory;
       // Don't normalize S3 or other cloud storage URIs
       if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
           && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
@@ -4034,7 +4117,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // Determine the base path to start from
     String basePath = "/";
     if (baseDirectory != null) {
-      basePath = baseDirectory.getPath();
+      basePath = baseDirectory;
       // Don't normalize S3 or other cloud storage URIs
       if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
           && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
@@ -4286,7 +4369,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    * The file is saved to baseDirectory/generated-model.json
    */
   private void generateModelFile(Map<String, Table> tables) {
-    if (baseDirectory == null || !baseDirectory.exists()) {
+    if (baseDirectory == null || !new File(baseDirectory).exists()) {
       LOGGER.debug("Cannot generate model file - baseDirectory doesn't exist");
       return;
     }
@@ -4422,9 +4505,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    * Gets the base directory for this schema.
    * This is where conversion metadata and cached files are stored.
    *
-   * @return The base directory, or null if not configured
+   * @return The base directory path, or null if not configured
    */
-  public File getBaseDirectory() {
+  public String getBaseDirectory() {
     return baseDirectory;
   }
 
