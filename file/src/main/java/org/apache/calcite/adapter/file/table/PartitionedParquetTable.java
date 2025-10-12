@@ -78,6 +78,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   private final List<String> filePaths;
   private final PartitionDetector.PartitionInfo partitionInfo;
   private final ExecutionEngineConfig engineConfig;
+  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
   private RelProtoDataType protoRowType;
   private List<String> partitionColumns;
   private List<String> addedPartitionColumns;  // Partition columns actually added to schema
@@ -95,14 +96,14 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   public PartitionedParquetTable(List<String> filePaths,
                                  PartitionDetector.PartitionInfo partitionInfo,
                                  ExecutionEngineConfig engineConfig) {
-    this(filePaths, partitionInfo, engineConfig, null, null, null, null, null, null);
+    this(filePaths, partitionInfo, engineConfig, null, null, null, null, null, null, null);
   }
 
   public PartitionedParquetTable(List<String> filePaths,
                                  PartitionDetector.PartitionInfo partitionInfo,
                                  ExecutionEngineConfig engineConfig,
                                  Map<String, String> partitionColumnTypes) {
-    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, null, null, null, null, null);
+    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, null, null, null, null, null, null);
   }
 
   public PartitionedParquetTable(List<String> filePaths,
@@ -111,7 +112,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
                                  Map<String, String> partitionColumnTypes,
                                  String customRegex,
                                  List<PartitionedTableConfig.ColumnMapping> columnMappings) {
-    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex, columnMappings, null, null, null);
+    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex, columnMappings, null, null, null, null);
   }
 
   public PartitionedParquetTable(List<String> filePaths,
@@ -121,7 +122,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
                                  String customRegex,
                                  List<PartitionedTableConfig.ColumnMapping> columnMappings,
                                  Map<String, Object> constraintConfig) {
-    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex, columnMappings, constraintConfig, null, null);
+    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex, columnMappings, constraintConfig, null, null, null);
   }
 
   public PartitionedParquetTable(List<String> filePaths,
@@ -133,9 +134,23 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
                                  Map<String, Object> constraintConfig,
                                  String schemaName,
                                  String tableName) {
+    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex, columnMappings, constraintConfig, schemaName, tableName, null);
+  }
+
+  public PartitionedParquetTable(List<String> filePaths,
+                                 PartitionDetector.PartitionInfo partitionInfo,
+                                 ExecutionEngineConfig engineConfig,
+                                 Map<String, String> partitionColumnTypes,
+                                 String customRegex,
+                                 List<PartitionedTableConfig.ColumnMapping> columnMappings,
+                                 Map<String, Object> constraintConfig,
+                                 String schemaName,
+                                 String tableName,
+                                 org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     this.filePaths = filePaths;
     this.partitionInfo = partitionInfo;
     this.engineConfig = engineConfig;
+    this.storageProvider = storageProvider;
     this.partitionColumnTypes = partitionColumnTypes;
     this.customRegex = customRegex;
     this.columnMappings = columnMappings;
@@ -470,9 +485,20 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
   private RelDataType getParquetSchema(String filePath, RelDataTypeFactory typeFactory)
       throws IOException {
-    Configuration conf = new Configuration();
-    Path hadoopPath = new Path(filePath);
-    InputFile inputFile = HadoopInputFile.fromPath(hadoopPath, conf);
+    InputFile inputFile;
+
+    // Use StorageProvider for S3/cloud storage, Hadoop FileSystem for local files
+    if (storageProvider != null && (filePath.startsWith("s3://") || filePath.startsWith("http://") || filePath.startsWith("https://"))) {
+      // Use StorageProvider for cloud storage
+      LOGGER.debug("Using StorageProvider to read Parquet schema from: {}", filePath);
+      inputFile = new org.apache.calcite.adapter.file.storage.StorageProviderInputFile(storageProvider, filePath);
+    } else {
+      // Use Hadoop FileSystem for local files
+      LOGGER.debug("Using Hadoop FileSystem to read Parquet schema from: {}", filePath);
+      Configuration conf = new Configuration();
+      Path hadoopPath = new Path(filePath);
+      inputFile = HadoopInputFile.fromPath(hadoopPath, conf);
+    }
 
     // Use the non-deprecated method
     ParquetMetadata metadata;
