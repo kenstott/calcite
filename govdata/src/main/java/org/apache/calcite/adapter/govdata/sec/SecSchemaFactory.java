@@ -73,6 +73,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private StorageProvider storageProvider;
   private SecCacheManifest cacheManifest; // ETag-based caching for submissions.json
 
+  // Directory paths following standardized naming
+  private String secCacheDirectory;      // Raw XBRL cache: $GOVDATA_CACHE_DIR/sec/
+  private String secOperatingDirectory;  // Metadata directory: $GOVDATA_PARQUET_DIR/.aperio/sec/
+
   // Standard SEC data cache directory - XBRL files are immutable, cache forever
   // These are now accessed at runtime via interface methods
 
@@ -501,10 +505,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       throw new IllegalStateException("parquetDirectory must be set in model operand or GOVDATA_PARQUET_DIR environment variable must be set");
     }
 
-    // Load SecCacheManifest now that we have the cache directory
-    String secCacheDir = govdataCacheDir + "/sec";
-    this.cacheManifest = SecCacheManifest.load(secCacheDir);
-    LOGGER.debug("Loaded SEC cache manifest from {}", secCacheDir);
+    // SEC data directories following standardized naming
+    String secCacheDir = govdataCacheDir + "/sec";  // Raw XBRL cache
+    this.secCacheDirectory = secCacheDir;
+
+    // Operating directory for metadata (.aperio/sec/)
+    // This is passed from GovDataSchemaFactory which establishes it centrally
+    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
+    this.secOperatingDirectory = (String) operand.get("operatingDirectory");
+    if (this.secOperatingDirectory == null) {
+      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
+    }
+    LOGGER.debug("Received operating directory from parent: {}", this.secOperatingDirectory);
+
+    // Load SecCacheManifest from operating directory
+    this.cacheManifest = SecCacheManifest.load(this.secOperatingDirectory);
+    LOGGER.debug("Loaded SEC cache manifest from {}", this.secOperatingDirectory);
 
     // Migrate legacy .notfound markers to manifest
     migrateNotFoundMarkers(secCacheDir);
@@ -512,7 +528,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // SEC data directories
     String secRawDir = govdataCacheDir + "/sec";
     String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
-    LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}'", govdataParquetDir, secParquetDir);
+    LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}', operatingDir='{}'",
+                govdataParquetDir, secParquetDir, this.secOperatingDirectory);
 
     // Determine cache directory
     String configuredDir = (String) mutableOperand.get("directory");
@@ -901,7 +918,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String entryPrefix = cik + "|" + accession + "|";
       String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
-      File manifestFile = new File(baseDirectory, "processed_filings.manifest");
+      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
       synchronized (SecSchemaFactory.class) {
         // Check if this entry already exists in the manifest (prevent duplicates)
         boolean alreadyExists = false;
@@ -1153,7 +1170,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Save SecCacheManifest after all downloads complete
       if (cacheManifest != null && secRawDir != null) {
-        cacheManifest.save(secRawDir);
+        cacheManifest.save(this.secOperatingDirectory);
         LOGGER.debug("Saved SEC cache manifest to {}", secRawDir);
       }
 
@@ -1166,7 +1183,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String cacheDir = getGovDataCacheDir();
         if (cacheDir != null) {
           String secCacheDir = cacheDir + "/sec";
-          cacheManifest.save(secCacheDir);
+          cacheManifest.save(this.secOperatingDirectory);
           LOGGER.debug("Saved SEC cache manifest in finally block to {}", secCacheDir);
         }
       }
@@ -1297,7 +1314,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               String cacheDir = getGovDataCacheDir();
               if (cacheDir != null) {
                 String secCacheDir = cacheDir + "/sec";
-                cacheManifest.save(secCacheDir);
+                cacheManifest.save(this.secOperatingDirectory);
               }
 
               if (newETag != null) {
@@ -1434,7 +1451,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Load manifest once for ALL filings in this CIK (huge performance improvement)
       // Reading a 476K-line file on every filing check is wasteful and causes stale reads
-      File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
+      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
       Set<String> processedFilingsManifest = new HashSet<>();
       if (manifestFile.exists()) {
         try {
@@ -1864,7 +1881,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String accession, String primaryDoc, String form, String filingDate, String reportDate, File cikDir, boolean hasInlineXBRL) {
     try {
       // Check manifest first to see if this filing was already fully processed
-      File manifestFile = new File(cikDir.getParentFile(), "processed_filings.manifest");
+      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
       String manifestKey = cik + "|" + accession + "|" + form + "|" + filingDate;
 
       // Check if already in manifest or has all required Parquet files
@@ -2472,7 +2489,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       int skipped424BFilings = 0;  // Track excluded 424B and S-* forms
 
       // Load manifest once for performance (avoid repeated file I/O)
-      File manifestFile = new File(secRawDir, "processed_filings.manifest");
+      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
       Set<String> processedFilingsManifest = new HashSet<>();
       if (manifestFile.exists()) {
         try {

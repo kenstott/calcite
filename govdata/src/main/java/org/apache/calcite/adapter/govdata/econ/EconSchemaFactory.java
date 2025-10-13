@@ -243,6 +243,15 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       int startYear, int endYear, StorageProvider storageProvider,
       List<String> customFredSeries, Map<String, Object> fredSeriesGroups, String defaultPartitionStrategy) throws IOException {
 
+    // Operating directory for metadata (.aperio/econ/)
+    // This is passed from GovDataSchemaFactory which establishes it centrally
+    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
+    String econOperatingDirectory = (String) operand.get("operatingDirectory");
+    if (econOperatingDirectory == null) {
+      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
+    }
+    LOGGER.debug("Received operating directory from parent: {}", econOperatingDirectory);
+
     // Create cache directory (always local)
     File cacheDirFile = new File(cacheDir);
     if (!cacheDirFile.exists()) {
@@ -265,8 +274,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       regionalDir.mkdirs();
     }
 
-    // Load or create cache manifest for tracking parquet conversions
-    CacheManifest cacheManifest = CacheManifest.load(cacheDir);
+    // Load or create cache manifest for tracking parquet conversions from operating directory
+    CacheManifest cacheManifest = CacheManifest.load(econOperatingDirectory);
+    LOGGER.debug("Loaded ECON cache manifest from {}", econOperatingDirectory);
 
     // Download BLS data if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
@@ -439,9 +449,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.warn("Skipping FRED catalog download - API key not available");
     }
 
-    // Save cache manifest after all downloads
+    // Save cache manifest after all downloads to operating directory
     if (cacheManifest != null) {
-      cacheManifest.save(cacheDir);
+      cacheManifest.save(econOperatingDirectory);
     }
   }
 
