@@ -210,7 +210,11 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   }
 
   public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, storageProvider, sharedManifest);
+    this(cacheDir, cacheDir, apiKey, storageProvider, sharedManifest);
+  }
+
+  public FredDataDownloader(String cacheDirectory, String operatingDirectory, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -936,7 +940,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     // Find the cached JSON file for this series
     // Look for any JSON file containing this series
-    File cacheRoot = new File(cacheDir);
+    File cacheRoot = new File(cacheDirectory);
     List<Map<String, Object>> observations = new ArrayList<>();
 
     // Search through cache directory structure

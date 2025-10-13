@@ -76,6 +76,7 @@ public class HudCrosswalkFetcher {
   private final ObjectMapper objectMapper;
   private final StorageProvider storageProvider;
   private final GeoCacheManifest cacheManifest;
+  private final String operatingDirectory;
 
   public HudCrosswalkFetcher(String username, String password, File cacheDir) {
     this(username, password, null, cacheDir, null, null);
@@ -97,10 +98,16 @@ public class HudCrosswalkFetcher {
 
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(username, password, token, cacheDir, cacheDir.getAbsolutePath(), storageProvider, cacheManifest);
+  }
+
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.username = username;
     this.password = password;
     this.token = token;
     this.cacheDir = cacheDir;
+    this.operatingDirectory = operatingDirectory;
     this.objectMapper = new ObjectMapper();
     this.storageProvider = storageProvider;
     this.cacheManifest = cacheManifest;
@@ -486,7 +493,7 @@ public class HudCrosswalkFetcher {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-        cacheManifest.save(cacheDir.getAbsolutePath());
+        cacheManifest.save(this.operatingDirectory);
       }
       return;
     }

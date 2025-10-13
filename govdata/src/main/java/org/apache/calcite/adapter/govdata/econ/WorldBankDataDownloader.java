@@ -85,7 +85,11 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   }
 
   public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, storageProvider, sharedManifest);
+    this(cacheDir, cacheDir, storageProvider, sharedManifest);
+  }
+
+  public WorldBankDataDownloader(String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
   }
 
   @Override protected long getMinRequestIntervalMs() {
@@ -194,7 +198,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   public void downloadWorldIndicatorsForYear(int year) throws IOException, InterruptedException {
     LOGGER.info("Downloading world economic indicators for year {}", year);
 
-    Path outputDir = Paths.get(cacheDir, "source=econ", "type=indicators", "year=" + year);
+    Path outputDir = Paths.get(cacheDirectory, "source=econ", "type=indicators", "year=" + year);
     Files.createDirectories(outputDir);
 
     List<Map<String, Object>> indicators = new ArrayList<>();
@@ -321,7 +325,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       if (storageProvider.exists(relativePath)) {
         LOGGER.info("Found existing world indicators file for {}-{} - updating manifest", startYear, endYear);
         cacheManifest.markCached("world_indicators", startYear, cacheParams, relativePath, 0L);
-        cacheManifest.save(cacheDir);
+        cacheManifest.save(operatingDirectory);
         return parquetFile;
       }
     } catch (Exception e) {
@@ -396,7 +400,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Mark as cached in manifest
     cacheManifest.markCached("world_indicators", startYear, cacheParams, relativePath, 0L);
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
 
     LOGGER.info("World indicators saved to: {} ({} records)", relativePath, indicators.size());
     return parquetFile;
@@ -437,7 +441,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       if (storageProvider.exists(relativePath)) {
         LOGGER.info("Found existing global GDP file for {}-{} - updating manifest", startYear, endYear);
         cacheManifest.markCached("global_gdp", startYear, cacheParams, relativePath, 0L);
-        cacheManifest.save(cacheDir);
+        cacheManifest.save(operatingDirectory);
         return parquetFile;
       }
     } catch (Exception e) {
@@ -488,7 +492,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Mark as cached in manifest
     cacheManifest.markCached("global_gdp", startYear, cacheParams, relativePath, 0L);
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Global GDP data saved to: {} ({} records)", relativePath, gdpData.size());
     return parquetFile;
