@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -52,16 +53,12 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final String TREASURY_API_BASE = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/";
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
-  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(cacheDir, storageProvider, null);
+  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this(cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(cacheDir, cacheDir, storageProvider, sharedManifest);
-  }
-
-  public TreasuryDataDownloader(String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
+  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
   }
 
   @Override protected long getMinRequestIntervalMs() {
@@ -399,47 +396,45 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * Converts cached Treasury yields data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
-   * @param sourceDir Directory containing cached Treasury JSON data
-   * @param targetFile Target parquet file to create
+   * @param sourceDirPath Path to directory containing cached Treasury JSON data
+   * @param targetFilePath Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Check if parquet file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
-    LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDir, targetFilePath);
+    LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<TreasuryYield> yields = new ArrayList<>();
 
-    // Look for JSON files in the source directory
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.endsWith(".json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-          JsonNode data = root.get("data");
+    // Read treasury yields JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "treasury_yields.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+        JsonNode data = root.get("data");
 
-          if (data != null && data.isArray()) {
-            for (JsonNode record : data) {
-              TreasuryYield yield = new TreasuryYield();
-              yield.date = record.get("record_date").asText();
-              yield.securityType = record.get("security_type_desc").asText("");
-              yield.securityDesc = record.get("security_desc").asText("");
-              yield.avgInterestRate = record.get("avg_interest_rate_amt").asDouble(0.0);
+        if (data != null && data.isArray()) {
+          for (JsonNode record : data) {
+            TreasuryYield yield = new TreasuryYield();
+            yield.date = record.get("record_date").asText();
+            yield.securityType = record.get("security_type_desc").asText("");
+            yield.securityDesc = record.get("security_desc").asText("");
+            yield.avgInterestRate = record.get("avg_interest_rate_amt").asDouble(0.0);
 
-              // Parse maturity from description
-              yield.maturityMonths = parseMaturityMonths(yield.securityDesc);
-              yield.maturityLabel = formatMaturityLabel(yield.maturityMonths);
+            // Parse maturity from description
+            yield.maturityMonths = parseMaturityMonths(yield.securityDesc);
+            yield.maturityLabel = formatMaturityLabel(yield.maturityMonths);
 
-              yields.add(yield);
-            }
+            yields.add(yield);
           }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading Treasury JSON file {}: {}", jsonFile, e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading Treasury JSON file {}: {}", jsonFilePath, e.getMessage());
       }
     }
 
@@ -453,59 +448,57 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts cached federal debt data to Parquet format.
    *
-   * @param sourceDir Directory containing cached federal debt JSON data
+   * @param sourceDirPath Path to directory containing cached federal debt JSON data
    * @param targetFilePath Target parquet file path to create
    */
-  public void convertFederalDebtToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertFederalDebtToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Check if parquet file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
-    LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDir, targetFilePath);
+    LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<FederalDebt> debtRecords = new ArrayList<>();
 
-    // Look for federal debt JSON files in the source directory
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("federal_debt.json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-          JsonNode data = root.get("data");
+    // Read federal debt JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "federal_debt.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+        JsonNode data = root.get("data");
 
-          if (data != null && data.isArray()) {
-            for (JsonNode record : data) {
-              FederalDebt debt = new FederalDebt();
-              debt.date = record.get("record_date").asText();
-              debt.debtType = "Total Public Debt Outstanding";
+        if (data != null && data.isArray()) {
+          for (JsonNode record : data) {
+            FederalDebt debt = new FederalDebt();
+            debt.date = record.get("record_date").asText();
+            debt.debtType = "Total Public Debt Outstanding";
 
-              // Parse debt amounts (convert from millions to billions)
-              JsonNode totalDebtNode = record.get("tot_pub_debt_out_amt");
-              if (totalDebtNode != null) {
-                debt.totalDebt = totalDebtNode.asDouble(0.0) / 1000.0; // Convert millions to billions
-              }
-
-              JsonNode publicDebtNode = record.get("debt_held_public_amt");
-              if (publicDebtNode != null) {
-                debt.debtHeldByPublic = publicDebtNode.asDouble(0.0) / 1000.0;
-              }
-
-              JsonNode intragovDebtNode = record.get("intragov_hold_amt");
-              if (intragovDebtNode != null) {
-                debt.intragovDebt = intragovDebtNode.asDouble(0.0) / 1000.0;
-              }
-
-              debt.holderCategory = "All";
-
-              debtRecords.add(debt);
+            // Parse debt amounts (convert from millions to billions)
+            JsonNode totalDebtNode = record.get("tot_pub_debt_out_amt");
+            if (totalDebtNode != null) {
+              debt.totalDebt = totalDebtNode.asDouble(0.0) / 1000.0; // Convert millions to billions
             }
+
+            JsonNode publicDebtNode = record.get("debt_held_public_amt");
+            if (publicDebtNode != null) {
+              debt.debtHeldByPublic = publicDebtNode.asDouble(0.0) / 1000.0;
+            }
+
+            JsonNode intragovDebtNode = record.get("intragov_hold_amt");
+            if (intragovDebtNode != null) {
+              debt.intragovDebt = intragovDebtNode.asDouble(0.0) / 1000.0;
+            }
+
+            debt.holderCategory = "All";
+
+            debtRecords.add(debt);
           }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading federal debt JSON file {}: {}", jsonFile, e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading federal debt JSON file {}: {}", jsonFilePath, e.getMessage());
       }
     }
 

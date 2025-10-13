@@ -116,13 +116,7 @@ public class FredCatalogDownloader {
         .build();
     this.objectMapper = new ObjectMapper();
 
-    // Ensure directories exist
-    try {
-      Files.createDirectories(Paths.get(cacheDir));
-      Files.createDirectories(Paths.get(parquetDir));
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to create directories", e);
-    }
+    // Directory creation handled automatically by StorageProvider when writing files
   }
 
   /**
@@ -746,15 +740,12 @@ public class FredCatalogDownloader {
       String seriesStatus = parts[3];
       List<Map<String, Object>> partitionData = entry.getValue();
 
-      // Create cache directory structure
+      // Build cache file path - directories created automatically when writing
       String catalogCacheDir = cacheDir + "/type=catalog" +
           "/category=" + categoryName +
           "/frequency=" + frequency +
           "/source=" + sourceName +
           "/status=" + seriesStatus;
-
-      Path cacheDir = Paths.get(catalogCacheDir);
-      Files.createDirectories(cacheDir);
 
       // Save partition to JSON cache file
       String jsonFile = catalogCacheDir + "/fred_data_series_catalog.json";

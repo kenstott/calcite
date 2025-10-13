@@ -33,6 +33,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -110,23 +111,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     public static final String COMPENSATION_BY_INDUSTRY = "4";              // Compensation by Industry
   }
 
-  public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider) {
-    this(cacheDir, parquetDir, apiKey, storageProvider, null);
+  public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
+    this(cacheDir, cacheDir, parquetDir, apiKey, cacheStorageProvider, storageProvider, null);
   }
 
-  public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(cacheDir, cacheDir, parquetDir, apiKey, storageProvider, sharedManifest);
-  }
-
-  public BeaDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDir, String apiKey, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
+  public BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, String apiKey, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.parquetDir = parquetDir;
     this.apiKey = apiKey;
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
   public BeaDataDownloader(String cacheDir, String apiKey) {
-    super(cacheDir, org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir));
+    super(cacheDir, org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir), org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir));
     this.parquetDir = cacheDir; // For compatibility, use same dir
     this.apiKey = apiKey;
   }
@@ -266,19 +263,20 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Check if file exists and update manifest
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    File jsonFile = new File(outputDir, "gdp_components.json");
-    if (jsonFile.exists() && jsonFile.length() > 100) {  // Check file has real data
-      LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
-      String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
-      cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(operatingDirectory);
-      return;
+    // Check if file exists using StorageProvider and update manifest
+    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
+    try {
+      if (cacheStorageProvider.exists(relativePath)) {
+        LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
+        cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, 0L);
+        cacheManifest.save(operatingDirectory);
+        return;
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check if file exists: {}", e.getMessage());
     }
 
-    // Create local cache directory
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
     List<GdpComponent> components = new ArrayList<>();
 
@@ -383,13 +381,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("GDP components saved to: {} ({} records)", jsonFile.getAbsolutePath(), components.size());
+    // Write using StorageProvider - directories created automatically
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
-    cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
+    LOGGER.debug("GDP components saved to: {} ({} records)", relativePath, components.size());
+
+    // Mark as cached in manifest
+    cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -555,9 +554,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.debug("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
 
-    // Create local cache directory
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
@@ -678,9 +675,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to local cache
-    File jsonFile = new File(outputDir, "regional_income.json");
-    LOGGER.debug("Preparing to save {} regional income records to {}", incomeData.size(), jsonFile.getAbsolutePath());
+    // Save as JSON to cache using StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/regional_income.json";
+    LOGGER.debug("Preparing to save {} regional income records to {}", incomeData.size(), relativePath);
 
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> incomeList = new ArrayList<>();
@@ -703,13 +700,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("Regional income data saved to: {} ({} records)", jsonFile.getAbsolutePath(), incomeData.size());
+    LOGGER.debug("Regional income data saved to: {} ({} records)", relativePath, incomeData.size());
 
     // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/regional_income.json";
-    cacheManifest.markCached("regional_income", year, cacheParams, relativePath, jsonFile.length());
+    cacheManifest.markCached("regional_income", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -835,9 +832,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.debug("Downloading BEA trade statistics for year {}", year);
 
-    // Create local cache directory
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
     List<TradeStatistic> tradeData = new ArrayList<>();
 
@@ -898,8 +893,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Calculate trade balances for matching export/import pairs
     calculateTradeBalances(tradeData);
 
-    // Save as JSON to local cache
-    File jsonFile = new File(outputDir, "trade_statistics.json");
+    // Save as JSON to cache using StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> tradeList = new ArrayList<>();
 
@@ -924,13 +919,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("Trade statistics saved to: {} ({} records)", jsonFile.getAbsolutePath(), tradeData.size());
+    LOGGER.debug("Trade statistics saved to: {} ({} records)", relativePath, tradeData.size());
 
     // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
-    cacheManifest.markCached("trade_statistics", year, cacheParams, relativePath, jsonFile.length());
+    cacheManifest.markCached("trade_statistics", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -1186,9 +1181,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Create local cache directory
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
     LOGGER.debug("Downloading BEA ITA data for year {}", year);
 
@@ -1283,8 +1276,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to local cache
-    File jsonFile = new File(outputDir, "ita_data.json");
+    // Save as JSON to cache using StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> itaList = new ArrayList<>();
 
@@ -1307,13 +1300,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("ITA data saved to: {} ({} records)", jsonFile.getAbsolutePath(), itaRecords.size());
+    LOGGER.debug("ITA data saved to: {} ({} records)", relativePath, itaRecords.size());
 
     // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
-    cacheManifest.markCached("ita_data", year, cacheParams, relativePath, jsonFile.length());
+    cacheManifest.markCached("ita_data", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -1496,9 +1489,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Create local cache directory
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
     LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
 
@@ -1578,8 +1569,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to local cache
-    File jsonFile = new File(outputDir, "industry_gdp.json");
+    // Save as JSON to cache using StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
 
@@ -1602,13 +1593,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("Industry GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), industryData.size());
+    LOGGER.debug("Industry GDP data saved to: {} ({} records)", relativePath, industryData.size());
 
     // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
-    cacheManifest.markCached("industry_gdp", year, cacheParams, relativePath, jsonFile.length());
+    cacheManifest.markCached("industry_gdp", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -1983,10 +1974,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Creates an empty GDP components file for years where data is not available.
    */
   private void createEmptyGdpComponentsFile(int year, String reason) throws IOException {
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
+    // Directory creation handled automatically by StorageProvider when writing files
 
-    File jsonFile = new File(outputDir, "gdp_components.json");
+    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
     Map<String, Object> data = new HashMap<>();
     data.put("components", new ArrayList<>());
     data.put("download_date", LocalDate.now().toString());
@@ -1994,17 +1984,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("no_data_reason", reason);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("Created empty GDP components file for year {}: {}", year, jsonFile.getAbsolutePath());
+    LOGGER.debug("Created empty GDP components file for year {}: {}", year, relativePath);
   }
 
   /**
    * Converts regional income JSON to Parquet format.
    */
-  public void convertRegionalIncomeToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertRegionalIncomeToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting regional income data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if a target file already exists
@@ -2015,16 +2004,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
-    // Look for regional income JSON files in the source directory
-    File sourceDirFile = new File(sourceDirPath);
-    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
-        name.equals("regional_income.json") && !name.startsWith("."));
-
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
+    // Read regional income JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "regional_income.json");
+    try {
+      if (cacheStorageProvider.exists(jsonFilePath)) {
+        try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+             InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+          JsonNode root = MAPPER.readTree(reader);
           JsonNode incomeArray = root.get("regional_income");
 
           if (incomeArray != null && incomeArray.isArray()) {
@@ -2046,10 +2032,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
               }
             }
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to process regional income JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
       }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to process regional income JSON file {}: {}", jsonFilePath, e.getMessage());
     }
 
     if (!incomeData.isEmpty()) {
@@ -2193,19 +2179,20 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Create local cache directory
-    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
-    outputDir.mkdirs();
-
-    // Check if data already exists
-    File jsonFile = new File(outputDir, "state_gdp.json");
-    if (jsonFile.exists()) {
-      LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
-      String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
-      cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(operatingDirectory);
-      return;
+    // Check if data already exists using StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
+    try {
+      if (cacheStorageProvider.exists(relativePath)) {
+        LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
+        cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, 0L);
+        cacheManifest.save(operatingDirectory);
+        return;
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check if file exists: {}", e.getMessage());
     }
+
+    // Directory creation handled automatically by StorageProvider when writing files
 
     LOGGER.debug("Downloading BEA state GDP data for year {}", year);
 
@@ -2284,8 +2271,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to local cache
-    LOGGER.debug("Preparing to save {} state GDP records to {}", gdpData.size(), jsonFile.getAbsolutePath());
+    // Save as JSON to cache using StorageProvider
+    LOGGER.debug("Preparing to save {} state GDP records to {}", gdpData.size(), relativePath);
 
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
@@ -2307,13 +2294,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    LOGGER.debug("State GDP data saved to: {} ({} records)", jsonFile.getAbsolutePath(), gdpData.size());
+    LOGGER.debug("State GDP data saved to: {} ({} records)", relativePath, gdpData.size());
 
     // Mark as cached in manifest (use relative path)
-    String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
-    cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
+    cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -2348,9 +2335,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts state GDP JSON to Parquet format.
    */
-  public void convertStateGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertStateGdpToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
@@ -2361,39 +2346,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     List<StateGdp> gdpData = new ArrayList<>();
 
-    // Look for state GDP JSON files in the source directory
-    File sourceDirFile = new File(sourceDirPath);
-    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
-        name.equals("state_gdp.json") && !name.startsWith("."));
+    // Read state GDP JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "state_gdp.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+        JsonNode gdpArray = root.get("state_gdp");
 
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-          JsonNode gdpArray = root.get("state_gdp");
+        if (gdpArray != null && gdpArray.isArray()) {
+          for (JsonNode gdpNode : gdpArray) {
+            try {
+              StateGdp gdp = new StateGdp();
+              gdp.geoFips = gdpNode.get("geo_fips").asText();
+              gdp.geoName = gdpNode.get("geo_name").asText();
+              gdp.lineCode = gdpNode.get("line_code").asText();
+              gdp.lineDescription = gdpNode.get("line_description").asText();
+              gdp.year = gdpNode.get("year").asInt();
+              gdp.value = gdpNode.get("value").asDouble();
+              gdp.units = gdpNode.get("units").asText();
 
-          if (gdpArray != null && gdpArray.isArray()) {
-            for (JsonNode gdpNode : gdpArray) {
-              try {
-                StateGdp gdp = new StateGdp();
-                gdp.geoFips = gdpNode.get("geo_fips").asText();
-                gdp.geoName = gdpNode.get("geo_name").asText();
-                gdp.lineCode = gdpNode.get("line_code").asText();
-                gdp.lineDescription = gdpNode.get("line_description").asText();
-                gdp.year = gdpNode.get("year").asInt();
-                gdp.value = gdpNode.get("value").asDouble();
-                gdp.units = gdpNode.get("units").asText();
-
-                gdpData.add(gdp);
-              } catch (Exception e) {
-                LOGGER.warn("Failed to parse state GDP record: {}", e.getMessage());
-              }
+              gdpData.add(gdp);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to parse state GDP record: {}", e.getMessage());
             }
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to process state GDP JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to process state GDP JSON file {}: {}", jsonFilePath, e.getMessage());
       }
     }
 
@@ -2424,9 +2404,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @param sourceDir Directory containing cached BEA JSON data
    * @param targetFilePath Target parquet file path to create
    */
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Extract year and data type
     int year = extractYearFromPath(targetFilePath);
     String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
@@ -2438,19 +2416,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.debug("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-
     List<Map<String, Object>> components = new ArrayList<>();
 
-    // Look for GDP components JSON files in the source directory
-    File sourceDirFile = new File(sourceDirPath);
-    File[] jsonFiles = sourceDirFile.listFiles((dir, name) ->
-        name.equals("gdp_components.json") && !name.startsWith("."));
-
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
+    // Read GDP components JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "gdp_components.json");
+    try {
+      if (cacheStorageProvider.exists(jsonFilePath)) {
+        try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+             java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+          JsonNode root = MAPPER.readTree(reader);
           JsonNode componentsArray = root.get("components");
 
           if (componentsArray != null && componentsArray.isArray()) {
@@ -2468,10 +2442,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
               components.add(component);
             }
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to process BEA JSON file {}: {}", jsonFile.getAbsolutePath(), e.getMessage());
         }
       }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to process BEA JSON file {}: {}", jsonFilePath, e.getMessage());
     }
 
     // Write parquet file
@@ -2482,6 +2456,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark parquet conversion complete
     markParquetConversionComplete(targetFilePath, year, dataType);
   }
+
 
   @SuppressWarnings("deprecation")
   private void writeGdpComponentsMapParquet(List<Map<String, Object>> components, String targetFilePath)
@@ -2520,9 +2495,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts trade statistics JSON files to Parquet format.
    */
-  public void convertTradeStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertTradeStatisticsToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting trade statistics data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
@@ -2531,21 +2504,21 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Read JSON file from local cache (not via storage provider)
-    File jsonFile = new File(sourceDir, "trade_statistics.json");
-    if (!jsonFile.exists()) {
-      LOGGER.warn("Trade statistics JSON file not found: {}", jsonFile.getAbsolutePath());
+    // Read JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "trade_statistics.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("Trade statistics JSON file not found: {}", jsonFilePath);
       return;
     }
 
     String jsonContent;
-    try (InputStream inputStream = new FileInputStream(jsonFile)) {
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseTradeStatisticsJson(jsonContent);
 
     if (records.isEmpty()) {
-      LOGGER.warn("No trade statistics records found in {}", jsonFile.getAbsolutePath());
+      LOGGER.warn("No trade statistics records found in {}", jsonFilePath);
       return;
     }
 
@@ -2645,9 +2618,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts ITA data JSON files to Parquet format.
    */
-  public void convertItaDataToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertItaDataToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Skip if target file already exists
@@ -2656,21 +2627,21 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Read JSON file from local cache (not via storage provider)
-    File jsonFile = new File(sourceDir, "ita_data.json");
-    if (!jsonFile.exists()) {
-      LOGGER.warn("ITA data JSON file not found: {}", jsonFile.getAbsolutePath());
+    // Read JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "ita_data.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("ITA data JSON file not found: {}", jsonFilePath);
       return;
     }
 
     String jsonContent;
-    try (InputStream inputStream = new FileInputStream(jsonFile)) {
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseItaDataJson(jsonContent);
 
     if (records.isEmpty()) {
-      LOGGER.warn("No ITA data records found in {}, creating empty Parquet file", jsonFile.getAbsolutePath());
+      LOGGER.warn("No ITA data records found in {}, creating empty Parquet file", jsonFilePath);
     }
 
     // Always write the Parquet file, even if empty - this ensures the table is discoverable
@@ -2762,9 +2733,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts industry GDP JSON files to Parquet format.
    */
-  public void convertIndustryGdpToParquet(File sourceDir, String targetFilePath) throws IOException {
-    String sourceDirPath = sourceDir.getAbsolutePath();
-
+  public void convertIndustryGdpToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Skip if target file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
@@ -2773,22 +2742,21 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.debug("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-    // Read JSON file
-    File jsonFile = new File(sourceDir, "industry_gdp.json");
-    if (!jsonFile.exists()) {
-      LOGGER.warn("Industry GDP JSON file not found: {}", jsonFile.getAbsolutePath());
+    // Read JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "industry_gdp.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("Industry GDP JSON file not found: {}", jsonFilePath);
       return;
     }
 
     String jsonContent;
-    // Read JSON file from local cache (not via storage provider)
-    try (InputStream inputStream = new FileInputStream(jsonFile)) {
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
       jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
     List<Map<String, Object>> records = parseIndustryGdpJson(jsonContent);
 
     if (records.isEmpty()) {
-      LOGGER.warn("No industry GDP records found in {}", jsonFile.getAbsolutePath());
+      LOGGER.warn("No industry GDP records found in {}", jsonFilePath);
       return;
     }
 
@@ -2927,7 +2895,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Convert GDP statistics data to Parquet format.
    */
-  public void convertGdpStatisticsToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertGdpStatisticsToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Extract year and data type for cache check
     int targetYear = extractYearFromPath(targetFilePath);
     String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
@@ -2937,9 +2905,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    File jsonFile = new File(sourceDir, "gdp_components.json");
-    if (!jsonFile.exists()) {
-      LOGGER.warn("No gdp_components.json found in {}", sourceDir);
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "gdp_components.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No gdp_components.json found in {}", sourceDirPath);
       return;
     }
 
@@ -2954,7 +2922,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         .endRecord();
 
     List<GenericRecord> records = new ArrayList<>();
-    Map<String, Object> data = MAPPER.readValue(jsonFile, Map.class);
+    Map<String, Object> data;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      data = MAPPER.readValue(reader, Map.class);
+    }
     // The field is "components" not "gdp_components"
     List<Map<String, Object>> components = (List<Map<String, Object>>) data.get("components");
 
@@ -2987,10 +2959,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       // Try to load previous year's data for calculating percent changes
       Map<String, Double> previousYearMetrics = new HashMap<>();
-      File previousYearFile = new File(sourceDir.getParentFile(), "year=" + (year - 1) + "/gdp_components.json");
-      if (previousYearFile.exists()) {
-        try {
-          Map<String, Object> previousData = MAPPER.readValue(previousYearFile, Map.class);
+      // Build path to previous year's file by replacing year in path
+      String previousYearPath = sourceDirPath.replaceAll("year=\\d+", "year=" + (year - 1)) + "/gdp_components.json";
+      if (cacheStorageProvider.exists(previousYearPath)) {
+        try (InputStream previousInputStream = cacheStorageProvider.openInputStream(previousYearPath);
+             InputStreamReader previousReader = new InputStreamReader(previousInputStream, StandardCharsets.UTF_8)) {
+          Map<String, Object> previousData = MAPPER.readValue(previousReader, Map.class);
           List<Map<String, Object>> previousComponents = (List<Map<String, Object>>) previousData.get("components");
           if (previousComponents != null && !previousComponents.isEmpty()) {
             for (Map<String, Object> component : previousComponents) {
@@ -3013,7 +2987,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             }
           }
         } catch (Exception e) {
-          LOGGER.debug("Could not load previous year data from {}: {}", previousYearFile, e.getMessage());
+          LOGGER.debug("Could not load previous year data from {}: {}", previousYearPath, e.getMessage());
         }
       }
 

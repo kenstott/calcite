@@ -65,15 +65,9 @@ public class CacheManifest {
       return false;
     }
 
-    // Check if file still exists (skip if filePath is null for parquet-only or unavailable entries)
-    if (entry.filePath != null) {
-      File file = cacheDir != null ? new File(cacheDir, entry.filePath) : new File(entry.filePath);
-      if (!file.exists()) {
-        LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
-        entries.remove(key);
-        return false;
-      }
-    }
+    // NOTE: File existence check removed - AbstractEconDataDownloader.isCachedOrExists()
+    // handles this using StorageProvider which supports both local and S3 storage.
+    // Using File API here would fail for S3 URIs and create invalid paths.
 
     // Check if refresh time has passed
     long now = System.currentTimeMillis();
@@ -192,16 +186,9 @@ public class CacheManifest {
     entries.entrySet().removeIf(entry -> {
       CacheEntry cacheEntry = entry.getValue();
 
-      // Skip file existence check if filePath is null (parquet-only or unavailable entries)
-      if (cacheEntry.filePath != null) {
-        // Remove if file doesn't exist (resolve relative path using cache directory)
-        File file = cacheDir != null ? new File(cacheDir, cacheEntry.filePath) : new File(cacheEntry.filePath);
-        if (!file.exists()) {
-          LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
-          removed[0]++;
-          return true;
-        }
-      }
+      // NOTE: File existence check removed - would fail for S3 cache URIs.
+      // Callers (AbstractEconDataDownloader) handle file existence checks using StorageProvider.
+      // Manifest focuses on time-based refresh policies only.
 
       // Remove if refresh time has passed
       if (now >= cacheEntry.refreshAfter) {

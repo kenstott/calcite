@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -79,16 +80,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     public static final String TX_UNEMPLOYMENT = "LASST480000000000003";
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(apiKey, cacheDir, storageProvider, null);
+  public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this(apiKey, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(apiKey, cacheDir, cacheDir, storageProvider, sharedManifest);
-  }
-
-  public BlsDataDownloader(String apiKey, String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
+  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -867,198 +864,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * by FileSchema's table discovery, the EconRawToParquetConverter must be registered
    * with FileSchema (which happens in GovDataSchemaFactory.registerEconConverter()).
    */
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Check if parquet file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
-    LOGGER.debug("Converting BLS data from {} to parquet: {}", sourceDir, targetFilePath);
+    LOGGER.debug("Converting BLS data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Extract data type from filename
     String fileName = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1);
 
     // Read employment statistics JSON files and convert to employment_statistics.parquet
     if (fileName.equals("employment_statistics.parquet")) {
-      convertEmploymentStatisticsToParquet(sourceDir, targetFilePath);
+      convertEmploymentStatisticsToParquet(sourceDirPath, targetFilePath);
     } else if (fileName.equals("inflation_metrics.parquet")) {
-      convertInflationMetricsToParquet(sourceDir, targetFilePath);
+      convertInflationMetricsToParquet(sourceDirPath, targetFilePath);
     } else if (fileName.equals("wage_growth.parquet")) {
-      convertWageGrowthToParquet(sourceDir, targetFilePath);
+      convertWageGrowthToParquet(sourceDirPath, targetFilePath);
     } else if (fileName.equals("regional_employment.parquet")) {
-      convertRegionalEmploymentToParquet(sourceDir, targetFilePath);
+      convertRegionalEmploymentToParquet(sourceDirPath, targetFilePath);
     }
   }
 
-  private void convertEmploymentStatisticsToParquet(File sourceDir, String targetPath) throws IOException {
+  private void convertEmploymentStatisticsToParquet(String sourceDirPath, String targetPath) throws IOException {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
 
-    // Look for employment statistics JSON files
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("employment_statistics.json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-
-          if (root.has("Results") && root.get("Results").has("series")) {
-            JsonNode series = root.get("Results").get("series");
-            for (JsonNode seriesNode : series) {
-              String seriesId = seriesNode.get("seriesID").asText();
-              List<Map<String, Object>> dataPoints = new ArrayList<>();
-
-              if (seriesNode.has("data")) {
-                for (JsonNode dataNode : seriesNode.get("data")) {
-                  Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
-                    String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
-                  dataPoint.put("value", dataNode.get("value").asDouble());
-
-                  // Extract percentage changes from BLS API calculations
-                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
-                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
-                    if (pctChanges.has("1")) {
-                      dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
-                    }
-                    if (pctChanges.has("12")) {
-                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
-                    }
-                  }
-
-                  dataPoints.add(dataPoint);
-                }
-              }
-              seriesData.put(seriesId, dataPoints);
-            }
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading BLS employment JSON file {}: {}", jsonFile, e.getMessage());
-        }
-      }
-    }
-
-    // Write to parquet
-    writeEmploymentStatisticsParquet(seriesData, targetPath);
-    LOGGER.info("Converted BLS employment data to parquet: {}", targetPath);
-  }
-
-  private void convertInflationMetricsToParquet(File sourceDir, String targetPath) throws IOException {
-    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
-
-    // Look for inflation metrics JSON files
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("inflation_metrics.json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-
-          if (root.has("Results") && root.get("Results").has("series")) {
-            JsonNode series = root.get("Results").get("series");
-            for (JsonNode seriesNode : series) {
-              String seriesId = seriesNode.get("seriesID").asText();
-              List<Map<String, Object>> dataPoints = new ArrayList<>();
-
-              if (seriesNode.has("data")) {
-                for (JsonNode dataNode : seriesNode.get("data")) {
-                  Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
-                    String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
-                  dataPoint.put("value", dataNode.get("value").asDouble());
-
-                  // Extract percentage changes from BLS API calculations
-                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
-                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
-                    if (pctChanges.has("1")) {
-                      dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
-                    }
-                    if (pctChanges.has("12")) {
-                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
-                    }
-                  }
-
-                  dataPoints.add(dataPoint);
-                }
-              }
-              seriesData.put(seriesId, dataPoints);
-            }
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading BLS inflation JSON file {}: {}", jsonFile, e.getMessage());
-        }
-      }
-    }
-
-    // Write to parquet using inflation metrics schema
-    writeInflationMetricsParquet(seriesData, targetPath);
-    LOGGER.info("Converted BLS inflation data to parquet: {}", targetPath);
-  }
-
-  private void convertWageGrowthToParquet(File sourceDir, String targetPath) throws IOException {
-    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
-
-    // Look for wage growth JSON files
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("wage_growth.json"));
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-          JsonNode root = MAPPER.readTree(content);
-
-          if (root.has("Results") && root.get("Results").has("series")) {
-            JsonNode series = root.get("Results").get("series");
-            for (JsonNode seriesNode : series) {
-              String seriesId = seriesNode.get("seriesID").asText();
-              List<Map<String, Object>> dataPoints = new ArrayList<>();
-
-              if (seriesNode.has("data")) {
-                for (JsonNode dataNode : seriesNode.get("data")) {
-                  Map<String, Object> dataPoint = new HashMap<>();
-                  dataPoint.put("date", dataNode.get("year").asText() + "-" +
-                    String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
-                  dataPoint.put("value", dataNode.get("value").asDouble());
-
-                  // Extract year-over-year percentage change from BLS API calculations
-                  // BLS API provides calculations.pct_changes.12 for 12-month change
-                  if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
-                    JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
-                    if (pctChanges.has("12")) {
-                      dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
-                    }
-                  }
-
-                  dataPoints.add(dataPoint);
-                }
-              }
-              seriesData.put(seriesId, dataPoints);
-            }
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Error reading BLS wage growth JSON file {}: {}", jsonFile, e.getMessage());
-        }
-      }
-    }
-
-    // Write to parquet using wage growth schema
-    writeWageGrowthParquet(seriesData, targetPath);
-    LOGGER.info("Converted BLS wage growth data to parquet: {}", targetPath);
-  }
-
-  private void convertRegionalEmploymentToParquet(File sourceDir, String targetPath) throws IOException {
-    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
-
-    // Look for regional employment JSON files in the source directory
-    File[] jsonFiles = sourceDir.listFiles((dir, name) -> name.equals("regional_employment.json"));
-    if (jsonFiles == null || jsonFiles.length == 0) {
-      LOGGER.warn("No regional_employment.json found in {}", sourceDir);
-      return;
-    }
-
-    for (File jsonFile : jsonFiles) {
-      try {
-        String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
-        JsonNode root = MAPPER.readTree(content);
+    // Read employment statistics JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "employment_statistics.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
 
         if (root.has("Results") && root.get("Results").has("series")) {
           JsonNode series = root.get("Results").get("series");
@@ -1073,7 +911,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                   String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
                 dataPoint.put("value", dataNode.get("value").asDouble());
 
-                // Extract percentage changes from BLS API calculations (if available)
+                // Extract percentage changes from BLS API calculations
                 if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
                   JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
                   if (pctChanges.has("1")) {
@@ -1091,12 +929,163 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
         }
       } catch (Exception e) {
-        LOGGER.error("Error reading BLS regional employment JSON file {}: {}", jsonFile, e.getMessage(), e);
+        LOGGER.warn("Error reading BLS employment JSON file {}: {}", jsonFilePath, e.getMessage());
       }
     }
 
+    // Write to parquet
+    writeEmploymentStatisticsParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS employment data to parquet: {}", targetPath);
+  }
+
+  private void convertInflationMetricsToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read inflation metrics JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "inflation_metrics.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+
+        if (root.has("Results") && root.get("Results").has("series")) {
+          JsonNode series = root.get("Results").get("series");
+          for (JsonNode seriesNode : series) {
+            String seriesId = seriesNode.get("seriesID").asText();
+            List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+            if (seriesNode.has("data")) {
+              for (JsonNode dataNode : seriesNode.get("data")) {
+                Map<String, Object> dataPoint = new HashMap<>();
+                dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                  String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+                dataPoint.put("value", dataNode.get("value").asDouble());
+
+                // Extract percentage changes from BLS API calculations
+                if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                  JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                  if (pctChanges.has("1")) {
+                    dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                  }
+                  if (pctChanges.has("12")) {
+                    dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                  }
+                }
+
+                dataPoints.add(dataPoint);
+              }
+            }
+            seriesData.put(seriesId, dataPoints);
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading BLS inflation JSON file {}: {}", jsonFilePath, e.getMessage());
+      }
+    }
+
+    // Write to parquet using inflation metrics schema
+    writeInflationMetricsParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS inflation data to parquet: {}", targetPath);
+  }
+
+  private void convertWageGrowthToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read wage growth JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "wage_growth.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+
+        if (root.has("Results") && root.get("Results").has("series")) {
+          JsonNode series = root.get("Results").get("series");
+          for (JsonNode seriesNode : series) {
+            String seriesId = seriesNode.get("seriesID").asText();
+            List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+            if (seriesNode.has("data")) {
+              for (JsonNode dataNode : seriesNode.get("data")) {
+                Map<String, Object> dataPoint = new HashMap<>();
+                dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                  String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+                dataPoint.put("value", dataNode.get("value").asDouble());
+
+                // Extract year-over-year percentage change from BLS API calculations
+                // BLS API provides calculations.pct_changes.12 for 12-month change
+                if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                  JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                  if (pctChanges.has("12")) {
+                    dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                  }
+                }
+
+                dataPoints.add(dataPoint);
+              }
+            }
+            seriesData.put(seriesId, dataPoints);
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error reading BLS wage growth JSON file {}: {}", jsonFilePath, e.getMessage());
+      }
+    }
+
+    // Write to parquet using wage growth schema
+    writeWageGrowthParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS wage growth data to parquet: {}", targetPath);
+  }
+
+  private void convertRegionalEmploymentToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read regional employment JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "regional_employment.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No regional_employment.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations (if available)
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS regional employment JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
     if (seriesData.isEmpty()) {
-      LOGGER.warn("No data found in regional employment JSON files");
+      LOGGER.warn("No data found in regional employment JSON file");
       return;
     }
 
