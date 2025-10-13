@@ -69,11 +69,19 @@ public interface GovDataSubSchemaFactory {
    *   <li>Configure storage directories and execution engine settings</li>
    * </ul>
    *
+   * <p>Sub-factories access shared services via parent reference instead of parameters:
+   * <ul>
+   *   <li>{@code parent.getStorageProvider()} - Parquet storage provider</li>
+   *   <li>{@code parent.getCacheStorageProvider()} - Cache storage provider</li>
+   *   <li>{@code parent.getStorageConfig()} - Enriched storage configuration</li>
+   *   <li>{@code parent.getOperatingDirectory(dataSource)} - Operating directory path</li>
+   * </ul>
+   *
    * @param operand Base operand configuration from model file
-   * @param storageProvider Storage provider for data operations
+   * @param parent Parent factory providing shared services
    * @return Modified operand with sub-schema-specific configuration
    */
-  Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider);
+  Map<String, Object> buildOperand(Map<String, Object> operand, GovDataSchemaFactory parent);
 
   /**
    * Returns the schema resource file name for this factory.

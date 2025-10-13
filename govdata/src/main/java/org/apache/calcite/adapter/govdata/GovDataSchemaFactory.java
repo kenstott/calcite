@@ -85,6 +85,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   // Unified storage provider for all government data sources
   private StorageProvider storageProvider;
 
+  // Cache storage provider for raw data (separate from parquet storage)
+  private StorageProvider cacheStorageProvider;
+
+  // Enriched storage configuration with endpoint overrides
+  private Map<String, Object> storageConfig;
+
   // Store constraint metadata to pass to sub-factories
   private Map<String, Map<String, Object>> tableConstraints;
   private List<JsonTable> tableDefinitions;
@@ -221,8 +227,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     GovDataSubSchemaFactory secFactory = new org.apache.calcite.adapter.govdata.sec.SecSchemaFactory();
 
-    // Get the operand configuration from SecSchemaFactory
-    return secFactory.buildOperand(operand, storageProvider);
+    // Get the operand configuration from SecSchemaFactory (parent provides services)
+    return secFactory.buildOperand(operand, this);
   }
 
   /**
@@ -251,8 +257,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       geoFactory.setTableConstraints(allConstraints, tableDefinitions);
     }
 
-    // Get the operand configuration from GeoSchemaFactory
-    return geoFactory.buildOperand(operand, storageProvider);
+    // Get the operand configuration from GeoSchemaFactory (parent provides services)
+    return geoFactory.buildOperand(operand, this);
   }
 
   /**
@@ -291,12 +297,17 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     String storageType = null;
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> storageConfig = (Map<String, Object>) operand.get("storageConfig");
-    if (storageConfig == null) {
-      storageConfig = (Map<String, Object>) operand.get("s3Config");
-      if (storageConfig != null) {
+    Map<String, Object> tempStorageConfig = (Map<String, Object>) operand.get("storageConfig");
+    if (tempStorageConfig == null) {
+      tempStorageConfig = (Map<String, Object>) operand.get("s3Config");
+      if (tempStorageConfig != null) {
         storageType = "s3";
       }
+    }
+
+    // Initialize instance variable for storageConfig
+    if (storageConfig == null) {
+      storageConfig = tempStorageConfig != null ? new HashMap<>(tempStorageConfig) : new HashMap<>();
     }
 
     // Auto-detect storage type from directory path (same logic as FileSchemaFactory)
@@ -317,9 +328,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Add directory to storageConfig for all storage types
-    if (storageConfig == null) {
-      storageConfig = new java.util.HashMap<>();
-    }
     String directory = (String) operand.get("directory");
     // Resolve environment variable placeholders (${VAR:default} syntax)
     // This uses the same logic as GovDataSubSchemaFactory.resolveEnvVar()
@@ -369,6 +377,51 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       operand.put("storageType", storageType);
     }
     operand.put("storageConfig", storageConfig);
+
+    // Initialize cache storage provider (for raw data)
+    // Cache directory can be S3 or local - get from operand
+    String cacheDirectory = (String) operand.get("cacheDirectory");
+    if (cacheDirectory == null) {
+      cacheDirectory = System.getenv("GOVDATA_CACHE_DIR");
+      if (cacheDirectory == null) {
+        cacheDirectory = System.getProperty("GOVDATA_CACHE_DIR");
+      }
+    }
+
+    if (cacheDirectory != null) {
+      // Resolve environment variable placeholders in cache directory
+      if (cacheDirectory.contains("${")) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
+        java.util.regex.Matcher matcher = pattern.matcher(cacheDirectory);
+        if (matcher.find()) {
+          String varName = matcher.group(1);
+          String defaultValue = matcher.group(2);
+          String resolvedValue = System.getenv(varName);
+          if (resolvedValue == null) {
+            resolvedValue = System.getProperty(varName);
+          }
+          if (resolvedValue == null) {
+            resolvedValue = defaultValue;
+          }
+          cacheDirectory = resolvedValue;
+        }
+      }
+
+      // Create cache storage provider using enriched storageConfig
+      if (cacheDirectory.startsWith("s3://")) {
+        // Use enriched S3 config from operand (includes endpoint override)
+        Map<String, Object> cacheS3Config = new HashMap<>(storageConfig);
+        cacheS3Config.put("directory", cacheDirectory);
+        cacheStorageProvider = StorageProviderFactory.createFromType("s3", cacheS3Config);
+        LOGGER.info("Initialized S3 cache storage provider with endpoint: {}", storageConfig.get("endpoint"));
+      } else {
+        cacheStorageProvider = StorageProviderFactory.createFromUrl(cacheDirectory);
+        LOGGER.debug("Initialized local cache storage provider: {}", cacheDirectory);
+      }
+
+      // NOTE: cacheStorageProvider is NO LONGER added to operand Map
+      // Sub-factories access it via parent.getCacheStorageProvider() instead
+    }
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
@@ -402,8 +455,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       censusFactory.setTableConstraints(allConstraints, tableDefinitions);
     }
 
-    // Get the operand configuration from CensusSchemaFactory
-    return censusFactory.buildOperand(operand, storageProvider);
+    // Get the operand configuration from CensusSchemaFactory (parent provides services)
+    return censusFactory.buildOperand(operand, this);
   }
 
   /**
@@ -434,8 +487,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       factory.setTableConstraints(allConstraints, tableDefinitions);
     }
 
-    // Get the operand configuration from EconSchemaFactory
-    Map<String, Object> builtOperand = factory.buildOperand(operand, storageProvider);
+    // Get the operand configuration from EconSchemaFactory (parent provides services)
+    Map<String, Object> builtOperand = factory.buildOperand(operand, this);
 
     // Mark that this is ECON data so we can register the custom converter after FileSchema creation
     builtOperand.put("_econData", true);
@@ -492,6 +545,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     File aperioDir = fileSchema.getOperatingCacheDirectory();
     String manifestPath = aperioDir.getAbsolutePath();
 
+    // Operating directory for ECON metadata (same as manifestPath)
+    String econOperatingDirectory = manifestPath;
+
     // Load cache manifest from .aperio directory (not raw cache directory)
     CacheManifest cacheManifest = CacheManifest.load(manifestPath);
 
@@ -511,24 +567,30 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     String econParquetDir = directory != null ? storageProvider.resolvePath(directory, "source=econ") : null;
 
+    // Use instance variable directly - no need to extract from operand
+    if (cacheStorageProvider == null) {
+      LOGGER.warn("Cache storage provider not initialized, converter registration may fail");
+      return;
+    }
+
     // Create downloaders (lightweight - just configuration, no download occurs)
     BlsDataDownloader blsDownloader = blsApiKey != null
-        ? new BlsDataDownloader(blsApiKey, econCacheDir, manifestPath, storageProvider, cacheManifest)
+        ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null
-        ? new FredDataDownloader(econCacheDir, manifestPath, fredApiKey, storageProvider, cacheManifest)
+        ? new FredDataDownloader(econCacheDir, econOperatingDirectory, fredApiKey, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     TreasuryDataDownloader treasuryDownloader =
-        new TreasuryDataDownloader(econCacheDir, manifestPath, storageProvider, cacheManifest);
+        new TreasuryDataDownloader(econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
 
     BeaDataDownloader beaDownloader = beaApiKey != null && econParquetDir != null
-        ? new BeaDataDownloader(econCacheDir, manifestPath, econParquetDir, beaApiKey, storageProvider, cacheManifest)
+        ? new BeaDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     WorldBankDataDownloader worldBankDownloader =
-        new WorldBankDataDownloader(econCacheDir, manifestPath, storageProvider, cacheManifest);
+        new WorldBankDataDownloader(econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
 
     // Create and register the ECON converter
     EconRawToParquetConverter econConverter =
@@ -581,6 +643,47 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     return operatingDirectory;
+  }
+
+  /**
+   * Get the unified storage provider for parquet data.
+   * Sub-factories can use this to access parquet storage operations.
+   *
+   * @return Storage provider for parquet data (S3, local, etc.)
+   */
+  public StorageProvider getStorageProvider() {
+    return storageProvider;
+  }
+
+  /**
+   * Get the cache storage provider for raw data.
+   * Sub-factories can use this to access raw data cache operations.
+   *
+   * @return Storage provider for cache operations (S3, local, etc.)
+   */
+  public StorageProvider getCacheStorageProvider() {
+    return cacheStorageProvider;
+  }
+
+  /**
+   * Get the enriched storage configuration with endpoint overrides.
+   * Sub-factories can use this to create additional storage providers with same configuration.
+   *
+   * @return Enriched storage configuration map (includes AWS endpoint override, etc.)
+   */
+  public Map<String, Object> getStorageConfig() {
+    return storageConfig != null ? new HashMap<>(storageConfig) : new HashMap<>();
+  }
+
+  /**
+   * Get the operating directory for a data source.
+   * Operating directories are always on local filesystem (.aperio/<dataSource>/).
+   *
+   * @param dataSource The data source name (sec, geo, econ, etc.)
+   * @return Absolute path to operating directory
+   */
+  public String getOperatingDirectory(String dataSource) {
+    return establishOperatingDirectory(dataSource);
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation
