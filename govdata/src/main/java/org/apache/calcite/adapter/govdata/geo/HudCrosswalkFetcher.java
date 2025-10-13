@@ -72,36 +72,36 @@ public class HudCrosswalkFetcher {
   private final String username;
   private final String password;
   private final String token;
-  private final File cacheDir;
+  private final String cacheDir;
   private final ObjectMapper objectMapper;
   private final StorageProvider storageProvider;
   private final GeoCacheManifest cacheManifest;
   private final String operatingDirectory;
 
-  public HudCrosswalkFetcher(String username, String password, File cacheDir) {
+  public HudCrosswalkFetcher(String username, String password, String cacheDir) {
     this(username, password, null, cacheDir, null, null);
   }
 
-  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir) {
+  public HudCrosswalkFetcher(String username, String password, String token, String cacheDir) {
     this(username, password, token, cacheDir, null, null);
   }
 
-  public HudCrosswalkFetcher(String username, String password, File cacheDir,
+  public HudCrosswalkFetcher(String username, String password, String cacheDir,
       StorageProvider storageProvider) {
     this(username, password, null, cacheDir, storageProvider, null);
   }
 
-  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+  public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
       StorageProvider storageProvider) {
     this(username, password, token, cacheDir, storageProvider, null);
   }
 
-  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+  public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(username, password, token, cacheDir, cacheDir.getAbsolutePath(), storageProvider, cacheManifest);
+    this(username, password, token, cacheDir, cacheDir, storageProvider, cacheManifest);
   }
 
-  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+  public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
       String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.username = username;
     this.password = password;
@@ -112,11 +112,53 @@ public class HudCrosswalkFetcher {
     this.storageProvider = storageProvider;
     this.cacheManifest = cacheManifest;
 
-    if (!cacheDir.exists()) {
-      cacheDir.mkdirs();
-    }
-
     LOGGER.info("HUD crosswalk fetcher initialized with cache directory: {}", cacheDir);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, File cacheDir) {
+    this(username, password, null, cacheDir.getAbsolutePath(), null, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir) {
+    this(username, password, token, cacheDir.getAbsolutePath(), null, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, File cacheDir,
+      StorageProvider storageProvider) {
+    this(username, password, null, cacheDir.getAbsolutePath(), storageProvider, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      StorageProvider storageProvider) {
+    this(username, password, token, cacheDir.getAbsolutePath(), storageProvider, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(username, password, token, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), storageProvider, cacheManifest);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
+      String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(username, password, token, cacheDir.getAbsolutePath(), operatingDirectory, storageProvider, cacheManifest);
   }
 
   /**
@@ -127,11 +169,8 @@ public class HudCrosswalkFetcher {
 
     // HUD releases data quarterly, we'll download Q2 (mid-year) data for each year
     for (int year = startYear; year <= endYear; year++) {
-      // Create year-specific cache directory
-      File yearCacheDir = new File(cacheDir, "year=" + year);
-      if (!yearCacheDir.exists()) {
-        yearCacheDir.mkdirs();
-      }
+      // Note: Year-specific cache directories will be created automatically
+      // when files are written via StorageProvider
 
       try {
         // Try Q2 first, fallback to Q1 if not available
@@ -172,17 +211,16 @@ public class HudCrosswalkFetcher {
    * Download ZIP to County crosswalk file for a specific year and quarter.
    */
   private File downloadZipToCountyForYear(String quarter, int year) throws IOException {
-    File yearDir = new File(cacheDir, "year=" + year);
+    String yearPath = "year=" + year;
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
     String filename = String.format("ZIP_COUNTY_%dQ%s.csv", year, quarter);
-    File outputFile = new File(yearDir, filename);
+    String cacheFilePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (!yearDir.exists()) {
-      yearDir.mkdirs();
-    }
-
-    if (outputFile.exists()) {
-      LOGGER.info("ZIP to County crosswalk already exists: {}", outputFile);
-      return outputFile;
+    // Check if already cached
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.info("ZIP to County crosswalk already exists: {}", cacheFilePath);
+      // For S3, download to temp; for local, return as-is
+      return downloadCacheToTemp(cacheFilePath, filename);
     }
 
     LOGGER.info("Downloading ZIP to County crosswalk for {}Q{}", year, quarter);
@@ -192,22 +230,54 @@ public class HudCrosswalkFetcher {
         String.format("%s?type=2&query=All&year=%d&quarter=%s", HUD_API_BASE, year, quarter);
 
     JsonNode data = fetchHudData(url);
-    convertJsonToCsv(data, outputFile, "zip_county");
 
-    return outputFile;
+    // Write to temp file, then upload to cache
+    File tempFile = File.createTempFile("hud-zip-county-", ".csv");
+    convertJsonToCsv(data, tempFile, "zip_county");
+
+    // Upload to cache
+    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
+    storageProvider.writeFile(cacheFilePath, csvData);
+    LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
+
+    return tempFile;
+  }
+
+  /**
+   * Download from cache to temp file (for S3 access), or return File directly (for local).
+   */
+  private File downloadCacheToTemp(String cachePath, String filename) throws IOException {
+    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
+      // Local filesystem - return as-is
+      return new File(cachePath);
+    }
+
+    // S3 - download to temp
+    File tempFile = File.createTempFile("hud-cache-", "-" + filename);
+    try (java.io.InputStream in = storageProvider.openInputStream(cachePath);
+         java.io.OutputStream out = new java.io.FileOutputStream(tempFile)) {
+      byte[] buffer = new byte[8192];
+      int bytesRead;
+      while ((bytesRead = in.read(buffer)) != -1) {
+        out.write(buffer, 0, bytesRead);
+      }
+    }
+    return tempFile;
   }
 
   /**
    * Download ZIP to Census Tract crosswalk file for a specific year and quarter.
    */
   private File downloadZipToTractForYear(String quarter, int year) throws IOException {
-    File yearDir = new File(cacheDir, "year=" + year);
+    String yearPath = "year=" + year;
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
     String filename = String.format("ZIP_TRACT_%dQ%s.csv", year, quarter);
-    File outputFile = new File(yearDir, filename);
+    String cacheFilePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (outputFile.exists()) {
-      LOGGER.info("ZIP to Tract crosswalk already exists: {}", outputFile);
-      return outputFile;
+    // Check if already cached
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.info("ZIP to Tract crosswalk already exists: {}", cacheFilePath);
+      return downloadCacheToTemp(cacheFilePath, filename);
     }
 
     LOGGER.info("Downloading ZIP to Tract crosswalk for {}Q{}", year, quarter);
@@ -217,22 +287,32 @@ public class HudCrosswalkFetcher {
         String.format("%s?type=1&query=All&year=%d&quarter=%s", HUD_API_BASE, year, quarter);
 
     JsonNode data = fetchHudData(url);
-    convertJsonToCsv(data, outputFile, "zip_tract");
 
-    return outputFile;
+    // Write to temp file, then upload to cache
+    File tempFile = File.createTempFile("hud-zip-tract-", ".csv");
+    convertJsonToCsv(data, tempFile, "zip_tract");
+
+    // Upload to cache
+    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
+    storageProvider.writeFile(cacheFilePath, csvData);
+    LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
+
+    return tempFile;
   }
 
   /**
    * Download ZIP to CBSA (Metro Area) crosswalk file for a specific year and quarter.
    */
   private File downloadZipToCbsaForYear(String quarter, int year) throws IOException {
-    File yearDir = new File(cacheDir, "year=" + year);
+    String yearPath = "year=" + year;
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
     String filename = String.format("ZIP_CBSA_%dQ%s.csv", year, quarter);
-    File outputFile = new File(yearDir, filename);
+    String cacheFilePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (outputFile.exists()) {
-      LOGGER.info("ZIP to CBSA crosswalk already exists: {}", outputFile);
-      return outputFile;
+    // Check if already cached
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.info("ZIP to CBSA crosswalk already exists: {}", cacheFilePath);
+      return downloadCacheToTemp(cacheFilePath, filename);
     }
 
     LOGGER.info("Downloading ZIP to CBSA crosswalk for {}Q{}", year, quarter);
@@ -242,9 +322,17 @@ public class HudCrosswalkFetcher {
         String.format("%s?type=3&query=All&year=%d&quarter=%s", HUD_API_BASE, year, quarter);
 
     JsonNode data = fetchHudData(url);
-    convertJsonToCsv(data, outputFile, "zip_cbsa");
 
-    return outputFile;
+    // Write to temp file, then upload to cache
+    File tempFile = File.createTempFile("hud-zip-cbsa-", ".csv");
+    convertJsonToCsv(data, tempFile, "zip_cbsa");
+
+    // Upload to cache
+    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
+    storageProvider.writeFile(cacheFilePath, csvData);
+    LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
+
+    return tempFile;
   }
 
   /**
@@ -293,11 +381,12 @@ public class HudCrosswalkFetcher {
    */
   public File downloadZipToCongressionalDistrict(String quarter, int year) throws IOException {
     String filename = String.format("ZIP_CD_%dQ%s.csv", year, quarter);
-    File outputFile = new File(cacheDir, filename);
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, filename);
 
-    if (outputFile.exists()) {
-      LOGGER.info("ZIP to Congressional District crosswalk already exists: {}", outputFile);
-      return outputFile;
+    // Check if already cached
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.info("ZIP to Congressional District crosswalk already exists: {}", cacheFilePath);
+      return downloadCacheToTemp(cacheFilePath, filename);
     }
 
     LOGGER.info("Downloading ZIP to Congressional District crosswalk for {}Q{}", year, quarter);
@@ -308,13 +397,22 @@ public class HudCrosswalkFetcher {
 
     try {
       JsonNode data = fetchHudData(url);
-      convertJsonToCsv(data, outputFile, "zip_cd");
+
+      // Write to temp file, then upload to cache
+      File tempFile = File.createTempFile("hud-zip-cd-", ".csv");
+      convertJsonToCsv(data, tempFile, "zip_cd");
+
+      // Upload to cache
+      byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
+      storageProvider.writeFile(cacheFilePath, csvData);
+      LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
+
+      return tempFile;
     } catch (Exception e) {
       LOGGER.warn("Congressional District crosswalk may not be available: {}", e.getMessage());
       // Not all quarters have CD crosswalk, this is not a fatal error
+      throw new IOException("CD crosswalk not available", e);
     }
-
-    return outputFile;
   }
 
   /**
@@ -440,7 +538,7 @@ public class HudCrosswalkFetcher {
   /**
    * Get the cache directory.
    */
-  public File getCacheDir() {
+  public String getCacheDir() {
     return cacheDir;
   }
 
@@ -517,7 +615,7 @@ public class HudCrosswalkFetcher {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
       cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir.getAbsolutePath());
+      cacheManifest.save(this.operatingDirectory);
     }
   }
 

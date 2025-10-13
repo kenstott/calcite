@@ -102,8 +102,11 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Builds the operand configuration for CENSUS schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
    */
-  @Override public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
+  @Override public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
     LOGGER.info("Building CENSUS schema operand configuration");
+
+    // Access shared services from parent
+    StorageProvider storageProvider = parent.getStorageProvider();
 
     // Get cache directories from operand
     String govdataCacheDir = getGovDataCacheDir(operand);
@@ -162,31 +165,10 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       censusCacheTtlDays = 30; // Ensure minimum 1 day TTL
     }
 
-    // Create cache directory structure
-    File cacheRoot = new File(censusRawDir);
-    if (!cacheRoot.exists() && !cacheRoot.mkdirs()) {
-      throw new RuntimeException("Failed to create cache directory: " + censusRawDir);
-    }
-
-    // Create hive-partitioned directory structure for parquet files
-    File parquetRoot = new File(censusParquetDir);
-    File acsDir = new File(parquetRoot, ACS_TYPE);
-    File decennialDir = new File(parquetRoot, DECENNIAL_TYPE);
-    File economicDir = new File(parquetRoot, ECONOMIC_TYPE);
-    File populationDir = new File(parquetRoot, POPULATION_TYPE);
-
-    for (File dir : new File[]{parquetRoot, acsDir, decennialDir, economicDir, populationDir}) {
-      if (!dir.exists() && !dir.mkdirs()) {
-        LOGGER.warn("Failed to create directory: {}", dir);
-      }
-    }
-
-    // Log the partitioned structure
-    LOGGER.info("Census data partitions created:");
-    LOGGER.info("  ACS: {}", acsDir);
-    LOGGER.info("  Decennial: {}", decennialDir);
-    LOGGER.info("  Economic: {}", economicDir);
-    LOGGER.info("  Population: {}", populationDir);
+    // NOTE: Directory creation removed for S3 compatibility
+    // Both censusRawDir and censusParquetDir may be S3 URIs (e.g., s3://govdata-production-cache)
+    // S3 buckets are managed via AWS/MinIO, not local filesystem
+    // StorageProvider handles S3 directory creation automatically when writing files
 
     // Log configuration
     LOGGER.info("Census data configuration:");
@@ -198,12 +180,27 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("  Census cache TTL: {} days", censusCacheTtlDays);
     LOGGER.info("  Census API key: {}", censusApiKey != null ? "configured" : "not configured");
 
+    // Operating directory for metadata (.aperio/census/)
+    // This is passed from GovDataSchemaFactory which establishes it centrally
+    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
+    String censusOperatingDirectory = (String) mutableOperand.get("operatingDirectory");
+    if (censusOperatingDirectory == null) {
+      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
+    }
+    LOGGER.debug("Received operating directory from parent: {}", censusOperatingDirectory);
+
+    // Load or create cache manifest from operating directory
+    org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest =
+        org.apache.calcite.adapter.govdata.geo.GeoCacheManifest.load(censusOperatingDirectory);
+    LOGGER.debug("Loaded CENSUS cache manifest from {}", censusOperatingDirectory);
+
     // Download data if auto-download is enabled
     if (autoDownload && censusApiKey != null) {
       LOGGER.info("Auto-download enabled for CENSUS data");
       try {
         downloadCensusData(censusRawDir, censusParquetDir, censusApiKey,
-            acsYears, decennialYears, censusCacheTtlDays, storageProvider);
+            acsYears, decennialYears, censusCacheTtlDays, storageProvider,
+            censusOperatingDirectory, cacheManifest);
       } catch (Exception e) {
         LOGGER.error("Error downloading CENSUS data", e);
         // Continue even if download fails - existing data may be available
@@ -270,7 +267,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    */
   private void downloadCensusData(String cacheDir, String censusParquetDir, String censusApiKey,
       List<Integer> acsYears, List<Integer> decennialYears, Integer censusCacheTtlDays,
-      StorageProvider storageProvider) throws IOException {
+      StorageProvider storageProvider, String censusOperatingDirectory,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
 
     LOGGER.info("Checking Census data cache: {}", censusParquetDir);
 
@@ -278,9 +276,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     long censusDataTtlMillis = censusCacheTtlDays * 24L * 60 * 60 * 1000; // Convert days to milliseconds
     long currentTime = System.currentTimeMillis();
 
-    // Reuse the existing CensusApiClient from GEO package
-    File censusCacheDir = new File(cacheDir);
-    CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, acsYears, storageProvider);
+    // Create CensusApiClient with String-based cache directory and manifest support
+    CensusApiClient censusClient = new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory,
+        acsYears, storageProvider, cacheManifest);
+
+    // For parquet conversion, we need a File object to scan local JSON cache files
+    // This is safe because downloads always go to local filesystem first (even with S3 parquet storage)
+    File localCacheDir = new File(cacheDir);
 
     // Check if ACS data needs updating
     boolean needsAcsUpdate = false;
@@ -371,7 +373,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to Parquet format
         LOGGER.info("Converting ACS data to Parquet for years: {}", acsYears);
         for (int year : acsYears) {
-          convertAcsDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+          convertAcsDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
         }
 
       } catch (Exception e) {
@@ -415,7 +417,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
           for (int year : decennialYears) {
             downloadDecennialData(censusClient, year);
-            convertDecennialDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+            convertDecennialDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
           }
 
         } catch (Exception e) {
@@ -438,7 +440,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         for (int year : economicYears) {
           try {
             downloadEconomicData(censusClient, year);
-            convertEconomicDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+            convertEconomicDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
           } catch (Exception e) {
             // Check if this is a "no data" error (404, dataset not available) vs actual API error
             String errorMsg = e.getMessage();
@@ -485,7 +487,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       for (int year : acsYears) {
         try {
           downloadPopulationEstimatesData(censusClient, year);
-          convertPopulationEstimatesDataToParquet(censusCacheDir, censusParquetDir, year, storageProvider);
+          convertPopulationEstimatesDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
         } catch (Exception e) {
           // Check if this is a "no data" error (404, dataset not available) vs actual API error
           String errorMsg = e.getMessage();

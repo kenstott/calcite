@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +92,7 @@ public class TigerDataDownloader {
     return type;
   }
 
-  private final File cacheDir;
+  private final String cacheDir;
   private final List<Integer> dataYears;
   private final boolean autoDownload;
   private final StorageProvider storageProvider;
@@ -101,7 +102,7 @@ public class TigerDataDownloader {
   /**
    * Constructor with year list and StorageProvider (matching ECON pattern).
    */
-  public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
+  public TigerDataDownloader(String cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider) {
     this(cacheDir, dataYears, autoDownload, storageProvider, null);
   }
@@ -109,15 +110,15 @@ public class TigerDataDownloader {
   /**
    * Constructor with year list, StorageProvider, and cacheManifest.
    */
-  public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
+  public TigerDataDownloader(String cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(cacheDir, cacheDir.getAbsolutePath(), dataYears, autoDownload, storageProvider, cacheManifest);
+    this(cacheDir, cacheDir, dataYears, autoDownload, storageProvider, cacheManifest);
   }
 
   /**
    * Constructor with separate cache and operating directories (standardized naming).
    */
-  public TigerDataDownloader(File cacheDir, String operatingDirectory, List<Integer> dataYears,
+  public TigerDataDownloader(String cacheDir, String operatingDirectory, List<Integer> dataYears,
       boolean autoDownload, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.cacheDir = cacheDir;
     this.operatingDirectory = operatingDirectory;
@@ -126,26 +127,46 @@ public class TigerDataDownloader {
     this.storageProvider = storageProvider;
     this.cacheManifest = cacheManifest;
 
-    if (!cacheDir.exists()) {
-      cacheDir.mkdirs();
-    }
-
     LOGGER.info("TIGER data downloader initialized for years {} in directory: {}",
         dataYears, cacheDir);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
+      StorageProvider storageProvider) {
+    this(cacheDir.getAbsolutePath(), dataYears, autoDownload, storageProvider, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), dataYears, autoDownload, storageProvider, cacheManifest);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public TigerDataDownloader(File cacheDir, String operatingDirectory, List<Integer> dataYears,
+      boolean autoDownload, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(cacheDir.getAbsolutePath(), operatingDirectory, dataYears, autoDownload, storageProvider, cacheManifest);
   }
 
   /**
    * Constructor with year list (backward compatibility).
    */
   public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload) {
-    this(cacheDir, dataYears, autoDownload, null);
+    this(cacheDir.getAbsolutePath(), dataYears, autoDownload, null);
   }
 
   /**
    * Backward compatibility constructor with single year.
    */
   public TigerDataDownloader(File cacheDir, int dataYear, boolean autoDownload) {
-    this(cacheDir, Arrays.asList(dataYear), autoDownload, null);
+    this(cacheDir.getAbsolutePath(), Arrays.asList(dataYear), autoDownload, null);
   }
 
   /**
@@ -224,28 +245,40 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
     String url = String.format("%s/%s/STATE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-    // Create year-partitioned directory structure
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "states");
-    File zipFile = new File(targetDir, filename);
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "states");
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (zipFile.exists()) {
-      LOGGER.info("States shapefile already exists for year {}: {}", year, zipFile);
-      return targetDir;
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("States shapefile already exists in cache for year {}: {}", year, zipCachePath);
+      // Download from cache to temp directory for use by converter
+      return downloadCacheToTemp(cachePath, "states_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. States shapefile not found for year {}: {}", year, zipFile);
+      LOGGER.info("Auto-download disabled. States shapefile not found for year {}: {}", year, zipCachePath);
       return null;
     }
 
     LOGGER.info("Downloading states shapefile for year {} from: {}", year, url);
-    targetDir.mkdirs();
 
     try {
+      // Download and extract to temp directory
+      File tempDir = Files.createTempDirectory("tiger-states-" + year + "-").toFile();
+      File zipFile = new File(tempDir, filename);
+
       downloadFile(url, zipFile);
-      extractZipFile(zipFile, targetDir);
-      return targetDir;
+      extractZipFile(zipFile, tempDir);
+
+      // Upload extracted files to cache storage
+      uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Keep temp directory for immediate use by converter
+      // Note: Caller is responsible for cleanup
+      return tempDir;
     } catch (IOException e) {
       if (e.getMessage().contains("404")) {
         LOGGER.warn("TIGER data not available for year {} at URL: {} - skipping", year, url);
@@ -283,27 +316,38 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
     String url = String.format("%s/%s/COUNTY%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "counties");
-    File zipFile = new File(targetDir, filename);
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "counties");
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (zipFile.exists()) {
-      LOGGER.info("Counties shapefile already exists for year {}: {}", year, zipFile);
-      return targetDir;
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("Counties shapefile already exists in cache for year {}: {}", year, zipCachePath);
+      return downloadCacheToTemp(cachePath, "counties_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Counties shapefile not found for year {}: {}", year, zipFile);
+      LOGGER.info("Auto-download disabled. Counties shapefile not found for year {}: {}", year, zipCachePath);
       return null;
     }
 
     LOGGER.info("Downloading counties shapefile for year {} from: {}", year, url);
-    targetDir.mkdirs();
 
     try {
+      // Download and extract to temp directory
+      File tempDir = Files.createTempDirectory("tiger-counties-" + year + "-").toFile();
+      File zipFile = new File(tempDir, filename);
+
       downloadFile(url, zipFile);
-      extractZipFile(zipFile, targetDir);
-      return targetDir;
+      extractZipFile(zipFile, tempDir);
+
+      // Upload extracted files to cache storage
+      uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Keep temp directory for immediate use by converter
+      return tempDir;
     } catch (IOException e) {
       if (e.getMessage().contains("404")) {
         LOGGER.warn("TIGER data not available for year {} at URL: {} - skipping", year, url);
@@ -332,27 +376,38 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_%s_%s.zip", year, stateFips, fileSuffix);
     String url = String.format("%s/%s/PLACE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "places/" + stateFips);
-    File zipFile = new File(targetDir, filename);
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "places");
+    cachePath = storageProvider.resolvePath(cachePath, stateFips);
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (zipFile.exists()) {
-      LOGGER.info("Places shapefile already exists for state {}: {}", stateFips, zipFile);
-      return targetDir;
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("Places shapefile already exists for state {} in cache: {}", stateFips, zipCachePath);
+      return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Places shapefile not found for state {}: {}",
-          stateFips, zipFile);
+      LOGGER.info("Auto-download disabled. Places shapefile not found for state {}: {}", stateFips, zipCachePath);
       return null;
     }
 
     LOGGER.info("Downloading places shapefile for state {} from: {}", stateFips, url);
-    targetDir.mkdirs();
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, targetDir);
 
-    return targetDir;
+    // Download and extract to temp directory
+    File tempDir = Files.createTempDirectory("tiger-places-" + stateFips + "-" + year + "-").toFile();
+    File zipFile = new File(tempDir, filename);
+
+    downloadFile(url, zipFile);
+    extractZipFile(zipFile, tempDir);
+
+    // Upload extracted files to cache storage
+    uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Keep temp directory for immediate use
+    return tempDir;
   }
 
   /**
@@ -397,28 +452,39 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
     String url = String.format("%s/%s/%s%s/%s", TIGER_BASE_URL, getTigerYearPath(year), zctaType, getTiger2010Subdir(year), filename);
 
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "zctas");
-    File zipFile = new File(targetDir, filename);
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "zctas");
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (zipFile.exists()) {
-      LOGGER.info("ZCTAs shapefile already exists: {}", zipFile);
-      return targetDir;
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("ZCTAs shapefile already exists in cache: {}", zipCachePath);
+      return downloadCacheToTemp(cachePath, "zctas_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. ZCTAs shapefile not found: {}", zipFile);
+      LOGGER.info("Auto-download disabled. ZCTAs shapefile not found: {}", zipCachePath);
       return null;
     }
 
     LOGGER.info("Downloading ZCTAs shapefile from: {}", url);
     LOGGER.warn("Note: ZCTA file is large (~200MB), this may take a while...");
-    targetDir.mkdirs();
 
     try {
+      // Download and extract to temp directory
+      File tempDir = Files.createTempDirectory("tiger-zctas-" + year + "-").toFile();
+      File zipFile = new File(tempDir, filename);
+
       downloadFile(url, zipFile);
-      extractZipFile(zipFile, targetDir);
-      return targetDir;
+      extractZipFile(zipFile, tempDir);
+
+      // Upload extracted files to cache storage
+      uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Keep temp directory for immediate use
+      return tempDir;
     } catch (IOException e) {
       if (e.getMessage().contains("404")) {
         LOGGER.warn("TIGER ZCTA data not available for year {} at URL: {} - skipping", year, url);
@@ -442,27 +508,26 @@ public class TigerDataDownloader {
    * Congressional districts are provided as state-level files, we need to download all states.
    */
   public File downloadCongressionalDistrictsForYear(int year) throws IOException {
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "congressional_districts");
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "congressional_districts");
 
-    // Check if we already have CD shapefile
-    if (targetDir.exists() && targetDir.listFiles((dir, name) -> name.endsWith(".shp")).length > 0) {
-      LOGGER.info("Congressional districts shapefiles already exist for year {}", year);
-      return targetDir;
+    // Calculate correct Congress number: ((year - 1789) / 2) + 1
+    int congressNum = ((year - 1789) / 2) + 1;
+    String filename = String.format("tl_%d_us_cd%d.zip", year, congressNum);
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
+
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("Congressional districts shapefile already exists in cache for year {}: {}", year, zipCachePath);
+      return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
     }
 
     if (!autoDownload) {
       LOGGER.info("Auto-download disabled. Congressional districts not found for year {}", year);
       return null;
     }
-
-    // Calculate correct Congress number: ((year - 1789) / 2) + 1
-    // Each Congress serves 2 years starting in odd years
-    // 116th Congress: 2019-2020, 117th: 2021-2022, 118th: 2023-2024, etc.
-    int congressNum = ((year - 1789) / 2) + 1;
-
-    // Congressional districts are provided as a nationwide file (not per-state)
-    String filename = String.format("tl_%d_us_cd%d.zip", year, congressNum);
 
     // 2010 has a different directory structure with congress subdirectory
     String url;
@@ -472,25 +537,115 @@ public class TigerDataDownloader {
       url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
     }
 
-    File zipFile = new File(targetDir, filename);
+    try {
+      LOGGER.info("Downloading CD shapefile for year {} (Congress {})", year, congressNum);
 
-    targetDir.mkdirs();
-    if (!zipFile.exists()) {
-      try {
-        LOGGER.info("Downloading CD shapefile for year {} (Congress {})", year, congressNum);
-        downloadFile(url, zipFile);
-        extractZipFile(zipFile, targetDir);
-      } catch (IOException e) {
-        if (e.getMessage().contains("404")) {
-          LOGGER.warn("Congressional districts data not available for year {} (Congress {}) - skipping", year, congressNum);
-          return null;
+      // Download and extract to temp directory
+      File tempDir = Files.createTempDirectory("tiger-cd-" + year + "-").toFile();
+      File zipFile = new File(tempDir, filename);
+
+      downloadFile(url, zipFile);
+      extractZipFile(zipFile, tempDir);
+
+      // Upload extracted files to cache storage
+      uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Keep temp directory for immediate use
+      return tempDir;
+    } catch (IOException e) {
+      if (e.getMessage().contains("404")) {
+        LOGGER.warn("Congressional districts data not available for year {} (Congress {}) - skipping", year, congressNum);
+        return null;
+      }
+      LOGGER.warn("Failed to download CD for year {}: {}", year, e.getMessage());
+      throw e;
+    }
+  }
+
+  /**
+   * Upload all files from a local directory to storage (recursively).
+   */
+  private void uploadDirectoryToStorage(File sourceDir, String targetPath) throws IOException {
+    File[] files = sourceDir.listFiles();
+    if (files == null) {
+      return;
+    }
+
+    for (File file : files) {
+      if (file.isDirectory()) {
+        // Recursively upload subdirectory
+        String subPath = storageProvider.resolvePath(targetPath, file.getName());
+        uploadDirectoryToStorage(file, subPath);
+      } else {
+        // Skip ZIP files (only upload extracted shapefiles)
+        if (file.getName().endsWith(".zip")) {
+          LOGGER.debug("Skipping ZIP file upload: {}", file.getName());
+          continue;
         }
-        LOGGER.warn("Failed to download CD for year {}: {}", year, e.getMessage());
-        throw e;
+        // Upload file
+        String filePath = storageProvider.resolvePath(targetPath, file.getName());
+        LOGGER.debug("Uploading {} to {}", file.getName(), filePath);
+        byte[] data = Files.readAllBytes(file.toPath());
+        storageProvider.writeFile(filePath, data);
+      }
+    }
+  }
+
+  /**
+   * Download files from cache storage to a temp directory for reading.
+   * Used when shapefiles exist in S3 cache but need to be read locally.
+   */
+  private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
+    // For local filesystem cache, just return the path directly
+    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
+      // Local path - can use directly
+      File localPath = new File(cachePath);
+      if (localPath.exists()) {
+        return localPath;
       }
     }
 
-    return targetDir;
+    // For S3 cache, download files to temp directory
+    File tempDir = Files.createTempDirectory(tempPrefix + "-").toFile();
+
+    // List all files in the cache path recursively and download them
+    java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, true);
+    if (files.isEmpty()) {
+      LOGGER.warn("No files found in cache path: {}", cachePath);
+      return tempDir;
+    }
+
+    for (FileEntry fileEntry : files) {
+      // Skip directories
+      if (fileEntry.isDirectory()) {
+        continue;
+      }
+
+      String filePath = fileEntry.getPath();
+      // Extract relative path from the cache path
+      String relativePath = filePath.substring(cachePath.length());
+      if (relativePath.startsWith("/")) {
+        relativePath = relativePath.substring(1);
+      }
+
+      File targetFile = new File(tempDir, relativePath);
+      targetFile.getParentFile().mkdirs();
+
+      // Download file from storage using InputStream
+      try (java.io.InputStream in = storageProvider.openInputStream(filePath);
+           java.io.OutputStream out = new java.io.FileOutputStream(targetFile)) {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+          out.write(buffer, 0, bytesRead);
+        }
+      }
+
+      LOGGER.debug("Downloaded {} to {}", filePath, targetFile);
+    }
+
+    LOGGER.info("Downloaded {} files from cache {} to temp directory {}", files.size(), cachePath, tempDir);
+    return tempDir;
   }
 
   /**
@@ -588,38 +743,40 @@ public class TigerDataDownloader {
    * Census tracts are organized by state, so we'll download for selected states.
    */
   public File downloadCensusTractsForYear(int year) throws IOException {
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "census_tracts");
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "census_tracts");
 
-    // Check if we already have census tract data
-    if (targetDir.exists() && targetDir.listFiles() != null && targetDir.listFiles().length > 0) {
-      LOGGER.info("Census tracts already downloaded for year {}: {}", year, targetDir);
-      return targetDir;
+    // Check if any census tracts exist in cache for this year (check first state)
+    String testStateFips = "06";
+    String testFileSuffix = getTigerFileSuffix(year, "tract");
+    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testFileSuffix);
+    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
+    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
+
+    // If cached, download to temp
+    if (storageProvider.exists(testZipPath)) {
+      LOGGER.info("Census tracts already cached for year {}", year);
+      return downloadCacheToTemp(cachePath, "census_tracts_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Census tracts not found for year {}: {}", year, targetDir);
+      LOGGER.info("Auto-download disabled. Census tracts not found for year {}", year);
       return null;
     }
 
-    targetDir.mkdirs();
-
     // Download census tracts for selected states only
-    // Using same states as we do for places: CA(06), TX(48), NY(36), FL(12)
-    String[] stateFips = {"06", "48", "36", "12"};
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    File tempDir = Files.createTempDirectory("tiger-census_tracts-" + year + "-").toFile();
 
     for (String fips : stateFips) {
       String fileSuffix = getTigerFileSuffix(year, "tract");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
       String url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-      File stateDir = new File(targetDir, fips);
+      File stateDir = new File(tempDir, fips);
       File zipFile = new File(stateDir, filename);
-
-      if (zipFile.exists()) {
-        LOGGER.info("Census tracts shapefile already exists for state {}: {}", fips, zipFile);
-        continue;
-      }
 
       LOGGER.info("Downloading census tracts shapefile for state {} year {} from: {}", fips, year, url);
       stateDir.mkdirs();
@@ -629,15 +786,18 @@ public class TigerDataDownloader {
         extractZipFile(zipFile, stateDir);
       } catch (IOException e) {
         if (e.getMessage().contains("404")) {
-          LOGGER.warn("TIGER census tract data not available for state {} year {} at URL: {} - skipping", fips, year, url);
+          LOGGER.warn("TIGER census tract data not available for state {} year {} - skipping", fips, year);
         } else {
           LOGGER.warn("Failed to download census tracts for state {}: {}", fips, e.getMessage());
         }
-        // Continue with other states even if one fails
       }
     }
 
-    return targetDir;
+    // Upload extracted files to cache storage
+    uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Keep temp directory for immediate use
+    return tempDir;
   }
 
   /**
@@ -654,38 +814,40 @@ public class TigerDataDownloader {
    * Block groups are organized by state, so we'll download for selected states.
    */
   public File downloadBlockGroupsForYear(int year) throws IOException {
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "block_groups");
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "block_groups");
 
-    // Check if we already have block group data
-    if (targetDir.exists() && targetDir.listFiles() != null && targetDir.listFiles().length > 0) {
-      LOGGER.info("Block groups already downloaded for year {}: {}", year, targetDir);
-      return targetDir;
+    // Check if any block groups exist in cache for this year (check first state)
+    String testStateFips = "06";
+    String testFileSuffix = getTigerFileSuffix(year, "bg");
+    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testFileSuffix);
+    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
+    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
+
+    // If cached, download to temp
+    if (storageProvider.exists(testZipPath)) {
+      LOGGER.info("Block groups already cached for year {}", year);
+      return downloadCacheToTemp(cachePath, "block_groups_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Block groups not found for year {}: {}", year, targetDir);
+      LOGGER.info("Auto-download disabled. Block groups not found for year {}", year);
       return null;
     }
 
-    targetDir.mkdirs();
-
     // Download block groups for selected states only
-    // Using same states as we do for places: CA(06), TX(48), NY(36), FL(12)
-    String[] stateFips = {"06", "48", "36", "12"};
+    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    File tempDir = Files.createTempDirectory("tiger-block_groups-" + year + "-").toFile();
 
     for (String fips : stateFips) {
       String fileSuffix = getTigerFileSuffix(year, "bg");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
       String url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-      File stateDir = new File(targetDir, fips);
+      File stateDir = new File(tempDir, fips);
       File zipFile = new File(stateDir, filename);
-
-      if (zipFile.exists()) {
-        LOGGER.info("Block groups shapefile already exists for state {}: {}", fips, zipFile);
-        continue;
-      }
 
       LOGGER.info("Downloading block groups shapefile for state {} year {} from: {}", fips, year, url);
       stateDir.mkdirs();
@@ -695,15 +857,18 @@ public class TigerDataDownloader {
         extractZipFile(zipFile, stateDir);
       } catch (IOException e) {
         if (e.getMessage().contains("404")) {
-          LOGGER.warn("TIGER block group data not available for state {} year {} at URL: {} - skipping", fips, year, url);
+          LOGGER.warn("TIGER block group data not available for state {} year {} - skipping", fips, year);
         } else {
           LOGGER.warn("Failed to download block groups for state {}: {}", fips, e.getMessage());
         }
-        // Continue with other states even if one fails
       }
     }
 
-    return targetDir;
+    // Upload extracted files to cache storage
+    uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Keep temp directory for immediate use
+    return tempDir;
   }
 
   /**
@@ -724,32 +889,43 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_us_cbsa%s.zip", year, cbsaSuffix);
     String url = String.format("%s/%s/CBSA%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
 
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "cbsa");
-    File zipFile = new File(targetDir, filename);
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "cbsa");
+    String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    if (zipFile.exists()) {
-      LOGGER.info("CBSA shapefile already exists for year {}: {}", year, zipFile);
-      return targetDir;
+    // Check if already exists in cache via StorageProvider
+    if (storageProvider.exists(zipCachePath)) {
+      LOGGER.info("CBSA shapefile already exists in cache for year {}: {}", year, zipCachePath);
+      return downloadCacheToTemp(cachePath, "cbsa_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. CBSA shapefile not found for year {}: {}", year, zipFile);
+      LOGGER.info("Auto-download disabled. CBSA shapefile not found for year {}: {}", year, zipCachePath);
       return null;
     }
 
     LOGGER.info("Downloading CBSA shapefile for year {} from: {}", year, url);
-    targetDir.mkdirs();
-    downloadFile(url, zipFile);
-    extractZipFile(zipFile, targetDir);
 
-    return targetDir;
+    // Download and extract to temp directory
+    File tempDir = Files.createTempDirectory("tiger-cbsa-" + year + "-").toFile();
+    File zipFile = new File(tempDir, filename);
+
+    downloadFile(url, zipFile);
+    extractZipFile(zipFile, tempDir);
+
+    // Upload extracted files to cache storage
+    uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Keep temp directory for immediate use
+    return tempDir;
   }
 
   /**
    * Get the cache directory.
    */
-  public File getCacheDir() {
+  public String getCacheDir() {
     return cacheDir;
   }
 
@@ -785,42 +961,38 @@ public class TigerDataDownloader {
     // Check if parquet already exists (skip raw download if converted file exists)
     if (parquetPath != null && shouldSkipDownload("school_districts", year, parquetPath)) {
       LOGGER.info("Skipping school districts download for year {} - parquet already exists", year);
-      File yearDir = new File(cacheDir, String.format("year=%d", year));
-      return new File(yearDir, "school_districts");
+      // Return temp directory placeholder (no actual download needed)
+      return Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
     }
 
-    // School districts are organized by state, so we'll download for selected states
-    File yearDir = new File(cacheDir, String.format("year=%d", year));
-    File targetDir = new File(yearDir, "school_districts");
+    // Build target path in cache storage
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, "school_districts");
 
-    // Check if we already have school district shapefiles (not just empty directories)
-    if (targetDir.exists()) {
-      boolean hasShapefiles = false;
-      File[] stateDirs = targetDir.listFiles(File::isDirectory);
-      if (stateDirs != null) {
-        for (File stateDir : stateDirs) {
-          File[] shpFiles = stateDir.listFiles((dir, name) -> name.endsWith(".shp"));
-          if (shpFiles != null && shpFiles.length > 0) {
-            hasShapefiles = true;
-            break;
-          }
-        }
-      }
-      if (hasShapefiles) {
-        LOGGER.info("School districts already downloaded for year {}: {}", year, targetDir);
-        return targetDir;
-      }
+    // Check if any school districts exist in cache for this year
+    String testStateFips = "06";
+    String testType = "unsd";
+    String testTypeSuffix = (year == 2010) ? testType + "10" : testType;
+    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testTypeSuffix);
+    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
+    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
+
+    // If cached, download to temp
+    if (storageProvider.exists(testZipPath)) {
+      LOGGER.info("School districts already cached for year {}", year);
+      return downloadCacheToTemp(cachePath, "school_districts_" + year);
     }
 
     if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. School districts not found for year {}: {}", year, targetDir);
+      LOGGER.info("Auto-download disabled. School districts not found for year {}", year);
       return null;
     }
 
-    targetDir.mkdirs();
-
     // Download school districts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+    File tempDir = Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
+    boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
       // Try different school district types
@@ -836,13 +1008,8 @@ public class TigerDataDownloader {
             ? String.format("%s/%s/%s/2010/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename)
             : String.format("%s/%s/%s/%s", TIGER_BASE_URL, getTigerYearPath(year), urlPath, filename);
 
-        File stateDir = new File(targetDir, fips);
+        File stateDir = new File(tempDir, fips);
         File zipFile = new File(stateDir, filename);
-
-        if (zipFile.exists()) {
-          LOGGER.debug("School district shapefile already exists for state {} type {}: {}", fips, type, zipFile);
-          continue;
-        }
 
         LOGGER.info("Downloading school district shapefile for state {} type {} year {} from: {}", fips, type, year, url);
         stateDir.mkdirs();
@@ -850,32 +1017,23 @@ public class TigerDataDownloader {
         try {
           downloadFile(url, zipFile);
           extractZipFile(zipFile, stateDir);
+          hasAnyDownloads = true;
         } catch (IOException e) {
           LOGGER.debug("Failed to download school districts for state {} type {}: {}", fips, type, e.getMessage());
-          // Continue with other types/states even if one fails
         }
       }
     }
 
-    // Check if any shapefiles were successfully downloaded
-    boolean hasShapefiles = false;
-    File[] stateDirs = targetDir.listFiles(File::isDirectory);
-    if (stateDirs != null) {
-      for (File stateDir : stateDirs) {
-        File[] shpFiles = stateDir.listFiles((dir, name) -> name.endsWith(".shp"));
-        if (shpFiles != null && shpFiles.length > 0) {
-          hasShapefiles = true;
-          break;
-        }
-      }
-    }
-
-    if (!hasShapefiles) {
+    if (!hasAnyDownloads) {
       LOGGER.warn("No school district shapefiles were successfully downloaded for year {}", year);
       return null;
     }
 
-    return targetDir;
+    // Upload extracted files to cache storage
+    uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Keep temp directory for immediate use
+    return tempDir;
   }
 
   /**
@@ -977,13 +1135,24 @@ public class TigerDataDownloader {
    * Check if a shapefile exists in the cache.
    */
   public boolean isShapefileAvailable(String category) {
-    File dir = new File(cacheDir, category);
-    if (!dir.exists()) {
-      return false;
+    // For local filesystem cache
+    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
+      File dir = new File(cacheDir, category);
+      if (!dir.exists()) {
+        return false;
+      }
+      File[] shpFiles = dir.listFiles((d, name) -> name.endsWith(".shp"));
+      return shpFiles != null && shpFiles.length > 0;
     }
 
-    // Check for .shp file
-    File[] shpFiles = dir.listFiles((d, name) -> name.endsWith(".shp"));
-    return shpFiles != null && shpFiles.length > 0;
+    // For S3 cache, check if any .shp files exist in the category path
+    String categoryPath = storageProvider.resolvePath(cacheDir, category);
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(categoryPath, true);
+      return files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+    } catch (IOException e) {
+      LOGGER.warn("Failed to check shapefile availability in S3: {}", e.getMessage());
+      return false;
+    }
   }
 }
