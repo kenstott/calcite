@@ -40,6 +40,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Year;
 import java.util.ArrayList;
@@ -453,11 +454,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param operand The base operand from the model file
    * @return Modified operand with SEC-specific configuration
    */
-  public Map<String, Object> buildOperand(Map<String, Object> operand, StorageProvider storageProvider) {
+  public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
     LOGGER.debug("SecSchemaFactory.buildOperand() called with operand: {}", operand);
 
-    // Store the storage provider for later use
-    this.storageProvider = storageProvider;
+    // Access shared services from parent
+    this.storageProvider = parent.getStorageProvider();
     LOGGER.debug("SEC buildOperand: storageProvider set to {}", storageProvider);
 
     // Create a mutable copy of operand to allow modifications
@@ -505,8 +506,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       throw new IllegalStateException("parquetDirectory must be set in model operand or GOVDATA_PARQUET_DIR environment variable must be set");
     }
 
-    // SEC data directories following standardized naming
-    String secCacheDir = govdataCacheDir + "/sec";  // Raw XBRL cache
+    // SEC cache directory for raw content (XBRL/HTML files)
+    String secCacheDir = storageProvider.resolvePath(govdataCacheDir, "sec");
     this.secCacheDirectory = secCacheDir;
 
     // Operating directory for metadata (.aperio/sec/)
@@ -525,8 +526,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Migrate legacy .notfound markers to manifest
     migrateNotFoundMarkers(secCacheDir);
 
-    // SEC data directories
-    String secRawDir = govdataCacheDir + "/sec";
+    // SEC data directories - NEVER concatenate paths, always use storageProvider.resolvePath
+    String secRawDir = storageProvider.resolvePath(govdataCacheDir, "sec");
     String secParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=sec");
     LOGGER.info("SecSchemaFactory: govdataParquetDir='{}', secParquetDir='{}', operatingDir='{}'",
                 govdataParquetDir, secParquetDir, this.secOperatingDirectory);
@@ -878,17 +879,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  private void addToManifest(File baseDirectory, File xbrlFile, File secParquetDir) {
+  private void addToManifest(String xbrlFilePath, String secParquetDirPath) {
     try {
       // Extract CIK and accession from file path
-      // Path structure: baseDir/sec-cache/raw/{cik}/{accession}/{file}
-      File accessionDir = xbrlFile.getParentFile();
-      File cikDir = accessionDir.getParentFile();
+      // Path structure: cacheDir/{cik}/{accession}/{file}
+      int lastSlash = xbrlFilePath.lastIndexOf('/');
+      String accessionPath = xbrlFilePath.substring(0, lastSlash);
+      int secondLastSlash = accessionPath.lastIndexOf('/');
+      String accession = accessionPath.substring(secondLastSlash + 1);
+      String cikPath = accessionPath.substring(0, secondLastSlash);
+      int thirdLastSlash = cikPath.lastIndexOf('/');
+      String cik = cikPath.substring(thirdLastSlash + 1);
 
-      String cik = cikDir.getName();
-      String accession = accessionDir.getName();
-      // Format accession with dashes
-      if (accession.length() == 18) {
+      // Format accession with dashes if needed
+      if (accession.length() == 18 && !accession.contains("-")) {
         accession = accession.substring(0, 10) + "-" +
                    accession.substring(10, 12) + "-" +
                    accession.substring(12);
@@ -900,12 +904,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
         // Check if vectorized file exists for this accession in the parquet directory
         try {
-          String parquetPath = secParquetDir.getAbsolutePath();
           String accessionNoHyphens = accession.replace("-", "");
           String vectorizedFileName = cik + "_" + accessionNoHyphens + "_vectorized.parquet";
 
           // Use StorageProvider to check for vectorized files (works for both local and S3)
-          List<StorageProvider.FileEntry> files = storageProvider.listFiles(parquetPath, true);
+          List<StorageProvider.FileEntry> files = storageProvider.listFiles(secParquetDirPath, true);
           hasVectorized = files.stream()
               .anyMatch(f -> !f.isDirectory() && f.getName().equals(vectorizedFileName));
         } catch (IOException e) {
@@ -918,8 +921,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String entryPrefix = cik + "|" + accession + "|";
       String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
-      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
-      synchronized (SecSchemaFactory.class) {
+      // Use per-CIK manifest for better organization and no lock contention
+      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
+      cikManifestDir.mkdirs();
+      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
+
+      synchronized (("manifest_" + cik).intern()) {
         // Check if this entry already exists in the manifest (prevent duplicates)
         boolean alreadyExists = false;
         if (manifestFile.exists()) {
@@ -1070,23 +1077,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     downloadedInThisCycle.clear();
 
     try {
-      // Raw SEC files should use cacheDirectory, NOT directory (which is for parquet files)
-      // getGovDataCacheDir() resolves environment variables like ${GOVDATA_CACHE_DIR:default}
-      String cacheHome = getGovDataCacheDir();
-      if (cacheHome == null) {
-        // Fall back to default cache location
-        cacheHome = System.getProperty("user.home") + "/.govdata-cache";
+      // Metadata (submissions.json and processed_filings.manifest) goes to operating directory under cik= subdirectories
+      LOGGER.info("Using SEC operating directory: {}", this.secOperatingDirectory);
+
+      // Raw content (XBRL/HTML files) goes to cache directory
+      // Use StorageProvider to create directories (works for both local and S3)
+      try {
+        storageProvider.createDirectories(this.secCacheDirectory);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to create SEC cache directory: {}", e.getMessage());
       }
-
-      // XBRL files are immutable - once downloaded, they never change
-      // Use sec subdirectory (consistent with econ, geo, census patterns)
-      File baseDir = new File(cacheHome, "sec");
-      baseDir.mkdirs();
-
-      // Keep secRawDir for cache manifest operations
-      String secRawDir = baseDir.getAbsolutePath();
-
-      LOGGER.info("Using SEC cache directory: {}", baseDir.getAbsolutePath());
+      LOGGER.info("Using SEC cache directory: {}", this.secCacheDirectory);
 
       // Check if we should use mock data instead of downloading
       Boolean useMockData = (Boolean) operand.get("useMockData");
@@ -1097,17 +1098,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         int endYear = (Integer) operand.getOrDefault("endYear", 2023);
         LOGGER.debug("DEBUG: Calling createSecTablesFromXbrl for mock data");
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("DEBUG: baseDir={}", baseDir.getAbsolutePath());
+          LOGGER.debug("DEBUG: secOperatingDirectory={}", this.secOperatingDirectory);
         }
         // Create minimal mock Parquet files so tables are discovered
-        downloadStockPrices(baseDir, Arrays.asList("320187", "51143", "789019"), 2021, 2024);
+        downloadStockPrices(this.secOperatingDirectory, Arrays.asList("320187", "51143", "789019"), 2021, 2024);
         LOGGER.debug("DEBUG: Mock data mode - created mock Parquet files");
 
         // Also create mock stock prices if enabled
         boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
         if (fetchStockPrices) {
           LOGGER.debug("Creating mock stock prices for testing");
-          createMockStockPrices(baseDir, ciks, startYear, endYear);
+          createMockStockPrices(this.secOperatingDirectory, ciks, startYear, endYear);
         }
 
         return;
@@ -1131,7 +1132,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       for (String cik : ciks) {
         cikCounter++;
         LOGGER.info("Processing CIK {}/{}: {}", cikCounter, ciks.size(), cik);
-        downloadCikFilings(provider, cik, filingTypes, startYear, endYear, baseDir);
+        downloadCikFilings(provider, cik, filingTypes, startYear, endYear);
       }
       LOGGER.info("Completed processing all {} CIKs", ciks.size());
 
@@ -1150,9 +1151,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("No filing processing futures to wait for");
       }
 
-      // Process any remaining files that weren't converted inline (backward compatibility)
-      LOGGER.info("Processing any remaining XBRL files");
-      createSecTablesFromXbrl(baseDir, ciks, startYear, endYear);
+      // All XBRL/HTML files are now converted to Parquet inline during download
+      // No batch processing needed - inline conversion works for both local and S3 cache
 
       // Download or create stock prices if enabled
       boolean fetchStockPrices = (Boolean) operand.getOrDefault("fetchStockPrices", true);
@@ -1161,17 +1161,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (fetchStockPrices) {
         if (isTestMode) {
           LOGGER.debug("Creating mock stock prices for testing (testMode=true)");
-          createMockStockPrices(baseDir, ciks, startYear, endYear);
+          createMockStockPrices(this.secCacheDirectory, ciks, startYear, endYear);
         } else {
           LOGGER.info("Downloading stock prices for configured CIKs");
-          downloadStockPrices(baseDir, ciks, startYear, endYear);
+          downloadStockPrices(this.secCacheDirectory, ciks, startYear, endYear);
         }
       }
 
       // Save SecCacheManifest after all downloads complete
-      if (cacheManifest != null && secRawDir != null) {
+      if (cacheManifest != null) {
         cacheManifest.save(this.secOperatingDirectory);
-        LOGGER.debug("Saved SEC cache manifest to {}", secRawDir);
+        LOGGER.debug("Saved SEC cache manifest to {}", this.secOperatingDirectory);
       }
 
     } catch (Exception e) {
@@ -1182,7 +1182,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (cacheManifest != null) {
         String cacheDir = getGovDataCacheDir();
         if (cacheDir != null) {
-          String secCacheDir = cacheDir + "/sec";
+          String secCacheDir = storageProvider.resolvePath(cacheDir, "sec");
           cacheManifest.save(this.secOperatingDirectory);
           LOGGER.debug("Saved SEC cache manifest in finally block to {}", secCacheDir);
         }
@@ -1191,7 +1191,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private void downloadCikFilings(SecHttpStorageProvider provider, String cik,
-      List<String> filingTypes, int startYear, int endYear, File baseDir) {
+      List<String> filingTypes, int startYear, int endYear) {
     // Ensure executors are initialized
     initializeExecutors();
 
@@ -1202,14 +1202,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String normalizedCik = String.format("%010d", Long.parseLong(cik.replaceAll("[^0-9]", "")));
       LOGGER.info("  Normalized CIK: {}", normalizedCik);
 
-      // Create CIK directory in the configured cache location
-      // Use the baseDir passed in from downloadSecData
-      File cikDir = new File(baseDir, normalizedCik);
-      cikDir.mkdirs();
-      LOGGER.info("  CIK directory: {}", cikDir.getAbsolutePath());
+      // Metadata (submissions.json and processed_filings.manifest) goes to operating directory
+      File cikMetadataDir = new File(this.secOperatingDirectory, "cik=" + normalizedCik);
+      cikMetadataDir.mkdirs();
+      LOGGER.info("  CIK metadata directory: {}", cikMetadataDir.getAbsolutePath());
+
+      // Raw content (XBRL/HTML files) goes to cache directory
+      String cikCachePath = storageProvider.resolvePath(this.secCacheDirectory, normalizedCik);
+      try {
+        storageProvider.createDirectories(cikCachePath);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to create CIK cache directory: {}", e.getMessage());
+      }
+      LOGGER.info("  CIK cache directory: {}", cikCachePath);
 
       // Download submissions metadata with ETag-based caching
-      File submissionsFile = new File(cikDir, "submissions.json");
+      File submissionsFile = new File(cikMetadataDir, "submissions.json");
       LOGGER.info("  Checking submissions file: {} (exists={})", submissionsFile.getAbsolutePath(), submissionsFile.exists());
 
       // Check if submissions are cached using manifest
@@ -1287,7 +1295,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             // Clean up macOS metadata files after writing
-            storageProvider.cleanupMacosMetadata(cikDir.getAbsolutePath());
+            storageProvider.cleanupMacosMetadata(cikCachePath);
 
             // Update manifest with ETag or Last-Modified
             if (cacheManifest != null) {
@@ -1313,7 +1321,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               // Save manifest immediately to avoid losing cache metadata on interruption
               String cacheDir = getGovDataCacheDir();
               if (cacheDir != null) {
-                String secCacheDir = cacheDir + "/sec";
+                String secCacheDir = storageProvider.resolvePath(cacheDir, "sec");
                 cacheManifest.save(this.secOperatingDirectory);
               }
 
@@ -1433,7 +1441,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         filingsToDownload.add(
             new FilingToDownload(normalizedCik, accession,
-            primaryDoc, form, filingDate, reportDate, cikDir, hasInlineXBRL));
+            primaryDoc, form, filingDate, reportDate, cikCachePath, hasInlineXBRL));
       }
 
       if (skipped424B > 0) {
@@ -1449,9 +1457,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Skipped {} filings for CIK {} (outside year range {}-{})", skippedYearRange, normalizedCik, startYear, endYear);
       }
 
-      // Load manifest once for ALL filings in this CIK (huge performance improvement)
-      // Reading a 476K-line file on every filing check is wasteful and causes stale reads
-      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
+      // Load per-CIK manifest (huge performance improvement over global manifest)
+      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + normalizedCik);
+      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
       Set<String> processedFilingsManifest = new HashSet<>();
       if (manifestFile.exists()) {
         try {
@@ -1460,7 +1468,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             LOGGER.debug("Loaded {} entries from manifest for CIK {}", processedFilingsManifest.size(), normalizedCik);
           }
         } catch (IOException e) {
-          LOGGER.warn("Failed to load manifest file: " + e.getMessage());
+          LOGGER.warn("Failed to load manifest file for CIK {}: {}", normalizedCik, e.getMessage());
         }
       }
 
@@ -1554,18 +1562,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     final String form;
     final String filingDate;
     final String reportDate;  // Period end date (for XBRL filename construction)
-    final File cikDir;
+    final String cikCachePath;
     final boolean hasInlineXBRL;
 
     FilingToDownload(String cik, String accession, String primaryDoc,
-        String form, String filingDate, String reportDate, File cikDir, boolean hasInlineXBRL) {
+        String form, String filingDate, String reportDate, String cikCachePath, boolean hasInlineXBRL) {
       this.cik = cik;
       this.accession = accession;
       this.primaryDoc = primaryDoc;
       this.form = form;
       this.filingDate = filingDate;
       this.reportDate = reportDate;
-      this.cikDir = cikDir;
+      this.cikCachePath = cikCachePath;
       this.hasInlineXBRL = hasInlineXBRL;
     }
   }
@@ -1775,28 +1783,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 
-      // Use .aperio/sec directory for metadata (not cache directory or S3)
-      // .conversions.json requires file locking which doesn't work on S3
-      // The directory structure must mirror the cache directory structure
-      String workingDir = System.getProperty("user.dir");
-
-      // Calculate relative path from cache base to source file's parent
-      String cacheHome = getGovDataCacheDir();
-      if (cacheHome == null) {
-        cacheHome = System.getProperty("user.home") + "/.govdata-cache";
-      }
-      File cacheBaseDir = new File(cacheHome, "sec");
+      // Source files are now in operating directory: .aperio/sec/raw/CIK/ACCESSION/file.xml
+      // Metadata (.conversions.json) goes in same directory as source file
       File sourceParentDir = sourceFile.getParentFile();
-
-      // Get relative path from cache base to source parent
-      String relativePath = cacheBaseDir.toPath().relativize(sourceParentDir.toPath()).toString();
-
-      // Create mirrored directory structure under .aperio/sec
-      File operatingCacheDirFile = new File(workingDir, ".aperio/sec/" + relativePath);
-      if (!operatingCacheDirFile.exists()) {
-        operatingCacheDirFile.mkdirs();
+      if (!sourceParentDir.exists()) {
+        sourceParentDir.mkdirs();
       }
-      ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
+      ConversionMetadata metadata = new ConversionMetadata(sourceParentDir);
       ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
       record.originalFile = sourceFile.getAbsolutePath();
       record.sourceFile = sourceFile.getParentFile().getName();  // accession number
@@ -1813,7 +1806,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("No parquet files created for " + sourceFile.getName());
       } else {
         // Add to manifest after successful conversion
-        addToManifest(baseDir, sourceFile, new File(secParquetDirPath));
+        addToManifest(sourceFile.getAbsolutePath(), secParquetDirPath);
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("Successfully processed filing: {} - created {} parquet files",
               sourceFile.getName(), outputFiles.size());
@@ -1840,7 +1833,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         Thread.sleep(currentRateLimitDelayMs.get());
         try {
           downloadFilingDocument(provider, filing.cik, filing.accession,
-              filing.primaryDoc, filing.form, filing.filingDate, filing.reportDate, filing.cikDir, filing.hasInlineXBRL);
+              filing.primaryDoc, filing.form, filing.filingDate, filing.reportDate, filing.cikCachePath, filing.hasInlineXBRL);
           break; // Success - exit retry loop
         } finally {
           rateLimiter.release();
@@ -1878,10 +1871,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private void downloadFilingDocument(SecHttpStorageProvider provider, String cik,
-      String accession, String primaryDoc, String form, String filingDate, String reportDate, File cikDir, boolean hasInlineXBRL) {
+      String accession, String primaryDoc, String form, String filingDate, String reportDate, String cikCachePath, boolean hasInlineXBRL) {
     try {
-      // Check manifest first to see if this filing was already fully processed
-      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
+      // Check per-CIK manifest first to see if this filing was already fully processed
+      File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
+      File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
       String manifestKey = cik + "|" + accession + "|" + form + "|" + filingDate;
 
       // Check if already in manifest or has all required Parquet files
@@ -1899,9 +1893,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return;
       } else if (status == FilingStatus.HAS_ALL_PARQUET) {
         // Has all Parquet files but not in manifest - add to manifest
-        addToManifest(cikDir.getParentFile(), null, null);
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Filing has all Parquet files, added to manifest: {} {}", form, filingDate);
+        try {
+          cikManifestDir.mkdirs();
+          synchronized (("manifest_" + cik).intern()) {
+            String entryPrefix = cik + "|" + accession + "|";
+            String manifestEntry = entryPrefix + "PROCESSED|" + System.currentTimeMillis();
+
+            // Write to manifest
+            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
+              pw.println(manifestEntry);
+            }
+
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Added filing to manifest (has all Parquet files): {} {}", form, filingDate);
+            }
+          }
+        } catch (IOException e) {
+          LOGGER.warn("Failed to add filing to manifest: {}", e.getMessage());
         }
         return;
       }
@@ -1910,8 +1918,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Create accession directory
       String accessionClean = accession.replace("-", "");
-      File accessionDir = new File(cikDir, accessionClean);
-      accessionDir.mkdirs();
+      String accessionPath = storageProvider.resolvePath(cikCachePath, accessionClean);
+      try {
+        storageProvider.createDirectories(accessionPath);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to create accession directory: {}", e.getMessage());
+      }
 
       // Download both HTML (for preview) and XBRL (for data extraction)
       boolean needHtml = false;
@@ -1921,32 +1933,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean isInsiderForm = form.equals("3") || form.equals("4") || form.equals("5");
 
       // Check if HTML file exists (for human-readable preview)
-      File htmlFile = new File(accessionDir, primaryDoc);
+      String htmlPath = storageProvider.resolvePath(accessionPath, primaryDoc);
       // Create parent directory if primaryDoc contains path (e.g., xslF345X05/wk-form4_*.xml for Form 4)
       if (primaryDoc.contains("/")) {
-        htmlFile.getParentFile().mkdirs();
+        String parentPath = htmlPath.substring(0, htmlPath.lastIndexOf('/'));
+        try {
+          storageProvider.createDirectories(parentPath);
+        } catch (IOException e) {
+          LOGGER.warn("Failed to create subdirectory for primary doc: {}", e.getMessage());
+        }
       }
       // Download primary document for ALL filing types (including insider forms)
-      if (!htmlFile.exists() || htmlFile.length() == 0) {
+      boolean htmlExists = false;
+      try {
+        htmlExists = storageProvider.exists(htmlPath) && storageProvider.getMetadata(htmlPath).getSize() > 0;
+      } catch (IOException e) {
+        // File doesn't exist
+      }
+      if (!htmlExists) {
         needHtml = true;
       }
 
       // Check if XBRL file exists (for structured data)
       String xbrlDoc;
-      File xbrlFile;
+      String xbrlPath;
       boolean confirmedInlineXbrl = false;  // Track if we've confirmed inline XBRL by HTML inspection
 
       if (isInsiderForm) {
         // For Forms 3/4/5, we'll save the extracted XML as ownership.xml
         xbrlDoc = "ownership.xml";
-        xbrlFile = new File(accessionDir, xbrlDoc);
+        xbrlPath = storageProvider.resolvePath(accessionPath, xbrlDoc);
       } else {
         // For other forms, detect XBRL type and filename
         // Strategy: Check HTML file FIRST for inline XBRL (most reliable), then try FilingSummary.xml
 
         // Step 1: If HTML exists, check for inline XBRL markers (authoritative test)
-        if (htmlFile.exists()) {
-          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
+        if (htmlExists) {
+          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlPath);
           if (confirmedInlineXbrl) {
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("Confirmed inline XBRL by HTML inspection: {}", primaryDoc);
@@ -1957,7 +1980,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         if (confirmedInlineXbrl || hasInlineXBRL) {
           // Inline XBRL confirmed - no separate XBRL file, use placeholder
           xbrlDoc = primaryDoc.replace(".htm", "_inline.xml");
-          xbrlFile = new File(accessionDir, xbrlDoc);
+          xbrlPath = storageProvider.resolvePath(accessionPath, xbrlDoc);
           if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Filing has inline XBRL, skipping separate XBRL file detection: {}", primaryDoc);
           }
@@ -1969,19 +1992,29 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Fallback to old pattern
             xbrlDoc = primaryDoc.replace(".htm", "_htm.xml");
           }
-          xbrlFile = new File(accessionDir, xbrlDoc);
+          xbrlPath = storageProvider.resolvePath(accessionPath, xbrlDoc);
         }
       }
 
       // Create parent directory if xbrlDoc contains path
       if (xbrlDoc.contains("/")) {
-        xbrlFile.getParentFile().mkdirs();
+        String parentPath = xbrlPath.substring(0, xbrlPath.lastIndexOf('/'));
+        try {
+          storageProvider.createDirectories(parentPath);
+        } catch (IOException e) {
+          LOGGER.warn("Failed to create subdirectory for XBRL doc: {}", e.getMessage());
+        }
       }
 
       // DEFER XBRL download decision until AFTER HTML is downloaded
       // We can only make the decision after checking the HTML file for inline XBRL markers
       // For now, just check if we already have the XBRL file or know it doesn't exist
-      boolean xbrlAlreadyExists = xbrlFile.exists() && xbrlFile.length() > 0;
+      boolean xbrlAlreadyExists = false;
+      try {
+        xbrlAlreadyExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
+      } catch (IOException e) {
+        // File doesn't exist
+      }
       boolean xbrlKnownNotFound = cacheManifest.isFileNotFound(cik, accession, xbrlDoc);
 
       if (LOGGER.isDebugEnabled()) {
@@ -2010,28 +2043,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Critical fix: Detect inline XBRL in cached HTML files that need Parquet processing
       // This addresses the core cache effectiveness issue where HTML files contain inline XBRL
       // but Parquet files were never generated due to cache logic gaps
-      if (htmlFile.exists()) {
-        boolean htmlHasInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
-
-        if (htmlHasInlineXbrl && needParquetReprocessing) {
-          // This is the critical case: HTML file exists with inline XBRL but Parquet files are missing
-          // Schedule the HTML file for inline XBRL processing
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Cached HTML file contains inline XBRL, scheduling for processing: {} {}", form, filingDate);
-          }
-
-          // Ensure the HTML file gets scheduled for inline XBRL processing
-          if (!scheduledForInlineXbrlProcessing.contains(htmlFile)) {
-            scheduledForInlineXbrlProcessing.add(htmlFile);
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Scheduled HTML file for inline XBRL processing: {}", htmlFile.getName());
-            }
-          }
-
-          // Since we have inline XBRL in HTML, we don't need separate XBRL download
-          needXbrl = false;
-        }
-      }
+      // NOTE: Disabled because needParquetReprocessing is always false (Parquet validation disabled)
+      // and because scheduling requires File objects which don't work with remote storage
 
       if (!needHtml && !needXbrl && !needParquetReprocessing) {
         if (LOGGER.isDebugEnabled()) {
@@ -2054,16 +2067,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             cik, accessionClean, primaryDoc);
 
         try (InputStream is = provider.openInputStream(htmlUrl)) {
-          try (FileOutputStream fos = new FileOutputStream(htmlFile)) {
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = is.read(buffer)) != -1) {
-              fos.write(buffer, 0, bytesRead);
-            }
-          }
+          storageProvider.writeFile(htmlPath, is);
           if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Downloaded HTML filing: {} {} ({})", form, filingDate, primaryDoc);
           }
+          htmlExists = true;
         } catch (Exception e) {
           LOGGER.debug("Could not download HTML: " + e.getMessage());
           return; // Can't proceed without HTML
@@ -2071,8 +2079,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         // CRITICAL: After HTML download, check for inline XBRL to make XBRL download decision
         // This is the authoritative check - don't rely solely on submissions.json isInlineXBRL flag
-        if (htmlFile.exists()) {
-          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlFile);
+        if (htmlExists) {
+          confirmedInlineXbrl = checkHtmlForInlineXbrl(htmlPath);
           if (confirmedInlineXbrl) {
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("HTML contains inline XBRL, will skip separate XBRL download: {} {}", form, filingDate);
@@ -2088,7 +2096,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // 1. XBRL file doesn't exist locally
       // 2. NOT already marked as not found in manifest
       // 3. NOT inline XBRL (per submissions.json OR HTML inspection)
-      if ((!xbrlFile.exists() || xbrlFile.length() == 0)
+      boolean xbrlExists = false;
+      try {
+        xbrlExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
+      } catch (IOException e) {
+        // File doesn't exist
+      }
+      if (!xbrlExists
           && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)
           && !hasInlineXBRL
           && !confirmedInlineXbrl) {
@@ -2136,9 +2150,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                     txtContent.substring(xmlStart, xmlEnd + "</ownershipDocument>".length());
 
                 // Save the extracted XML
-                try (FileWriter writer = new FileWriter(xbrlFile)) {
-                  writer.write(xmlContent);
-                }
+                storageProvider.writeFile(xbrlPath, xmlContent.getBytes(StandardCharsets.UTF_8));
                 if (LOGGER.isDebugEnabled()) {
                   LOGGER.debug("Extracted ownership XML for Form {} {}", form, filingDate);
                 }
@@ -2152,13 +2164,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
           } else {
             // For other forms, try FilingSummary.xml first for accurate filename
-            String actualXbrlFilename = getXbrlFilenameFromSummary(provider, cik, accession, accessionDir);
+            String actualXbrlFilename = getXbrlFilenameFromSummary(provider, cik, accession, accessionPath);
             if (actualXbrlFilename != null && !actualXbrlFilename.equals(xbrlDoc)) {
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("FilingSummary.xml provided more accurate filename: {} (was: {})", actualXbrlFilename, xbrlDoc);
               }
               xbrlDoc = actualXbrlFilename;
-              xbrlFile = new File(accessionDir, xbrlDoc);
+              xbrlPath = storageProvider.resolvePath(accessionPath, xbrlDoc);
             }
 
             // Download the XBRL file
@@ -2167,13 +2179,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 cik, accessionClean, xbrlDoc);
 
             try (InputStream is = provider.openInputStream(xbrlUrl)) {
-              try (FileOutputStream fos = new FileOutputStream(xbrlFile)) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = is.read(buffer)) != -1) {
-                  fos.write(buffer, 0, bytesRead);
-                }
-              }
+              storageProvider.writeFile(xbrlPath, is);
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Downloaded XBRL filing: {} {} ({})", form, filingDate, xbrlDoc);
               }
@@ -2191,38 +2197,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      // STREAMING PROCESSING: Process filing immediately after download
-      // Check if we have all required source files and process them
-      boolean shouldProcess = false;
-      File fileToProcess = null;
-
-      if (hasInlineXBRL && htmlFile.exists()) {
-        shouldProcess = true;
-        fileToProcess = htmlFile;
-      } else if (xbrlFile.exists() && xbrlFile.length() > 0) {
-        shouldProcess = true;
-        fileToProcess = xbrlFile;
-      } else if (isInsiderForm && xbrlFile.exists() && xbrlFile.length() > 0) {
-        shouldProcess = true;
-        fileToProcess = xbrlFile;
-      }
-
-      if (shouldProcess && fileToProcess != null) {
-        // Process this filing immediately in a separate thread
-        final File finalFileToProcess = fileToProcess;
-        final File baseDirectory = cikDir.getParentFile();
-        CompletableFuture<Void> processingFuture = CompletableFuture.runAsync(() -> {
-          processSingleFiling(finalFileToProcess, baseDirectory);
-        }, conversionExecutor);
-
-        // Track the processing future (but don't wait for it)
-        filingProcessingFutures.add(processingFuture);
-
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Scheduled immediate processing for filing: {} {}", form, filingDate);
+      // INLINE PROCESSING: Convert XBRL/HTML to Parquet immediately after download
+      // This works for both local and S3 cache since converter uses StorageProvider
+      try {
+        String fileToConvert = null;
+        if (xbrlExists) {
+          fileToConvert = xbrlPath;
+        } else if (htmlExists && confirmedInlineXbrl) {
+          fileToConvert = htmlPath;
         }
-      } else {
-        LOGGER.debug("Filing downloaded, but missing required files for processing: {} {}", form, filingDate);
+
+        if (fileToConvert != null) {
+          // Get parquet directory
+          String govdataParquetDir = getGovDataParquetDir();
+          String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
+
+          if (secParquetDirPath != null) {
+            // Check if text similarity is enabled
+            Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+            boolean enableVectorization = textSimilarityConfig != null &&
+                Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+
+            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
+
+            // Convert using String paths (works for both local and S3)
+            List<java.io.File> outputFiles = converter.convertInternal(fileToConvert, secParquetDirPath, null);
+
+            if (!outputFiles.isEmpty()) {
+              // Add to manifest after successful conversion
+              addToManifest(fileToConvert, secParquetDirPath);
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Converted filing inline: {} {} ({} parquet files)", form, filingDate, outputFiles.size());
+              }
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to convert filing {}: {}", accession, e.getMessage());
       }
 
     } catch (Exception e) {
@@ -2236,11 +2247,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param provider HTTP storage provider
    * @param cik CIK of the company
    * @param accession Accession number
-   * @param accessionDir Directory for this filing
+   * @param accessionPath Path to accession directory for this filing
    * @return XBRL instance document filename, or null if unavailable
    */
   private String getXbrlFilenameFromSummary(SecHttpStorageProvider provider, String cik,
-      String accession, File accessionDir) {
+      String accession, String accessionPath) {
     // Check cache first
     String cachedFilename = cacheManifest.getCachedFilingSummaryXbrlFilename(cik, accession);
     if (cachedFilename != null) {
@@ -2264,19 +2275,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/FilingSummary.xml", cik, accessionClean);
 
     try {
-      File summaryFile = new File(accessionDir, "FilingSummary.xml");
+      String summaryPath = storageProvider.resolvePath(accessionPath, "FilingSummary.xml");
       try (InputStream is = provider.openInputStream(summaryUrl)) {
-        try (FileOutputStream fos = new FileOutputStream(summaryFile)) {
-          byte[] buffer = new byte[8192];
-          int bytesRead;
-          while ((bytesRead = is.read(buffer)) != -1) {
-            fos.write(buffer, 0, bytesRead);
-          }
-        }
+        storageProvider.writeFile(summaryPath, is);
       }
 
       // Parse XML to extract instance document filename
-      String xbrlFilename = parseXbrlFilenameFromSummary(summaryFile);
+      String xbrlFilename = parseXbrlFilenameFromSummary(summaryPath);
       if (xbrlFilename != null) {
         // Cache the result
         cacheManifest.cacheFilingSummaryXbrlFilename(cik, accession, xbrlFilename);
@@ -2302,41 +2307,43 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Parse XBRL instance document filename from FilingSummary.xml.
    *
-   * @param summaryFile The FilingSummary.xml file
+   * @param summaryPath Path to the FilingSummary.xml file
    * @return Instance document filename, or null if not found
    */
-  private String parseXbrlFilenameFromSummary(File summaryFile) {
+  private String parseXbrlFilenameFromSummary(String summaryPath) {
     try {
       javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
       javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
-      org.w3c.dom.Document doc = builder.parse(summaryFile);
+      try (InputStream is = storageProvider.openInputStream(summaryPath)) {
+        org.w3c.dom.Document doc = builder.parse(is);
 
-      // Look for <InstanceReport> element
-      org.w3c.dom.NodeList instanceReports = doc.getElementsByTagName("InstanceReport");
-      if (instanceReports.getLength() > 0) {
-        org.w3c.dom.Node instanceReport = instanceReports.item(0);
-        return instanceReport.getTextContent().trim();
-      }
+        // Look for <InstanceReport> element
+        org.w3c.dom.NodeList instanceReports = doc.getElementsByTagName("InstanceReport");
+        if (instanceReports.getLength() > 0) {
+          org.w3c.dom.Node instanceReport = instanceReports.item(0);
+          return instanceReport.getTextContent().trim();
+        }
 
-      // Fallback: look for <Report> with type="instance"
-      org.w3c.dom.NodeList reports = doc.getElementsByTagName("Report");
-      for (int i = 0; i < reports.getLength(); i++) {
-        org.w3c.dom.Node report = reports.item(i);
-        if (report.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
-          org.w3c.dom.Element reportElement = (org.w3c.dom.Element) report;
-          String reportType = reportElement.getAttribute("type");
-          if ("instance".equalsIgnoreCase(reportType)) {
-            org.w3c.dom.NodeList htmlFileNames = reportElement.getElementsByTagName("HtmlFileName");
-            if (htmlFileNames.getLength() > 0) {
-              String htmlFileName = htmlFileNames.item(0).getTextContent().trim();
-              // Convert .htm to .xml for XBRL instance
-              return htmlFileName.replace(".htm", ".xml").replace(".html", ".xml");
+        // Fallback: look for <Report> with type="instance"
+        org.w3c.dom.NodeList reports = doc.getElementsByTagName("Report");
+        for (int i = 0; i < reports.getLength(); i++) {
+          org.w3c.dom.Node report = reports.item(i);
+          if (report.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
+            org.w3c.dom.Element reportElement = (org.w3c.dom.Element) report;
+            String reportType = reportElement.getAttribute("type");
+            if ("instance".equalsIgnoreCase(reportType)) {
+              org.w3c.dom.NodeList htmlFileNames = reportElement.getElementsByTagName("HtmlFileName");
+              if (htmlFileNames.getLength() > 0) {
+                String htmlFileName = htmlFileNames.item(0).getTextContent().trim();
+                // Convert .htm to .xml for XBRL instance
+                return htmlFileName.replace(".htm", ".xml").replace(".html", ".xml");
+              }
             }
           }
         }
-      }
 
-      return null;
+        return null;
+      }
     } catch (Exception e) {
       LOGGER.debug("Failed to parse FilingSummary.xml: {}", e.getMessage());
       return null;
@@ -2393,11 +2400,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param htmlFile The HTML file to check
    * @return true if inline XBRL detected, false otherwise
    */
-  private boolean checkHtmlForInlineXbrl(File htmlFile) {
+  private boolean checkHtmlForInlineXbrl(String htmlPath) {
     try {
       byte[] headerBytes = new byte[10240];
-      try (FileInputStream fis = new FileInputStream(htmlFile)) {
-        int bytesRead = fis.read(headerBytes);
+      try (InputStream is = storageProvider.openInputStream(htmlPath)) {
+        int bytesRead = is.read(headerBytes);
+
+        // Fully drain the remaining stream to avoid S3ObjectInputStream warnings
+        // when the storage provider is S3 and returns raw S3ObjectInputStream
+        byte[] drainBuffer = new byte[8192];
+        while (is.read(drainBuffer) != -1) {
+          // Just drain, don't process
+        }
+
         if (bytesRead > 0) {
           String header = new String(headerBytes, 0, bytesRead);
           boolean hasInlineXbrl = header.contains("xmlns:ix=")
@@ -2406,7 +2421,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               || header.contains("iXBRL");
 
           if (LOGGER.isDebugEnabled() && hasInlineXbrl) {
-            LOGGER.debug("Detected inline XBRL in HTML file: {}", htmlFile.getName());
+            String fileName = htmlPath.substring(htmlPath.lastIndexOf('/') + 1);
+            LOGGER.debug("Detected inline XBRL in HTML file: {}", fileName);
           }
           return hasInlineXbrl;
         }
@@ -2438,13 +2454,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
         cik, accessionClean, primaryDoc);
     try (InputStream is = provider.openInputStream(htmlUrl)) {
-      try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-          fos.write(buffer, 0, bytesRead);
-        }
-      }
+      storageProvider.writeFile(outputFile.getAbsolutePath(), is);
     }
 
     if (LOGGER.isDebugEnabled()) {
@@ -2452,338 +2462,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  private void createSecTablesFromXbrl(File baseDir, List<String> ciks, int startYear, int endYear) {
-    // Ensure executors are initialized
-    initializeExecutors();
-
-    LOGGER.debug("Creating SEC tables from XBRL data");
-    LOGGER.debug("DEBUG: createSecTablesFromXbrl START");
-    if (LOGGER.isDebugEnabled()) {
-      LOGGER.debug("DEBUG: baseDir={}", baseDir.getAbsolutePath());
-      LOGGER.debug("DEBUG: ciks.size()={}", ciks.size());
-      LOGGER.debug("DEBUG: startYear={}, endYear={}", startYear, endYear);
-    }
-
-    try {
-      // baseDir points to {cache}/sec where CIK subdirectories are located
-      File secRawDir = baseDir;
-      // Get parquet directory from interface method
-      String govdataParquetDir = getGovDataParquetDir();
-      String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
-      // Parquet directory uses unified GOVDATA_PARQUET_DIR structure
-      // Don't create File or call mkdirs() - parquet path may be S3
-      // StorageProvider will create directories as needed when writing files
-
-      // TODO: XbrlToParquetConverter and ConversionMetadata use File APIs - need S3 update
-      // For now, create temporary File object for API compatibility (won't do actual File I/O)
-      File secParquetDir = new File(secParquetDirPath);
-
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("DEBUG: secRawDir={} exists={}", secRawDir.getAbsolutePath(), secRawDir.exists());
-        LOGGER.debug("DEBUG: secParquetDirPath={}", secParquetDirPath);
-      }
-      LOGGER.info("Processing XBRL files from " + secRawDir + " to create Parquet tables");
-
-      // Collect all XBRL files to convert
-      List<File> xbrlFilesToConvert = new ArrayList<>();
-      int skipped424BFilings = 0;  // Track excluded 424B and S-* forms
-
-      // Load manifest once for performance (avoid repeated file I/O)
-      File manifestFile = new File(this.secOperatingDirectory, "processed_filings.manifest");
-      Set<String> processedFilingsManifest = new HashSet<>();
-      if (manifestFile.exists()) {
-        try {
-          processedFilingsManifest = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
-          LOGGER.info("Loaded {} entries from manifest", processedFilingsManifest.size());
-        } catch (IOException e) {
-          LOGGER.warn("Failed to load manifest file: " + e.getMessage());
-        }
-      }
-
-      // Process all downloaded XBRL files
-      for (String cik : ciks) {
-        String normalizedCik = String.format("%010d", Long.parseLong(cik.replaceAll("[^0-9]", "")));
-        File cikDir = new File(secRawDir, normalizedCik);
-
-        if (!cikDir.exists()) {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("No data directory found for CIK {}", normalizedCik);
-          }
-          continue;
-        }
-
-        // Load submissions.json to check isXBRL flag and form types
-        Map<String, Boolean> accessionIsXbrlMap = new HashMap<>();
-        Map<String, String> accessionFormTypeMap = new HashMap<>();
-        File submissionsFile = new File(cikDir, "submissions.json");
-        if (submissionsFile.exists()) {
-          try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode submissionsJson = mapper.readTree(submissionsFile);
-            JsonNode filings = submissionsJson.get("filings");
-            if (filings != null) {
-              JsonNode recent = filings.get("recent");
-              if (recent != null) {
-                JsonNode accessionNumbers = recent.get("accessionNumber");
-                JsonNode isXbrlArray = recent.get("isXBRL");
-                JsonNode formsArray = recent.get("form");
-                if (accessionNumbers != null && isXbrlArray != null && accessionNumbers.isArray() && isXbrlArray.isArray()) {
-                  for (int i = 0; i < accessionNumbers.size(); i++) {
-                    String accessionNumber = accessionNumbers.get(i).asText();
-                    int isXbrl = isXbrlArray.get(i).asInt();
-                    accessionIsXbrlMap.put(accessionNumber, isXbrl == 1);
-
-                    // Also capture form type to filter out 424B forms
-                    if (formsArray != null && formsArray.isArray() && i < formsArray.size()) {
-                      String formType = formsArray.get(i).asText();
-                      accessionFormTypeMap.put(accessionNumber, formType);
-                    }
-                  }
-                }
-              }
-            }
-          } catch (Exception e) {
-            LOGGER.warn("Failed to load submissions.json for CIK {}: {}", normalizedCik, e.getMessage());
-          }
-        }
-
-        // Process each filing in the CIK directory
-        File[] accessionDirs = cikDir.listFiles(File::isDirectory);
-        if (accessionDirs != null) {
-          for (File accessionDir : accessionDirs) {
-            String accessionNumber = accessionDir.getName();
-
-            // Normalize accession number to match submissions.json format (add dashes)
-            // Directory: 000119312521025910 → Submissions: 0001193125-21-025910
-            String normalizedAccession = accessionNumber;
-            if (accessionNumber.length() == 18 && !accessionNumber.contains("-")) {
-              normalizedAccession = accessionNumber.substring(0, 10) + "-" +
-                                   accessionNumber.substring(10, 12) + "-" +
-                                   accessionNumber.substring(12);
-            }
-
-            // Skip 424B and S-* forms - prospectuses and registration statements that
-            // never contain useful financial XBRL data, even if SEC metadata incorrectly
-            // flags them as isXBRL=1
-            // Note: This is a safety check for cached files; download phase now filters these
-            String formType = accessionFormTypeMap.get(normalizedAccession);
-            if (formType != null && (formType.startsWith("424B") || formType.startsWith("S-"))) {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Skipping {} filing directory: {} (excluded form type)",
-                    formType, accessionDir.getName());
-              }
-              skipped424BFilings++;  // Track all excluded filings
-              continue;
-            }
-
-            // Check if this accession has XBRL data according to submissions.json
-            Boolean isXbrl = accessionIsXbrlMap.get(normalizedAccession);
-
-            // Find XBRL and HTML files in this accession directory
-            // Exclude macOS metadata files that start with ._
-            File[] xbrlFiles = accessionDir.listFiles((dir, name) ->
-                !name.startsWith("._") && (
-                name.endsWith("_htm.xml") || name.endsWith(".xml") ||
-                name.endsWith(".htm") || name.endsWith(".html")));
-
-            if (xbrlFiles != null) {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Found {} XBRL/HTML files in {} (isXBRL={})", xbrlFiles.length, accessionDir.getName(), isXbrl);
-              }
-              for (File xbrlFile : xbrlFiles) {
-                // Use submissions.json to determine if this filing has XBRL data
-                // Skip processing if isXBRL flag is false (no XBRL data at all)
-                if (Boolean.FALSE.equals(isXbrl)) {
-                  if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("  Skipping non-XBRL filing: {} (isXBRL=false)", xbrlFile.getName());
-                  }
-                  continue;
-                }
-
-                // Check form type against whitelist (skip 424B prospectuses and S-* registration statements)
-                // Also skip files where form type cannot be determined (formType == null)
-                if (formType == null) {
-                  LOGGER.warn("  Skipping file with unknown form type: {} (accession={})", xbrlFile.getName(), normalizedAccession);
-                  continue;
-                }
-                if (!isFormTypeAllowed(formType)) {
-                  LOGGER.info("  Skipping filing type not in whitelist: {} (form={})", xbrlFile.getName(), formType);
-                  continue;
-                }
-
-                // Check manifest to see if this filing is already fully processed
-                FilingStatus status =
-                    checkFilingStatusInMemory(normalizedCik, normalizedAccession, formType != null ? formType : "UNKNOWN", "", processedFilingsManifest);
-
-                if (status == FilingStatus.FULLY_PROCESSED) {
-                  if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("  Skipping already processed filing: {} (CIK={}, Accession={})",
-                        xbrlFile.getName(), normalizedCik, normalizedAccession);
-                  }
-                  continue;
-                }
-
-                LOGGER.info("  SCHEDULING FOR CONVERSION: {} (CIK={}, Accession={}, Status={})",
-                    xbrlFile.getName(), normalizedCik, normalizedAccession, status);
-                xbrlFilesToConvert.add(xbrlFile);
-              }
-            } else {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("No XBRL/HTML files found in {}", accessionDir.getName());
-              }
-            }
-          }
-        }
-      }
-
-      // Add any files scheduled for reconversion (missing Parquet files)
-      if (!scheduledForReconversion.isEmpty()) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Adding {} existing XBRL files for reconversion", scheduledForReconversion.size());
-        }
-        xbrlFilesToConvert.addAll(scheduledForReconversion);
-        scheduledForReconversion.clear();
-      }
-
-      // Critical fix: Add HTML files with inline XBRL that need Parquet processing
-      // This addresses the cache effectiveness issue where HTML files contain inline XBRL
-      // but were never processed because cache logic didn't recognize them as processable files
-      if (!scheduledForInlineXbrlProcessing.isEmpty()) {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Adding {} cached HTML files with inline XBRL for processing", scheduledForInlineXbrlProcessing.size());
-        }
-        xbrlFilesToConvert.addAll(scheduledForInlineXbrlProcessing);
-        scheduledForInlineXbrlProcessing.clear();
-      }
-
-      // Convert XBRL files in parallel
-      totalConversions.set(xbrlFilesToConvert.size());
-      LOGGER.info("Scheduling " + xbrlFilesToConvert.size() + " XBRL files for conversion");
-
-      for (File xbrlFile : xbrlFilesToConvert) {
-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-          try {
-            // Use the storageProvider that was passed from GovDataSchemaFactory
-            if (this.storageProvider == null) {
-              LOGGER.error("StorageProvider is null - cannot convert XBRL to Parquet");
-              throw new IllegalStateException("StorageProvider not initialized - must be provided by GovDataSchemaFactory");
-            }
-            // Check if text similarity is enabled from operand
-            Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
-            boolean enableVectorization = textSimilarityConfig != null &&
-                Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
-
-            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
-
-            // Use .aperio/sec directory for metadata (not cache directory or S3)
-            // .conversions.json requires file locking which doesn't work on S3
-            // The directory structure must mirror the cache directory structure
-            String workingDir = System.getProperty("user.dir");
-
-            // Calculate relative path from cache base to source file's parent
-            String cacheHome = getGovDataCacheDir();
-            if (cacheHome == null) {
-              cacheHome = System.getProperty("user.home") + "/.govdata-cache";
-            }
-            File cacheBaseDir = new File(cacheHome, "sec");
-            File sourceParentDir = xbrlFile.getParentFile();
-
-            // Get relative path from cache base to source parent
-            String relativePath = cacheBaseDir.toPath().relativize(sourceParentDir.toPath()).toString();
-
-            // Create mirrored directory structure under .aperio/sec
-            File operatingCacheDirFile = new File(workingDir, ".aperio/sec/" + relativePath);
-            if (!operatingCacheDirFile.exists()) {
-              operatingCacheDirFile.mkdirs();
-            }
-            ConversionMetadata metadata = new ConversionMetadata(operatingCacheDirFile);
-            ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
-            record.originalFile = xbrlFile.getAbsolutePath();
-            // Store accession number (parent directory name) in the sourceFile field
-            record.sourceFile = xbrlFile.getParentFile().getName();
-            metadata.recordConversion(xbrlFile, record);
-
-            // The converter now properly extracts metadata from the XML content itself
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("DEBUG: Starting conversion of {} to parquet in {}", xbrlFile.getAbsolutePath(), secParquetDirPath);
-            }
-            // Use S3-compatible convertInternal method
-            List<File> outputFiles = converter.convertInternal(xbrlFile.getAbsolutePath(), secParquetDirPath, metadata);
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("DEBUG: Conversion completed for {} - created {} parquet files", xbrlFile.getName(), outputFiles.size());
-            }
-            if (outputFiles.isEmpty()) {
-              LOGGER.warn("DEBUG: No parquet files created for " + xbrlFile.getName());
-            } else {
-              for (File outputFile : outputFiles) {
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug("DEBUG: Created parquet file: {}", outputFile.getAbsolutePath());
-                }
-              }
-            }
-
-            // Add to manifest after successful conversion
-            addToManifest(xbrlFile.getParentFile().getParentFile().getParentFile(), xbrlFile, secParquetDir);
-          } catch (java.nio.channels.OverlappingFileLockException e) {
-            // Non-fatal: Another thread is processing this file, skip it
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Skipping {} - already being processed by another thread", xbrlFile.getName());
-            }
-          } catch (Exception e) {
-            // Check if the cause is an OverlappingFileLockException
-            Throwable cause = e.getCause();
-            if (cause instanceof java.nio.channels.OverlappingFileLockException) {
-              // Non-fatal: Another thread is processing this file, skip it
-              if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Skipping {} - already being processed by another thread", xbrlFile.getName());
-            }
-            } else {
-              LOGGER.error("DEBUG: Failed to convert {} - Exception: {}", xbrlFile.getName(), e.getMessage(), e);
-            }
-          }
-          int completed = completedConversions.incrementAndGet();
-          if (completed % 10 == 0) {
-            if (LOGGER.isDebugEnabled()) {
-              LOGGER.debug("Conversion progress: {}/{} files", completed, totalConversions.get());
-            }
-          }
-        }, conversionExecutor);
-        conversionFutures.add(future);
-      }
-
-      // Wait for all conversions to complete
-      CompletableFuture<Void> allConversions =
-          CompletableFuture.allOf(conversionFutures.toArray(new CompletableFuture[0]));
-      allConversions.get(30, TimeUnit.MINUTES); // Wait up to 30 minutes
-
-      LOGGER.info("Processed " + completedConversions.get() + " XBRL files into Parquet tables in: " + secParquetDir);
-      if (skipped424BFilings > 0) {
-        LOGGER.info("Skipped {} excluded filings in XBRL conversion phase (424B prospectuses and S-* registration statements)", skipped424BFilings);
-      }
-
-      // Bulk cleanup of macOS metadata files at the end of processing
-      cleanupAllMacOSMetadataFiles(secParquetDir);
-
-      // Debug logging: List directory contents using StorageProvider
-      if (LOGGER.isDebugEnabled()) {
-        try {
-          String secParquetPath = secParquetDir.getAbsolutePath();
-          LOGGER.debug("DEBUG: Checking what was created in secParquetDir after conversion");
-          List<StorageProvider.FileEntry> afterConversion = storageProvider.listFiles(secParquetPath, false);
-          LOGGER.debug("DEBUG: Found {} items in secParquetDir", afterConversion.size());
-          for (StorageProvider.FileEntry f : afterConversion) {
-            LOGGER.debug("DEBUG: - {} (isDir={}, size={})", f.getName(), f.isDirectory(), f.getSize());
-          }
-        } catch (IOException e) {
-          LOGGER.debug("DEBUG: Could not list parquet directory: {}", e.getMessage());
-        }
-      }
-
-    } catch (Exception e) {
-      LOGGER.error("Failed to create SEC tables from XBRL", e);
-      throw new RuntimeException("Failed to create SEC tables", e);
-    }
-  }
 
 
   // REMOVED: consolidateFactsIntoFinancialLineItems method
@@ -2928,9 +2606,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Creates mock stock prices for testing.
    */
-  private void createMockStockPrices(File baseDir, List<String> ciks, int startYear, int endYear) {
+  private void createMockStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
     try {
-      // baseDir is the cache directory (sec-cache)
+      // baseDirPath is the cache directory (sec-cache)
       // We need to create files in govdata-parquet/source=sec/stock_prices
       String govdataParquetDir = getGovDataParquetDir();
       String stockPricesDir = storageProvider.resolvePath(govdataParquetDir, "source=sec/stock_prices");
@@ -3074,7 +2752,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Downloads stock prices for all configured CIKs.
    * Implements daily caching - stock prices are only downloaded once per day.
    */
-  private void downloadStockPrices(File baseDir, List<String> ciks, int startYear, int endYear) {
+  private void downloadStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
     try {
       // Use the parquet directory for stock prices - same as other SEC data
       String govdataParquetDir = getGovDataParquetDir();
@@ -3207,7 +2885,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Check each ticker for each year
         for (String ticker : tickers) {
           for (int year = startYear; year <= endYear; year++) {
-            String stockPriceDir = basePath + "/stock_prices";
+            String stockPriceDir = storageProvider.resolvePath(basePath, "stock_prices");
             String parquetPath =
                 storageProvider.resolvePath(stockPriceDir, String.format("ticker=%s/year=%d/%s_%d.parquet", ticker, year, ticker, year));
 
@@ -3321,12 +2999,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Bulk cleanup of all macOS metadata files in the parquet directory.
    * This is run at the end of processing to clean up any ._* files that were created.
    */
-  private void cleanupAllMacOSMetadataFiles(File directory) {
-    if (directory == null) {
+  private void cleanupAllMacOSMetadataFiles(String dirPath) {
+    if (dirPath == null) {
       return;
     }
-
-    String dirPath = directory.getAbsolutePath();
 
     // Use StorageProvider to check directory existence (works for both local and S3)
     try {
@@ -3466,8 +3142,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * This allows us to deprecate the .notfound file mechanism in favor of manifest-based tracking.
    */
   private void migrateNotFoundMarkers(String secCacheDir) {
-    File cacheRoot = new File(secCacheDir);
-    if (!cacheRoot.exists()) {
+    try {
+      if (!storageProvider.exists(secCacheDir)) {
+        return;
+      }
+    } catch (IOException e) {
+      return;
+    }
+
+    // Migration only works for local filesystem (uses java.nio.file.Files.walk)
+    // For remote storage, .notfound markers were never used, so no migration needed
+    java.io.File cacheRootFile = new java.io.File(secCacheDir);
+    if (!cacheRootFile.exists()) {
       return;
     }
 
@@ -3475,7 +3161,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     int deletedCount = 0;
 
     try {
-      java.nio.file.Files.walk(cacheRoot.toPath())
+      java.nio.file.Files.walk(cacheRootFile.toPath())
           .filter(path -> path.toString().endsWith(".notfound"))
           .forEach(notFoundPath -> {
             try {
