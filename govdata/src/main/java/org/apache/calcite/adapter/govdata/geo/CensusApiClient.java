@@ -68,7 +68,7 @@ public class CensusApiClient {
   private static final long RATE_LIMIT_DELAY_MS = 500; // 2 requests per second
 
   private final String apiKey;
-  private final File cacheDir;
+  private final String cacheDir;
   private final List<Integer> censusYears;
   private final ObjectMapper objectMapper;
   private final Semaphore rateLimiter;
@@ -77,25 +77,25 @@ public class CensusApiClient {
   private final GeoCacheManifest cacheManifest;
   private final String operatingDirectory;
 
-  public CensusApiClient(String apiKey, File cacheDir) {
+  public CensusApiClient(String apiKey, String cacheDir) {
     this(apiKey, cacheDir, new ArrayList<>(), null, null);
   }
 
-  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears) {
+  public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears) {
     this(apiKey, cacheDir, censusYears, null, null);
   }
 
-  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+  public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider) {
     this(apiKey, cacheDir, censusYears, storageProvider, null);
   }
 
-  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+  public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(apiKey, cacheDir, cacheDir.getAbsolutePath(), censusYears, storageProvider, cacheManifest);
+    this(apiKey, cacheDir, cacheDir, censusYears, storageProvider, cacheManifest);
   }
 
-  public CensusApiClient(String apiKey, File cacheDir, String operatingDirectory, List<Integer> censusYears,
+  public CensusApiClient(String apiKey, String cacheDir, String operatingDirectory, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
@@ -107,11 +107,45 @@ public class CensusApiClient {
     this.storageProvider = storageProvider;
     this.cacheManifest = cacheManifest;
 
-    if (!cacheDir.exists()) {
-      cacheDir.mkdirs();
-    }
-
     LOGGER.info("Census API client initialized with cache directory: {}", cacheDir);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public CensusApiClient(String apiKey, File cacheDir) {
+    this(apiKey, cacheDir.getAbsolutePath(), new ArrayList<>(), null, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears) {
+    this(apiKey, cacheDir.getAbsolutePath(), censusYears, null, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+      StorageProvider storageProvider) {
+    this(apiKey, cacheDir.getAbsolutePath(), censusYears, storageProvider, null);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(apiKey, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), censusYears, storageProvider, cacheManifest);
+  }
+
+  /**
+   * Backward compatibility constructor - delegates to String-based constructor.
+   */
+  public CensusApiClient(String apiKey, File cacheDir, String operatingDirectory, List<Integer> censusYears,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(apiKey, cacheDir.getAbsolutePath(), operatingDirectory, censusYears, storageProvider, cacheManifest);
   }
 
   /**
@@ -122,11 +156,8 @@ public class CensusApiClient {
 
     // Download demographic data for each year
     for (int year = startYear; year <= endYear; year++) {
-      // Create year-specific cache directory
-      File yearCacheDir = new File(cacheDir, "year=" + year);
-      if (!yearCacheDir.exists()) {
-        yearCacheDir.mkdirs();
-      }
+      // Note: Year-specific cache directories will be created automatically
+      // when files are written via StorageProvider
 
       try {
         // Download population demographics
@@ -223,13 +254,22 @@ public class CensusApiClient {
    * Save JSON data to year-specific cache directory.
    */
   private void saveJsonToYearCache(int year, String filename, JsonNode data) throws IOException {
-    File yearDir = new File(cacheDir, "year=" + year);
-    if (!yearDir.exists()) {
-      yearDir.mkdirs();
+    String yearPath = "year=" + year;
+    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String filePath = storageProvider.resolvePath(cachePath, filename);
+
+    byte[] jsonBytes = objectMapper.writeValueAsBytes(data);
+    storageProvider.writeFile(filePath, jsonBytes);
+    LOGGER.debug("Saved Census data to {}", filePath);
+  }
+
+  /**
+   * Read JSON from storage provider.
+   */
+  private JsonNode readJsonFromStorage(String filePath) throws IOException {
+    try (java.io.InputStream in = storageProvider.openInputStream(filePath)) {
+      return objectMapper.readTree(in);
     }
-    File jsonFile = new File(yearDir, filename);
-    objectMapper.writeValue(jsonFile, data);
-    LOGGER.debug("Saved Census data to {}", jsonFile);
   }
 
   /**
@@ -246,10 +286,10 @@ public class CensusApiClient {
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
     // Check cache first
-    File cacheFile = new File(cacheDir, cacheKey + ".json");
-    if (cacheFile.exists()) {
-      LOGGER.debug("Using cached ACS data from {}", cacheFile);
-      return objectMapper.readTree(cacheFile);
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached ACS data from {}", cacheFilePath);
+      return readJsonFromStorage(cacheFilePath);
     }
 
     // Build API URL
@@ -261,8 +301,9 @@ public class CensusApiClient {
     JsonNode response = makeApiRequest(url);
 
     // Cache the response
-    objectMapper.writeValue(cacheFile, response);
-    LOGGER.info("Cached ACS data to {}", cacheFile);
+    byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    LOGGER.info("Cached ACS data to {}", cacheFilePath);
 
     return response;
   }
@@ -296,10 +337,10 @@ public class CensusApiClient {
         preferredDataset != null ? preferredDataset : "auto");
 
     // Check cache first
-    File cacheFile = new File(cacheDir, cacheKey + ".json");
-    if (cacheFile.exists()) {
-      LOGGER.debug("Using cached Decennial data from {}", cacheFile);
-      return objectMapper.readTree(cacheFile);
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached Decennial data from {}", cacheFilePath);
+      return readJsonFromStorage(cacheFilePath);
     }
 
     // Determine datasets to try
@@ -329,8 +370,9 @@ public class CensusApiClient {
         JsonNode response = makeApiRequest(url);
 
         // Cache the successful response
-        objectMapper.writeValue(cacheFile, response);
-        LOGGER.info("Cached Decennial data to {} using dataset '{}'", cacheFile, dataset);
+        byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        LOGGER.info("Cached Decennial data to {} using dataset '{}'", cacheFilePath, dataset);
 
         return response;
 
@@ -361,10 +403,10 @@ public class CensusApiClient {
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
     // Check cache first
-    File cacheFile = new File(cacheDir, cacheKey + ".json");
-    if (cacheFile.exists()) {
-      LOGGER.debug("Using cached Economic data from {}", cacheFile);
-      return objectMapper.readTree(cacheFile);
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached Economic data from {}", cacheFilePath);
+      return readJsonFromStorage(cacheFilePath);
     }
 
     // Determine dataset to use
@@ -388,8 +430,9 @@ public class CensusApiClient {
         JsonNode response = makeApiRequest(url);
 
         // Cache the successful response
-        objectMapper.writeValue(cacheFile, response);
-        LOGGER.info("Cached Economic data to {} using dataset '{}'", cacheFile, ds);
+        byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        LOGGER.info("Cached Economic data to {} using dataset '{}'", cacheFilePath, ds);
 
         return response;
 
@@ -420,10 +463,10 @@ public class CensusApiClient {
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
     // Check cache first
-    File cacheFile = new File(cacheDir, cacheKey + ".json");
-    if (cacheFile.exists()) {
-      LOGGER.debug("Using cached Population Estimates data from {}", cacheFile);
-      return objectMapper.readTree(cacheFile);
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached Population Estimates data from {}", cacheFilePath);
+      return readJsonFromStorage(cacheFilePath);
     }
 
     // Determine dataset to use
@@ -457,8 +500,9 @@ public class CensusApiClient {
         JsonNode response = makeApiRequest(url);
 
         // Cache the successful response
-        objectMapper.writeValue(cacheFile, response);
-        LOGGER.info("Cached Population Estimates data to {} using dataset '{}'", cacheFile, ds);
+        byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+        storageProvider.writeFile(cacheFilePath, jsonBytes);
+        LOGGER.info("Cached Population Estimates data to {} using dataset '{}'", cacheFilePath, ds);
 
         return response;
 
@@ -735,7 +779,7 @@ public class CensusApiClient {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
       cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(cacheDir.getAbsolutePath());
+      cacheManifest.save(this.operatingDirectory);
     }
   }
 

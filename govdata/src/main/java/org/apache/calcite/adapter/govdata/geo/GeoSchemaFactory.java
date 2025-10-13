@@ -95,8 +95,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
    * Builds the operand configuration for GEO schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
    */
-  public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+  public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
     LOGGER.info("Building GEO schema operand configuration");
+
+    // Access shared services from parent
+    org.apache.calcite.adapter.file.storage.StorageProvider storageProvider = parent.getStorageProvider();
 
     // Get cache directories from interface methods
     String govdataCacheDir = getGovDataCacheDir(operand);
@@ -202,31 +205,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       geoCacheTtlDays = 90; // Ensure minimum 1 day TTL
     }
 
-    // Create cache directory structure
-    File cacheRoot = new File(cacheDir);
-    if (!cacheRoot.exists()) {
-      if (!cacheRoot.mkdirs()) {
-        throw new RuntimeException("Failed to create cache directory: " + cacheDir);
-      }
-    }
-
-    // Create hive-partitioned directory structure for parquet files
-    File parquetRoot = new File(geoParquetDir);
-    File boundaryDir = new File(parquetRoot, BOUNDARY_TYPE);
-    File demographicDir = new File(parquetRoot, DEMOGRAPHIC_TYPE);
-    File crosswalkDir = new File(parquetRoot, CROSSWALK_TYPE);
-
-    for (File dir : new File[]{parquetRoot, boundaryDir, demographicDir, crosswalkDir}) {
-      if (!dir.exists() && !dir.mkdirs()) {
-        LOGGER.warn("Failed to create directory: {}", dir);
-      }
-    }
-
-    // Log the partitioned structure
-    LOGGER.info("Geographic data partitions created:");
-    LOGGER.info("  Boundaries: {}", boundaryDir);
-    LOGGER.info("  Demographics: {}", demographicDir);
-    LOGGER.info("  Crosswalks: {}", crosswalkDir);
+    // NOTE: Directory creation removed for S3 compatibility
+    // Both cacheDir and geoParquetDir may be S3 URIs (e.g., s3://govdata-production-cache)
+    // S3 buckets are managed via AWS/MinIO, not local filesystem
+    // StorageProvider handles S3 directory creation automatically when writing files
 
     // Log configuration
     LOGGER.info("Geographic data configuration:");
@@ -394,7 +376,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       } else {
         LOGGER.info("TIGER data needs processing for years: {}", yearsToProcess);
         // Use simple cache directory structure for raw data downloads
-        File tigerCacheDir = new File(cacheDir, "tiger");
+        String tigerCacheDir = storageProvider.resolvePath(cacheDir, "tiger");
         TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, geoOperatingDirectory, tigerYears, true, storageProvider, cacheManifest);
 
         try {
@@ -403,16 +385,17 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             LOGGER.info("Processing TIGER data for year {}", year);
 
             // Download and convert each dataset only if parquet doesn't exist
+            // Note: Download methods return temp File directories containing the data
             String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
             if (!storageProvider.exists(statesParquetPath)) {
-              tigerDownloader.downloadStatesForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), statesParquetPath);
+              File statesDir = tigerDownloader.downloadStatesForYear(year);
+              tigerDownloader.convertToParquet(statesDir, statesParquetPath);
             }
 
             String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
             if (!storageProvider.exists(countiesParquetPath)) {
-              tigerDownloader.downloadCountiesForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), countiesParquetPath);
+              File countiesDir = tigerDownloader.downloadCountiesForYear(year);
+              tigerDownloader.convertToParquet(countiesDir, countiesParquetPath);
             }
 
             String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
@@ -420,15 +403,15 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               tigerDownloader.downloadPlacesForYear(year, "06"); // California
               tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
               tigerDownloader.downloadPlacesForYear(year, "36"); // New York
-              tigerDownloader.downloadPlacesForYear(year, "12"); // Florida
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), placesParquetPath);
+              File placesDir = tigerDownloader.downloadPlacesForYear(year, "12"); // Florida (last one returns dir)
+              tigerDownloader.convertToParquet(placesDir, placesParquetPath);
             }
 
             String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
             if (!storageProvider.exists(zctasParquetPath)) {
               File zctasDir = tigerDownloader.downloadZctasForYear(year);
               if (zctasDir != null) {
-                tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), zctasParquetPath);
+                tigerDownloader.convertToParquet(zctasDir, zctasParquetPath);
               } else {
                 // Create zero-row marker file for missing data (e.g., ZCTAs only exist for decennial census years)
                 LOGGER.info("Creating zero-row marker for ZCTAs year {} (data not available)", year);
@@ -438,14 +421,14 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
 
             String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
             if (!storageProvider.exists(tractsParquetPath)) {
-              tigerDownloader.downloadCensusTractsForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), tractsParquetPath);
+              File tractsDir = tigerDownloader.downloadCensusTractsForYear(year);
+              tigerDownloader.convertToParquet(tractsDir, tractsParquetPath);
             }
 
             String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
             if (!storageProvider.exists(blockGroupsParquetPath)) {
-              tigerDownloader.downloadBlockGroupsForYear(year);
-              tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), blockGroupsParquetPath);
+              File blockGroupsDir = tigerDownloader.downloadBlockGroupsForYear(year);
+              tigerDownloader.convertToParquet(blockGroupsDir, blockGroupsParquetPath);
             }
 
             String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
@@ -453,7 +436,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               try {
                 File cbsaDir = tigerDownloader.downloadCbsasForYear(year);
                 if (cbsaDir != null) {
-                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), cbsaParquetPath);
+                  tigerDownloader.convertToParquet(cbsaDir, cbsaParquetPath);
                 } else {
                   // Create zero-row marker file for missing data
                   LOGGER.info("Creating zero-row marker for CBSAs year {} (data not available)", year);
@@ -475,7 +458,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               try {
                 File cdDir = tigerDownloader.downloadCongressionalDistrictsForYear(year);
                 if (cdDir != null) {
-                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), congressionalParquetPath);
+                  tigerDownloader.convertToParquet(cdDir, congressionalParquetPath);
                 } else {
                   // Create zero-row marker file for missing data
                   LOGGER.info("Creating zero-row marker for congressional districts year {} (data not available)", year);
@@ -491,7 +474,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               try {
                 File schoolDir = tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
                 if (schoolDir != null) {
-                  tigerDownloader.convertToParquet(new File(tigerCacheDir, "year=" + year), schoolParquetPath);
+                  tigerDownloader.convertToParquet(schoolDir, schoolParquetPath);
                 } else {
                   // Create zero-row marker file for missing data
                   LOGGER.info("Creating zero-row marker for school districts year {} (data not available)", year);
@@ -557,8 +540,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("HUD crosswalk data already fully cached for years: {}", tigerYears);
       } else {
         // Use simple cache directory structure for raw data downloads
-        File hudCacheDir = new File(cacheDir, "hud");
-        File crosswalkParquetDir = new File(geoParquetDir, CROSSWALK_TYPE);
+        String hudCacheDir = storageProvider.resolvePath(cacheDir, "hud");
         HudCrosswalkFetcher hudFetcher;
 
         if (hudToken != null && !hudToken.isEmpty()) {
@@ -575,15 +557,46 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           hudFetcher.downloadAll(startYear, endYear);
 
           // Convert to Parquet for each year
+          // Note: HUD downloader returns temp File directories from download methods
+          // These temp directories are then used for conversion
           for (int year : tigerYears) {
+            // HUD data is in temp directories after download
+            // The convertToParquet method reads CSV files from year-specific subdirectories
+            String yearPath = "year=" + year;
+            File yearCacheDir;
+
+            // For S3, download to temp; for local, use cached files directly
+            if (hudCacheDir.startsWith("s3://")) {
+              // Download from S3 cache to temp directory
+              yearCacheDir = java.nio.file.Files.createTempDirectory("hud-year-" + year + "-").toFile();
+              String cachePath = storageProvider.resolvePath(hudCacheDir, yearPath);
+              java.util.List<StorageProvider.FileEntry> files = storageProvider.listFiles(cachePath, false);
+              for (StorageProvider.FileEntry file : files) {
+                if (!file.isDirectory()) {
+                  File targetFile = new File(yearCacheDir, file.getName());
+                  try (java.io.InputStream in = storageProvider.openInputStream(file.getPath());
+                       java.io.OutputStream out = new java.io.FileOutputStream(targetFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                      out.write(buffer, 0, bytesRead);
+                    }
+                  }
+                }
+              }
+            } else {
+              // Local filesystem - use directly
+              yearCacheDir = new File(hudCacheDir, yearPath);
+            }
+
             String zipCountyPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_county_crosswalk.parquet");
-            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCountyPath);
+            hudFetcher.convertToParquet(yearCacheDir, zipCountyPath);
 
             String zipCbsaPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/zip_cbsa_crosswalk.parquet");
-            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), zipCbsaPath);
+            hudFetcher.convertToParquet(yearCacheDir, zipCbsaPath);
 
             String tractZipPath = storageProvider.resolvePath(geoParquetDir, CROSSWALK_TYPE + "/year=" + year + "/tract_zip_crosswalk.parquet");
-            hudFetcher.convertToParquet(new File(hudCacheDir, "year=" + year), tractZipPath);
+            hudFetcher.convertToParquet(yearCacheDir, tractZipPath);
           }
 
         } catch (Exception e) {
@@ -638,8 +651,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Census demographic data already fully cached for years: {}", censusYears);
       } else {
         // Use simple cache directory structure for raw data downloads
-        File censusCacheDir = new File(cacheDir, "census");
-        File demographicParquetDir = new File(geoParquetDir, DEMOGRAPHIC_TYPE);
+        String censusCacheDir = storageProvider.resolvePath(cacheDir, "census");
         CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, geoOperatingDirectory, censusYears, storageProvider, cacheManifest);
 
         try {
@@ -650,15 +662,43 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           censusClient.downloadAll(startYear, endYear);
 
           // Convert to Parquet for each year
+          // Note: Census data is stored in cache with year-specific subdirectories
           for (int year : censusYears) {
+            String yearPath = "year=" + year;
+            File yearCacheDir;
+
+            // For S3, download to temp; for local, use cached files directly
+            if (censusCacheDir.startsWith("s3://")) {
+              // Download from S3 cache to temp directory
+              yearCacheDir = java.nio.file.Files.createTempDirectory("census-year-" + year + "-").toFile();
+              String cachePath = storageProvider.resolvePath(censusCacheDir, yearPath);
+              java.util.List<StorageProvider.FileEntry> files = storageProvider.listFiles(cachePath, false);
+              for (StorageProvider.FileEntry file : files) {
+                if (!file.isDirectory()) {
+                  File targetFile = new File(yearCacheDir, file.getName());
+                  try (java.io.InputStream in = storageProvider.openInputStream(file.getPath());
+                       java.io.OutputStream out = new java.io.FileOutputStream(targetFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                      out.write(buffer, 0, bytesRead);
+                    }
+                  }
+                }
+              }
+            } else {
+              // Local filesystem - use directly
+              yearCacheDir = new File(censusCacheDir, yearPath);
+            }
+
             String populationPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/population_demographics.parquet");
-            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), populationPath);
+            censusClient.convertToParquet(yearCacheDir, populationPath);
 
             String housingPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/housing_characteristics.parquet");
-            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), housingPath);
+            censusClient.convertToParquet(yearCacheDir, housingPath);
 
             String economicPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/economic_indicators.parquet");
-            censusClient.convertToParquet(new File(censusCacheDir, "year=" + year), economicPath);
+            censusClient.convertToParquet(yearCacheDir, economicPath);
           }
 
         } catch (Exception e) {

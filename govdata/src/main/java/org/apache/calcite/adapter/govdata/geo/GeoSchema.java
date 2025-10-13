@@ -120,6 +120,8 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     // Initialize TIGER downloader with hive-partitioned structure
     if (enabledSources.contains("tiger") && !tigerYears.isEmpty()) {
       // TIGER data goes under: /govdata-parquet/source=geo/type=boundary/year=YYYY/
+      // Note: GeoSchema uses File-based constructors (backward compatibility)
+      // For S3 support, use GeoSchemaFactory instead which provides StorageProvider
       File boundaryDir = new File(new File(cacheDir, "source=geo"), "type=boundary");
       this.tigerDownloader = new TigerDataDownloader(boundaryDir, tigerYears, autoDownload);
     }
