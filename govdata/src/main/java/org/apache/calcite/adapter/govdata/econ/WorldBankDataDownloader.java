@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -80,16 +81,12 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
         "KOR", "ESP", "AUS", "RUS", "MEX", "IDN", "NLD", "TUR", "CHE", "POL");
   }
 
-  public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(cacheDir, storageProvider, null);
+  public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this(cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public WorldBankDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(cacheDir, cacheDir, storageProvider, sharedManifest);
-  }
-
-  public WorldBankDataDownloader(String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
+  public WorldBankDataDownloader(String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
   }
 
   @Override protected long getMinRequestIntervalMs() {
@@ -198,8 +195,8 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   public void downloadWorldIndicatorsForYear(int year) throws IOException, InterruptedException {
     LOGGER.info("Downloading world economic indicators for year {}", year);
 
-    Path outputDir = Paths.get(cacheDirectory, "source=econ", "type=indicators", "year=" + year);
-    Files.createDirectories(outputDir);
+    // Build relative path for JSON file - directories created automatically by StorageProvider
+    String relativePath = "source=econ/type=indicators/year=" + year + "/world_indicators.json";
 
     List<Map<String, Object>> indicators = new ArrayList<>();
 
@@ -277,17 +274,17 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       Thread.sleep(100);
     }
 
-    // Save raw JSON data to cache
-    File jsonFile = new File(outputDir.toFile(), "world_indicators.json");
+    // Save raw JSON data to cache using StorageProvider
     Map<String, Object> data = new HashMap<>();
     data.put("indicators", indicators);
     data.put("download_date", LocalDate.now().toString());
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    Files.writeString(jsonFile.toPath(), jsonContent);
+    // StorageProvider automatically creates parent directories when writing
+    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-    LOGGER.info("World indicators saved to: {} ({} records)", jsonFile, indicators.size());
+    LOGGER.info("World indicators saved to: {} ({} records)", relativePath, indicators.size());
   }
 
   /**
@@ -545,51 +542,47 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
    * Converts cached World Bank data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
-   * @param sourceDir Directory containing cached World Bank JSON data
-   * @param targetFile Target parquet file to create
+   * @param sourceDirPath Directory path containing cached World Bank JSON data
+   * @param targetFilePath Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Check if parquet file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
-    LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDir, targetFilePath);
+    LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Directories are created automatically by StorageProvider when writing files
 
     List<Map<String, Object>> indicators = new ArrayList<>();
 
-    // Look for World Bank indicators JSON files in the source directory
-    File[] jsonFiles = sourceDir.listFiles((dir, name) ->
-        name.equals("world_indicators.json") && !name.startsWith("."));
+    // Look for World Bank indicators JSON file in the source directory
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "world_indicators.json");
+    if (cacheStorageProvider.exists(jsonFilePath)) {
+      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+           InputStreamReader reader = new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
+        JsonNode root = MAPPER.readTree(reader);
+        JsonNode indicatorsArray = root.get("indicators");
 
-    if (jsonFiles != null) {
-      for (File jsonFile : jsonFiles) {
-        try {
-          String content = Files.readString(jsonFile.toPath());
-          JsonNode root = MAPPER.readTree(content);
-          JsonNode indicatorsArray = root.get("indicators");
+        if (indicatorsArray != null && indicatorsArray.isArray()) {
+          for (JsonNode ind : indicatorsArray) {
+            Map<String, Object> indicator = new HashMap<>();
+            indicator.put("country_code", ind.get("country_code").asText());
+            indicator.put("country_name", ind.get("country_name").asText());
+            indicator.put("indicator_code", ind.get("indicator_code").asText());
+            indicator.put("indicator_name", ind.get("indicator_name").asText());
+            indicator.put("year", ind.get("year").asInt());
+            indicator.put("value", ind.get("value").asDouble());
+            indicator.put("unit", ind.get("unit").asText(""));
+            indicator.put("scale", ind.get("scale").asText(""));
 
-          if (indicatorsArray != null && indicatorsArray.isArray()) {
-            for (JsonNode ind : indicatorsArray) {
-              Map<String, Object> indicator = new HashMap<>();
-              indicator.put("country_code", ind.get("country_code").asText());
-              indicator.put("country_name", ind.get("country_name").asText());
-              indicator.put("indicator_code", ind.get("indicator_code").asText());
-              indicator.put("indicator_name", ind.get("indicator_name").asText());
-              indicator.put("year", ind.get("year").asInt());
-              indicator.put("value", ind.get("value").asDouble());
-              indicator.put("unit", ind.get("unit").asText(""));
-              indicator.put("scale", ind.get("scale").asText(""));
-
-              indicators.add(indicator);
-            }
+            indicators.add(indicator);
           }
-        } catch (Exception e) {
-          LOGGER.warn("Failed to process World Bank JSON file {}: {}", jsonFile, e.getMessage());
         }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to process World Bank JSON file {}: {}", jsonFilePath, e.getMessage());
       }
     }
 

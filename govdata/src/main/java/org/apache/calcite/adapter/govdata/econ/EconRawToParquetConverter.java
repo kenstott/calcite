@@ -117,95 +117,98 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
     File rawFile = new File(rawFilePath);
     File sourceDir = rawFile.getParentFile(); // Get the year directory
 
+    // Get source directory path as String
+    String sourceDirPath = sourceDir.getAbsolutePath();
+
     // Route based on path patterns
     try {
       // FRED indicators
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("fred_indicators")) {
-        fredDownloader.convertToParquet(sourceDir, targetParquetPath);
+        fredDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BLS employment statistics
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("employment_statistics")) {
-        blsDownloader.convertToParquet(sourceDir, targetParquetPath);
+        blsDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BLS inflation metrics
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("inflation_metrics")) {
-        blsDownloader.convertToParquet(sourceDir, targetParquetPath);
+        blsDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BLS wage growth
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("wage_growth")) {
-        blsDownloader.convertToParquet(sourceDir, targetParquetPath);
+        blsDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BLS regional employment
       if (rawFilePath.contains("type=regional") && rawFilePath.contains("regional_employment")) {
-        blsDownloader.convertToParquet(sourceDir, targetParquetPath);
+        blsDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // Treasury yields
       if (rawFilePath.contains("type=timeseries") && rawFilePath.contains("treasury_yields")) {
-        treasuryDownloader.convertToParquet(sourceDir, targetParquetPath);
+        treasuryDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // Treasury federal debt
       if (rawFilePath.contains("type=timeseries") && rawFilePath.contains("federal_debt")) {
-        treasuryDownloader.convertFederalDebtToParquet(sourceDir, targetParquetPath);
+        treasuryDownloader.convertFederalDebtToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA GDP components
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("gdp_components")) {
-        beaDownloader.convertToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA GDP statistics
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("gdp_statistics")) {
-        beaDownloader.convertGdpStatisticsToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertGdpStatisticsToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA regional income
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("regional_income")) {
-        beaDownloader.convertRegionalIncomeToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertRegionalIncomeToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA state GDP
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("state_gdp")) {
-        beaDownloader.convertStateGdpToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertStateGdpToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA trade statistics
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("trade_statistics")) {
-        beaDownloader.convertTradeStatisticsToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertTradeStatisticsToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA ITA data
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("ita_data")) {
-        beaDownloader.convertItaDataToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertItaDataToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // BEA industry GDP
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("industry_gdp")) {
-        beaDownloader.convertIndustryGdpToParquet(sourceDir, targetParquetPath);
+        beaDownloader.convertIndustryGdpToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
       // World Bank indicators
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("world_indicators")) {
-        worldBankDownloader.convertToParquet(sourceDir, targetParquetPath);
+        worldBankDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 
@@ -213,7 +216,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       if (rawFilePath.contains("type=custom_fred") || rawFilePath.contains("type=custom")) {
         // Extract series ID from path if possible
         // For now, delegate to FRED downloader's generic conversion
-        fredDownloader.convertToParquet(sourceDir, targetParquetPath);
+        fredDownloader.convertToParquet(sourceDirPath, targetParquetPath);
         return true;
       }
 

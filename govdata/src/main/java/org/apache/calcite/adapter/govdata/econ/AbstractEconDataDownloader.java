@@ -23,13 +23,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Map;
 
@@ -81,6 +79,9 @@ public abstract class AbstractEconDataDownloader {
   /** Operating directory for storing operational metadata (e.g., .aperio/econ/) */
   protected final String operatingDirectory;
 
+  /** Storage provider for reading/writing raw cache files (JSON, XML) */
+  protected final StorageProvider cacheStorageProvider;
+
   /** Storage provider for reading/writing parquet files (supports local and S3) */
   protected final StorageProvider storageProvider;
 
@@ -97,36 +98,27 @@ public abstract class AbstractEconDataDownloader {
    * Constructs base downloader with required infrastructure.
    *
    * @param cacheDirectory Local directory for caching raw JSON data
+   * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider storageProvider) {
-    this(cacheDirectory, cacheDirectory, storageProvider, null);
+  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
+    this(cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null);
   }
 
   /**
-   * Constructs base downloader with required infrastructure and shared cache manifest.
-   * This constructor should be used when multiple downloaders share the same manifest
-   * to avoid stale cache issues.
-   *
-   * @param cacheDirectory Local directory for caching raw JSON data
-   * @param storageProvider Provider for parquet file operations
-   * @param sharedManifest Shared cache manifest (if null, will load from disk)
-   */
-  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(cacheDirectory, cacheDirectory, storageProvider, sharedManifest);
-  }
-
-  /**
-   * Constructs base downloader with separate raw cache and operating directories.
+   * Constructs base downloader with separate raw cache and operating directories and shared cache manifest.
+   * This constructor should be used when multiple downloaders share the same manifest to avoid stale cache issues.
    *
    * @param cacheDirectory Local directory for caching raw JSON data
    * @param operatingDirectory Directory for storing operational metadata (.aperio/<schema>/)
+   * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, StorageProvider storageProvider, CacheManifest sharedManifest) {
+  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
+    this.cacheStorageProvider = cacheStorageProvider;
     this.storageProvider = storageProvider;
     this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
     this.httpClient = HttpClient.newBuilder()
@@ -176,13 +168,18 @@ public abstract class AbstractEconDataDownloader {
     }
 
     // 2. Defensive check: if file exists but not in manifest, update manifest
-    File jsonFile = new File(cacheDirectory, relativePath);
-    if (jsonFile.exists()) {
-      LOGGER.info("Found existing {} file for year {} - updating manifest", dataType, year);
-      long fileSize = jsonFile.length();
-      cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-      cacheManifest.save(operatingDirectory);
-      return true;
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    try {
+      if (cacheStorageProvider.exists(filePath)) {
+        LOGGER.info("Found existing {} file for year {} - updating manifest", dataType, year);
+        long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
+        cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
+        cacheManifest.save(operatingDirectory);
+        return true;
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
+      // If we can't check, assume it doesn't exist
     }
 
     return false;
@@ -202,12 +199,11 @@ public abstract class AbstractEconDataDownloader {
   protected final void saveToCache(String dataType, int year, Map<String, String> params,
       String relativePath, String jsonContent) throws IOException {
 
-    // Save raw JSON data to local cache directory
-    File jsonFile = new File(cacheDirectory, relativePath);
-    jsonFile.getParentFile().mkdirs();
-    Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Save raw JSON data via cache storage provider
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    // Mark as cached in manifest
+    // Mark as cached in manifest (operating metadata stays in .aperio via File API)
     cacheManifest.markCached(dataType, year, params, relativePath, jsonContent.length());
     cacheManifest.save(operatingDirectory);
 

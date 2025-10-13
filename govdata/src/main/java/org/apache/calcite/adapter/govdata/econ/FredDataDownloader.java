@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -205,16 +206,12 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       Series.CONSUMER_CONFIDENCE,
       Series.PERSONAL_SAVING_RATE);
 
-  public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(cacheDir, apiKey, storageProvider, null);
+  public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this(cacheDir, cacheDir, apiKey, cacheStorageProvider, storageProvider, null);
   }
 
-  public FredDataDownloader(String cacheDir, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this(cacheDir, cacheDir, apiKey, storageProvider, sharedManifest);
-  }
-
-  public FredDataDownloader(String cacheDirectory, String operatingDirectory, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
+  public FredDataDownloader(String cacheDir, String operatingDirectory, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -723,57 +720,51 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * Converts cached FRED data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
-   * @param sourceDir Directory containing cached FRED JSON data
-   * @param targetFile Target parquet file to create
+   * @param sourceDirPath Path to directory containing cached FRED JSON data
+   * @param targetFilePath Target parquet file to create
    */
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
+  public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Check if parquet file already exists
     if (storageProvider.exists(targetFilePath)) {
       LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
       return;
     }
 
-    String sourceDirPath = sourceDir.getAbsolutePath();
     LOGGER.info("Converting FRED data from {} to parquet: {}", sourceDirPath, targetFilePath);
-
-    // Directories are created automatically by StorageProvider when writing files
 
     List<Map<String, Object>> observations = new ArrayList<>();
 
-    // Look for FRED indicators JSON files in the source directory
-    File[] files = sourceDir.listFiles((dir, name) -> name.equals("fred_indicators.json"));
-
-    if (files == null || files.length == 0) {
-      LOGGER.warn("No fred_indicators.json found in {}", sourceDir);
+    // Read FRED indicators JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "fred_indicators.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No fred_indicators.json found in {}", sourceDirPath);
       return;
     }
 
-    for (File file : files) {
-      try {
-        String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-        JsonNode root = MAPPER.readTree(content);
-        JsonNode obsArray = root.get("observations");
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+      JsonNode obsArray = root.get("observations");
 
-        if (obsArray != null && obsArray.isArray()) {
-          for (JsonNode obs : obsArray) {
-            Map<String, Object> observation = new HashMap<>();
-            observation.put("series_id", obs.get("series_id").asText());
-            observation.put("series_name", obs.get("series_name").asText());
-            observation.put("date", obs.get("date").asText());
-            observation.put("value", obs.get("value").asDouble());
-            observation.put("units", obs.get("units").asText());
-            observation.put("frequency", obs.get("frequency").asText());
+      if (obsArray != null && obsArray.isArray()) {
+        for (JsonNode obs : obsArray) {
+          Map<String, Object> observation = new HashMap<>();
+          observation.put("series_id", obs.get("series_id").asText());
+          observation.put("series_name", obs.get("series_name").asText());
+          observation.put("date", obs.get("date").asText());
+          observation.put("value", obs.get("value").asDouble());
+          observation.put("units", obs.get("units").asText());
+          observation.put("frequency", obs.get("frequency").asText());
 
-            observations.add(observation);
-          }
+          observations.add(observation);
         }
-      } catch (Exception e) {
-        LOGGER.error("Failed to process FRED JSON file {}: {}", file.getPath(), e.getMessage(), e);
       }
+    } catch (Exception e) {
+      LOGGER.error("Failed to process FRED JSON file {}: {}", jsonFilePath, e.getMessage(), e);
     }
 
     if (observations.isEmpty()) {
-      LOGGER.warn("No observations found in FRED indicators JSON files");
+      LOGGER.warn("No observations found in FRED indicators JSON file");
       return;
     }
 
@@ -938,12 +929,12 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.debug("Converting FRED series {} to parquet: {}", seriesId, targetPath);
 
-    // Find the cached JSON file for this series
-    // Look for any JSON file containing this series
-    File cacheRoot = new File(cacheDirectory);
+    // Find the cached JSON file for this series in local operating directory
+    // Note: Cache files are stored in operating directory for FRED series
+    File cacheRoot = new File(operatingDirectory);
     List<Map<String, Object>> observations = new ArrayList<>();
 
-    // Search through cache directory structure
+    // Search through operating directory structure for cached data
     if (!findAndLoadSeriesData(cacheRoot, seriesId, observations)) {
       LOGGER.warn("No cached data found for FRED series: {}", seriesId);
       return;
