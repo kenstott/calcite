@@ -167,6 +167,9 @@ public class S3StorageProvider implements StorageProvider {
       String directory = (String) config.get("directory");
       // Ensure it ends with /
       this.baseS3Path = directory.endsWith("/") ? directory : directory + "/";
+
+      // Ensure bucket exists - create if needed
+      ensureBucketExists(this.baseS3Path);
     } else {
       this.baseS3Path = null;
     }
@@ -179,6 +182,34 @@ public class S3StorageProvider implements StorageProvider {
       // Cache manager not initialized, persistent cache will be null
     }
     this.persistentCache = cache;
+  }
+
+  /**
+   * Ensures that the S3 bucket exists, creating it if necessary.
+   *
+   * @param s3Path Full S3 path (e.g., "s3://bucket-name/prefix/")
+   */
+  private void ensureBucketExists(String s3Path) {
+    try {
+      S3Uri s3Uri = parseS3Uri(s3Path);
+      String bucketName = s3Uri.bucket;
+
+      // Check if bucket exists
+      if (!s3Client.doesBucketExistV2(bucketName)) {
+        LOGGER.info("Creating S3 bucket: {}", bucketName);
+        s3Client.createBucket(bucketName);
+        LOGGER.info("Successfully created S3 bucket: {}", bucketName);
+      } else {
+        LOGGER.debug("S3 bucket already exists: {}", bucketName);
+      }
+    } catch (AmazonServiceException e) {
+      // Log but don't fail - the bucket might exist but we don't have permission to check,
+      // or it might be created by another process. Let subsequent operations fail if needed.
+      LOGGER.warn("Unable to verify or create S3 bucket from path {}: {} ({})",
+          s3Path, e.getMessage(), e.getErrorCode());
+    } catch (IOException e) {
+      LOGGER.warn("Unable to parse S3 path for bucket creation: {}", s3Path, e);
+    }
   }
 
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
