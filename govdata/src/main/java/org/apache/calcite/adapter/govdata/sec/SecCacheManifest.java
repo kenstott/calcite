@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 public class SecCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String MANIFEST_FILENAME = "sec_cache_manifest.json";
+  private static final String MANIFEST_FILENAME = "cache_manifest.json";
 
   @JsonProperty("entries")
   private Map<String, SubmissionCacheEntry> entries = new HashMap<>();
@@ -66,14 +66,9 @@ public class SecCacheManifest {
       return false;
     }
 
-    // Check if file still exists (skip for S3 paths to avoid File API on URIs)
-    if (!entry.filePath.startsWith("s3://")) {
-      if (!new File(entry.filePath).exists()) {
-        LOGGER.debug("Cache entry removed - file no longer exists: {}", entry.filePath);
-        entries.remove(cik);
-        return false;
-      }
-    }
+    // NOTE: File existence check removed - EdgarDownloader handles file existence checks
+    // using StorageProvider which supports both local and S3 storage.
+    // Manifest focuses on ETag-based and time-based refresh policies only.
 
     // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
     if (entry.etag != null && !entry.etag.isEmpty()) {
@@ -181,14 +176,9 @@ public class SecCacheManifest {
     entries.entrySet().removeIf(entry -> {
       SubmissionCacheEntry cacheEntry = entry.getValue();
 
-      // Remove if file doesn't exist (skip for S3 paths to avoid File API on URIs)
-      if (!cacheEntry.filePath.startsWith("s3://")) {
-        if (!new File(cacheEntry.filePath).exists()) {
-          LOGGER.debug("Removing cache entry for missing file: {}", cacheEntry.filePath);
-          removed[0]++;
-          return true;
-        }
-      }
+      // NOTE: File existence check removed - EdgarDownloader handles file existence checks
+      // using StorageProvider which supports both local and S3 storage.
+      // Manifest focuses on ETag-based and time-based refresh policies only.
 
       // Don't remove entries with ETags based on time - let server decide via 304/200
       if (cacheEntry.etag != null && !cacheEntry.etag.isEmpty()) {
