@@ -132,7 +132,7 @@ public class SecTextVectorizer {
    * Create contextual chunks from XBRL document.
    * Each chunk contains a financial concept and ALL its related narrative.
    */
-  public List<ContextualChunk> createContextualChunks(Document sec, File secFile) {
+  public List<ContextualChunk> createContextualChunks(Document sec, String secPath) {
     List<ContextualChunk> chunks = new ArrayList<>();
 
     // Extract all financial facts
@@ -151,7 +151,7 @@ public class SecTextVectorizer {
 
       // Tag the context
       chunkText.append("[CONTEXT: ").append(context).append("] ");
-      chunkText.append("[FILING: ").append(extractFilingInfo(secFile)).append("] ");
+      chunkText.append("[FILING: ").append(extractFilingInfo(secPath)).append("] ");
 
       // Add all metrics in this group
       boolean hasMetrics = false;
@@ -199,7 +199,7 @@ public class SecTextVectorizer {
     }
 
     // Also create a full document embedding
-    String fullDoc = createFullDocumentText(facts, narratives, footnotes, secFile);
+    String fullDoc = createFullDocumentText(facts, narratives, footnotes, secPath);
     double[] fullDocEmbedding = generateRealEmbedding(fullDoc);
     chunks.add(
         new ContextualChunk("FULL_DOCUMENT", fullDoc, "document",
@@ -214,12 +214,12 @@ public class SecTextVectorizer {
   private String createFullDocumentText(Map<String, FinancialFact> facts,
                                         Map<String, String> narratives,
                                         Map<String, String> footnotes,
-                                        File secFile) {
+                                        String secPath) {
     StringBuilder text = new StringBuilder();
 
     // Header with filing metadata
     text.append("[DOCUMENT_START] ");
-    text.append("[FILING_INFO: ").append(extractFilingInfo(secFile)).append("] ");
+    text.append("[FILING_INFO: ").append(extractFilingInfo(secPath)).append("] ");
 
     // All financial metrics with tags
     text.append("[FINANCIAL_SECTION_START] ");
@@ -387,9 +387,10 @@ public class SecTextVectorizer {
     return "unknown";
   }
 
-  private String extractFilingInfo(File secFile) {
+  private String extractFilingInfo(String secPath) {
     // Extract from filename: CIK-DATE-TYPE.xml
-    String name = secFile.getName().replace(".xml", "");
+    String fileName = secPath.substring(secPath.lastIndexOf('/') + 1);
+    String name = fileName.replace(".xml", "");
     return name;
   }
 

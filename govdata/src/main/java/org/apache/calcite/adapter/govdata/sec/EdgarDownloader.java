@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -23,8 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -40,8 +42,9 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Downloads XBRL filings from SEC EDGAR.
- * This implementation downloads actual documents from SEC EDGAR API.
+ * Downloads XBRL filings from SEC EDGAR using StorageProvider abstraction.
+ * This implementation downloads actual documents from SEC EDGAR API and stores
+ * them via StorageProvider, which supports both local filesystem and S3 storage.
  */
 public class EdgarDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarDownloader.class);
@@ -53,26 +56,35 @@ public class EdgarDownloader {
   private static final String XBRL_URL = "https://www.sec.gov/Archives/edgar/data/%s/%s/%s";
 
   private final Map<String, Object> edgarConfig;
-  private final File targetDirectory;
+  private final String targetDirectory;
+  private final String cacheDirectory;
+  private final StorageProvider storageProvider;
   private final SecCacheManifest cacheManifest;
-  private final File cacheDirectory;
 
-  public EdgarDownloader(Map<String, Object> edgarConfig, File targetDirectory,
-                        SecCacheManifest cacheManifest, File cacheDirectory) {
+  public EdgarDownloader(Map<String, Object> edgarConfig, String targetDirectory,
+                        String cacheDirectory, StorageProvider storageProvider,
+                        SecCacheManifest cacheManifest) {
     this.edgarConfig = edgarConfig;
     this.targetDirectory = targetDirectory;
-    this.cacheManifest = cacheManifest;
     this.cacheDirectory = cacheDirectory;
-    targetDirectory.mkdirs();
-    cacheDirectory.mkdirs();
+    this.storageProvider = storageProvider;
+    this.cacheManifest = cacheManifest;
+
+    // Ensure directories exist
+    try {
+      storageProvider.createDirectories(targetDirectory);
+      storageProvider.createDirectories(cacheDirectory);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to create directories: {}", e.getMessage());
+    }
   }
 
   /**
    * Download filings from SEC EDGAR.
-   * @return List of downloaded XBRL files
+   * @return List of downloaded XBRL file paths
    */
-  public List<File> downloadFilings() throws IOException {
-    List<File> downloadedFiles = new ArrayList<>();
+  public List<String> downloadFilings() throws IOException {
+    List<String> downloadedFiles = new ArrayList<>();
 
     // Get CIKs from configuration
     List<String> ciks = new ArrayList<>();
@@ -123,7 +135,7 @@ public class EdgarDownloader {
         }
 
         // Extract and download XBRL files
-        List<File> cikFiles = downloadXBRLFiles(cik, submissions, filingTypes, startDate, endDate);
+        List<String> cikFiles = downloadXBRLFiles(cik, submissions, filingTypes, startDate, endDate);
         downloadedFiles.addAll(cikFiles);
 
         LOGGER.info("Downloaded " + cikFiles.size() + " files for CIK " + cik);
@@ -145,10 +157,12 @@ public class EdgarDownloader {
     // Check cache first
     if (cacheManifest.isCached(cik)) {
       String cachedFilePath = cacheManifest.getFilePath(cik);
-      File cachedFile = new File(cachedFilePath);
-      if (cachedFile.exists()) {
+      String fullPath = storageProvider.resolvePath(cacheDirectory, cachedFilePath);
+      if (storageProvider.exists(fullPath)) {
         LOGGER.debug("Using cached submissions for CIK {}", cik);
-        return MAPPER.readTree(cachedFile);
+        try (InputStream in = storageProvider.openInputStream(fullPath)) {
+          return MAPPER.readTree(in);
+        }
       }
     }
 
@@ -189,10 +203,12 @@ public class EdgarDownloader {
       // Not Modified - use cached file
       String cachedFilePath = cacheManifest.getFilePath(cik);
       if (cachedFilePath != null) {
-        File cachedFile = new File(cachedFilePath);
-        if (cachedFile.exists()) {
+        String fullPath = storageProvider.resolvePath(cacheDirectory, cachedFilePath);
+        if (storageProvider.exists(fullPath)) {
           LOGGER.info("Submissions unchanged for CIK {} (304 Not Modified), using cache", cik);
-          return MAPPER.readTree(cachedFile);
+          try (InputStream in = storageProvider.openInputStream(fullPath)) {
+            return MAPPER.readTree(in);
+          }
         }
       }
       LOGGER.warn("Got 304 but cached file not found for CIK {}", cik);
@@ -217,10 +233,13 @@ public class EdgarDownloader {
         JsonNode submissions = MAPPER.readTree(responseBody);
 
         // Save to cache file
-        File cacheFile = new File(cacheDirectory, "submissions_" + cik + ".json");
-        MAPPER.writerWithDefaultPrettyPrinter().writeValue(cacheFile, submissions);
+        String cacheFileName = "submissions_" + cik + ".json";
+        String cachePath = storageProvider.resolvePath(cacheDirectory, cacheFileName);
+        byte[] jsonBytes = MAPPER.writerWithDefaultPrettyPrinter()
+            .writeValueAsBytes(submissions);
+        storageProvider.writeFile(cachePath, jsonBytes);
 
-        long fileSize = cacheFile.length();
+        long fileSize = jsonBytes.length;
         // Prefer ETag, fallback to Last-Modified, final fallback to 24-hour TTL
         // With ETag or Last-Modified: never expire (header tells us when to refresh)
         // Without either: fall back to 24-hour TTL
@@ -239,8 +258,8 @@ public class EdgarDownloader {
           refreshReason = "daily_fallback_no_metadata";
         }
 
-        // Update manifest with ETag or Last-Modified
-        cacheManifest.markCached(cik, cacheFile.getAbsolutePath(), newETag, fileSize,
+        // Update manifest with ETag or Last-Modified (store relative path)
+        cacheManifest.markCached(cik, cacheFileName, newETag, fileSize,
                                  refreshAfter, refreshReason);
 
         if (newETag != null) {
@@ -262,10 +281,10 @@ public class EdgarDownloader {
   /**
    * Download XBRL files based on submissions data.
    */
-  private List<File> downloadXBRLFiles(String cik, JsonNode submissions,
+  private List<String> downloadXBRLFiles(String cik, JsonNode submissions,
       List<String> filingTypes, LocalDate startDate, LocalDate endDate) throws IOException {
 
-    List<File> downloadedFiles = new ArrayList<>();
+    List<String> downloadedFiles = new ArrayList<>();
 
     // Get recent filings
     JsonNode recent = submissions.path("filings").path("recent");
@@ -300,12 +319,14 @@ public class EdgarDownloader {
       }
 
       // Try to download XBRL instance document
-      File xbrlFile =
+      String xbrlFilePath =
           downloadXBRLDocument(cik, formType, filingDate, accessionNumber, primaryDoc);
 
-      if (xbrlFile != null) {
-        downloadedFiles.add(xbrlFile);
-        LOGGER.info("Downloaded: " + xbrlFile.getName());
+      if (xbrlFilePath != null) {
+        downloadedFiles.add(xbrlFilePath);
+        // Extract filename from path for logging
+        String fileName = xbrlFilePath.substring(xbrlFilePath.lastIndexOf('/') + 1);
+        LOGGER.info("Downloaded: " + fileName);
       }
     }
 
@@ -344,7 +365,7 @@ public class EdgarDownloader {
   /**
    * Download a specific XBRL document.
    */
-  private File downloadXBRLDocument(String cik, String formType, LocalDate filingDate,
+  private String downloadXBRLDocument(String cik, String formType, LocalDate filingDate,
       String accessionNumber, String primaryDoc) throws IOException {
 
     // Generate local filename
@@ -352,12 +373,15 @@ public class EdgarDownloader {
     String cleanFormType = formType.replace("/", "-").replace(" ", "_");
     String filename =
         String.format(Locale.ROOT, "%s_%s_%s.xml", cik, dateStr, cleanFormType);
-    File localFile = new File(targetDirectory, filename);
+    String filePath = storageProvider.resolvePath(targetDirectory, filename);
 
     // Skip if already downloaded (EDGAR filings are immutable)
-    if (localFile.exists() && localFile.length() > 100) {
-      LOGGER.debug("Already cached: " + localFile.getName());
-      return localFile;
+    if (storageProvider.exists(filePath)) {
+      long fileSize = storageProvider.getMetadata(filePath).getSize();
+      if (fileSize > 100) {
+        LOGGER.debug("Already cached: " + filename);
+        return filePath;
+      }
     }
 
     // Try different XBRL document naming patterns
@@ -395,19 +419,20 @@ public class EdgarDownloader {
         if (responseCode == 200) {
           // Download the file
           try (InputStream in = conn.getInputStream();
-               FileOutputStream out = new FileOutputStream(localFile)) {
+               ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             byte[] buffer = new byte[8192];
             int bytesRead;
-            long totalBytes = 0;
 
             while ((bytesRead = in.read(buffer)) != -1) {
               out.write(buffer, 0, bytesRead);
-              totalBytes += bytesRead;
             }
 
-            LOGGER.info("Downloaded " + totalBytes + " bytes: " + localFile.getName());
-            return localFile;
+            byte[] fileContent = out.toByteArray();
+            storageProvider.writeFile(filePath, fileContent);
+
+            LOGGER.info("Downloaded " + fileContent.length + " bytes: " + filename);
+            return filePath;
           }
         } else if (responseCode == 429) {
           // Rate limited

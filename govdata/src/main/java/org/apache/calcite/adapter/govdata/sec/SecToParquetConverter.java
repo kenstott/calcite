@@ -188,7 +188,7 @@ public class SecToParquetConverter {
     GenericRecord companyInfo = extractCompanyInfo(doc, metadata);
 
     // Create contextual chunks for embeddings
-    List<SecTextVectorizer.ContextualChunk> chunks = vectorizer.createContextualChunks(doc, secFile);
+    List<SecTextVectorizer.ContextualChunk> chunks = vectorizer.createContextualChunks(doc, secFile.getAbsolutePath());
     List<GenericRecord> embeddings = createEmbeddingRecords(chunks, metadata);
 
     // Write to partitioned Parquet files
