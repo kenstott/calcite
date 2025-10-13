@@ -75,6 +75,7 @@ public class CensusApiClient {
   private final AtomicLong lastRequestTime;
   private final StorageProvider storageProvider;
   private final GeoCacheManifest cacheManifest;
+  private final String operatingDirectory;
 
   public CensusApiClient(String apiKey, File cacheDir) {
     this(apiKey, cacheDir, new ArrayList<>(), null, null);
@@ -91,8 +92,14 @@ public class CensusApiClient {
 
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(apiKey, cacheDir, cacheDir.getAbsolutePath(), censusYears, storageProvider, cacheManifest);
+  }
+
+  public CensusApiClient(String apiKey, File cacheDir, String operatingDirectory, List<Integer> censusYears,
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
+    this.operatingDirectory = operatingDirectory;
     this.censusYears = censusYears;
     this.objectMapper = new ObjectMapper();
     this.rateLimiter = new Semaphore(MAX_REQUESTS_PER_SECOND);
@@ -704,7 +711,7 @@ public class CensusApiClient {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-        cacheManifest.save(cacheDir.getAbsolutePath());
+        cacheManifest.save(this.operatingDirectory);
       }
       return;
     }

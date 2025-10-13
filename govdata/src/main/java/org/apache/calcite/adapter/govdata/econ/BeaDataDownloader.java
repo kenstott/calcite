@@ -115,7 +115,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BeaDataDownloader(String cacheDir, String parquetDir, String apiKey, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, storageProvider, sharedManifest);
+    this(cacheDir, cacheDir, parquetDir, apiKey, storageProvider, sharedManifest);
+  }
+
+  public BeaDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDir, String apiKey, StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
     this.parquetDir = parquetDir;
     this.apiKey = apiKey;
   }
@@ -263,13 +267,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Check if file exists and update manifest
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     File jsonFile = new File(outputDir, "gdp_components.json");
     if (jsonFile.exists() && jsonFile.length() > 100) {  // Check file has real data
       LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
       String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
       cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(cacheDir);
+      cacheManifest.save(operatingDirectory);
       return;
     }
 
@@ -386,7 +390,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
     cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
@@ -552,7 +556,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.debug("Downloading BEA regional income data for year {} with API key: {}...", year, apiKey.substring(0, 4));
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     List<RegionalIncome> incomeData = new ArrayList<>();
@@ -706,7 +710,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/regional_income.json";
     cacheManifest.markCached("regional_income", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
@@ -832,7 +836,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.debug("Downloading BEA trade statistics for year {}", year);
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     List<TradeStatistic> tradeData = new ArrayList<>();
@@ -927,7 +931,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
     cacheManifest.markCached("trade_statistics", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
@@ -1183,7 +1187,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     LOGGER.debug("Downloading BEA ITA data for year {}", year);
@@ -1310,7 +1314,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
     cacheManifest.markCached("ita_data", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
@@ -1493,7 +1497,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
@@ -1605,7 +1609,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
     cacheManifest.markCached("industry_gdp", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
@@ -1979,7 +1983,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Creates an empty GDP components file for years where data is not available.
    */
   private void createEmptyGdpComponentsFile(int year, String reason) throws IOException {
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     File jsonFile = new File(outputDir, "gdp_components.json");
@@ -2190,7 +2194,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Create local cache directory
-    File outputDir = new File(cacheDir, "source=econ/type=indicators/year=" + year);
+    File outputDir = new File(cacheDirectory, "source=econ/type=indicators/year=" + year);
     outputDir.mkdirs();
 
     // Check if data already exists
@@ -2199,7 +2203,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
       String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
       cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
-      cacheManifest.save(cacheDir);
+      cacheManifest.save(operatingDirectory);
       return;
     }
 
@@ -2310,7 +2314,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest (use relative path)
     String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
     cacheManifest.markCached("state_gdp", year, cacheParams, relativePath, jsonFile.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
   }
 
   @SuppressWarnings("deprecation")

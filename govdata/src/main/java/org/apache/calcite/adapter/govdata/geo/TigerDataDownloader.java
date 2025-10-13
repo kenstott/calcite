@@ -96,6 +96,7 @@ public class TigerDataDownloader {
   private final boolean autoDownload;
   private final StorageProvider storageProvider;
   private final GeoCacheManifest cacheManifest;
+  private final String operatingDirectory;
 
   /**
    * Constructor with year list and StorageProvider (matching ECON pattern).
@@ -110,7 +111,16 @@ public class TigerDataDownloader {
    */
   public TigerDataDownloader(File cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    this(cacheDir, cacheDir.getAbsolutePath(), dataYears, autoDownload, storageProvider, cacheManifest);
+  }
+
+  /**
+   * Constructor with separate cache and operating directories (standardized naming).
+   */
+  public TigerDataDownloader(File cacheDir, String operatingDirectory, List<Integer> dataYears,
+      boolean autoDownload, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
     this.cacheDir = cacheDir;
+    this.operatingDirectory = operatingDirectory;
     this.dataYears = dataYears;
     this.autoDownload = autoDownload;
     this.storageProvider = storageProvider;
@@ -918,7 +928,7 @@ public class TigerDataDownloader {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-        cacheManifest.save(cacheDir.getAbsolutePath());
+        cacheManifest.save(this.operatingDirectory);
       }
       return;
     }
@@ -944,7 +954,7 @@ public class TigerDataDownloader {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-        cacheManifest.save(cacheDir.getAbsolutePath());
+        cacheManifest.save(this.operatingDirectory);
       }
     } catch (Exception e) {
       LOGGER.error("Error converting {} to Parquet", dataType, e);

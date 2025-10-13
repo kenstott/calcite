@@ -57,7 +57,11 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   }
 
   public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, storageProvider, sharedManifest);
+    this(cacheDir, cacheDir, storageProvider, sharedManifest);
+  }
+
+  public TreasuryDataDownloader(String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
   }
 
   @Override protected long getMinRequestIntervalMs() {

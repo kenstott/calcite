@@ -75,8 +75,11 @@ public abstract class AbstractEconDataDownloader {
   /** Shared ObjectMapper for JSON serialization */
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 
-  /** Cache directory for storing downloaded raw data */
-  protected final String cacheDir;
+  /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/econ/) */
+  protected final String cacheDirectory;
+
+  /** Operating directory for storing operational metadata (e.g., .aperio/econ/) */
+  protected final String operatingDirectory;
 
   /** Storage provider for reading/writing parquet files (supports local and S3) */
   protected final StorageProvider storageProvider;
@@ -93,11 +96,11 @@ public abstract class AbstractEconDataDownloader {
   /**
    * Constructs base downloader with required infrastructure.
    *
-   * @param cacheDir Local directory for caching raw JSON data
+   * @param cacheDirectory Local directory for caching raw JSON data
    * @param storageProvider Provider for parquet file operations
    */
-  protected AbstractEconDataDownloader(String cacheDir, StorageProvider storageProvider) {
-    this(cacheDir, storageProvider, null);
+  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider storageProvider) {
+    this(cacheDirectory, cacheDirectory, storageProvider, null);
   }
 
   /**
@@ -105,14 +108,27 @@ public abstract class AbstractEconDataDownloader {
    * This constructor should be used when multiple downloaders share the same manifest
    * to avoid stale cache issues.
    *
-   * @param cacheDir Local directory for caching raw JSON data
+   * @param cacheDirectory Local directory for caching raw JSON data
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from disk)
    */
-  protected AbstractEconDataDownloader(String cacheDir, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    this.cacheDir = cacheDir;
+  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider storageProvider, CacheManifest sharedManifest) {
+    this(cacheDirectory, cacheDirectory, storageProvider, sharedManifest);
+  }
+
+  /**
+   * Constructs base downloader with separate raw cache and operating directories.
+   *
+   * @param cacheDirectory Local directory for caching raw JSON data
+   * @param operatingDirectory Directory for storing operational metadata (.aperio/<schema>/)
+   * @param storageProvider Provider for parquet file operations
+   * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
+   */
+  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, StorageProvider storageProvider, CacheManifest sharedManifest) {
+    this.cacheDirectory = cacheDirectory;
+    this.operatingDirectory = operatingDirectory;
     this.storageProvider = storageProvider;
-    this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(cacheDir);
+    this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build();
@@ -160,12 +176,12 @@ public abstract class AbstractEconDataDownloader {
     }
 
     // 2. Defensive check: if file exists but not in manifest, update manifest
-    File jsonFile = new File(cacheDir, relativePath);
+    File jsonFile = new File(cacheDirectory, relativePath);
     if (jsonFile.exists()) {
       LOGGER.info("Found existing {} file for year {} - updating manifest", dataType, year);
       long fileSize = jsonFile.length();
       cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-      cacheManifest.save(cacheDir);
+      cacheManifest.save(operatingDirectory);
       return true;
     }
 
@@ -187,13 +203,13 @@ public abstract class AbstractEconDataDownloader {
       String relativePath, String jsonContent) throws IOException {
 
     // Save raw JSON data to local cache directory
-    File jsonFile = new File(cacheDir, relativePath);
+    File jsonFile = new File(cacheDirectory, relativePath);
     jsonFile.getParentFile().mkdirs();
     Files.write(jsonFile.toPath(), jsonContent.getBytes(StandardCharsets.UTF_8));
 
     // Mark as cached in manifest
     cacheManifest.markCached(dataType, year, params, relativePath, jsonContent.length());
-    cacheManifest.save(cacheDir);
+    cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
   }

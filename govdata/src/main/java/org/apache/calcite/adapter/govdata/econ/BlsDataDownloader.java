@@ -84,7 +84,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, storageProvider, sharedManifest);
+    this(apiKey, cacheDir, cacheDir, storageProvider, sharedManifest);
+  }
+
+  public BlsDataDownloader(String apiKey, String cacheDirectory, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDirectory, operatingDirectory, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
