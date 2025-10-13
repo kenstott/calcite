@@ -38,6 +38,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -108,8 +109,18 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     LOGGER.info("Creating unified government data schema for source: {}", dataSource);
 
+    // Establish operating cache directory (.aperio/<dataSource>/) ONCE for all sub-schemas
+    // This is ALWAYS on local filesystem (working directory), even if parquet data is on S3
+    // The .aperio directory requires file locking which doesn't work on S3
+    String operatingDirectory = establishOperatingDirectory(dataSource);
+    LOGGER.debug("Established operating directory for {}: {}", dataSource, operatingDirectory);
+
+    // Add operating directory to operand so sub-schemas can use it
+    Map<String, Object> enrichedOperand = new HashMap<>(operand);
+    enrichedOperand.put("operatingDirectory", operatingDirectory);
+
     // Build the unified operand for FileSchemaFactory
-    Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, operand);
+    Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, enrichedOperand);
 
     // Add storageType and storageConfig to unifiedOperand if storage provider was initialized
     // This ensures FileSchemaFactory can properly configure DuckDB with S3 endpoint and credentials
@@ -127,6 +138,25 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("Creating single FileSchema with unified operand for {} data", dataSource);
     Schema schema =
         org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
+
+    // Get the operating cache directory from FileSchema (.aperio/<schema_name>/)
+    // This is established by FileSchema during initialization and should be passed to sub-schemas
+    File operatingCacheDirectory = null;
+    if (schema instanceof FileSchema) {
+      operatingCacheDirectory = ((FileSchema) schema).getOperatingCacheDirectory();
+    } else if (schema instanceof DuckDBJdbcSchema) {
+      FileSchema fileSchema = ((DuckDBJdbcSchema) schema).getFileSchema();
+      if (fileSchema != null) {
+        operatingCacheDirectory = fileSchema.getOperatingCacheDirectory();
+      }
+    }
+
+    if (operatingCacheDirectory != null) {
+      LOGGER.debug("Operating cache directory established by FileSchema: {}", operatingCacheDirectory);
+      // Store this for potential future use by sub-schemas if they need to access it post-creation
+      // However, by this point buildOperand() has already been called, so sub-schemas already
+      // established their own directories. This architectural issue requires deeper refactoring.
+    }
 
     // Register custom ECON converter if this is ECON data
     if (unifiedOperand.containsKey("_econData") && Boolean.TRUE.equals(unifiedOperand.get("_econData"))) {
@@ -458,8 +488,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     String econCacheDir = cacheDirectory + "/econ";
 
-    // Load cache manifest
-    CacheManifest cacheManifest = CacheManifest.load(econCacheDir);
+    // Get .aperio directory for metadata (always local filesystem)
+    File aperioDir = fileSchema.getOperatingCacheDirectory();
+    String manifestPath = aperioDir.getAbsolutePath();
+
+    // Load cache manifest from .aperio directory (not raw cache directory)
+    CacheManifest cacheManifest = CacheManifest.load(manifestPath);
 
     // Extract API keys from environment variables or operand
     String blsApiKey = extractApiKey(operand, "blsApiKey", "BLS_API_KEY");
@@ -479,22 +513,22 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create downloaders (lightweight - just configuration, no download occurs)
     BlsDataDownloader blsDownloader = blsApiKey != null
-        ? new BlsDataDownloader(blsApiKey, econCacheDir, storageProvider, cacheManifest)
+        ? new BlsDataDownloader(blsApiKey, econCacheDir, manifestPath, storageProvider, cacheManifest)
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null
-        ? new FredDataDownloader(econCacheDir, fredApiKey, storageProvider, cacheManifest)
+        ? new FredDataDownloader(econCacheDir, manifestPath, fredApiKey, storageProvider, cacheManifest)
         : null;
 
     TreasuryDataDownloader treasuryDownloader =
-        new TreasuryDataDownloader(econCacheDir, storageProvider, cacheManifest);
+        new TreasuryDataDownloader(econCacheDir, manifestPath, storageProvider, cacheManifest);
 
     BeaDataDownloader beaDownloader = beaApiKey != null && econParquetDir != null
-        ? new BeaDataDownloader(econCacheDir, econParquetDir, beaApiKey, storageProvider, cacheManifest)
+        ? new BeaDataDownloader(econCacheDir, manifestPath, econParquetDir, beaApiKey, storageProvider, cacheManifest)
         : null;
 
     WorldBankDataDownloader worldBankDownloader =
-        new WorldBankDataDownloader(econCacheDir, storageProvider, cacheManifest);
+        new WorldBankDataDownloader(econCacheDir, manifestPath, storageProvider, cacheManifest);
 
     // Create and register the ECON converter
     EconRawToParquetConverter econConverter =
@@ -502,7 +536,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     fileSchema.registerRawToParquetConverter(econConverter);
 
-    LOGGER.info("Registered EconRawToParquetConverter with FileSchema for cache directory: {}", econCacheDir);
+    LOGGER.info("Registered EconRawToParquetConverter with FileSchema (raw cache: {}, manifest: {})", econCacheDir, manifestPath);
   }
 
   /**
@@ -523,6 +557,30 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Fallback to system property
     return System.getProperty(envKey);
+  }
+
+  /**
+   * Establish the operating directory (.aperio/<dataSource>/) ONCE for all sub-schemas.
+   * This is ALWAYS on local filesystem (working directory), even if parquet data is on S3.
+   * The .aperio directory requires file locking which doesn't work on S3.
+   *
+   * @param dataSource The data source name (sec, geo, econ, etc.)
+   * @return The absolute path to the operating directory
+   */
+  private String establishOperatingDirectory(String dataSource) {
+    String workingDir = System.getProperty("user.dir");
+    if ("/".equals(workingDir) || workingDir == null || workingDir.isEmpty()) {
+      LOGGER.warn("Working directory is root or invalid ('{}'), falling back to temp directory", workingDir);
+      workingDir = System.getProperty("java.io.tmpdir");
+    }
+
+    String operatingDirectory = workingDir + "/.aperio/" + dataSource.toLowerCase();
+    File operatingDir = new File(operatingDirectory);
+    if (!operatingDir.exists()) {
+      operatingDir.mkdirs();
+    }
+
+    return operatingDirectory;
   }
 
   // Deprecated create methods removed - now using buildOperand pattern with unified FileSchema creation

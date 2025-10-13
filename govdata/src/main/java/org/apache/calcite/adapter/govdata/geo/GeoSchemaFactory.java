@@ -329,8 +329,18 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     long geoDataTtlMillis = geoCacheTtlDays * 24L * 60 * 60 * 1000; // Convert days to milliseconds
     long currentTime = System.currentTimeMillis();
 
-    // Load or create cache manifest for tracking parquet conversions
-    GeoCacheManifest cacheManifest = GeoCacheManifest.load(cacheDir);
+    // Operating directory for metadata (.aperio/geo/)
+    // This is passed from GovDataSchemaFactory which establishes it centrally
+    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
+    String geoOperatingDirectory = (String) operand.get("operatingDirectory");
+    if (geoOperatingDirectory == null) {
+      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
+    }
+    LOGGER.debug("Received operating directory from parent: {}", geoOperatingDirectory);
+
+    // Load or create cache manifest from operating directory
+    GeoCacheManifest cacheManifest = GeoCacheManifest.load(geoOperatingDirectory);
+    LOGGER.debug("Loaded GEO cache manifest from {}", geoOperatingDirectory);
 
     // Download TIGER data if enabled
     if (Arrays.asList(enabledSources).contains("tiger") && !tigerYears.isEmpty()) {
@@ -385,7 +395,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("TIGER data needs processing for years: {}", yearsToProcess);
         // Use simple cache directory structure for raw data downloads
         File tigerCacheDir = new File(cacheDir, "tiger");
-        TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, tigerYears, true, storageProvider, cacheManifest);
+        TigerDataDownloader tigerDownloader = new TigerDataDownloader(tigerCacheDir, geoOperatingDirectory, tigerYears, true, storageProvider, cacheManifest);
 
         try {
           // Download and convert TIGER data only for years that need processing
@@ -552,9 +562,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         HudCrosswalkFetcher hudFetcher;
 
         if (hudToken != null && !hudToken.isEmpty()) {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider, cacheManifest);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest);
         } else {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, storageProvider, cacheManifest);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest);
         }
 
         try {
@@ -630,7 +640,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         // Use simple cache directory structure for raw data downloads
         File censusCacheDir = new File(cacheDir, "census");
         File demographicParquetDir = new File(geoParquetDir, DEMOGRAPHIC_TYPE);
-        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, censusYears, storageProvider, cacheManifest);
+        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, geoOperatingDirectory, censusYears, storageProvider, cacheManifest);
 
         try {
           LOGGER.info("Downloading Census demographic data for years: {}", censusYears);
