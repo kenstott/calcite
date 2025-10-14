@@ -3760,6 +3760,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       LOGGER.debug("findMatchingFiles: StorageProvider returned {} files", allFiles.size());
 
+      // Debug: Log all returned files
+      if (LOGGER.isDebugEnabled()) {
+        for (StorageProvider.FileEntry entry : allFiles) {
+          LOGGER.debug("  StorageProvider returned: path={}, name={}, isDir={}",
+              entry.getPath(), entry.getName(), entry.isDirectory());
+        }
+      }
+
       // Create glob matcher for the pattern
       PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
 
@@ -3793,6 +3801,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
         // Convert to Path for glob matching
         Path relPath = Paths.get(relativePath);
+
+        // Debug: Log matching attempt
+        if (LOGGER.isDebugEnabled()) {
+          boolean mainMatch = matcher.matches(relPath);
+          boolean rootMatch = rootMatcher != null && rootMatcher.matches(relPath);
+          LOGGER.debug("  Checking file: fullPath={}, relativePath={}, mainMatch={}, rootMatch={}",
+              fullPath, relativePath, mainMatch, rootMatch);
+        }
 
         // Match against main pattern OR root pattern (if applicable)
         if (matcher.matches(relPath) ||
