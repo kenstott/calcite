@@ -2673,6 +2673,12 @@ public class XbrlToParquetConverter implements FileConverter {
       writeParquetFile(transactions, schema, outputPath);
       LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
 
+      // CRITICAL: Add insider file to outputFiles so addToManifest() can detect it
+      outputFiles.add(new File(outputPath));
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Added insider file to outputFiles: {}", outputPath);
+      }
+
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
           + transactions.size() + " records");
 
@@ -2686,6 +2692,11 @@ public class XbrlToParquetConverter implements FileConverter {
 
         try {
           writeInsiderVectorizedBlobsToParquet(doc, vectorizedPath, cik, filingType, filingDate, sourcePath, accession);
+          // CRITICAL: Add vectorized file to outputFiles so addToManifest() can detect it
+          outputFiles.add(new File(vectorizedPath));
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Added vectorized file to outputFiles: {}", vectorizedPath);
+          }
         } catch (Exception ve) {
           LOGGER.warn("Failed to create vectorized blobs for insider form: " + ve.getMessage());
         }
