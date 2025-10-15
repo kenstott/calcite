@@ -2540,7 +2540,8 @@ public class XbrlToParquetConverter implements FileConverter {
       conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
       conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
       conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
-      conn.setRequestProperty("Accept-Encoding", "gzip, deflate");
+      // Removed "Accept-Encoding: gzip, deflate" - was causing SEC to return gzip-compressed error responses
+      // that couldn't be read as plain text. SEC.gov appears to return 403 for XSD downloads regardless.
       conn.setRequestProperty("DNT", "1");
       conn.setRequestProperty("Connection", "keep-alive");
       conn.setRequestProperty("Upgrade-Insecure-Requests", "1");
