@@ -312,6 +312,18 @@ public class ModelHandler {
       final SchemaPlus schemaPlus = parentSchema.add(jsonSchema.name, schema);
       populateSchema(jsonSchema, schemaPlus);
     } catch (Exception e) {
+      // Print full stack trace to help diagnose instantiation errors
+      System.err.println("=== DETAILED ERROR INSTANTIATING SCHEMA ===");
+      System.err.println("Schema: " + jsonSchema);
+      System.err.println("Exception message: " + e.getMessage());
+      System.err.println("Exception class: " + e.getClass().getName());
+      System.err.println("Full stack trace:");
+      e.printStackTrace(System.err);
+      if (e.getCause() != null) {
+        System.err.println("=== CAUSED BY ===");
+        e.getCause().printStackTrace(System.err);
+      }
+      System.err.println("=== END ERROR DETAILS ===");
       throw new RuntimeException("Error instantiating " + jsonSchema, e);
     }
   }

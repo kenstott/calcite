@@ -35,6 +35,9 @@
         <Logger name="org.apache.calcite.adapter.sec" level="DEBUG"/>
         <Logger name="org.apache.calcite.adapter.govdata" level="DEBUG"/>
 
+        <!-- Enable DEBUG for model loading to see full stack traces -->
+        <Logger name="org.apache.calcite.model" level="DEBUG"/>
+
         <!-- Reduce Parquet noise -->
         <Logger name="org.apache.parquet" level="WARN"/>
 
