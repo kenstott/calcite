@@ -8,6 +8,7 @@
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
       "operand": {
         "dataSource": "sec",
+        "refreshInterval": "1h",
         "executionEngine": "DUCKDB",
         "ephemeralCache": false,
         "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
@@ -35,6 +36,7 @@
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
       "operand": {
         "dataSource": "econ",
+        "refreshInterval": "1h",
         "executionEngine": "DUCKDB",
         "ephemeralCache": false,
         "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
@@ -73,6 +75,7 @@
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
       "operand": {
         "dataSource": "geo",
+        "refreshInterval": "1h",
         "executionEngine": "DUCKDB",
         "ephemeralCache": false,
         "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
@@ -89,6 +92,7 @@
       "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
       "operand": {
         "dataSource": "census",
+        "refreshInterval": "1h",
         "executionEngine": "DUCKDB",
         "ephemeralCache": false,
         "cacheDirectory": "${GOVDATA_CACHE_DIR:govdata-cache}",
