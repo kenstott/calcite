@@ -73,19 +73,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileSystems;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -3530,6 +3525,66 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Determines if a partitioned table should use lazy initialization.
+   * Returns true for DuckDB+Hive tables with a pattern and refresh interval.
+   */
+  private boolean shouldUseLazyInitialization(PartitionedTableConfig config) {
+    LOGGER.info("Checking lazy init for table '{}': engineConfig={}, engineType={}, refreshInterval={}",
+        config.getName(),
+        engineConfig != null ? "present" : "null",
+        engineConfig != null ? engineConfig.getEngineType() : "null",
+        this.refreshInterval);
+
+    // Must have engine config
+    if (engineConfig == null) {
+      LOGGER.info("Table '{}' - lazy init disabled: no engine config", config.getName());
+      return false;
+    }
+
+    // Check if DuckDB is available either as the primary engine or nested within PARQUET engine
+    boolean hasDuckDB = false;
+    if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.DUCKDB) {
+      hasDuckDB = true;
+      LOGGER.info("Table '{}' - DuckDB available as primary engine", config.getName());
+    } else if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
+      // Check if there's a nested DuckDB config
+      if (engineConfig.getDuckDBConfig() != null) {
+        hasDuckDB = true;
+        LOGGER.info("Table '{}' - DuckDB available as nested engine within PARQUET", config.getName());
+      }
+    }
+
+    if (!hasDuckDB) {
+      LOGGER.info("Table '{}' - lazy init disabled: no DuckDB engine available", config.getName());
+      return false;
+    }
+
+    // Must have refresh interval (otherwise we'd never enumerate files)
+    if (this.refreshInterval == null) {
+      LOGGER.info("Table '{}' - lazy init disabled: no refresh interval", config.getName());
+      return false;
+    }
+
+    // Must have Hive-style partitioning
+    if (config.getPartitions() == null || !"hive".equals(config.getPartitions().getStyle())) {
+      LOGGER.info("Table '{}' - lazy init disabled: partitions={}, style={}",
+          config.getName(),
+          config.getPartitions() != null ? "present" : "null",
+          config.getPartitions() != null ? config.getPartitions().getStyle() : "null");
+      return false;
+    }
+
+    // Must have a pattern (required for DuckDB parquet_scan)
+    if (config.getPattern() == null || config.getPattern().trim().isEmpty()) {
+      LOGGER.info("Table '{}' - lazy init disabled: pattern is null or empty", config.getName());
+      return false;
+    }
+
+    LOGGER.info("Table '{}' - USING LAZY INIT", config.getName());
+    return true;
+  }
+
+  /**
    * Process partitioned table configurations.
    */
   private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder) {
@@ -3557,15 +3612,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.info("Processing partitioned table config: {}", partTableConfig);
         PartitionedTableConfig config = PartitionedTableConfig.fromMap(partTableConfig);
 
-        // Find all files matching the pattern
-        List<String> matchingFiles = findMatchingFiles(config.getPattern());
+        // Check if this is a DuckDB+Hive refreshable table that should use lazy initialization
+        boolean useLazyInit = shouldUseLazyInitialization(config);
 
-        if (matchingFiles.isEmpty()) {
-          LOGGER.debug("No files found matching pattern: {}", config.getPattern());
-          continue;
+        // Find all files matching the pattern (skip for lazy-initialized tables)
+        List<String> matchingFiles;
+        if (useLazyInit) {
+          LOGGER.info("Table '{}' will use lazy initialization - skipping file enumeration during schema loading", config.getName());
+          matchingFiles = java.util.Collections.emptyList();
+        } else {
+          matchingFiles = findMatchingFiles(config.getPattern());
+
+          if (matchingFiles.isEmpty()) {
+            LOGGER.debug("No files found matching pattern: {}", config.getPattern());
+            continue;
+          }
+
+          LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
         }
-
-        LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
 
         // Detect or apply partition scheme
         PartitionDetector.PartitionInfo partitionInfo = null;
@@ -3656,9 +3720,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             LOGGER.debug("No constraint config found for table '{}'", config.getName());
           }
           // Use refreshable version that can discover new partitions
+          // Use baseDirectory (String) instead of sourceDirectory (File) to support S3 URIs
+          String directoryPath;
+          if (baseDirectory != null) {
+            directoryPath = baseDirectory;
+          } else if (sourceDirectory != null) {
+            directoryPath = sourceDirectory.getAbsolutePath();
+          } else {
+            LOGGER.error("Both baseDirectory and sourceDirectory are null for table '{}', cannot create refreshable table", config.getName());
+            continue;
+          }
           RefreshablePartitionedParquetTable refreshableTable =
               new RefreshablePartitionedParquetTable(config.getName(),
-                  sourceDirectory, config.getPattern(), config,
+                  directoryPath, config.getPattern(), config,
                   engineConfig, RefreshInterval.parse(this.refreshInterval), constraintConfig, name, this.storageProvider);
           // Set refresh context for DuckDB notifications
           refreshableTable.setRefreshContext(this, config.getName());
@@ -3695,28 +3769,57 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         }
 
         // Record table metadata for comprehensive tracking (same as other table types)
-        // Use the first file as representative source for partitioned tables
-        if (!matchingFiles.isEmpty()) {
-          String firstFile = matchingFiles.get(0);
-          LOGGER.info("Recording metadata for partitioned table '{}' using first file: {}", config.getName(), firstFile);
-          try {
-            Source partitionSource = Sources.of(firstFile);
-            LOGGER.info("Created Source for partitioned table '{}': {}", config.getName(), partitionSource);
-
-            // Record the partitioned table in conversion metadata for DuckDB discovery
-            LOGGER.info("About to record partitioned table '{}' in conversion metadata, conversionMetadata: {}",
-                        config.getName(), conversionMetadata != null ? "present" : "null");
-            if (conversionMetadata != null) {
-              conversionMetadata.recordTable(config.getName(), table, partitionSource, partTableConfig);
-              LOGGER.info("Successfully recorded partitioned table '{}' in conversion metadata", config.getName());
+        // For lazy-initialized tables, use the pattern as a dummy source
+        // For normal tables, use the first file as representative source
+        try {
+          Source partitionSource;
+          if (matchingFiles.isEmpty() && useLazyInit) {
+            // Lazy-initialized table - use pattern as dummy source
+            // The actual file paths will be populated during first refresh
+            // Use baseDirectory (supports S3 URIs) instead of sourceDirectory.getAbsolutePath()
+            String basePath;
+            if (baseDirectory != null) {
+              // baseDirectory is already a string path that can be S3 URI
+              basePath = baseDirectory;
+            } else if (sourceDirectory != null) {
+              // Fallback to sourceDirectory for local paths
+              basePath = sourceDirectory.getAbsolutePath();
             } else {
-              LOGGER.error("ConversionMetadata is null - cannot record partitioned table '{}'", config.getName());
+              LOGGER.error("Both baseDirectory and sourceDirectory are null for table '{}', cannot record metadata", config.getName());
+              continue;
             }
-          } catch (Exception recordEx) {
-            LOGGER.error("Failed to record metadata for partitioned table '{}': {}", config.getName(), recordEx.getMessage(), recordEx);
+
+            // Ensure path separator
+            if (!basePath.endsWith("/")) {
+              basePath = basePath + "/";
+            }
+
+            String patternPath = basePath + config.getPattern();
+            partitionSource = Sources.of(patternPath);
+            LOGGER.info("Recording metadata for lazy-initialized table '{}' using pattern: {}", config.getName(), patternPath);
+          } else if (!matchingFiles.isEmpty()) {
+            // Normal table - use first file
+            String firstFile = matchingFiles.get(0);
+            partitionSource = Sources.of(firstFile);
+            LOGGER.info("Recording metadata for partitioned table '{}' using first file: {}", config.getName(), firstFile);
+          } else {
+            LOGGER.warn("No matching files found for partitioned table '{}', skipping metadata recording", config.getName());
+            continue; // Skip to next table
           }
-        } else {
-          LOGGER.warn("No matching files found for partitioned table '{}', skipping metadata recording", config.getName());
+
+          LOGGER.info("Created Source for partitioned table '{}': {}", config.getName(), partitionSource);
+
+          // Record the partitioned table in conversion metadata for DuckDB discovery
+          LOGGER.info("About to record partitioned table '{}' in conversion metadata, conversionMetadata: {}",
+                      config.getName(), conversionMetadata != null ? "present" : "null");
+          if (conversionMetadata != null) {
+            conversionMetadata.recordTable(config.getName(), table, partitionSource, partTableConfig);
+            LOGGER.info("Successfully recorded partitioned table '{}' in conversion metadata", config.getName());
+          } else {
+            LOGGER.error("ConversionMetadata is null - cannot record partitioned table '{}'", config.getName());
+          }
+        } catch (Exception recordEx) {
+          LOGGER.error("Failed to record metadata for partitioned table '{}': {}", config.getName(), recordEx.getMessage(), recordEx);
         }
 
       } catch (Exception e) {
@@ -4733,6 +4836,82 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Notifies all pattern-aware listeners that a table has been refreshed with a pattern.
+   * This is used for DuckDB+Hive optimization where the pattern is sufficient for view recreation.
+   *
+   * @param tableName The table name
+   * @param pattern The file pattern (glob) for the table
+   */
+  public void notifyTableRefreshedWithPattern(String tableName, String pattern) {
+    for (org.apache.calcite.adapter.file.refresh.TableRefreshListener listener : refreshListeners) {
+      try {
+        if (listener instanceof org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener) {
+          ((org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener) listener)
+              .onTableRefreshedWithPattern(tableName, pattern);
+          LOGGER.debug("Notified pattern-aware listener for table '{}' with pattern: {}", tableName, pattern);
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error notifying pattern-aware refresh listener for table '{}': {}", tableName, e.getMessage(), e);
+      }
+    }
+  }
+
+  /**
+   * Gets the baseline snapshot for a table from conversion metadata.
+   * Used by DuckDB+Hive optimization for fast change detection.
+   *
+   * @param tableName The table name
+   * @return The baseline snapshot, or null if not found
+   */
+  public ConversionMetadata.@Nullable PartitionBaseline getTableBaseline(String tableName) {
+    if (conversionMetadata == null) {
+      return null;
+    }
+
+    ConversionMetadata.ConversionRecord record = conversionMetadata.getAllConversions().get(tableName);
+    if (record == null) {
+      return null;
+    }
+
+    return record.baseline;
+  }
+
+  /**
+   * Updates the baseline snapshot for a table in conversion metadata.
+   * Used by DuckDB+Hive optimization to persist file metadata for fast restarts.
+   *
+   * @param tableName The table name
+   * @param baseline The new baseline snapshot
+   */
+  public void updateTableBaseline(String tableName, ConversionMetadata.PartitionBaseline baseline) {
+    if (conversionMetadata == null) {
+      LOGGER.warn("Cannot update baseline for table '{}' - conversion metadata is null", tableName);
+      return;
+    }
+
+    ConversionMetadata.ConversionRecord record = conversionMetadata.getAllConversions().get(tableName);
+    if (record == null) {
+      LOGGER.warn("Cannot update baseline for table '{}' - no conversion record found", tableName);
+      return;
+    }
+
+    record.baseline = baseline;
+    record.lastChangeCheck = System.currentTimeMillis();
+
+    // Persist to disk
+    try {
+      // Use reflection to call saveMetadata (it's private)
+      java.lang.reflect.Method saveMethod = conversionMetadata.getClass().getDeclaredMethod("saveMetadata");
+      saveMethod.setAccessible(true);
+      saveMethod.invoke(conversionMetadata);
+      LOGGER.debug("Updated baseline for table '{}' with {} files",
+          tableName, baseline != null && baseline.files != null ? baseline.files.size() : 0);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save baseline for table '{}': {}", tableName, e.getMessage(), e);
+    }
+  }
+
+  /**
    * Registers a custom raw-to-parquet converter for domain-specific transformations.
    * Custom converters are checked before FileSchema's default conversion.
    *
@@ -4814,6 +4993,37 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     // Tables will use this metadata when getStatistic() is called
     // This enables query optimization and JDBC metadata support
+  }
+
+  /**
+   * Sets conversion records with viewScanPatterns for DuckDB Hive optimization.
+   * This is called by FileSchemaFactory after receiving conversion records from sub-schema factories (e.g., SEC).
+   *
+   * @param conversionRecords Map of table name to conversion record with viewScanPattern
+   */
+  public void setConversionRecords(
+      Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords) {
+    if (conversionRecords == null || conversionRecords.isEmpty()) {
+      return;
+    }
+
+    LOGGER.info("FileSchema.setConversionRecords: Registering {} table patterns for DuckDB", conversionRecords.size());
+
+    // Add each conversion record to the FileSchema's ConversionMetadata
+    for (Map.Entry<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> entry
+        : conversionRecords.entrySet()) {
+      String tableName = entry.getKey();
+      org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record = entry.getValue();
+
+      // Register the record in the ConversionMetadata using the proper method
+      if (this.conversionMetadata != null) {
+        this.conversionMetadata.putConversionRecord(tableName, record);
+        LOGGER.info("  - Registered viewScanPattern for '{}': {}", tableName, record.viewScanPattern);
+      }
+    }
+
+    LOGGER.info("FileSchema.setConversionRecords: Complete. Total records in metadata: {}",
+        this.conversionMetadata != null ? this.conversionMetadata.getAllConversions().size() : 0);
   }
 
   /**

@@ -489,6 +489,129 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
+   * Detects if a table is Hive-partitioned based on the file list.
+   * Hive partitioning uses directory structure with key=value patterns.
+   *
+   * @param fileList Comma-separated list of file paths (may be bracketed)
+   * @return true if the files follow Hive partitioning convention
+   */
+  private static boolean isHivePartitioned(String fileList) {
+    if (fileList == null || fileList.isEmpty()) {
+      return false;
+    }
+
+    // Remove brackets if present
+    String cleanList = fileList;
+    if ((fileList.startsWith("[") && fileList.endsWith("]")) ||
+        (fileList.startsWith("{") && fileList.endsWith("}"))) {
+      cleanList = fileList.substring(1, fileList.length() - 1);
+    }
+
+    // Split by comma to get individual files
+    String[] files = cleanList.split(",");
+
+    // Need at least 2 files to be considered partitioned
+    if (files.length < 2) {
+      return false;
+    }
+
+    // Check if files contain Hive partition patterns (key=value in path)
+    // Look for patterns like /year=2020/ or /country=US/
+    int partitionedFileCount = 0;
+    for (String file : files) {
+      String trimmedFile = file.trim();
+      // Remove quotes if present
+      if (trimmedFile.startsWith("'") && trimmedFile.endsWith("'")) {
+        trimmedFile = trimmedFile.substring(1, trimmedFile.length() - 1);
+      }
+
+      // Check for key=value pattern in path
+      if (trimmedFile.matches(".*[/\\\\][a-zA-Z_][a-zA-Z0-9_]*=[^/\\\\]+[/\\\\].*")) {
+        partitionedFileCount++;
+      }
+    }
+
+    // Consider it Hive partitioned if most files (>50%) have partition patterns
+    return partitionedFileCount > files.length / 2;
+  }
+
+  /**
+   * Derives a glob pattern from a list of Hive-partitioned files.
+   * Extracts the common base directory and creates a pattern like base/**\/*.parquet
+   *
+   * @param fileList Comma-separated list of file paths (may be bracketed)
+   * @return Glob pattern suitable for DuckDB's parquet_scan with hive_partitioning=true
+   */
+  private static String deriveGlobPattern(String fileList) {
+    if (fileList == null || fileList.isEmpty()) {
+      return null;
+    }
+
+    // Remove brackets if present
+    String cleanList = fileList;
+    if ((fileList.startsWith("[") && fileList.endsWith("]")) ||
+        (fileList.startsWith("{") && fileList.endsWith("}"))) {
+      cleanList = fileList.substring(1, fileList.length() - 1);
+    }
+
+    // Split by comma to get individual files
+    String[] files = cleanList.split(",");
+    if (files.length == 0) {
+      return null;
+    }
+
+    // Get first file and clean it
+    String firstFile = files[0].trim();
+    if (firstFile.startsWith("'") && firstFile.endsWith("'")) {
+      firstFile = firstFile.substring(1, firstFile.length() - 1);
+    }
+
+    // Find the base path before partition directories
+    // Look for the first occurrence of key=value pattern
+    int partitionStart = -1;
+    String[] pathParts = firstFile.split("[/\\\\]");
+
+    for (int i = 0; i < pathParts.length; i++) {
+      if (pathParts[i].matches("[a-zA-Z_][a-zA-Z0-9_]*=.*")) {
+        partitionStart = i;
+        break;
+      }
+    }
+
+    if (partitionStart == -1) {
+      // No partition found, use parent directory
+      int lastSlash = Math.max(firstFile.lastIndexOf('/'), firstFile.lastIndexOf('\\'));
+      if (lastSlash > 0) {
+        String basePath = firstFile.substring(0, lastSlash);
+        String extension = firstFile.substring(firstFile.lastIndexOf('.'));
+        return basePath + "/*" + extension;
+      }
+      return firstFile;
+    }
+
+    // Reconstruct base path up to partition directories
+    StringBuilder basePath = new StringBuilder();
+    for (int i = 0; i < partitionStart; i++) {
+      if (i > 0) {
+        basePath.append("/");
+      }
+      basePath.append(pathParts[i]);
+    }
+
+    // Determine file extension from first file
+    String extension = ".parquet";
+    if (firstFile.contains(".")) {
+      extension = firstFile.substring(firstFile.lastIndexOf('.'));
+    }
+
+    // Create glob pattern: base/**/*.parquet
+    String globPattern = basePath.toString() + "/**/*" + extension;
+
+    LOGGER.debug("Derived glob pattern '{}' from {} files", globPattern, files.length);
+    return globPattern;
+  }
+
+  /**
    * Registers tables from the FileSchema's conversion registry as DuckDB views.
    * This ensures all tables discovered by FileSchema are available in DuckDB.
    */
@@ -512,8 +635,8 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("=== DUCKDB REGISTRATION: CONVERSION RECORDS ===");
     for (java.util.Map.Entry<String, ConversionMetadata.ConversionRecord> entry : records.entrySet()) {
       ConversionMetadata.ConversionRecord record = entry.getValue();
-      LOGGER.info("DuckDB: Table '{}' -> sourceFile='{}', convertedFile='{}', parquetCacheFile='{}', conversionType='{}'",
-          record.tableName, record.sourceFile, record.convertedFile, record.getParquetCacheFile(), record.conversionType);
+      LOGGER.info("DuckDB: Table '{}' -> sourceFile='{}', convertedFile='{}', parquetCacheFile='{}', viewScanPattern='{}', conversionType='{}'",
+          record.tableName, record.sourceFile, record.convertedFile, record.getParquetCacheFile(), record.viewScanPattern, record.conversionType);
     }
 
     // Debug why records might be empty
@@ -713,24 +836,41 @@ public class DuckDBJdbcSchemaFactory {
 
           if (isMultiFileList) {
             // For multiple files specified as [file1,file2,file3] or {file1,file2,file3}
-            // Remove the brackets and split by comma
-            String fileList = parquetPath.substring(1, parquetPath.length() - 1);
-            String[] files = fileList.split(",");
+            // Check if this is Hive-partitioned data
+            if (isHivePartitioned(parquetPath)) {
+              // Use stored table-specific pattern for Hive-partitioned tables
+              String pattern = record.viewScanPattern;
 
-            // Build a list of file paths for DuckDB's read_parquet function
-            // DuckDB can read multiple files using: read_parquet(['file1', 'file2', ...])
-            StringBuilder fileArray = new StringBuilder("[");
-            boolean first = true;
-            for (String file : files) {
-              if (!first) fileArray.append(", ");
-              fileArray.append("'").append(file.trim()).append("'");
-              first = false;
+              if (pattern != null) {
+                sql =
+                                   String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true)", duckdbSchema, tableName, pattern);
+                LOGGER.info("Creating DuckDB view with stored table-specific pattern: \"{}.{}\" -> {}",
+                           duckdbSchema, tableName, pattern);
+              } else {
+                // This should never happen - pattern must exist for Hive-partitioned tables
+                LOGGER.error("Missing viewScanPattern for Hive-partitioned table '{}' - this indicates a bug in pattern extraction", tableName);
+                throw new SQLException("Missing viewScanPattern for Hive-partitioned table: " + tableName);
+              }
+            } else {
+              // Non-Hive partitioned: use explicit file array
+              String fileList = parquetPath.substring(1, parquetPath.length() - 1);
+              String[] files = fileList.split(",");
+
+              // Build a list of file paths for DuckDB's read_parquet function
+              // DuckDB can read multiple files using: read_parquet(['file1', 'file2', ...])
+              StringBuilder fileArray = new StringBuilder("[");
+              boolean first = true;
+              for (String file : files) {
+                if (!first) fileArray.append(", ");
+                fileArray.append("'").append(file.trim()).append("'");
+                first = false;
+              }
+              fileArray.append("]");
+
+              sql =
+                                 String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s, hive_partitioning = true)", duckdbSchema, tableName, fileArray.toString());
+              LOGGER.info("Creating DuckDB view for multiple files: \"{}.{}\" -> {} files", duckdbSchema, tableName, files.length);
             }
-            fileArray.append("]");
-
-            sql =
-                              String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s, hive_partitioning = true)", duckdbSchema, tableName, fileArray.toString());
-            LOGGER.info("Creating DuckDB view for multiple files: \"{}.{}\" -> {} files", duckdbSchema, tableName, files.length);
           } else if (isGlobPattern) {
             // Glob pattern - DuckDB's parquet_scan supports glob patterns directly
             // For glob patterns with **, always enable hive_partitioning to let DuckDB auto-detect
