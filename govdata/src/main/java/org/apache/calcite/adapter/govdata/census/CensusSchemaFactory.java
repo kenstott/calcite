@@ -277,8 +277,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     long currentTime = System.currentTimeMillis();
 
     // Create CensusApiClient with String-based cache directory and manifest support
-    CensusApiClient censusClient = new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory,
-        acsYears, storageProvider, cacheManifest);
+    CensusApiClient censusClient =
+        new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory, acsYears, storageProvider, cacheManifest);
 
     // For parquet conversion, we need a File object to scan local JSON cache files
     // This is safe because downloads always go to local filesystem first (even with S3 parquet storage)

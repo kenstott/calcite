@@ -33,10 +33,8 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -73,6 +71,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
   private SecCacheManifest cacheManifest; // ETag-based caching for submissions.json
+
+  // Cache filing status decisions to avoid repeated manifest searches
+  private final Map<String, FilingStatus> filingStatusCache = new java.util.concurrent.ConcurrentHashMap<>();
 
   // Directory paths following standardized naming
   private String secCacheDirectory;      // Raw XBRL cache: $GOVDATA_CACHE_DIR/sec/
@@ -455,14 +456,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @return Modified operand with SEC-specific configuration
    */
   public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
-    LOGGER.debug("SecSchemaFactory.buildOperand() called with operand: {}", operand);
+    LOGGER.info("=== SecSchemaFactory.buildOperand() START ===");
+    LOGGER.info("Operand keys: {}", operand != null ? operand.keySet() : "NULL");
 
-    // Access shared services from parent
-    this.storageProvider = parent.getStorageProvider();
-    LOGGER.debug("SEC buildOperand: storageProvider set to {}", storageProvider);
+    try {
+      // Access shared services from parent
+      LOGGER.info("Getting storage provider from parent...");
+      this.storageProvider = parent.getStorageProvider();
+      LOGGER.info("Storage provider obtained: {}", storageProvider);
 
-    // Create a mutable copy of operand to allow modifications
-    Map<String, Object> mutableOperand = new HashMap<>(operand);
+      // Create a mutable copy of operand to allow modifications
+      LOGGER.info("Creating mutable operand copy...");
+      Map<String, Object> mutableOperand = new HashMap<>(operand);
+      LOGGER.info("Mutable operand created");
 
     // Load SecCacheManifest for ETag-based caching of submissions.json files
     // Note: Cache manifest loading is deferred until after getGovDataCacheDir() is called
@@ -484,19 +490,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
     mutableOperand.put("stockPriceTtlHours", stockPriceTtlHours);
 
-    // Load and apply defaults before processing
-    Map<String, Object> defaults = loadDefaults();
-    if (defaults != null) {
-      LOGGER.debug("Applying defaults from sec-schema-factory.defaults.json");
-      applyDefaults(mutableOperand, defaults);
-      LOGGER.debug("Operand after applying defaults: {}", mutableOperand);
-    }
+      // Load and apply defaults before processing
+      LOGGER.info("Loading defaults...");
+      Map<String, Object> defaults = loadDefaults();
+      if (defaults != null) {
+        LOGGER.info("Applying defaults from sec-schema-factory.defaults.json");
+        applyDefaults(mutableOperand, defaults);
+        LOGGER.info("Defaults applied");
+      }
 
-    this.currentOperand = mutableOperand; // Store for table auto-discovery
+      LOGGER.info("Storing currentOperand...");
+      this.currentOperand = mutableOperand; // Store for table auto-discovery
+      LOGGER.info("currentOperand stored");
 
-    // Get cache directories from operand or environment variables
-    String govdataCacheDir = getGovDataCacheDir(mutableOperand);
-    String govdataParquetDir = getGovDataParquetDir(mutableOperand);
+      // Get cache directories from operand or environment variables
+      LOGGER.info("Getting cache directories...");
+      String govdataCacheDir = getGovDataCacheDir(mutableOperand);
+      String govdataParquetDir = getGovDataParquetDir(mutableOperand);
+      LOGGER.info("Cache directories obtained: cache={}, parquet={}", govdataCacheDir, govdataParquetDir);
 
     // Check required directories are configured
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -549,36 +560,40 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       cacheHome = configuredDir != null ? configuredDir : secRawDir;
     }
 
-    // Handle SEC data download if configured
-    LOGGER.debug("SEC buildOperand: checking download with autoDownload={}", mutableOperand.get("autoDownload"));
-    LOGGER.debug("About to check shouldDownloadData");
-    LOGGER.debug("Checking shouldDownloadData...");
-    if (shouldDownloadData(mutableOperand)) {
-      LOGGER.debug("SEC: shouldDownloadData = true, calling downloadSecData");
+      // Handle SEC data download if configured
+      LOGGER.info("Checking if data download is needed (autoDownload={})...", mutableOperand.get("autoDownload"));
+      if (shouldDownloadData(mutableOperand)) {
+        LOGGER.info("Data download needed - starting download...");
       // Get base directory from operand
       if (configuredDir != null) {
         File baseDir = new File(configuredDir);
         // Rebuild manifest from existing files first
         rebuildManifestFromExistingFiles(baseDir);
       }
-      downloadSecData(mutableOperand);
+        LOGGER.info("Calling downloadSecData...");
+        downloadSecData(mutableOperand);
+        LOGGER.info("downloadSecData completed");
 
-      // CRITICAL: Wait for all downloads and conversions to complete
-      // The downloadSecData method starts async tasks but returns immediately
-      // We need to wait for them to complete before creating the FileSchema
-      waitForAllConversions();
-    } else {
-      LOGGER.debug("SEC: shouldDownloadData = false, skipping download (autoDownload={}, useMockData={})",
-                  mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
-    }
+        // CRITICAL: Wait for all downloads and conversions to complete
+        // The downloadSecData method starts async tasks but returns immediately
+        // We need to wait for them to complete before creating the FileSchema
+        LOGGER.info("Waiting for all conversions to complete...");
+        waitForAllConversions();
+        LOGGER.info("All conversions completed");
+      } else {
+        LOGGER.info("Data download not needed (autoDownload={}, useMockData={})",
+                    mutableOperand.get("autoDownload"), mutableOperand.get("useMockData"));
+      }
 
-    // Pre-define partitioned tables using the partitionedTables format
-    // These will be resolved by FileSchemaFactory after downloads complete
-    List<Map<String, Object>> partitionedTables = new ArrayList<>();
+      // Pre-define partitioned tables using the partitionedTables format
+      // These will be resolved by FileSchemaFactory after downloads complete
+      LOGGER.info("Defining partitioned tables...");
+      List<Map<String, Object>> partitionedTables = new ArrayList<>();
 
-    // Define partition configuration (shared by both tables)
-    Map<String, Object> partitionConfig = new HashMap<>();
-    partitionConfig.put("style", "hive");  // Use Hive-style partitioning (key=value)
+      // Define partition configuration (shared by both tables)
+      LOGGER.info("Creating partition config...");
+      Map<String, Object> partitionConfig = new HashMap<>();
+      partitionConfig.put("style", "hive");  // Use Hive-style partitioning (key=value)
 
     // Define partition columns
     List<Map<String, Object>> columnDefs = new ArrayList<>();
@@ -837,9 +852,57 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       mutableOperand.put("tableConstraints", allConstraints);
     }
 
-    // Return the configured operand for GovDataSchemaFactory to use
-    LOGGER.info("SEC schema operand configuration complete");
-    return mutableOperand;
+    // Create conversion metadata with viewScanPatterns for DuckDB Hive optimization
+    // This allows DuckDB to use efficient pattern-based scanning without enumerating all files
+    Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords =
+        new HashMap<>();
+
+    for (Object tableObj : partitionedTables) {
+      Map<String, Object> table = (Map<String, Object>) tableObj;
+      String tableName = (String) table.get("name");
+      String pattern = (String) table.get("pattern");
+
+      if (tableName != null && pattern != null) {
+        // Convert relative pattern to full viewScanPattern
+        // Pattern format: "cik=*/filing_type=*/year=*/[!.]*_line_items.parquet"
+        // Full pattern: "{secParquetDir}/{tableName}/{pattern}"
+        String viewScanPattern = storageProvider.resolvePath(
+            storageProvider.resolvePath(secParquetDir, tableName),
+            pattern);
+
+        org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
+            new org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord();
+        record.viewScanPattern = viewScanPattern;
+        record.originalFile = tableName; // Use table name as identifier
+        record.conversionType = "SEC_XBRL_TO_PARQUET";
+
+        conversionRecords.put(tableName, record);
+
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Registered viewScanPattern for table '{}': {}", tableName, viewScanPattern);
+        }
+      }
+    }
+
+    // Add conversion records to operand for FileSchema to access
+    if (!conversionRecords.isEmpty()) {
+      mutableOperand.put("conversionRecords", conversionRecords);
+      LOGGER.info("Registered viewScanPatterns for {} SEC tables", conversionRecords.size());
+    }
+
+    // Disable cache priming for SEC adapter - we have millions of files and don't need
+    // statistics preloaded at startup. DuckDB will handle statistics on-demand efficiently.
+    // This dramatically improves startup time from minutes to seconds.
+    mutableOperand.put("primeCache", false);
+    LOGGER.info("Disabled cache priming for SEC schema (too many files, DuckDB handles stats on-demand)");
+
+      // Return the configured operand for GovDataSchemaFactory to use
+      LOGGER.info("SEC schema operand configuration complete");
+      return mutableOperand;
+    } catch (Exception e) {
+      LOGGER.error("ERROR in SecSchemaFactory.buildOperand(): {}", e.getMessage(), e);
+      throw new RuntimeException("Failed to build SEC schema operand", e);
+    }
   }
 
 
@@ -909,7 +972,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      String fileTypes = hasVectorized ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
+      // If vectorization is enabled in config, mark as PROCESSED_WITH_VECTORS even if no
+      // vectorized files were created (e.g., no text content to vectorize).
+      // This prevents re-checking on every run.
+      boolean vectorizationEnabled = false;
+      if (currentOperand != null) {
+        Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+        vectorizationEnabled = textSimilarityConfig != null &&
+            Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+      }
+
+      String fileTypes = (hasVectorized || vectorizationEnabled) ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
       String entryPrefix = cik + "|" + accession + "|";
       String manifestKey = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
@@ -1614,13 +1687,29 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   // Check filing status - manifest, Parquet files, source files
   private FilingStatus checkFilingStatus(String cik, String accession, String form,
                                           String filingDate, File manifestFile) {
+    // Create cache key
+    String cacheKey = cik + "|" + accession + "|" + form + "|" + filingDate;
+
+    // Check cache first
+    FilingStatus cachedStatus = filingStatusCache.get(cacheKey);
+    if (cachedStatus != null) {
+      if (LOGGER.isTraceEnabled()) {
+        LOGGER.trace("Filing status CACHE HIT: {} -> {}", cacheKey, cachedStatus);
+      }
+      return cachedStatus;
+    }
+
+    // Cache miss - compute status
+    FilingStatus status;
     try {
       // Skip checking entirely for 424B forms - they are excluded from processing
       if (form.startsWith("424B")) {
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("424B filing excluded from processing: {} {}", form, filingDate);
         }
-        return FilingStatus.EXCLUDED_424B;
+        status = FilingStatus.EXCLUDED_424B;
+        filingStatusCache.put(cacheKey, status);
+        return status;
       }
 
       // Check manifest first
@@ -1657,11 +1746,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
 
         if (isInManifest && (!needsVectorized || hasVectorized)) {
-          return FilingStatus.FULLY_PROCESSED;
+          // Filing is in manifest and either:
+          // 1. Vectorization not needed, OR
+          // 2. Has vectorization flag (was processed with vectorization enabled)
+          status = FilingStatus.FULLY_PROCESSED;
+          filingStatusCache.put(cacheKey, status);
+          return status;
         } else if (isInManifest && needsVectorized && !hasVectorized) {
+          // Filing in manifest but missing vectorization flag - needs reprocessing
+          // Note: With the fix above, new filings will be marked PROCESSED_WITH_VECTORS
+          // even if no vectorized files created, so this should be rare.
           if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Filing in manifest but needs vectorization: {} {}", form, filingDate);
+            LOGGER.debug("Filing in manifest but needs vectorization reprocessing: {} {}", form, filingDate);
           }
+          // Fall through to return NEEDS_PROCESSING
         }
 
       }
@@ -1674,10 +1772,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       //   return FilingStatus.HAS_ALL_PARQUET;
       // }
 
-      return FilingStatus.NEEDS_PROCESSING;
+      status = FilingStatus.NEEDS_PROCESSING;
+      filingStatusCache.put(cacheKey, status);
+      return status;
     } catch (Exception e) {
       LOGGER.debug("Error checking filing status: " + e.getMessage());
-      return FilingStatus.NEEDS_PROCESSING;
+      status = FilingStatus.NEEDS_PROCESSING;
+      filingStatusCache.put(cacheKey, status);
+      return status;
     }
   }
 
@@ -2037,10 +2139,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
       // Download primary document for ALL filing types (including insider forms)
       boolean htmlExists = false;
-      try {
-        htmlExists = storageProvider.exists(htmlPath) && storageProvider.getMetadata(htmlPath).getSize() > 0;
-      } catch (IOException e) {
-        // File doesn't exist
+      // Check manifest first to avoid S3 API call
+      if (cacheManifest.isFileDownloaded(cik, accession, primaryDoc)) {
+        htmlExists = true;
+      } else {
+        // Only make S3 call if file status is unknown
+        try {
+          htmlExists = storageProvider.exists(htmlPath) && storageProvider.getMetadata(htmlPath).getSize() > 0;
+          if (htmlExists) {
+            // File exists but wasn't tracked in manifest - add it now
+            cacheManifest.markFileDownloaded(cik, accession, primaryDoc);
+          }
+        } catch (IOException e) {
+          // File doesn't exist
+        }
       }
       if (!htmlExists) {
         needHtml = true;
@@ -2101,13 +2213,33 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // DEFER XBRL download decision until AFTER HTML is downloaded
       // We can only make the decision after checking the HTML file for inline XBRL markers
       // For now, just check if we already have the XBRL file or know it doesn't exist
+      // BUT: skip this check entirely if we already know it's inline XBRL (no separate .xml file exists)
       boolean xbrlAlreadyExists = false;
-      try {
-        xbrlAlreadyExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
-      } catch (IOException e) {
-        // File doesn't exist
+      boolean xbrlKnownNotFound = false;
+
+      // Skip existence check if inline XBRL already confirmed
+      if (hasInlineXBRL || confirmedInlineXbrl) {
+        // For inline XBRL, there is no separate .xml file, so no need to check
+        xbrlKnownNotFound = true; // Mark as not found since separate XBRL doesn't exist
+      } else {
+        // Only check for separate XBRL file if NOT inline XBRL
+        // Check manifest first to avoid S3 API call
+        if (cacheManifest.isFileDownloaded(cik, accession, xbrlDoc)) {
+          xbrlAlreadyExists = true;
+        } else if (!cacheManifest.isFileNotFound(cik, accession, xbrlDoc)) {
+          // Only make S3 call if file status is unknown
+          try {
+            xbrlAlreadyExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
+            if (xbrlAlreadyExists) {
+              // File exists but wasn't tracked in manifest - add it now
+              cacheManifest.markFileDownloaded(cik, accession, xbrlDoc);
+            }
+          } catch (IOException e) {
+            // File doesn't exist
+          }
+        }
+        xbrlKnownNotFound = cacheManifest.isFileNotFound(cik, accession, xbrlDoc);
       }
-      boolean xbrlKnownNotFound = cacheManifest.isFileNotFound(cik, accession, xbrlDoc);
 
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Initial XBRL check: form={} date={} hasInlineXBRL={} confirmedInlineXbrl={} xbrlExists={} inManifest={}",
@@ -2168,10 +2300,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
             // Only write if entry doesn't already exist
             if (!alreadyExists) {
-              // For cached files, we don't check for vectorized files here - too expensive.
-              // If vectorization is needed, the checkFilingStatus() will detect missing vectors
-              // and trigger reprocessing, which will then write PROCESSED_WITH_VECTORS.
-              String manifestEntry = entryPrefix + "PROCESSED|" + System.currentTimeMillis();
+              // For cached files, mark as PROCESSED_WITH_VECTORS if vectorization is enabled,
+              // even though we don't check if vectorized files exist (too expensive).
+              // This prevents re-checking on every run.
+              boolean vectorizationEnabled = false;
+              if (currentOperand != null) {
+                Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
+                vectorizationEnabled = textSimilarityConfig != null &&
+                    Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
+              }
+              String fileTypes = vectorizationEnabled ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
+              String manifestEntry = entryPrefix + fileTypes + "|" + System.currentTimeMillis();
 
               // Write to manifest
               try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
@@ -2208,6 +2347,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             LOGGER.debug("Downloaded HTML filing: {} {} ({})", form, filingDate, primaryDoc);
           }
           htmlExists = true;
+          // Track downloaded file in manifest to avoid redundant S3 existence checks
+          cacheManifest.markFileDownloaded(cik, accession, primaryDoc);
         } catch (Exception e) {
           LOGGER.debug("Could not download HTML: " + e.getMessage());
           return; // Can't proceed without HTML
@@ -2232,24 +2373,37 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // 1. XBRL file doesn't exist locally
       // 2. NOT already marked as not found in manifest
       // 3. NOT inline XBRL (per submissions.json OR HTML inspection)
-      boolean xbrlExists = false;
-      try {
-        xbrlExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
-      } catch (IOException e) {
-        // File doesn't exist
-      }
-      if (!xbrlExists
-          && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)
-          && !hasInlineXBRL
-          && !confirmedInlineXbrl) {
-        needXbrl = true;
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Will download XBRL file: {}", xbrlDoc);
-        }
-      } else if (hasInlineXBRL || confirmedInlineXbrl) {
+
+      // Skip xbrlExists check entirely if we already know it's inline XBRL
+      // For inline XBRL, there is no separate .xml file to check
+      boolean xbrlExists = false; // Declare outside so it's available later in the method
+      if (hasInlineXBRL || confirmedInlineXbrl) {
         if (LOGGER.isDebugEnabled()) {
           String source = confirmedInlineXbrl ? "HTML inspection" : "submissions.json";
           LOGGER.debug("Skipping XBRL download - filing has inline XBRL per {}: {} {}", source, form, filingDate);
+        }
+      } else {
+        // Only check for separate XBRL file if NOT inline XBRL
+        // Check manifest first to avoid S3 API call
+        if (cacheManifest.isFileDownloaded(cik, accession, xbrlDoc)) {
+          xbrlExists = true;
+        } else if (!cacheManifest.isFileNotFound(cik, accession, xbrlDoc)) {
+          // Only make S3 call if file status is unknown
+          try {
+            xbrlExists = storageProvider.exists(xbrlPath) && storageProvider.getMetadata(xbrlPath).getSize() > 0;
+            if (xbrlExists) {
+              // File exists but wasn't tracked in manifest - add it now
+              cacheManifest.markFileDownloaded(cik, accession, xbrlDoc);
+            }
+          } catch (IOException e) {
+            // File doesn't exist
+          }
+        }
+        if (!xbrlExists && !cacheManifest.isFileNotFound(cik, accession, xbrlDoc)) {
+          needXbrl = true;
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Will download XBRL file: {}", xbrlDoc);
+          }
         }
       }
 
@@ -2290,6 +2444,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 if (LOGGER.isDebugEnabled()) {
                   LOGGER.debug("Extracted ownership XML for Form {} {}", form, filingDate);
                 }
+                // Track downloaded file in manifest to avoid redundant S3 existence checks
+                cacheManifest.markFileDownloaded(cik, accession, xbrlDoc);
               } else {
                 LOGGER.warn("Could not find ownershipDocument in Form " + form + " .txt file");
                 cacheManifest.markFileNotFound(cik, accession, xbrlDoc, "ownership_xml_not_in_txt_file");
@@ -2319,6 +2475,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Downloaded XBRL filing: {} {} ({})", form, filingDate, xbrlDoc);
               }
+              // Track downloaded file in manifest to avoid redundant S3 existence checks
+              cacheManifest.markFileDownloaded(cik, accession, xbrlDoc);
             } catch (Exception e) {
               // XBRL doesn't exist for this filing - mark in manifest to avoid retrying
               if (LOGGER.isDebugEnabled()) {
@@ -2432,6 +2590,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       try (InputStream is = provider.openInputStream(summaryUrl)) {
         storageProvider.writeFile(summaryPath, is);
       }
+      // Track downloaded file in manifest to avoid redundant S3 existence checks
+      cacheManifest.markFileDownloaded(cik, accession, "FilingSummary.xml");
 
       // Parse XML to extract instance document filename
       String xbrlFilename = parseXbrlFilenameFromSummary(summaryPath);
