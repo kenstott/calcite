@@ -346,12 +346,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("[FileSchemaFactory] ==> - isDuckDB: {}", isDuckDB);
     LOGGER.info("[FileSchemaFactory] ==> - directoryFile != null: {}", directoryFile != null);
     LOGGER.info("[FileSchemaFactory] ==> - storageType: '{}'", storageType);
-    LOGGER.info("[FileSchemaFactory] ==> - Full condition: {}", isDuckDB && directoryFile != null && storageType == null);
+    LOGGER.info("[FileSchemaFactory] ==> - directoryPath: '{}'", directoryPath);
+    LOGGER.info("[FileSchemaFactory] ==> - Full condition (old): {}", isDuckDB && directoryFile != null && storageType == null);
+    LOGGER.info("[FileSchemaFactory] ==> - Full condition (new): {}", isDuckDB && (directoryFile != null || directoryPath != null));
 
-    if (isDuckDB && directoryFile != null && storageType == null) {
-      LOGGER.info("[FileSchemaFactory] ==> *** ENTERING DUCKDB PATH FOR SCHEMA: {} ***", name);
-      // Create directory if it doesn't exist yet (common in tests)
-      if (!directoryFile.exists()) {
+    // DuckDB supports both local storage (directoryFile) and S3 storage (directoryPath with storageType="s3")
+    // The httpfs extension provides native S3 support
+    if (isDuckDB && (directoryFile != null || directoryPath != null)) {
+      LOGGER.info("[FileSchemaFactory] ==> *** ENTERING DUCKDB PATH FOR SCHEMA: {} (storageType: {}) ***", name, storageType);
+      // Create directory if it doesn't exist yet (common in tests, only for local storage)
+      if (directoryFile != null && !directoryFile.exists()) {
         LOGGER.info("Creating directory as it doesn't exist: {}", directoryFile);
         directoryFile.mkdirs();
       }
@@ -379,13 +383,29 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         fileSchema.setConstraintMetadata(constraintsToPass);
       }
 
+      // Pass conversion records (with viewScanPatterns) to FileSchema for DuckDB optimization
+      @SuppressWarnings("unchecked")
+      Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords =
+          (Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>)
+          operand.get("conversionRecords");
+      if (conversionRecords != null && !conversionRecords.isEmpty()) {
+        LOGGER.info("FileSchemaFactory: Setting {} conversion records on internal FileSchema for DuckDB", conversionRecords.size());
+        fileSchema.setConversionRecords(conversionRecords);
+      }
+
       // Force initialization to run conversions and populate the FileSchema for DuckDB
       LOGGER.info("DuckDB: About to call fileSchema.getTableMap() for table discovery");
       LOGGER.info("DuckDB: Internal FileSchema created successfully: {}", fileSchema.getClass().getSimpleName());
       LOGGER.info("DuckDB: Internal FileSchema directory: {}", directoryFile);
 
-      Map<String, Table> tableMap = fileSchema.getTableMap();
-      LOGGER.info("DuckDB: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
+      Map<String, Table> tableMap;
+      try {
+        tableMap = fileSchema.getTableMap();
+        LOGGER.info("DuckDB: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
+      } catch (Exception e) {
+        LOGGER.error("ERROR calling fileSchema.getTableMap(): {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to discover tables in FileSchema for DuckDB", e);
+      }
 
       if (tableMap.containsKey("sales_custom")) {
         LOGGER.info("DuckDB: Found sales_custom table in internal FileSchema!");
@@ -416,8 +436,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Pass directoryPath as String to support both local and S3 URIs
       LOGGER.debug("FileSchemaFactory: Now creating DuckDB JDBC schema");
       // Use directoryPath if available (cloud storage), otherwise use directoryFile (local storage)
-      String duckdbDirectory = directoryPath != null ? directoryPath
-          : (directoryFile != null ? directoryFile.getPath() : directory);
+      String duckdbDirectory =
+          directoryPath != null ? directoryPath
+              : (directoryFile != null ? directoryFile.getPath() : directory);
       JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, duckdbDirectory, recursive, fileSchema);
       LOGGER.info("FileSchemaFactory: DuckDB JDBC schema created successfully");
 
@@ -444,8 +465,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Otherwise use regular FileSchema
     LOGGER.info("[FileSchemaFactory] ==> *** USING REGULAR FILESCHEMA FOR SCHEMA: {} ***", name);
-    LOGGER.info("[FileSchemaFactory] ==> - Reason: isDuckDB={}, directoryFile != null={}, storageType='{}'",
-               isDuckDB, directoryFile != null, storageType);
+    LOGGER.info("[FileSchemaFactory] ==> - Reason: isDuckDB={}, directoryFile={}, directoryPath={}, storageType='{}'",
+               isDuckDB, directoryFile != null ? "present" : "null", directoryPath != null ? directoryPath : "null", storageType);
     // Pass user-configured baseDirectory or null to let FileSchema use its default
     // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
     FileSchema fileSchema =
@@ -460,6 +481,17 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       fileSchema.setConstraintMetadata(constraintsToPass);
     } else {
       LOGGER.info("FileSchemaFactory: No constraints to pass to FileSchema");
+    }
+
+    // Pass conversion records (with viewScanPatterns) to FileSchema for DuckDB optimization
+    // This is provided by sub-schema factories like SEC adapter
+    @SuppressWarnings("unchecked")
+    Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> conversionRecords =
+        (Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord>)
+        operand.get("conversionRecords");
+    if (conversionRecords != null && !conversionRecords.isEmpty()) {
+      LOGGER.info("FileSchemaFactory: Setting {} conversion records on FileSchema for DuckDB", conversionRecords.size());
+      fileSchema.setConversionRecords(conversionRecords);
     }
 
     // Force table discovery to populate the schema - tables will now be created with constraints

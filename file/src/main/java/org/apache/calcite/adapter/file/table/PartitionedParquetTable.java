@@ -300,14 +300,22 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     }
 
     try {
-      // Read metadata from the first Parquet file
+      // Read metadata from the first Parquet file using StorageProvider
       String firstFile = filePaths.get(0);
-      Configuration conf = new Configuration();
-      Path path = new Path(firstFile);
 
-      // Read Parquet metadata
-      @SuppressWarnings("deprecation")
-      ParquetMetadata metadata = ParquetFileReader.readFooter(conf, path);
+      if (storageProvider == null) {
+        LOGGER.debug("No StorageProvider available, skipping comment extraction");
+        return;
+      }
+
+      LOGGER.debug("Using StorageProvider to extract comments from: {}", firstFile);
+      InputFile inputFile = new org.apache.calcite.adapter.file.storage.StorageProviderInputFile(storageProvider, firstFile);
+
+      // Read Parquet metadata using the non-deprecated method
+      ParquetMetadata metadata;
+      try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
+        metadata = reader.getFooter();
+      }
       FileMetaData fileMetaData = metadata.getFileMetaData();
 
       // Extract table comment from file key-value metadata

@@ -60,14 +60,18 @@ public class DuckDBJdbcSchema extends JdbcSchema {
     LOGGER.info("Created DuckDB JDBC schema for directory: {} (recursive={}) with persistent connection",
                 directoryPath, recursive);
 
-    // Register refresh listener to recreate views when parquet files are updated
+    // Register pattern-aware refresh listener to recreate views when parquet files are updated
     if (fileSchema != null) {
-      fileSchema.addRefreshListener(new org.apache.calcite.adapter.file.refresh.TableRefreshListener() {
+      fileSchema.addRefreshListener(new org.apache.calcite.adapter.file.refresh.PatternAwareRefreshListener() {
         @Override public void onTableRefreshed(String tableName, File parquetFile) {
           recreateView(tableName, parquetFile);
         }
+
+        @Override public void onTableRefreshedWithPattern(String tableName, String pattern) {
+          recreateViewWithPattern(tableName, pattern);
+        }
       });
-      LOGGER.info("Registered refresh listener with FileSchema");
+      LOGGER.info("Registered pattern-aware refresh listener with FileSchema");
     }
   }
 
@@ -93,6 +97,47 @@ public class DuckDBJdbcSchema extends JdbcSchema {
       LOGGER.info("Successfully recreated view for refreshed table '{}'", tableName);
     } catch (Exception e) {
       LOGGER.error("Failed to recreate view for table '{}': {}", tableName, e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Recreates a DuckDB view using a file pattern (glob) instead of explicit file list.
+   * Used by DuckDB+Hive optimization where the pattern is sufficient for view recreation.
+   * This is more efficient and scalable for large partitioned datasets.
+   */
+  private void recreateViewWithPattern(String tableName, String pattern) {
+    try {
+      // Get the record from conversion metadata to check if it's Hive-partitioned
+      org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record = null;
+      if (fileSchema != null && fileSchema.getConversionMetadata() != null) {
+        record = fileSchema.getConversionMetadata().getAllConversions().get(tableName);
+      }
+
+      // Check if we should use Hive partitioning
+      boolean isHivePartitioned = record != null && record.viewScanPattern != null;
+
+      String viewSql;
+      if (isHivePartitioned) {
+        // Use Hive-partitioning mode for tables with partition structure
+        viewSql =
+            String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true)", schemaName, tableName, pattern);
+        LOGGER.info("Recreating DuckDB Hive-partitioned view with pattern: \"{}.{}\" -> {}",
+            schemaName, tableName, pattern);
+      } else {
+        // Standard glob pattern without Hive partitioning
+        viewSql =
+            String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", schemaName, tableName, pattern);
+        LOGGER.info("Recreating DuckDB view with pattern: \"{}.{}\" -> {}",
+            schemaName, tableName, pattern);
+      }
+
+      try (Statement stmt = persistentConnection.createStatement()) {
+        stmt.execute(viewSql);
+      }
+
+      LOGGER.info("Successfully recreated pattern-based view for table '{}'", tableName);
+    } catch (Exception e) {
+      LOGGER.error("Failed to recreate pattern-based view for table '{}': {}", tableName, e.getMessage(), e);
     }
   }
 
