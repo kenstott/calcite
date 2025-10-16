@@ -251,11 +251,13 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("States shapefile already exists in cache for year {}: {}", year, zipCachePath);
-      // Download from cache to temp directory for use by converter
-      return downloadCacheToTemp(cachePath, "states_" + year);
+    // Check manifest first for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isCached("states", year, params)) {
+        LOGGER.debug("States shapefile cached per manifest for year {}", year);
+        return downloadCacheToTemp(cachePath, "states_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -275,6 +277,13 @@ public class TigerDataDownloader {
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Mark as cached in manifest
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        cacheManifest.markCached("states", year, params, cachePath, zipFile.length());
+        cacheManifest.save(this.operatingDirectory);
+      }
 
       // Keep temp directory for immediate use by converter
       // Note: Caller is responsible for cleanup
@@ -322,10 +331,13 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "counties");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("Counties shapefile already exists in cache for year {}: {}", year, zipCachePath);
-      return downloadCacheToTemp(cachePath, "counties_" + year);
+    // Check manifest first for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isCached("counties", year, params)) {
+        LOGGER.debug("Counties shapefile cached per manifest for year {}", year);
+        return downloadCacheToTemp(cachePath, "counties_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -345,6 +357,13 @@ public class TigerDataDownloader {
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Mark as cached in manifest
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        cacheManifest.markCached("counties", year, params, cachePath, zipFile.length());
+        cacheManifest.save(this.operatingDirectory);
+      }
 
       // Keep temp directory for immediate use by converter
       return tempDir;
@@ -383,10 +402,14 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, stateFips);
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("Places shapefile already exists for state {} in cache: {}", stateFips, zipCachePath);
-      return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
+    // Check manifest first for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("state", stateFips);
+      if (cacheManifest.isCached("places", year, params)) {
+        LOGGER.debug("Places shapefile cached per manifest for state {} year {}", stateFips, year);
+        return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -405,6 +428,14 @@ public class TigerDataDownloader {
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Mark as cached in manifest
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("state", stateFips);
+      cacheManifest.markCached("places", year, params, cachePath, zipFile.length());
+      cacheManifest.save(this.operatingDirectory);
+    }
 
     // Keep temp directory for immediate use
     return tempDir;
@@ -593,7 +624,7 @@ public class TigerDataDownloader {
 
   /**
    * Download files from cache storage to a temp directory for reading.
-   * Used when shapefiles exist in S3 cache but need to be read locally.
+   * Used when shapefiles exist in remote storage but need to be read locally.
    */
   private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
     // For local filesystem cache, just return the path directly
@@ -605,7 +636,7 @@ public class TigerDataDownloader {
       }
     }
 
-    // For S3 cache, download files to temp directory
+    // For remote storage, download files to temp directory
     File tempDir = Files.createTempDirectory(tempPrefix + "-").toFile();
 
     // List all files in the cache path recursively and download them
@@ -1145,13 +1176,13 @@ public class TigerDataDownloader {
       return shpFiles != null && shpFiles.length > 0;
     }
 
-    // For S3 cache, check if any .shp files exist in the category path
+    // For remote storage, check if any .shp files exist in the category path
     String categoryPath = storageProvider.resolvePath(cacheDir, category);
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(categoryPath, true);
       return files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
     } catch (IOException e) {
-      LOGGER.warn("Failed to check shapefile availability in S3: {}", e.getMessage());
+      LOGGER.warn("Failed to check shapefile availability: {}", e.getMessage());
       return false;
     }
   }

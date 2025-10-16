@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata;
 
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.model.JsonTable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -2537,7 +2537,10 @@ public class XbrlToParquetConverter implements FileConverter {
       conn.setRequestMethod("GET");
       conn.setConnectTimeout(10000);
       conn.setReadTimeout(10000);
-      conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+      // SEC.gov requires proper User-Agent identifying automated tools with contact info
+      // See: https://www.sec.gov/os/accessing-edgar-data
+      String userAgent = "Apache Calcite GovData Adapter 1.0 (kenstott@github.com)";
+      conn.setRequestProperty("User-Agent", userAgent);
       conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
       conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
       // Removed "Accept-Encoding: gzip, deflate" - was causing SEC to return gzip-compressed error responses
@@ -2545,6 +2548,10 @@ public class XbrlToParquetConverter implements FileConverter {
       conn.setRequestProperty("DNT", "1");
       conn.setRequestProperty("Connection", "keep-alive");
       conn.setRequestProperty("Upgrade-Insecure-Requests", "1");
+
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Attempting XSD download with User-Agent: {}", userAgent);
+      }
 
       int responseCode = conn.getResponseCode();
       if (responseCode != HttpURLConnection.HTTP_OK) {

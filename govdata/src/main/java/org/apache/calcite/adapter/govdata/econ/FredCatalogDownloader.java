@@ -769,10 +769,20 @@ public class FredCatalogDownloader {
 
   /**
    * Check if we already have existing partition cache files.
+   * Uses StorageProvider for S3 compatibility.
    */
   private boolean hasExistingPartitions() {
-    File typeDir = new File(cacheDir + "/type=catalog");
-    return typeDir.exists() && typeDir.isDirectory() && typeDir.list().length > 0;
+    // Check for any JSON partition files using StorageProvider
+    String catalogPath = "type=catalog";
+    try {
+      // If storage provider can list the directory and find any files, partitions exist
+      // For local filesystem, this checks if directory exists and has files
+      // For S3, this checks if any objects with this prefix exist
+      return storageProvider.exists(catalogPath);
+    } catch (Exception e) {
+      LOGGER.debug("Could not check for existing partitions: {}", e.getMessage());
+      return false;
+    }
   }
 
   /**

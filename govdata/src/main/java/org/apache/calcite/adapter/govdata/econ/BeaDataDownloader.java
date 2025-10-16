@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -38,7 +37,6 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -1489,6 +1487,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
+    // Check if JSON file exists using StorageProvider and update manifest
+    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
+    try {
+      if (cacheStorageProvider.exists(relativePath)) {
+        LOGGER.debug("Found existing industry GDP JSON file for year {} - updating manifest", year);
+        cacheManifest.markCached("industry_gdp", year, cacheParams, relativePath, 0L);
+        cacheManifest.save(operatingDirectory);
+        return;
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check if file exists: {}", e.getMessage());
+    }
+
     // Directory creation handled automatically by StorageProvider when writing files
 
     LOGGER.debug("Downloading BEA GDP by Industry data for year {}", year);
@@ -1570,7 +1581,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Save as JSON to cache using StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
+    // relativePath already declared at line 1491
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> gdpList = new ArrayList<>();
 

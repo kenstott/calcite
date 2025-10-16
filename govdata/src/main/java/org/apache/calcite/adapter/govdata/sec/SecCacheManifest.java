@@ -319,7 +319,7 @@ public class SecCacheManifest {
     public String fileName;
 
     @JsonProperty("state")
-    public String state;  // "not_found" (existence tracked by submissions.json)
+    public String state;  // "downloaded", "not_found", or "xbrl_filename_cached"
 
     @JsonProperty("reason")
     public String reason;  // Why it's not found (e.g., "404_from_server", "network_error")
@@ -352,6 +352,34 @@ public class SecCacheManifest {
     String key = buildFilingKey(cik, accession, fileName);
     FilingCacheEntry entry = filings.get(key);
     return entry != null && "not_found".equals(entry.state);
+  }
+
+  /**
+   * Mark a filing file as downloaded and cached.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param fileName Name of the file (e.g., "form10q.htm", "wba-20150531.xml")
+   */
+  public void markFileDownloaded(String cik, String accession, String fileName) {
+    String key = buildFilingKey(cik, accession, fileName);
+    FilingCacheEntry entry = new FilingCacheEntry(cik, accession, fileName, "downloaded", null);
+    filings.put(key, entry);
+    this.lastUpdated = System.currentTimeMillis();
+  }
+
+  /**
+   * Check if a filing file is known to be downloaded and cached.
+   *
+   * @param cik CIK of the company
+   * @param accession Accession number
+   * @param fileName Name of the file
+   * @return true if we've previously downloaded this file
+   */
+  public boolean isFileDownloaded(String cik, String accession, String fileName) {
+    String key = buildFilingKey(cik, accession, fileName);
+    FilingCacheEntry entry = filings.get(key);
+    return entry != null && "downloaded".equals(entry.state);
   }
 
   /**
