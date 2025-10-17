@@ -635,8 +635,13 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("=== DUCKDB REGISTRATION: CONVERSION RECORDS ===");
     for (java.util.Map.Entry<String, ConversionMetadata.ConversionRecord> entry : records.entrySet()) {
       ConversionMetadata.ConversionRecord record = entry.getValue();
+      // Truncate parquetCacheFile for readability (can be huge file list)
+      String parquetCache = record.getParquetCacheFile();
+      if (parquetCache != null && parquetCache.length() > 200) {
+        parquetCache = parquetCache.substring(0, 197) + "...";
+      }
       LOGGER.info("DuckDB: Table '{}' -> sourceFile='{}', convertedFile='{}', parquetCacheFile='{}', viewScanPattern='{}', conversionType='{}'",
-          record.tableName, record.sourceFile, record.convertedFile, record.getParquetCacheFile(), record.viewScanPattern, record.conversionType);
+          record.tableName, record.sourceFile, record.convertedFile, parquetCache, record.viewScanPattern, record.conversionType);
     }
 
     // Debug why records might be empty

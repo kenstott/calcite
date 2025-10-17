@@ -1603,22 +1603,22 @@ public class ConversionMetadata {
 
   /**
    * Formats a conversion record for detailed logging.
-   * Limits long field values to 200 characters for readability.
+   * Truncates parquetCacheFile to 200 characters for readability.
    */
   private String formatRecord(ConversionRecord record) {
     if (record == null) return "null";
 
-    // Helper to truncate long strings
-    java.util.function.Function<String, String> truncate = s -> {
-      if (s == null) return "null";
-      return s.length() <= 200 ? s : s.substring(0, 197) + "...";
-    };
+    // Truncate only the parquetCacheFile field which can contain huge file lists
+    String parquetCache = record.parquetCacheFile;
+    if (parquetCache != null && parquetCache.length() > 200) {
+      parquetCache = parquetCache.substring(0, 197) + "...";
+    }
 
     return String.format(
         "ConversionRecord{tableName='%s', tableType='%s', sourceFile='%s', originalFile='%s', convertedFile='%s', conversionType='%s', parquetCacheFile='%s', viewScanPattern='%s'}",
-        truncate.apply(record.tableName), truncate.apply(record.tableType), truncate.apply(record.sourceFile),
-        truncate.apply(record.originalFile), truncate.apply(record.convertedFile), truncate.apply(record.conversionType),
-        truncate.apply(record.parquetCacheFile), truncate.apply(record.viewScanPattern));
+        record.tableName, record.tableType, record.sourceFile,
+        record.originalFile, record.convertedFile, record.conversionType,
+        parquetCache, record.viewScanPattern);
   }
 
   /**
