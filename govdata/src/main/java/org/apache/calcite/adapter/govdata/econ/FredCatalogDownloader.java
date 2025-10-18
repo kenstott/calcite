@@ -730,6 +730,7 @@ public class FredCatalogDownloader {
 
   /**
    * Flush current partitions to individual JSON cache files and clear memory.
+   * Uses StorageProvider for S3 compatibility.
    */
   private void flushPartitionsToDisk() throws IOException {
     for (Map.Entry<String, List<Map<String, Object>>> entry : partitionedSeries.entrySet()) {
@@ -740,25 +741,29 @@ public class FredCatalogDownloader {
       String seriesStatus = parts[3];
       List<Map<String, Object>> partitionData = entry.getValue();
 
-      // Build cache file path - directories created automatically when writing
-      String catalogCacheDir = cacheDir + "/type=catalog" +
+      // Build cache file path using StorageProvider
+      String relativePath = "type=catalog" +
           "/category=" + categoryName +
           "/frequency=" + frequency +
           "/source=" + sourceName +
-          "/status=" + seriesStatus;
-
-      // Save partition to JSON cache file
-      String jsonFile = catalogCacheDir + "/fred_data_series_catalog.json";
+          "/status=" + seriesStatus +
+          "/fred_data_series_catalog.json";
+      String jsonFile = storageProvider.resolvePath(cacheDir, relativePath);
 
       // If file already exists, merge with existing data
       List<Map<String, Object>> existingData = new ArrayList<>();
-      File existingFile = new File(jsonFile);
-      if (existingFile.exists()) {
-        existingData = objectMapper.readValue(existingFile, new TypeReference<List<Map<String, Object>>>() {});
+      if (storageProvider.exists(jsonFile)) {
+        try (java.io.InputStream inputStream = storageProvider.openInputStream(jsonFile);
+             java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+          existingData = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+        }
       }
 
       existingData.addAll(partitionData);
-      objectMapper.writeValue(new File(jsonFile), existingData);
+
+      // Write merged data using StorageProvider
+      String jsonContent = objectMapper.writeValueAsString(existingData);
+      storageProvider.writeFile(jsonFile, jsonContent.getBytes(StandardCharsets.UTF_8));
 
       LOGGER.debug("Flushed {} series to partition cache: {}", partitionData.size(), jsonFile);
     }
@@ -773,12 +778,20 @@ public class FredCatalogDownloader {
    */
   private boolean hasExistingPartitions() {
     // Check for any JSON partition files using StorageProvider
-    String catalogPath = "type=catalog";
+    String catalogPath = storageProvider.resolvePath(cacheDir, "type=catalog");
     try {
-      // If storage provider can list the directory and find any files, partitions exist
-      // For local filesystem, this checks if directory exists and has files
-      // For S3, this checks if any objects with this prefix exist
-      return storageProvider.exists(catalogPath);
+      // List files under the catalog prefix to see if any exist
+      // For S3, this checks if any objects with this prefix exist (directories are virtual)
+      // For local filesystem, this checks if directory exists and contains files
+      List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> files =
+          storageProvider.listFiles(catalogPath, true);
+
+      if (files != null && !files.isEmpty()) {
+        LOGGER.debug("Found {} existing partition files under {}", files.size(), catalogPath);
+        return true;
+      }
+
+      return false;
     } catch (Exception e) {
       LOGGER.debug("Could not check for existing partitions: {}", e.getMessage());
       return false;
@@ -787,29 +800,36 @@ public class FredCatalogDownloader {
 
   /**
    * Convert existing partition cache files to Parquet format.
+   * Uses StorageProvider for S3 compatibility.
    */
   private void convertExistingPartitionsToParquet() throws IOException {
     LOGGER.info("Converting existing partition cache files to Parquet format");
 
-    Path catalogCacheRoot = Paths.get(cacheDir + "/type=catalog");
-    if (!Files.exists(catalogCacheRoot)) {
-      LOGGER.warn("No existing partition cache found");
-      return;
-    }
+    String catalogPath = storageProvider.resolvePath(cacheDir, "type=catalog");
 
     try {
-      Files.walk(catalogCacheRoot)
-          .filter(path -> path.toString().endsWith("fred_data_series_catalog.json"))
-          .filter(path -> !path.getFileName().toString().startsWith(".")) // Skip macOS metadata files
-          .forEach(jsonPath -> {
-            try {
-              convertSinglePartitionToParquet(jsonPath.toString());
-            } catch (IOException e) {
-              LOGGER.error("Failed to convert partition {}: {}", jsonPath, e.getMessage());
-            }
-          });
+      List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> files =
+          storageProvider.listFiles(catalogPath, true);
+
+      if (files == null || files.isEmpty()) {
+        LOGGER.warn("No existing partition cache files found");
+        return;
+      }
+
+      // Filter for JSON catalog files and skip macOS metadata
+      for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry file : files) {
+        if (!file.isDirectory() &&
+            file.getName().equals("fred_data_series_catalog.json") &&
+            !file.getName().startsWith(".")) {
+          try {
+            convertSinglePartitionToParquet(file.getPath());
+          } catch (IOException e) {
+            LOGGER.error("Failed to convert partition {}: {}", file.getPath(), e.getMessage());
+          }
+        }
+      }
     } catch (IOException e) {
-      LOGGER.error("Error walking partition cache directory: {}", e.getMessage());
+      LOGGER.error("Error listing partition cache directory: {}", e.getMessage());
     }
   }
 
@@ -840,21 +860,29 @@ public class FredCatalogDownloader {
 
   /**
    * Convert a single partition JSON file to Parquet format.
+   * Uses StorageProvider for S3 compatibility.
    */
   private void convertSinglePartitionToParquet(String jsonFile) throws IOException {
     // Skip macOS metadata files
-    File file = new File(jsonFile);
-    if (file.getName().startsWith(".") || file.getName().startsWith("._")) {
+    String fileName = jsonFile.substring(jsonFile.lastIndexOf('/') + 1);
+    if (fileName.startsWith(".") || fileName.startsWith("._")) {
       LOGGER.debug("Skipping macOS metadata file: {}", jsonFile);
       return;
     }
 
     // Extract partition information from file path
-    String relativePath = jsonFile.replace(cacheDir + "/", "");
+    // Remove the resolved base path to get relative path
+    String relativePath = jsonFile;
+    if (jsonFile.startsWith(cacheDir)) {
+      relativePath = jsonFile.substring(cacheDir.length());
+      if (relativePath.startsWith("/")) {
+        relativePath = relativePath.substring(1);
+      }
+    }
 
     // Parse partition keys from path: type=catalog/category=X/frequency=Y/source=Z/status=W/
     String[] pathParts = relativePath.split("/");
-    if (pathParts.length < 4) {
+    if (pathParts.length < 5) {
       LOGGER.warn("Invalid partition path structure: {}", jsonFile);
       return;
     }
@@ -862,12 +890,13 @@ public class FredCatalogDownloader {
     String categoryName = pathParts[1].substring("category=".length());
     String frequency = pathParts[2].substring("frequency=".length());
     String sourceName = pathParts[3].substring("source=".length());
-    String seriesStatus = pathParts.length > 4 ? pathParts[4].substring("status=".length()) : "unknown";
+    String seriesStatus = pathParts[4].substring("status=".length());
 
     // Read JSON data with error handling for corrupted files
     List<Map<String, Object>> seriesList;
-    try {
-      seriesList = objectMapper.readValue(file, new TypeReference<List<Map<String, Object>>>() {});
+    try (java.io.InputStream inputStream = storageProvider.openInputStream(jsonFile);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      seriesList = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
     } catch (Exception e) {
       LOGGER.warn("Skipping corrupted or invalid JSON file {}: {}", jsonFile, e.getMessage());
       return;
@@ -878,7 +907,7 @@ public class FredCatalogDownloader {
       return;
     }
 
-    // Build parquet path and check if it already exists
+    // Build parquet path
     String parquetFile = parquetDir + "/type=catalog" +
         "/category=" + categoryName +
         "/frequency=" + frequency +
@@ -886,9 +915,15 @@ public class FredCatalogDownloader {
         "/status=" + seriesStatus +
         "/fred_data_series_catalog.parquet";
 
-    // Check if parquet file already exists
-    if (storageProvider.exists(parquetFile)) {
-      LOGGER.debug("Parquet file already exists for partition {}/{}/{}/{}, skipping conversion", categoryName, frequency, sourceName, seriesStatus);
+    // Check if parquet file already converted using manifest (avoids expensive S3 exists check)
+    Map<String, String> partitionParams = new HashMap<>();
+    partitionParams.put("category", categoryName);
+    partitionParams.put("frequency", frequency);
+    partitionParams.put("source", sourceName);
+    partitionParams.put("status", seriesStatus);
+
+    if (cacheManifest.isParquetConverted("catalog", 0, partitionParams)) {
+      LOGGER.debug("Parquet file already converted (manifest), skipping partition {}/{}/{}/{}", categoryName, frequency, sourceName, seriesStatus);
       return;
     }
 
@@ -931,6 +966,10 @@ public class FredCatalogDownloader {
 
     // Write Parquet file using StorageProvider (parquetFile already constructed above)
     writeParquetWithStorageProvider(parquetFile, transformedSeries);
+
+    // Mark as converted in manifest to avoid expensive S3 exists checks on subsequent runs
+    // Note: Manifest will be saved centrally by EconSchemaFactory after all conversions complete
+    cacheManifest.markParquetConverted("catalog", 0, partitionParams, parquetFile);
 
     LOGGER.debug("Created Parquet file for partition {}/{}/{}/{}: {} series",
         categoryName, frequency, sourceName, seriesStatus, transformedSeries.size());

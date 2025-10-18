@@ -719,16 +719,13 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * Converts cached FRED data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
+   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
+   * No defensive file existence check is needed here.
+   *
    * @param sourceDirPath Path to directory containing cached FRED JSON data
    * @param targetFilePath Target parquet file to create
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return;
-    }
-
     LOGGER.info("Converting FRED data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<Map<String, Object>> observations = new ArrayList<>();
@@ -913,27 +910,23 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   /**
    * Convert a specific FRED series to Parquet format with optional partitioning.
    *
+   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
+   * No defensive file existence check is needed here.
+   *
    * @param seriesId FRED series identifier
    * @param targetPath Target parquet file path
    * @param partitionFields List of partition fields (can be null for no partitioning)
    */
   public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields)
       throws IOException {
-
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetPath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetPath);
-      return;
-    }
-
     LOGGER.debug("Converting FRED series {} to parquet: {}", seriesId, targetPath);
 
-    // Find the cached JSON file for this series in local operating directory
-    // Note: Cache files are stored in operating directory for FRED series
-    File cacheRoot = new File(operatingDirectory);
+    // Find the cached JSON file for this series in cache directory
+    // Note: Cache files are stored in cacheDirectory via cacheStorageProvider (supports S3)
+    File cacheRoot = new File(cacheDirectory);
     List<Map<String, Object>> observations = new ArrayList<>();
 
-    // Search through operating directory structure for cached data
+    // Search through cache directory structure for cached data
     if (!findAndLoadSeriesData(cacheRoot, seriesId, observations)) {
       LOGGER.warn("No cached data found for FRED series: {}", seriesId);
       return;

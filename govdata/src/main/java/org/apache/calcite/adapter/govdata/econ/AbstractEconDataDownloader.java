@@ -163,7 +163,7 @@ public abstract class AbstractEconDataDownloader {
 
     // 1. Check cache manifest first - trust it as source of truth
     if (cacheManifest.isCached(dataType, year, params)) {
-      LOGGER.debug("Found cached {} data for year {} per manifest", dataType, year);
+      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {} (year={})", dataType, year);
       return true;
     }
 
@@ -171,7 +171,7 @@ public abstract class AbstractEconDataDownloader {
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
     try {
       if (cacheStorageProvider.exists(filePath)) {
-        LOGGER.info("Found existing {} file for year {} - updating manifest", dataType, year);
+        LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
         long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
         cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
         cacheManifest.save(operatingDirectory);

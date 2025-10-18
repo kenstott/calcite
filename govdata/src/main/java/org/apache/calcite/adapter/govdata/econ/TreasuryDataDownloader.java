@@ -395,16 +395,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * Converts cached Treasury yields data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
+   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
+   * No defensive file existence check is needed here.
+   *
    * @param sourceDirPath Path to directory containing cached Treasury JSON data
    * @param targetFilePath Target parquet file to create
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return;
-    }
-
     LOGGER.info("Converting Treasury data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<TreasuryYield> yields = new ArrayList<>();
@@ -447,16 +444,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts cached federal debt data to Parquet format.
    *
+   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
+   * No defensive file existence check is needed here.
+   *
    * @param sourceDirPath Path to directory containing cached federal debt JSON data
    * @param targetFilePath Target parquet file path to create
    */
   public void convertFederalDebtToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return;
-    }
-
     LOGGER.info("Converting federal debt data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<FederalDebt> debtRecords = new ArrayList<>();

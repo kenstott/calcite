@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,10 +35,13 @@ import java.util.concurrent.TimeUnit;
  * Cache manifest for tracking SEC submissions.json files with ETag support.
  * Enables efficient conditional GET requests to avoid redundant downloads.
  *
+ * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
+ * including ETag support, TTL-based expiration, and parquet conversion tracking.
+ *
  * <p>Uses HTTP ETags to detect changes on the SEC server, falling back to
  * time-based expiration when ETags are not available.
  */
-public class SecCacheManifest {
+public class SecCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MANIFEST_FILENAME = "cache_manifest.json";
@@ -52,6 +57,72 @@ public class SecCacheManifest {
 
   @JsonProperty("lastUpdated")
   private long lastUpdated = System.currentTimeMillis();
+
+  /**
+   * Check if a CIK has been fully processed (all filings converted to parquet).
+   * This is valid only if the submissions.json has not changed since processing.
+   *
+   * @param cik The CIK to check
+   * @return true if the CIK is fully processed and submissions.json hasn't changed
+   */
+  public boolean isCikFullyProcessed(String cik) {
+    SubmissionCacheEntry entry = entries.get(cik);
+    if (entry == null) {
+      LOGGER.debug("CIK {} not in cache manifest entries", cik);
+      return false;
+    }
+
+    // CIK is only considered fully processed if the flag is set to true
+    if (!entry.fullyProcessed) {
+      LOGGER.debug("CIK {} fullyProcessed flag is false", cik);
+      return false;
+    }
+
+    // The flag remains valid until submissions.json actually changes
+    // (invalidateCikFullyProcessed is called when file is re-downloaded)
+    // We don't invalidate just because TTL expired - that's too aggressive
+    LOGGER.info("CIK {} is fully processed ({} filings at {})",
+        cik, entry.totalFilingsWhenProcessed,
+        entry.fullyProcessedAt != null ? new java.util.Date(entry.fullyProcessedAt) : "unknown");
+    return true;
+  }
+
+  /**
+   * Mark a CIK as fully processed (all filings have been converted to parquet).
+   *
+   * @param cik The CIK
+   * @param totalFilings Total number of filings that were processed
+   */
+  public void markCikFullyProcessed(String cik, int totalFilings) {
+    SubmissionCacheEntry entry = entries.get(cik);
+    if (entry == null) {
+      LOGGER.warn("Cannot mark CIK {} as fully processed - not in cache manifest", cik);
+      return;
+    }
+
+    entry.fullyProcessed = true;
+    entry.fullyProcessedAt = System.currentTimeMillis();
+    entry.totalFilingsWhenProcessed = totalFilings;
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.info("Marked CIK {} as fully processed ({} filings)", cik, totalFilings);
+  }
+
+  /**
+   * Invalidate the fully processed flag for a CIK (e.g., when submissions.json changes).
+   *
+   * @param cik The CIK
+   */
+  public void invalidateCikFullyProcessed(String cik) {
+    SubmissionCacheEntry entry = entries.get(cik);
+    if (entry != null && entry.fullyProcessed) {
+      entry.fullyProcessed = false;
+      entry.fullyProcessedAt = null;
+      entry.totalFilingsWhenProcessed = null;
+      lastUpdated = System.currentTimeMillis();
+      LOGGER.debug("Invalidated fully_processed flag for CIK {}", cik);
+    }
+  }
 
   /**
    * Check if submissions.json is cached and still fresh for the given CIK.
@@ -279,30 +350,26 @@ public class SecCacheManifest {
 
   /**
    * Cache entry metadata for SEC submissions.json files.
-   * Note: SEC adapter uses a different pattern - submissions.json tracks available filings,
+   * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add SEC-specific fields.
+   *
+   * <p>Note: SEC adapter uses a different pattern - submissions.json tracks available filings,
    * and parquet conversion is tracked separately via processed_filings.manifest
    */
-  public static class SubmissionCacheEntry {
+  public static class SubmissionCacheEntry extends BaseCacheEntry {
     @JsonProperty("cik")
     public String cik;
 
-    @JsonProperty("filePath")
-    public String filePath;
-
-    @JsonProperty("etag")
-    public String etag;  // ETag from SEC response header
-
-    @JsonProperty("fileSize")
-    public long fileSize;
-
     @JsonProperty("downloadedAt")
-    public long downloadedAt;
+    public long downloadedAt;  // SEC uses downloadedAt instead of cachedAt
 
-    @JsonProperty("refreshAfter")
-    public long refreshAfter = Long.MAX_VALUE;  // TTL - fallback if no ETag
+    @JsonProperty("fullyProcessed")
+    public boolean fullyProcessed = false;  // true if all filings from this submissions.json have been processed
 
-    @JsonProperty("refreshReason")
-    public String refreshReason;  // e.g., "etag_based", "daily_fallback_no_etag"
+    @JsonProperty("fullyProcessedAt")
+    public Long fullyProcessedAt;  // timestamp when CIK was marked as fully processed
+
+    @JsonProperty("totalFilingsWhenProcessed")
+    public Integer totalFilingsWhenProcessed;  // number of filings that were processed
   }
 
   /**
