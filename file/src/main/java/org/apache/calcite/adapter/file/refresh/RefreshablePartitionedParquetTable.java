@@ -99,10 +99,10 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     this.schemaName = schemaName;
     this.storageProvider = storageProvider;
 
-    LOGGER.error("CONSTRUCTOR: Creating RefreshablePartitionedParquetTable for table: {}, hasPartitionConfig: {}",
+    LOGGER.debug("Creating RefreshablePartitionedParquetTable for table: {}, hasPartitionConfig: {}",
         tableName, config.getPartitions() != null);
     if (config.getPartitions() != null) {
-      LOGGER.error("CONSTRUCTOR: Partition config - style: {}, columnDefinitions: {}",
+      LOGGER.debug("Partition config - style: {}, columnDefinitions: {}",
           config.getPartitions().getStyle(),
           config.getPartitions().getColumnDefinitions() != null ?
               config.getPartitions().getColumnDefinitions().size() : "null");
