@@ -543,11 +543,6 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
    * @param targetFilePath Target parquet file to create
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return;
-    }
 
     LOGGER.info("Converting World Bank data from {} to parquet: {}", sourceDirPath, targetFilePath);
 

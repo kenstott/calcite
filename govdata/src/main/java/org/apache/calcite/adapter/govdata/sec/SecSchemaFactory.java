@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -736,45 +737,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
     partitionedTables.add(earningsTranscripts);
 
-    // Define stock_prices table for daily EOD prices
-    Map<String, Object> stockPricesPartitionConfig = new HashMap<>();
-    stockPricesPartitionConfig.put("style", "hive");  // Use Hive-style partitioning (key=value)
-
-    // Define partition columns for stock_prices (ticker and year only)
-    // CIK will be a regular column in the Parquet files for joins
-    List<Map<String, Object>> stockPricesColumnDefs = new ArrayList<>();
-
-    Map<String, Object> tickerCol = new HashMap<>();
-    tickerCol.put("name", "ticker");
-    tickerCol.put("type", "VARCHAR");
-    stockPricesColumnDefs.add(tickerCol);
-
-    Map<String, Object> stockYearCol = new HashMap<>();
-    stockYearCol.put("name", "year");
-    stockYearCol.put("type", "INTEGER");
-    stockPricesColumnDefs.add(stockYearCol);
-
-    stockPricesPartitionConfig.put("columnDefinitions", stockPricesColumnDefs);
-
-    Map<String, Object> stockPrices = new HashMap<>();
-    stockPrices.put("name", "stock_prices");
-    stockPrices.put("pattern", "stock_prices/ticker=*/year=*/[!.]*.parquet");
-    stockPrices.put("partitions", stockPricesPartitionConfig);
-    partitionedTables.add(stockPrices);
-
-    // Define company_info as a single file (non-partitioned but in partitionedTables for consistency)
-    Map<String, Object> companyInfo = new HashMap<>();
-    companyInfo.put("name", "company_info");
-    companyInfo.put("pattern", "[!.]company_info.parquet");
-    // No partitions config needed - this is a single file
-    partitionedTables.add(companyInfo);
-
     // Add vectorized_blobs table when text similarity is enabled
     Map<String, Object> textSimilarityConfig = (Map<String, Object>) operand.get("textSimilarity");
     if (textSimilarityConfig != null && Boolean.TRUE.equals(textSimilarityConfig.get("enabled"))) {
       Map<String, Object> vectorizedBlobsTable = new HashMap<>();
       vectorizedBlobsTable.put("name", "vectorized_blobs");
-      vectorizedBlobsTable.put("pattern", "cik=*/filing_type=*/year=*/*_vectorized.parquet");
+      // Pattern matches files like: cik=0000320193/filing_type=10K/year=2023/0000320193_0001628280-23-000106_vectorized.parquet
+      // Uses [!.]* to exclude hidden files (like .conversions.json)
+      vectorizedBlobsTable.put("pattern", "cik=*/filing_type=*/year=*/[!.]*_vectorized.parquet");
       vectorizedBlobsTable.put("partitions", partitionConfig);
       partitionedTables.add(vectorizedBlobsTable);
       LOGGER.debug("Added vectorized_blobs table configuration for text similarity");
@@ -866,8 +836,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Convert relative pattern to full viewScanPattern
         // Pattern format: "cik=*/filing_type=*/year=*/[!.]*_line_items.parquet"
         // Full pattern: "{secParquetDir}/{tableName}/{pattern}"
-        String viewScanPattern = storageProvider.resolvePath(
-            storageProvider.resolvePath(secParquetDir, tableName),
+        String viewScanPattern =
+            storageProvider.resolvePath(storageProvider.resolvePath(secParquetDir, tableName),
             pattern);
 
         org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record =
@@ -875,11 +845,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         record.viewScanPattern = viewScanPattern;
         record.originalFile = tableName; // Use table name as identifier
         record.conversionType = "SEC_XBRL_TO_PARQUET";
+        record.tableName = tableName; // Set table name for consistency
+        record.tableConfig = table; // Preserve table configuration including partition info
 
         conversionRecords.put(tableName, record);
 
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Registered viewScanPattern for table '{}': {}", tableName, viewScanPattern);
+          LOGGER.debug("Registered viewScanPattern for table '{}': {} (partitions: {})",
+              tableName, viewScanPattern, table.get("partitions"));
         }
       }
     }
@@ -1007,7 +980,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               if (line.startsWith(entryPrefix)) {
                 existingEntry = line;
                 // Entry already exists - check if we need to upgrade it
-                if (hasVectorized && !line.contains("PROCESSED_WITH_VECTORS")) {
+                // Upgrade if: vectorization is enabled AND entry doesn't have PROCESSED_WITH_VECTORS
+                if ((hasVectorized || vectorizationEnabled) && !line.contains("PROCESSED_WITH_VECTORS")) {
                   // Need to upgrade from PROCESSED to PROCESSED_WITH_VECTORS
                   // This is handled by rewriting below
                   if (LOGGER.isDebugEnabled()) {
@@ -1085,7 +1059,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
     } catch (Exception e) {
-      LOGGER.debug("Could not update manifest: " + e.getMessage());
+      LOGGER.error("CRITICAL: Could not update manifest - filing will be reprocessed on next run: {}", e.getMessage(), e);
     }
   }
 
@@ -1318,6 +1292,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       File submissionsFile = new File(cikMetadataDir, "submissions.json");
       LOGGER.info("  Checking submissions file: {} (exists={})", submissionsFile.getAbsolutePath(), submissionsFile.exists());
 
+      // OPTIMIZATION: Check if this CIK is fully processed before doing any individual filing checks
+      if (cacheManifest != null && cacheManifest.isCikFullyProcessed(normalizedCik)) {
+        LOGGER.info("CIK {} is fully processed and submissions.json unchanged - skipping entire CIK (FAST PATH)", normalizedCik);
+        return; // Skip this entire CIK - no need to check individual filings
+      }
+
       // Check if submissions are cached using manifest
       boolean needsDownload = true;
       if (cacheManifest != null && cacheManifest.isCached(normalizedCik)) {
@@ -1413,6 +1393,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
                 refreshReason = "daily_fallback_no_metadata";
               }
+              // Invalidate fully_processed flag since submissions.json changed
+              cacheManifest.invalidateCikFullyProcessed(normalizedCik);
+
               cacheManifest.markCached(normalizedCik, submissionsFile.getAbsolutePath(),
                                       newETag, fileSize, refreshAfter, refreshReason);
 
@@ -1561,7 +1544,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Set<String> processedFilingsManifest = new HashSet<>();
       if (manifestFile.exists()) {
         try {
-          processedFilingsManifest = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+          Set<String> rawEntries = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+          // Migrate old manifest entries to current format if needed
+          processedFilingsManifest = migrateManifestIfNeeded(manifestFile, rawEntries);
+
           if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Loaded {} entries from manifest for CIK {}", processedFilingsManifest.size(), normalizedCik);
           }
@@ -1587,6 +1573,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         if (allFilingsProcessed) {
           LOGGER.info("All {} filings for CIK {} are already fully processed - skipping entire CIK", filingsToDownload.size(), normalizedCik);
+
+          // Mark this CIK as fully processed in the cache manifest for future runs
+          if (cacheManifest != null) {
+            cacheManifest.markCikFullyProcessed(normalizedCik, filingsToDownload.size());
+            String cacheDir = getGovDataCacheDir();
+            if (cacheDir != null) {
+              cacheManifest.save(this.secOperatingDirectory);
+            }
+          }
+
           return; // Skip this entire CIK
         }
       }
@@ -1631,6 +1627,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       totalFilingsToProcess.addAndGet(filingsNeedingProcessing.size());
       if (filingsNeedingProcessing.size() > 0) {
         LOGGER.info("Scheduling {} filings for download/processing for CIK {}", filingsNeedingProcessing.size(), normalizedCik);
+      } else {
+        // If we scheduled 0 filings, it means all filings are already processed
+        // Mark this CIK as fully processed for future runs
+        if (cacheManifest != null && filingsToDownload.size() > 0) {
+          LOGGER.info("All {} filings for CIK {} are already processed - marking as fully processed", filingsToDownload.size(), normalizedCik);
+          cacheManifest.markCikFullyProcessed(normalizedCik, filingsToDownload.size());
+          String cacheDir = getGovDataCacheDir();
+          if (cacheDir != null) {
+            cacheManifest.save(this.secOperatingDirectory);
+          }
+        }
       }
 
       for (FilingToDownload filing : filingsNeedingProcessing) {
@@ -1676,6 +1683,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
+  // Helper class to hold aggregated manifest entry status
+  private static class FilingManifestEntry {
+    boolean hasVectorized = false;
+    boolean isNoXbrl = false;
+  }
+
   // Enum for filing status
   private enum FilingStatus {
     FULLY_PROCESSED,      // In manifest with all required files
@@ -1714,7 +1727,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Check manifest first
       if (manifestFile.exists()) {
-        Set<String> processedFilings = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+        Set<String> rawEntries = new HashSet<>(Files.readAllLines(manifestFile.toPath()));
+        // Migrate old manifest entries to current format if needed
+        Set<String> processedFilings = migrateManifestIfNeeded(manifestFile, rawEntries);
 
         String searchPrefix = cik + "|" + accession + "|";
         if (LOGGER.isDebugEnabled()) {
@@ -1724,14 +1739,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         boolean isInManifest = false;
         boolean hasVectorized = false;
+        boolean isNoXbrl = false;
+        int matchAttempts = 0;
         for (String entry : processedFilings) {
           if (entry.startsWith(searchPrefix)) {
             isInManifest = true;
             hasVectorized = entry.contains("PROCESSED_WITH_VECTORS");
+            isNoXbrl = entry.contains("NO_XBRL");
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("checkFilingStatus: FOUND entry='{}' for prefix='{}'", entry, searchPrefix);
             }
             break;
+          }
+          // Debug: show first few entries that don't match
+          if (LOGGER.isDebugEnabled() && matchAttempts < 3 && entry.contains(accession)) {
+            LOGGER.debug("checkFilingStatus: NEAR MISS - entry contains accession but doesn't match prefix. entry='{}' searchPrefix='{}'",
+                entry, searchPrefix);
+            matchAttempts++;
           }
         }
 
@@ -1741,11 +1765,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
 
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("checkFilingStatus: cik={} accession={} isInManifest={} needsVectorized={} hasVectorized={}",
-              cik, accession, isInManifest, needsVectorized, hasVectorized);
+          LOGGER.debug("checkFilingStatus: cik={} accession={} isInManifest={} needsVectorized={} hasVectorized={} isNoXbrl={}",
+              cik, accession, isInManifest, needsVectorized, hasVectorized, isNoXbrl);
         }
 
-        if (isInManifest && (!needsVectorized || hasVectorized)) {
+        if (isInManifest && isNoXbrl) {
+          // Filing has no XBRL data - fully processed (nothing to convert)
+          status = FilingStatus.FULLY_PROCESSED;
+          filingStatusCache.put(cacheKey, status);
+          return status;
+        } else if (isInManifest && (!needsVectorized || hasVectorized)) {
           // Filing is in manifest and either:
           // 1. Vectorization not needed, OR
           // 2. Has vectorization flag (was processed with vectorization enabled)
@@ -1811,35 +1840,141 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .anyMatch(type -> type.equalsIgnoreCase(normalizedForm));
   }
 
+  /**
+   * Migrates old manifest entries to current format if needed.
+   *
+   * <p>Manifest format evolution:
+   * - v0 (very old): CIK|ACCESSION (2 fields)
+   * - v1 (old): CIK|ACCESSION|STATUS (3 fields)
+   * - v2 (current): CIK|ACCESSION|STATUS|TIMESTAMP (4 fields)
+   *
+   * <p>This method detects old format entries and upgrades them transparently,
+   * preventing unnecessary reprocessing of filings that were already converted
+   * in previous code versions.
+   *
+   * @param manifestFile The manifest file (used for saving migrated entries)
+   * @param entries The raw manifest entries loaded from disk
+   * @return Migrated entries in current format
+   */
+  private Set<String> migrateManifestIfNeeded(File manifestFile, Set<String> entries) {
+    Set<String> migrated = new HashSet<>();
+    int v0Count = 0; // CIK|ACCESSION
+    int v1Count = 0; // CIK|ACCESSION|STATUS
+    int v2Count = 0; // CIK|ACCESSION|STATUS|TIMESTAMP
+
+    for (String entry : entries) {
+      if (entry.trim().isEmpty()) {
+        continue; // Skip empty lines
+      }
+
+      String[] parts = entry.split("\\|");
+
+      // Current format: CIK|ACCESSION|STATUS|TIMESTAMP (4 parts)
+      if (parts.length == 4) {
+        migrated.add(entry); // Already correct
+        v2Count++;
+      } else if (parts.length == 3) {
+        // Old format: CIK|ACCESSION|STATUS (missing timestamp)
+        String upgraded = entry + "|" + System.currentTimeMillis();
+        migrated.add(upgraded);
+        v1Count++;
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Migrated v1 entry: {} -> {}", entry, upgraded);
+        }
+      } else if (parts.length == 2) {
+        // Very old format: CIK|ACCESSION (missing status and timestamp)
+        String upgraded = parts[0] + "|" + parts[1] + "|PROCESSED|" + System.currentTimeMillis();
+        migrated.add(upgraded);
+        v0Count++;
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Migrated v0 entry: {} -> {}", entry, upgraded);
+        }
+      } else {
+        // Unknown format - keep as-is to avoid data loss
+        migrated.add(entry);
+        LOGGER.warn("Unknown manifest format ({}): {}", parts.length, entry);
+      }
+    }
+
+    // Save migrated manifest if any entries were upgraded
+    if (v0Count > 0 || v1Count > 0) {
+      LOGGER.info("Migrating manifest {} - v0: {}, v1: {}, v2: {}, total: {}",
+          manifestFile.getName(), v0Count, v1Count, v2Count, migrated.size());
+      try {
+        // Write sorted entries for better readability
+        List<String> sortedEntries = new ArrayList<>(migrated);
+        Collections.sort(sortedEntries);
+        Files.write(manifestFile.toPath(), sortedEntries);
+        LOGGER.info("Successfully migrated manifest to current format");
+      } catch (IOException e) {
+        LOGGER.error("Failed to save migrated manifest: {}", e.getMessage());
+        // Continue with migrated in-memory entries even if save fails
+      }
+    }
+
+    return migrated;
+  }
+
+  /**
+   * Index manifest entries into a HashMap for O(1) lookups.
+   * Aggregates duplicate entries by keeping the most permissive flags.
+   *
+   * @param manifest The set of manifest entries to index
+   * @return Map from "cik|accession" to aggregated FilingManifestEntry
+   */
+  private Map<String, FilingManifestEntry> indexManifestEntries(Set<String> manifest) {
+    Map<String, FilingManifestEntry> index = new HashMap<>();
+
+    for (String entry : manifest) {
+      // Entry format: "cik|accession|...|STATUS|timestamp"
+      // Example: "0000732712|0001062993-25-011201|PROCESSED_WITH_VECTORS|1234567890"
+      String[] parts = entry.split("\\|");
+      if (parts.length >= 2) {
+        String key = parts[0] + "|" + parts[1]; // "cik|accession"
+
+        FilingManifestEntry existing = index.get(key);
+        if (existing == null) {
+          existing = new FilingManifestEntry();
+          index.put(key, existing);
+        }
+
+        // Aggregate flags from all entries (handles duplicates)
+        if (entry.contains("PROCESSED_WITH_VECTORS")) {
+          existing.hasVectorized = true;
+        }
+        if (entry.contains("NO_XBRL")) {
+          existing.isNoXbrl = true;
+        }
+      }
+    }
+
+    return index;
+  }
+
   private FilingStatus checkFilingStatusInMemory(String cik, String accession, String form,
                                                   String filingDate, Set<String> processedFilingsManifest) {
     try {
-      // Scan ALL manifest entries for this filing (don't stop at first match!)
-      // Duplicate entries exist due to historical re-processing, need to find latest status
-      boolean isInManifest = false;
-      boolean hasVectorized = false;
-      for (String entry : processedFilingsManifest) {
-        if (entry.startsWith(cik + "|" + accession + "|")) {
-          isInManifest = true;
-          // Check if THIS entry has vectorized status
-          if (entry.contains("PROCESSED_WITH_VECTORS")) {
-            hasVectorized = true;
-            // Don't break - keep scanning to find all entries
-          }
-        }
-      }
+      // Build indexed map for O(1) lookups
+      Map<String, FilingManifestEntry> manifestIndex = indexManifestEntries(processedFilingsManifest);
+
+      String lookupKey = cik + "|" + accession;
+      FilingManifestEntry entry = manifestIndex.get(lookupKey);
+
+      boolean isInManifest = (entry != null);
+      boolean hasVectorized = isInManifest && entry.hasVectorized;
+      boolean isNoXbrl = isInManifest && entry.isNoXbrl;
 
       // Check if text similarity is enabled
       Map<String, Object> textSimilarityConfig = (Map<String, Object>) currentOperand.get("textSimilarity");
       boolean needsVectorized = textSimilarityConfig != null &&
           Boolean.TRUE.equals(textSimilarityConfig.get("enabled"));
 
-      if (LOGGER.isDebugEnabled() && isInManifest) {
-        LOGGER.debug("DEBUG: checkFilingStatusInMemory - CIK={}, Accession={}, isInManifest={}, hasVectorized={}, needsVectorized={}",
-            cik, accession, isInManifest, hasVectorized, needsVectorized);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("[MANIFEST-CHECK] In-memory manifest lookup (O(1)): CIK={}, Accession={}, isInManifest={}, hasVectorized={}, needsVectorized={}, isNoXbrl={}",
+            cik, accession, isInManifest, hasVectorized, needsVectorized, isNoXbrl);
       }
 
-      if (isInManifest && (!needsVectorized || hasVectorized)) {
+      if (isInManifest && (isNoXbrl || !needsVectorized || hasVectorized)) {
         return FilingStatus.FULLY_PROCESSED;
       }
 
@@ -1866,7 +2001,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean isInsiderForm = form.matches("[345]");
 
       if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("hasAllParquetFiles: cik={} accession={} form={} filingDate={} uniqueId={} isInsiderForm={}",
+        LOGGER.debug("[FILE-EXISTENCE-CHECK] Checking Parquet files (I/O): cik={}, accession={}, form={}, filingDate={}, uniqueId={}, isInsiderForm={}",
             cik, accession, form, filingDate, uniqueId, isInsiderForm);
       }
 
@@ -2497,11 +2632,74 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String fileToConvert = null;
         if (xbrlExists) {
           fileToConvert = xbrlPath;
-        } else if (htmlExists && confirmedInlineXbrl) {
+        } else if (htmlExists && (confirmedInlineXbrl || hasInlineXBRL)) {
           fileToConvert = htmlPath;
+        } else if (xbrlKnownNotFound && !confirmedInlineXbrl && !hasInlineXBRL) {
+          // Special case: If this is vectorization reprocessing and filing is already PROCESSED,
+          // we should upgrade to PROCESSED_WITH_VECTORS rather than marking as NO_XBRL
+          // This happens when vectorization is enabled after files were already processed
+          if (needsVectorizationReprocessing && LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Filing {} {} needs vectorization reprocessing but has no new XBRL - upgrading to PROCESSED_WITH_VECTORS", form, filingDate);
+          }
+
+          if (needsVectorizationReprocessing) {
+            // Call addToManifest with empty outputFiles list to upgrade status
+            // addToManifest will mark as PROCESSED_WITH_VECTORS when vectorization is enabled
+            String govdataParquetDir = getGovDataParquetDir();
+            if (govdataParquetDir != null) {
+              String secParquetDirPath = storageProvider.resolvePath(govdataParquetDir, "source=sec");
+              addToManifest(xbrlPath, secParquetDirPath, new ArrayList<>());
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Upgraded filing to PROCESSED_WITH_VECTORS: {} {}", form, filingDate);
+              }
+            }
+          } else {
+            // Filing has no XBRL data (no separate .xml file and no inline XBRL in HTML)
+            // Add to manifest with NO_XBRL status to prevent re-checking on future runs
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Filing {} {} has no processable XBRL data - adding to manifest as NO_XBRL", form, filingDate);
+            }
+            try {
+              cikManifestDir.mkdirs();
+              synchronized (("manifest_" + cik).intern()) {
+                String entryPrefix = cik + "|" + accession + "|";
+                String manifestEntry = entryPrefix + "NO_XBRL|" + System.currentTimeMillis();
+
+                // Check if entry already exists
+                boolean alreadyExists = false;
+                if (manifestFile.exists()) {
+                  try (BufferedReader reader = new BufferedReader(new FileReader(manifestFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                      if (line.startsWith(entryPrefix)) {
+                        alreadyExists = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                if (!alreadyExists) {
+                  try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
+                    pw.println(manifestEntry);
+                  }
+                  if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Added NO_XBRL entry to manifest: {}", manifestEntry);
+                  }
+                }
+              }
+            } catch (IOException e) {
+              LOGGER.warn("Failed to add NO_XBRL entry to manifest: {}", e.getMessage());
+            }
+          }
+          return; // No conversion possible or already upgraded
         }
 
         if (fileToConvert != null) {
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("INLINE CONVERSION: fileToConvert={} for filing {} {}", fileToConvert, form, filingDate);
+          }
+
           // Get parquet directory
           String govdataParquetDir = getGovDataParquetDir();
           String secParquetDirPath = govdataParquetDir != null ? storageProvider.resolvePath(govdataParquetDir, "source=sec") : null;
@@ -2527,28 +2725,60 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   outputFiles != null ? outputFiles.size() : "null");
             }
 
-            if (!outputFiles.isEmpty()) {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("INLINE CONVERSION: Calling addToManifest for {} output files", outputFiles.size());
-              }
-              // Add to manifest after successful conversion
-              addToManifest(fileToConvert, secParquetDirPath, outputFiles);
-              if (LOGGER.isDebugEnabled()) {
+            // Always call addToManifest, even with empty outputFiles
+            // This ensures proper handling of vectorization reprocessing
+            // addToManifest will mark as PROCESSED_WITH_VECTORS when vectorization is enabled,
+            // even if no output files were created (e.g., 8-K with no financial data)
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("INLINE CONVERSION: Calling addToManifest with {} output files", outputFiles.size());
+            }
+            addToManifest(fileToConvert, secParquetDirPath, outputFiles);
+            if (LOGGER.isDebugEnabled()) {
+              if (!outputFiles.isEmpty()) {
                 LOGGER.debug("Converted filing inline: {} {} ({} parquet files)", form, filingDate, outputFiles.size());
-              }
-            } else {
-              if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("INLINE CONVERSION: outputFiles is EMPTY, NOT calling addToManifest");
+              } else {
+                LOGGER.debug("Conversion completed with no output files, marked as processed: {} {}", form, filingDate);
               }
             }
           }
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to convert filing {}: {}", accession, e.getMessage());
+
+        // Write FAILED entry to manifest so we don't keep retrying this filing
+        try {
+          cikManifestDir.mkdirs();
+          synchronized (("manifest_" + cik).intern()) {
+            String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
+            try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
+              pw.println(manifestEntry);
+            }
+            LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
+          }
+        } catch (IOException ioe) {
+          LOGGER.warn("Failed to add FAILED entry to manifest: {}", ioe.getMessage());
+        }
       }
 
     } catch (Exception e) {
       LOGGER.warn("Failed to download filing " + accession + ": " + e.getMessage());
+
+      // Write FAILED entry to manifest so we don't keep retrying this filing
+      try {
+        File cikManifestDir = new File(this.secOperatingDirectory, "cik=" + cik);
+        File manifestFile = new File(cikManifestDir, "processed_filings.manifest");
+        cikManifestDir.mkdirs();
+
+        synchronized (("manifest_" + cik).intern()) {
+          String manifestEntry = cik + "|" + accession + "|FAILED|" + System.currentTimeMillis();
+          try (PrintWriter pw = new PrintWriter(new FileOutputStream(manifestFile, true))) {
+            pw.println(manifestEntry);
+          }
+          LOGGER.debug("Added FAILED entry to manifest for {}: {}", accession, e.getMessage());
+        }
+      } catch (IOException ioe) {
+        LOGGER.warn("Failed to add FAILED entry to manifest: {}", ioe.getMessage());
+      }
     }
   }
 

@@ -861,14 +861,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <p>Note: This method only creates the parquet file. For the file to be discoverable
    * by FileSchema's table discovery, the EconRawToParquetConverter must be registered
    * with FileSchema (which happens in GovDataSchemaFactory.registerEconConverter()).
+   *
+   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
+   * No defensive file existence check is needed here.
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Check if parquet file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return;
-    }
-
     LOGGER.debug("Converting BLS data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     // Extract data type from filename

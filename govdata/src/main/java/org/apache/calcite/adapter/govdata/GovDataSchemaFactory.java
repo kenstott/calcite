@@ -137,6 +137,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       unifiedOperand.put("storageConfig", operand.get("storageConfig"));
     }
 
+    // Pass through database_filename for shared DuckDB database support
+    if (operand.containsKey("database_filename")) {
+      unifiedOperand.put("database_filename", operand.get("database_filename"));
+      LOGGER.info("Passing database_filename to FileSchema: {}", operand.get("database_filename"));
+    }
+
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), dataSource.toUpperCase());
 

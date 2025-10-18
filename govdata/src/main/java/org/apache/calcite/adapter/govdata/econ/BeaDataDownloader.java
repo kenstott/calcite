@@ -2007,11 +2007,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public void convertRegionalIncomeToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting regional income data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-    // Skip if a target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      return;
-    }
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
@@ -2349,11 +2344,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public void convertStateGdpToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-    // Skip if target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      return;
-    }
 
     List<StateGdp> gdpData = new ArrayList<>();
 
@@ -2417,14 +2407,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Extract year and data type
-    int year = extractYearFromPath(targetFilePath);
-    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
-
-    // Check manifest/file existence
-    if (shouldSkipParquetConversion(targetFilePath, year, dataType)) {
-      return;
-    }
-
     LOGGER.debug("Converting BEA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
     List<Map<String, Object>> components = new ArrayList<>();
@@ -2463,9 +2445,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     writeGdpComponentsMapParquet(components, targetFilePath);
 
     LOGGER.debug("Converted BEA data to parquet: {} ({} components)", targetFilePath, components.size());
-
-    // Mark parquet conversion complete
-    markParquetConversionComplete(targetFilePath, year, dataType);
   }
 
 
@@ -2509,11 +2488,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public void convertTradeStatisticsToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting trade statistics data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-    // Skip if target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      return;
-    }
 
     // Read JSON file from cache using cacheStorageProvider
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "trade_statistics.json");
@@ -2632,11 +2606,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public void convertItaDataToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
-    // Skip if target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      return;
-    }
 
     // Read JSON file from cache using cacheStorageProvider
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "ita_data.json");
@@ -2745,11 +2714,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Converts industry GDP JSON files to Parquet format.
    */
   public void convertIndustryGdpToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    // Skip if target file already exists
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      return;
-    }
 
     LOGGER.debug("Converting industry GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
@@ -2908,14 +2872,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    */
   public void convertGdpStatisticsToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     // Extract year and data type for cache check
-    int targetYear = extractYearFromPath(targetFilePath);
-    String dataType = targetFilePath.substring(targetFilePath.lastIndexOf('/') + 1).replace(".parquet", "");
-
-    // Check if conversion should be skipped (file already exists)
-    if (shouldSkipParquetConversion(targetFilePath, targetYear, dataType)) {
-      return;
-    }
-
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "gdp_components.json");
     if (!cacheStorageProvider.exists(jsonFilePath)) {
       LOGGER.warn("No gdp_components.json found in {}", sourceDirPath);
@@ -3052,25 +3008,4 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.debug("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
   }
 
-  /**
-   * Check if parquet conversion should be skipped (file already exists).
-   * Checks file existence directly via StorageProvider.
-   *
-   * @return true if conversion should be skipped, false if conversion should proceed
-   */
-  private boolean shouldSkipParquetConversion(String targetFilePath, int year, String dataType) throws IOException {
-    if (storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Parquet file already exists, skipping conversion: {}", targetFilePath);
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Mark parquet conversion as complete.
-   * FileSchema's conversion registry automatically tracks conversions.
-   */
-  private void markParquetConversionComplete(String targetFilePath, int year, String dataType) {
-    // FileSchema's conversion registry automatically tracks this conversion
-  }
 }

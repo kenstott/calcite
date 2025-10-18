@@ -163,18 +163,21 @@ public class AlphaVantageDownloader {
         .atZone(estZone);
 
     for (int year = startYear; year <= endYear; year++) {
-      // Build the path - ensure it's absolute
-      File baseDir = new File(basePath);
-      LOGGER.debug("baseDir: {}, absolute: {}", baseDir, baseDir.getAbsolutePath());
-      File stockPricesDir = new File(baseDir, "stock_prices");
-      LOGGER.debug("stockPricesDir: {}, absolute: {}", stockPricesDir, stockPricesDir.getAbsolutePath());
-      File tickerDir = new File(stockPricesDir, String.format("ticker=%s", pair.ticker.toUpperCase()));
-      File yearDir = new File(tickerDir, String.format("year=%d", year));
-      LOGGER.debug("yearDir: {}, absolute: {}", yearDir, yearDir.getAbsolutePath());
-      yearDir.mkdirs();
+      // Build the path using StorageProvider.resolvePath for S3 compatibility
+      String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
+      LOGGER.debug("stockPricesDir: {}", stockPricesDir);
+      String tickerDir = storageProvider.resolvePath(stockPricesDir, String.format("ticker=%s", pair.ticker.toUpperCase()));
+      String yearDir = storageProvider.resolvePath(tickerDir, String.format("year=%d", year));
+      LOGGER.debug("yearDir: {}", yearDir);
 
-      File parquetFile = new File(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
-      String fullPath = parquetFile.getAbsolutePath();
+      // Create directories using StorageProvider
+      try {
+        storageProvider.createDirectories(yearDir);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to create directory {}: {}", yearDir, e.getMessage());
+      }
+
+      String fullPath = storageProvider.resolvePath(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
       LOGGER.debug("parquetFile fullPath: {}", fullPath);
 
       // Check if data already exists and determine if refresh is needed
@@ -187,7 +190,8 @@ public class AlphaVantageDownloader {
             needsDownload = false;
           } else {
             // For current year, check if we need to refresh after market close
-            long fileModifiedTime = parquetFile.lastModified();
+            StorageProvider.FileMetadata metadata = storageProvider.getMetadata(fullPath);
+            long fileModifiedTime = metadata.getLastModified();
             java.time.Instant fileModifiedInstant = java.time.Instant.ofEpochMilli(fileModifiedTime);
             java.time.ZonedDateTime fileModifiedEst = fileModifiedInstant.atZone(estZone);
 
