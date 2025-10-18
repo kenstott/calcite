@@ -1448,6 +1448,18 @@ public class ConversionMetadata {
   }
 
   /**
+   * Checks if metadata exists for a given table name.
+   * This is used to skip expensive S3 file enumeration during schema loading
+   * when we already have cached metadata for the table.
+   *
+   * @param tableName The table name to check
+   * @return true if metadata exists for this table
+   */
+  public boolean hasTableMetadata(String tableName) {
+    return conversions.containsKey(tableName);
+  }
+
+  /**
    * Adds or updates a conversion record in the metadata.
    * This is used to register table patterns for DuckDB views.
    *
@@ -1488,19 +1500,33 @@ public class ConversionMetadata {
                   metadataFile, MAPPER.getTypeFactory().constructMapType(HashMap.class,
                   String.class, ConversionRecord.class));
 
-          conversions.putAll(loaded);
           LOGGER.debug("Loaded {} conversion records from metadata", loaded.size());
 
           // Clean up entries for files that no longer exist
           boolean needsCleanup = false;
           for (Map.Entry<String, ConversionRecord> entry : loaded.entrySet()) {
-            File convertedFile = new File(entry.getKey());
-            File originalFile = new File(entry.getValue().originalFile);
-            if (convertedFile.exists() && originalFile.exists()) {
-              conversions.put(entry.getKey(), entry.getValue());
+            String key = entry.getKey();
+            ConversionRecord record = entry.getValue();
+
+            // Check if key is a table name (not a file path)
+            // Table names don't contain path separators or have file extensions
+            boolean isTableName = !key.contains("/") && !key.contains("\\") &&
+                                  !key.contains(".") && record.tableName != null;
+
+            if (isTableName) {
+              // This is a table-based record, keep it regardless of file existence
+              conversions.put(key, record);
+              LOGGER.debug("Loaded table-based record: tableName='{}'", record.tableName);
             } else {
-              LOGGER.debug("Skipping stale conversion record: {}", entry.getKey());
-              needsCleanup = true;
+              // This is a file-based record, check if files still exist
+              File convertedFile = new File(key);
+              File originalFile = new File(record.originalFile);
+              if (convertedFile.exists() && originalFile.exists()) {
+                conversions.put(key, record);
+              } else {
+                LOGGER.debug("Skipping stale conversion record: {}", key);
+                needsCleanup = true;
+              }
             }
           }
 
