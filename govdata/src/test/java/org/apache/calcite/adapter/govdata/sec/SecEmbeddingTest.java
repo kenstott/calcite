@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -112,12 +114,16 @@ public class SecEmbeddingTest {
       edgarConfig.put("endYear", Integer.parseInt(testEndYear));
     }
 
+    // Create storage provider
+    StorageProvider storageProvider = new LocalFileStorageProvider();
+
     // Load cache manifest
     SecCacheManifest cacheManifest = SecCacheManifest.load(secDir.getAbsolutePath());
 
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, secDir, cacheManifest, secDir);
-    List<File> downloaded = downloader.downloadFilings();
+    String secDirPath = secDir.getAbsolutePath();
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, secDirPath, secDirPath, storageProvider, cacheManifest);
+    List<String> downloaded = downloader.downloadFilings();
 
     System.out.println("Downloaded " + downloaded.size() + " XBRL files");
   }

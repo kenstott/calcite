@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -54,12 +56,16 @@ public class Dow30DownloadTest {
     System.out.println("Filing types: 10-K, 10-Q, 8-K");
     System.out.println("");
 
+    // Create storage provider
+    StorageProvider storageProvider = new LocalFileStorageProvider();
+
     // Load cache manifest
     SecCacheManifest cacheManifest = SecCacheManifest.load(targetDir.getAbsolutePath());
 
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir, cacheManifest, targetDir);
-    List<File> downloadedFiles = downloader.downloadFilings();
+    String targetDirPath = targetDir.getAbsolutePath();
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDirPath, targetDirPath, storageProvider, cacheManifest);
+    List<String> downloadedFiles = downloader.downloadFilings();
 
     Duration elapsed = Duration.between(start, Instant.now());
 

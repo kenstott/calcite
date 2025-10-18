@@ -71,7 +71,8 @@ public class NewDownloadMethodsTest {
 
     // Test that the method exists and can be called
     assertNotNull(tiger, "TigerDataDownloader should be created");
-    assertTrue(tiger.getCacheDir().exists(), "Cache directory should exist");
+    File cacheDir = new File(tiger.getCacheDir());
+    assertTrue(cacheDir.exists(), "Cache directory should exist");
 
     System.out.println("✓ downloadZctas() method verified");
     System.out.println("✓ Cache directory: " + tiger.getCacheDir());

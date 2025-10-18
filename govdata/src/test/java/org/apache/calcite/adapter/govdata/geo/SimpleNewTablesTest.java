@@ -131,7 +131,8 @@ public class SimpleNewTablesTest {
     System.out.println("  ✓ isAutoDownload() method works");
 
     // Verify the cache directory exists
-    assertTrue(downloader.getCacheDir().exists(), "Cache directory should exist");
+    File cacheDir = new File(downloader.getCacheDir());
+    assertTrue(cacheDir.exists(), "Cache directory should exist");
 
     System.out.println("  ✓ Cache directory exists: " + downloader.getCacheDir());
 

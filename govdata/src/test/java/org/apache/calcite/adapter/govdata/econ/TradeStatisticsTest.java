@@ -49,7 +49,7 @@ public class TradeStatisticsTest {
         "BEA_API_KEY not set, skipping trade statistics test");
 
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    BeaDataDownloader downloader = new BeaDataDownloader(apiKey, tempDir.toString(), storageProvider);
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Test trade statistics for a 3-year period for faster testing
     downloader.downloadTradeStatistics(2021, 2023);

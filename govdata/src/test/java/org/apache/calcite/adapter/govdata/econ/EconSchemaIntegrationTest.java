@@ -121,7 +121,7 @@ public class EconSchemaIntegrationTest {
     if (fredKey != null) {
       // Create FRED indicators file
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
-      FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredKey, storageProvider);
+      FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredKey, storageProvider, storageProvider);
       // Download just one day of data for testing
       try {
         // Use the default series list for a minimal download
@@ -143,7 +143,7 @@ public class EconSchemaIntegrationTest {
 
     if (beaKey != null) {
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
-      BeaDataDownloader beaDownloader = new BeaDataDownloader(beaKey, cacheDir, storageProvider);
+      BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, cacheDir, beaKey, storageProvider, storageProvider);
 
       // Try to download each BEA dataset
       try {

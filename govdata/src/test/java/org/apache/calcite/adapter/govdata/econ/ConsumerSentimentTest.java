@@ -48,7 +48,7 @@ public class ConsumerSentimentTest {
         "FRED_API_KEY not set, skipping consumer sentiment test");
 
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider);
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Test all 4 consumer sentiment indices
     downloader.downloadEconomicIndicators(
