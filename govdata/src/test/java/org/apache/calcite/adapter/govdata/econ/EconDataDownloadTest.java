@@ -54,13 +54,13 @@ public class EconDataDownloadTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "BLS_API_KEY not set, skipping BLS test");
 
-    BlsDataDownloader downloader = new BlsDataDownloader(apiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BlsDataDownloader downloader = new BlsDataDownloader(apiKey, tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 1 year of employment data for testing
     downloader.downloadEmploymentStatistics(2023, 2024);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=employment/year_range=2023_2024/employment_statistics.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -69,13 +69,13 @@ public class EconDataDownloadTest {
   }
 
   @Test public void testTreasuryYields() throws Exception {
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 1 year of data for testing
     downloader.downloadTreasuryYields(2023, 2024);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=treasury/year_range=2023_2024/treasury_yields.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -84,12 +84,12 @@ public class EconDataDownloadTest {
   }
 
   @Test public void testFederalDebt() throws Exception {
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     downloader.downloadFederalDebt(2023, 2024);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=treasury/year_range=2023_2024/federal_debt.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -98,13 +98,13 @@ public class EconDataDownloadTest {
   }
 
   @Test public void testWorldBankIndicators() throws Exception {
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 2 years for G7 countries
     downloader.downloadWorldIndicators(2022, 2023);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=worldbank/year_range=2022_2023/world_indicators.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -113,13 +113,13 @@ public class EconDataDownloadTest {
   }
 
   @Test public void testWorldBankGlobalGDP() throws Exception {
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 1 year of GDP data
     downloader.downloadGlobalGDP(2023, 2023);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=worldbank/year_range=2023_2023/global_gdp.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -132,7 +132,8 @@ public class EconDataDownloadTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "FRED_API_KEY not set, skipping FRED test");
 
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Download just a few key indicators for 1 year
     downloader.downloadEconomicIndicators(
@@ -142,7 +143,6 @@ public class EconDataDownloadTest {
         "2023-01-01", "2024-01-01");
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=fred_indicators/fred_indicators.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -155,7 +155,8 @@ public class EconDataDownloadTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty() && !"demo".equals(apiKey),
         "FRED_API_KEY not set or is demo key, skipping FRED custom series test");
 
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Test individual series download
     downloader.downloadSeries("UNRATE", 2023, 2024);
@@ -195,13 +196,13 @@ public class EconDataDownloadTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "BEA_API_KEY not set, skipping BEA test");
 
-    BeaDataDownloader downloader = new BeaDataDownloader(apiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Download just 1 year of GDP components
     downloader.downloadGdpComponents(2023, 2023);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=gdp_components/year_range=2023_2023/gdp_components.parquet");
     assertTrue(storageProvider.exists(parquetPath));
@@ -214,13 +215,13 @@ public class EconDataDownloadTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "BEA_API_KEY not set, skipping BEA regional test");
 
-    BeaDataDownloader downloader = new BeaDataDownloader(apiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Download just 1 year of regional income data
     downloader.downloadRegionalIncome(2023, 2023);
 
     // Verify parquet file was created
-    StorageProvider storageProvider = createStorageProvider();
     String parquetPath =
         storageProvider.resolvePath(tempDir.toString(), "source=econ/type=regional_income/year_range=2023_2023/regional_income.parquet");
     assertTrue(storageProvider.exists(parquetPath));

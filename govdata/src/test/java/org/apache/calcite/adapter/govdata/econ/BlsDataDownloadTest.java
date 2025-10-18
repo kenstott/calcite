@@ -64,7 +64,8 @@ public class BlsDataDownloadTest {
       return;
     }
 
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 2 years of data for testing
     File parquetFile = downloader.downloadEmploymentStatistics(2023, 2024);
@@ -83,7 +84,8 @@ public class BlsDataDownloadTest {
       return;
     }
 
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), storageProvider, storageProvider);
 
     File parquetFile = downloader.downloadInflationMetrics(2023, 2024);
 
@@ -100,7 +102,8 @@ public class BlsDataDownloadTest {
       return;
     }
 
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), storageProvider, storageProvider);
 
     File parquetFile = downloader.downloadWageGrowth(2023, 2024);
 
@@ -117,7 +120,8 @@ public class BlsDataDownloadTest {
       return;
     }
 
-    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BlsDataDownloader downloader = new BlsDataDownloader(blsApiKey, tempDir.toString(), storageProvider, storageProvider);
 
     File parquetFile = downloader.downloadRegionalEmployment(2023, 2024);
 

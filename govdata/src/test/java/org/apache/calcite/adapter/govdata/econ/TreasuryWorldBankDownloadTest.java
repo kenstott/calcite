@@ -42,7 +42,7 @@ public class TreasuryWorldBankDownloadTest {
 
   @Test public void testDownloadTreasuryYields() throws Exception {
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider);
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 1 year of data for testing
     downloader.downloadTreasuryYields(2023, 2024);
@@ -57,7 +57,7 @@ public class TreasuryWorldBankDownloadTest {
 
   @Test public void testDownloadFederalDebt() throws Exception {
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider);
+    TreasuryDataDownloader downloader = new TreasuryDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     downloader.downloadFederalDebt(2023, 2024);
 
@@ -70,7 +70,7 @@ public class TreasuryWorldBankDownloadTest {
 
   @Test public void testDownloadWorldIndicators() throws Exception {
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider);
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 2 years for G7 countries
     downloader.downloadWorldIndicators(2022, 2023);
@@ -84,7 +84,7 @@ public class TreasuryWorldBankDownloadTest {
 
   @Test public void testDownloadGlobalGDP() throws Exception {
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider);
+    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
 
     // Download just 1 year of GDP data
     downloader.downloadGlobalGDP(2023, 2023);

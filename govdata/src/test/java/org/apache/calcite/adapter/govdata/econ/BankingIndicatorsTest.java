@@ -49,7 +49,7 @@ public class BankingIndicatorsTest {
         "FRED_API_KEY not set, skipping banking indicators test");
 
     StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + tempDir.toString());
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider);
+    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
 
     // Test all 4 banking indicators
     downloader.downloadEconomicIndicators(

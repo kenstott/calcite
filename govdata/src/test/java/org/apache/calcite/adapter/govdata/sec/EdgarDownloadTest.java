@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -60,15 +62,20 @@ public class EdgarDownloadTest {
 
     System.out.println("Downloading to: " + targetDir.getAbsolutePath());
 
+    // Create storage provider
+    StorageProvider storageProvider = new LocalFileStorageProvider();
+
     // Load cache manifest
     SecCacheManifest cacheManifest = SecCacheManifest.load(targetDir.getAbsolutePath());
 
     // Download filings
-    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDir, cacheManifest, targetDir);
-    List<File> downloaded = downloader.downloadFilings();
+    String targetDirPath = targetDir.getAbsolutePath();
+    EdgarDownloader downloader = new EdgarDownloader(edgarConfig, targetDirPath, targetDirPath, storageProvider, cacheManifest);
+    List<String> downloaded = downloader.downloadFilings();
 
     System.out.println("Downloaded " + downloaded.size() + " files:");
-    for (File file : downloaded) {
+    for (String filePath : downloaded) {
+      File file = new File(filePath);
       System.out.println("  - " + file.getName() + " (" + file.length() + " bytes)");
       assertTrue(file.exists(), "File should exist: " + file.getName());
       assertTrue(file.length() > 0, "File should not be empty: " + file.getName());

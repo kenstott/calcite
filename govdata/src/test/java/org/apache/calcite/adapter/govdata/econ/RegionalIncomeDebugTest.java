@@ -59,7 +59,9 @@ public class RegionalIncomeDebugTest {
 
     BeaDataDownloader downloader =
         new BeaDataDownloader(cacheDir,
+        cacheDir,
         apiKey,
+        StorageProviderFactory.createFromUrl(cacheDir),
         StorageProviderFactory.createFromUrl(cacheDir));
 
     // Test download for 2023
@@ -88,8 +90,9 @@ public class RegionalIncomeDebugTest {
     File parquetFile = new File(parquetDir, "regional_income.parquet");
 
     System.out.println("Converting to parquet...");
+    String sourceDir = cacheDir + "/source=econ/type=indicators/year=2023";
     downloader.convertRegionalIncomeToParquet(
-        new File(cacheDir, "source=econ/type=indicators/year=2023"),
+        sourceDir,
         parquetFile.getAbsolutePath());
 
     assertTrue(parquetFile.exists(), "Parquet file should be created");

@@ -52,7 +52,8 @@ public class ParquetMetadataTest {
 
   @Test void testTradeStatisticsMetadata() throws Exception {
     // Create a minimal trade statistics dataset
-    BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.getAbsolutePath(), tempDir.getAbsolutePath(), "test_api_key", storageProvider, storageProvider);
 
     List<BeaDataDownloader.TradeStatistic> tradeStats = new ArrayList<>();
     BeaDataDownloader.TradeStatistic trade = new BeaDataDownloader.TradeStatistic();
@@ -113,7 +114,8 @@ public class ParquetMetadataTest {
   }
 
   @Test void testRegionalIncomeMetadata() throws Exception {
-    BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.getAbsolutePath(), tempDir.getAbsolutePath(), "test_api_key", storageProvider, storageProvider);
 
     List<BeaDataDownloader.RegionalIncome> incomeData = new ArrayList<>();
     BeaDataDownloader.RegionalIncome income = new BeaDataDownloader.RegionalIncome();
@@ -157,7 +159,8 @@ public class ParquetMetadataTest {
   }
 
   @Test void testStateGdpMetadata() throws Exception {
-    BeaDataDownloader downloader = new BeaDataDownloader("test_api_key", tempDir.getAbsolutePath(), createStorageProvider());
+    StorageProvider storageProvider = createStorageProvider();
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.getAbsolutePath(), tempDir.getAbsolutePath(), "test_api_key", storageProvider, storageProvider);
 
     List<BeaDataDownloader.StateGdp> gdpData = new ArrayList<>();
     BeaDataDownloader.StateGdp gdp = new BeaDataDownloader.StateGdp();
