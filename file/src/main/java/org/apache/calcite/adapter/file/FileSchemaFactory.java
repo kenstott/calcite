@@ -79,12 +79,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Model file location (automatically set by Calcite's ModelHandler)
     // This can be null for inline models (model provided as a string)
+    // Convert to string immediately - avoid File object usage
+    String modelFileDirPath = null;
     Object baseDirectoryObj = operand.get(ModelHandler.ExtraOperand.BASE_DIRECTORY.camelName);
-    File modelFileDirectory = null;
     if (baseDirectoryObj instanceof File) {
-      modelFileDirectory = (File) baseDirectoryObj;
+      modelFileDirPath = ((File) baseDirectoryObj).getAbsolutePath();
     } else if (baseDirectoryObj instanceof String) {
-      modelFileDirectory = new File((String) baseDirectoryObj);
+      modelFileDirPath = new File((String) baseDirectoryObj).getAbsolutePath();
     }
 
     // Get ephemeralCache option (default to false for backward compatibility)
@@ -129,9 +130,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       if (baseDirConfig != null && !baseDirConfig.isEmpty()) {
         // User explicitly configured baseDirectory - respect their choice
         baseConfigDirectory = new File(baseDirConfig);
-        if (!baseConfigDirectory.isAbsolute() && modelFileDirectory != null) {
+        if (!baseConfigDirectory.isAbsolute() && modelFileDirPath != null) {
           // If relative path, resolve against model.json location
-          baseConfigDirectory = new File(modelFileDirectory, baseDirConfig);
+          baseConfigDirectory = new File(modelFileDirPath, baseDirConfig);
         }
         baseConfigDirectory = baseConfigDirectory.getAbsoluteFile();
         LOGGER.info("Using user-configured baseConfigDirectory: {}", baseConfigDirectory.getAbsolutePath());
@@ -155,9 +156,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     final String directory = (String) operand.get("directory") != null
         ? (String) operand.get("directory")
         : (String) operand.get("sourceDirectory");
-    File sourceDirectory = null;
     LOGGER.debug("[FileSchemaFactory] directory from operand: '{}' (checked both 'directory' and 'sourceDirectory')", directory);
-    LOGGER.debug("[FileSchemaFactory] modelFileDirectory: '{}'", modelFileDirectory);
+    LOGGER.debug("[FileSchemaFactory] modelFileDirPath: '{}'", modelFileDirPath);
     LOGGER.debug("[FileSchemaFactory] ephemeralCache: {}, baseDirectory: {}", ephemeralCache, baseDirectory);
 
     // Execution engine configuration
@@ -291,40 +291,49 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
             ? (Boolean) operand.get("prime_cache")
             : Boolean.TRUE;  // Default to true
 
-    File directoryFile = null;
+    // All paths are strings - StorageProvider handles both local and cloud storage
     String directoryPath = null;
-    // Determine sourceDirectory for reading files
-    // Only create File objects for local storage, not for cloud storage providers
-    if (storageType == null || "local".equals(storageType)) {
-      if (directory != null) {
-        sourceDirectory = new File(directory);
-        // If sourceDirectory is relative and we have a modelFileDirectory context, resolve it
-        if (!sourceDirectory.isAbsolute() && modelFileDirectory != null) {
-          // For relative paths, resolve against modelFileDirectory (which is the model file's parent directory)
-          // This ensures we find test resources at the correct location
-          sourceDirectory = new File(modelFileDirectory, directory);
-        }
-      } else if (modelFileDirectory != null) {
-        // If no directory specified but modelFileDirectory exists, use modelFileDirectory itself
-        sourceDirectory = modelFileDirectory;
+
+    // Set storageType = "local" if not specified and we have a local directory
+    if (storageType == null && directory != null && !directory.startsWith("s3://") && !directory.startsWith("hdfs://")
+        && !directory.startsWith("http://") && !directory.startsWith("https://")) {
+      storageType = "local";
+      LOGGER.info("Auto-detected local storage from directory path: {}", directory);
+    }
+
+    // Validate storageType is set
+    if (storageType == null) {
+      throw new IllegalStateException(
+          String.format("storageType must be configured for schema '%s'. " +
+              "Set storageType='local' for local files or 's3' for S3 storage in model.json operand.", name));
+    }
+
+    // Resolve directory path
+    if (directory != null) {
+      // Check if it's a relative path (for local storage only)
+      boolean isAbsolute = directory.startsWith("/") || directory.matches("^[a-zA-Z]:[\\\\/].*"); // Unix or Windows absolute
+      if ("local".equals(storageType) && modelFileDirPath != null && !isAbsolute) {
+        // Relative path - resolve against model file directory
+        directoryPath = modelFileDirPath + (modelFileDirPath.endsWith("/") ? "" : "/") + directory;
+        LOGGER.info("Resolved relative path against model directory: {} -> {}", directory, directoryPath);
       } else {
-        // Default to current working directory
-        sourceDirectory = new File(System.getProperty("user.dir"));
+        // Absolute path or cloud URI - use as-is
+        directoryPath = directory;
+        LOGGER.info("Using directory path: {}", directoryPath);
       }
-      directoryFile = sourceDirectory;
-    } else if (directory != null && storageType != null) {
-      // For cloud storage, keep directory as String (S3 URI, etc.)
-      // Don't create File objects for cloud storage URIs
-      directoryPath = directory;
-      LOGGER.info("Using cloud storage path (no File object): {}", directoryPath);
+    } else if (modelFileDirPath != null) {
+      // No directory specified - use model file directory
+      directoryPath = modelFileDirPath;
+      LOGGER.info("Using model directory as default: {}", directoryPath);
+    } else {
+      // Default to current working directory
+      directoryPath = System.getProperty("user.dir");
+      LOGGER.info("Using current directory as default: {}", directoryPath);
     }
 
     // If DuckDB engine is selected, first create FileSchema with PARQUET engine for conversions
-    LOGGER.debug("FileSchemaFactory: Checking DuckDB conditions for schema '{}': engineConfig.getEngineType()={}, directoryFile={}, exists={}, isDirectory={}, storageType={}",
-                name, engineConfig.getEngineType(), directoryFile,
-                directoryFile != null ? directoryFile.exists() : false,
-                directoryFile != null ? directoryFile.isDirectory() : false,
-                storageType);
+    LOGGER.debug("FileSchemaFactory: Checking DuckDB conditions for schema '{}': engineConfig.getEngineType()={}, directoryPath={}, storageType={}",
+                name, engineConfig.getEngineType(), directoryPath, storageType);
 
     // Prepare constraint metadata - used for both DuckDB and regular FileSchema
     // Support both instance field (from setTableConstraints) and operand
@@ -344,22 +353,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("[FileSchemaFactory] ==> - engineConfig.getEngineType(): {}", engineConfig.getEngineType());
     LOGGER.info("[FileSchemaFactory] ==> - ExecutionEngineType.DUCKDB: {}", ExecutionEngineConfig.ExecutionEngineType.DUCKDB);
     LOGGER.info("[FileSchemaFactory] ==> - isDuckDB: {}", isDuckDB);
-    LOGGER.info("[FileSchemaFactory] ==> - directoryFile != null: {}", directoryFile != null);
     LOGGER.info("[FileSchemaFactory] ==> - storageType: '{}'", storageType);
     LOGGER.info("[FileSchemaFactory] ==> - directoryPath: '{}'", directoryPath);
-    LOGGER.info("[FileSchemaFactory] ==> - Full condition (old): {}", isDuckDB && directoryFile != null && storageType == null);
-    LOGGER.info("[FileSchemaFactory] ==> - Full condition (new): {}", isDuckDB && (directoryFile != null || directoryPath != null));
 
-    // DuckDB supports both local storage (directoryFile) and S3 storage (directoryPath with storageType="s3")
-    // The httpfs extension provides native S3 support
-    if (isDuckDB && (directoryFile != null || directoryPath != null)) {
+    // DuckDB supports both local and cloud storage via StorageProvider
+    if (isDuckDB && directoryPath != null) {
       LOGGER.info("[FileSchemaFactory] ==> *** ENTERING DUCKDB PATH FOR SCHEMA: {} (storageType: {}) ***", name, storageType);
-      // Create directory if it doesn't exist yet (common in tests, only for local storage)
-      if (directoryFile != null && !directoryFile.exists()) {
-        LOGGER.info("Creating directory as it doesn't exist: {}", directoryFile);
-        directoryFile.mkdirs();
-      }
-
       LOGGER.info("Using DuckDB: Running conversions first, then creating JDBC adapter for schema: {}", name);
 
       // Step 1: Create FileSchema with PARQUET engine
@@ -372,8 +371,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("DuckDB: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       // Create internal FileSchema for DuckDB processing
+      // Pass null for File parameters - all file access goes through StorageProvider with directoryPath
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, directoryFile, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
 
@@ -396,7 +396,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Force initialization to run conversions and populate the FileSchema for DuckDB
       LOGGER.info("DuckDB: About to call fileSchema.getTableMap() for table discovery");
       LOGGER.info("DuckDB: Internal FileSchema created successfully: {}", fileSchema.getClass().getSimpleName());
-      LOGGER.info("DuckDB: Internal FileSchema directory: {}", directoryFile);
+      LOGGER.info("DuckDB: Internal FileSchema directory: {}", directoryPath);
 
       Map<String, Table> tableMap;
       try {
@@ -434,12 +434,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Step 2: Now create DuckDB JDBC schema that reads the files
       // Pass the FileSchema so it stays alive for refresh handling
       // Pass directoryPath as String to support both local and S3 URIs
+      // Pass the operand map to support database_filename configuration
       LOGGER.debug("FileSchemaFactory: Now creating DuckDB JDBC schema");
-      // Use directoryPath if available (cloud storage), otherwise use directoryFile (local storage)
-      String duckdbDirectory =
-          directoryPath != null ? directoryPath
-              : (directoryFile != null ? directoryFile.getPath() : directory);
-      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, duckdbDirectory, recursive, fileSchema);
+      JdbcSchema duckdbSchema = DuckDBJdbcSchemaFactory.create(parentSchema, name, directoryPath, recursive, fileSchema, operand);
       LOGGER.info("FileSchemaFactory: DuckDB JDBC schema created successfully");
 
       // Wrap the schema with constraint metadata if available
@@ -465,12 +462,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Otherwise use regular FileSchema
     LOGGER.info("[FileSchemaFactory] ==> *** USING REGULAR FILESCHEMA FOR SCHEMA: {} ***", name);
-    LOGGER.info("[FileSchemaFactory] ==> - Reason: isDuckDB={}, directoryFile={}, directoryPath={}, storageType='{}'",
-               isDuckDB, directoryFile != null ? "present" : "null", directoryPath != null ? directoryPath : "null", storageType);
+    LOGGER.info("[FileSchemaFactory] ==> - directoryPath={}, storageType='{}'",
+               directoryPath != null ? directoryPath : "null", storageType);
     // Pass user-configured baseDirectory or null to let FileSchema use its default
     // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
+    // Pass null for File parameter - all file access goes through StorageProvider with directoryPath
     FileSchema fileSchema =
-        new FileSchema(parentSchema, name, directoryFile, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
+        new FileSchema(parentSchema, name, null, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
 
