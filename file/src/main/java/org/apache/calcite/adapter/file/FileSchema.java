@@ -500,7 +500,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       this.storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
       LOGGER.debug("[FileSchema] Storage provider created: {}", this.storageProvider);
     } else {
-      LOGGER.debug("[FileSchema] No storage provider configured");
+      LOGGER.debug("[FileSchema] No storage provider configured - storageType is null");
       this.storageProvider = null;
     }
 
@@ -3621,71 +3621,85 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           LOGGER.info("Table '{}' will use lazy initialization - skipping file enumeration during schema loading", config.getName());
           matchingFiles = java.util.Collections.emptyList();
         } else {
-          matchingFiles = findMatchingFiles(config.getPattern());
+          // Check if ConversionMetadata already has this table's files cached
+          // Note: For ECON tables, refresh/TTL logic is handled upstream by CacheManifest
+          // before table creation, so ConversionMetadata presence means files are already current
+          if (conversionMetadata != null && conversionMetadata.hasTableMetadata(config.getName())) {
+            // Trust the cached metadata - avoid expensive S3 listing
+            LOGGER.info("Table '{}' found in conversion metadata cache - skipping file enumeration", config.getName());
+            matchingFiles = java.util.Collections.emptyList();
+          } else {
+            matchingFiles = findMatchingFiles(config.getPattern());
 
-          if (matchingFiles.isEmpty()) {
-            LOGGER.debug("No files found matching pattern: {}", config.getPattern());
-            continue;
+            if (matchingFiles.isEmpty()) {
+              LOGGER.debug("No files found matching pattern: {}", config.getPattern());
+              continue;
+            }
+
+            LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
           }
-
-          LOGGER.debug("Found {} files for partitioned table: {}", matchingFiles.size(), config.getName());
         }
 
         // Detect or apply partition scheme
+        // Skip partition detection for lazy-initialized tables - DuckDB will handle it dynamically
         PartitionDetector.PartitionInfo partitionInfo = null;
 
-        if (config.getPartitions() == null
-            || "auto".equals(config.getPartitions().getStyle())) {
-          // Auto-detect partition scheme
-          partitionInfo =
-              PartitionDetector.detectPartitionScheme(matchingFiles);
-          if (partitionInfo == null) {
-            LOGGER.warn("WARN: No partition scheme detected for table '{}'. Treating as unpartitioned. Query performance may be impacted.", config.getName());
+        if (!useLazyInit) {
+          if (config.getPartitions() == null
+              || "auto".equals(config.getPartitions().getStyle())) {
+            // Auto-detect partition scheme
+            partitionInfo =
+                PartitionDetector.detectPartitionScheme(matchingFiles);
+            if (partitionInfo == null) {
+              LOGGER.warn("WARN: No partition scheme detected for table '{}'. Treating as unpartitioned. Query performance may be impacted.", config.getName());
+            }
+          } else {
+            // Use configured partition scheme
+            PartitionedTableConfig.PartitionConfig partConfig = config.getPartitions();
+            String style = partConfig.getStyle();
+
+            if ("hive".equals(style)) {
+              // For Hive-style partitions, use the configured column order if provided
+              List<String> partitionCols = null;
+              if (partConfig.getColumnDefinitions() != null && !partConfig.getColumnDefinitions().isEmpty()) {
+                // Use the configured column order
+                partitionCols = new ArrayList<>();
+                for (PartitionedTableConfig.ColumnDefinition colDef : partConfig.getColumnDefinitions()) {
+                  partitionCols.add(colDef.getName());
+                }
+              } else if (!matchingFiles.isEmpty()) {
+                // Fall back to extracting from first file (only if files are available)
+                PartitionDetector.PartitionInfo tempInfo =
+                    PartitionDetector.extractHivePartitions(matchingFiles.get(0));
+                if (tempInfo != null) {
+                  partitionCols = tempInfo.getPartitionColumns();
+                }
+              }
+
+              if (partitionCols != null) {
+                // Create partition info with configured columns and no values
+                partitionInfo =
+                    new PartitionDetector.PartitionInfo(new LinkedHashMap<>(),  // Empty values map
+                    partitionCols,
+                    true);  // isHiveStyle
+              }
+            } else if ("directory".equals(style)
+                && partConfig.getColumns() != null && !matchingFiles.isEmpty()) {
+              // Directory-based partitioning (only if files are available)
+              partitionInfo =
+                  PartitionDetector.extractDirectoryPartitions(
+                      matchingFiles.get(0), partConfig.getColumns());
+            } else if ("custom".equals(style)
+                && partConfig.getRegex() != null && !matchingFiles.isEmpty()) {
+              // Custom regex partitioning (only if files are available)
+              partitionInfo =
+                  PartitionDetector.extractCustomPartitions(
+                      matchingFiles.get(0), partConfig.getRegex(),
+                      partConfig.getColumnMappings());
+            }
           }
         } else {
-          // Use configured partition scheme
-          PartitionedTableConfig.PartitionConfig partConfig = config.getPartitions();
-          String style = partConfig.getStyle();
-
-          if ("hive".equals(style)) {
-            // For Hive-style partitions, use the configured column order if provided
-            List<String> partitionCols = null;
-            if (partConfig.getColumnDefinitions() != null && !partConfig.getColumnDefinitions().isEmpty()) {
-              // Use the configured column order
-              partitionCols = new ArrayList<>();
-              for (PartitionedTableConfig.ColumnDefinition colDef : partConfig.getColumnDefinitions()) {
-                partitionCols.add(colDef.getName());
-              }
-            } else {
-              // Fall back to extracting from first file
-              PartitionDetector.PartitionInfo tempInfo =
-                  PartitionDetector.extractHivePartitions(matchingFiles.get(0));
-              if (tempInfo != null) {
-                partitionCols = tempInfo.getPartitionColumns();
-              }
-            }
-
-            if (partitionCols != null) {
-              // Create partition info with configured columns and no values
-              partitionInfo =
-                  new PartitionDetector.PartitionInfo(new LinkedHashMap<>(),  // Empty values map
-                  partitionCols,
-                  true);  // isHiveStyle
-            }
-          } else if ("directory".equals(style)
-              && partConfig.getColumns() != null) {
-            // Directory-based partitioning
-            partitionInfo =
-                PartitionDetector.extractDirectoryPartitions(
-                    matchingFiles.get(0), partConfig.getColumns());
-          } else if ("custom".equals(style)
-              && partConfig.getRegex() != null) {
-            // Custom regex partitioning
-            partitionInfo =
-                PartitionDetector.extractCustomPartitions(
-                    matchingFiles.get(0), partConfig.getRegex(),
-                    partConfig.getColumnMappings());
-          }
+          LOGGER.info("Skipping partition info extraction for lazy-initialized table '{}' - DuckDB will handle partition detection", config.getName());
         }
 
         // Create map of column types if defined
@@ -3831,6 +3845,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
   /**
    * Find all files matching a glob pattern relative to baseDirectory.
+   * Uses ConversionMetadata as primary source (fast) and falls back to
+   * StorageProvider listing (expensive for S3) only when needed.
    */
   private List<String> findMatchingFiles(String pattern) {
     List<String> result = new ArrayList<>();
@@ -3857,7 +3873,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 searchPath, pattern, storageProvider.getStorageType());
 
     try {
-      // List all files using StorageProvider
+      // Use StorageProvider listing to find files matching the pattern
       boolean recursive = pattern.contains("**") || pattern.contains("/");
       List<StorageProvider.FileEntry> allFiles = storageProvider.listFiles(searchPath, recursive);
 
@@ -3905,13 +3921,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         // Convert to Path for glob matching
         Path relPath = Paths.get(relativePath);
 
-        // Debug: Log matching attempt
-        if (LOGGER.isDebugEnabled()) {
-          boolean mainMatch = matcher.matches(relPath);
-          boolean rootMatch = rootMatcher != null && rootMatcher.matches(relPath);
-          LOGGER.debug("  Checking file: fullPath={}, relativePath={}, mainMatch={}, rootMatch={}",
-              fullPath, relativePath, mainMatch, rootMatch);
-        }
+        // Pattern matching happens here, but no need to log every file check
 
         // Match against main pattern OR root pattern (if applicable)
         if (matcher.matches(relPath) ||
@@ -3928,6 +3938,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     LOGGER.info("findMatchingFiles: Found {} files matching pattern: {}", result.size(), pattern);
     return result;
   }
+
 
   /**
    * Gets files for processing, using storage provider if configured,
