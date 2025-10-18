@@ -41,14 +41,37 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
 
 /**
  * Factory for creating JDBC schema backed by DuckDB.
  * Uses standard JDBC adapter for proper query pushdown.
+ * Supports shared databases via database_filename operand for cross-schema joins.
  */
 public class DuckDBJdbcSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBJdbcSchemaFactory.class);
+
+  /**
+   * Pool of shared database connections keyed by absolute database file path.
+   * Allows multiple schemas to share the same DuckDB database for efficient cross-schema queries.
+   */
+  private static final Map<String, SharedDatabaseInfo> DATABASE_POOL = new ConcurrentHashMap<>();
+
+  /**
+   * Information about a shared database instance.
+   */
+  private static class SharedDatabaseInfo {
+    final DataSource dataSource;
+    final Connection setupConnection;
+    final String jdbcUrl;
+
+    SharedDatabaseInfo(DataSource dataSource, Connection setupConnection, String jdbcUrl) {
+      this.dataSource = dataSource;
+      this.setupConnection = setupConnection;
+      this.jdbcUrl = jdbcUrl;
+    }
+  }
 
   static {
     LOGGER.debug("[DuckDBJdbcSchemaFactory] Class loaded");
@@ -87,27 +110,107 @@ public class DuckDBJdbcSchemaFactory {
    * Creates a single persistent connection that lives with the schema.
    * Configures with Oracle Lex and unquoted casing to lower.
    * @param fileSchema The FileSchema that handles conversions and refreshes (kept alive)
+   * @param operand Schema operand map containing database_filename and other config
    */
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName,
                                  String directoryPath, boolean recursive,
-                                 org.apache.calcite.adapter.file.FileSchema fileSchema) {
+                                 org.apache.calcite.adapter.file.FileSchema fileSchema,
+                                 Map<String, Object> operand) {
     LOGGER.debug("[DuckDBJdbcSchemaFactory] create() called with fileSchema for schema: {}", schemaName);
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={})",
                 directoryPath, schemaName, recursive, fileSchema != null);
 
+    // Extract database_filename from operand if provided
+    String databaseFilename = operand != null ? (String) operand.get("database_filename") : null;
+    if (databaseFilename != null) {
+      LOGGER.info("Using shared database filename from operand: {}", databaseFilename);
+    }
+
+    return createInternal(parentSchema, schemaName, directoryPath, recursive, fileSchema, databaseFilename);
+  }
+
+  /**
+   * Creates a JDBC schema for DuckDB with files registered as views (backward compatibility).
+   * Creates a single persistent connection that lives with the schema.
+   * Configures with Oracle Lex and unquoted casing to lower.
+   * @param fileSchema The FileSchema that handles conversions and refreshes (kept alive)
+   */
+  public static JdbcSchema create(SchemaPlus parentSchema, String schemaName,
+                                 String directoryPath, boolean recursive,
+                                 org.apache.calcite.adapter.file.FileSchema fileSchema) {
+    return createInternal(parentSchema, schemaName, directoryPath, recursive, fileSchema, null);
+  }
+
+  /**
+   * Internal implementation of create() with database_filename support.
+   */
+  private static JdbcSchema createInternal(SchemaPlus parentSchema, String schemaName,
+                                 String directoryPath, boolean recursive,
+                                 org.apache.calcite.adapter.file.FileSchema fileSchema,
+                                 String databaseFilename) {
+    LOGGER.debug("[DuckDBJdbcSchemaFactory] createInternal() called for schema: {}", schemaName);
+    LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={}, databaseFilename={})",
+                directoryPath, schemaName, recursive, fileSchema != null, databaseFilename);
+
     try {
       Class.forName("org.duckdb.DuckDBDriver");
 
-      // Determine catalog path - check for explicit configuration first
-      String catalogPath = determineCatalogPath(schemaName, directoryPath);
+      // If databaseFilename is provided, use it; otherwise use schema-specific default
+      String catalogPath;
+      if (databaseFilename != null) {
+        // Resolve database_filename path
+        File dbFile = new File(databaseFilename);
+        if (!dbFile.isAbsolute()) {
+          // Relative path - resolve against working directory's .aperio/.duckdb/ directory
+          // This ensures all schemas can find the same shared database file
+          File workingDir = new File(System.getProperty("user.dir"));
+          File aperioDir = new File(workingDir, ".aperio");
+          File duckdbDir = new File(aperioDir, ".duckdb");
+
+          // Ensure the .duckdb directory exists
+          if (!duckdbDir.exists()) {
+            duckdbDir.mkdirs();
+            LOGGER.debug("Created shared DuckDB catalog directory: {}", duckdbDir);
+          }
+
+          catalogPath = new File(duckdbDir, databaseFilename).getAbsolutePath();
+        } else {
+          // Absolute path - use as-is
+          catalogPath = dbFile.getAbsolutePath();
+        }
+        LOGGER.info("Using configured database filename: {} (resolved to: {})", databaseFilename, catalogPath);
+      } else {
+        // Use default per-schema database
+        // Use FileSchema's operating cache directory for catalog storage (always local filesystem)
+        // DuckDB database files must be on local filesystem (not S3) for file locking
+        String baseDirForCatalog;
+        if (fileSchema != null && fileSchema.getOperatingCacheDirectory() != null) {
+          baseDirForCatalog = fileSchema.getOperatingCacheDirectory().getAbsolutePath();
+        } else {
+          baseDirForCatalog = directoryPath;
+        }
+        catalogPath = determineCatalogPath(schemaName, baseDirForCatalog);
+      }
+
       String jdbcUrl;
       String dbName;
 
       if (catalogPath != null) {
+        // Check if this database is already in the connection pool
+        SharedDatabaseInfo sharedInfo = DATABASE_POOL.get(catalogPath);
+
+        if (sharedInfo != null) {
+          // Reuse existing database connection
+          LOGGER.info("Reusing existing DuckDB database: {} for schema: {}", catalogPath, schemaName);
+          return createSchemaInSharedDatabase(sharedInfo, parentSchema, schemaName, directoryPath,
+                                             recursive, fileSchema);
+        }
+
         // Use persistent file-based catalog
         jdbcUrl = "jdbc:duckdb:" + catalogPath;
-        dbName = new File(catalogPath).getName().replace(".duckdb", "");
-        LOGGER.info("Using persistent DuckDB catalog: {}", catalogPath);
+        // For shared databases, use a neutral catalog name (not schema-specific)
+        dbName = null;  // DuckDB will use default catalog name
+        LOGGER.info("Creating new DuckDB database: {} for schema: {}", catalogPath, schemaName);
       } else {
         // Fallback to named in-memory database
         dbName = "calcite_" + schemaName + "_" + System.nanoTime();
@@ -301,10 +404,73 @@ public class DuckDBJdbcSchemaFactory {
       DuckDBJdbcSchema schema =
                                                     new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema, directoryPath, recursive, setupConn, fileSchema);
 
+      // Add to connection pool if this is a persistent database (for future schema sharing)
+      if (catalogPath != null) {
+        SharedDatabaseInfo sharedInfo = new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl);
+        DATABASE_POOL.put(catalogPath, sharedInfo);
+        LOGGER.info("Added DuckDB database to connection pool: {}", catalogPath);
+      }
+
       return schema;
 
     } catch (Exception e) {
       throw new RuntimeException("Failed to create DuckDB JDBC schema", e);
+    }
+  }
+
+  /**
+   * Creates a schema in an existing shared DuckDB database.
+   * This method is called when a database is being reused across multiple schemas.
+   */
+  private static JdbcSchema createSchemaInSharedDatabase(SharedDatabaseInfo sharedInfo,
+                                                         SchemaPlus parentSchema,
+                                                         String schemaName,
+                                                         String directoryPath,
+                                                         boolean recursive,
+                                                         org.apache.calcite.adapter.file.FileSchema fileSchema) {
+    try {
+      Connection setupConn = sharedInfo.setupConnection;
+
+      // Create a new schema in the shared database
+      String duckdbSchema = schemaName;
+      String createSchemaSQL = "CREATE SCHEMA IF NOT EXISTS \"" + duckdbSchema + "\"";
+      LOGGER.info("Creating schema in shared DuckDB database: \"{}\"", duckdbSchema);
+      setupConn.createStatement().execute(createSchemaSQL);
+      LOGGER.info("Created DuckDB schema: \"{}\"", duckdbSchema);
+
+      // Register similarity functions for this schema (macros are database-level, so only once)
+      // Note: Macros are global in DuckDB, so they're already registered from the first schema
+
+      // Register Parquet files as views in this schema
+      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName, fileSchema);
+
+      // Debug: List all registered views
+      try (Statement stmt = setupConn.createStatement();
+           ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
+        LOGGER.info("DuckDB tables and views in schema '{}':", duckdbSchema);
+        while (rs.next()) {
+          LOGGER.info("  - Schema: {}, Name: {}, Type: {}",
+                     rs.getString("table_schema"),
+                     rs.getString("table_name"),
+                     rs.getString("table_type"));
+        }
+      }
+
+      // Reuse existing DataSource and dialect
+      SqlDialect dialect = createDuckDBDialectWithCustomLex();
+
+      Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
+      DuckDBConvention convention = DuckDBConvention.of(dialect, expression, schemaName);
+
+      // Create schema using shared database (dbName is null for shared databases)
+      DuckDBJdbcSchema schema =
+          new DuckDBJdbcSchema(sharedInfo.dataSource, dialect, convention, null, duckdbSchema,
+                              directoryPath, recursive, setupConn, fileSchema);
+
+      return schema;
+
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create schema in shared DuckDB database", e);
     }
   }
 
@@ -414,7 +580,8 @@ public class DuckDBJdbcSchemaFactory {
    * Priority:
    * 1. DUCKDB_CATALOG_PATH environment variable
    * 2. duckdb.catalog.path system property
-   * 3. null (fallback to in-memory database)
+   * 3. Default persistent catalog in {directoryPath}/.duckdb/{schemaName}.duckdb
+   * 4. null (fallback to in-memory database for temp/test directories)
    *
    * @param schemaName The schema name
    * @param directoryPath The data directory path
@@ -435,54 +602,100 @@ public class DuckDBJdbcSchemaFactory {
       return catalogPath;
     }
 
-    // No explicit configuration - return null to use in-memory database
+    // Use default persistent catalog for non-temporary directories
+    // This ensures views are preserved across restarts (fast startup on subsequent runs)
+    if (directoryPath != null && !isTempDirectory(directoryPath)) {
+      // Create catalog in {directoryPath}/.duckdb/{schemaName}.duckdb
+      File catalogDir = new File(directoryPath, ".duckdb");
+      catalogPath = new File(catalogDir, schemaName + ".duckdb").getAbsolutePath();
+      LOGGER.info("Using default persistent catalog: {}", catalogPath);
+
+      // Ensure catalog directory exists
+      if (!catalogDir.exists()) {
+        catalogDir.mkdirs();
+        LOGGER.debug("Created catalog directory: {}", catalogDir);
+      }
+
+      return catalogPath;
+    }
+
+    // Fallback to in-memory database for temp directories (tests, ephemeral usage)
+    LOGGER.debug("Using in-memory database (temp directory detected or no path specified)");
     return null;
+  }
+
+  /**
+   * Checks if a directory path is a temporary directory.
+   * Temp directories use in-memory databases; persistent directories use file-based catalogs.
+   *
+   * @param directoryPath The directory path to check
+   * @return true if the path appears to be a temporary directory
+   */
+  private static boolean isTempDirectory(String directoryPath) {
+    if (directoryPath == null) {
+      return true;
+    }
+
+    String lowerPath = directoryPath.toLowerCase();
+
+    // Check for common temp directory patterns
+    return lowerPath.contains("/tmp/") ||
+           lowerPath.contains("\\temp\\") ||
+           lowerPath.contains("/temp/") ||
+           lowerPath.startsWith("/tmp") ||
+           lowerPath.startsWith("\\tmp") ||
+           lowerPath.contains("java.io.tmpdir");
   }
 
   /**
    * Registers similarity functions as DuckDB macros.
    * This makes COSINE_SIMILARITY available using DuckDB's native array functions.
    * DuckDB has built-in array_cosine_similarity() which we can leverage.
+   *
+   * The trick is to avoid type inference issues by using list_cosine_similarity
+   * which works with VARCHAR inputs directly via string_split.
    */
   private static void registerSimilarityFunctions(Connection conn) {
     try {
       LOGGER.info("Registering similarity functions using DuckDB's native array functions");
 
-      // DuckDB has native array_cosine_similarity() function
-      // We need to create macros that handle different input formats
-
-      // Create a macro that converts string vectors to arrays and uses DuckDB's native function
+      // Cast each element of the split string arrays to DOUBLE
+      // Using list_transform avoids the DOUBLE[] vs DOUBLE[ANY] type inference issue
       String cosineSimilarityMacro =
         "CREATE OR REPLACE MACRO COSINE_SIMILARITY(vector1, vector2) AS " +
-        "array_cosine_similarity(" +
-        "  CAST(string_split(vector1, ',') AS DOUBLE[]), " +
-        "  CAST(string_split(vector2, ',') AS DOUBLE[])" +
+        "list_cosine_similarity(" +
+        "  list_transform(string_split(vector1, ','), x -> CAST(x AS DOUBLE)), " +
+        "  list_transform(string_split(vector2, ','), x -> CAST(x AS DOUBLE))" +
         ")";
 
       conn.createStatement().execute(cosineSimilarityMacro);
-      LOGGER.info("Successfully registered COSINE_SIMILARITY macro using DuckDB's array_cosine_similarity");
+      LOGGER.info("Successfully registered COSINE_SIMILARITY macro using DuckDB's " +
+                 "list_cosine_similarity");
 
-      // Create COSINE_DISTANCE macro using DuckDB's native function
+      // Create COSINE_DISTANCE macro using DuckDB's list function
       String cosineDistanceMacro =
         "CREATE OR REPLACE MACRO COSINE_DISTANCE(vector1, vector2) AS " +
-        "array_cosine_distance(" +
-        "  CAST(string_split(vector1, ',') AS DOUBLE[]), " +
-        "  CAST(string_split(vector2, ',') AS DOUBLE[])" +
+        "list_cosine_distance(" +
+        "  list_transform(string_split(vector1, ','), x -> CAST(x AS DOUBLE)), " +
+        "  list_transform(string_split(vector2, ','), x -> CAST(x AS DOUBLE))" +
         ")";
 
       conn.createStatement().execute(cosineDistanceMacro);
-      LOGGER.info("Successfully registered COSINE_DISTANCE macro using DuckDB's array_cosine_distance");
+      LOGGER.info("Successfully registered COSINE_DISTANCE macro using DuckDB's " +
+                 "list_cosine_distance");
 
-      // Also create macros for arrays directly (in case embeddings are stored as arrays)
+      // Also create macro for arrays directly (for when embeddings are stored as arrays)
+      // Cast to DOUBLE[] to resolve ambiguity between FLOAT[] and DOUBLE[] overloads
       String arrayCosineSimilarityMacro =
         "CREATE OR REPLACE MACRO ARRAY_COSINE_SIMILARITY(arr1, arr2) AS " +
-        "array_cosine_similarity(arr1, arr2)";
+        "list_cosine_similarity(CAST(arr1 AS DOUBLE[]), CAST(arr2 AS DOUBLE[]))";
 
       conn.createStatement().execute(arrayCosineSimilarityMacro);
       LOGGER.info("Successfully registered ARRAY_COSINE_SIMILARITY macro");
 
     } catch (Exception e) {
-      LOGGER.warn("Failed to register similarity functions as DuckDB macros: " + e.getMessage());
+      LOGGER.warn("Failed to register similarity functions as DuckDB macros: " +
+                 e.getMessage());
       LOGGER.debug("Error details: ", e);
       // This is not fatal - queries will fall back to Calcite function resolution
     }
@@ -669,95 +882,52 @@ public class DuckDBJdbcSchemaFactory {
       String parquetPath = null;
       String tableName = null;
 
-      // Check if this record has table metadata (newer records)
-      if (record.getTableName() != null && !record.getTableName().isEmpty()) {
-        tableName = record.getTableName();
-        LOGGER.debug("Processing table '{}' from registry (original casing)", tableName);
+      // All tables should have proper metadata with tableName set
+      tableName = record.getTableName();
 
-        // Check if this is an Iceberg table
-        if ("ICEBERG_PARQUET".equals(record.getConversionType())) {
-          // For Iceberg tables, use DuckDB's native Iceberg support
-          LOGGER.debug("Table '{}' is an Iceberg table, will use native DuckDB Iceberg support", tableName);
-          // We'll handle this below with iceberg_scan
-          parquetPath = null; // Will be handled specially
-        } else {
-          // Primary source: parquetCacheFile (single file, bracketed list, or glob pattern)
-          // This is the most reliable source as it's explicitly set during table registration
-          if (record.parquetCacheFile != null) {
-            parquetPath = record.parquetCacheFile;
-            if (parquetPath.startsWith("[") || parquetPath.startsWith("{")) {
-              LOGGER.debug("Table '{}' has multiple Parquet files: {} files",
-                          tableName, parquetPath.split(",").length);
-            } else {
-              LOGGER.debug("Table '{}' using parquetCacheFile: {}", tableName, parquetPath);
-            }
-          } else if (record.sourceFile != null && record.sourceFile.endsWith(".parquet")) {
-            // Fallback: direct parquet source file
-            parquetPath = record.sourceFile;
-            LOGGER.debug("Table '{}' is native Parquet: {}", tableName, parquetPath);
-          } else if (record.convertedFile != null) {
-            // Fallback: converted parquet file or glob pattern
-            if (record.convertedFile.endsWith(".parquet")) {
-              parquetPath = record.convertedFile;
-              LOGGER.debug("Table '{}' has converted Parquet: {}", tableName, parquetPath);
-            } else if (record.convertedFile.startsWith("{") && record.convertedFile.endsWith("}")) {
-              parquetPath = record.convertedFile;
-              LOGGER.debug("Table '{}' has glob pattern: {}", tableName, parquetPath);
-            }
-          }
-        }
+      if (tableName == null || tableName.isEmpty()) {
+        // This indicates a bug - all tables should be registered with tableName
+        LOGGER.error("Table record missing tableName - this is a bug in table registration. Key: '{}', Record: {}",
+            key, formatRecordForError(record));
+        continue; // Skip this malformed record
+      }
+
+      LOGGER.debug("Processing table '{}' from registry", tableName);
+
+      // Check if this is an Iceberg table
+      if ("ICEBERG_PARQUET".equals(record.getConversionType())) {
+        // For Iceberg tables, use DuckDB's native Iceberg support
+        LOGGER.debug("Table '{}' is an Iceberg table, will use native DuckDB Iceberg support", tableName);
+        // We'll handle this below with iceberg_scan
+        parquetPath = null; // Will be handled specially
       } else {
-        // Legacy record format - try to extract table name from file path
-        LOGGER.debug("Processing legacy record with key: {}", key);
-
-        // If the key is a simple table name (not a path), use it
-        if (!key.contains("/") && !key.contains("\\")) {
-          tableName = key;
-        } else {
-          // Extract table name from file path
-          File file = new File(key);
-          String fileName = file.getName();
-          if (fileName.endsWith(".parquet")) {
-            tableName = fileName.substring(0, fileName.length() - 8);
-          } else if (fileName.endsWith(".json")) {
-            tableName = fileName.substring(0, fileName.length() - 5);
+        // Determine parquet path from metadata
+        // Priority: 1) viewScanPattern, 2) parquetCacheFile, 3) sourceFile, 4) convertedFile
+        if (record.viewScanPattern != null) {
+          // Use viewScanPattern for partitioned tables with glob patterns
+          parquetPath = record.viewScanPattern;
+          LOGGER.debug("Table '{}' using viewScanPattern: {}", tableName, parquetPath);
+        } else if (record.parquetCacheFile != null) {
+          // Use parquetCacheFile (single file, bracketed list, or glob pattern)
+          parquetPath = record.parquetCacheFile;
+          if (parquetPath.startsWith("[") || parquetPath.startsWith("{")) {
+            LOGGER.debug("Table '{}' has multiple Parquet files: {} files",
+                        tableName, parquetPath.split(",").length);
           } else {
-            tableName = fileName;
+            LOGGER.debug("Table '{}' using parquetCacheFile: {}", tableName, parquetPath);
           }
-        }
-
-        // For legacy records, NEVER use getParquetCacheFile() - may contain stale paths
-        // Always compute paths fresh from sourceFile/convertedFile
-        if (key.endsWith(".parquet")) {
-          parquetPath = key;
-        } else if (key.endsWith(".json")) {
-          // For JSON files, try to find corresponding Parquet cache file
-          // Schema-aware cache uses pattern: baseDirectory/.parquet_cache/tableName.parquet
-          // Note: For S3 storage, baseDirectory will be s3:// URI, so File operations won't work
-          // This legacy path should only execute for local storage
-          String baseDirPath = fileSchema.getBaseDirectory();
-          String parquetCachePath = baseDirPath + "/.parquet_cache/" + tableName + ".parquet";
-
-          // Check if this might be cloud storage
-          if (baseDirPath.startsWith("s3://") || baseDirPath.startsWith("http")) {
-            // For cloud storage, assume the parquet file exists at the expected path
-            parquetPath = parquetCachePath;
-            LOGGER.debug("Using cloud storage Parquet cache path for legacy JSON table '{}': {}", tableName, parquetPath);
-          } else {
-            // Local storage - check existence
-            File parquetFile = new File(parquetCachePath);
-            if (parquetFile.exists()) {
-              parquetPath = parquetCachePath;
-              LOGGER.debug("Found Parquet cache for legacy JSON table '{}': {}", tableName, parquetFile.getName());
-            } else {
-              // Try original ParquetConversionUtil location pattern
-              File conversionDir = ParquetConversionUtil.getParquetCacheDir(new File(key).getParentFile(), null, calciteSchemaName);
-              File altParquetFile = new File(conversionDir, tableName + ".parquet");
-              if (altParquetFile.exists()) {
-                parquetPath = altParquetFile.getAbsolutePath();
-                LOGGER.debug("Found Parquet cache for legacy JSON table '{}' in alt location: {}", tableName, altParquetFile.getName());
-              }
-            }
+        } else if (record.sourceFile != null && record.sourceFile.endsWith(".parquet")) {
+          // Fallback: direct parquet source file
+          parquetPath = record.sourceFile;
+          LOGGER.debug("Table '{}' is native Parquet: {}", tableName, parquetPath);
+        } else if (record.convertedFile != null) {
+          // Fallback: converted parquet file or glob pattern
+          if (record.convertedFile.endsWith(".parquet")) {
+            parquetPath = record.convertedFile;
+            LOGGER.debug("Table '{}' has converted Parquet: {}", tableName, parquetPath);
+          } else if (record.convertedFile.startsWith("{") && record.convertedFile.endsWith("}")) {
+            parquetPath = record.convertedFile;
+            LOGGER.debug("Table '{}' has glob pattern: {}", tableName, parquetPath);
           }
         }
       }
@@ -787,46 +957,46 @@ public class DuckDBJdbcSchemaFactory {
             }
 
             // For Iceberg tables, try iceberg_scan
-            // If it fails (e.g., empty table), create an empty view as a fallback
-            String sql =
-                                     String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, record.getSourceFile());
-            LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
-                       duckdbSchema, tableName, record.getSourceFile());
+            // Check if view exists first to avoid expensive file scanning
+            if (viewExists(conn, duckdbSchema, tableName)) {
+              LOGGER.debug("⚡ Iceberg view exists, skipped: {}.{}", duckdbSchema, tableName);
+            } else {
+              // View doesn't exist - create it
+              String sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')",
+                  duckdbSchema, tableName, record.getSourceFile());
+              LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
+                         duckdbSchema, tableName, record.getSourceFile());
 
-            try {
-              conn.createStatement().execute(sql);
-              viewCount++;
-              LOGGER.debug("Successfully created Iceberg view: {}.{}", duckdbSchema, tableName);
-            } catch (SQLException scanError) {
-              // iceberg_scan failed - probably an empty table
-              LOGGER.debug("iceberg_scan failed for table '{}': {}", tableName, scanError.getMessage());
-
-              // Create an empty view as a fallback
-              // This ensures the table is available even if it's empty
-              // We need to include common Iceberg columns
               try {
-                // Create empty view with common Iceberg table columns
-                // This is a workaround for empty Iceberg tables where iceberg_scan fails
-                // TODO: Get actual schema from FileSchema's table instance
-                String emptyViewSql =
-                    String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS " +
-                    "SELECT " +
-                    "NULL::INT AS order_id, " +
-                    "NULL::VARCHAR AS customer_id, " +
-                    "NULL::VARCHAR AS product_id, " +
-                    "NULL::DOUBLE AS amount, " +
-                    "NULL::TIMESTAMP AS snapshot_time " +
-                    "WHERE 1=0",
-                    duckdbSchema, tableName);
-
-                LOGGER.info("Creating empty view for Iceberg table '{}' (fallback)", tableName);
-                conn.createStatement().execute(emptyViewSql);
+                conn.createStatement().execute(sql);
                 viewCount++;
-                LOGGER.debug("Successfully created empty view for table: {}.{}", duckdbSchema, tableName);
-              } catch (SQLException fallbackError) {
-                LOGGER.warn("Failed to create fallback empty view for table '{}': {}",
-                           tableName, fallbackError.getMessage());
-                throw fallbackError; // Re-throw to maintain original behavior
+                LOGGER.info("✅ Created Iceberg view: {}.{}", duckdbSchema, tableName);
+              } catch (SQLException scanError) {
+                // iceberg_scan failed - probably an empty table
+                LOGGER.debug("iceberg_scan failed for table '{}': {}", tableName, scanError.getMessage());
+
+                // Create an empty view as a fallback
+                try {
+                  String emptyViewSql =
+                      String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS " +
+                      "SELECT " +
+                      "NULL::INT AS order_id, " +
+                      "NULL::VARCHAR AS customer_id, " +
+                      "NULL::VARCHAR AS product_id, " +
+                      "NULL::DOUBLE AS amount, " +
+                      "NULL::TIMESTAMP AS snapshot_time " +
+                      "WHERE 1=0",
+                      duckdbSchema, tableName);
+
+                  LOGGER.info("Creating empty view for Iceberg table '{}' (fallback)", tableName);
+                  conn.createStatement().execute(emptyViewSql);
+                  viewCount++;
+                  LOGGER.info("✅ Created empty Iceberg view: {}.{}", duckdbSchema, tableName);
+                } catch (SQLException fallbackError) {
+                  LOGGER.warn("Failed to create fallback empty view for table '{}': {}",
+                             tableName, fallbackError.getMessage());
+                  throw fallbackError;
+                }
               }
             }
           } catch (SQLException e) {
@@ -841,22 +1011,27 @@ public class DuckDBJdbcSchemaFactory {
 
           if (isMultiFileList) {
             // For multiple files specified as [file1,file2,file3] or {file1,file2,file3}
-            // Check if this is Hive-partitioned data
-            if (isHivePartitioned(parquetPath)) {
+            // Check table configuration to determine if Hive partitioning should be enabled
+            boolean hasHivePartitioning = isHivePartitionedFromConfig(record);
+
+            if (hasHivePartitioning) {
               // Use stored table-specific pattern for Hive-partitioned tables
               String pattern = record.viewScanPattern;
 
               if (pattern != null) {
+                // Disable union_by_name for performance - avoids scanning all files during view creation
+                // This requires consistent schema across all partition files (typical for Hive partitioning)
+                // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
                 sql =
-                                   String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true)", duckdbSchema, tableName, pattern);
-                LOGGER.info("Creating DuckDB view with stored table-specific pattern: \"{}.{}\" -> {}",
+                                   String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = false)", duckdbSchema, tableName, pattern);
+                LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name=false for performance): \"{}.{}\" -> {}",
                            duckdbSchema, tableName, pattern);
               } else {
                 // This should never happen - pattern must exist for Hive-partitioned tables
                 LOGGER.error("Missing viewScanPattern for Hive-partitioned table '{}' - this indicates a bug in pattern extraction", tableName);
                 throw new SQLException("Missing viewScanPattern for Hive-partitioned table: " + tableName);
               }
-            } else {
+            } else{
               // Non-Hive partitioned: use explicit file array
               String fileList = parquetPath.substring(1, parquetPath.length() - 1);
               String[] files = fileList.split(",");
@@ -872,57 +1047,73 @@ public class DuckDBJdbcSchemaFactory {
               }
               fileArray.append("]");
 
+              // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
               sql =
-                                 String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s, hive_partitioning = true)", duckdbSchema, tableName, fileArray.toString());
+                                 String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan(%s)", duckdbSchema, tableName, fileArray.toString());
               LOGGER.info("Creating DuckDB view for multiple files: \"{}.{}\" -> {} files", duckdbSchema, tableName, files.length);
             }
           } else if (isGlobPattern) {
             // Glob pattern - DuckDB's parquet_scan supports glob patterns directly
-            // For glob patterns with **, always enable hive_partitioning to let DuckDB auto-detect
-            // DuckDB will automatically detect if the data is actually Hive-partitioned
-            if (parquetPath.contains("**")) {
-              // Enable hive_partitioning for recursive glob patterns - DuckDB will auto-detect if needed
+            // Check table configuration to determine if Hive partitioning should be enabled
+            boolean hasHivePartitioning = isHivePartitionedFromConfig(record);
+
+            if (hasHivePartitioning) {
+              // Enable hive_partitioning based on table configuration
+              // Disable union_by_name for performance - avoids scanning all files during view creation
+              // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
               sql =
-                                 String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true)", duckdbSchema, tableName, parquetPath);
-              LOGGER.info("Creating DuckDB view with glob pattern and Hive partitioning auto-detection: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
+                                 String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = false)", duckdbSchema, tableName, parquetPath);
+              LOGGER.info("Creating DuckDB view with glob pattern and Hive partitioning (from config, union_by_name=false for performance): \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
             } else {
+              // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
               sql =
-                                 String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetPath);
+                                 String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetPath);
               LOGGER.info("Creating DuckDB view with glob pattern: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
             }
           } else {
             // Single file - use parquetPath string directly (works for both local and S3)
+            // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
             sql =
-                              String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetPath);
+                              String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s')", duckdbSchema, tableName, parquetPath);
             LOGGER.info("Creating DuckDB view: \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
           }
 
           if (sql != null) {
-            try {
-              LOGGER.info("=== EXECUTING DuckDB DDL ===");
-              LOGGER.info("🎯 Table: {}.{}", duckdbSchema, tableName);
-              LOGGER.info("🔍 ParquetPath: {}", parquetPath);
-              LOGGER.info("📝 SQL: {}", sql);
-              LOGGER.info("⚙️ About to execute SQL statement...");
-              conn.createStatement().execute(sql);
-              viewCount++;
-              LOGGER.info("✅ SUCCESS: Created DuckDB view: {}.{}", duckdbSchema, tableName);
-
-              // Add diagnostic logging to see what DuckDB interprets from the Parquet file
-              try (Statement debugStmt = conn.createStatement();
-                   ResultSet schemaInfo =
-                     debugStmt.executeQuery(String.format("DESCRIBE \"%s\".\"%s\"", duckdbSchema, tableName))) {
-                LOGGER.debug("=== DuckDB Schema for {}.{} ===", duckdbSchema, tableName);
-                while (schemaInfo.next()) {
-                  String colName = schemaInfo.getString("column_name");
-                  String colType = schemaInfo.getString("column_type");
-                  String nullable = schemaInfo.getString("null");
-                  LOGGER.debug("  Column: {} | Type: {} | Nullable: {}", colName, colType, nullable);
+            // Check if view exists first to avoid expensive file scanning
+            if (viewExists(conn, duckdbSchema, tableName)) {
+              LOGGER.debug("⚡ Parquet view exists, skipped: {}.{}", duckdbSchema, tableName);
+            } else {
+              // View doesn't exist - create it
+              try {
+                LOGGER.info("=== EXECUTING DuckDB DDL ===");
+                LOGGER.info("🎯 Table: {}.{}", duckdbSchema, tableName);
+                // Truncate parquetPath for readability (can be huge file list)
+                String truncatedPath = parquetPath;
+                if (truncatedPath != null && truncatedPath.length() > 200) {
+                  truncatedPath = truncatedPath.substring(0, 197) + "...";
                 }
-              } catch (SQLException debugE) {
-                LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
-              }
-            } catch (SQLException e) {
+                LOGGER.info("🔍 ParquetPath: {}", truncatedPath);
+                LOGGER.info("📝 SQL: {}", sql);
+                LOGGER.info("⚙️ About to execute SQL statement...");
+                conn.createStatement().execute(sql);
+                viewCount++;
+                LOGGER.info("✅ SUCCESS: Created DuckDB view: {}.{}", duckdbSchema, tableName);
+
+                // Add diagnostic logging to see what DuckDB interprets from the Parquet file
+                try (Statement debugStmt = conn.createStatement();
+                     ResultSet schemaInfo =
+                       debugStmt.executeQuery(String.format("DESCRIBE \"%s\".\"%s\"", duckdbSchema, tableName))) {
+                  LOGGER.debug("=== DuckDB Schema for {}.{} ===", duckdbSchema, tableName);
+                  while (schemaInfo.next()) {
+                    String colName = schemaInfo.getString("column_name");
+                    String colType = schemaInfo.getString("column_type");
+                    String nullable = schemaInfo.getString("null");
+                    LOGGER.debug("  Column: {} | Type: {} | Nullable: {}", colName, colType, nullable);
+                  }
+                } catch (SQLException debugE) {
+                  LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
+                }
+              } catch (SQLException e) {
               LOGGER.error("═══════════════════════════════════════════════════════════════");
               LOGGER.error("🚨 CRITICAL: DuckDB VIEW CREATION FAILED 🚨");
               LOGGER.error("═══════════════════════════════════════════════════════════════");
@@ -952,6 +1143,7 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.error("═══════════════════════════════════════════════════════════════");
               // Log the full stack trace for debugging
               e.printStackTrace();
+              }
             }
           }
         } else {
@@ -1015,13 +1207,79 @@ public class DuckDBJdbcSchemaFactory {
 
           // Register Parquet file - preserve original casing since we use quoted identifiers
           String tableName = fileName.replaceAll("\\.parquet$", "");
-          String sql =
-                                   String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM read_parquet('%s')", schema, tableName, file.getAbsolutePath());
-          LOGGER.info("Registering DuckDB view: {}.{} from file: {}",
-                      schema, tableName, file.getAbsolutePath());
-          conn.createStatement().execute(sql);
-          LOGGER.info("Successfully registered view: {}.{}", schema, tableName);
+
+          // Check if view already exists - skip expensive CREATE if view defined
+          if (!viewExists(conn, schema, tableName)) {
+            String sql =
+                                     String.format("CREATE OR REPLACE VIEW \"%s\".\"%s\" AS SELECT * FROM read_parquet('%s')", schema, tableName, file.getAbsolutePath());
+            LOGGER.info("Registering DuckDB view: {}.{} from file: {}",
+                        schema, tableName, file.getAbsolutePath());
+            conn.createStatement().execute(sql);
+            LOGGER.info("✅ Successfully registered view: {}.{}", schema, tableName);
+          } else {
+            LOGGER.debug("⚡ Legacy view exists, skipped: {}.{}", schema, tableName);
+          }
         }
+      }
+    }
+  }
+
+  /**
+   * Determines if a table uses Hive-style partitioning based on its configuration.
+   * This is the single source of truth - NOT file path patterns or heuristics.
+   *
+   * @param record The conversion record containing table configuration
+   * @return true if the table is configured with Hive partitioning
+   */
+  private static boolean isHivePartitionedFromConfig(ConversionMetadata.ConversionRecord record) {
+    if (record == null || record.tableConfig == null) {
+      return false;
+    }
+
+    // Check if tableConfig contains partitions.style == "hive"
+    Object partitionsObj = record.tableConfig.get("partitions");
+    if (partitionsObj instanceof Map) {
+      Map<String, Object> partitions = (Map<String, Object>) partitionsObj;
+      Object styleObj = partitions.get("style");
+      if (styleObj instanceof String) {
+        String style = (String) styleObj;
+        return "hive".equalsIgnoreCase(style);
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Formats a conversion record for error logging.
+   */
+  private static String formatRecordForError(ConversionMetadata.ConversionRecord record) {
+    if (record == null) return "null";
+    return String.format(
+        "ConversionRecord{tableName='%s', tableType='%s', sourceFile='%s', viewScanPattern='%s', parquetCacheFile='%s'}",
+        record.tableName, record.tableType, record.getSourceFile(), record.viewScanPattern,
+        record.getParquetCacheFile() != null && record.getParquetCacheFile().length() > 100
+            ? record.getParquetCacheFile().substring(0, 97) + "..." : record.getParquetCacheFile());
+  }
+
+  /**
+   * Checks if a view already exists in DuckDB's catalog.
+   * This is used to skip CREATE VIEW IF NOT EXISTS when the view is already defined,
+   * avoiding expensive file scanning during parquet_scan() validation.
+   *
+   * @param conn DuckDB connection
+   * @param schema Schema name (DuckDB schema, not Calcite)
+   * @param tableName Table/view name
+   * @return true if view exists in information_schema
+   */
+  private static boolean viewExists(Connection conn, String schema, String tableName) throws SQLException {
+    String sql = "SELECT COUNT(*) FROM information_schema.tables " +
+                 "WHERE table_schema = ? AND table_name = ? AND table_type = 'VIEW'";
+    try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, schema);
+      ps.setString(2, tableName);
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() && rs.getInt(1) > 0;
       }
     }
   }
