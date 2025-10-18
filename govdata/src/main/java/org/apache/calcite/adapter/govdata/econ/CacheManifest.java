@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,10 +35,13 @@ import java.util.concurrent.TimeUnit;
  * Cache manifest for tracking downloaded economic data to improve startup performance.
  * Maintains metadata about cached files to avoid redundant downloads.
  *
- * Uses explicit refresh timestamps stored in each entry, allowing different refresh
+ * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
+ * including ETag support, TTL-based expiration, and parquet conversion tracking.
+ *
+ * <p>Uses explicit refresh timestamps stored in each entry, allowing different refresh
  * policies per data type (e.g., current year vs historical, daily vs immutable).
  */
-public class CacheManifest {
+public class CacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MANIFEST_FILENAME = "cache_manifest.json";
@@ -55,7 +60,7 @@ public class CacheManifest {
 
   /**
    * Check if data is cached and fresh for the given parameters.
-   * Uses explicit refreshAfter timestamp stored in each entry.
+   * Uses ETag-based caching when available, falling back to time-based TTL.
    */
   public boolean isCached(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
@@ -69,7 +74,13 @@ public class CacheManifest {
     // handles this using StorageProvider which supports both local and S3 storage.
     // Using File API here would fail for S3 URIs and create invalid paths.
 
-    // Check if refresh time has passed
+    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
+    if (entry.etag != null && !entry.etag.isEmpty()) {
+      LOGGER.debug("Using cached {} data for year {} (ETag: {})", dataType, year, entry.etag);
+      return true;
+    }
+
+    // Fallback: check if refresh time has passed for entries without ETags
     long now = System.currentTimeMillis();
     if (now >= entry.refreshAfter) {
       long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
@@ -119,10 +130,56 @@ public class CacheManifest {
         dataType, year, fileSize, hoursUntilRefresh, refreshReason);
   }
 
-  // REMOVED: isParquetConverted() and markParquetConverted()
-  // Parquet conversion tracking is now handled by FileSchema's conversion registry
-  // to avoid duplication and stale path issues. The cache manifest focuses solely
-  // on download management (tracking raw JSON data from APIs).
+  /**
+   * Check if parquet file has been converted for the given parameters.
+   * This avoids expensive S3 exists checks on every run by tracking conversions in the manifest.
+   */
+  public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+
+    if (entry == null || entry.parquetPath == null) {
+      return false;
+    }
+
+    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
+    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
+    if (entry.cachedAt > entry.parquetConvertedAt) {
+      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {} (year={})",
+          dataType, year);
+      return false;
+    }
+
+    // Parquet is up-to-date with raw file
+    LOGGER.info("⚡ Cached parquet, skipped conversion: {} (year={})", dataType, year);
+    return true;
+  }
+
+  /**
+   * Mark parquet file as converted for the given parameters.
+   * This is called after successful parquet conversion to avoid redundant conversions.
+   */
+  public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+
+    if (entry == null) {
+      // Create new entry if it doesn't exist (shouldn't happen normally)
+      entry = new CacheEntry();
+      entry.dataType = dataType;
+      entry.year = year;
+      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
+      entry.refreshAfter = Long.MAX_VALUE;  // Parquet files are immutable
+      entry.refreshReason = "parquet_immutable";
+      entries.put(key, entry);
+    }
+
+    entry.parquetPath = parquetPath;
+    entry.parquetConvertedAt = System.currentTimeMillis();
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.debug("Marked parquet as converted: {} (year={}, path={})", dataType, year, parquetPath);
+  }
 
   /**
    * Mark data as unavailable (404 or similar) with TTL for retry.
@@ -313,11 +370,24 @@ public class CacheManifest {
   }
 
   /**
-   * Cache entry metadata with explicit refresh timestamp.
-   * Tracks raw JSON data downloads only - parquet conversion tracking
-   * is handled by FileSchema's conversion registry.
+   * Get the ETag for a cached entry.
+   *
+   * @param dataType The type of data
+   * @param year The year
+   * @param parameters Additional parameters
+   * @return The ETag string, or null if not cached or no ETag available
    */
-  public static class CacheEntry {
+  public String getETag(String dataType, int year, Map<String, String> parameters) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+    return (entry != null) ? entry.etag : null;
+  }
+
+  /**
+   * Cache entry metadata with explicit refresh timestamp.
+   * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add ECON-specific fields.
+   */
+  public static class CacheEntry extends BaseCacheEntry {
     @JsonProperty("dataType")
     public String dataType;
 
@@ -326,24 +396,6 @@ public class CacheManifest {
 
     @JsonProperty("parameters")
     public Map<String, String> parameters = new HashMap<>();
-
-    @JsonProperty("filePath")
-    public String filePath;
-
-    @JsonProperty("fileSize")
-    public long fileSize;
-
-    @JsonProperty("cachedAt")
-    public long cachedAt;
-
-    @JsonProperty("refreshAfter")
-    public long refreshAfter = Long.MAX_VALUE;  // Default: never refresh (for backward compatibility)
-
-    @JsonProperty("refreshReason")
-    public String refreshReason;  // e.g., "current_year_daily", "historical_immutable", "market_close"
-
-    // REMOVED: parquetPath and parquetConvertedAt
-    // Parquet tracking is now handled by FileSchema's .conversions.json
   }
 
   /**

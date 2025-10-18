@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,10 +35,13 @@ import java.util.concurrent.TimeUnit;
  * Cache manifest for tracking downloaded geographic data to improve startup performance.
  * Maintains metadata about cached files to avoid redundant downloads and S3 existence checks.
  *
- * Uses explicit refresh timestamps stored in each entry, allowing different refresh
+ * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
+ * including ETag support, TTL-based expiration, and parquet conversion tracking.
+ *
+ * <p>Uses explicit refresh timestamps stored in each entry, allowing different refresh
  * policies per data type (e.g., current year vs historical, TIGER boundaries vs Census API data).
  */
-public class GeoCacheManifest {
+public class GeoCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MANIFEST_FILENAME = "cache_manifest.json";
@@ -55,7 +60,7 @@ public class GeoCacheManifest {
 
   /**
    * Check if data is cached and fresh for the given parameters.
-   * Uses explicit refreshAfter timestamp stored in each entry.
+   * Uses ETag-based caching when available, falling back to time-based TTL.
    */
   public boolean isCached(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
@@ -68,9 +73,15 @@ public class GeoCacheManifest {
     // NOTE: File existence check removed - would fail for S3 cache URIs.
     // Callers (TigerDataDownloader, CensusApiClient, HudCrosswalkFetcher) handle file existence
     // checks using StorageProvider which supports both local and S3 storage.
-    // Manifest focuses on time-based refresh policies only.
+    // Manifest focuses on ETag-based and time-based refresh policies only.
 
-    // Check if refresh time has passed
+    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
+    if (entry.etag != null && !entry.etag.isEmpty()) {
+      LOGGER.debug("Using cached {} data for year {} (ETag: {})", dataType, year, entry.etag);
+      return true;
+    }
+
+    // Fallback: check if refresh time has passed for entries without ETags
     long now = System.currentTimeMillis();
     if (now >= entry.refreshAfter) {
       long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
@@ -86,6 +97,20 @@ public class GeoCacheManifest {
         dataType, year, hoursUntilRefresh, entry.refreshReason != null ? entry.refreshReason : "unknown");
 
     return true;
+  }
+
+  /**
+   * Get the ETag for a cached entry.
+   *
+   * @param dataType The type of data
+   * @param year The year
+   * @param parameters Additional parameters
+   * @return The ETag string, or null if not cached or no ETag available
+   */
+  public String getETag(String dataType, int year, Map<String, String> parameters) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+    return (entry != null) ? entry.etag : null;
   }
 
   /**
@@ -139,6 +164,14 @@ public class GeoCacheManifest {
       LOGGER.debug("Parquet entry expired for {} year={} (age: {} hours, policy: {})",
           dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      return false;
+    }
+
+    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
+    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
+    if (entry.cachedAt > entry.parquetConvertedAt) {
+      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {} (year={})",
+          dataType, year);
       return false;
     }
 
@@ -287,8 +320,9 @@ public class GeoCacheManifest {
 
   /**
    * Cache entry metadata with explicit refresh timestamp.
+   * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add GEO-specific fields.
    */
-  public static class CacheEntry {
+  public static class CacheEntry extends BaseCacheEntry {
     @JsonProperty("dataType")
     public String dataType;
 
@@ -297,26 +331,5 @@ public class GeoCacheManifest {
 
     @JsonProperty("parameters")
     public Map<String, String> parameters = new HashMap<>();
-
-    @JsonProperty("filePath")
-    public String filePath;
-
-    @JsonProperty("fileSize")
-    public long fileSize;
-
-    @JsonProperty("cachedAt")
-    public long cachedAt;
-
-    @JsonProperty("refreshAfter")
-    public long refreshAfter = Long.MAX_VALUE;
-
-    @JsonProperty("refreshReason")
-    public String refreshReason;
-
-    @JsonProperty("parquetPath")
-    public String parquetPath;
-
-    @JsonProperty("parquetConvertedAt")
-    public long parquetConvertedAt;
   }
 }
