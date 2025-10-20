@@ -276,6 +276,12 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
         return Linq4j.singletonEnumerator((T) updateCount);
       }
     } catch (SQLException e) {
+      LOGGER.error("SQLException while executing query on JDBC sub-schema:");
+      LOGGER.error("  SQL: {}", sql);
+      LOGGER.error("  Error Code: {}", e.getErrorCode());
+      LOGGER.error("  SQL State: {}", e.getSQLState());
+      LOGGER.error("  Message: {}", e.getMessage());
+      LOGGER.error("  Stack trace:", e);
       throw Static.RESOURCE.exceptionWhilePerformingQueryOnJdbcSubSchema(sql)
           .ex(e);
     } finally {
@@ -302,6 +308,12 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
         return Linq4j.singletonEnumerator((T) updateCount);
       }
     } catch (SQLException e) {
+      LOGGER.error("SQLException while executing query on JDBC sub-schema:");
+      LOGGER.error("  SQL: {}", sql);
+      LOGGER.error("  Error Code: {}", e.getErrorCode());
+      LOGGER.error("  SQL State: {}", e.getSQLState());
+      LOGGER.error("  Message: {}", e.getMessage());
+      LOGGER.error("  Stack trace:", e);
       throw Static.RESOURCE.exceptionWhilePerformingQueryOnJdbcSubSchema(sql)
           .ex(e);
     } finally {
