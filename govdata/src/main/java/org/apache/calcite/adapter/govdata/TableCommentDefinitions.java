@@ -253,7 +253,9 @@ public final class TableCommentDefinitions {
     vectorizedBlobsCols.put("filing_date", "Date when the filing was submitted to SEC (ISO 8601 format)");
     vectorizedBlobsCols.put("original_text", "Original text content before enrichment");
     vectorizedBlobsCols.put("enriched_text", "Text after adding financial context, related concepts, and cross-references");
-    vectorizedBlobsCols.put("embedding", "Vector embedding as array of 256 floats representing semantic content");
+    vectorizedBlobsCols.put("embedding",
+        "Vector embedding for semantic search across SEC filing narratives including MD&A, footnotes, and earnings transcripts. "
+        + "[VECTOR dimension=384 provider=local model=tf-idf source_table_col=source_table source_id_col=source_id]");
     vectorizedBlobsCols.put("parent_section", "Parent section identifier (e.g., 'Item 7', 'Note 1 - Summary of Significant Accounting Policies')");
     vectorizedBlobsCols.put("relationships", "JSON string of relationships to other blobs for graph-based navigation");
     vectorizedBlobsCols.put("financial_concepts", "Comma-separated list of XBRL concept names referenced in this text");
