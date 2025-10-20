@@ -372,6 +372,7 @@
       "description": "Annual population estimate",
       "dataType": "LONG",
       "population": {
+        "2010-2019": {"dataset": "pep", "variable": "POP"},
         "2020": {"variable": "POP_2020"},
         "2021": {"variable": "POP_2021"},
         "2022": {"variable": "POP_2022"},
@@ -608,7 +609,7 @@
     },
     "population": {
       "2010-2019": {
-        "primary": "pep",
+        "primary": "population",
         "fallbacks": ["acs/acs5"]
       },
       "2020": {
