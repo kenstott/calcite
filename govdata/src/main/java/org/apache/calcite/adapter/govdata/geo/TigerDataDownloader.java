@@ -251,7 +251,16 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check manifest first for cached raw shapefiles
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isParquetConverted("states", year, params)) {
+        LOGGER.debug("States parquet already converted per manifest for year {} - skipping raw download", year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       if (cacheManifest.isCached("states", year, params)) {
@@ -331,7 +340,16 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "counties");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check manifest first for cached raw shapefiles
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isParquetConverted("counties", year, params)) {
+        LOGGER.debug("Counties parquet already converted per manifest for year {} - skipping raw download", year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       if (cacheManifest.isCached("counties", year, params)) {
@@ -402,7 +420,17 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, stateFips);
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check manifest first for cached raw shapefiles
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      params.put("state", stateFips);
+      if (cacheManifest.isParquetConverted("places", year, params)) {
+        LOGGER.debug("Places parquet already converted per manifest for state {} year {} - skipping raw download", stateFips, year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("state", stateFips);
@@ -489,10 +517,22 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "zctas");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("ZCTAs shapefile already exists in cache: {}", zipCachePath);
-      return downloadCacheToTemp(cachePath, "zctas_" + year);
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isParquetConverted("zctas", year, params)) {
+        LOGGER.debug("ZCTAs parquet already converted per manifest for year {} - skipping raw download", year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isCached("zctas", year, params)) {
+        LOGGER.debug("ZCTAs shapefile cached per manifest for year {}", year);
+        return downloadCacheToTemp(cachePath, "zctas_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -513,6 +553,13 @@ public class TigerDataDownloader {
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Mark as cached in manifest
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        cacheManifest.markCached("zctas", year, params, cachePath, zipFile.length());
+        cacheManifest.save(this.operatingDirectory);
+      }
 
       // Keep temp directory for immediate use
       return tempDir;
@@ -549,10 +596,22 @@ public class TigerDataDownloader {
     String filename = String.format("tl_%d_us_cd%d.zip", year, congressNum);
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("Congressional districts shapefile already exists in cache for year {}: {}", year, zipCachePath);
-      return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isParquetConverted("congressional_districts", year, params)) {
+        LOGGER.debug("Congressional districts parquet already converted per manifest for year {} - skipping raw download", year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isCached("congressional_districts", year, params)) {
+        LOGGER.debug("Congressional districts shapefile cached per manifest for year {}", year);
+        return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -580,6 +639,13 @@ public class TigerDataDownloader {
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
+
+      // Mark as cached in manifest
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        cacheManifest.markCached("congressional_districts", year, params, cachePath, zipFile.length());
+        cacheManifest.save(this.operatingDirectory);
+      }
 
       // Keep temp directory for immediate use
       return tempDir;
@@ -774,34 +840,54 @@ public class TigerDataDownloader {
    * Census tracts are organized by state, so we'll download for selected states.
    */
   public File downloadCensusTractsForYear(int year) throws IOException {
-    // Build target path in cache storage
-    String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
-    cachePath = storageProvider.resolvePath(cachePath, "census_tracts");
-
-    // Check if any census tracts exist in cache for this year (check first state)
-    String testStateFips = "06";
-    String testFileSuffix = getTigerFileSuffix(year, "tract");
-    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testFileSuffix);
-    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
-    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
-
-    // If cached, download to temp
-    if (storageProvider.exists(testZipPath)) {
-      LOGGER.info("Census tracts already cached for year {}", year);
-      return downloadCacheToTemp(cachePath, "census_tracts_" + year);
-    }
-
-    if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Census tracts not found for year {}", year);
-      return null;
-    }
-
     // Download census tracts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
     File tempDir = Files.createTempDirectory("tiger-census_tracts-" + year + "-").toFile();
+    boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
+      // Build target path in cache storage for this state
+      String yearPath = String.format("year=%d", year);
+      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      cachePath = storageProvider.resolvePath(cachePath, "census_tracts");
+      cachePath = storageProvider.resolvePath(cachePath, fips);
+
+      // Check manifest first - if parquet already converted for this state, skip
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isParquetConverted("census_tracts", year, params)) {
+          LOGGER.debug("Census tracts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
+          continue;
+        }
+      }
+
+      // Check manifest for cached raw shapefiles for this state
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isCached("census_tracts", year, params)) {
+          LOGGER.debug("Census tracts shapefile cached per manifest for state {} year {}", fips, year);
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "census_tracts_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      }
+
+      if (!autoDownload) {
+        LOGGER.info("Auto-download disabled. Census tracts not found for state {} year {}", fips, year);
+        continue;
+      }
+
       String fileSuffix = getTigerFileSuffix(year, "tract");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
       String url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
@@ -815,6 +901,18 @@ public class TigerDataDownloader {
       try {
         downloadFile(url, zipFile);
         extractZipFile(zipFile, stateDir);
+        hasAnyDownloads = true;
+
+        // Upload extracted files to cache storage for this state
+        uploadDirectoryToStorage(stateDir, cachePath);
+
+        // Mark as cached in manifest with state parameter
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", fips);
+          cacheManifest.markCached("census_tracts", year, params, cachePath, zipFile.length());
+          cacheManifest.save(this.operatingDirectory);
+        }
       } catch (IOException e) {
         if (e.getMessage().contains("404")) {
           LOGGER.warn("TIGER census tract data not available for state {} year {} - skipping", fips, year);
@@ -824,8 +922,10 @@ public class TigerDataDownloader {
       }
     }
 
-    // Upload extracted files to cache storage
-    uploadDirectoryToStorage(tempDir, cachePath);
+    if (!hasAnyDownloads) {
+      LOGGER.warn("No census tract shapefiles were successfully downloaded or cached for year {}", year);
+      return null;
+    }
 
     // Keep temp directory for immediate use
     return tempDir;
@@ -845,34 +945,54 @@ public class TigerDataDownloader {
    * Block groups are organized by state, so we'll download for selected states.
    */
   public File downloadBlockGroupsForYear(int year) throws IOException {
-    // Build target path in cache storage
-    String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
-    cachePath = storageProvider.resolvePath(cachePath, "block_groups");
-
-    // Check if any block groups exist in cache for this year (check first state)
-    String testStateFips = "06";
-    String testFileSuffix = getTigerFileSuffix(year, "bg");
-    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testFileSuffix);
-    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
-    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
-
-    // If cached, download to temp
-    if (storageProvider.exists(testZipPath)) {
-      LOGGER.info("Block groups already cached for year {}", year);
-      return downloadCacheToTemp(cachePath, "block_groups_" + year);
-    }
-
-    if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. Block groups not found for year {}", year);
-      return null;
-    }
-
     // Download block groups for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
     File tempDir = Files.createTempDirectory("tiger-block_groups-" + year + "-").toFile();
+    boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
+      // Build target path in cache storage for this state
+      String yearPath = String.format("year=%d", year);
+      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      cachePath = storageProvider.resolvePath(cachePath, "block_groups");
+      cachePath = storageProvider.resolvePath(cachePath, fips);
+
+      // Check manifest first - if parquet already converted for this state, skip
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isParquetConverted("block_groups", year, params)) {
+          LOGGER.debug("Block groups parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
+          continue;
+        }
+      }
+
+      // Check manifest for cached raw shapefiles for this state
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isCached("block_groups", year, params)) {
+          LOGGER.debug("Block groups shapefile cached per manifest for state {} year {}", fips, year);
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "block_groups_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      }
+
+      if (!autoDownload) {
+        LOGGER.info("Auto-download disabled. Block groups not found for state {} year {}", fips, year);
+        continue;
+      }
+
       String fileSuffix = getTigerFileSuffix(year, "bg");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
       String url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
@@ -886,6 +1006,18 @@ public class TigerDataDownloader {
       try {
         downloadFile(url, zipFile);
         extractZipFile(zipFile, stateDir);
+        hasAnyDownloads = true;
+
+        // Upload extracted files to cache storage for this state
+        uploadDirectoryToStorage(stateDir, cachePath);
+
+        // Mark as cached in manifest with state parameter
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", fips);
+          cacheManifest.markCached("block_groups", year, params, cachePath, zipFile.length());
+          cacheManifest.save(this.operatingDirectory);
+        }
       } catch (IOException e) {
         if (e.getMessage().contains("404")) {
           LOGGER.warn("TIGER block group data not available for state {} year {} - skipping", fips, year);
@@ -895,8 +1027,10 @@ public class TigerDataDownloader {
       }
     }
 
-    // Upload extracted files to cache storage
-    uploadDirectoryToStorage(tempDir, cachePath);
+    if (!hasAnyDownloads) {
+      LOGGER.warn("No block group shapefiles were successfully downloaded or cached for year {}", year);
+      return null;
+    }
 
     // Keep temp directory for immediate use
     return tempDir;
@@ -926,10 +1060,22 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "cbsa");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check if already exists in cache via StorageProvider
-    if (storageProvider.exists(zipCachePath)) {
-      LOGGER.info("CBSA shapefile already exists in cache for year {}: {}", year, zipCachePath);
-      return downloadCacheToTemp(cachePath, "cbsa_" + year);
+    // Check manifest first - if parquet already converted, no need to download raw files
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isParquetConverted("cbsa", year, params)) {
+        LOGGER.debug("CBSA parquet already converted per manifest for year {} - skipping raw download", year);
+        return null; // No need to download raw files if parquet exists
+      }
+    }
+
+    // Check manifest for cached raw shapefiles
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      if (cacheManifest.isCached("cbsa", year, params)) {
+        LOGGER.debug("CBSA shapefile cached per manifest for year {}", year);
+        return downloadCacheToTemp(cachePath, "cbsa_" + year);
+      }
     }
 
     if (!autoDownload) {
@@ -948,6 +1094,13 @@ public class TigerDataDownloader {
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
+
+    // Mark as cached in manifest
+    if (cacheManifest != null) {
+      java.util.Map<String, String> params = new java.util.HashMap<>();
+      cacheManifest.markCached("cbsa", year, params, cachePath, zipFile.length());
+      cacheManifest.save(this.operatingDirectory);
+    }
 
     // Keep temp directory for immediate use
     return tempDir;
@@ -989,45 +1142,67 @@ public class TigerDataDownloader {
    * @param parquetPath Optional parquet path - if provided and file exists, skip download
    */
   public File downloadSchoolDistrictsForYear(int year, String parquetPath) throws IOException {
-    // Check if parquet already exists (skip raw download if converted file exists)
-    if (parquetPath != null && shouldSkipDownload("school_districts", year, parquetPath)) {
-      LOGGER.info("Skipping school districts download for year {} - parquet already exists", year);
-      // Return temp directory placeholder (no actual download needed)
-      return Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
-    }
-
-    // Build target path in cache storage
-    String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
-    cachePath = storageProvider.resolvePath(cachePath, "school_districts");
-
-    // Check if any school districts exist in cache for this year
-    String testStateFips = "06";
-    String testType = "unsd";
-    String testTypeSuffix = (year == 2010) ? testType + "10" : testType;
-    String testFilename = String.format("tl_%d_%s_%s.zip", year, testStateFips, testTypeSuffix);
-    String testStatePath = storageProvider.resolvePath(cachePath, testStateFips);
-    String testZipPath = storageProvider.resolvePath(testStatePath, testFilename);
-
-    // If cached, download to temp
-    if (storageProvider.exists(testZipPath)) {
-      LOGGER.info("School districts already cached for year {}", year);
-      return downloadCacheToTemp(cachePath, "school_districts_" + year);
-    }
-
-    if (!autoDownload) {
-      LOGGER.info("Auto-download disabled. School districts not found for year {}", year);
-      return null;
-    }
-
     // Download school districts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
     File tempDir = Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
     boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
+      // Build target path in cache storage for this state
+      String yearPath = String.format("year=%d", year);
+      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      cachePath = storageProvider.resolvePath(cachePath, "school_districts");
+      cachePath = storageProvider.resolvePath(cachePath, fips);
+
+      // Check manifest first - if parquet already converted for this state, skip
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isParquetConverted("school_districts", year, params)) {
+          LOGGER.debug("School districts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
+          // Still need to copy to temp dir if we have cached data
+          File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
+          if (stateTemp != null) {
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      }
+
+      // Check manifest for cached raw shapefiles for this state
+      if (cacheManifest != null) {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("state", fips);
+        if (cacheManifest.isCached("school_districts", year, params)) {
+          LOGGER.debug("School districts shapefile cached per manifest for state {} year {}", fips, year);
+          // Download this state's data to temp dir
+          File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
+          if (stateTemp != null) {
+            // Copy to main temp dir under state subdirectory
+            File stateTempTarget = new File(tempDir, fips);
+            stateTempTarget.mkdirs();
+            for (File file : stateTemp.listFiles()) {
+              Files.copy(file.toPath(), new File(stateTempTarget, file.getName()).toPath());
+            }
+            hasAnyDownloads = true;
+          }
+          continue;
+        }
+      }
+
+      if (!autoDownload) {
+        LOGGER.info("Auto-download disabled. School districts not found for state {} year {}", fips, year);
+        continue;
+      }
+
       // Try different school district types
       String[] districtTypes = {"unsd", "elsd", "scsd"}; // Unified, Elementary, Secondary
+      boolean stateHasDownloads = false;
 
       for (String type : districtTypes) {
         // 2010 has different naming: subdirectory "2010" and type suffix "10" (e.g., unsd10)
@@ -1048,20 +1223,33 @@ public class TigerDataDownloader {
         try {
           downloadFile(url, zipFile);
           extractZipFile(zipFile, stateDir);
+          stateHasDownloads = true;
           hasAnyDownloads = true;
         } catch (IOException e) {
           LOGGER.debug("Failed to download school districts for state {} type {}: {}", fips, type, e.getMessage());
         }
       }
+
+      // If this state had any successful downloads, upload to cache and mark in manifest
+      if (stateHasDownloads) {
+        File stateDir = new File(tempDir, fips);
+        // Upload extracted files to cache storage for this state
+        uploadDirectoryToStorage(stateDir, cachePath);
+
+        // Mark as cached in manifest with state parameter
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", fips);
+          cacheManifest.markCached("school_districts", year, params, cachePath, 0);
+          cacheManifest.save(this.operatingDirectory);
+        }
+      }
     }
 
     if (!hasAnyDownloads) {
-      LOGGER.warn("No school district shapefiles were successfully downloaded for year {}", year);
+      LOGGER.warn("No school district shapefiles were successfully downloaded or cached for year {}", year);
       return null;
     }
-
-    // Upload extracted files to cache storage
-    uploadDirectoryToStorage(tempDir, cachePath);
 
     // Keep temp directory for immediate use
     return tempDir;
@@ -1102,7 +1290,6 @@ public class TigerDataDownloader {
     // Check manifest first (avoids S3 check)
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      params.put("type", dataType);
       if (cacheManifest.isParquetConverted(dataType, year, params)) {
         LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
         return;
@@ -1115,7 +1302,6 @@ public class TigerDataDownloader {
       // Update manifest since file exists but wasn't tracked
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
@@ -1141,7 +1327,6 @@ public class TigerDataDownloader {
       // Mark parquet conversion complete in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        params.put("type", dataType);
         cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
