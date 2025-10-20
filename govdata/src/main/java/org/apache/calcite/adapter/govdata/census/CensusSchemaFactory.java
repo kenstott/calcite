@@ -665,9 +665,20 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
         // Check if this is a "no data" error vs a real error
+        // Check both the outer exception message and root cause (may be wrapped)
         String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("No data") || errorMessage.contains("empty") ||
-            errorMessage.contains("insufficient data"))) {
+        String rootCauseMessage = null;
+        Throwable rootCause = e.getCause();
+        if (rootCause != null && rootCause.getMessage() != null) {
+          rootCauseMessage = rootCause.getMessage();
+        }
+
+        boolean isNoDataError = (errorMessage != null && (errorMessage.contains("No data") ||
+            errorMessage.contains("empty") || errorMessage.contains("insufficient data"))) ||
+            (rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
+            rootCauseMessage.contains("empty") || rootCauseMessage.contains("insufficient data")));
+
+        if (isNoDataError) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
             String parquetPath =
@@ -707,9 +718,20 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
         // Check if this is a "no data" error vs a real error
+        // Check both the outer exception message and root cause (may be wrapped)
         String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("No data") || errorMessage.contains("empty") ||
-            errorMessage.contains("insufficient data"))) {
+        String rootCauseMessage = null;
+        Throwable rootCause = e.getCause();
+        if (rootCause != null && rootCause.getMessage() != null) {
+          rootCauseMessage = rootCause.getMessage();
+        }
+
+        boolean isNoDataError = (errorMessage != null && (errorMessage.contains("No data") ||
+            errorMessage.contains("empty") || errorMessage.contains("insufficient data"))) ||
+            (rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
+            rootCauseMessage.contains("empty") || rootCauseMessage.contains("insufficient data")));
+
+        if (isNoDataError) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
             String parquetPath =
