@@ -877,7 +877,9 @@ public class ConversionMetadata {
     }
 
     // Try to get HTTP metadata for remote sources
-    if (isRemoteFile(source.path())) {
+    // Skip metadata fetching for glob patterns (wildcards like *, **, ?, [, ])
+    // These represent multiple files and cannot be queried as a single file
+    if (isRemoteFile(source.path()) && !isGlobPattern(source.path())) {
       try {
         org.apache.calcite.adapter.file.storage.StorageProvider provider =
             org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(source.path());
@@ -889,6 +891,8 @@ public class ConversionMetadata {
       } catch (Exception e) {
         LOGGER.debug("Could not get remote file metadata for {}: {}", source.path(), e.getMessage());
       }
+    } else if (isRemoteFile(source.path()) && isGlobPattern(source.path())) {
+      LOGGER.debug("Skipping metadata fetch for glob pattern: {}", source.path());
     }
 
     // Check for existing conversion record to get original file and conversion info
@@ -942,6 +946,16 @@ public class ConversionMetadata {
         path.startsWith("http://") || path.startsWith("https://") ||
         path.startsWith("s3://") || path.startsWith("ftp://") ||
         path.startsWith("sftp://"));
+  }
+
+  /**
+   * Determines if a file path contains glob pattern wildcards.
+   * Glob patterns use wildcards like *, **, ?, [, ] to match multiple files.
+   */
+  private boolean isGlobPattern(String path) {
+    return path != null && (
+        path.contains("*") || path.contains("?") ||
+        path.contains("[") || path.contains("]"));
   }
 
   /**

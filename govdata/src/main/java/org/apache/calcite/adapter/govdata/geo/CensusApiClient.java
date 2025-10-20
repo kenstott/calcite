@@ -37,7 +37,9 @@ import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -285,11 +287,16 @@ public class CensusApiClient {
         String.format("acs_%d_%s_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"),
         geography.replaceAll("[^a-zA-Z0-9]", "_"));
 
-    // Check cache first
+    // Check manifest first to avoid S3 operations
     String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
-    if (storageProvider.exists(cacheFilePath)) {
-      LOGGER.debug("Using cached ACS data from {}", cacheFilePath);
-      return readJsonFromStorage(cacheFilePath);
+    if (cacheManifest != null) {
+      Map<String, String> params = new HashMap<>();
+      params.put("variables", variables);
+      params.put("geography", geography);
+      if (cacheManifest.isCached(cacheKey, year, params)) {
+        LOGGER.debug("Using cached ACS data per manifest: {}", cacheFilePath);
+        return readJsonFromStorage(cacheFilePath);
+      }
     }
 
     // Build API URL
@@ -304,6 +311,15 @@ public class CensusApiClient {
     byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
     storageProvider.writeFile(cacheFilePath, jsonBytes);
     LOGGER.info("Cached ACS data to {}", cacheFilePath);
+
+    // Mark in manifest
+    if (cacheManifest != null) {
+      Map<String, String> params = new HashMap<>();
+      params.put("variables", variables);
+      params.put("geography", geography);
+      cacheManifest.markCached(cacheKey, year, params, cacheFilePath, jsonBytes.length);
+      cacheManifest.save(operatingDirectory);
+    }
 
     return response;
   }

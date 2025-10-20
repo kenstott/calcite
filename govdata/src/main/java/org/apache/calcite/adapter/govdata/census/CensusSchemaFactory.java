@@ -280,9 +280,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     CensusApiClient censusClient =
         new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory, acsYears, storageProvider, cacheManifest);
 
-    // For parquet conversion, we need a File object to scan local JSON cache files
-    // This is safe because downloads always go to local filesystem first (even with S3 parquet storage)
-    File localCacheDir = new File(cacheDir);
+    // Cache directory is used via StorageProvider for both local and S3 paths
 
     // Check if ACS data needs updating
     boolean needsAcsUpdate = false;
@@ -373,7 +371,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         // Convert to Parquet format
         LOGGER.info("Converting ACS data to Parquet for years: {}", acsYears);
         for (int year : acsYears) {
-          convertAcsDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
+          convertAcsDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
         }
 
       } catch (Exception e) {
@@ -417,7 +415,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
           for (int year : decennialYears) {
             downloadDecennialData(censusClient, year);
-            convertDecennialDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
+            convertDecennialDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
           }
 
         } catch (Exception e) {
@@ -440,7 +438,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         for (int year : economicYears) {
           try {
             downloadEconomicData(censusClient, year);
-            convertEconomicDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
+            convertEconomicDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
           } catch (Exception e) {
             // Check if this is a "no data" error (404, dataset not available) vs actual API error
             String errorMsg = e.getMessage();
@@ -487,7 +485,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       for (int year : acsYears) {
         try {
           downloadPopulationEstimatesData(censusClient, year);
-          convertPopulationEstimatesDataToParquet(localCacheDir, censusParquetDir, year, storageProvider);
+          convertPopulationEstimatesDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
         } catch (Exception e) {
           // Check if this is a "no data" error (404, dataset not available) vs actual API error
           String errorMsg = e.getMessage();
@@ -644,7 +642,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Convert ACS data to Parquet format for all table types.
    */
-  private void convertAcsDataToParquet(File cacheDir, String parquetDir, int year,
+  private void convertAcsDataToParquet(String cacheDir, String parquetDir, int year,
       StorageProvider storageProvider) throws IOException {
     LOGGER.info("Converting ACS data to Parquet for year {}", year);
 
@@ -690,7 +688,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Convert Decennial Census data to Parquet format.
    */
-  private void convertDecennialDataToParquet(File cacheDir, String parquetDir, int year,
+  private void convertDecennialDataToParquet(String cacheDir, String parquetDir, int year,
       StorageProvider storageProvider) throws IOException {
     LOGGER.info("Converting Decennial Census data to Parquet for year {}", year);
 
@@ -732,7 +730,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Convert Census table data to Parquet with friendly column names.
    */
-  private void convertTableDataToParquet(File cacheDir, String targetPath, String tableName,
+  private void convertTableDataToParquet(String cacheDir, String targetPath, String tableName,
       int year, StorageProvider storageProvider, String censusType) throws IOException {
 
     // Check if target already exists and is current
@@ -758,40 +756,63 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
 
-      // Find matching JSON cache files for this table and year
+      // Find matching JSON cache files for this table and year using StorageProvider
       // Cache files are named like: acs_2020_B19013_001E_..._county__.json
       // We need to filter for files that contain at least one of the required variables
-      File[] jsonFiles = null;
-      if (cacheDir.exists() && cacheDir.isDirectory()) {
-        final String yearPrefix = censusType + "_" + year + "_";
+      final String yearPrefix = censusType + "_" + year + "_";
+      final java.util.Set<String> requiredVariables = variableMap.keySet();
 
-        // Get the variable codes we need for this table
-        final java.util.Set<String> requiredVariables = variableMap.keySet();
-
-        // Filter for JSON files matching this year, census type, and containing at least one required variable
-        jsonFiles = cacheDir.listFiles((dir, name) -> {
-          if (!name.startsWith(yearPrefix) || !name.endsWith(".json") ||
-              name.startsWith("._") || name.startsWith(".DS_Store")) {
-            return false;
-          }
-          // Check if filename contains at least one of the required variables
-          for (String varCode : requiredVariables) {
-            if (name.contains(varCode)) {
-              return true;
-            }
-          }
-          return false;
-        });
+      // Ensure cache directory ends with '/' for proper S3 listing
+      String cacheDirPath = cacheDir.endsWith("/") ? cacheDir : cacheDir + "/";
+      LOGGER.info("Listing JSON files from cache directory: {}", cacheDirPath);
+      List<StorageProvider.FileEntry> allFiles = storageProvider.listFiles(cacheDirPath, false);
+      LOGGER.info("StorageProvider.listFiles() returned {} entries from {}", allFiles.size(), cacheDirPath);
+      if (allFiles.isEmpty()) {
+        LOGGER.warn("Cache directory is empty: {}", cacheDirPath);
       }
 
-      if (jsonFiles == null || jsonFiles.length == 0) {
-        LOGGER.warn("No JSON cache files found for {} ({} year {})", tableName, censusType, year);
-        return;
+      // Filter for JSON files matching this year, census type, and containing at least one required variable
+      List<String> jsonFilePaths = new ArrayList<>();
+      for (StorageProvider.FileEntry entry : allFiles) {
+        String fullPath = entry.getPath();
+        String name = entry.getName();
+        // Extract just the filename from the path if name contains directory separators
+        String filename = name;
+        if (name.contains("/")) {
+          filename = name.substring(name.lastIndexOf("/") + 1);
+        }
+        LOGGER.debug("  Examining file: fullPath={}, name={}, filename={}, isDirectory={}", fullPath, name, filename, entry.isDirectory());
+        if (!filename.startsWith(yearPrefix) || !filename.endsWith(".json") ||
+            filename.startsWith("._") || filename.startsWith(".DS_Store")) {
+          LOGGER.debug("    Skipping (doesn't match prefix '{}' or not .json)", yearPrefix);
+          continue;
+        }
+        // Check if filename contains at least one of the required variables
+        boolean matched = false;
+        for (String varCode : requiredVariables) {
+          if (filename.contains(varCode)) {
+            jsonFilePaths.add(entry.getPath());
+            LOGGER.info("    MATCHED: {} contains variable {}", filename, varCode);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          LOGGER.debug("    Skipping (doesn't contain any required variables: {})", requiredVariables);
+        }
       }
+
+      if (jsonFilePaths.isEmpty()) {
+        LOGGER.warn("No JSON cache files found for {} ({} year {}) in {}", tableName, censusType, year, cacheDirPath);
+        LOGGER.warn("  Looking for files with prefix: {} and containing variables: {}", yearPrefix, requiredVariables);
+        throw new IOException("No data: JSON cache files missing for " + tableName + " year " + year);
+      }
+
+      LOGGER.info("Found {} JSON cache files for {} ({} year {})", jsonFilePaths.size(), tableName, censusType, year);
 
       // Transform and write parquet data
       CensusDataTransformer transformer = new CensusDataTransformer();
-      transformer.transformToParquet(jsonFiles, targetPath, tableName, year, variableMap, storageProvider, censusType);
+      transformer.transformToParquet(jsonFilePaths.toArray(new String[0]), targetPath, tableName, year, variableMap, storageProvider, censusType);
 
       LOGGER.info("Successfully converted {} data to Parquet: {}", tableName, targetPath);
 
@@ -1039,7 +1060,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Convert Economic Census data to Parquet format.
    */
-  private void convertEconomicDataToParquet(File cacheDir, String parquetDir, int year,
+  private void convertEconomicDataToParquet(String cacheDir, String parquetDir, int year,
       StorageProvider storageProvider) throws IOException {
     LOGGER.info("Converting Economic Census data to Parquet for year {}", year);
     String[] economicTableNames = {"economic_census", "county_business_patterns"};
@@ -1060,7 +1081,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Convert Population Estimates data to Parquet format.
    */
-  private void convertPopulationEstimatesDataToParquet(File cacheDir, String parquetDir, int year,
+  private void convertPopulationEstimatesDataToParquet(String cacheDir, String parquetDir, int year,
       StorageProvider storageProvider) throws IOException {
     LOGGER.info("Converting Population Estimates data to Parquet for year {}", year);
 
