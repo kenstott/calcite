@@ -213,12 +213,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       econConstraints.putAll(tableConstraints);
     }
 
-    mutableOperand.put("comment", "U.S. and international economic data including employment statistics, inflation metrics (CPI/PPI), "
-        + "Federal Reserve interest rates, GDP components, Treasury yields, federal debt, and global economic indicators. "
-        + "Data sources include Bureau of Labor Statistics (BLS), U.S. Treasury, World Bank, "
-        + "Federal Reserve Economic Data (FRED), and Bureau of Economic Analysis (BEA). "
-        + "Enables macroeconomic analysis, market research, and correlation with financial data.");
-
     // Add constraint metadata to operand so FileSchemaFactory can pass it to FileSchema
     mutableOperand.put("tableConstraints", econConstraints);
 
@@ -231,12 +225,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // after schema creation, then cast FileSchema and call registerRawToParquetConverter()
     // This requires downloaders to be recreated in GovDataSchemaFactory.buildEconOperand()
 
-    // Add schema-level comment for JDBC metadata
-    mutableOperand.put("comment", "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), "
-        + "Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, "
-        + "inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 "
-        + "time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, "
-        + "and cross-domain correlation with geographic and demographic data.");
+    // Add schema-level comment from JSON metadata
+    String schemaComment = loadSchemaComment();
+    if (schemaComment != null) {
+      mutableOperand.put("comment", schemaComment);
+    }
 
     return mutableOperand;
   }

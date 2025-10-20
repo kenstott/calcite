@@ -455,6 +455,9 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
   }
 
   @Override public @Nullable String getComment() {
+    // Note: GeoSchema has custom architecture (AbstractSchema) and is not instantiated by FileSchemaFactory
+    // Comment is loaded from geo-schema.json but not currently passed through to GeoSchema
+    // TODO: Add comment parameter to GeoSchema constructor if needed
     return "U.S. government geographic data including Census TIGER boundaries, "
         + "HUD USPS ZIP code crosswalks, and demographic statistics. "
         + "Enables spatial analysis, geographic aggregation, and crosswalk between "
