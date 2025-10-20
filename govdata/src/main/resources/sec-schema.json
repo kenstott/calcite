@@ -100,13 +100,37 @@
       ]
     },
     "insider_transactions": {
-      "primaryKey": ["cik", "filing_date", "transaction_date", "reporting_person_cik", "security_title", "shares_transacted", "transaction_code"]
+      "primaryKey": ["cik", "filing_date", "transaction_date", "reporting_person_cik", "security_title", "shares_transacted", "transaction_code"],
+      "foreignKeys": [
+        {
+          "columns": ["cik"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["cik"],
+          "comment": "Links insider transactions to company filings for timing analysis and correlation with filing activity"
+        }
+      ]
     },
     "earnings_transcripts": {
-      "primaryKey": ["cik", "transcript_date", "transcript_id"]
+      "primaryKey": ["cik", "transcript_date", "transcript_id"],
+      "foreignKeys": [
+        {
+          "columns": ["cik"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["cik"],
+          "comment": "Links earnings transcripts to company filings for comprehensive earnings analysis and sentiment correlation"
+        }
+      ]
     },
     "stock_prices": {
-      "primaryKey": ["cik", "date"]
+      "primaryKey": ["cik", "date"],
+      "foreignKeys": [
+        {
+          "columns": ["cik"],
+          "targetTable": "filing_metadata",
+          "targetColumns": ["cik"],
+          "comment": "Links stock prices to company filings for event studies and price reaction analysis around filing dates"
+        }
+      ]
     },
     "vectorized_blobs": {
       "primaryKey": ["source_table", "source_id", "blob_type"]

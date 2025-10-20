@@ -109,7 +109,16 @@
       "primaryKey": ["date", "series_id", "industry_code", "occupation_code"]
     },
     "regional_employment": {
-      "primaryKey": ["date", "area_code"]
+      "primaryKey": ["date", "area_code"],
+      "foreignKeys": [
+        {
+          "columns": ["area_code"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links regional employment to state geography when area_code represents state-level data (state FIPS codes)"
+        }
+      ]
     },
     "treasury_yields": {
       "primaryKey": ["date", "maturity_months"]
@@ -138,10 +147,28 @@
       "primaryKey": ["year", "quarter", "metric"]
     },
     "regional_income": {
-      "primaryKey": ["geo_fips", "metric", "year"]
+      "primaryKey": ["geo_fips", "metric", "year"],
+      "foreignKeys": [
+        {
+          "columns": ["geo_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links regional income to state geography for spatial analysis and demographic correlation (when geo_fips is state-level)"
+        }
+      ]
     },
     "state_gdp": {
-      "primaryKey": ["geo_fips", "line_code", "year"]
+      "primaryKey": ["geo_fips", "line_code", "year"],
+      "foreignKeys": [
+        {
+          "columns": ["geo_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links state GDP to geographic and demographic data for per capita analysis and regional economic comparisons"
+        }
+      ]
     },
     "trade_statistics": {
       "primaryKey": ["year", "quarter", "category"]
