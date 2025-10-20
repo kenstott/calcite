@@ -151,15 +151,42 @@
     },
     "population_demographics": {
       "primaryKey": ["geo_id", "year"],
-      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+      "indexes": [["state_fips"], ["county_fips"], ["year"]],
+      "foreignKeys": [
+        {
+          "columns": ["geo_id", "year"],
+          "targetSchema": "census",
+          "targetTable": "acs_population",
+          "targetColumns": ["geoid", "year"],
+          "comment": "Bridges GEO demographic summaries to detailed CENSUS population data for comprehensive demographic analysis"
+        }
+      ]
     },
     "housing_characteristics": {
       "primaryKey": ["geo_id", "year"],
-      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+      "indexes": [["state_fips"], ["county_fips"], ["year"]],
+      "foreignKeys": [
+        {
+          "columns": ["geo_id", "year"],
+          "targetSchema": "census",
+          "targetTable": "acs_housing",
+          "targetColumns": ["geoid", "year"],
+          "comment": "Bridges GEO housing summaries to detailed CENSUS housing data for comprehensive housing analysis"
+        }
+      ]
     },
     "economic_indicators": {
       "primaryKey": ["geo_id", "year"],
-      "indexes": [["state_fips"], ["county_fips"], ["year"]]
+      "indexes": [["state_fips"], ["county_fips"], ["year"]],
+      "foreignKeys": [
+        {
+          "columns": ["geo_id", "year"],
+          "targetSchema": "census",
+          "targetTable": "acs_income",
+          "targetColumns": ["geoid", "year"],
+          "comment": "Bridges GEO economic summaries to detailed CENSUS income data for comprehensive economic analysis"
+        }
+      ]
     },
     "zip_county_crosswalk": {
       "primaryKey": ["zip", "county_fips"],

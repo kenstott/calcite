@@ -488,6 +488,18 @@
           "targetColumns": [
             "state_fips"
           ]
+        },
+        {
+          "columns": [
+            "geoid",
+            "year"
+          ],
+          "targetTable": "acs_population",
+          "targetColumns": [
+            "geoid",
+            "year"
+          ],
+          "comment": "Links income data to population for per capita income calculations and income distribution analysis"
         }
       ]
     },
@@ -517,6 +529,18 @@
           "targetColumns": [
             "state_fips"
           ]
+        },
+        {
+          "columns": [
+            "geoid",
+            "year"
+          ],
+          "targetTable": "acs_income",
+          "targetColumns": [
+            "geoid",
+            "year"
+          ],
+          "comment": "Links poverty statistics to income data for economic equity analysis and poverty-income correlation studies"
         }
       ]
     },
@@ -546,6 +570,18 @@
           "targetColumns": [
             "state_fips"
           ]
+        },
+        {
+          "columns": [
+            "geoid",
+            "year"
+          ],
+          "targetTable": "acs_population",
+          "targetColumns": [
+            "geoid",
+            "year"
+          ],
+          "comment": "Links employment data to population for labor force participation rate calculations and workforce demographics analysis"
         }
       ]
     },
@@ -640,6 +676,18 @@
           "targetColumns": [
             "state_fips"
           ]
+        },
+        {
+          "columns": [
+            "geoid",
+            "year"
+          ],
+          "targetTable": "acs_housing",
+          "targetColumns": [
+            "geoid",
+            "year"
+          ],
+          "comment": "Links detailed housing costs to housing inventory for affordability analysis and cost-burden calculations"
         }
       ]
     },
