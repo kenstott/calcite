@@ -53,23 +53,23 @@ public class CensusDataTransformer {
   /**
    * Transform Census JSON data to Parquet format with friendly column names.
    *
-   * @param jsonFiles Array of JSON cache files to process
+   * @param jsonFilePaths Array of JSON cache file paths to process
    * @param targetPath Target parquet file path
    * @param tableName Name of the table being created
    * @param year Data year
    * @param variableMap Mapping from Census variable codes to friendly names
    * @param storageProvider Storage provider for file operations
    */
-  public void transformToParquet(File[] jsonFiles, String targetPath, String tableName,
+  public void transformToParquet(String[] jsonFilePaths, String targetPath, String tableName,
       int year, Map<String, String> variableMap, StorageProvider storageProvider)
       throws IOException {
-    transformToParquet(jsonFiles, targetPath, tableName, year, variableMap, storageProvider, null);
+    transformToParquet(jsonFilePaths, targetPath, tableName, year, variableMap, storageProvider, null);
   }
 
   /**
    * Transform Census JSON data to Parquet format with conceptual variable mappings.
    *
-   * @param jsonFiles Array of JSON cache files to process
+   * @param jsonFilePaths Array of JSON cache file paths to process
    * @param targetPath Target parquet file path
    * @param tableName Name of the table being created
    * @param year Data year
@@ -77,16 +77,16 @@ public class CensusDataTransformer {
    * @param storageProvider Storage provider for file operations
    * @param censusType Type of census (for conceptual mapping)
    */
-  public void transformToParquet(File[] jsonFiles, String targetPath, String tableName,
+  public void transformToParquet(String[] jsonFilePaths, String targetPath, String tableName,
       int year, Map<String, String> variableMap, StorageProvider storageProvider, String censusType)
       throws IOException {
 
-    LOGGER.info("Transforming Census data to Parquet: {} files -> {}", jsonFiles.length, targetPath);
+    LOGGER.info("Transforming Census data to Parquet: {} files -> {}", jsonFilePaths.length, targetPath);
 
     // Collect all data from JSON files
     List<Map<String, Object>> allData = new ArrayList<>();
-    for (File jsonFile : jsonFiles) {
-      List<Map<String, Object>> fileData = parseJsonFile(jsonFile);
+    for (String jsonFilePath : jsonFilePaths) {
+      List<Map<String, Object>> fileData = parseJsonFile(jsonFilePath, storageProvider);
       if (fileData != null && !fileData.isEmpty()) {
         allData.addAll(fileData);
       }
@@ -98,7 +98,7 @@ public class CensusDataTransformer {
       return;
     }
 
-    LOGGER.info("Collected {} records from {} JSON files", allData.size(), jsonFiles.length);
+    LOGGER.info("Collected {} records from {} JSON files", allData.size(), jsonFilePaths.length);
 
     // Get variable mappings - use conceptual if available, fallback to legacy
     Map<String, String> effectiveVariableMap = variableMap;
@@ -137,15 +137,17 @@ public class CensusDataTransformer {
   /**
    * Parse a Census API JSON file.
    */
-  private List<Map<String, Object>> parseJsonFile(File jsonFile) {
-    try (FileInputStream fis = new FileInputStream(jsonFile)) {
-      LOGGER.debug("Parsing JSON file: {}", jsonFile.getName());
+  private List<Map<String, Object>> parseJsonFile(String jsonFilePath, StorageProvider storageProvider) {
+    try (java.io.InputStream is = storageProvider.openInputStream(jsonFilePath)) {
+      // Extract filename from path for logging
+      String fileName = jsonFilePath.substring(jsonFilePath.lastIndexOf('/') + 1);
+      LOGGER.debug("Parsing JSON file: {}", fileName);
 
       // Census API returns arrays of arrays, where first array is headers
-      List<List<String>> rawData = objectMapper.readValue(fis, new TypeReference<List<List<String>>>() {});
+      List<List<String>> rawData = objectMapper.readValue(is, new TypeReference<List<List<String>>>() {});
 
       if (rawData.size() < 2) {
-        LOGGER.warn("JSON file has insufficient data: {}", jsonFile.getName());
+        LOGGER.warn("JSON file has insufficient data: {}", fileName);
         return new ArrayList<>();
       }
 
@@ -171,11 +173,13 @@ public class CensusDataTransformer {
         }
       }
 
-      LOGGER.debug("Parsed {} records from {}", records.size(), jsonFile.getName());
+      LOGGER.debug("Parsed {} records from {}", records.size(), fileName);
       return records;
 
     } catch (Exception e) {
-      LOGGER.error("Error parsing JSON file {}: {}", jsonFile.getName(), e.getMessage());
+      // Extract filename from path for logging
+      String fileName = jsonFilePath.substring(jsonFilePath.lastIndexOf('/') + 1);
+      LOGGER.error("Error parsing JSON file {}: {}", fileName, e.getMessage());
       return new ArrayList<>();
     }
   }
