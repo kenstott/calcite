@@ -28,12 +28,12 @@ dependencies {
     implementation("org.apache.calcite.avatica:avatica-core")
 
     // JSON processing
-    implementation("com.google.code.gson:gson")
+    implementation("com.google.code.gson:gson:2.11.0")
 
     // Logging
     implementation("org.slf4j:slf4j-api")
-    implementation("org.apache.logging.log4j:log4j-slf4j2-impl")
-    implementation("org.apache.logging.log4j:log4j-core")
+    implementation("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
+    implementation("org.apache.logging.log4j:log4j-core:2.23.1")
 
     // Testing
     testImplementation(project(":testkit"))
