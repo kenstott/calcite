@@ -376,6 +376,9 @@
             "type": "INTEGER"
           }
         ]
+      },
+      "duckdb": {
+        "union_by_name": true
       }
     }
   ],
