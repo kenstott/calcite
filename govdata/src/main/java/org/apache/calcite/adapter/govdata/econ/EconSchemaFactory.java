@@ -231,6 +231,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // after schema creation, then cast FileSchema and call registerRawToParquetConverter()
     // This requires downloaders to be recreated in GovDataSchemaFactory.buildEconOperand()
 
+    // Add schema-level comment for JDBC metadata
+    mutableOperand.put("comment", "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), "
+        + "Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, "
+        + "inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 "
+        + "time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, "
+        + "and cross-domain correlation with geographic and demographic data.");
+
     return mutableOperand;
   }
 
