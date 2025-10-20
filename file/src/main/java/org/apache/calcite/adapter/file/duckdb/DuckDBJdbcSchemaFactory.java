@@ -290,20 +290,34 @@ public class DuckDBJdbcSchemaFactory {
           }
         }
 
-        // Apply S3 configuration to setup connection
+        // Apply S3 configuration to setup connection using modern CREATE SECRET approach
         if (s3AccessKey != null && s3SecretKey != null) {
-          setupConn.createStatement().execute("SET s3_region='" + (s3Region != null ? s3Region : "us-east-1") + "'");
-          setupConn.createStatement().execute("SET s3_access_key_id='" + s3AccessKey + "'");
-          setupConn.createStatement().execute("SET s3_secret_access_key='" + s3SecretKey + "'");
+          // Use CREATE PERSISTENT SECRET with CONFIG provider for explicit credentials
+          // PERSISTENT ensures the secret is saved to the database file and available across connections
+          // This is the modern DuckDB approach instead of legacy SET statements
+          StringBuilder secretSQL = new StringBuilder();
+          secretSQL.append("CREATE OR REPLACE PERSISTENT SECRET duckdb_s3_secret (");
+          secretSQL.append("TYPE s3, ");
+          secretSQL.append("PROVIDER config, ");
+          secretSQL.append("KEY_ID '").append(s3AccessKey).append("', ");
+          secretSQL.append("SECRET '").append(s3SecretKey).append("'");
 
-          if (endpointHostPort != null) {
-            setupConn.createStatement().execute("SET s3_endpoint='" + endpointHostPort + "'");
-            setupConn.createStatement().execute("SET s3_url_style='path'");
-            setupConn.createStatement().execute("SET s3_use_ssl=" + useSSL);
-            LOGGER.info("DuckDB S3 configured with custom endpoint: {} (SSL: {})", endpointHostPort, useSSL);
+          if (s3Region != null) {
+            secretSQL.append(", REGION '").append(s3Region).append("'");
           }
 
-          LOGGER.info("DuckDB S3 credentials configured (region: {})", s3Region != null ? s3Region : "us-east-1");
+          if (endpointHostPort != null) {
+            secretSQL.append(", ENDPOINT '").append(endpointHostPort).append("'");
+            secretSQL.append(", URL_STYLE 'path'");
+            secretSQL.append(", USE_SSL ").append(useSSL);
+          }
+
+          secretSQL.append(")");
+
+          LOGGER.info("Creating DuckDB PERSISTENT S3 secret with SQL: {}", secretSQL.toString());
+          setupConn.createStatement().execute(secretSQL.toString());
+          LOGGER.info("DuckDB S3 secret created successfully for endpoint: {} (SSL: {})",
+                     endpointHostPort != null ? endpointHostPort : "default", useSSL);
         } else {
           LOGGER.info("No S3 credentials found in operands or environment - S3 access will use default AWS credentials");
         }
@@ -359,18 +373,9 @@ public class DuckDBJdbcSchemaFactory {
           try (Statement stmt = conn.createStatement()) {
             stmt.execute("SET scalar_subquery_error_on_multiple_rows = false");
 
-            // Apply S3 configuration to this connection (required for S3 access in queries)
-            if (finalS3AccessKey != null && finalS3SecretKey != null) {
-              stmt.execute("SET s3_region='" + (finalS3Region != null ? finalS3Region : "us-east-1") + "'");
-              stmt.execute("SET s3_access_key_id='" + finalS3AccessKey + "'");
-              stmt.execute("SET s3_secret_access_key='" + finalS3SecretKey + "'");
-
-              if (finalEndpointHostPort != null) {
-                stmt.execute("SET s3_endpoint='" + finalEndpointHostPort + "'");
-                stmt.execute("SET s3_url_style='path'");
-                stmt.execute("SET s3_use_ssl=" + finalUseSSL);
-              }
-            }
+            // Note: S3 secrets are database-level in DuckDB, not connection-level
+            // The secret created during setup should persist and be available to all connections
+            // No need to recreate it for each connection
           }
           return conn;
         }
@@ -605,9 +610,10 @@ public class DuckDBJdbcSchemaFactory {
     // Use default persistent catalog for non-temporary directories
     // This ensures views are preserved across restarts (fast startup on subsequent runs)
     if (directoryPath != null && !isTempDirectory(directoryPath)) {
-      // Create catalog in {directoryPath}/.duckdb/{schemaName}.duckdb
+      // Create catalog in {directoryPath}/.duckdb/{schemaName}_db.duckdb
+      // Append _db to avoid conflicts when database name matches schema name
       File catalogDir = new File(directoryPath, ".duckdb");
-      catalogPath = new File(catalogDir, schemaName + ".duckdb").getAbsolutePath();
+      catalogPath = new File(catalogDir, schemaName + "_db.duckdb").getAbsolutePath();
       LOGGER.info("Using default persistent catalog: {}", catalogPath);
 
       // Ensure catalog directory exists
@@ -1019,13 +1025,16 @@ public class DuckDBJdbcSchemaFactory {
               String pattern = record.viewScanPattern;
 
               if (pattern != null) {
-                // Disable union_by_name for performance - avoids scanning all files during view creation
-                // This requires consistent schema across all partition files (typical for Hive partitioning)
+                // Check if union_by_name is explicitly enabled for this table
+                // This allows tables to handle schema variations across partition files when needed
+                // (e.g., columns added/removed over time like census.population_estimates)
+                boolean useUnionByName = shouldUseUnionByName(record);
+
                 // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
-                sql =
-                                   String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = false)", duckdbSchema, tableName, pattern);
-                LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name=false for performance): \"{}.{}\" -> {}",
-                           duckdbSchema, tableName, pattern);
+                sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)",
+                                   duckdbSchema, tableName, pattern, useUnionByName);
+                LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name={}): \"{}.{}\" -> {}",
+                           useUnionByName, duckdbSchema, tableName, pattern);
               } else {
                 // This should never happen - pattern must exist for Hive-partitioned tables
                 LOGGER.error("Missing viewScanPattern for Hive-partitioned table '{}' - this indicates a bug in pattern extraction", tableName);
@@ -1058,12 +1067,15 @@ public class DuckDBJdbcSchemaFactory {
             boolean hasHivePartitioning = isHivePartitionedFromConfig(record);
 
             if (hasHivePartitioning) {
-              // Enable hive_partitioning based on table configuration
-              // Disable union_by_name for performance - avoids scanning all files during view creation
+              // Check if union_by_name is explicitly enabled for this table
+              // This allows tables to handle schema variations across partition files when needed
+              boolean useUnionByName = shouldUseUnionByName(record);
+
               // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
-              sql =
-                                 String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = false)", duckdbSchema, tableName, parquetPath);
-              LOGGER.info("Creating DuckDB view with glob pattern and Hive partitioning (from config, union_by_name=false for performance): \"{}.{}\" -> {}", duckdbSchema, tableName, parquetPath);
+              sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)",
+                                 duckdbSchema, tableName, parquetPath, useUnionByName);
+              LOGGER.info("Creating DuckDB view with glob pattern and Hive partitioning (from config, union_by_name={}): \"{}.{}\" -> {}",
+                         useUnionByName, duckdbSchema, tableName, parquetPath);
             } else {
               // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
               sql =
@@ -1114,35 +1126,44 @@ public class DuckDBJdbcSchemaFactory {
                   LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
                 }
               } catch (SQLException e) {
-              LOGGER.error("═══════════════════════════════════════════════════════════════");
-              LOGGER.error("🚨 CRITICAL: DuckDB VIEW CREATION FAILED 🚨");
-              LOGGER.error("═══════════════════════════════════════════════════════════════");
-              LOGGER.error("❌ Table: {}.{}", duckdbSchema, tableName);
-              LOGGER.error("❌ SQL Statement: {}", sql);
-              LOGGER.error("❌ SQLException Message: {}", e.getMessage());
-              LOGGER.error("❌ SQL State: {}", e.getSQLState());
-              LOGGER.error("❌ Error Code: {}", e.getErrorCode());
+              // Check if this is a "No files found" error for glob patterns
+              // This is expected when table definitions exist but data hasn't been downloaded yet
+              String errorMsg = e.getMessage();
+              if (errorMsg != null && errorMsg.contains("No files found that match the pattern")) {
+                LOGGER.warn("⚠️ Skipping view creation for '{}' - no files match pattern: {}", tableName, parquetPath);
+                LOGGER.debug("This is expected when table definitions exist but data hasn't been downloaded yet");
+              } else {
+                // Real error - log with full detail
+                LOGGER.error("═══════════════════════════════════════════════════════════════");
+                LOGGER.error("🚨 CRITICAL: DuckDB VIEW CREATION FAILED 🚨");
+                LOGGER.error("═══════════════════════════════════════════════════════════════");
+                LOGGER.error("❌ Table: {}.{}", duckdbSchema, tableName);
+                LOGGER.error("❌ SQL Statement: {}", sql);
+                LOGGER.error("❌ SQLException Message: {}", e.getMessage());
+                LOGGER.error("❌ SQL State: {}", e.getSQLState());
+                LOGGER.error("❌ Error Code: {}", e.getErrorCode());
 
-              // Extra debugging for financial_line_items specifically
-              if ("financial_line_items".equals(tableName)) {
-                LOGGER.error("🔥 FINANCIAL_LINE_ITEMS SPECIFIC DEBUG INFO:");
-                LOGGER.error("🔥 Parquet path: {}", parquetPath);
-                LOGGER.error("🔥 Is multiple files: {}", isMultiFileList);
-                LOGGER.error("🔥 Is glob pattern: {}", isGlobPattern);
-                if (isMultiFileList && parquetPath.contains(",")) {
-                  String fileList = parquetPath.substring(1, parquetPath.length() - 1);
-                  String[] fileArray = fileList.split(",");
-                  LOGGER.error("🔥 File count: {}", fileArray.length);
-                  LOGGER.error("🔥 First few files:");
-                  for (int i = 0; i < Math.min(5, fileArray.length); i++) {
-                    LOGGER.error("🔥   File {}: {}", i + 1, fileArray[i].trim());
+                // Extra debugging for financial_line_items specifically
+                if ("financial_line_items".equals(tableName)) {
+                  LOGGER.error("🔥 FINANCIAL_LINE_ITEMS SPECIFIC DEBUG INFO:");
+                  LOGGER.error("🔥 Parquet path: {}", parquetPath);
+                  LOGGER.error("🔥 Is multiple files: {}", isMultiFileList);
+                  LOGGER.error("🔥 Is glob pattern: {}", isGlobPattern);
+                  if (isMultiFileList && parquetPath.contains(",")) {
+                    String fileList = parquetPath.substring(1, parquetPath.length() - 1);
+                    String[] fileArray = fileList.split(",");
+                    LOGGER.error("🔥 File count: {}", fileArray.length);
+                    LOGGER.error("🔥 First few files:");
+                    for (int i = 0; i < Math.min(5, fileArray.length); i++) {
+                      LOGGER.error("🔥   File {}: {}", i + 1, fileArray[i].trim());
+                    }
                   }
                 }
-              }
 
-              LOGGER.error("═══════════════════════════════════════════════════════════════");
-              // Log the full stack trace for debugging
-              e.printStackTrace();
+                LOGGER.error("═══════════════════════════════════════════════════════════════");
+                // Log the full stack trace for debugging
+                e.printStackTrace();
+              }
               }
             }
           }
@@ -1244,6 +1265,31 @@ public class DuckDBJdbcSchemaFactory {
       if (styleObj instanceof String) {
         String style = (String) styleObj;
         return "hive".equalsIgnoreCase(style);
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Determines if a table should use union_by_name in DuckDB parquet_scan based on its configuration.
+   * This allows per-table control over schema evolution handling.
+   *
+   * @param record The conversion record containing table configuration
+   * @return true if the table is configured to use union_by_name
+   */
+  private static boolean shouldUseUnionByName(ConversionMetadata.ConversionRecord record) {
+    if (record == null || record.tableConfig == null) {
+      return false;
+    }
+
+    // Check if tableConfig contains duckdb.union_by_name == true
+    Object duckdbObj = record.tableConfig.get("duckdb");
+    if (duckdbObj instanceof Map) {
+      Map<String, Object> duckdb = (Map<String, Object>) duckdbObj;
+      Object unionByNameObj = duckdb.get("union_by_name");
+      if (unionByNameObj instanceof Boolean) {
+        return (Boolean) unionByNameObj;
       }
     }
 
