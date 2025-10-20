@@ -298,6 +298,64 @@ public class SimilarityFunctions {
   }
 
   /**
+   * Generate embedding with specific provider settings.
+   *
+   * @param text Input text
+   * @param dimension Embedding dimension (e.g., 384)
+   * @param provider Provider type ("local", "openai", "cohere")
+   * @param model Model name (e.g., "tf-idf", "text-embedding-ada-002")
+   * @return Embedding as comma-separated string
+   */
+  public static String embed(String text, int dimension, String provider, String model) {
+    if (text == null || text.isEmpty()) {
+      return generateZeroVector(dimension);
+    }
+
+    try {
+      java.util.Map<String, Object> config = new java.util.HashMap<>();
+      config.put("embeddingDimension", dimension);
+      if (model != null) {
+        config.put("model", model);
+      }
+
+      TextEmbeddingProvider embeddingProvider =
+          EmbeddingProviderFactory.createProvider(provider, config);
+      double[] embedding = embeddingProvider.generateEmbedding(text);
+      return arrayToString(embedding);
+
+    } catch (EmbeddingException e) {
+      return generateHashBasedEmbedding(text, dimension);
+    }
+  }
+
+  /**
+   * Overload for dimension + provider (use default model).
+   *
+   * @param text Input text
+   * @param dimension Embedding dimension
+   * @param provider Provider type
+   * @return Embedding as comma-separated string
+   */
+  public static String embed(String text, int dimension, String provider) {
+    return embed(text, dimension, provider, null);
+  }
+
+  /**
+   * Generate a zero vector of specified dimension.
+   *
+   * @param dimension Vector dimension
+   * @return Zero vector as comma-separated string
+   */
+  private static String generateZeroVector(int dimension) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < dimension; i++) {
+      if (i > 0) result.append(",");
+      result.append("0.0");
+    }
+    return result.toString();
+  }
+
+  /**
    * Parses a comma-separated string into a double array.
    */
   private static double[] parseVector(String vector) {
