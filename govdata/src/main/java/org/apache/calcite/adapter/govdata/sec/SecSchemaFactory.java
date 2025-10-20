@@ -869,6 +869,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     mutableOperand.put("primeCache", false);
     LOGGER.info("Disabled cache priming for SEC schema (too many files, DuckDB handles stats on-demand)");
 
+      // Add schema-level comment for JDBC metadata
+      mutableOperand.put("comment", "Securities and Exchange Commission financial data including "
+          + "XBRL filings (10-K, 10-Q, 8-K), insider trading transactions, "
+          + "stock prices, and earnings transcripts. "
+          + "Enables financial analysis, regulatory compliance monitoring, "
+          + "and investment research across public companies.");
+
       // Return the configured operand for GovDataSchemaFactory to use
       LOGGER.info("SEC schema operand configuration complete");
       return mutableOperand;

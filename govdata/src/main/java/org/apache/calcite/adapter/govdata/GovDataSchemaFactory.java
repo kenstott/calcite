@@ -146,10 +146,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), dataSource.toUpperCase());
 
-    // Create ONE FileSchema with the unified operand
-    LOGGER.info("Creating single FileSchema with unified operand for {} data", dataSource);
-    Schema schema =
-        org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
+    // Create schema - use custom schema class for schemas with comments
+    // Create schema using FileSchemaFactory which properly handles StorageProvider and path resolution
+    // Custom schema classes (SecSchema, EconSchema, CensusSchema, etc.) only provide schema-level comments
+    // FileSchemaFactory will instantiate the correct schema class based on the comment in the operand
+    LOGGER.info("Creating schema with unified operand for {} data", dataSource);
+    Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
 
     // Get the operating cache directory from FileSchema (.aperio/<schema_name>/)
     // This is established by FileSchema during initialization and should be passed to sub-schemas
