@@ -1,4 +1,5 @@
 {
+  "comment": "Securities and Exchange Commission financial data including XBRL filings (10-K, 10-Q, 8-K), insider trading transactions, stock prices, and earnings transcripts. Enables financial analysis, regulatory compliance monitoring, and investment research across public companies.",
   "partitionedTables": [
     {
       "name": "financial_line_items",

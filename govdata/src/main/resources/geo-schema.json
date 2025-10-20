@@ -1,4 +1,5 @@
 {
+  "comment": "U.S. government geographic data including Census TIGER boundaries, HUD USPS ZIP code crosswalks, and demographic statistics. Enables spatial analysis, geographic aggregation, and crosswalk between ZIP codes, counties, census tracts, congressional districts, and metropolitan areas.",
   "partitionedTables": [
     {
       "name": "states",

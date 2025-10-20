@@ -118,6 +118,32 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
+   * Load schema-level comment from schema JSON resource file.
+   *
+   * @return Schema comment, or null if not defined
+   */
+  default String loadSchemaComment() {
+    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+      if (is == null) {
+        LOGGER.warn("Could not find {} resource file for loading comment", getSchemaResourceName());
+        return null;
+      }
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      String comment = (String) schema.get("comment");
+      if (comment != null) {
+        LOGGER.debug("Loaded schema comment from {}: {}", getSchemaResourceName(),
+            comment.length() > 80 ? comment.substring(0, 80) + "..." : comment);
+      }
+      return comment;
+    } catch (IOException e) {
+      LOGGER.warn("Error loading schema comment from {}: {}", getSchemaResourceName(), e.getMessage());
+      return null;
+    }
+  }
+
+  /**
    * Load constraint definitions from schema JSON resource file.
    *
    * @return Map of table name to constraint definitions

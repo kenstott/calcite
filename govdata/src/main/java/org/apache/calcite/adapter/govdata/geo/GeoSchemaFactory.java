@@ -291,6 +291,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       mutableOperand.put("tableConstraints", geoConstraints);
     }
 
+    // Add schema-level comment from JSON metadata
+    String schemaComment = loadSchemaComment();
+    if (schemaComment != null) {
+      mutableOperand.put("comment", schemaComment);
+    }
+
     // Return the configured operand for GovDataSchemaFactory to use
     LOGGER.info("GEO schema operand configuration complete");
     return mutableOperand;

@@ -257,13 +257,11 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       mutableOperand.put("tableConstraints", censusConstraints);
     }
 
-    // Add schema-level comment for JDBC metadata
-    mutableOperand.put("comment", "U.S. Census Bureau demographic and population data including decennial census results, "
-        + "American Community Survey (ACS) estimates, population projections, and economic indicators. "
-        + "Provides comprehensive demographic profiles, household characteristics, income distributions, "
-        + "educational attainment, housing statistics, and migration patterns at national, state, county, "
-        + "and census tract levels. Supports demographic analysis, population trend research, social policy "
-        + "planning, and market segmentation studies.");
+    // Add schema-level comment from JSON metadata
+    String schemaComment = loadSchemaComment();
+    if (schemaComment != null) {
+      mutableOperand.put("comment", schemaComment);
+    }
 
     // Return the configured operand for GovDataSchemaFactory to use
     LOGGER.info("CENSUS schema operand configuration complete");
