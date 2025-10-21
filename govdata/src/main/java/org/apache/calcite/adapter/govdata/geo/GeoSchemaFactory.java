@@ -411,16 +411,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             // Download and convert each dataset only if parquet doesn't exist
             // Note: Download methods return temp File directories containing the data
             String statesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/states.parquet");
-            // Check manifest first before calling download (avoids unnecessary S3 file checks)
-            boolean statesNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("states", year, params)) {
-                statesNeedsProcessing = false;
-                LOGGER.debug("Skipping states for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (statesNeedsProcessing) {
+            String statesShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/states");
+            java.util.Map<String, String> statesParams = new java.util.HashMap<>();
+
+            // Check if parquet exists and is up-to-date (with fallback to file existence check)
+            if (!tigerDownloader.isParquetConvertedOrExists("states", year, statesParams, statesShapefilePath, statesParquetPath)) {
               File statesDir = tigerDownloader.downloadStatesForYear(year);
               if (statesDir != null) {
                 tigerDownloader.convertToParquet(statesDir, statesParquetPath);
@@ -428,15 +423,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String countiesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/counties.parquet");
-            boolean countiesNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("counties", year, params)) {
-                countiesNeedsProcessing = false;
-                LOGGER.debug("Skipping counties for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (countiesNeedsProcessing) {
+            String countiesShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/counties");
+            java.util.Map<String, String> countiesParams = new java.util.HashMap<>();
+
+            if (!tigerDownloader.isParquetConvertedOrExists("counties", year, countiesParams, countiesShapefilePath, countiesParquetPath)) {
               File countiesDir = tigerDownloader.downloadCountiesForYear(year);
               if (countiesDir != null) {
                 tigerDownloader.convertToParquet(countiesDir, countiesParquetPath);
@@ -444,15 +434,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String placesParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/places.parquet");
-            boolean placesNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("places", year, params)) {
-                placesNeedsProcessing = false;
-                LOGGER.debug("Skipping places for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (placesNeedsProcessing) {
+            // Places are aggregated across multiple states, use first state's path for timestamp check
+            String placesShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/places/06");
+            java.util.Map<String, String> placesParams = new java.util.HashMap<>();
+
+            if (!tigerDownloader.isParquetConvertedOrExists("places", year, placesParams, placesShapefilePath, placesParquetPath)) {
               tigerDownloader.downloadPlacesForYear(year, "06"); // California
               tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
               tigerDownloader.downloadPlacesForYear(year, "36"); // New York
@@ -463,15 +449,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String zctasParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/zctas.parquet");
-            boolean zctasNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("zctas", year, params)) {
-                zctasNeedsProcessing = false;
-                LOGGER.debug("Skipping zctas for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (zctasNeedsProcessing) {
+            String zctasShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/zctas");
+            java.util.Map<String, String> zctasParams = new java.util.HashMap<>();
+
+            if (!tigerDownloader.isParquetConvertedOrExists("zctas", year, zctasParams, zctasShapefilePath, zctasParquetPath)) {
               File zctasDir = tigerDownloader.downloadZctasForYear(year);
               if (zctasDir != null) {
                 tigerDownloader.convertToParquet(zctasDir, zctasParquetPath);
@@ -481,31 +462,17 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                 createZeroRowTigerParquet(zctasParquetPath, "zctas", storageProvider);
                 // Mark in manifest to avoid recreating on next startup
                 if (cacheManifest != null) {
-                  java.util.Map<String, String> params = new java.util.HashMap<>();
-                  cacheManifest.markParquetConverted("zctas", year, params, zctasParquetPath);
+                  cacheManifest.markParquetConverted("zctas", year, zctasParams, zctasParquetPath);
                   cacheManifest.save(geoOperatingDirectory);
                 }
               }
             }
 
             String tractsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/census_tracts.parquet");
-            boolean tractsNeedsProcessing = false;
-            // Check if ALL states are converted - census_tracts downloads per-state
+            String tractsCacheBasePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/census_tracts");
             String[] tractStates = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-            if (cacheManifest != null) {
-              for (String stateFips : tractStates) {
-                java.util.Map<String, String> params = new java.util.HashMap<>();
-                params.put("state", stateFips);
-                if (!cacheManifest.isParquetConverted("census_tracts", year, params)) {
-                  tractsNeedsProcessing = true;
-                  LOGGER.debug("Census tracts needs processing for state {} year {}", stateFips, year);
-                  break;
-                }
-              }
-            } else {
-              tractsNeedsProcessing = true; // No manifest, need to process
-            }
-            if (tractsNeedsProcessing) {
+
+            if (tigerDownloader.needsProcessingMultiState("census_tracts", year, tractStates, tractsCacheBasePath, tractsParquetPath)) {
               File tractsDir = tigerDownloader.downloadCensusTractsForYear(year);
               if (tractsDir != null) {
                 tigerDownloader.convertToParquet(tractsDir, tractsParquetPath);
@@ -522,23 +489,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String blockGroupsParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/block_groups.parquet");
-            boolean blockGroupsNeedsProcessing = false;
-            // Check if ALL states are converted - block_groups downloads per-state
+            String blockGroupsCacheBasePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/block_groups");
             String[] blockGroupStates = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-            if (cacheManifest != null) {
-              for (String stateFips : blockGroupStates) {
-                java.util.Map<String, String> params = new java.util.HashMap<>();
-                params.put("state", stateFips);
-                if (!cacheManifest.isParquetConverted("block_groups", year, params)) {
-                  blockGroupsNeedsProcessing = true;
-                  LOGGER.debug("Block groups needs processing for state {} year {}", stateFips, year);
-                  break;
-                }
-              }
-            } else {
-              blockGroupsNeedsProcessing = true; // No manifest, need to process
-            }
-            if (blockGroupsNeedsProcessing) {
+
+            if (tigerDownloader.needsProcessingMultiState("block_groups", year, blockGroupStates, blockGroupsCacheBasePath, blockGroupsParquetPath)) {
               File blockGroupsDir = tigerDownloader.downloadBlockGroupsForYear(year);
               if (blockGroupsDir != null) {
                 tigerDownloader.convertToParquet(blockGroupsDir, blockGroupsParquetPath);
@@ -555,15 +509,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String cbsaParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/cbsa.parquet");
-            boolean cbsaNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("cbsa", year, params)) {
-                cbsaNeedsProcessing = false;
-                LOGGER.debug("Skipping cbsa for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (cbsaNeedsProcessing) {
+            String cbsaShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/cbsa");
+            java.util.Map<String, String> cbsaParams = new java.util.HashMap<>();
+
+            if (!tigerDownloader.isParquetConvertedOrExists("cbsa", year, cbsaParams, cbsaShapefilePath, cbsaParquetPath)) {
               try {
                 File cbsaDir = tigerDownloader.downloadCbsasForYear(year);
                 if (cbsaDir != null) {
@@ -597,15 +546,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String congressionalParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/congressional_districts.parquet");
-            boolean congressionalNeedsProcessing = true;
-            if (cacheManifest != null) {
-              java.util.Map<String, String> params = new java.util.HashMap<>();
-              if (cacheManifest.isParquetConverted("congressional_districts", year, params)) {
-                congressionalNeedsProcessing = false;
-                LOGGER.debug("Skipping congressional_districts for year {} - parquet already converted per manifest", year);
-              }
-            }
-            if (congressionalNeedsProcessing) {
+            String congressionalShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/congressional_districts");
+            java.util.Map<String, String> congressionalParams = new java.util.HashMap<>();
+
+            if (!tigerDownloader.isParquetConvertedOrExists("congressional_districts", year, congressionalParams, congressionalShapefilePath, congressionalParquetPath)) {
               try {
                 File cdDir = tigerDownloader.downloadCongressionalDistrictsForYear(year);
                 if (cdDir != null) {
@@ -627,23 +571,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             String schoolParquetPath = storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/school_districts.parquet");
-            boolean schoolNeedsProcessing = false;
-            // Check if ALL states are converted - school_districts downloads per-state
+            String schoolCacheBasePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/school_districts");
             String[] schoolStates = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-            if (cacheManifest != null) {
-              for (String stateFips : schoolStates) {
-                java.util.Map<String, String> params = new java.util.HashMap<>();
-                params.put("state", stateFips);
-                if (!cacheManifest.isParquetConverted("school_districts", year, params)) {
-                  schoolNeedsProcessing = true;
-                  LOGGER.debug("School districts needs processing for state {} year {}", stateFips, year);
-                  break;
-                }
-              }
-            } else {
-              schoolNeedsProcessing = true; // No manifest, need to process
-            }
-            if (schoolNeedsProcessing) {
+
+            if (tigerDownloader.needsProcessingMultiState("school_districts", year, schoolStates, schoolCacheBasePath, schoolParquetPath)) {
               try {
                 File schoolDir = tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
                 if (schoolDir != null) {
