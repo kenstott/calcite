@@ -251,14 +251,8 @@ public class TigerDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Check manifest first - if parquet already converted, no need to download raw files
-    if (cacheManifest != null) {
-      java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted("states", year, params)) {
-        LOGGER.debug("States parquet already converted per manifest for year {} - skipping raw download", year);
-        return null; // No need to download raw files if parquet exists
-      }
-    }
+    // Note: parquetPath check moved to GeoSchemaFactory for better control flow
+    // GeoSchemaFactory will call isParquetConvertedOrExists() before calling this method
 
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
@@ -267,6 +261,26 @@ public class TigerDataDownloader {
         LOGGER.debug("States shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "states_" + year);
       }
+    }
+
+    // Defensive fallback: check if shapefiles exist in cache even without manifest entry
+    try {
+      java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, false);
+      boolean hasShapefile = files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+      if (hasShapefile) {
+        LOGGER.info("⚡ States shapefile exists in cache, updating manifest: year={}", year);
+        if (cacheManifest != null) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          // Estimate file size from shapefile
+          long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
+          cacheManifest.markCached("states", year, params, cachePath, totalSize);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        return downloadCacheToTemp(cachePath, "states_" + year);
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check for existing shapefiles: {}", e.getMessage());
+      // Fall through to download
     }
 
     if (!autoDownload) {
@@ -1369,6 +1383,166 @@ public class TigerDataDownloader {
     } catch (IOException e) {
       LOGGER.warn("Failed to check shapefile availability: {}", e.getMessage());
       return false;
+    }
+  }
+
+  /**
+   * Check if parquet file has been converted, with defensive fallback to file existence and timestamp check.
+   * This prevents unnecessary downloads and reconversion when the manifest is deleted but parquet files still exist.
+   *
+   * @param dataType Type of data (e.g., "states", "counties")
+   * @param year Year of data
+   * @param params Additional parameters for cache key
+   * @param shapefileCachePath Path to shapefile directory in cache
+   * @param parquetPath Full path to parquet file
+   * @return true if parquet exists and is newer than shapefiles, false if conversion needed
+   */
+  public boolean isParquetConvertedOrExists(String dataType, int year,
+      java.util.Map<String, String> params, String shapefileCachePath, String parquetPath) {
+
+    // 1. Check manifest first - trust it as source of truth
+    if (cacheManifest != null && cacheManifest.isParquetConverted(dataType, year, params)) {
+      return true;
+    }
+
+    // 2. Defensive check: if parquet file exists but not in manifest, verify it's up-to-date
+    try {
+      if (storageProvider.exists(parquetPath)) {
+        // Get parquet timestamp
+        long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
+
+        // Find the .shp file in the shapefile cache directory and check its timestamp
+        java.util.List<FileEntry> files = storageProvider.listFiles(shapefileCachePath, false);
+        java.util.Optional<FileEntry> shpFile = files.stream()
+            .filter(f -> !f.isDirectory() && f.getPath().endsWith(".shp"))
+            .findFirst();
+
+        if (shpFile.isPresent()) {
+          long shpModTime = shpFile.get().getLastModified();
+
+          if (parquetModTime > shpModTime) {
+            // Parquet is newer than shapefile - update manifest and skip conversion
+            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
+                dataType, year);
+            if (cacheManifest != null) {
+              cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+              cacheManifest.save(this.operatingDirectory);
+            }
+            return true;
+          } else {
+            // Shapefile is newer - needs reconversion
+            LOGGER.info("Shapefile is newer than parquet, reconversion needed: {} (year={})",
+                dataType, year);
+            return false;
+          }
+        } else {
+          // Shapefile doesn't exist but parquet does - consider it up-to-date
+          LOGGER.info("⚡ Parquet exists (shapefile not found), updating cache manifest: {} (year={})",
+              dataType, year);
+          if (cacheManifest != null) {
+            cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+            cacheManifest.save(this.operatingDirectory);
+          }
+          return true;
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to check parquet/shapefile timestamps for {} year {}: {}",
+          dataType, year, e.getMessage());
+      // Fall through to return false - reconvert to be safe
+    }
+
+    // 3. Parquet doesn't exist or check failed - needs conversion
+    return false;
+  }
+
+  /**
+   * Check if a multi-state dataset needs processing (for census_tracts, block_groups, school_districts).
+   * Returns true if ANY state needs processing OR if parquet file doesn't exist/is outdated.
+   *
+   * @param dataType Data type identifier
+   * @param year Year of the data
+   * @param states Array of state FIPS codes to check
+   * @param shapefileCacheBasePath Base cache path where state-specific shapefiles would be stored
+   * @param parquetPath Path to the combined parquet file
+   * @return true if processing is needed, false if parquet is up-to-date
+   */
+  public boolean needsProcessingMultiState(String dataType, int year, String[] states,
+      String shapefileCacheBasePath, String parquetPath) {
+
+    // 1. Check if parquet exists and get its timestamp
+    try {
+      if (!storageProvider.exists(parquetPath)) {
+        LOGGER.debug("Parquet does not exist, processing needed: {}", parquetPath);
+        return true; // Parquet doesn't exist - needs processing
+      }
+
+      long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
+
+      // 2. Check manifest for each state
+      if (cacheManifest != null) {
+        boolean anyStateMissingInManifest = false;
+        for (String stateFips : states) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", stateFips);
+          if (!cacheManifest.isParquetConverted(dataType, year, params)) {
+            anyStateMissingInManifest = true;
+            LOGGER.debug("{} needs processing for state {} year {} (not in manifest)",
+                dataType, stateFips, year);
+            break;
+          }
+        }
+
+        if (!anyStateMissingInManifest) {
+          // All states are in manifest - no processing needed
+          return false;
+        }
+      }
+
+      // 3. Defensive fallback: check if any state's shapefile is newer than parquet
+      //    This handles the case where manifest is missing/incomplete but shapefiles exist
+      boolean anyShapefileNewer = false;
+      for (String stateFips : states) {
+        String stateCachePath = storageProvider.resolvePath(shapefileCacheBasePath, "state=" + stateFips);
+        try {
+          java.util.List<FileEntry> files = storageProvider.listFiles(stateCachePath, false);
+          java.util.Optional<FileEntry> shpFile = files.stream()
+              .filter(f -> !f.isDirectory() && f.getPath().endsWith(".shp"))
+              .findFirst();
+
+          if (shpFile.isPresent() && shpFile.get().getLastModified() > parquetModTime) {
+            LOGGER.info("Shapefile for state {} is newer than parquet, reconversion needed: {} (year={})",
+                stateFips, dataType, year);
+            anyShapefileNewer = true;
+            break;
+          }
+        } catch (IOException e) {
+          LOGGER.debug("Could not check shapefile timestamp for state {}: {}", stateFips, e.getMessage());
+          // Continue checking other states
+        }
+      }
+
+      if (anyShapefileNewer) {
+        return true; // At least one shapefile is newer - needs reconversion
+      }
+
+      // 4. Parquet exists, is up-to-date, but manifest is incomplete - update manifest
+      if (cacheManifest != null) {
+        LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
+            dataType, year);
+        for (String stateFips : states) {
+          java.util.Map<String, String> params = new java.util.HashMap<>();
+          params.put("state", stateFips);
+          cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+        }
+        cacheManifest.save(this.operatingDirectory);
+      }
+
+      return false; // Parquet is up-to-date, no processing needed
+
+    } catch (IOException e) {
+      LOGGER.warn("Failed to check parquet file for {} year {}: {}", dataType, year, e.getMessage());
+      return true; // Error checking - process to be safe
     }
   }
 }
