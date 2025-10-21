@@ -280,30 +280,34 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String cacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
 
           // Convert employment statistics
-          if (!cacheManifest.isParquetConverted("employment_statistics", year, null)) {
-            String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/employment_statistics.parquet");
+          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/employment_statistics.parquet");
+          String employmentRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "employment_statistics.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "employment_statistics", year, employmentRawPath, employmentParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, employmentParquetPath);
             cacheManifest.markParquetConverted("employment_statistics", year, null, employmentParquetPath);
           }
 
           // Convert inflation metrics
-          if (!cacheManifest.isParquetConverted("inflation_metrics", year, null)) {
-            String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/inflation_metrics.parquet");
+          String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/inflation_metrics.parquet");
+          String inflationRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "inflation_metrics.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "inflation_metrics", year, inflationRawPath, inflationParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, inflationParquetPath);
             cacheManifest.markParquetConverted("inflation_metrics", year, null, inflationParquetPath);
           }
 
           // Convert wage growth
-          if (!cacheManifest.isParquetConverted("wage_growth", year, null)) {
-            String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/wage_growth.parquet");
+          String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/wage_growth.parquet");
+          String wageRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "wage_growth.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "wage_growth", year, wageRawPath, wageParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, wageParquetPath);
             cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
           }
 
           // Convert regional employment
           String regionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=regional/year=" + year);
-          if (!cacheManifest.isParquetConverted("regional_employment", year, null)) {
-            String regionalParquetPath = storageProvider.resolvePath(parquetDir, "type=regional/year=" + year + "/regional_employment.parquet");
+          String regionalParquetPath = storageProvider.resolvePath(parquetDir, "type=regional/year=" + year + "/regional_employment.parquet");
+          String regionalRawPath = cacheStorageProvider.resolvePath(regionalCacheYearPath, "regional_employment.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_employment", year, regionalRawPath, regionalParquetPath)) {
             blsDownloader.convertToParquet(regionalCacheYearPath, regionalParquetPath);
             cacheManifest.markParquetConverted("regional_employment", year, null, regionalParquetPath);
           }
@@ -325,9 +329,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
-          if (!cacheManifest.isParquetConverted("fred_indicators", year, null)) {
-            String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
-            String cacheFredYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
+          String cacheFredYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String fredRawPath = cacheStorageProvider.resolvePath(cacheFredYearPath, "fred_indicators.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "fred_indicators", year, fredRawPath, fredParquetPath)) {
             fredDownloader.convertToParquet(cacheFredYearPath, fredParquetPath);
             cacheManifest.markParquetConverted("fred_indicators", year, null, fredParquetPath);
           }
@@ -360,15 +365,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         for (int year = startYear; year <= endYear; year++) {
           String cacheTimeseriesYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=timeseries/year=" + year);
 
-          if (!cacheManifest.isParquetConverted("treasury_yields", year, null)) {
-            String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/treasury_yields.parquet");
+          String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/treasury_yields.parquet");
+          String yieldsRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "treasury_yields.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "treasury_yields", year, yieldsRawPath, yieldsParquetPath)) {
             treasuryDownloader.convertToParquet(cacheTimeseriesYearPath, yieldsParquetPath);
             cacheManifest.markParquetConverted("treasury_yields", year, null, yieldsParquetPath);
           }
 
           // Convert federal debt data to parquet
-          if (!cacheManifest.isParquetConverted("federal_debt", year, null)) {
-            String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/federal_debt.parquet");
+          String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/federal_debt.parquet");
+          String debtRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "federal_debt.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "federal_debt", year, debtRawPath, debtParquetPath)) {
             treasuryDownloader.convertFederalDebtToParquet(cacheTimeseriesYearPath, debtParquetPath);
             cacheManifest.markParquetConverted("federal_debt", year, null, debtParquetPath);
           }
@@ -393,50 +400,57 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String cacheIndicatorsYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
 
           // Convert GDP components
-          if (!cacheManifest.isParquetConverted("gdp_components", year, null)) {
-            String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
+          String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
+          String gdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "gdp_components.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "gdp_components", year, gdpRawPath, gdpParquetPath)) {
             beaDownloader.convertToParquet(cacheIndicatorsYearPath, gdpParquetPath);
             cacheManifest.markParquetConverted("gdp_components", year, null, gdpParquetPath);
           }
 
           // Create gdp_statistics table (GDP growth rates from BEA)
-          if (!cacheManifest.isParquetConverted("gdp_statistics", year, null)) {
-            String gdpStatsParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_statistics.parquet");
+          String gdpStatsParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_statistics.parquet");
+          String gdpStatsRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "gdp_statistics.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "gdp_statistics", year, gdpStatsRawPath, gdpStatsParquetPath)) {
             beaDownloader.convertGdpStatisticsToParquet(cacheIndicatorsYearPath, gdpStatsParquetPath);
             cacheManifest.markParquetConverted("gdp_statistics", year, null, gdpStatsParquetPath);
           }
 
           // Convert regional income
-          if (!cacheManifest.isParquetConverted("regional_income", year, null)) {
-            String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
+          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
+          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "regional_income.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_income", year, regionalIncomeRawPath, regionalIncomeParquetPath)) {
             beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
             cacheManifest.markParquetConverted("regional_income", year, null, regionalIncomeParquetPath);
           }
 
           // Convert State GDP data
-          if (!cacheManifest.isParquetConverted("state_gdp", year, null)) {
-            String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
+          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
+          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "state_gdp.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_gdp", year, stateGdpRawPath, stateGdpParquetPath)) {
             beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
             cacheManifest.markParquetConverted("state_gdp", year, null, stateGdpParquetPath);
           }
 
           // Convert BEA trade statistics
-          if (!cacheManifest.isParquetConverted("trade_statistics", year, null)) {
-            String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
+          String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
+          String tradeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "trade_statistics.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "trade_statistics", year, tradeRawPath, tradeParquetPath)) {
             beaDownloader.convertTradeStatisticsToParquet(cacheIndicatorsYearPath, tradeParquetPath);
             cacheManifest.markParquetConverted("trade_statistics", year, null, tradeParquetPath);
           }
 
           // Convert ITA data
-          if (!cacheManifest.isParquetConverted("ita_data", year, null)) {
-            String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/ita_data.parquet");
+          String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/ita_data.parquet");
+          String itaRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "ita_data.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "ita_data", year, itaRawPath, itaParquetPath)) {
             beaDownloader.convertItaDataToParquet(cacheIndicatorsYearPath, itaParquetPath);
             cacheManifest.markParquetConverted("ita_data", year, null, itaParquetPath);
           }
 
           // Convert industry GDP data
-          if (!cacheManifest.isParquetConverted("industry_gdp", year, null)) {
-            String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/industry_gdp.parquet");
+          String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/industry_gdp.parquet");
+          String industryGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "industry_gdp.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "industry_gdp", year, industryGdpRawPath, industryGdpParquetPath)) {
             beaDownloader.convertIndustryGdpToParquet(cacheIndicatorsYearPath, industryGdpParquetPath);
             cacheManifest.markParquetConverted("industry_gdp", year, null, industryGdpParquetPath);
           }
@@ -458,9 +472,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
-          if (!cacheManifest.isParquetConverted("world_indicators", year, null)) {
-            String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
-            String cacheWorldBankYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
+          String cacheWorldBankYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String worldRawPath = cacheStorageProvider.resolvePath(cacheWorldBankYearPath, "world_indicators.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "world_indicators", year, worldRawPath, worldParquetPath)) {
             worldBankDownloader.convertToParquet(cacheWorldBankYearPath, worldParquetPath);
             cacheManifest.markParquetConverted("world_indicators", year, null, worldParquetPath);
           }
@@ -863,6 +878,68 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     LOGGER.debug("Generated {} custom FRED table definitions", customTables.size());
     return customTables;
+  }
+
+  /**
+   * Check if parquet file has been converted, with defensive fallback to file existence and timestamp check.
+   * This prevents unnecessary reconversion when the manifest is deleted but parquet files still exist.
+   *
+   * @param cacheManifest Cache manifest to check
+   * @param storageProvider Storage provider for file existence checks
+   * @param cacheStorageProvider Storage provider for raw file checks
+   * @param dataType Type of data (e.g., "gdp_components")
+   * @param year Year of data
+   * @param rawFilePath Full path to raw source file (JSON/CSV)
+   * @param parquetPath Full path to parquet file
+   * @return true if parquet exists and is newer than raw file, false if conversion needed
+   */
+  private boolean isParquetConvertedOrExists(CacheManifest cacheManifest,
+      StorageProvider storageProvider, StorageProvider cacheStorageProvider,
+      String dataType, int year, String rawFilePath, String parquetPath) {
+
+    // 1. Check manifest first - trust it as source of truth
+    if (cacheManifest.isParquetConverted(dataType, year, null)) {
+      return true;
+    }
+
+    // 2. Defensive check: if parquet file exists but not in manifest, verify it's up-to-date
+    try {
+      if (storageProvider.exists(parquetPath)) {
+        // Get timestamps for both files
+        long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
+
+        // Check if raw file exists and compare timestamps
+        if (cacheStorageProvider.exists(rawFilePath)) {
+          long rawModTime = cacheStorageProvider.getMetadata(rawFilePath).getLastModified();
+
+          if (parquetModTime > rawModTime) {
+            // Parquet is newer than raw file - update manifest and skip conversion
+            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
+                dataType, year);
+            cacheManifest.markParquetConverted(dataType, year, null, parquetPath);
+            return true;
+          } else {
+            // Raw file is newer - needs reconversion
+            LOGGER.info("Raw file is newer than parquet, reconversion needed: {} (year={})",
+                dataType, year);
+            return false;
+          }
+        } else {
+          // Raw file doesn't exist but parquet does - consider it up-to-date
+          LOGGER.info("⚡ Parquet exists (raw file not found), updating cache manifest: {} (year={})",
+              dataType, year);
+          cacheManifest.markParquetConverted(dataType, year, null, parquetPath);
+          return true;
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to check parquet/raw file timestamps for {} year {}: {}",
+          dataType, year, e.getMessage());
+      // Fall through to return false - reconvert to be safe
+    }
+
+    // 3. Parquet doesn't exist or check failed - needs conversion
+    return false;
   }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,

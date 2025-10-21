@@ -14,6 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+plugins {
+    id("com.github.johnrengelman.shadow")
+}
+
 dependencies {
     api(project(":core"))
     api(project(":linq4j"))
@@ -83,5 +87,24 @@ tasks.test {
             val tags = project.property("includeTags").toString().split(",")
             includeTags(*tags.toTypedArray())
         }
+    }
+}
+
+// Shadow JAR configuration for fat JDBC driver (includes govdata + file adapters)
+tasks.shadowJar {
+    archiveBaseName.set("calcite-govdata")
+    archiveClassifier.set("all")
+    mergeServiceFiles()
+
+    // Enable zip64 for large JARs
+    isZip64 = true
+
+    // Exclude signature files
+    exclude("META-INF/*.SF")
+    exclude("META-INF/*.DSA")
+    exclude("META-INF/*.RSA")
+
+    manifest {
+        attributes["Main-Class"] = "org.apache.calcite.jdbc.Driver"
     }
 }
