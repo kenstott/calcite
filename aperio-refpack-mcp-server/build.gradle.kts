@@ -15,6 +15,10 @@
  * limitations under the License.
  */
 
+plugins {
+    id("com.github.johnrengelman.shadow")
+}
+
 description = "Aperio Refpack MCP Server - Model Context Protocol server for Calcite"
 
 dependencies {
@@ -42,14 +46,33 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
-tasks.test {
-    useJUnitPlatform()
+tasks {
+    named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+        archiveBaseName.set("aperio-refpack-mcp-server")
+        archiveVersion.set("")
+        mergeServiceFiles()
+        isZip64 = true
 
-    testLogging {
-        events("passed", "skipped", "failed", "standardOut", "standardError")
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        showExceptions = true
-        showCauses = true
-        showStackTraces = true
+        manifest {
+            attributes(
+                "Main-Class" to "org.apache.calcite.mcp.AperioMcpServer"
+            )
+        }
+    }
+
+    test {
+        useJUnitPlatform()
+
+        testLogging {
+            events("passed", "skipped", "failed", "standardOut", "standardError")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            showExceptions = true
+            showCauses = true
+            showStackTraces = true
+        }
+    }
+
+    build {
+        dependsOn(shadowJar)
     }
 }

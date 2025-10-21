@@ -17,8 +17,11 @@
 package org.apache.calcite.mcp.tools;
 
 import org.apache.calcite.mcp.CalciteConnection;
+import org.apache.calcite.mcp.cache.QueryCache;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.sql.PreparedStatement;
@@ -29,13 +32,18 @@ import java.sql.SQLException;
 /**
  * MCP tools for querying data.
  *
- * <p>Provides SQL query execution and table sampling capabilities.
+ * <p>Provides SQL query execution and table sampling capabilities
+ * with result caching for improved performance.
  */
 public class QueryTools {
+  private static final Gson gson = new Gson();
   private final CalciteConnection connection;
+  private final QueryCache cache;
 
   public QueryTools(CalciteConnection connection) {
     this.connection = connection;
+    // Cache up to 100 queries for 5 minutes
+    this.cache = new QueryCache(100, 5 * 60 * 1000);
   }
 
   /**
@@ -47,15 +55,22 @@ public class QueryTools {
    * @throws SQLException if query execution fails
    */
   public JsonObject queryData(String sql, int limit) throws SQLException {
-    JsonObject result = new JsonObject();
-    JsonArray columns = new JsonArray();
-    JsonArray rows = new JsonArray();
-
     // Apply limit if not already present
     String query = sql;
     if (limit > 0 && !sql.toUpperCase().contains("LIMIT")) {
       query = sql + " LIMIT " + limit;
     }
+
+    // Check cache first
+    String cacheKey = "query:" + query;
+    JsonElement cached = cache.get(cacheKey);
+    if (cached != null && cached.isJsonObject()) {
+      return cached.getAsJsonObject();
+    }
+
+    JsonObject result = new JsonObject();
+    JsonArray columns = new JsonArray();
+    JsonArray rows = new JsonArray();
 
     try (PreparedStatement stmt = connection.getConnection().prepareStatement(query);
          ResultSet rs = stmt.executeQuery()) {
@@ -90,6 +105,10 @@ public class QueryTools {
 
     result.add("columns", columns);
     result.add("rows", rows);
+
+    // Cache the result
+    cache.put(cacheKey, result);
+
     return result;
   }
 

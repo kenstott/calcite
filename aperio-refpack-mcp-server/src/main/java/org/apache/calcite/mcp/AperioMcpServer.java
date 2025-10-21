@@ -19,6 +19,8 @@ package org.apache.calcite.mcp;
 import org.apache.calcite.mcp.protocol.McpRequest;
 import org.apache.calcite.mcp.protocol.McpResponse;
 import org.apache.calcite.mcp.tools.DiscoveryTools;
+import org.apache.calcite.mcp.tools.MetadataSearchTools;
+import org.apache.calcite.mcp.tools.ProfileTools;
 import org.apache.calcite.mcp.tools.QueryTools;
 import org.apache.calcite.mcp.tools.VectorSearchTools;
 
@@ -53,6 +55,8 @@ public class AperioMcpServer {
 
   private final CalciteConnection connection;
   private final DiscoveryTools discoveryTools;
+  private final MetadataSearchTools metadataSearchTools;
+  private final ProfileTools profileTools;
   private final QueryTools queryTools;
   private final VectorSearchTools vectorSearchTools;
 
@@ -76,6 +80,8 @@ public class AperioMcpServer {
   public AperioMcpServer(String jdbcUrl) throws SQLException {
     this.connection = new CalciteConnection(jdbcUrl);
     this.discoveryTools = new DiscoveryTools(connection);
+    this.metadataSearchTools = new MetadataSearchTools(connection);
+    this.profileTools = new ProfileTools(connection);
     this.queryTools = new QueryTools(connection);
     this.vectorSearchTools = new VectorSearchTools(connection);
   }
@@ -155,6 +161,27 @@ public class AperioMcpServer {
           table = getParam(params, "table", null);
           limit = getParam(params, "limit", 10);
           result = queryTools.sampleTable(schema, table, limit);
+          break;
+
+        // Metadata search tools
+        case "search_metadata":
+          String query = getParam(params, "query", "");
+          result = metadataSearchTools.searchMetadata(query);
+          break;
+
+        // Profile tools
+        case "profile_table":
+          schema = getParam(params, "schema", null);
+          table = getParam(params, "table", null);
+          // Parse columns array if provided
+          java.util.List<String> columns = new java.util.ArrayList<>();
+          if (params != null && params.has("columns")) {
+            com.google.gson.JsonArray colArray = params.getAsJsonArray("columns");
+            for (int i = 0; i < colArray.size(); i++) {
+              columns.add(colArray.get(i).getAsString());
+            }
+          }
+          result = profileTools.profileTable(schema, table, columns);
           break;
 
         // Vector search tools

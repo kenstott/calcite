@@ -160,14 +160,16 @@ public class VectorSearchTools {
     sql.append(", ").append(similarityExpr).append(" as similarity");
 
     // Add source table columns if requested
-    if (includeSource && (pattern == VectorPattern.FK_FORMAL || pattern == VectorPattern.FK_LOGICAL)) {
+    if (includeSource && (pattern == VectorPattern.FK_FORMAL
+        || pattern == VectorPattern.FK_LOGICAL
+        || pattern == VectorPattern.MULTI_SOURCE)) {
       sql.append(", src.*");
     }
 
     // FROM clause
     sql.append(" FROM ").append(qualifiedTable).append(" t");
 
-    // JOIN for Pattern 2a/2b
+    // JOIN for Pattern 2a/2b/3
     if (includeSource) {
       if (pattern == VectorPattern.FK_FORMAL) {
         sql.append(" LEFT JOIN ").append(vm.getDiscoveredTargetTable()).append(" src");
@@ -180,6 +182,16 @@ public class VectorSearchTools {
         }
         sql.append(" LEFT JOIN ").append(sourceTable).append(" src");
         sql.append(" ON t.").append(vm.getSourceIdColumn());
+        sql.append(" = src.id");  // Assumes 'id' column in source table
+      } else if (pattern == VectorPattern.MULTI_SOURCE && sourceTableFilter != null) {
+        // Pattern 3: Dynamic join based on source_table value
+        // This requires the source table to be known at query time via sourceTableFilter
+        String sourceTable = sourceTableFilter;
+        if (schema != null && !sourceTable.contains(".")) {
+          sourceTable = schema + "." + sourceTable;
+        }
+        sql.append(" LEFT JOIN ").append(sourceTable).append(" src");
+        sql.append(" ON t.").append(vm.getSourceIdColumnName());
         sql.append(" = src.id");  // Assumes 'id' column in source table
       }
     }
