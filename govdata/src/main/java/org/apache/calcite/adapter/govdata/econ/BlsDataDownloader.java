@@ -733,6 +733,69 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Fetches and splits data for large series lists (>50 series) with year batching.
+   * Handles both series batching (50 at a time) and year batching (20 at a time).
+   *
+   * @param seriesIds Full list of series IDs (can be >50)
+   * @param uncachedYears List of years that need downloading
+   * @return Map of year → combined JSON response
+   */
+  private Map<Integer, String> fetchAndSplitByYearLargeSeries(List<String> seriesIds, List<Integer> uncachedYears)
+      throws IOException, InterruptedException {
+
+    Map<Integer, String> resultsByYear = new HashMap<>();
+    List<int[]> yearRanges = batchYearsIntoRanges(uncachedYears, MAX_YEARS_PER_REQUEST);
+
+    LOGGER.info("Optimized fetch: {} series across {} years in {} year-batches, {} series-batches",
+                seriesIds.size(), uncachedYears.size(), yearRanges.size(),
+                (seriesIds.size() + MAX_SERIES_PER_REQUEST - 1) / MAX_SERIES_PER_REQUEST);
+
+    // Batch series into groups of 50
+    for (int seriesOffset = 0; seriesOffset < seriesIds.size(); seriesOffset += MAX_SERIES_PER_REQUEST) {
+      int seriesEnd = Math.min(seriesOffset + MAX_SERIES_PER_REQUEST, seriesIds.size());
+      List<String> seriesBatch = seriesIds.subList(seriesOffset, seriesEnd);
+
+      LOGGER.info("Processing series batch {}/{} ({} series)",
+                  (seriesOffset / MAX_SERIES_PER_REQUEST) + 1,
+                  (seriesIds.size() + MAX_SERIES_PER_REQUEST - 1) / MAX_SERIES_PER_REQUEST,
+                  seriesBatch.size());
+
+      // Fetch each year range for this series batch
+      for (int[] range : yearRanges) {
+        int yearStart = range[0];
+        int yearEnd = range[1];
+
+        String batchJson = fetchMultipleSeriesRaw(seriesBatch, yearStart, yearEnd);
+        JsonNode batchResponse = MAPPER.readTree(batchJson);
+
+        // Check for errors
+        String status = batchResponse.path("status").asText("UNKNOWN");
+        if (!"REQUEST_SUCCEEDED".equals(status)) {
+          JsonNode messageNode = batchResponse.path("message");
+          String message = messageNode.isArray() && messageNode.size() > 0
+              ? messageNode.get(0).asText()
+              : messageNode.asText("No error message");
+
+          LOGGER.warn("BLS API error for year range {}-{}: {} - {}", yearStart, yearEnd, status, message);
+
+          // Check for rate limit
+          if ("REQUEST_NOT_PROCESSED".equals(status)
+              && (message.contains("daily threshold") || message.contains("rate limit"))) {
+            LOGGER.warn("BLS API rate limit reached. Returning partial results.");
+            return resultsByYear; // Return what we have so far
+          }
+          continue; // Skip this batch
+        }
+
+        // Split response by year and merge with existing data
+        splitResponseByYear(batchResponse, resultsByYear, yearStart, yearEnd);
+      }
+    }
+
+    return resultsByYear;
+  }
+
+  /**
    * Downloads all BLS data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
@@ -1005,98 +1068,51 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads employment by industry data for all 51 U.S. jurisdictions (50 states + DC)
    * across 22 NAICS supersector codes. Generates 1,122 series (51 × 22).
+   *
+   * <p>Optimized with year-batching to reduce API calls from ~345 (23 batches × 15 years)
+   * to ~46 (23 batches × 2 year-batches).
    */
   public File downloadStateIndustryEmployment(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading state industry employment for {} states × {} sectors ({} series) for {}-{}",
                 STATE_FIPS_MAP.size(), NAICS_SUPERSECTORS.size(),
                 STATE_FIPS_MAP.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
 
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=state_industry/year=" + year;
-      String jsonFilePath = outputDirPath + "/state_industry.json";
+    List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
+    LOGGER.info("Generated {} state industry employment series IDs", seriesIds.size());
 
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String jsonFilePath = "source=econ/type=state_industry/year=" + year + "/state_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("state_industry", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached state industry employment for year {} - skipping download", year);
+        LOGGER.info("Found cached state industry employment for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
-      LOGGER.info("Generated {} state industry employment series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All state industry employment data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      // Batch the series into groups of 50 to respect API limits
-      ArrayNode allSeries = MAPPER.createArrayNode();
+    // 2. Batch fetch uncached years (with series batching)
+    LOGGER.info("Fetching state industry employment for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, uncachedYears);
 
-      for (int i = 0; i < seriesIds.size(); i += 50) {
-        int end = Math.min(i + 50, seriesIds.size());
-        List<String> batch = seriesIds.subList(i, end);
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String jsonFilePath = "source=econ/type=state_industry/year=" + year + "/state_industry.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
-                    (i / 50) + 1, (seriesIds.size() + 49) / 50, batch.size(), year);
-
-        String batchJson = fetchMultipleSeriesRaw(batch, year, year);
-
-        // Parse and extract series array from this batch
-        JsonNode batchRoot = MAPPER.readTree(batchJson);
-        JsonNode seriesNode = batchRoot.path("Results").path("series");
-
-        if (!seriesNode.isArray()) {
-          String status = batchRoot.path("status").asText("UNKNOWN");
-          JsonNode messageNode = batchRoot.path("message");
-          String message = messageNode.isArray() && messageNode.size() > 0
-              ? messageNode.get(0).asText()
-              : messageNode.asText("No error message");
-
-          LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
-          LOGGER.debug("Problematic response: {}", batchJson);
-
-          // Check if this is a rate limit error - if so, stop immediately
-          if ("REQUEST_NOT_PROCESSED".equals(status)
-              && (message.contains("daily threshold") || message.contains("rate limit"))) {
-            LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
-            LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
-                       (i / 50), (seriesIds.size() + 49) / 50);
-            LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
-            break; // Exit batch loop - save partial data
-          }
-
-          continue; // Skip this batch for other errors
-        }
-
-        // Append series to combined array
-        for (JsonNode series : seriesNode) {
-          allSeries.add(series);
-        }
-
-        // Rate limiting between batches
-        if (end < seriesIds.size()) {
-          Thread.sleep(500); // Small delay between batches
-        }
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("state_industry", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      // Check if we have any data to save
-      if (allSeries.size() == 0) {
-        LOGGER.warn("No data fetched for state industry employment year {} - skipping cache save", year);
-        continue; // Skip to next year
-      }
-
-      // Build combined JSON structure
-      ObjectNode combinedRoot = MAPPER.createObjectNode();
-      ObjectNode resultsNode = MAPPER.createObjectNode();
-      resultsNode.set("series", allSeries);
-      combinedRoot.set("Results", resultsNode);
-      combinedRoot.put("status", "REQUEST_SUCCEEDED"); // Mark as successful
-      String rawJson = MAPPER.writeValueAsString(combinedRoot);
-
-      // Save to cache using base class helper (partial or complete data)
-      LOGGER.info("Saving state industry employment data for year {} ({} series fetched)", year, allSeries.size());
-      saveToCache("state_industry", year, cacheParams, jsonFilePath, rawJson);
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -1163,98 +1179,51 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads employment by industry data for 27 major U.S. metropolitan areas
    * across 22 NAICS supersector codes. Generates 594 series (27 × 22).
+   *
+   * <p>Optimized with year-batching to reduce API calls from ~180 (12 batches × 15 years)
+   * to ~24 (12 batches × 2 year-batches).
    */
   public File downloadMetroIndustryEmployment(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading metro industry employment for {} metros × {} sectors ({} series) for {}-{}",
                 METRO_AREA_CODES.size(), NAICS_SUPERSECTORS.size(),
                 METRO_AREA_CODES.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
 
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=metro_industry/year=" + year;
-      String jsonFilePath = outputDirPath + "/metro_industry.json";
+    List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
+    LOGGER.info("Generated {} metro industry employment series IDs", seriesIds.size());
 
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String jsonFilePath = "source=econ/type=metro_industry/year=" + year + "/metro_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("metro_industry", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached metro industry employment for year {} - skipping download", year);
+        LOGGER.info("Found cached metro industry employment for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
-      LOGGER.info("Generated {} metro industry employment series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All metro industry employment data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      // Batch the series into groups of 50 to respect API limits
-      ArrayNode allSeries = MAPPER.createArrayNode();
+    // 2. Batch fetch uncached years (with series batching)
+    LOGGER.info("Fetching metro industry employment for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, uncachedYears);
 
-      for (int i = 0; i < seriesIds.size(); i += 50) {
-        int end = Math.min(i + 50, seriesIds.size());
-        List<String> batch = seriesIds.subList(i, end);
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String jsonFilePath = "source=econ/type=metro_industry/year=" + year + "/metro_industry.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
-                    (i / 50) + 1, (seriesIds.size() + 49) / 50, batch.size(), year);
-
-        String batchJson = fetchMultipleSeriesRaw(batch, year, year);
-
-        // Parse and extract series array from this batch
-        JsonNode batchRoot = MAPPER.readTree(batchJson);
-        JsonNode seriesNode = batchRoot.path("Results").path("series");
-
-        if (!seriesNode.isArray()) {
-          String status = batchRoot.path("status").asText("UNKNOWN");
-          JsonNode messageNode = batchRoot.path("message");
-          String message = messageNode.isArray() && messageNode.size() > 0
-              ? messageNode.get(0).asText()
-              : messageNode.asText("No error message");
-
-          LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
-          LOGGER.debug("Problematic response: {}", batchJson);
-
-          // Check if this is a rate limit error - if so, stop immediately
-          if ("REQUEST_NOT_PROCESSED".equals(status)
-              && (message.contains("daily threshold") || message.contains("rate limit"))) {
-            LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
-            LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
-                       (i / 50), (seriesIds.size() + 49) / 50);
-            LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
-            break; // Exit batch loop - save partial data
-          }
-
-          continue; // Skip this batch for other errors
-        }
-
-        // Append series to combined array
-        for (JsonNode series : seriesNode) {
-          allSeries.add(series);
-        }
-
-        // Rate limiting between batches
-        if (end < seriesIds.size()) {
-          Thread.sleep(500); // Small delay between batches
-        }
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("metro_industry", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      // Check if we have any data to save
-      if (allSeries.size() == 0) {
-        LOGGER.warn("No data fetched for metro industry employment year {} - skipping cache save", year);
-        continue; // Skip to next year
-      }
-
-      // Build combined JSON structure
-      ObjectNode combinedRoot = MAPPER.createObjectNode();
-      ObjectNode resultsNode = MAPPER.createObjectNode();
-      resultsNode.set("series", allSeries);
-      combinedRoot.set("Results", resultsNode);
-      combinedRoot.put("status", "REQUEST_SUCCEEDED"); // Mark as successful
-      String rawJson = MAPPER.writeValueAsString(combinedRoot);
-
-      // Save to cache using base class helper (partial or complete data)
-      LOGGER.info("Saving metro industry employment data for year {} ({} series fetched)", year, allSeries.size());
-      saveToCache("metro_industry", year, cacheParams, jsonFilePath, rawJson);
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
