@@ -1159,8 +1159,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         // Check if this state's parquet file already exists
         String parquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
+        String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
 
-        if (storageProvider.exists(parquetPath)) {
+        if (storageProvider.exists(fullPath)) {
           LOGGER.debug("State {} (FIPS {}) year {} already cached - skipping", stateName, stateFips, year);
           totalStatesSkipped++;
           lastFile = new File(parquetPath);
