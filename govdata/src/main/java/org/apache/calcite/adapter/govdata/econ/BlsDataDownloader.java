@@ -557,39 +557,72 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private static final int MAX_YEARS_PER_REQUEST = 20;
 
   /**
+   * Batches a list of years into contiguous ranges of up to maxYears each.
+   * Example: [2000, 2001, 2005, 2024, 2025] with max=20 → [[2000-2001], [2005], [2024-2025]]
+   */
+  private List<int[]> batchYearsIntoRanges(List<Integer> years, int maxYears) {
+    if (years.isEmpty()) {
+      return new ArrayList<>();
+    }
+
+    List<int[]> ranges = new ArrayList<>();
+    int rangeStart = years.get(0);
+    int rangeEnd = years.get(0);
+
+    for (int i = 1; i < years.size(); i++) {
+      int year = years.get(i);
+
+      // Check if we can extend current range
+      if (year == rangeEnd + 1 && (year - rangeStart) < maxYears) {
+        rangeEnd = year;  // Extend range
+      } else {
+        // Start new range
+        ranges.add(new int[]{rangeStart, rangeEnd});
+        rangeStart = year;
+        rangeEnd = year;
+      }
+    }
+
+    // Add final range
+    ranges.add(new int[]{rangeStart, rangeEnd});
+    return ranges;
+  }
+
+  /**
    * Fetches BLS data optimally batched by series (50 max) and years (20 max),
    * then splits results by individual year for caching.
    *
    * @param seriesIds List of BLS series IDs to fetch
-   * @param startYear First year to fetch
-   * @param endYear Last year to fetch
+   * @param uncachedYears Specific years that need fetching (may be non-contiguous)
    * @return Map of year → JSON response for that year
    * @throws IOException If API request fails
    * @throws InterruptedException If interrupted while waiting
    */
-  private Map<Integer, String> fetchAndSplitByYear(List<String> seriesIds, int startYear, int endYear)
+  private Map<Integer, String> fetchAndSplitByYear(List<String> seriesIds, List<Integer> uncachedYears)
       throws IOException, InterruptedException {
 
     Map<Integer, String> resultsByYear = new HashMap<>();
-    int totalYears = endYear - startYear + 1;
-    int totalSeries = seriesIds.size();
 
-    LOGGER.info("Optimized fetch: {} series across {} years (batching by {}-series, {}-years)",
-                totalSeries, totalYears, MAX_SERIES_PER_REQUEST, MAX_YEARS_PER_REQUEST);
+    // Batch uncached years into contiguous ranges
+    List<int[]> yearRanges = batchYearsIntoRanges(uncachedYears, MAX_YEARS_PER_REQUEST);
+
+    LOGGER.info("Optimized fetch: {} series across {} years in {} batches",
+                seriesIds.size(), uncachedYears.size(), yearRanges.size());
 
     // Batch by series (50 at a time)
     for (int seriesOffset = 0; seriesOffset < seriesIds.size(); seriesOffset += MAX_SERIES_PER_REQUEST) {
       int seriesEnd = Math.min(seriesOffset + MAX_SERIES_PER_REQUEST, seriesIds.size());
       List<String> seriesBatch = seriesIds.subList(seriesOffset, seriesEnd);
 
-      // Batch by years (20 at a time)
-      for (int yearStart = startYear; yearStart <= endYear; yearStart += MAX_YEARS_PER_REQUEST) {
-        int yearEnd = Math.min(yearStart + MAX_YEARS_PER_REQUEST - 1, endYear);
+      // Fetch each year range
+      for (int[] range : yearRanges) {
+        int yearStart = range[0];
+        int yearEnd = range[1];
 
         LOGGER.debug("Fetching series {}-{} for years {}-{}",
                     seriesOffset + 1, seriesEnd, yearStart, yearEnd);
 
-        // Single API call for up to 50 series × 20 years
+        // Single API call for up to 50 series × up to 20 contiguous years
         String batchJson = fetchMultipleSeriesRaw(seriesBatch, yearStart, yearEnd);
         JsonNode batchResponse = MAPPER.readTree(batchJson);
 
@@ -832,11 +865,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       return lastFile;
     }
 
-    // 2. Batch fetch uncached years (optimized: up to 20 years per API call)
+    // 2. Batch fetch uncached years (optimized: up to 20 contiguous years per API call)
     LOGGER.info("Fetching employment statistics for {} uncached years", uncachedYears.size());
-    int minYear = uncachedYears.get(0);
-    int maxYear = uncachedYears.get(uncachedYears.size() - 1);
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, minYear, maxYear);
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
     // 3. Save each uncached year
     for (int year : uncachedYears) {
@@ -1306,37 +1337,47 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads inflation metrics data and converts to Parquet.
    */
   public File downloadInflationMetrics(int startYear, int endYear) throws IOException, InterruptedException {
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
-      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
 
-      Map<String, String> cacheParams = new HashMap<>();
-
-      // Check cache using base class helper
-      if (isCachedOrExists("inflation_metrics", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached inflation metrics for year {} - skipping download", year);
-        lastFile = new File(jsonFilePath);
-        continue;
-      }
-
-    List<String> seriesIds =
-        List.of(Series.CPI_ALL_URBAN,
+    List<String> seriesIds = List.of(
+        Series.CPI_ALL_URBAN,
         Series.CPI_CORE,
         Series.PPI_FINAL_DEMAND);
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      // Validate and save (skips rate limits, saves 404s)
-
-      if (!validateAndSaveBlsResponse("inflation_metrics", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      if (isCachedOrExists("inflation_metrics", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached inflation metrics for year {} - skipping", year);
+        lastFile = new File(jsonFilePath);
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      lastFile = new File(jsonFilePath);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All inflation metrics data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
+
+    // 2. Batch fetch uncached years
+    LOGGER.info("Fetching inflation metrics for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
+
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
+      Map<String, String> cacheParams = new HashMap<>();
+
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("inflation_metrics", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
+      }
     }
 
     return lastFile;
@@ -1353,32 +1394,44 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads wage growth data and converts to Parquet.
    */
   public File downloadWageGrowth(int startYear, int endYear) throws IOException, InterruptedException {
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
 
-      Map<String, String> cacheParams = new HashMap<>();
-
-      // Check cache using base class helper
-      if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
-        LOGGER.info("Found cached wage growth data for year {} - skipping download", year);
-        lastFile = new File(relativePath);
-        continue;
-      }
-
-    List<String> seriesIds =
-        List.of(Series.AVG_HOURLY_EARNINGS,
+    List<String> seriesIds = List.of(
+        Series.AVG_HOURLY_EARNINGS,
         Series.EMPLOYMENT_COST_INDEX);
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      // Validate and save (skips rate limits, saves 404s)
-      if (!validateAndSaveBlsResponse("wage_growth", year, cacheParams, relativePath, rawJson)) {
-        continue; // Error response not saved, skip to next year
+      if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
+        LOGGER.info("Found cached wage growth data for year {} - skipping", year);
+        lastFile = new File(relativePath);
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      lastFile = new File(relativePath);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All wage growth data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
+
+    // 2. Batch fetch uncached years
+    LOGGER.info("Fetching wage growth for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
+
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+      Map<String, String> cacheParams = new HashMap<>();
+
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("wage_growth", year, cacheParams, relativePath, rawJson)) {
+        lastFile = new File(relativePath);
+      }
     }
 
     return lastFile;
