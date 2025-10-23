@@ -551,6 +551,155 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * BLS API V2 limits for batching optimization.
+   */
+  private static final int MAX_SERIES_PER_REQUEST = 50;
+  private static final int MAX_YEARS_PER_REQUEST = 20;
+
+  /**
+   * Fetches BLS data optimally batched by series (50 max) and years (20 max),
+   * then splits results by individual year for caching.
+   *
+   * @param seriesIds List of BLS series IDs to fetch
+   * @param startYear First year to fetch
+   * @param endYear Last year to fetch
+   * @return Map of year → JSON response for that year
+   * @throws IOException If API request fails
+   * @throws InterruptedException If interrupted while waiting
+   */
+  private Map<Integer, String> fetchAndSplitByYear(List<String> seriesIds, int startYear, int endYear)
+      throws IOException, InterruptedException {
+
+    Map<Integer, String> resultsByYear = new HashMap<>();
+    int totalYears = endYear - startYear + 1;
+    int totalSeries = seriesIds.size();
+
+    LOGGER.info("Optimized fetch: {} series across {} years (batching by {}-series, {}-years)",
+                totalSeries, totalYears, MAX_SERIES_PER_REQUEST, MAX_YEARS_PER_REQUEST);
+
+    // Batch by series (50 at a time)
+    for (int seriesOffset = 0; seriesOffset < seriesIds.size(); seriesOffset += MAX_SERIES_PER_REQUEST) {
+      int seriesEnd = Math.min(seriesOffset + MAX_SERIES_PER_REQUEST, seriesIds.size());
+      List<String> seriesBatch = seriesIds.subList(seriesOffset, seriesEnd);
+
+      // Batch by years (20 at a time)
+      for (int yearStart = startYear; yearStart <= endYear; yearStart += MAX_YEARS_PER_REQUEST) {
+        int yearEnd = Math.min(yearStart + MAX_YEARS_PER_REQUEST - 1, endYear);
+
+        LOGGER.debug("Fetching series {}-{} for years {}-{}",
+                    seriesOffset + 1, seriesEnd, yearStart, yearEnd);
+
+        // Single API call for up to 50 series × 20 years
+        String batchJson = fetchMultipleSeriesRaw(seriesBatch, yearStart, yearEnd);
+        JsonNode batchResponse = MAPPER.readTree(batchJson);
+
+        // Split response by year for individual caching
+        splitResponseByYear(batchResponse, resultsByYear, yearStart, yearEnd);
+      }
+    }
+
+    return resultsByYear;
+  }
+
+  /**
+   * Splits a multi-year BLS API response into per-year JSON responses.
+   * Merges data if multiple batches cover the same year.
+   */
+  private void splitResponseByYear(JsonNode batchResponse, Map<Integer, String> resultsByYear,
+      int startYear, int endYear) throws IOException {
+
+    String status = batchResponse.path("status").asText("UNKNOWN");
+    JsonNode seriesArray = batchResponse.path("Results").path("series");
+
+    if (!seriesArray.isArray()) {
+      return;
+    }
+
+    // Group series data by year
+    Map<Integer, Map<String, ArrayNode>> dataByYear = new HashMap<>();
+
+    for (JsonNode series : seriesArray) {
+      String seriesId = series.path("seriesID").asText();
+      JsonNode dataArray = series.path("data");
+
+      if (!dataArray.isArray()) {
+        continue;
+      }
+
+      // Split series data points by year
+      for (JsonNode dataPoint : dataArray) {
+        int year = dataPoint.path("year").asInt();
+        if (year >= startYear && year <= endYear) {
+          dataByYear.computeIfAbsent(year, k -> new HashMap<>())
+                    .computeIfAbsent(seriesId, k -> MAPPER.createArrayNode())
+                    .add(dataPoint);
+        }
+      }
+    }
+
+    // Create per-year JSON responses
+    for (int year = startYear; year <= endYear; year++) {
+      Map<String, ArrayNode> yearSeriesData = dataByYear.get(year);
+      if (yearSeriesData == null || yearSeriesData.isEmpty()) {
+        continue;
+      }
+
+      // Build JSON response matching BLS structure
+      ObjectNode yearResponse = MAPPER.createObjectNode();
+      yearResponse.put("status", status);
+      ObjectNode results = yearResponse.putObject("Results");
+      ArrayNode seriesOutput = results.putArray("series");
+
+      // Add each series with its year-filtered data
+      for (Map.Entry<String, ArrayNode> entry : yearSeriesData.entrySet()) {
+        ObjectNode seriesNode = MAPPER.createObjectNode();
+        seriesNode.put("seriesID", entry.getKey());
+        seriesNode.set("data", entry.getValue());
+        seriesOutput.add(seriesNode);
+      }
+
+      String yearJson = MAPPER.writeValueAsString(yearResponse);
+
+      // Merge if year already has data from previous batch
+      final int currentYear = year; // For lambda
+      resultsByYear.merge(year, yearJson, (existing, newData) -> {
+        try {
+          return mergeBatchResponses(existing, newData);
+        } catch (IOException e) {
+          LOGGER.warn("Failed to merge batch responses for year {}: {}", currentYear, e.getMessage());
+          return existing;
+        }
+      });
+    }
+  }
+
+  /**
+   * Merges two BLS API JSON responses (for same year, different series batches).
+   */
+  private String mergeBatchResponses(String json1, String json2) throws IOException {
+    JsonNode response1 = MAPPER.readTree(json1);
+    JsonNode response2 = MAPPER.readTree(json2);
+
+    ObjectNode merged = MAPPER.createObjectNode();
+    merged.put("status", response1.path("status").asText());
+    ObjectNode results = merged.putObject("Results");
+    ArrayNode mergedSeries = results.putArray("series");
+
+    // Add all series from both responses
+    ArrayNode series1 = (ArrayNode) response1.path("Results").path("series");
+    ArrayNode series2 = (ArrayNode) response2.path("Results").path("series");
+
+    for (JsonNode series : series1) {
+      mergedSeries.add(series);
+    }
+    for (JsonNode series : series2) {
+      mergedSeries.add(series);
+    }
+
+    return MAPPER.writeValueAsString(merged);
+  }
+
+  /**
    * Downloads all BLS data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
@@ -655,34 +804,50 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads employment statistics data and converts to Parquet.
    */
   public File downloadEmploymentStatistics(int startYear, int endYear) throws IOException, InterruptedException {
-    // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
-      String jsonFilePath = outputDirPath + "/employment_statistics.json";
 
-      Map<String, String> cacheParams = new HashMap<>();
-
-      // Check cache using base class helper
-      if (isCachedOrExists("employment_statistics", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached employment statistics for year {} - skipping download", year);
-        lastFile = new File(jsonFilePath);
-        continue;
-      }
-
-    // Download key employment series
-    List<String> seriesIds =
-        List.of(Series.UNEMPLOYMENT_RATE,
+    // Series IDs to fetch (constant across all years)
+    List<String> seriesIds = List.of(
+        Series.UNEMPLOYMENT_RATE,
         Series.EMPLOYMENT_LEVEL,
         Series.LABOR_FORCE_PARTICIPATION);
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String jsonFilePath = outputDirPath + "/employment_statistics.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      // Validate and save (skips rate limits, saves 404s)
-      if (!validateAndSaveBlsResponse("employment_statistics", year, cacheParams, jsonFilePath, rawJson)) {
-        continue;
+      if (isCachedOrExists("employment_statistics", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached employment statistics for year {} - skipping", year);
+        lastFile = new File(jsonFilePath);
+      } else {
+        uncachedYears.add(year);
       }
-      lastFile = new File(jsonFilePath);
+    }
+
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All employment statistics data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
+
+    // 2. Batch fetch uncached years (optimized: up to 20 years per API call)
+    LOGGER.info("Fetching employment statistics for {} uncached years", uncachedYears.size());
+    int minYear = uncachedYears.get(0);
+    int maxYear = uncachedYears.get(uncachedYears.size() - 1);
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, minYear, maxYear);
+
+    // 3. Save each uncached year
+    for (int year : uncachedYears) {
+      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String jsonFilePath = outputDirPath + "/employment_statistics.json";
+      Map<String, String> cacheParams = new HashMap<>();
+
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("employment_statistics", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
+      }
     }
 
     return lastFile;
