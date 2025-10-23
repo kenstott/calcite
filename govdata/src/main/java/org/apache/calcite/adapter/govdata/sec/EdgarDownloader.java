@@ -69,13 +69,7 @@ public class EdgarDownloader {
     this.storageProvider = storageProvider;
     this.cacheManifest = cacheManifest;
 
-    // Ensure directories exist
-    try {
-      storageProvider.createDirectories(targetDirectory);
-      storageProvider.createDirectories(cacheDirectory);
-    } catch (IOException e) {
-      LOGGER.warn("Failed to create directories: {}", e.getMessage());
-    }
+    // StorageProvider automatically creates parent directories when writing files
   }
 
   /**

@@ -1159,12 +1159,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Using SEC operating directory: {}", this.secOperatingDirectory);
 
       // Raw content (XBRL/HTML files) goes to cache directory
-      // Use StorageProvider to create directories (works for both local and S3)
-      try {
-        storageProvider.createDirectories(this.secCacheDirectory);
-      } catch (IOException e) {
-        LOGGER.warn("Failed to create SEC cache directory: {}", e.getMessage());
-      }
+      // StorageProvider automatically creates parent directories when writing files
       LOGGER.info("Using SEC cache directory: {}", this.secCacheDirectory);
 
       // Check if we should use mock data instead of downloading
@@ -1287,11 +1282,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Raw content (XBRL/HTML files) goes to cache directory
       String cikCachePath = storageProvider.resolvePath(this.secCacheDirectory, normalizedCik);
-      try {
-        storageProvider.createDirectories(cikCachePath);
-      } catch (IOException e) {
-        LOGGER.warn("Failed to create CIK cache directory: {}", e.getMessage());
-      }
       LOGGER.info("  CIK cache directory: {}", cikCachePath);
 
       // Download submissions metadata with ETag-based caching
@@ -2251,14 +2241,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Need to check source files and possibly download/process
 
-      // Create accession directory
+      // StorageProvider automatically creates parent directories when writing files
       String accessionClean = accession.replace("-", "");
       String accessionPath = storageProvider.resolvePath(cikCachePath, accessionClean);
-      try {
-        storageProvider.createDirectories(accessionPath);
-      } catch (IOException e) {
-        LOGGER.warn("Failed to create accession directory: {}", e.getMessage());
-      }
 
       // Download both HTML (for preview) and XBRL (for data extraction)
       boolean needHtml = false;
@@ -2269,15 +2254,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Check if HTML file exists (for human-readable preview)
       String htmlPath = storageProvider.resolvePath(accessionPath, primaryDoc);
-      // Create parent directory if primaryDoc contains path (e.g., xslF345X05/wk-form4_*.xml for Form 4)
-      if (primaryDoc.contains("/")) {
-        String parentPath = htmlPath.substring(0, htmlPath.lastIndexOf('/'));
-        try {
-          storageProvider.createDirectories(parentPath);
-        } catch (IOException e) {
-          LOGGER.warn("Failed to create subdirectory for primary doc: {}", e.getMessage());
-        }
-      }
+      // StorageProvider automatically creates parent directories when writing files
       // Download primary document for ALL filing types (including insider forms)
       boolean htmlExists = false;
       // Check manifest first to avoid S3 API call
@@ -2341,15 +2318,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      // Create parent directory if xbrlDoc contains path
-      if (xbrlDoc.contains("/")) {
-        String parentPath = xbrlPath.substring(0, xbrlPath.lastIndexOf('/'));
-        try {
-          storageProvider.createDirectories(parentPath);
-        } catch (IOException e) {
-          LOGGER.warn("Failed to create subdirectory for XBRL doc: {}", e.getMessage());
-        }
-      }
+      // StorageProvider automatically creates parent directories when writing files
 
       // DEFER XBRL download decision until AFTER HTML is downloaded
       // We can only make the decision after checking the HTML file for inline XBRL markers
