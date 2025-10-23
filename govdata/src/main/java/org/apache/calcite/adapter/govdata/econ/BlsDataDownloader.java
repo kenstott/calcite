@@ -899,36 +899,44 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   public File downloadRegionalCpi(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading regional CPI for 4 Census regions for {}-{}", startYear, endYear);
-
-    // Download for each year separately
     File lastFile = null;
+
+    List<String> seriesIds = Series.getAllRegionalCpiSeriesIds();
+
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       String outputDirPath = "source=econ/type=cpi_regional/year=" + year;
       String jsonFilePath = outputDirPath + "/regional_cpi.json";
-
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("regional_cpi", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached regional CPI for year {} - skipping download", year);
+        LOGGER.info("Found cached regional CPI for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllRegionalCpiSeriesIds();
-      LOGGER.info("Generated {} regional CPI series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All regional CPI data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 2. Batch fetch uncached years
+    LOGGER.info("Fetching regional CPI for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
-      // Validate and save (skips rate limits, saves 404s)
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String outputDirPath = "source=econ/type=cpi_regional/year=" + year;
+      String jsonFilePath = outputDirPath + "/regional_cpi.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      if (!validateAndSaveBlsResponse("regional_cpi", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("regional_cpi", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -947,36 +955,44 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadMetroCpi(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading metro area CPI for {} metros for {}-{}",
                 METRO_AREA_CODES.size(), startYear, endYear);
-
-    // Download for each year separately
     File lastFile = null;
+
+    List<String> seriesIds = Series.getAllMetroCpiSeriesIds();
+
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       String outputDirPath = "source=econ/type=cpi_metro/year=" + year;
       String jsonFilePath = outputDirPath + "/metro_cpi.json";
-
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("metro_cpi", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached metro CPI for year {} - skipping download", year);
+        LOGGER.info("Found cached metro CPI for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllMetroCpiSeriesIds();
-      LOGGER.info("Generated {} metro CPI series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All metro CPI data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 2. Batch fetch uncached years
+    LOGGER.info("Fetching metro CPI for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
-      // Validate and save (skips rate limits, saves 404s)
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String outputDirPath = "source=econ/type=cpi_metro/year=" + year;
+      String jsonFilePath = outputDirPath + "/metro_cpi.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      if (!validateAndSaveBlsResponse("metro_cpi", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("metro_cpi", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -1097,36 +1113,44 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadStateWages(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading state wages for {} jurisdictions for {}-{}",
                 STATE_FIPS_MAP.size(), startYear, endYear);
-
-    // Download for each year separately
     File lastFile = null;
+
+    List<String> seriesIds = Series.getAllStateWageSeriesIds();
+
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       String outputDirPath = "source=econ/type=state_wages/year=" + year;
       String jsonFilePath = outputDirPath + "/state_wages.json";
-
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("state_wages", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached state wages for year {} - skipping download", year);
+        LOGGER.info("Found cached state wages for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllStateWageSeriesIds();
-      LOGGER.info("Generated {} state wage series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All state wages data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 2. Batch fetch uncached years
+    LOGGER.info("Fetching state wages for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
-      // Validate and save (skips rate limits, saves 404s)
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String outputDirPath = "source=econ/type=state_wages/year=" + year;
+      String jsonFilePath = outputDirPath + "/state_wages.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      if (!validateAndSaveBlsResponse("state_wages", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("state_wages", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -1248,35 +1272,42 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading metro wages for {} metropolitan areas for {}-{}",
                 METRO_AREA_CODES.size(), startYear, endYear);
 
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=metro_wages/year=" + year;
-      String jsonFilePath = outputDirPath + "/metro_wages.json";
+    List<String> seriesIds = Series.getAllMetroWageSeriesIds();
+    LOGGER.info("Generated {} metro wage series IDs", seriesIds.size());
 
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String jsonFilePath = "source=econ/type=metro_wages/year=" + year + "/metro_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("metro_wages", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached metro wages for year {} - skipping download", year);
+        LOGGER.info("Found cached metro wages for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllMetroWageSeriesIds();
-      LOGGER.info("Generated {} metro wage series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All metro wages data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 2. Batch fetch uncached years (up to 20 years per API call)
+    LOGGER.info("Fetching metro wages for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
-      // Validate and save (skips rate limits, saves 404s)
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String jsonFilePath = "source=econ/type=metro_wages/year=" + year + "/metro_wages.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      if (!validateAndSaveBlsResponse("metro_wages", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("metro_wages", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -1295,35 +1326,42 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading JOLTS regional data for 4 Census regions × 5 metrics (20 series) for {}-{}",
                 startYear, endYear);
 
-    // Download for each year separately
     File lastFile = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=jolts_regional/year=" + year;
-      String jsonFilePath = outputDirPath + "/jolts_regional.json";
+    List<String> seriesIds = Series.getAllJoltsRegionalSeriesIds();
+    LOGGER.info("Generated {} JOLTS regional series IDs", seriesIds.size());
 
+    // 1. Identify uncached years
+    List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      String jsonFilePath = "source=econ/type=jolts_regional/year=" + year + "/jolts_regional.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      // Check cache using base class helper
       if (isCachedOrExists("jolts_regional", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached JOLTS regional for year {} - skipping download", year);
+        LOGGER.info("Found cached JOLTS regional for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-        continue;
+      } else {
+        uncachedYears.add(year);
       }
+    }
 
-      List<String> seriesIds = Series.getAllJoltsRegionalSeriesIds();
-      LOGGER.info("Generated {} JOLTS regional series IDs for year {}", seriesIds.size(), year);
+    if (uncachedYears.isEmpty()) {
+      LOGGER.info("All JOLTS regional data cached (years {}-{})", startYear, endYear);
+      return lastFile;
+    }
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+    // 2. Batch fetch uncached years (up to 20 years per API call)
+    LOGGER.info("Fetching JOLTS regional for {} uncached years", uncachedYears.size());
+    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
 
-      // Validate and save (skips rate limits, saves 404s)
+    // 3. Save each year
+    for (int year : uncachedYears) {
+      String jsonFilePath = "source=econ/type=jolts_regional/year=" + year + "/jolts_regional.json";
+      Map<String, String> cacheParams = new HashMap<>();
 
-      if (!validateAndSaveBlsResponse("jolts_regional", year, cacheParams, jsonFilePath, rawJson)) {
-
-        continue;
-
+      String rawJson = resultsByYear.get(year);
+      if (rawJson != null && validateAndSaveBlsResponse("jolts_regional", year, cacheParams, jsonFilePath, rawJson)) {
+        lastFile = new File(jsonFilePath);
       }
-
-      lastFile = new File(jsonFilePath);
     }
 
     return lastFile;
@@ -1450,111 +1488,135 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    *
    * <p>Data is partitioned by year and state_fips, with each state saved to a separate parquet file.
    * This enables incremental downloads - if a state file already exists for a given year, it's skipped.
+   *
+   * <p>Optimized to batch up to 20 years per API call (per state), reducing total API calls from
+   * ~1,275 (51 states × 25 years) to ~102 (51 states × ~2 batches).
    */
   public File downloadRegionalEmployment(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", startYear, endYear);
 
     File lastFile = null;
-    int totalStatesDownloaded = 0;
-    int totalStatesSkipped = 0;
+    int totalFilesDownloaded = 0;
+    int totalFilesSkipped = 0;
 
-    // Download for each year separately
-    for (int year = startYear; year <= endYear; year++) {
-      LOGGER.info("Processing year {}: checking which states need downloading", year);
+    // Process each state independently with year-batching
+    for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
+      String stateName = entry.getKey();
+      String stateFips = entry.getValue();
 
-      // Check each state to see if it's already cached
-      for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
-        String stateName = entry.getKey();
-        String stateFips = entry.getValue();
+      LOGGER.info("Processing state {} (FIPS {})", stateName, stateFips);
 
-        // Build parquet path - relative path that gets resolved with parquetDirectory
+      // 1. Identify uncached years for this state
+      List<Integer> uncachedYears = new ArrayList<>();
+      for (int year = startYear; year <= endYear; year++) {
         String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
-        // Check cache manifest first (consistent with other BLS tables)
         Map<String, String> cacheParams = new HashMap<>();
         cacheParams.put("state_fips", stateFips);
+
+        // Check cache manifest first
         if (cacheManifest.isParquetConverted("regional_employment", year, cacheParams)) {
-          LOGGER.debug("State {} (FIPS {}) year {} already in manifest - skipping", stateName, stateFips, year);
-          totalStatesSkipped++;
+          LOGGER.debug("State {} year {} already cached - skipping", stateName, year);
+          totalFilesSkipped++;
           lastFile = new File(fullParquetPath);
           continue;
         }
 
         // Defensive check: if file exists but not in manifest, update manifest
         if (storageProvider.exists(fullParquetPath)) {
-          LOGGER.info("State {} (FIPS {}) year {} parquet exists, updating manifest", stateName, stateFips, year);
+          LOGGER.info("State {} year {} parquet exists, updating manifest", stateName, year);
           cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
           cacheManifest.save(operatingDirectory);
-          totalStatesSkipped++;
+          totalFilesSkipped++;
           lastFile = new File(fullParquetPath);
           continue;
         }
 
-        LOGGER.info("Downloading state {} (FIPS {}) for year {}", stateName, stateFips, year);
+        uncachedYears.add(year);
+      }
 
-        // Generate series IDs for this state
-        // Format: LASST{state_fips}0000000000{measure}
-        // Measures: 03=unemployment rate, 04=unemployment, 05=employment, 06=labor force
-        List<String> seriesIds = new ArrayList<>();
-        seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
-        seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
-        seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
-        seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
+      if (uncachedYears.isEmpty()) {
+        LOGGER.info("All years cached for state {} - skipping", stateName);
+        continue;
+      }
+
+      // 2. Generate series IDs for this state (4 measures)
+      // Format: LASST{state_fips}0000000000{measure}
+      List<String> seriesIds = new ArrayList<>();
+      seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
+      seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
+      seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
+      seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
+
+      // 3. Batch fetch uncached years (up to 20 years per API call)
+      LOGGER.info("Fetching {} uncached years for state {}", uncachedYears.size(), stateName);
+      Map<Integer, String> resultsByYear;
+      try {
+        resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to fetch data for state {}: {}", stateName, e.getMessage());
+
+        // Check if rate limit error
+        if (e.getMessage() != null && e.getMessage().contains("rate limit")) {
+          LOGGER.warn("BLS API rate limit reached. Stopping download.");
+          LOGGER.info("Downloaded {} files, skipped {} already cached", totalFilesDownloaded, totalFilesSkipped);
+          return lastFile;
+        }
+
+        continue; // Skip this state
+      }
+
+      // 4. Save each year
+      for (int year : uncachedYears) {
+        String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
+
+        String rawJson = resultsByYear.get(year);
+        if (rawJson == null) {
+          LOGGER.warn("No data returned for state {} year {} - skipping", stateName, year);
+          continue;
+        }
 
         try {
-          // Fetch data for this state's 4 series
-          String batchJson = fetchMultipleSeriesRaw(seriesIds, year, year);
-          JsonNode batchRoot = MAPPER.readTree(batchJson);
+          // Parse and validate response
+          JsonNode batchRoot = MAPPER.readTree(rawJson);
+          String status = batchRoot.path("status").asText("UNKNOWN");
 
-          // Extract series from response
+          if (!"REQUEST_SUCCEEDED".equals(status)) {
+            LOGGER.warn("API error for state {} year {}: {} - skipping", stateName, year, status);
+            continue;
+          }
+
           JsonNode seriesNode = batchRoot.path("Results").path("series");
-
           if (!seriesNode.isArray() || seriesNode.size() == 0) {
-            String status = batchRoot.path("status").asText("UNKNOWN");
-            JsonNode messageNode = batchRoot.path("message");
-            String message = messageNode.isArray() && messageNode.size() > 0
-                ? messageNode.get(0).asText()
-                : messageNode.asText("No error message");
-
-            LOGGER.warn("Failed to fetch data for state {} (status: {}): {}", stateName, status, message);
-
-            // Check if this is a rate limit error - if so, stop immediately
-            if ("REQUEST_NOT_PROCESSED".equals(status)
-                && (message.contains("daily threshold") || message.contains("rate limit"))) {
-              LOGGER.warn("BLS API daily rate limit reached. Stopping download.");
-              LOGGER.info("Downloaded {} states, skipped {} already cached", totalStatesDownloaded, totalStatesSkipped);
-              LOGGER.info("Retry tomorrow after rate limit resets (midnight Eastern Time).");
-              return lastFile;
-            }
-
-            continue; // Skip this state
+            LOGGER.warn("No series data for state {} year {} - skipping", stateName, year);
+            continue;
           }
 
           // Convert JSON response to Parquet and save
           convertAndSaveRegionalEmployment(batchRoot, fullParquetPath, year, stateFips);
 
-          // Mark as converted in manifest (consistent with other BLS tables)
+          // Mark as converted in manifest
+          Map<String, String> cacheParams = new HashMap<>();
+          cacheParams.put("state_fips", stateFips);
           cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
           cacheManifest.save(operatingDirectory);
 
-          totalStatesDownloaded++;
+          totalFilesDownloaded++;
           lastFile = new File(fullParquetPath);
 
-          LOGGER.info("Saved state {} (FIPS {}) for year {} ({} series)", stateName, stateFips, year, seriesNode.size());
+          LOGGER.info("Saved state {} year {} ({} series)", stateName, year, seriesNode.size());
 
         } catch (Exception e) {
-          LOGGER.warn("Failed to download state {} (FIPS {}) for year {}: {}", stateName, stateFips, year, e.getMessage());
-          // Continue with next state
+          LOGGER.warn("Failed to save state {} year {}: {}", stateName, year, e.getMessage());
+          // Continue with next year
         }
-
-        // Rate limiting: small delay between states to avoid overwhelming API
-        Thread.sleep(100);
       }
     }
 
-    LOGGER.info("Regional employment download complete: {} states downloaded, {} already cached",
-                totalStatesDownloaded, totalStatesSkipped);
+    LOGGER.info("Regional employment download complete: {} files downloaded, {} already cached",
+                totalFilesDownloaded, totalFilesSkipped);
 
     return lastFile;
   }
