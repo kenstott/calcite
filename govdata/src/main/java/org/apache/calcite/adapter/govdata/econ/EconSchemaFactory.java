@@ -274,7 +274,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download BLS data if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
-        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
+        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
         // Download all BLS data for the year range (using enabledBlsTables parsed in buildOperand)
         blsDownloader.downloadAll(startYear, endYear, enabledBlsTables);

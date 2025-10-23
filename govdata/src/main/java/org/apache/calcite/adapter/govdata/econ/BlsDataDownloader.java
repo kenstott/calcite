@@ -379,11 +379,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(apiKey, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
+    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
+  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 
@@ -1157,14 +1157,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String stateName = entry.getKey();
         String stateFips = entry.getValue();
 
-        // Check if this state's parquet file already exists
-        String parquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
-        String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
+        // Build parquet path - relative path that gets resolved with parquetDirectory
+        String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
-        if (storageProvider.exists(fullPath)) {
+        if (storageProvider.exists(fullParquetPath)) {
           LOGGER.debug("State {} (FIPS {}) year {} already cached - skipping", stateName, stateFips, year);
           totalStatesSkipped++;
-          lastFile = new File(parquetPath);
+          lastFile = new File(fullParquetPath);
           continue;
         }
 
@@ -1209,9 +1209,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Convert JSON response to Parquet and save
-          convertAndSaveRegionalEmployment(batchRoot, parquetPath, year, stateFips);
+          convertAndSaveRegionalEmployment(batchRoot, fullParquetPath, year, stateFips);
           totalStatesDownloaded++;
-          lastFile = new File(parquetPath);
+          lastFile = new File(fullParquetPath);
 
           LOGGER.info("Saved state {} (FIPS {}) for year {} ({} series)", stateName, stateFips, year, seriesNode.size());
 
@@ -1235,12 +1235,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Converts BLS LAUS JSON response to Parquet format and saves for a single state.
    *
    * @param jsonResponse BLS API JSON response containing series data
-   * @param parquetPath Target path for Parquet file (including state partition)
+   * @param fullParquetPath Full path for Parquet file (already resolved with parquet directory)
    * @param year Year of the data
    * @param stateFips State FIPS code
    * @throws IOException if conversion or write fails
    */
-  private void convertAndSaveRegionalEmployment(JsonNode jsonResponse, String parquetPath,
+  private void convertAndSaveRegionalEmployment(JsonNode jsonResponse, String fullParquetPath,
       int year, String stateFips) throws IOException {
 
     // Define schema matching regional_employment table
@@ -1311,11 +1311,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Write Parquet file
-    String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
-    storageProvider.writeAvroParquet(fullPath, schema, records, "regional_employment");
+    // Write Parquet file - fullParquetPath is already resolved, so pass it directly
+    storageProvider.writeAvroParquet(fullParquetPath, schema, records, "regional_employment");
 
-    LOGGER.debug("Wrote {} records to {}", records.size(), parquetPath);
+    LOGGER.debug("Wrote {} records to {}", records.size(), fullParquetPath);
   }
 
   /**
@@ -1548,8 +1547,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             year, zipData.length / (1024 * 1024));
 
         // Parse CSV and convert to Parquet
-        String parquetPath = "source=econ/type=county_qcew/year=" + year + "/county_qcew.parquet";
-        parseAndConvertQcewToParquet(zipData, parquetPath, year);
+        String relativeParquetPath = "source=econ/type=county_qcew/year=" + year + "/county_qcew.parquet";
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
+        parseAndConvertQcewToParquet(zipData, fullParquetPath, year);
 
         // Save cache metadata
         saveToCache("qcew_annual", year, cacheParams, relativePath, "");
@@ -1609,11 +1609,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * - annual_avg_wkly_wage: Average weekly wage
    *
    * @param zipData Downloaded ZIP file bytes
-   * @param parquetPath Relative path for output Parquet file
+   * @param fullParquetPath Full path for output Parquet file (already resolved)
    * @param year Year of the data
    * @throws IOException if parsing or conversion fails
    */
-  private void parseAndConvertQcewToParquet(byte[] zipData, String parquetPath, int year) throws IOException {
+  private void parseAndConvertQcewToParquet(byte[] zipData, String fullParquetPath, int year) throws IOException {
     LOGGER.info("Parsing QCEW CSV for year {} and converting to Parquet", year);
 
     // Define Avro schema for QCEW county data
@@ -1723,9 +1723,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Convert to Parquet and save
     if (!records.isEmpty()) {
-      String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
-      storageProvider.writeAvroParquet(fullPath, schema, records, "county_qcew");
-      LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", parquetPath, records.size());
+      // fullParquetPath is already resolved, pass it directly
+      storageProvider.writeAvroParquet(fullParquetPath, schema, records, "county_qcew");
+      LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", fullParquetPath, records.size());
     } else {
       LOGGER.warn("No county records found in QCEW data for year {}", year);
     }
