@@ -765,10 +765,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         if (!seriesNode.isArray()) {
           String status = batchRoot.path("status").asText("UNKNOWN");
-          String message = batchRoot.path("message").asText("No error message");
+          JsonNode messageNode = batchRoot.path("message");
+          String message = messageNode.isArray() && messageNode.size() > 0
+              ? messageNode.get(0).asText()
+              : messageNode.asText("No error message");
+
           LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
           LOGGER.debug("Problematic response: {}", batchJson);
-          continue; // Skip this batch
+
+          // Check if this is a rate limit error - if so, stop immediately
+          if ("REQUEST_NOT_PROCESSED".equals(status)
+              && (message.contains("daily threshold") || message.contains("rate limit"))) {
+            LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
+            LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
+                       (i / 50), (seriesIds.size() + 49) / 50);
+            LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
+            break; // Exit batch loop - save partial data
+          }
+
+          continue; // Skip this batch for other errors
         }
 
         // Append series to combined array
@@ -782,14 +797,22 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         }
       }
 
+      // Check if we have any data to save
+      if (allSeries.size() == 0) {
+        LOGGER.warn("No data fetched for state industry employment year {} - skipping cache save", year);
+        continue; // Skip to next year
+      }
+
       // Build combined JSON structure
       ObjectNode combinedRoot = MAPPER.createObjectNode();
       ObjectNode resultsNode = MAPPER.createObjectNode();
       resultsNode.set("series", allSeries);
       combinedRoot.set("Results", resultsNode);
+      combinedRoot.put("status", "REQUEST_SUCCEEDED"); // Mark as successful
       String rawJson = MAPPER.writeValueAsString(combinedRoot);
 
-      // Save to cache using base class helper
+      // Save to cache using base class helper (partial or complete data)
+      LOGGER.info("Saving state industry employment data for year {} ({} series fetched)", year, allSeries.size());
       saveToCache("state_industry", year, cacheParams, jsonFilePath, rawJson);
       lastFile = new File(jsonFilePath);
     }
@@ -886,10 +909,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         if (!seriesNode.isArray()) {
           String status = batchRoot.path("status").asText("UNKNOWN");
-          String message = batchRoot.path("message").asText("No error message");
+          JsonNode messageNode = batchRoot.path("message");
+          String message = messageNode.isArray() && messageNode.size() > 0
+              ? messageNode.get(0).asText()
+              : messageNode.asText("No error message");
+
           LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
           LOGGER.debug("Problematic response: {}", batchJson);
-          continue; // Skip this batch
+
+          // Check if this is a rate limit error - if so, stop immediately
+          if ("REQUEST_NOT_PROCESSED".equals(status)
+              && (message.contains("daily threshold") || message.contains("rate limit"))) {
+            LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
+            LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
+                       (i / 50), (seriesIds.size() + 49) / 50);
+            LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
+            break; // Exit batch loop - save partial data
+          }
+
+          continue; // Skip this batch for other errors
         }
 
         // Append series to combined array
@@ -903,14 +941,22 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         }
       }
 
+      // Check if we have any data to save
+      if (allSeries.size() == 0) {
+        LOGGER.warn("No data fetched for metro industry employment year {} - skipping cache save", year);
+        continue; // Skip to next year
+      }
+
       // Build combined JSON structure
       ObjectNode combinedRoot = MAPPER.createObjectNode();
       ObjectNode resultsNode = MAPPER.createObjectNode();
       resultsNode.set("series", allSeries);
       combinedRoot.set("Results", resultsNode);
+      combinedRoot.put("status", "REQUEST_SUCCEEDED"); // Mark as successful
       String rawJson = MAPPER.writeValueAsString(combinedRoot);
 
-      // Save to cache using base class helper
+      // Save to cache using base class helper (partial or complete data)
+      LOGGER.info("Saving metro industry employment data for year {} ({} series fetched)", year, allSeries.size());
       saveToCache("metro_industry", year, cacheParams, jsonFilePath, rawJson);
       lastFile = new File(jsonFilePath);
     }
