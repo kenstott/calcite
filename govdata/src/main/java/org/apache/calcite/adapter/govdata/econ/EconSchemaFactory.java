@@ -370,14 +370,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
           }
 
-          // Convert regional employment
-          String regionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=regional/year=" + year);
-          String regionalParquetPath = storageProvider.resolvePath(parquetDir, "type=regional/year=" + year + "/regional_employment.parquet");
-          String regionalRawPath = cacheStorageProvider.resolvePath(regionalCacheYearPath, "regional_employment.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_employment", year, regionalRawPath, regionalParquetPath)) {
-            blsDownloader.convertToParquet(regionalCacheYearPath, regionalParquetPath);
-            cacheManifest.markParquetConverted("regional_employment", year, null, regionalParquetPath);
-          }
+          // NOTE: regional_employment conversion removed - downloadRegionalEmployment() now creates
+          // Parquet files directly with state-level partitioning (year + state_fips).
+          // No intermediate JSON files are created, and no conversion step is needed.
         }
 
         LOGGER.debug("BLS data download completed");
