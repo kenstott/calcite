@@ -65,6 +65,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private Map<String, Map<String, Object>> tableConstraints;
   private List<String> customFredSeries;
   private Map<String, Object> fredSeriesGroups;
+  private java.util.Set<String> enabledBlsTables;
 
 /**
    * Build the operand configuration for ECON schema without creating the FileSchema.
@@ -166,6 +167,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Store configuration for table definition generation
     this.customFredSeries = customFredSeries;
     this.fredSeriesGroups = fredSeriesGroups;
+
+    // Parse BLS table filtering configuration (needed for both download and schema filtering)
+    this.enabledBlsTables = parseBlsTableFilter(operand);
 
     String defaultPartitionStrategy = (String) operand.get("defaultPartitionStrategy");
     if (defaultPartitionStrategy == null) {
@@ -272,8 +276,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
 
-        // Download all BLS data for the year range
-        blsDownloader.downloadAll(startYear, endYear);
+        // Download all BLS data for the year range (using enabledBlsTables parsed in buildOperand)
+        blsDownloader.downloadAll(startYear, endYear, enabledBlsTables);
 
         // Convert to parquet files for each year
         for (int year = startYear; year <= endYear; year++) {
@@ -293,6 +297,69 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "inflation_metrics", year, inflationRawPath, inflationParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, inflationParquetPath);
             cacheManifest.markParquetConverted("inflation_metrics", year, null, inflationParquetPath);
+          }
+
+          // Convert regional CPI
+          String regionalCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=cpi_regional/year=" + year);
+          String regionalCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_regional/year=" + year + "/regional_cpi.parquet");
+          String regionalCpiRawPath = cacheStorageProvider.resolvePath(regionalCpiCacheYearPath, "regional_cpi.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_cpi", year, regionalCpiRawPath, regionalCpiParquetPath)) {
+            blsDownloader.convertToParquet(regionalCpiCacheYearPath, regionalCpiParquetPath);
+            cacheManifest.markParquetConverted("regional_cpi", year, null, regionalCpiParquetPath);
+          }
+
+          // Convert metro CPI
+          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=cpi_metro/year=" + year);
+          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_metro/year=" + year + "/metro_cpi.parquet");
+          String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
+            blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
+            cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
+          }
+
+          // Convert state industry employment
+          String stateIndustryCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=state_industry/year=" + year);
+          String stateIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=state_industry/year=" + year + "/state_industry.parquet");
+          String stateIndustryRawPath = cacheStorageProvider.resolvePath(stateIndustryCacheYearPath, "state_industry.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_industry", year, stateIndustryRawPath, stateIndustryParquetPath)) {
+            blsDownloader.convertToParquet(stateIndustryCacheYearPath, stateIndustryParquetPath);
+            cacheManifest.markParquetConverted("state_industry", year, null, stateIndustryParquetPath);
+          }
+
+          // Convert state wages
+          String stateWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=state_wages/year=" + year);
+          String stateWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=state_wages/year=" + year + "/state_wages.parquet");
+          String stateWagesRawPath = cacheStorageProvider.resolvePath(stateWagesCacheYearPath, "state_wages.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_wages", year, stateWagesRawPath, stateWagesParquetPath)) {
+            blsDownloader.convertToParquet(stateWagesCacheYearPath, stateWagesParquetPath);
+            cacheManifest.markParquetConverted("state_wages", year, null, stateWagesParquetPath);
+          }
+
+          // Convert metro industry employment
+          String metroIndustryCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=metro_industry/year=" + year);
+          String metroIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_industry/year=" + year + "/metro_industry.parquet");
+          String metroIndustryRawPath = cacheStorageProvider.resolvePath(metroIndustryCacheYearPath, "metro_industry.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_industry", year, metroIndustryRawPath, metroIndustryParquetPath)) {
+            blsDownloader.convertToParquet(metroIndustryCacheYearPath, metroIndustryParquetPath);
+            cacheManifest.markParquetConverted("metro_industry", year, null, metroIndustryParquetPath);
+          }
+
+          // Convert metro wages
+          String metroWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=metro_wages/year=" + year);
+          String metroWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_wages/year=" + year + "/metro_wages.parquet");
+          String metroWagesRawPath = cacheStorageProvider.resolvePath(metroWagesCacheYearPath, "metro_wages.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_wages", year, metroWagesRawPath, metroWagesParquetPath)) {
+            blsDownloader.convertToParquet(metroWagesCacheYearPath, metroWagesParquetPath);
+            cacheManifest.markParquetConverted("metro_wages", year, null, metroWagesParquetPath);
+          }
+
+          // Convert JOLTS regional
+          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=jolts_regional/year=" + year);
+          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/year=" + year + "/jolts_regional.parquet");
+          String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
+            blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
+            cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
           }
 
           // Convert wage growth
@@ -758,13 +825,41 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    */
   @Override public List<Map<String, Object>> loadTableDefinitions() {
     // Start with base table definitions from econ-schema.json
-    List<Map<String, Object>> tables = new ArrayList<>(GovDataSubSchemaFactory.super.loadTableDefinitions());
+    List<Map<String, Object>> baseTables = GovDataSubSchemaFactory.super.loadTableDefinitions();
+    List<Map<String, Object>> tables = new ArrayList<>();
 
-    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.json", tables.size());
+    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.json", baseTables.size());
 
-    // Log the base tables
-    for (Map<String, Object> table : tables) {
-      LOGGER.debug("[DEBUG] Base table: {} with pattern: {}", table.get("name"), table.get("pattern"));
+    // Filter BLS tables based on enabledBlsTables configuration
+    for (Map<String, Object> table : baseTables) {
+      String tableName = (String) table.get("name");
+
+      // Check if this is a BLS table
+      boolean isBlsTable = tableName.equals(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS)
+          || tableName.equals(BlsDataDownloader.TABLE_INFLATION_METRICS)
+          || tableName.equals(BlsDataDownloader.TABLE_REGIONAL_CPI)
+          || tableName.equals(BlsDataDownloader.TABLE_METRO_CPI)
+          || tableName.equals(BlsDataDownloader.TABLE_STATE_INDUSTRY)
+          || tableName.equals(BlsDataDownloader.TABLE_STATE_WAGES)
+          || tableName.equals(BlsDataDownloader.TABLE_METRO_INDUSTRY)
+          || tableName.equals(BlsDataDownloader.TABLE_METRO_WAGES)
+          || tableName.equals(BlsDataDownloader.TABLE_JOLTS_REGIONAL)
+          || tableName.equals(BlsDataDownloader.TABLE_WAGE_GROWTH)
+          || tableName.equals(BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT);
+
+      if (isBlsTable) {
+        // Check if table is enabled (null means all tables enabled)
+        if (enabledBlsTables == null || enabledBlsTables.contains(tableName)) {
+          tables.add(table);
+          LOGGER.debug("[DEBUG] Including BLS table: {} with pattern: {}", tableName, table.get("pattern"));
+        } else {
+          LOGGER.info("Filtering out BLS table '{}' from schema (not in enabled tables)", tableName);
+        }
+      } else {
+        // Non-BLS table, always include
+        tables.add(table);
+        LOGGER.debug("[DEBUG] Including non-BLS table: {} with pattern: {}", tableName, table.get("pattern"));
+      }
     }
 
     // Add custom FRED table definitions if operand is available
@@ -940,6 +1035,61 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // 3. Parquet doesn't exist or check failed - needs conversion
     return false;
+  }
+
+  /**
+   * Parse BLS table filtering configuration from operand.
+   * Supports either includeTables (whitelist) or excludeTables (blacklist), but not both.
+   *
+   * @param operand Schema configuration operand
+   * @return Set of enabled table names, or null to download all tables
+   */
+  private java.util.Set<String> parseBlsTableFilter(Map<String, Object> operand) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> blsConfig = (Map<String, Object>) operand.get("blsConfig");
+    if (blsConfig == null) {
+      return null; // No filtering, download all tables
+    }
+
+    @SuppressWarnings("unchecked")
+    List<String> includeTables = (List<String>) blsConfig.get("includeTables");
+    @SuppressWarnings("unchecked")
+    List<String> excludeTables = (List<String>) blsConfig.get("excludeTables");
+
+    // Validate mutual exclusivity
+    if (includeTables != null && excludeTables != null) {
+      throw new IllegalArgumentException(
+          "Cannot specify both 'includeTables' and 'excludeTables' in blsConfig. " +
+          "Use includeTables for whitelist or excludeTables for blacklist, but not both.");
+    }
+
+    if (includeTables != null) {
+      LOGGER.info("BLS table filter: including {} tables: {}", includeTables.size(), includeTables);
+      return new java.util.HashSet<>(includeTables);
+    }
+
+    if (excludeTables != null) {
+      // Return all tables except excluded ones
+      java.util.Set<String> allTables = new java.util.HashSet<>(java.util.Arrays.asList(
+          BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
+          BlsDataDownloader.TABLE_INFLATION_METRICS,
+          BlsDataDownloader.TABLE_REGIONAL_CPI,
+          BlsDataDownloader.TABLE_METRO_CPI,
+          BlsDataDownloader.TABLE_STATE_INDUSTRY,
+          BlsDataDownloader.TABLE_STATE_WAGES,
+          BlsDataDownloader.TABLE_METRO_INDUSTRY,
+          BlsDataDownloader.TABLE_METRO_WAGES,
+          BlsDataDownloader.TABLE_JOLTS_REGIONAL,
+          BlsDataDownloader.TABLE_WAGE_GROWTH,
+          BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT
+      ));
+      allTables.removeAll(excludeTables);
+      LOGGER.info("BLS table filter: excluding {} tables, downloading {} tables",
+          excludeTables.size(), allTables.size());
+      return allTables;
+    }
+
+    return null; // No filtering
   }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,

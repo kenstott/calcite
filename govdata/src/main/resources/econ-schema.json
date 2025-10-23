@@ -12,6 +12,41 @@
       "comment": "Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates."
     },
     {
+      "name": "regional_cpi",
+      "pattern": "type=cpi_regional/year=*/regional_cpi.parquet",
+      "comment": "Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas."
+    },
+    {
+      "name": "metro_cpi",
+      "pattern": "type=cpi_metro/year=*/metro_cpi.parquet",
+      "comment": "Consumer Price Index for 27 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends."
+    },
+    {
+      "name": "state_industry",
+      "pattern": "type=state_industry/year=*/state_industry.parquet",
+      "comment": "Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons."
+    },
+    {
+      "name": "state_wages",
+      "pattern": "type=state_wages/year=*/state_wages.parquet",
+      "comment": "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis."
+    },
+    {
+      "name": "metro_industry",
+      "pattern": "type=metro_industry/year=*/metro_industry.parquet",
+      "comment": "Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons."
+    },
+    {
+      "name": "metro_wages",
+      "pattern": "type=metro_wages/year=*/metro_wages.parquet",
+      "comment": "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis."
+    },
+    {
+      "name": "jolts_regional",
+      "pattern": "type=jolts_regional/year=*/jolts_regional.parquet",
+      "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends."
+    },
+    {
       "name": "wage_growth",
       "pattern": "type=indicators/year=*/wage_growth.parquet",
       "comment": "Average hourly earnings, weekly earnings, and employment cost index by industry and occupation. Tracks wage growth trends and labor cost pressures."
@@ -104,6 +139,45 @@
           "targetColumns": ["area_code"]
         }
       ]
+    },
+    "regional_cpi": {
+      "primaryKey": ["date", "region_code"]
+    },
+    "metro_cpi": {
+      "primaryKey": ["date", "metro_area_code"]
+    },
+    "state_industry": {
+      "primaryKey": ["date", "state_fips", "supersector_code"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links state industry employment to geographic and demographic data for state-level analysis"
+        }
+      ]
+    },
+    "state_wages": {
+      "primaryKey": ["date", "state_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links state wage data to geographic and demographic data for regional compensation analysis"
+        }
+      ]
+    },
+    "metro_industry": {
+      "primaryKey": ["date", "metro_area_code", "supersector_code"]
+    },
+    "metro_wages": {
+      "primaryKey": ["date", "metro_area_code"]
+    },
+    "jolts_regional": {
+      "primaryKey": ["date", "region_code", "metric"]
     },
     "wage_growth": {
       "primaryKey": ["date", "series_id", "industry_code", "occupation_code"]

@@ -999,6 +999,135 @@ public final class TableCommentDefinitions {
     inflationMetricsCols.put("seasonally_adjusted", "Whether data is seasonally adjusted");
     ECON_COLUMN_COMMENTS.put("inflation_metrics", inflationMetricsCols);
 
+    // regional_cpi table
+    ECON_TABLE_COMMENTS.put("regional_cpi",
+        "Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). "
+        + "Enables regional inflation comparisons and analysis of cost-of-living differences across "
+        + "major geographic areas. Useful for understanding regional price pressures and economic conditions.");
+
+    Map<String, String> regionalCpiCols = new HashMap<>();
+    regionalCpiCols.put("date", "Observation date for the index value");
+    regionalCpiCols.put("region_code", "Census region code (0100=Northeast, 0200=Midwest, 0300=South, 0400=West)");
+    regionalCpiCols.put("region_name", "Census region name (Northeast, Midwest, South, or West)");
+    regionalCpiCols.put("index_value", "CPI-U index value for all items (base period = 100)");
+    regionalCpiCols.put("percent_change_month", "Percent change from previous month");
+    regionalCpiCols.put("percent_change_year", "Year-over-year percent change (regional inflation rate)");
+    ECON_COLUMN_COMMENTS.put("regional_cpi", regionalCpiCols);
+
+    // metro_cpi table
+    ECON_TABLE_COMMENTS.put("metro_cpi",
+        "Consumer Price Index for 27 major U.S. metropolitan areas including New York, Los Angeles, "
+        + "Chicago, Houston, Phoenix, and others. Provides detailed metro-level inflation tracking for "
+        + "cost-of-living analysis, wage adjustments, and regional economic comparisons.");
+
+    Map<String, String> metroCpiCols = new HashMap<>();
+    metroCpiCols.put("date", "Observation date for the index value");
+    metroCpiCols.put("metro_area_code", "BLS metro area code (e.g., A100 for NYC, A400 for LA)");
+    metroCpiCols.put("metro_area_name", "Metropolitan area name with state abbreviations");
+    metroCpiCols.put("index_value", "CPI-U index value for all items (base period = 100)");
+    metroCpiCols.put("percent_change_month", "Month-over-month percent change");
+    metroCpiCols.put("percent_change_year", "Year-over-year percent change (metro inflation rate)");
+    ECON_COLUMN_COMMENTS.put("metro_cpi", metroCpiCols);
+
+    // state_industry table
+    ECON_TABLE_COMMENTS.put("state_industry",
+        "Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS "
+        + "supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns "
+        + "by major industry categories including manufacturing, construction, retail, healthcare, financial "
+        + "activities, and government. Enables state-level industry analysis, cross-state economic comparisons, "
+        + "and identification of regional economic specialization patterns.");
+
+    Map<String, String> stateIndustryCols = new HashMap<>();
+    stateIndustryCols.put("date", "Observation date (monthly)");
+    stateIndustryCols.put("series_id", "BLS State and Metro Area Employment series ID (SMS format)");
+    stateIndustryCols.put("state_fips", "2-digit state FIPS code (00-78)");
+    stateIndustryCols.put("state_name", "State or jurisdiction name");
+    stateIndustryCols.put("supersector_code", "NAICS supersector code (e.g., 00000000 for total nonfarm)");
+    stateIndustryCols.put("supersector_name", "NAICS supersector description");
+    stateIndustryCols.put("employment", "Employment level in thousands of jobs");
+    stateIndustryCols.put("employment_1m_chg", "1-month employment change in thousands");
+    stateIndustryCols.put("employment_12m_chg", "12-month employment change in thousands");
+    stateIndustryCols.put("employment_12m_pct_chg", "12-month percent change in employment");
+    ECON_COLUMN_COMMENTS.put("state_industry", stateIndustryCols);
+
+    // state_wages table
+    ECON_TABLE_COMMENTS.put("state_wages",
+        "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW "
+        + "(Quarterly Census of Employment and Wages). Provides comprehensive state-level compensation "
+        + "data for analyzing regional wage differences, cost-of-living adjustments, economic competitiveness, "
+        + "and labor market dynamics. Critical for understanding how compensation varies across states and "
+        + "identifying high-wage versus low-wage regions.");
+
+    Map<String, String> stateWagesCols = new HashMap<>();
+    stateWagesCols.put("date", "Observation date (quarterly)");
+    stateWagesCols.put("series_id", "BLS QCEW series ID (ENU format)");
+    stateWagesCols.put("state_fips", "2-digit state FIPS code (00-78)");
+    stateWagesCols.put("state_name", "State or jurisdiction name");
+    stateWagesCols.put("average_weekly_wage", "Average weekly wage in dollars");
+    stateWagesCols.put("total_employment", "Total covered employment (quarterly average)");
+    stateWagesCols.put("total_wages", "Total quarterly wages (in thousands of dollars)");
+    stateWagesCols.put("annual_average_wage", "Annual average wage (weekly wage × 52)");
+    ECON_COLUMN_COMMENTS.put("state_wages", stateWagesCols);
+
+    // metro_industry table
+    ECON_TABLE_COMMENTS.put("metro_industry",
+        "Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS "
+        + "supersector codes. Covers major metros including New York, Los Angeles, Chicago, Houston, "
+        + "Phoenix, and others with comprehensive industry breakdowns including manufacturing, construction, "
+        + "retail, healthcare, financial activities, and government. Enables metro-level industry analysis, "
+        + "cross-metro economic comparisons, and identification of regional industry specialization patterns.");
+
+    Map<String, String> metroIndustryCols = new HashMap<>();
+    metroIndustryCols.put("date", "Observation date (monthly)");
+    metroIndustryCols.put("series_id", "BLS State and Metro Area Employment series ID (SMU format)");
+    metroIndustryCols.put("metro_area_code", "BLS metro area code (e.g., A100 for NYC, A400 for LA)");
+    metroIndustryCols.put("metro_area_name", "Metropolitan area name with state abbreviations");
+    metroIndustryCols.put("supersector_code", "NAICS supersector code (e.g., 00000000 for total nonfarm)");
+    metroIndustryCols.put("supersector_name", "NAICS supersector description");
+    metroIndustryCols.put("employment", "Employment level in thousands of jobs");
+    metroIndustryCols.put("employment_1m_chg", "1-month employment change in thousands");
+    metroIndustryCols.put("employment_12m_chg", "12-month employment change in thousands");
+    metroIndustryCols.put("employment_12m_pct_chg", "12-month percent change in employment");
+    ECON_COLUMN_COMMENTS.put("metro_industry", metroIndustryCols);
+
+    // metro_wages table
+    ECON_TABLE_COMMENTS.put("metro_wages",
+        "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census "
+        + "of Employment and Wages). Provides comprehensive metro-level compensation data for analyzing "
+        + "local wage differences, cost-of-living variations, and metropolitan economic competitiveness. "
+        + "Critical for understanding how compensation varies across major metros including NYC, LA, Chicago, "
+        + "Houston, and other major metropolitan areas.");
+
+    Map<String, String> metroWagesCols = new HashMap<>();
+    metroWagesCols.put("date", "Observation date (quarterly)");
+    metroWagesCols.put("series_id", "BLS QCEW series ID (ENUC format)");
+    metroWagesCols.put("metro_area_code", "BLS metro area code (e.g., A100 for NYC, A400 for LA)");
+    metroWagesCols.put("metro_area_name", "Metropolitan area name with state abbreviations");
+    metroWagesCols.put("average_weekly_wage", "Average weekly wage in dollars");
+    metroWagesCols.put("total_employment", "Total covered employment (quarterly average)");
+    metroWagesCols.put("total_wages", "Total quarterly wages (in thousands of dollars)");
+    metroWagesCols.put("annual_average_wage", "Annual average wage (weekly wage × 52)");
+    ECON_COLUMN_COMMENTS.put("metro_wages", metroWagesCols);
+
+    // jolts_regional table
+    ECON_TABLE_COMMENTS.put("jolts_regional",
+        "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, "
+        + "Midwest, South, West). Tracks critical labor market dynamics including job openings rate, hires "
+        + "rate, total separations rate, quits rate, and layoffs/discharges rate. Provides essential insights "
+        + "into labor market fluidity, worker mobility patterns, regional hiring trends, and employment "
+        + "churn across different geographic regions.");
+
+    Map<String, String> joltsRegionalCols = new HashMap<>();
+    joltsRegionalCols.put("date", "Observation date (monthly)");
+    joltsRegionalCols.put("series_id", "BLS JOLTS series ID (JTS format)");
+    joltsRegionalCols.put("region_code", "Census region code (1000=NE, 2000=MW, 3000=S, 4000=W)");
+    joltsRegionalCols.put("region_name", "Census region name (Northeast, Midwest, South, West)");
+    joltsRegionalCols.put("metric", "JOLTS metric code (JOR=Job Openings, HIR=Hires, TSR=Total Separations, QUR=Quits, LDR=Layoffs/Discharges)");
+    joltsRegionalCols.put("metric_name", "JOLTS metric description");
+    joltsRegionalCols.put("rate", "Rate per 100 employees (seasonally adjusted)");
+    joltsRegionalCols.put("level", "Level in thousands (seasonally adjusted)");
+    ECON_COLUMN_COMMENTS.put("jolts_regional", joltsRegionalCols);
+
     // wage_growth table
     ECON_TABLE_COMMENTS.put("wage_growth",
         "Average earnings and compensation data by industry and occupation from BLS. "
