@@ -47,22 +47,29 @@ Primary key: `(date, series_id)`
 | subcategory | VARCHAR | Data subcategory |
 
 #### `regional_employment`
-State and metropolitan area employment statistics.
+State-level employment statistics from BLS LAUS (Local Area Unemployment Statistics) for all 51 U.S. jurisdictions (50 states + DC).
 
 Primary key: `(date, area_code)`
 
+Foreign keys:
+- `state_code` → `geo.tiger_states.state_code` (links to geographic/demographic data)
+
 | Column | Type | Description |
 |--------|------|-------------|
-| date | DATE | Observation date |
-| area_code | VARCHAR | Geographic area code |
-| area_name | VARCHAR | Area name |
-| area_type | VARCHAR | Type (state, MSA, county) |
-| state_code | VARCHAR | 2-letter state code (FK → geo.tiger_states.state_code) |
-| unemployment_rate | DECIMAL | Unemployment percentage |
-| employment_level | BIGINT | Number employed |
-| labor_force | BIGINT | Total labor force |
+| date | DATE | Observation date (monthly) |
+| area_code | VARCHAR | Geographic area code (state FIPS code) |
+| area_name | VARCHAR | State name |
+| area_type | VARCHAR | Type (state) |
+| state_code | VARCHAR | 2-letter state code (FK) |
+| unemployment_rate | DECIMAL | Unemployment rate as percentage |
+| employment_level | BIGINT | Number of employed persons |
+| labor_force | BIGINT | Total labor force size |
 | participation_rate | DECIMAL | Labor force participation rate |
 | employment_population_ratio | DECIMAL | Employment to population ratio |
+
+**Coverage**: 204 series (51 jurisdictions × 4 metrics: unemployment rate, unemployment level, employment level, labor force)
+
+**Note**: County-level LAUS data (~3,142 counties) not yet implemented due to API rate limit constraints. See source code for implementation notes.
 
 #### `wage_growth`
 Earnings by industry and occupation from BLS.

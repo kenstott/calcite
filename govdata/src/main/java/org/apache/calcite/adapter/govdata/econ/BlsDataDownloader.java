@@ -1130,9 +1130,26 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads regional employment data for selected states.
+   * Downloads state-level LAUS (Local Area Unemployment Statistics) data for all 51 jurisdictions
+   * (50 states + DC). Includes unemployment rate, employment level, unemployment level, and labor force.
    */
   public File downloadRegionalEmployment(int startYear, int endYear) throws IOException, InterruptedException {
+    // Generate LAUS series IDs for all states
+    // Format: LASST{state_fips}0000000000{measure}
+    // Measures: 03=unemployment rate, 04=unemployment, 05=employment, 06=labor force
+    List<String> allSeriesIds = new ArrayList<>();
+
+    for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
+      String stateFips = entry.getValue();
+      // Add unemployment rate, employment, unemployment, and labor force for each state
+      allSeriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
+      allSeriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
+      allSeriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
+      allSeriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
+    }
+
+    LOGGER.info("Generated {} LAUS series IDs for all 51 states/jurisdictions", allSeriesIds.size());
+
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
@@ -1147,20 +1164,146 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-    // Download data for major states
-    List<String> seriesIds =
-        List.of(Series.CA_UNEMPLOYMENT,
-        Series.NY_UNEMPLOYMENT,
-        Series.TX_UNEMPLOYMENT);
+      // BLS API supports up to 50 series per request, so batch the requests
+      // We have 204 series (51 states × 4 metrics), so we need 5 batches
+      ArrayNode allSeries = MAPPER.createArrayNode();
 
-      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+      for (int i = 0; i < allSeriesIds.size(); i += 50) {
+        int endIndex = Math.min(i + 50, allSeriesIds.size());
+        List<String> batch = allSeriesIds.subList(i, endIndex);
+
+        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
+                   (i / 50) + 1, (allSeriesIds.size() + 49) / 50, batch.size(), year);
+
+        try {
+          String batchJson = fetchMultipleSeriesRaw(batch, year, year);
+          JsonNode batchRoot = MAPPER.readTree(batchJson);
+
+          // Extract series from batch response
+          JsonNode seriesNode = batchRoot.path("Results").path("series");
+
+          if (!seriesNode.isArray()) {
+            String status = batchRoot.path("status").asText("UNKNOWN");
+            JsonNode messageNode = batchRoot.path("message");
+            String message = messageNode.isArray() && messageNode.size() > 0
+                ? messageNode.get(0).asText()
+                : messageNode.asText("No error message");
+
+            LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
+
+            // Check if this is a rate limit error - if so, stop immediately
+            if ("REQUEST_NOT_PROCESSED".equals(status)
+                && (message.contains("daily threshold") || message.contains("rate limit"))) {
+              LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
+              LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
+                         (i / 50), (allSeriesIds.size() + 49) / 50);
+              LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
+              break; // Exit batch loop - save partial data
+            }
+
+            continue; // Skip this batch for other errors
+          }
+
+          // Add all series from this batch to combined result
+          for (JsonNode series : seriesNode) {
+            allSeries.add(series);
+          }
+
+        } catch (Exception e) {
+          LOGGER.warn("Failed to fetch batch {} for year {}: {}", (i / 50) + 1, year, e.getMessage());
+          // Continue with other batches
+        }
+      }
+
+      // Check if we have any data to save
+      if (allSeries.size() == 0) {
+        LOGGER.warn("No data fetched for regional employment year {} - skipping cache save", year);
+        continue; // Skip to next year
+      }
+
+      // Build combined JSON structure
+      ObjectNode combinedRoot = MAPPER.createObjectNode();
+      ObjectNode resultsNode = MAPPER.createObjectNode();
+      resultsNode.set("series", allSeries);
+      combinedRoot.set("Results", resultsNode);
+      combinedRoot.put("status", "REQUEST_SUCCEEDED");
+      String rawJson = MAPPER.writeValueAsString(combinedRoot);
 
       // Save to cache using base class helper
+      LOGGER.info("Saving regional employment data for year {} ({} series fetched)", year, allSeries.size());
       saveToCache("regional_employment", year, cacheParams, relativePath, rawJson);
       lastFile = new File(relativePath);
     }
 
     return lastFile;
+  }
+
+  /**
+   * Downloads county-level LAUS (Local Area Unemployment Statistics) for all US counties.
+   *
+   * <p>IMPORTANT: County-level LAUS data covers approximately 3,142 US counties with 4 metrics each
+   * (unemployment rate, employment level, unemployment level, labor force), totaling ~12,568 series.
+   *
+   * <p>API Rate Limit Considerations:
+   * - BLS API supports 50 series per request
+   * - ~12,568 series requires ~252 API requests
+   * - With 500 requests/day limit, this takes approximately 1 day for full coverage
+   * - Downloads are cached, so subsequent runs are fast
+   *
+   * <p>Series ID Format: LAUCN{county_5digit_fips}0000000{measure}
+   * - Measures: 3=unemployment rate, 4=unemployment, 5=employment, 6=labor force
+   *
+   * <p>For efficiency, this method downloads all counties but batches requests and implements
+   * fail-fast on rate limits. Partial data is saved, allowing resumption the next day.
+   *
+   * <p>TODO: Implement county FIPS code discovery via Census API or static mapping.
+   * For now, this is a placeholder for future implementation.
+   */
+  public File downloadCountyEmployment(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.warn("County-level LAUS data not yet implemented. " +
+        "This requires ~252 API requests for full US coverage (~3,142 counties × 4 metrics). " +
+        "Implementation pending: Census API integration for county FIPS code discovery.");
+
+    // TODO: Implement county LAUS download
+    // 1. Get all county FIPS codes (query Census API or use static mapping)
+    // 2. Generate LAUCN series IDs for each county (4 metrics per county)
+    // 3. Batch into 50-series requests
+    // 4. Download with fail-fast rate limit handling
+    // 5. Save partial results for resumption
+
+    return null;
+  }
+
+  /**
+   * Downloads county-level QCEW (Quarterly Census of Employment and Wages) data.
+   *
+   * <p>IMPORTANT: County-level QCEW data with industry breakdown would generate an extremely
+   * large number of series: ~3,142 counties × industry codes × ownership types × establishment sizes.
+   *
+   * <p>This could easily exceed 100,000+ series, which is not practical via the BLS API.
+   *
+   * <p>RECOMMENDATION: For comprehensive county-level QCEW data, users should:
+   * 1. Use BLS QCEW flat file downloads (CSV/Excel format)
+   * 2. Use the QCEW database interface: https://data.bls.gov/cew/apps/data_views/data_views.htm
+   * 3. Download state-by-state QCEW files and process locally
+   *
+   * <p>This method is a placeholder for potential future implementation with state filtering.
+   *
+   * <p>TODO: Consider implementing county-level QCEW for specific states only, or total employment
+   * without industry breakdown (reducing series count to ~3,142 counties × 2-3 metrics).
+   */
+  public File downloadCountyWages(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.warn("County-level QCEW data not yet implemented. " +
+        "Full county×industry coverage would require 100,000+ series (not practical via API). " +
+        "Consider using BLS QCEW flat file downloads for comprehensive county-level data: " +
+        "https://data.bls.gov/cew/apps/data_views/data_views.htm");
+
+    // TODO: Potential implementation approaches:
+    // 1. State-filtered county QCEW (download counties for specific states only)
+    // 2. Total employment only (no industry breakdown) to reduce series count
+    // 3. Integration with BLS flat file downloads instead of API
+
+    return null;
   }
 
   /**
