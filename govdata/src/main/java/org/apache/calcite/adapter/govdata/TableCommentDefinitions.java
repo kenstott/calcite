@@ -1172,9 +1172,11 @@ public final class TableCommentDefinitions {
 
     // regional_employment table
     ECON_TABLE_COMMENTS.put("regional_employment",
-        "State and metropolitan area employment statistics from BLS Local Area Unemployment Statistics "
-        + "(LAUS). Provides unemployment rates, employment levels, and labor force participation by "
-        + "geographic region. Critical for regional economic analysis and geographic comparisons.");
+        "State-level employment statistics from BLS Local Area Unemployment Statistics (LAUS) for all "
+        + "51 U.S. jurisdictions (50 states + DC). Provides comprehensive monthly data including unemployment "
+        + "rate, unemployment level, employment level, and labor force size. Includes 204 series (51 states × "
+        + "4 metrics). Critical for state-level labor market analysis, regional economic comparisons, and "
+        + "understanding geographic employment patterns.");
 
     Map<String, String> regionalEmploymentCols = new HashMap<>();
     regionalEmploymentCols.put("date", "Observation date");
