@@ -42,6 +42,11 @@
       "comment": "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis."
     },
     {
+      "name": "county_qcew",
+      "pattern": "type=county_qcew/year=*/county_qcew.parquet",
+      "comment": "County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research."
+    },
+    {
       "name": "jolts_regional",
       "pattern": "type=jolts_regional/year=*/jolts_regional.parquet",
       "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends."
