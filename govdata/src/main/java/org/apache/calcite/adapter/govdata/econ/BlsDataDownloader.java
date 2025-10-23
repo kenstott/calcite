@@ -761,10 +761,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         // Parse and extract series array from this batch
         JsonNode batchRoot = MAPPER.readTree(batchJson);
-        ArrayNode batchSeries = (ArrayNode) batchRoot.path("Results").path("series");
+        JsonNode seriesNode = batchRoot.path("Results").path("series");
+
+        if (!seriesNode.isArray()) {
+          String status = batchRoot.path("status").asText("UNKNOWN");
+          String message = batchRoot.path("message").asText("No error message");
+          LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
+          LOGGER.debug("Problematic response: {}", batchJson);
+          continue; // Skip this batch
+        }
 
         // Append series to combined array
-        for (JsonNode series : batchSeries) {
+        for (JsonNode series : seriesNode) {
           allSeries.add(series);
         }
 
@@ -874,10 +882,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         // Parse and extract series array from this batch
         JsonNode batchRoot = MAPPER.readTree(batchJson);
-        ArrayNode batchSeries = (ArrayNode) batchRoot.path("Results").path("series");
+        JsonNode seriesNode = batchRoot.path("Results").path("series");
+
+        if (!seriesNode.isArray()) {
+          String status = batchRoot.path("status").asText("UNKNOWN");
+          String message = batchRoot.path("message").asText("No error message");
+          LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
+          LOGGER.debug("Problematic response: {}", batchJson);
+          continue; // Skip this batch
+        }
 
         // Append series to combined array
-        for (JsonNode series : batchSeries) {
+        for (JsonNode series : seriesNode) {
           allSeries.add(series);
         }
 
