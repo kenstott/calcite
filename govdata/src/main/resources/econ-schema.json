@@ -58,7 +58,7 @@
     },
     {
       "name": "regional_employment",
-      "pattern": "type=regional/year=*/regional_employment.parquet",
+      "pattern": "type=regional/year=*/state_fips=*/regional_employment.parquet",
       "comment": "State and metropolitan area employment statistics including unemployment rates, job growth, and labor force participation by geographic region."
     },
     {
