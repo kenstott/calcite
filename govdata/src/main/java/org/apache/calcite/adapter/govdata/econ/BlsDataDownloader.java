@@ -28,8 +28,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -40,6 +43,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Downloads and converts BLS economic data to Parquet format.
@@ -1132,110 +1137,202 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads state-level LAUS (Local Area Unemployment Statistics) data for all 51 jurisdictions
    * (50 states + DC). Includes unemployment rate, employment level, unemployment level, and labor force.
+   *
+   * <p>Data is partitioned by year and state_fips, with each state saved to a separate parquet file.
+   * This enables incremental downloads - if a state file already exists for a given year, it's skipped.
    */
   public File downloadRegionalEmployment(int startYear, int endYear) throws IOException, InterruptedException {
-    // Generate LAUS series IDs for all states
-    // Format: LASST{state_fips}0000000000{measure}
-    // Measures: 03=unemployment rate, 04=unemployment, 05=employment, 06=labor force
-    List<String> allSeriesIds = new ArrayList<>();
+    LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", startYear, endYear);
 
-    for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
-      String stateFips = entry.getValue();
-      // Add unemployment rate, employment, unemployment, and labor force for each state
-      allSeriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
-      allSeriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
-      allSeriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
-      allSeriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
-    }
-
-    LOGGER.info("Generated {} LAUS series IDs for all 51 states/jurisdictions", allSeriesIds.size());
+    File lastFile = null;
+    int totalStatesDownloaded = 0;
+    int totalStatesSkipped = 0;
 
     // Download for each year separately
-    File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=regional/year=" + year + "/regional_employment.json";
+      LOGGER.info("Processing year {}: checking which states need downloading", year);
 
-      Map<String, String> cacheParams = new HashMap<>();
+      // Check each state to see if it's already cached
+      for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
+        String stateName = entry.getKey();
+        String stateFips = entry.getValue();
 
-      // Check cache using base class helper
-      if (isCachedOrExists("regional_employment", year, cacheParams, relativePath)) {
-        LOGGER.info("Found cached regional employment data for year {} - skipping download", year);
-        lastFile = new File(relativePath);
-        continue;
-      }
+        // Check if this state's parquet file already exists
+        String parquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
 
-      // BLS API supports up to 50 series per request, so batch the requests
-      // We have 204 series (51 states × 4 metrics), so we need 5 batches
-      ArrayNode allSeries = MAPPER.createArrayNode();
+        if (storageProvider.exists(parquetPath)) {
+          LOGGER.debug("State {} (FIPS {}) year {} already cached - skipping", stateName, stateFips, year);
+          totalStatesSkipped++;
+          lastFile = new File(parquetPath);
+          continue;
+        }
 
-      for (int i = 0; i < allSeriesIds.size(); i += 50) {
-        int endIndex = Math.min(i + 50, allSeriesIds.size());
-        List<String> batch = allSeriesIds.subList(i, endIndex);
+        LOGGER.info("Downloading state {} (FIPS {}) for year {}", stateName, stateFips, year);
 
-        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
-                   (i / 50) + 1, (allSeriesIds.size() + 49) / 50, batch.size(), year);
+        // Generate series IDs for this state
+        // Format: LASST{state_fips}0000000000{measure}
+        // Measures: 03=unemployment rate, 04=unemployment, 05=employment, 06=labor force
+        List<String> seriesIds = new ArrayList<>();
+        seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
+        seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
+        seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
+        seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
 
         try {
-          String batchJson = fetchMultipleSeriesRaw(batch, year, year);
+          // Fetch data for this state's 4 series
+          String batchJson = fetchMultipleSeriesRaw(seriesIds, year, year);
           JsonNode batchRoot = MAPPER.readTree(batchJson);
 
-          // Extract series from batch response
+          // Extract series from response
           JsonNode seriesNode = batchRoot.path("Results").path("series");
 
-          if (!seriesNode.isArray()) {
+          if (!seriesNode.isArray() || seriesNode.size() == 0) {
             String status = batchRoot.path("status").asText("UNKNOWN");
             JsonNode messageNode = batchRoot.path("message");
             String message = messageNode.isArray() && messageNode.size() > 0
                 ? messageNode.get(0).asText()
                 : messageNode.asText("No error message");
 
-            LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
+            LOGGER.warn("Failed to fetch data for state {} (status: {}): {}", stateName, status, message);
 
             // Check if this is a rate limit error - if so, stop immediately
             if ("REQUEST_NOT_PROCESSED".equals(status)
                 && (message.contains("daily threshold") || message.contains("rate limit"))) {
-              LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
-              LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
-                         (i / 50), (allSeriesIds.size() + 49) / 50);
-              LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
-              break; // Exit batch loop - save partial data
+              LOGGER.warn("BLS API daily rate limit reached. Stopping download.");
+              LOGGER.info("Downloaded {} states, skipped {} already cached", totalStatesDownloaded, totalStatesSkipped);
+              LOGGER.info("Retry tomorrow after rate limit resets (midnight Eastern Time).");
+              return lastFile;
             }
 
-            continue; // Skip this batch for other errors
+            continue; // Skip this state
           }
 
-          // Add all series from this batch to combined result
-          for (JsonNode series : seriesNode) {
-            allSeries.add(series);
-          }
+          // Convert JSON response to Parquet and save
+          convertAndSaveRegionalEmployment(batchRoot, parquetPath, year, stateFips);
+          totalStatesDownloaded++;
+          lastFile = new File(parquetPath);
+
+          LOGGER.info("Saved state {} (FIPS {}) for year {} ({} series)", stateName, stateFips, year, seriesNode.size());
 
         } catch (Exception e) {
-          LOGGER.warn("Failed to fetch batch {} for year {}: {}", (i / 50) + 1, year, e.getMessage());
-          // Continue with other batches
+          LOGGER.warn("Failed to download state {} (FIPS {}) for year {}: {}", stateName, stateFips, year, e.getMessage());
+          // Continue with next state
         }
+
+        // Rate limiting: small delay between states to avoid overwhelming API
+        Thread.sleep(100);
       }
-
-      // Check if we have any data to save
-      if (allSeries.size() == 0) {
-        LOGGER.warn("No data fetched for regional employment year {} - skipping cache save", year);
-        continue; // Skip to next year
-      }
-
-      // Build combined JSON structure
-      ObjectNode combinedRoot = MAPPER.createObjectNode();
-      ObjectNode resultsNode = MAPPER.createObjectNode();
-      resultsNode.set("series", allSeries);
-      combinedRoot.set("Results", resultsNode);
-      combinedRoot.put("status", "REQUEST_SUCCEEDED");
-      String rawJson = MAPPER.writeValueAsString(combinedRoot);
-
-      // Save to cache using base class helper
-      LOGGER.info("Saving regional employment data for year {} ({} series fetched)", year, allSeries.size());
-      saveToCache("regional_employment", year, cacheParams, relativePath, rawJson);
-      lastFile = new File(relativePath);
     }
 
+    LOGGER.info("Regional employment download complete: {} states downloaded, {} already cached",
+                totalStatesDownloaded, totalStatesSkipped);
+
     return lastFile;
+  }
+
+  /**
+   * Converts BLS LAUS JSON response to Parquet format and saves for a single state.
+   *
+   * @param jsonResponse BLS API JSON response containing series data
+   * @param parquetPath Target path for Parquet file (including state partition)
+   * @param year Year of the data
+   * @param stateFips State FIPS code
+   * @throws IOException if conversion or write fails
+   */
+  private void convertAndSaveRegionalEmployment(JsonNode jsonResponse, String parquetPath,
+      int year, String stateFips) throws IOException {
+
+    // Define schema matching regional_employment table
+    Schema schema = SchemaBuilder.record("regional_employment")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").type().stringType().noDefault()
+        .name("series_id").type().stringType().noDefault()
+        .name("value").type().nullable().doubleType().noDefault()
+        .name("area_code").type().nullable().stringType().noDefault()
+        .name("area_type").type().nullable().stringType().noDefault()
+        .name("measure").type().nullable().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+
+    // Parse series from JSON response
+    JsonNode seriesArray = jsonResponse.path("Results").path("series");
+    if (!seriesArray.isArray()) {
+      throw new IOException("Invalid BLS response: no series array found");
+    }
+
+    for (JsonNode series : seriesArray) {
+      String seriesId = series.path("seriesID").asText();
+      JsonNode dataArray = series.path("data");
+
+      if (!dataArray.isArray()) {
+        continue;
+      }
+
+      // Extract measure from series ID (last digit: 3=rate, 4=unemployment, 5=employment, 6=labor force)
+      String measureCode = seriesId.substring(seriesId.length() - 1);
+      String measure = getMeasureFromCode(measureCode);
+
+      for (JsonNode dataPoint : dataArray) {
+        String yearStr = dataPoint.path("year").asText();
+        String period = dataPoint.path("period").asText();
+        String valueStr = dataPoint.path("value").asText();
+
+        // Parse value
+        Double value = null;
+        try {
+          value = Double.parseDouble(valueStr);
+        } catch (NumberFormatException e) {
+          // Skip invalid values
+          continue;
+        }
+
+        // Construct date from year and period (M01-M12 format)
+        String month = period.replace("M", "");
+        String date = String.format("%s-%02d-01", yearStr, Integer.parseInt(month));
+
+        // Create Avro record
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", date);
+        record.put("series_id", seriesId);
+        record.put("value", value);
+        record.put("area_code", stateFips);
+        record.put("area_type", "state");
+        record.put("measure", measure);
+
+        records.add(record);
+      }
+    }
+
+    if (records.isEmpty()) {
+      LOGGER.warn("No records parsed from BLS response for state FIPS {}", stateFips);
+      return;
+    }
+
+    // Write Parquet file
+    String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
+    storageProvider.writeAvroParquet(fullPath, schema, records, "regional_employment");
+
+    LOGGER.debug("Wrote {} records to {}", records.size(), parquetPath);
+  }
+
+  /**
+   * Maps BLS measure code to human-readable measure name.
+   */
+  private String getMeasureFromCode(String code) {
+    switch (code) {
+      case "3":
+        return "unemployment_rate";
+      case "4":
+        return "unemployment";
+      case "5":
+        return "employment";
+      case "6":
+        return "labor_force";
+      default:
+        return "unknown";
+    }
   }
 
   /**
@@ -1449,16 +1546,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         LOGGER.info("Downloaded QCEW flat file for year {} ({} MB)",
             year, zipData.length / (1024 * 1024));
 
-        // TODO: Unzip and parse CSV file
-        // TODO: Convert to Parquet format with schema:
-        //   - area_fips (5-digit county code)
-        //   - county_name
-        //   - industry_code (NAICS)
-        //   - ownership_code (private, government, etc.)
-        //   - establishment_count
-        //   - average_employment
-        //   - total_wages
-        //   - average_weekly_wage
+        // Parse CSV and convert to Parquet
+        String parquetPath = "source=econ/type=county_qcew/year=" + year + "/county_qcew.parquet";
+        parseAndConvertQcewToParquet(zipData, parquetPath, year);
 
         // Save cache metadata
         saveToCache("qcew_annual", year, cacheParams, relativePath, "");
@@ -1498,6 +1588,203 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Download interrupted", e);
+    }
+  }
+
+  /**
+   * Parses QCEW flat file (ZIP containing CSV) and converts to Parquet format.
+   *
+   * <p>Extracts county-level records from the QCEW annual CSV file and converts to Parquet.
+   * Filters to county-level aggregation (agglvl_code 70-78) to focus on county-specific data.
+   *
+   * <p>Schema includes:
+   * - area_fips: 5-digit county FIPS code
+   * - own_code: Ownership code (0=Total, 1-5=various types)
+   * - industry_code: 6-character NAICS industry code
+   * - agglvl_code: Aggregation level (70-78 for county data)
+   * - annual_avg_estabs: Annual average establishment count
+   * - annual_avg_emplvl: Annual average employment level
+   * - total_annual_wages: Total annual wages
+   * - annual_avg_wkly_wage: Average weekly wage
+   *
+   * @param zipData Downloaded ZIP file bytes
+   * @param parquetPath Relative path for output Parquet file
+   * @param year Year of the data
+   * @throws IOException if parsing or conversion fails
+   */
+  private void parseAndConvertQcewToParquet(byte[] zipData, String parquetPath, int year) throws IOException {
+    LOGGER.info("Parsing QCEW CSV for year {} and converting to Parquet", year);
+
+    // Define Avro schema for QCEW county data
+    Schema schema = SchemaBuilder.record("CountyQcew")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("area_fips").type().stringType().noDefault()
+        .name("own_code").type().stringType().noDefault()
+        .name("industry_code").type().stringType().noDefault()
+        .name("agglvl_code").type().stringType().noDefault()
+        .name("annual_avg_estabs").type().nullable().intType().noDefault()
+        .name("annual_avg_emplvl").type().nullable().intType().noDefault()
+        .name("total_annual_wages").type().nullable().longType().noDefault()
+        .name("annual_avg_wkly_wage").type().nullable().intType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    int recordCount = 0;
+    int countyRecordCount = 0;
+
+    // Unzip and parse CSV
+    try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+      ZipEntry entry;
+
+      while ((entry = zis.getNextEntry()) != null) {
+        // Look for CSV files in the ZIP
+        if (entry.getName().endsWith(".csv")) {
+          LOGGER.info("Processing CSV file: {}", entry.getName());
+
+          try (BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8))) {
+            String line;
+            boolean isHeader = true;
+
+            while ((line = reader.readLine()) != null) {
+              // Skip header row
+              if (isHeader) {
+                isHeader = false;
+                continue;
+              }
+
+              recordCount++;
+
+              // Parse CSV line (QCEW uses comma-separated values with quotes)
+              String[] fields = parseCsvLine(line);
+
+              if (fields.length < 20) {
+                continue; // Skip malformed records
+              }
+
+              try {
+                String areaFips = fields[0].trim();
+                String ownCode = fields[1].trim();
+                String industryCode = fields[2].trim();
+                String agglvlCode = fields[3].trim();
+
+                // Filter to county-level data only (agglvl 70-78 are county aggregations)
+                // 70 = County, Total
+                // 71-78 = Various county-level industry aggregations
+                if (!agglvlCode.startsWith("7")) {
+                  continue;
+                }
+
+                // Filter to actual counties (5-digit FIPS codes, not state or national)
+                if (areaFips.length() != 5 || areaFips.equals("US000")) {
+                  continue;
+                }
+
+                countyRecordCount++;
+
+                // Parse numeric fields (handle empty values)
+                Integer avgEstabs = parseIntOrNull(fields[13]);
+                Integer avgEmplvl = parseIntOrNull(fields[14]);
+                Long totalWages = parseLongOrNull(fields[15]);
+                Integer avgWklyWage = parseIntOrNull(fields[18]);
+
+                // Create Avro record
+                GenericRecord record = new GenericData.Record(schema);
+                record.put("area_fips", areaFips);
+                record.put("own_code", ownCode);
+                record.put("industry_code", industryCode);
+                record.put("agglvl_code", agglvlCode);
+                record.put("annual_avg_estabs", avgEstabs);
+                record.put("annual_avg_emplvl", avgEmplvl);
+                record.put("total_annual_wages", totalWages);
+                record.put("annual_avg_wkly_wage", avgWklyWage);
+
+                records.add(record);
+
+              } catch (Exception e) {
+                // Skip malformed records
+                LOGGER.debug("Skipping malformed QCEW record: {}", e.getMessage());
+              }
+
+              // Log progress every 100K records
+              if (recordCount % 100000 == 0) {
+                LOGGER.info("Processed {} total records, {} county records extracted", recordCount, countyRecordCount);
+              }
+            }
+          }
+        }
+
+        zis.closeEntry();
+      }
+    }
+
+    LOGGER.info("Parsed {} county records from {} total QCEW records", countyRecordCount, recordCount);
+
+    // Convert to Parquet and save
+    if (!records.isEmpty()) {
+      String fullPath = storageProvider.resolvePath(operatingDirectory, parquetPath);
+      storageProvider.writeAvroParquet(fullPath, schema, records, "county_qcew");
+      LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", parquetPath, records.size());
+    } else {
+      LOGGER.warn("No county records found in QCEW data for year {}", year);
+    }
+  }
+
+  /**
+   * Parses a CSV line handling quoted fields.
+   *
+   * @param line CSV line to parse
+   * @return Array of field values
+   */
+  private String[] parseCsvLine(String line) {
+    List<String> fields = new ArrayList<>();
+    StringBuilder currentField = new StringBuilder();
+    boolean inQuotes = false;
+
+    for (int i = 0; i < line.length(); i++) {
+      char c = line.charAt(i);
+
+      if (c == '"') {
+        inQuotes = !inQuotes;
+      } else if (c == ',' && !inQuotes) {
+        fields.add(currentField.toString());
+        currentField.setLength(0);
+      } else {
+        currentField.append(c);
+      }
+    }
+
+    // Add the last field
+    fields.add(currentField.toString());
+
+    return fields.toArray(new String[0]);
+  }
+
+  /**
+   * Parses an integer from a string, returning null if empty or invalid.
+   */
+  private Integer parseIntOrNull(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(value.trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Parses a long from a string, returning null if empty or invalid.
+   */
+  private Long parseLongOrNull(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return null;
+    }
+    try {
+      return Long.parseLong(value.trim());
+    } catch (NumberFormatException e) {
+      return null;
     }
   }
 

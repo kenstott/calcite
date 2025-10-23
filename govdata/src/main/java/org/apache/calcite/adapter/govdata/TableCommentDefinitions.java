@@ -1132,6 +1132,26 @@ public final class TableCommentDefinitions {
     metroWagesCols.put("annual_average_wage", "Annual average wage (weekly wage × 52)");
     ECON_COLUMN_COMMENTS.put("metro_wages", metroWagesCols);
 
+    // county_qcew table
+    ECON_TABLE_COMMENTS.put("county_qcew",
+        "County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) "
+        + "for all ~3,142 U.S. counties. Provides comprehensive county-level data including establishment "
+        + "counts, employment levels, total wages, and average weekly wages broken down by industry (NAICS codes) "
+        + "and ownership type (private, federal, state, local government). Enables detailed county-level labor "
+        + "market analysis, industry concentration studies, economic development research, and cross-county "
+        + "comparisons. Data sourced from BLS QCEW flat files covering all counties with detailed industry breakdowns.");
+
+    Map<String, String> countyQcewCols = new HashMap<>();
+    countyQcewCols.put("area_fips", "5-digit county FIPS code (state + county)");
+    countyQcewCols.put("own_code", "Ownership code: 0=Total, 1-5=Private/Government breakdown");
+    countyQcewCols.put("industry_code", "6-character NAICS industry code");
+    countyQcewCols.put("agglvl_code", "Aggregation level code (70-78 for county data)");
+    countyQcewCols.put("annual_avg_estabs", "Annual average of quarterly establishment counts");
+    countyQcewCols.put("annual_avg_emplvl", "Annual average of monthly employment levels");
+    countyQcewCols.put("total_annual_wages", "Sum of quarterly total wages (in dollars)");
+    countyQcewCols.put("annual_avg_wkly_wage", "Average weekly wage (total wages / avg employment / 52)");
+    ECON_COLUMN_COMMENTS.put("county_qcew", countyQcewCols);
+
     // jolts_regional table
     ECON_TABLE_COMMENTS.put("jolts_regional",
         "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, "

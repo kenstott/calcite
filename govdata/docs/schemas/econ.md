@@ -181,6 +181,31 @@ Primary key: `(date, metro_area_code)`
 | total_employment | INTEGER | Total employment count |
 | percent_change_year | DECIMAL | Year-over-year wage change |
 
+#### `county_qcew`
+County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties.
+
+Primary key: `(area_fips, own_code, industry_code, agglvl_code)`
+
+Foreign keys:
+- `area_fips` → `geo.tiger_counties.county_fips` (links to county geographic data)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| area_fips | VARCHAR | 5-digit county FIPS code (FK) |
+| own_code | VARCHAR | Ownership code (0=Total, 1-5=breakdown) |
+| industry_code | VARCHAR | 6-character NAICS industry code |
+| agglvl_code | VARCHAR | Aggregation level (70-78 for county) |
+| annual_avg_estabs | INTEGER | Annual average establishment count |
+| annual_avg_emplvl | INTEGER | Annual average employment level |
+| total_annual_wages | BIGINT | Total annual wages ($) |
+| annual_avg_wkly_wage | INTEGER | Average weekly wage ($) |
+
+**Coverage**: Comprehensive county-level data with industry and ownership breakdowns
+
+**Data Source**: BLS QCEW flat files (CSV format, ~500MB per year) downloaded and converted to Parquet
+
+**Note**: Provides detailed industry breakdown by NAICS codes and ownership types (private, federal, state, local government) for all U.S. counties. Essential for county-level economic analysis, industry concentration studies, and regional development research.
+
 ### Price and Inflation Tables
 
 #### `inflation_metrics`
