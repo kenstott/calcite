@@ -1256,54 +1256,249 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <p>For efficiency, this method downloads all counties but batches requests and implements
    * fail-fast on rate limits. Partial data is saved, allowing resumption the next day.
    *
-   * <p>TODO: Implement county FIPS code discovery via Census API or static mapping.
-   * For now, this is a placeholder for future implementation.
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param countyFipsCodes Map of county FIPS codes to county names (from Census API)
+   * @return Last file downloaded
+   * @throws IOException if download fails
+   * @throws InterruptedException if interrupted
    */
-  public File downloadCountyEmployment(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.warn("County-level LAUS data not yet implemented. " +
-        "This requires ~252 API requests for full US coverage (~3,142 counties × 4 metrics). " +
-        "Implementation pending: Census API integration for county FIPS code discovery.");
+  public File downloadCountyEmployment(int startYear, int endYear, Map<String, String> countyFipsCodes)
+      throws IOException, InterruptedException {
 
-    // TODO: Implement county LAUS download
-    // 1. Get all county FIPS codes (query Census API or use static mapping)
-    // 2. Generate LAUCN series IDs for each county (4 metrics per county)
-    // 3. Batch into 50-series requests
-    // 4. Download with fail-fast rate limit handling
-    // 5. Save partial results for resumption
+    if (countyFipsCodes == null || countyFipsCodes.isEmpty()) {
+      LOGGER.warn("County FIPS codes not provided - cannot download county-level LAUS data. " +
+          "Call CensusApiClient.getAllCountyFipsCodes() first to get county listings.");
+      return null;
+    }
 
-    return null;
+    // Generate LAUS series IDs for all counties
+    // Format: LAUCN{county_5digit_fips}0000000{measure}
+    // Measures: 3=unemployment rate, 4=unemployment level, 5=employment level, 6=labor force
+    List<String> allSeriesIds = new ArrayList<>();
+
+    for (String countyFips : countyFipsCodes.keySet()) {
+      // Add 4 metrics for each county
+      allSeriesIds.add("LAUCN" + countyFips + "0000000003"); // unemployment rate
+      allSeriesIds.add("LAUCN" + countyFips + "0000000004"); // unemployment level
+      allSeriesIds.add("LAUCN" + countyFips + "0000000005"); // employment level
+      allSeriesIds.add("LAUCN" + countyFips + "0000000006"); // labor force
+    }
+
+    LOGGER.info("Generated {} LAUS series IDs for {} counties",
+        allSeriesIds.size(), countyFipsCodes.size());
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String relativePath = "source=econ/type=county/year=" + year + "/county_employment.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("county_employment", year, cacheParams, relativePath)) {
+        LOGGER.info("Found cached county employment data for year {} - skipping download", year);
+        lastFile = new File(relativePath);
+        continue;
+      }
+
+      // BLS API supports up to 50 series per request, so batch the requests
+      // We have ~12,568 series (~3,142 counties × 4 metrics), so we need ~252 batches
+      ArrayNode allSeries = MAPPER.createArrayNode();
+
+      for (int i = 0; i < allSeriesIds.size(); i += 50) {
+        int endIndex = Math.min(i + 50, allSeriesIds.size());
+        List<String> batch = allSeriesIds.subList(i, endIndex);
+
+        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
+                   (i / 50) + 1, (allSeriesIds.size() + 49) / 50, batch.size(), year);
+
+        try {
+          String batchJson = fetchMultipleSeriesRaw(batch, year, year);
+          JsonNode batchRoot = MAPPER.readTree(batchJson);
+
+          // Extract series from batch response
+          JsonNode seriesNode = batchRoot.path("Results").path("series");
+
+          if (!seriesNode.isArray()) {
+            String status = batchRoot.path("status").asText("UNKNOWN");
+            JsonNode messageNode = batchRoot.path("message");
+            String message = messageNode.isArray() && messageNode.size() > 0
+                ? messageNode.get(0).asText()
+                : messageNode.asText("No error message");
+
+            LOGGER.warn("BLS API did not return series array for batch (status: {}): {}", status, message);
+
+            // Check if this is a rate limit error - if so, stop immediately
+            if ("REQUEST_NOT_PROCESSED".equals(status)
+                && (message.contains("daily threshold") || message.contains("rate limit"))) {
+              LOGGER.warn("BLS API daily rate limit reached. Stopping download for year {}.", year);
+              LOGGER.info("Successfully fetched {} of {} batches before rate limit.",
+                         (i / 50), (allSeriesIds.size() + 49) / 50);
+              LOGGER.info("Partial data will be saved. Retry tomorrow after rate limit resets (midnight Eastern Time).");
+              break; // Exit batch loop - save partial data
+            }
+
+            continue; // Skip this batch for other errors
+          }
+
+          // Add all series from this batch to combined result
+          for (JsonNode series : seriesNode) {
+            allSeries.add(series);
+          }
+
+        } catch (Exception e) {
+          LOGGER.warn("Failed to fetch batch {} for year {}: {}", (i / 50) + 1, year, e.getMessage());
+          // Continue with other batches
+        }
+      }
+
+      // Check if we have any data to save
+      if (allSeries.size() == 0) {
+        LOGGER.warn("No data fetched for county employment year {} - skipping cache save", year);
+        continue; // Skip to next year
+      }
+
+      // Build combined JSON structure
+      ObjectNode combinedRoot = MAPPER.createObjectNode();
+      ObjectNode resultsNode = MAPPER.createObjectNode();
+      resultsNode.set("series", allSeries);
+      combinedRoot.set("Results", resultsNode);
+      combinedRoot.put("status", "REQUEST_SUCCEEDED");
+      String rawJson = MAPPER.writeValueAsString(combinedRoot);
+
+      // Save to cache using base class helper
+      LOGGER.info("Saving county employment data for year {} ({} series fetched)", year, allSeries.size());
+      saveToCache("county_employment", year, cacheParams, relativePath, rawJson);
+      lastFile = new File(relativePath);
+    }
+
+    return lastFile;
   }
 
   /**
-   * Downloads county-level QCEW (Quarterly Census of Employment and Wages) data.
+   * Downloads county-level QCEW (Quarterly Census of Employment and Wages) data via flat file downloads.
    *
-   * <p>IMPORTANT: County-level QCEW data with industry breakdown would generate an extremely
-   * large number of series: ~3,142 counties × industry codes × ownership types × establishment sizes.
+   * <p>IMPORTANT: County-level QCEW data with industry breakdown would generate 100,000+ series
+   * via the API, which is not practical. Instead, this method downloads BLS QCEW flat files (CSV format)
+   * which provide comprehensive county-level data for all industries, ownership types, and establishment sizes.
    *
-   * <p>This could easily exceed 100,000+ series, which is not practical via the BLS API.
+   * <p>BLS QCEW Flat File Structure:
+   * - Annual files: One CSV file per year with all counties, industries, and metrics
+   * - Quarterly files: Separate files for each quarter
+   * - URL pattern: https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip
    *
-   * <p>RECOMMENDATION: For comprehensive county-level QCEW data, users should:
-   * 1. Use BLS QCEW flat file downloads (CSV/Excel format)
-   * 2. Use the QCEW database interface: https://data.bls.gov/cew/apps/data_views/data_views.htm
-   * 3. Download state-by-state QCEW files and process locally
+   * <p>This implementation downloads annual single files which are smaller and simpler to process.
+   * The files are large (~500MB zipped, ~3GB unzipped) but provide complete coverage.
    *
-   * <p>This method is a placeholder for potential future implementation with state filtering.
+   * <p>TODO: Implement full CSV parsing and Parquet conversion. Current implementation downloads
+   * the files but does not yet parse them. Steps needed:
+   * 1. Download and unzip CSV files
+   * 2. Parse CSV records (millions of rows per year)
+   * 3. Filter to relevant metrics (employment, wages, establishments)
+   * 4. Convert to Parquet format with proper partitioning
+   * 5. Add table schema definition for query access
    *
-   * <p>TODO: Consider implementing county-level QCEW for specific states only, or total employment
-   * without industry breakdown (reducing series count to ~3,142 counties × 2-3 metrics).
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @return Last file downloaded
+   * @throws IOException if download fails
+   * @throws InterruptedException if interrupted
    */
   public File downloadCountyWages(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.warn("County-level QCEW data not yet implemented. " +
-        "Full county×industry coverage would require 100,000+ series (not practical via API). " +
-        "Consider using BLS QCEW flat file downloads for comprehensive county-level data: " +
-        "https://data.bls.gov/cew/apps/data_views/data_views.htm");
+    LOGGER.info("Downloading BLS QCEW flat files for county-level wage and employment data");
+    LOGGER.warn("QCEW flat file parsing not yet fully implemented. Files will be downloaded but " +
+        "conversion to queryable Parquet format is pending. See source code TODOs for implementation details.");
 
-    // TODO: Potential implementation approaches:
-    // 1. State-filtered county QCEW (download counties for specific states only)
-    // 2. Total employment only (no industry breakdown) to reduce series count
-    // 3. Integration with BLS flat file downloads instead of API
+    File lastFile = null;
 
-    return null;
+    for (int year = startYear; year <= endYear; year++) {
+      // QCEW data only available from 1990 forward in current format
+      if (year < 1990) {
+        LOGGER.warn("QCEW flat files only available from 1990 forward. Skipping year {}", year);
+        continue;
+      }
+
+      String relativePath = "source=econ/type=qcew/year=" + year + "/qcew_annual.zip";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("qcew_annual", year, cacheParams, relativePath)) {
+        LOGGER.info("Found cached QCEW flat file for year {} - skipping download", year);
+        lastFile = new File(relativePath);
+        continue;
+      }
+
+      // BLS QCEW flat file URL pattern
+      // Annual single file format is simplest: all counties, industries, and metrics in one CSV
+      String url = String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_annual_singlefile.zip",
+          year, year);
+
+      LOGGER.info("Downloading QCEW flat file for year {} from {}", year, url);
+
+      try {
+        // Download the ZIP file
+        // Note: These files are large (~500MB zipped), so download may take several minutes
+        byte[] zipData = downloadFile(url);
+
+        // Save ZIP file to storage
+        String zipPath = storageProvider.resolvePath(operatingDirectory, relativePath);
+        storageProvider.writeFile(zipPath, zipData);
+
+        LOGGER.info("Downloaded QCEW flat file for year {} ({} MB)",
+            year, zipData.length / (1024 * 1024));
+
+        // TODO: Unzip and parse CSV file
+        // TODO: Convert to Parquet format with schema:
+        //   - area_fips (5-digit county code)
+        //   - county_name
+        //   - industry_code (NAICS)
+        //   - ownership_code (private, government, etc.)
+        //   - establishment_count
+        //   - average_employment
+        //   - total_wages
+        //   - average_weekly_wage
+
+        // Save cache metadata
+        saveToCache("qcew_annual", year, cacheParams, relativePath, "");
+        lastFile = new File(relativePath);
+
+      } catch (Exception e) {
+        LOGGER.error("Failed to download QCEW flat file for year {}: {}", year, e.getMessage());
+        // Continue with other years
+      }
+    }
+
+    return lastFile;
+  }
+
+  /**
+   * Downloads a file from a URL and returns the bytes.
+   *
+   * @param url URL to download from
+   * @return File contents as byte array
+   * @throws IOException if download fails
+   */
+  private byte[] downloadFile(String url) throws IOException {
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .timeout(Duration.ofMinutes(10)) // Large files may take time
+        .GET()
+        .build();
+
+    try {
+      HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+      if (response.statusCode() != 200) {
+        throw new IOException("HTTP request failed with status: " + response.statusCode());
+      }
+
+      return response.body();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Download interrupted", e);
+    }
   }
 
   /**
