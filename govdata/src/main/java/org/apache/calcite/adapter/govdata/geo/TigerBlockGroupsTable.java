@@ -54,7 +54,7 @@ public class TigerBlockGroupsTable extends AbstractTable implements ScannableTab
     return typeFactory.builder()
         .add("bg_geoid", SqlTypeName.VARCHAR)        // 12-digit block group GEOID
         .add("state_fips", SqlTypeName.VARCHAR)      // 2-digit state FIPS code
-        .add("county_fips", SqlTypeName.VARCHAR)     // 3-digit county FIPS code
+        .add("county_fips", SqlTypeName.VARCHAR)     // 5-digit county FIPS code (state + county)
         .add("tract_code", SqlTypeName.VARCHAR)      // 6-digit tract code
         .add("blkgrp", SqlTypeName.VARCHAR)          // 1-digit block group number
         .add("namelsad", SqlTypeName.VARCHAR)        // Name and legal/statistical description
