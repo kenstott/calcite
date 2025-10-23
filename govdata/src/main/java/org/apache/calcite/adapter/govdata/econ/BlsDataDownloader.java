@@ -500,6 +500,57 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public static final String TABLE_REGIONAL_EMPLOYMENT = "regional_employment";
 
   /**
+   * Validates BLS API response and saves to cache appropriately.
+   *
+   * <p>Handling:
+   * <ul>
+   *   <li>REQUEST_SUCCEEDED: Save data to cache, return true
+   *   <li>404/No data: Save response to cache (creates empty parquet), return true
+   *   <li>Rate limit/errors: Don't save, return false (will retry later)
+   * </ul>
+   *
+   * @param dataType Type of data being cached
+   * @param year Year of data
+   * @param cacheParams Additional cache parameters
+   * @param relativePath Relative path for cache file
+   * @param rawJson Raw JSON response from BLS API
+   * @return true if response was saved (data or 404), false if retriable error
+   * @throws IOException If JSON parsing fails
+   */
+  private boolean validateAndSaveBlsResponse(String dataType, int year,
+      Map<String, String> cacheParams, String relativePath, String rawJson) throws IOException {
+
+    JsonNode response = MAPPER.readTree(rawJson);
+    String status = response.path("status").asText("UNKNOWN");
+
+    if ("REQUEST_SUCCEEDED".equals(status)) {
+      // Check if data is actually present
+      JsonNode results = response.path("Results");
+      JsonNode series = results.path("series");
+
+      if (!series.isMissingNode() && series.isArray() && series.size() > 0) {
+        // Has data - save normally
+        saveToCache(dataType, year, cacheParams, relativePath, rawJson);
+        return true;
+      } else {
+        // 404/No data - save anyway to create empty parquet file
+        LOGGER.info("No data available for {} year {} - saving empty response", dataType, year);
+        saveToCache(dataType, year, cacheParams, relativePath, rawJson);
+        return true;
+      }
+    }
+
+    // Error response (rate limit, server error, etc) - don't save
+    JsonNode messageNode = response.path("message");
+    String message = messageNode.isArray() && messageNode.size() > 0
+        ? messageNode.get(0).asText()
+        : messageNode.asText("No error message");
+    LOGGER.warn("BLS API error for {} year {}: {} - {} (not cached, will retry)",
+                dataType, year, status, message);
+    return false;
+  }
+
+  /**
    * Downloads all BLS data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
@@ -627,8 +678,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("employment_statistics", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+      if (!validateAndSaveBlsResponse("employment_statistics", year, cacheParams, jsonFilePath, rawJson)) {
+        continue;
+      }
       lastFile = new File(jsonFilePath);
     }
 
@@ -671,8 +724,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("regional_cpi", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("regional_cpi", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -713,8 +772,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("metro_cpi", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("metro_cpi", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -857,8 +922,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("state_wages", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("state_wages", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -1001,8 +1072,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("metro_wages", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("metro_wages", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -1042,8 +1119,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("jolts_regional", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("jolts_regional", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -1080,8 +1163,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("inflation_metrics", year, cacheParams, jsonFilePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+
+      if (!validateAndSaveBlsResponse("inflation_metrics", year, cacheParams, jsonFilePath, rawJson)) {
+
+        continue;
+
+      }
+
       lastFile = new File(jsonFilePath);
     }
 
@@ -1119,8 +1208,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
 
-      // Save to cache using base class helper
-      saveToCache("wage_growth", year, cacheParams, relativePath, rawJson);
+      // Validate and save (skips rate limits, saves 404s)
+      if (!validateAndSaveBlsResponse("wage_growth", year, cacheParams, relativePath, rawJson)) {
+        continue; // Error response not saved, skip to next year
+      }
+
       lastFile = new File(relativePath);
     }
 
