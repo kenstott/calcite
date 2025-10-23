@@ -170,13 +170,7 @@ public class AlphaVantageDownloader {
       String yearDir = storageProvider.resolvePath(tickerDir, String.format("year=%d", year));
       LOGGER.debug("yearDir: {}", yearDir);
 
-      // Create directories using StorageProvider
-      try {
-        storageProvider.createDirectories(yearDir);
-      } catch (IOException e) {
-        LOGGER.warn("Failed to create directory {}: {}", yearDir, e.getMessage());
-      }
-
+      // StorageProvider automatically creates parent directories when writing files
       String fullPath = storageProvider.resolvePath(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
       LOGGER.debug("parquetFile fullPath: {}", fullPath);
 
