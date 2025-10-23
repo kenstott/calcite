@@ -56,6 +56,105 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private static final int MAX_RETRIES = 3;
   private static final long RETRY_DELAY_MS = 2000; // 2 seconds initial retry delay
 
+  // State FIPS code mapping for all 50 states + DC
+  private static final Map<String, String> STATE_FIPS_MAP = new HashMap<>();
+  static {
+    STATE_FIPS_MAP.put("AL", "01"); STATE_FIPS_MAP.put("AK", "02");
+    STATE_FIPS_MAP.put("AZ", "04"); STATE_FIPS_MAP.put("AR", "05");
+    STATE_FIPS_MAP.put("CA", "06"); STATE_FIPS_MAP.put("CO", "08");
+    STATE_FIPS_MAP.put("CT", "09"); STATE_FIPS_MAP.put("DE", "10");
+    STATE_FIPS_MAP.put("DC", "11"); STATE_FIPS_MAP.put("FL", "12");
+    STATE_FIPS_MAP.put("GA", "13"); STATE_FIPS_MAP.put("HI", "15");
+    STATE_FIPS_MAP.put("ID", "16"); STATE_FIPS_MAP.put("IL", "17");
+    STATE_FIPS_MAP.put("IN", "18"); STATE_FIPS_MAP.put("IA", "19");
+    STATE_FIPS_MAP.put("KS", "20"); STATE_FIPS_MAP.put("KY", "21");
+    STATE_FIPS_MAP.put("LA", "22"); STATE_FIPS_MAP.put("ME", "23");
+    STATE_FIPS_MAP.put("MD", "24"); STATE_FIPS_MAP.put("MA", "25");
+    STATE_FIPS_MAP.put("MI", "26"); STATE_FIPS_MAP.put("MN", "27");
+    STATE_FIPS_MAP.put("MS", "28"); STATE_FIPS_MAP.put("MO", "29");
+    STATE_FIPS_MAP.put("MT", "30"); STATE_FIPS_MAP.put("NE", "31");
+    STATE_FIPS_MAP.put("NV", "32"); STATE_FIPS_MAP.put("NH", "33");
+    STATE_FIPS_MAP.put("NJ", "34"); STATE_FIPS_MAP.put("NM", "35");
+    STATE_FIPS_MAP.put("NY", "36"); STATE_FIPS_MAP.put("NC", "37");
+    STATE_FIPS_MAP.put("ND", "38"); STATE_FIPS_MAP.put("OH", "39");
+    STATE_FIPS_MAP.put("OK", "40"); STATE_FIPS_MAP.put("OR", "41");
+    STATE_FIPS_MAP.put("PA", "42"); STATE_FIPS_MAP.put("RI", "44");
+    STATE_FIPS_MAP.put("SC", "45"); STATE_FIPS_MAP.put("SD", "46");
+    STATE_FIPS_MAP.put("TN", "47"); STATE_FIPS_MAP.put("TX", "48");
+    STATE_FIPS_MAP.put("UT", "49"); STATE_FIPS_MAP.put("VT", "50");
+    STATE_FIPS_MAP.put("VA", "51"); STATE_FIPS_MAP.put("WA", "53");
+    STATE_FIPS_MAP.put("WV", "54"); STATE_FIPS_MAP.put("WI", "55");
+    STATE_FIPS_MAP.put("WY", "56");
+  }
+
+  // Census region codes and names
+  private static final Map<String, String> CENSUS_REGIONS = new HashMap<>();
+  static {
+    CENSUS_REGIONS.put("0100", "Northeast");
+    CENSUS_REGIONS.put("0200", "Midwest");
+    CENSUS_REGIONS.put("0300", "South");
+    CENSUS_REGIONS.put("0400", "West");
+  }
+
+  // Metro area codes for major metropolitan areas
+  private static final Map<String, String> METRO_AREA_CODES = new HashMap<>();
+  static {
+    METRO_AREA_CODES.put("A100", "New York-Newark-Jersey City, NY-NJ-PA");
+    METRO_AREA_CODES.put("A400", "Los Angeles-Long Beach-Anaheim, CA");
+    METRO_AREA_CODES.put("A207", "Chicago-Naperville-Elgin, IL-IN-WI");
+    METRO_AREA_CODES.put("A425", "Houston-The Woodlands-Sugar Land, TX");
+    METRO_AREA_CODES.put("A423", "Phoenix-Mesa-Scottsdale, AZ");
+    METRO_AREA_CODES.put("A102", "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD");
+    METRO_AREA_CODES.put("A426", "San Antonio-New Braunfels, TX");
+    METRO_AREA_CODES.put("A421", "San Diego-Carlsbad, CA");
+    METRO_AREA_CODES.put("A127", "Dallas-Fort Worth-Arlington, TX");
+    METRO_AREA_CODES.put("A429", "San Jose-Sunnyvale-Santa Clara, CA");
+    METRO_AREA_CODES.put("A438", "Austin-Round Rock, TX");
+    METRO_AREA_CODES.put("A420", "Jacksonville, FL");
+    METRO_AREA_CODES.put("A103", "Boston-Cambridge-Newton, MA-NH");
+    METRO_AREA_CODES.put("A428", "Seattle-Tacoma-Bellevue, WA");
+    METRO_AREA_CODES.put("A427", "Denver-Aurora-Lakewood, CO");
+    METRO_AREA_CODES.put("A101", "Washington-Arlington-Alexandria, DC-VA-MD-WV");
+    METRO_AREA_CODES.put("A211", "Detroit-Warren-Dearborn, MI");
+    METRO_AREA_CODES.put("A104", "Cleveland-Elyria, OH");
+    METRO_AREA_CODES.put("A212", "Minneapolis-St. Paul-Bloomington, MN-WI");
+    METRO_AREA_CODES.put("A422", "Miami-Fort Lauderdale-West Palm Beach, FL");
+    METRO_AREA_CODES.put("A419", "Atlanta-Sandy Springs-Roswell, GA");
+    METRO_AREA_CODES.put("A437", "Portland-Vancouver-Hillsboro, OR-WA");
+    METRO_AREA_CODES.put("A424", "Riverside-San Bernardino-Ontario, CA");
+    METRO_AREA_CODES.put("A320", "St. Louis, MO-IL");
+    METRO_AREA_CODES.put("A319", "Baltimore-Columbia-Towson, MD");
+    METRO_AREA_CODES.put("A433", "Tampa-St. Petersburg-Clearwater, FL");
+    METRO_AREA_CODES.put("A440", "Anchorage, AK");
+  }
+
+  // NAICS supersector codes for industry employment
+  private static final Map<String, String> NAICS_SUPERSECTORS = new HashMap<>();
+  static {
+    NAICS_SUPERSECTORS.put("00000000", "Total Nonfarm");
+    NAICS_SUPERSECTORS.put("05000000", "Total Private");
+    NAICS_SUPERSECTORS.put("06000000", "Goods Producing");
+    NAICS_SUPERSECTORS.put("07000000", "Service Providing");
+    NAICS_SUPERSECTORS.put("08000000", "Private Service Providing");
+    NAICS_SUPERSECTORS.put("10000000", "Mining and Logging");
+    NAICS_SUPERSECTORS.put("20000000", "Construction");
+    NAICS_SUPERSECTORS.put("30000000", "Manufacturing");
+    NAICS_SUPERSECTORS.put("31000000", "Durable Goods");
+    NAICS_SUPERSECTORS.put("32000000", "Nondurable Goods");
+    NAICS_SUPERSECTORS.put("40000000", "Trade, Transportation, and Utilities");
+    NAICS_SUPERSECTORS.put("41000000", "Wholesale Trade");
+    NAICS_SUPERSECTORS.put("42000000", "Retail Trade");
+    NAICS_SUPERSECTORS.put("43000000", "Transportation and Warehousing");
+    NAICS_SUPERSECTORS.put("44000000", "Utilities");
+    NAICS_SUPERSECTORS.put("50000000", "Information");
+    NAICS_SUPERSECTORS.put("55000000", "Financial Activities");
+    NAICS_SUPERSECTORS.put("60000000", "Professional and Business Services");
+    NAICS_SUPERSECTORS.put("65000000", "Education and Health Services");
+    NAICS_SUPERSECTORS.put("70000000", "Leisure and Hospitality");
+    NAICS_SUPERSECTORS.put("80000000", "Other Services");
+    NAICS_SUPERSECTORS.put("90000000", "Government");
+  }
+
   // Common BLS series IDs
   public static class Series {
     // Employment Statistics
@@ -76,6 +175,202 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     public static final String CA_UNEMPLOYMENT = "LASST060000000000003";
     public static final String NY_UNEMPLOYMENT = "LASST360000000000003";
     public static final String TX_UNEMPLOYMENT = "LASST480000000000003";
+
+    /**
+     * Generates BLS regional CPI series ID.
+     * Format: CUUR{REGION}SA0
+     * @param regionCode 4-digit region code (e.g., "0100" for Northeast)
+     */
+    public static String getRegionalCpiSeriesId(String regionCode) {
+      return "CUUR" + regionCode + "SA0";
+    }
+
+    /**
+     * Gets all regional CPI series IDs for 4 Census regions.
+     */
+    public static List<String> getAllRegionalCpiSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String regionCode : CENSUS_REGIONS.keySet()) {
+        seriesIds.add(getRegionalCpiSeriesId(regionCode));
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Generates BLS metro area CPI series ID.
+     * Format: CUURS{AREA_CODE}SA0
+     * @param metroAreaCode Metro area code (e.g., "A100" for NYC)
+     */
+    public static String getMetroCpiSeriesId(String metroAreaCode) {
+      return "CUURS" + metroAreaCode + "SA0";
+    }
+
+    /**
+     * Gets all metro area CPI series IDs for 27 major metros.
+     */
+    public static List<String> getAllMetroCpiSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String areaCode : METRO_AREA_CODES.keySet()) {
+        seriesIds.add(getMetroCpiSeriesId(areaCode));
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Gets metro area name from area code.
+     */
+    public static String getMetroAreaName(String areaCode) {
+      return METRO_AREA_CODES.getOrDefault(areaCode, "Unknown Metro");
+    }
+
+    /**
+     * Generates BLS state industry employment series ID.
+     * Format: SMS{STATE_FIPS}{SUPERSECTOR}
+     * @param stateFips 2-digit state FIPS code (e.g., "06" for CA)
+     * @param supersector 8-digit NAICS supersector code
+     */
+    public static String getStateIndustryEmploymentSeriesId(String stateFips, String supersector) {
+      return "SMS" + stateFips + supersector;
+    }
+
+    /**
+     * Gets all state industry employment series IDs.
+     * Generates series for all 51 jurisdictions × 22 supersectors = 1,122 series.
+     */
+    public static List<String> getAllStateIndustryEmploymentSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String stateFips : STATE_FIPS_MAP.values()) {
+        for (String supersector : NAICS_SUPERSECTORS.keySet()) {
+          seriesIds.add(getStateIndustryEmploymentSeriesId(stateFips, supersector));
+        }
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Gets NAICS supersector name from code.
+     */
+    public static String getNaicsSupersectorName(String supersectorCode) {
+      return NAICS_SUPERSECTORS.getOrDefault(supersectorCode, "Unknown Sector");
+    }
+
+    /**
+     * Generates BLS state wage series ID from QCEW (Quarterly Census of Employment and Wages).
+     * Format: ENU{STATE_FIPS}00010{DATA_TYPE}
+     * Data types: 10 = average weekly wages, 03 = total employment
+     *
+     * @param stateFips 2-digit state FIPS code
+     * @param dataType "10" for weekly wages, "03" for employment
+     * @return QCEW series ID
+     */
+    public static String getStateWageSeriesId(String stateFips, String dataType) {
+      return "ENU" + stateFips + "00010" + dataType;
+    }
+
+    /**
+     * Gets all state average weekly wage series IDs (51 jurisdictions).
+     * Uses data type "10" for average weekly wages.
+     */
+    public static List<String> getAllStateWageSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String stateFips : STATE_FIPS_MAP.values()) {
+        seriesIds.add(getStateWageSeriesId(stateFips, "10"));
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Gets state name from FIPS code.
+     */
+    public static String getStateName(String fipsCode) {
+      for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
+        if (entry.getValue().equals(fipsCode)) {
+          return entry.getKey();
+        }
+      }
+      return "Unknown State";
+    }
+
+    /**
+     * Generates BLS metro area industry employment series ID.
+     * Format: SMU{METRO_CODE}{SUPERSECTOR}
+     * Example: SMUA100000000000 for NYC Total Nonfarm
+     *
+     * @param metroCode Metro area code (e.g., "A100" for NYC)
+     * @param supersector NAICS supersector code (e.g., "00000000" for total nonfarm)
+     * @return BLS metro industry employment series ID
+     */
+    public static String getMetroIndustryEmploymentSeriesId(String metroCode, String supersector) {
+      return "SMU" + metroCode + supersector;
+    }
+
+    /**
+     * Gets all metro industry employment series IDs for the 27 major metro areas.
+     * Generates 594 series (27 metros × 22 sectors).
+     */
+    public static List<String> getAllMetroIndustryEmploymentSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String metroCode : METRO_AREA_CODES.keySet()) {
+        for (String supersector : NAICS_SUPERSECTORS.keySet()) {
+          seriesIds.add(getMetroIndustryEmploymentSeriesId(metroCode, supersector));
+        }
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Generates BLS metro area wage series ID from QCEW.
+     * Format: ENUC{METRO_CODE}010
+     * Data type: 10 = average weekly wages
+     *
+     * @param metroCode Metro area code (e.g., "A100" for NYC)
+     * @return QCEW metro wage series ID
+     */
+    public static String getMetroWageSeriesId(String metroCode) {
+      return "ENUC" + metroCode + "010";
+    }
+
+    /**
+     * Gets all metro average weekly wage series IDs (27 metros).
+     */
+    public static List<String> getAllMetroWageSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      for (String metroCode : METRO_AREA_CODES.keySet()) {
+        seriesIds.add(getMetroWageSeriesId(metroCode));
+      }
+      return seriesIds;
+    }
+
+    /**
+     * Generates BLS JOLTS regional series ID.
+     * Format: JTS{REGION}000000000{METRIC}
+     *
+     * @param regionCode Region code (1000=NE, 2000=MW, 3000=S, 4000=W)
+     * @param metric Metric code (JOR=Job Openings Rate, HIR=Hires Rate, TSR=Total Separations,
+     *               QUR=Quits Rate, LDR=Layoffs/Discharges Rate)
+     * @return JOLTS series ID
+     */
+    public static String getJoltsRegionalSeriesId(String regionCode, String metric) {
+      return "JTS" + regionCode + "000000000" + metric;
+    }
+
+    /**
+     * Gets all JOLTS regional series IDs (4 regions × 5 metrics = 20 series).
+     * Covers job openings, hires, total separations, quits, and layoffs/discharges
+     * for Northeast, Midwest, South, and West regions.
+     */
+    public static List<String> getAllJoltsRegionalSeriesIds() {
+      List<String> seriesIds = new ArrayList<>();
+      String[] regions = {"1000", "2000", "3000", "4000"}; // NE, MW, S, W
+      String[] metrics = {"JOR", "HIR", "TSR", "QUR", "LDR"}; // Openings, Hires, Separations, Quits, Layoffs
+
+      for (String region : regions) {
+        for (String metric : metrics) {
+          seriesIds.add(getJoltsRegionalSeriesId(region, metric));
+        }
+      }
+      return seriesIds;
+    }
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
@@ -186,21 +481,111 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     return LocalDate.now().getYear();
   }
 
+  // Table name constants for filtering
+  public static final String TABLE_EMPLOYMENT_STATISTICS = "employment_statistics";
+  public static final String TABLE_INFLATION_METRICS = "inflation_metrics";
+  public static final String TABLE_REGIONAL_CPI = "regional_cpi";
+  public static final String TABLE_METRO_CPI = "metro_cpi";
+  public static final String TABLE_STATE_INDUSTRY = "state_industry";
+  public static final String TABLE_STATE_WAGES = "state_wages";
+  public static final String TABLE_METRO_INDUSTRY = "metro_industry";
+  public static final String TABLE_METRO_WAGES = "metro_wages";
+  public static final String TABLE_JOLTS_REGIONAL = "jolts_regional";
+  public static final String TABLE_WAGE_GROWTH = "wage_growth";
+  public static final String TABLE_REGIONAL_EMPLOYMENT = "regional_employment";
+
   /**
    * Downloads all BLS data for the specified year range.
    */
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
+    downloadAll(startYear, endYear, null);
+  }
+
+  /**
+   * Downloads BLS data for the specified year range, filtered by table names.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param enabledTables Set of table names to download, or null to download all tables.
+   *                      If provided, only tables in this set will be downloaded.
+   */
+  public void downloadAll(int startYear, int endYear, java.util.Set<String> enabledTables) throws IOException, InterruptedException {
     // Download employment statistics
-    downloadEmploymentStatistics(startYear, endYear);
+    if (enabledTables == null || enabledTables.contains(TABLE_EMPLOYMENT_STATISTICS)) {
+      downloadEmploymentStatistics(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_EMPLOYMENT_STATISTICS);
+    }
 
     // Download inflation metrics
-    downloadInflationMetrics(startYear, endYear);
+    if (enabledTables == null || enabledTables.contains(TABLE_INFLATION_METRICS)) {
+      downloadInflationMetrics(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_INFLATION_METRICS);
+    }
+
+    // Download regional CPI
+    if (enabledTables == null || enabledTables.contains(TABLE_REGIONAL_CPI)) {
+      downloadRegionalCpi(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_REGIONAL_CPI);
+    }
+
+    // Download metro CPI
+    if (enabledTables == null || enabledTables.contains(TABLE_METRO_CPI)) {
+      downloadMetroCpi(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_METRO_CPI);
+    }
+
+    // Download state industry employment
+    if (enabledTables == null || enabledTables.contains(TABLE_STATE_INDUSTRY)) {
+      downloadStateIndustryEmployment(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out - saves ~1,122 series!)", TABLE_STATE_INDUSTRY);
+    }
+
+    // Download state wages
+    if (enabledTables == null || enabledTables.contains(TABLE_STATE_WAGES)) {
+      downloadStateWages(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_STATE_WAGES);
+    }
+
+    // Download metro industry employment
+    if (enabledTables == null || enabledTables.contains(TABLE_METRO_INDUSTRY)) {
+      downloadMetroIndustryEmployment(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out - saves ~594 series!)", TABLE_METRO_INDUSTRY);
+    }
+
+    // Download metro wages
+    if (enabledTables == null || enabledTables.contains(TABLE_METRO_WAGES)) {
+      downloadMetroWages(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_METRO_WAGES);
+    }
+
+    // Download JOLTS regional data
+    if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_REGIONAL)) {
+      downloadJoltsRegional(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_JOLTS_REGIONAL);
+    }
 
     // Download wage growth data
-    downloadWageGrowth(startYear, endYear);
+    if (enabledTables == null || enabledTables.contains(TABLE_WAGE_GROWTH)) {
+      downloadWageGrowth(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_WAGE_GROWTH);
+    }
 
     // Download regional employment data
-    downloadRegionalEmployment(startYear, endYear);
+    if (enabledTables == null || enabledTables.contains(TABLE_REGIONAL_EMPLOYMENT)) {
+      downloadRegionalEmployment(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_REGIONAL_EMPLOYMENT);
+    }
   }
 
   /**
@@ -248,6 +633,356 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads inflation metrics using default date range from environment.
    */
+  /**
+   * Downloads regional CPI using default date range from environment.
+   */
+  public File downloadRegionalCpi() throws IOException, InterruptedException {
+    return downloadRegionalCpi(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads CPI data for 4 Census regions (Northeast, Midwest, South, West).
+   */
+  public File downloadRegionalCpi(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading regional CPI for 4 Census regions for {}-{}", startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=cpi_regional/year=" + year;
+      String jsonFilePath = outputDirPath + "/regional_cpi.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("regional_cpi", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached regional CPI for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllRegionalCpiSeriesIds();
+      LOGGER.info("Generated {} regional CPI series IDs for year {}", seriesIds.size(), year);
+
+      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+
+      // Save to cache using base class helper
+      saveToCache("regional_cpi", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  /**
+   * Downloads metro CPI using default date range from environment.
+   */
+  public File downloadMetroCpi() throws IOException, InterruptedException {
+    return downloadMetroCpi(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads CPI data for 27 major metro areas.
+   */
+  public File downloadMetroCpi(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading metro area CPI for {} metros for {}-{}",
+                METRO_AREA_CODES.size(), startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=cpi_metro/year=" + year;
+      String jsonFilePath = outputDirPath + "/metro_cpi.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("metro_cpi", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached metro CPI for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllMetroCpiSeriesIds();
+      LOGGER.info("Generated {} metro CPI series IDs for year {}", seriesIds.size(), year);
+
+      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+
+      // Save to cache using base class helper
+      saveToCache("metro_cpi", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  public File downloadStateIndustryEmployment() throws IOException, InterruptedException {
+    return downloadStateIndustryEmployment(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads employment by industry data for all 51 U.S. jurisdictions (50 states + DC)
+   * across 22 NAICS supersector codes. Generates 1,122 series (51 × 22).
+   */
+  public File downloadStateIndustryEmployment(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading state industry employment for {} states × {} sectors ({} series) for {}-{}",
+                STATE_FIPS_MAP.size(), NAICS_SUPERSECTORS.size(),
+                STATE_FIPS_MAP.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=state_industry/year=" + year;
+      String jsonFilePath = outputDirPath + "/state_industry.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("state_industry", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached state industry employment for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
+      LOGGER.info("Generated {} state industry employment series IDs for year {}", seriesIds.size(), year);
+
+      // Batch the series into groups of 50 to respect API limits
+      ArrayNode allSeries = MAPPER.createArrayNode();
+
+      for (int i = 0; i < seriesIds.size(); i += 50) {
+        int end = Math.min(i + 50, seriesIds.size());
+        List<String> batch = seriesIds.subList(i, end);
+
+        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
+                    (i / 50) + 1, (seriesIds.size() + 49) / 50, batch.size(), year);
+
+        String batchJson = fetchMultipleSeriesRaw(batch, year, year);
+
+        // Parse and extract series array from this batch
+        JsonNode batchRoot = MAPPER.readTree(batchJson);
+        ArrayNode batchSeries = (ArrayNode) batchRoot.path("Results").path("series");
+
+        // Append series to combined array
+        for (JsonNode series : batchSeries) {
+          allSeries.add(series);
+        }
+
+        // Rate limiting between batches
+        if (end < seriesIds.size()) {
+          Thread.sleep(500); // Small delay between batches
+        }
+      }
+
+      // Build combined JSON structure
+      ObjectNode combinedRoot = MAPPER.createObjectNode();
+      ObjectNode resultsNode = MAPPER.createObjectNode();
+      resultsNode.set("series", allSeries);
+      combinedRoot.set("Results", resultsNode);
+      String rawJson = MAPPER.writeValueAsString(combinedRoot);
+
+      // Save to cache using base class helper
+      saveToCache("state_industry", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  public File downloadStateWages() throws IOException, InterruptedException {
+    return downloadStateWages(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads average weekly wages for all 51 U.S. jurisdictions (50 states + DC)
+   * from BLS QCEW (Quarterly Census of Employment and Wages). Generates 51 series.
+   */
+  public File downloadStateWages(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading state wages for {} jurisdictions for {}-{}",
+                STATE_FIPS_MAP.size(), startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=state_wages/year=" + year;
+      String jsonFilePath = outputDirPath + "/state_wages.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("state_wages", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached state wages for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllStateWageSeriesIds();
+      LOGGER.info("Generated {} state wage series IDs for year {}", seriesIds.size(), year);
+
+      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+
+      // Save to cache using base class helper
+      saveToCache("state_wages", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  public File downloadMetroIndustryEmployment() throws IOException, InterruptedException {
+    return downloadMetroIndustryEmployment(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads employment by industry data for 27 major U.S. metropolitan areas
+   * across 22 NAICS supersector codes. Generates 594 series (27 × 22).
+   */
+  public File downloadMetroIndustryEmployment(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading metro industry employment for {} metros × {} sectors ({} series) for {}-{}",
+                METRO_AREA_CODES.size(), NAICS_SUPERSECTORS.size(),
+                METRO_AREA_CODES.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=metro_industry/year=" + year;
+      String jsonFilePath = outputDirPath + "/metro_industry.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("metro_industry", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached metro industry employment for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
+      LOGGER.info("Generated {} metro industry employment series IDs for year {}", seriesIds.size(), year);
+
+      // Batch the series into groups of 50 to respect API limits
+      ArrayNode allSeries = MAPPER.createArrayNode();
+
+      for (int i = 0; i < seriesIds.size(); i += 50) {
+        int end = Math.min(i + 50, seriesIds.size());
+        List<String> batch = seriesIds.subList(i, end);
+
+        LOGGER.info("Fetching batch {}/{} ({} series) for year {}",
+                    (i / 50) + 1, (seriesIds.size() + 49) / 50, batch.size(), year);
+
+        String batchJson = fetchMultipleSeriesRaw(batch, year, year);
+
+        // Parse and extract series array from this batch
+        JsonNode batchRoot = MAPPER.readTree(batchJson);
+        ArrayNode batchSeries = (ArrayNode) batchRoot.path("Results").path("series");
+
+        // Append series to combined array
+        for (JsonNode series : batchSeries) {
+          allSeries.add(series);
+        }
+
+        // Rate limiting between batches
+        if (end < seriesIds.size()) {
+          Thread.sleep(500); // Small delay between batches
+        }
+      }
+
+      // Build combined JSON structure
+      ObjectNode combinedRoot = MAPPER.createObjectNode();
+      ObjectNode resultsNode = MAPPER.createObjectNode();
+      resultsNode.set("series", allSeries);
+      combinedRoot.set("Results", resultsNode);
+      String rawJson = MAPPER.writeValueAsString(combinedRoot);
+
+      // Save to cache using base class helper
+      saveToCache("metro_industry", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  public File downloadMetroWages() throws IOException, InterruptedException {
+    return downloadMetroWages(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads average weekly wages for 27 major U.S. metropolitan areas
+   * from BLS QCEW (Quarterly Census of Employment and Wages). Generates 27 series.
+   */
+  public File downloadMetroWages(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading metro wages for {} metropolitan areas for {}-{}",
+                METRO_AREA_CODES.size(), startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=metro_wages/year=" + year;
+      String jsonFilePath = outputDirPath + "/metro_wages.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("metro_wages", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached metro wages for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllMetroWageSeriesIds();
+      LOGGER.info("Generated {} metro wage series IDs for year {}", seriesIds.size(), year);
+
+      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+
+      // Save to cache using base class helper
+      saveToCache("metro_wages", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
+  public File downloadJoltsRegional() throws IOException, InterruptedException {
+    return downloadJoltsRegional(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads JOLTS (Job Openings and Labor Turnover Survey) data for 4 Census regions.
+   * Covers job openings, hires, total separations, quits, and layoffs/discharges.
+   * Generates 20 series (4 regions × 5 metrics).
+   */
+  public File downloadJoltsRegional(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading JOLTS regional data for 4 Census regions × 5 metrics (20 series) for {}-{}",
+                startYear, endYear);
+
+    // Download for each year separately
+    File lastFile = null;
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = "source=econ/type=jolts_regional/year=" + year;
+      String jsonFilePath = outputDirPath + "/jolts_regional.json";
+
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check cache using base class helper
+      if (isCachedOrExists("jolts_regional", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("Found cached JOLTS regional for year {} - skipping download", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      List<String> seriesIds = Series.getAllJoltsRegionalSeriesIds();
+      LOGGER.info("Generated {} JOLTS regional series IDs for year {}", seriesIds.size(), year);
+
+      String rawJson = fetchMultipleSeriesRaw(seriesIds, year, year);
+
+      // Save to cache using base class helper
+      saveToCache("jolts_regional", year, cacheParams, jsonFilePath, rawJson);
+      lastFile = new File(jsonFilePath);
+    }
+
+    return lastFile;
+  }
+
   public File downloadInflationMetrics() throws IOException, InterruptedException {
     return downloadInflationMetrics(getDefaultStartYear(), getDefaultEndYear());
   }
