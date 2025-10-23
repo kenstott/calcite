@@ -336,6 +336,29 @@ public final class TableCommentDefinitions {
     censusPlacesCols.put("longitude", "Geographic center longitude in decimal degrees");
     GEO_COLUMN_COMMENTS.put("census_places", censusPlacesCols);
 
+    // cps_voting table
+    GEO_TABLE_COMMENTS.put("cps_voting",
+        "Current Population Survey (CPS) Voting and Registration Supplement microdata. Provides "
+        + "individual-level voter registration and turnout data collected biennially (every 2 years) "
+        + "by the U.S. Census Bureau in November election years. Data available from 2010-2024. "
+        + "IMPORTANT: Census does NOT collect party affiliation data. Use survey weights (weight column) "
+        + "for accurate population estimates. Data includes registration status, voting behavior, "
+        + "demographics, and vote method (election day, early, or mail).");
+
+    Map<String, String> cpsVotingCols = new HashMap<>();
+    cpsVotingCols.put("person_id", "Unique person identifier (year_rowindex format)");
+    cpsVotingCols.put("election_year", "Election year (even years only: 2010, 2012, 2014, etc.)");
+    cpsVotingCols.put("state_fips", "State FIPS code (2-digit numeric code)");
+    cpsVotingCols.put("age", "Age in years");
+    cpsVotingCols.put("age_group", "Age category: '18-24', '25-44', '45-64', '65+'");
+    cpsVotingCols.put("race", "Race category (Census Bureau classification)");
+    cpsVotingCols.put("hispanic_origin", "Hispanic origin: 'Hispanic' or 'Not Hispanic'");
+    cpsVotingCols.put("education_level", "Education level category");
+    cpsVotingCols.put("registration_status", "Voter registration status: 'Registered', 'Not registered', or response codes");
+    cpsVotingCols.put("voted", "Voting status: 'Yes', 'No', 'Refused', 'Don't know', or 'No response'");
+    cpsVotingCols.put("weight", "Survey weight for population estimates (must be used for accurate totals)");
+    GEO_COLUMN_COMMENTS.put("cps_voting", cpsVotingCols);
+
     // hud_zip_county table
     GEO_TABLE_COMMENTS.put("hud_zip_county",
         "HUD USPS ZIP code to county crosswalk mapping. Maps 5-digit ZIP codes to counties with "

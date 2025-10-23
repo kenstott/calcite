@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +68,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
   private final Set<String> enabledSources;
   private final List<Integer> tigerYears;
   private final List<Integer> censusYears;
+  private final List<Integer> votingYears;
   private final boolean autoDownload;
 
   // Data fetchers (to be implemented)
@@ -85,13 +87,21 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
       String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears,
       boolean autoDownload) {
     this(parentSchema, name, cacheDir, censusApiKey, hudUsername, hudPassword,
-         null, enabledSources, tigerYears, censusYears, autoDownload);
+         null, enabledSources, tigerYears, censusYears, new ArrayList<>(), autoDownload);
   }
 
   public GeoSchema(SchemaPlus parentSchema, String name, String cacheDir,
       String censusApiKey, String hudUsername, String hudPassword, String hudToken,
       String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears,
       boolean autoDownload) {
+    this(parentSchema, name, cacheDir, censusApiKey, hudUsername, hudPassword, hudToken,
+         enabledSources, tigerYears, censusYears, new ArrayList<>(), autoDownload);
+  }
+
+  public GeoSchema(SchemaPlus parentSchema, String name, String cacheDir,
+      String censusApiKey, String hudUsername, String hudPassword, String hudToken,
+      String[] enabledSources, List<Integer> tigerYears, List<Integer> censusYears,
+      List<Integer> votingYears, boolean autoDownload) {
 
     this.parentSchema = parentSchema;
     this.name = name;
@@ -103,6 +113,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     this.enabledSources = new HashSet<>(Arrays.asList(enabledSources));
     this.tigerYears = tigerYears;
     this.censusYears = censusYears;
+    this.votingYears = votingYears;
     this.autoDownload = autoDownload;
 
     // Initialize data fetchers
@@ -116,6 +127,7 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     LOGGER.info("Initializing geographic data fetchers");
     LOGGER.info("  TIGER years: {}", tigerYears);
     LOGGER.info("  Census years: {}", censusYears);
+    LOGGER.info("  Voting years: {}", votingYears);
 
     // Initialize TIGER downloader with hive-partitioned structure
     if (enabledSources.contains("tiger") && !tigerYears.isEmpty()) {
@@ -209,6 +221,19 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
     // Create Census places (cities) table
     CensusPlacesTable censusPlacesTable = new CensusPlacesTable(censusClient);
     tableMap.put("census_places", censusPlacesTable);
+
+    // Create CPS Voting table if voting years are configured
+    if (censusApiKey != null && votingYears != null && !votingYears.isEmpty()) {
+      createCpsVotingTable();
+    }
+  }
+
+  private void createCpsVotingTable() {
+    LOGGER.info("Creating CPS Voting table for years: {}", votingYears);
+
+    // Create CPS Voting Supplement table
+    CpsVotingTable cpsVotingTable = new CpsVotingTable(censusClient, votingYears);
+    tableMap.put("cps_voting", cpsVotingTable);
   }
 
   private void createTigerTables() {

@@ -535,6 +535,64 @@ public class CensusApiClient {
   }
 
   /**
+   * Get voting and registration data from Current Population Survey (CPS) Voting Supplement.
+   * Returns microdata for eligible voters (18+) with registration and voting behavior.
+   *
+   * <p>Important: CPS Voting Supplement is conducted biennially (every 2 years) in
+   * November election years only: 2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, etc.
+   *
+   * <p>Note: Census does NOT collect party affiliation data. Data includes only
+   * registration status, voting status, demographics, and vote method.
+   *
+   * @param year Election year (must be even: 2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024)
+   * @param variables Comma-separated list of variables (e.g., "PES1,PES2,GESTFIPS,PRTAGE")
+   *                  PES1 = Voted (yes/no), PES2 = Registration status
+   * @return JSON response from Census CPS Voting API
+   * @throws IOException if API call fails or year is invalid
+   */
+  public JsonNode getCpsVotingData(int year, String variables) throws IOException {
+    // Validate that year is even (CPS Voting only conducted in election years)
+    if (year % 2 != 0) {
+      throw new IllegalArgumentException(
+          "CPS Voting Supplement is only available for even years (election years): " + year);
+    }
+
+    // Validate year range (CPS Voting Supplement started in 1964)
+    if (year < 1964 || year > 2024) {
+      throw new IllegalArgumentException(
+          "CPS Voting Supplement year must be between 1964 and 2024: " + year);
+    }
+
+    String cacheKey =
+        String.format("cps_voting_%d_%s", year, variables.replaceAll("[^a-zA-Z0-9]", "_"));
+
+    // Check cache first
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached CPS Voting data from {}", cacheFilePath);
+      return readJsonFromStorage(cacheFilePath);
+    }
+
+    // Build API URL for CPS Voting microdata
+    // Pattern: /data/{YEAR}/cps/voting/nov?get={variables}&key={apiKey}
+    // Note: CPS microdata does not use geography filters - each record contains state info
+    String url =
+        String.format("%s/%d/cps/voting/nov?get=%s&key=%s", BASE_URL, year, variables, apiKey);
+
+    LOGGER.info("Fetching CPS Voting data for year {} with variables: {}", year, variables);
+
+    // Make API request with rate limiting
+    JsonNode response = makeApiRequest(url);
+
+    // Cache the successful response
+    byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    LOGGER.info("Cached CPS Voting data to {} ({} bytes)", cacheFilePath, jsonBytes.length);
+
+    return response;
+  }
+
+  /**
    * Remap PEP variables to their ACS equivalents.
    *
    * @param pepVariables Comma-separated PEP variable names (e.g., "POP,POPEST")

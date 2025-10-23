@@ -196,6 +196,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     for (int year = startYear; year <= endYear; year++) {
       tigerYears.add(year);
     }
+    // Calculate which voting years to include (CPS Voting Supplement is biennial)
+    List<Integer> votingYears = determineVotingYears(startYear, endYear);
 
     Boolean autoDownload = (Boolean) mutableOperand.getOrDefault("autoDownload", true);
 
@@ -295,6 +297,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     String schemaComment = loadSchemaComment();
     if (schemaComment != null) {
       mutableOperand.put("comment", schemaComment);
+    }
+
+    // Add voting years for CPS Voting Supplement table
+    if (!votingYears.isEmpty()) {
+      mutableOperand.put("votingYears", votingYears);
+      LOGGER.info("Added voting years to GEO operand: {}", votingYears);
     }
 
     // Return the configured operand for GovDataSchemaFactory to use
@@ -919,6 +927,36 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         startYear, endYear, censusYears);
 
     return censusYears;
+  }
+
+  /**
+   * Determine which CPS Voting Supplement years to include based on date range.
+   * CPS Voting Supplement is conducted biennially (every 2 years) in November
+   * election years only.
+   *
+   * @param startYear Start of the year range
+   * @param endYear End of the year range
+   * @return List of voting years to include (even years only: 2010, 2012, 2014, etc.)
+   */
+  private List<Integer> determineVotingYears(int startYear, int endYear) {
+    List<Integer> votingYears = new ArrayList<>();
+
+    // CPS Voting Supplement only available for even years (election years)
+    // Adjust start year to next even year if it's odd
+    int firstVotingYear = (startYear % 2 == 0) ? startYear : startYear + 1;
+
+    // Add all even years in the range
+    for (int year = firstVotingYear; year <= endYear; year += 2) {
+      // CPS Voting Supplement available from 1964 onwards
+      if (year >= 1964 && year <= 2024) {
+        votingYears.add(year);
+      }
+    }
+
+    LOGGER.info("Voting years to include for range {}-{}: {}",
+        startYear, endYear, votingYears);
+
+    return votingYears;
   }
 
   /**
