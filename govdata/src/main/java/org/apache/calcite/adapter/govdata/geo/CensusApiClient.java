@@ -593,6 +593,98 @@ public class CensusApiClient {
   }
 
   /**
+   * Gets all U.S. county FIPS codes from the Census API.
+   *
+   * <p>Queries the most recent ACS 5-year estimates to retrieve a complete list of all
+   * U.S. counties with their FIPS codes. Returns approximately 3,142 counties including
+   * county-equivalents (parishes, boroughs, etc.).
+   *
+   * <p>The returned map contains:
+   * <ul>
+   *   <li>Key: 5-digit county FIPS code (state + county)</li>
+   *   <li>Value: County name with state (e.g., "Alameda County, California")</li>
+   * </ul>
+   *
+   * <p>Results are cached to avoid repeated API calls.
+   *
+   * @return Map of county FIPS codes to county names
+   * @throws IOException if API call fails
+   */
+  public Map<String, String> getAllCountyFipsCodes() throws IOException {
+    String cacheKey = "all_county_fips";
+
+    // Check cache first
+    String cacheFilePath = storageProvider.resolvePath(cacheDir, cacheKey + ".json");
+    if (storageProvider.exists(cacheFilePath)) {
+      LOGGER.debug("Using cached county FIPS codes from {}", cacheFilePath);
+      JsonNode cachedData = readJsonFromStorage(cacheFilePath);
+      return parseCountyFipsFromJson(cachedData);
+    }
+
+    // Query Census API for all counties
+    // Using 2020 ACS 5-year estimates (most recent comprehensive dataset)
+    // Pattern: /data/2020/acs/acs5?get=NAME&for=county:*&key={apiKey}
+    String url = String.format("%s/2020/acs/acs5?get=NAME&for=county:*&key=%s", BASE_URL, apiKey);
+
+    LOGGER.info("Fetching all county FIPS codes from Census API");
+
+    // Make API request with rate limiting
+    JsonNode response = makeApiRequest(url);
+
+    // Cache the successful response
+    byte[] jsonBytes = objectMapper.writeValueAsBytes(response);
+    storageProvider.writeFile(cacheFilePath, jsonBytes);
+    LOGGER.info("Cached county FIPS codes to {} ({} bytes)", cacheFilePath, jsonBytes.length);
+
+    return parseCountyFipsFromJson(response);
+  }
+
+  /**
+   * Parses county FIPS codes from Census API JSON response.
+   *
+   * <p>Expected format:
+   * <pre>
+   * [
+   *   ["NAME", "state", "county"],  // Header row
+   *   ["Autauga County, Alabama", "01", "001"],
+   *   ["Baldwin County, Alabama", "01", "003"],
+   *   ...
+   * ]
+   * </pre>
+   *
+   * @param response Census API JSON response
+   * @return Map of 5-digit county FIPS codes to county names
+   */
+  private Map<String, String> parseCountyFipsFromJson(JsonNode response) {
+    Map<String, String> countyFips = new HashMap<>();
+
+    if (!response.isArray() || response.size() < 2) {
+      LOGGER.warn("Invalid county FIPS response format");
+      return countyFips;
+    }
+
+    // First row is headers, skip it
+    for (int i = 1; i < response.size(); i++) {
+      JsonNode row = response.get(i);
+      if (!row.isArray() || row.size() < 3) {
+        continue;
+      }
+
+      String countyName = row.get(0).asText();
+      String stateFips = row.get(1).asText();
+      String countyCode = row.get(2).asText();
+
+      // Combine state + county to create 5-digit FIPS code
+      String fipsCode = stateFips + countyCode;
+
+      countyFips.put(fipsCode, countyName);
+    }
+
+    LOGGER.info("Parsed {} county FIPS codes from Census API", countyFips.size());
+    return countyFips;
+  }
+
+  /**
    * Remap PEP variables to their ACS equivalents.
    *
    * @param pepVariables Comma-separated PEP variable names (e.g., "POP,POPEST")
