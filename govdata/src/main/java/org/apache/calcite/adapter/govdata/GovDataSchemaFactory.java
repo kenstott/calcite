@@ -583,7 +583,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create downloaders (lightweight - just configuration, no download occurs)
     BlsDataDownloader blsDownloader = blsApiKey != null
-        ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest)
+        ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null

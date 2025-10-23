@@ -114,7 +114,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, String apiKey, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
+    super(cacheDir, operatingDirectory, cacheDir, cacheStorageProvider, storageProvider, sharedManifest);
     this.parquetDir = parquetDir;
     this.apiKey = apiKey;
   }

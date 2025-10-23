@@ -210,7 +210,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   }
 
   public FredDataDownloader(String cacheDir, String operatingDirectory, String apiKey, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
+    super(cacheDir, operatingDirectory, cacheDir, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
   }
 

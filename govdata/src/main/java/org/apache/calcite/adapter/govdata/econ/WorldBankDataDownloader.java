@@ -83,7 +83,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   }
 
   public WorldBankDataDownloader(String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, cacheStorageProvider, storageProvider, sharedManifest);
+    super(cacheDir, operatingDirectory, cacheDir, cacheStorageProvider, storageProvider, sharedManifest);
   }
 
   @Override protected long getMinRequestIntervalMs() {

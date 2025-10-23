@@ -79,6 +79,9 @@ public abstract class AbstractEconDataDownloader {
   /** Operating directory for storing operational metadata (e.g., .aperio/econ/) */
   protected final String operatingDirectory;
 
+  /** Parquet directory for storing converted parquet files (e.g., $GOVDATA_PARQUET_DIR or s3://govdata-parquet) */
+  protected final String parquetDirectory;
+
   /** Storage provider for reading/writing raw cache files (JSON, XML) */
   protected final StorageProvider cacheStorageProvider;
 
@@ -102,7 +105,7 @@ public abstract class AbstractEconDataDownloader {
    * @param storageProvider Provider for parquet file operations
    */
   protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
-    this(cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null);
+    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null);
   }
 
   /**
@@ -111,13 +114,15 @@ public abstract class AbstractEconDataDownloader {
    *
    * @param cacheDirectory Local directory for caching raw JSON data
    * @param operatingDirectory Directory for storing operational metadata (.aperio/<schema>/)
+   * @param parquetDirectory Directory for storing parquet files (e.g., s3://govdata-parquet)
    * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
+  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
+    this.parquetDirectory = parquetDirectory;
     this.cacheStorageProvider = cacheStorageProvider;
     this.storageProvider = storageProvider;
     this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
