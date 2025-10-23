@@ -54,7 +54,7 @@ public class TigerCensusTractsTable extends AbstractTable implements ScannableTa
     return typeFactory.builder()
         .add("tract_geoid", SqlTypeName.VARCHAR)     // 11-digit census tract GEOID
         .add("state_fips", SqlTypeName.VARCHAR)      // 2-digit state FIPS code
-        .add("county_fips", SqlTypeName.VARCHAR)     // 3-digit county FIPS code
+        .add("county_fips", SqlTypeName.VARCHAR)     // 5-digit county FIPS code (state + county)
         .add("tract_code", SqlTypeName.VARCHAR)      // 6-digit tract code
         .add("tract_name", SqlTypeName.VARCHAR)      // Tract name (usually numeric)
         .add("namelsad", SqlTypeName.VARCHAR)        // Name and legal/statistical description

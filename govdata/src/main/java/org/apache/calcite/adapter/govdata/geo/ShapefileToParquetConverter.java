@@ -528,15 +528,18 @@ public class ShapefileToParquetConverter {
           List<Object[]> stateBlockGroups = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
             String blockGroupFips = TigerShapefileParser.getStringAttribute(feature, "GEOID");
             String stateFipsAttr = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
-            String countyFips = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
+            String countyFp = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
             String tractFips = TigerShapefileParser.getStringAttribute(feature, "TRACTCE");
             Double landArea = TigerShapefileParser.getDoubleAttribute(feature, "ALAND");
             Double waterArea = TigerShapefileParser.getDoubleAttribute(feature, "AWATER");
 
+            // Construct 5-digit county FIPS code (state + county) to match other TIGER tables
+            String countyFips = stateFipsAttr + countyFp;
+
             return new Object[]{
                 blockGroupFips, // block_group_fips
                 stateFipsAttr,  // state_fips
-                countyFips,     // county_fips
+                countyFips,     // county_fips (5-digit: state + county)
                 tractFips,      // tract_fips
                 landArea,       // land_area
                 waterArea,      // water_area
