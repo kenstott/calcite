@@ -4,6 +4,12 @@
 
 The ECON schema provides unified access to economic indicators from multiple U.S. government sources including the Bureau of Labor Statistics (BLS), Federal Reserve Economic Data (FRED), Treasury Direct, Bureau of Economic Analysis (BEA), and World Bank.
 
+The schema includes comprehensive regional economic data covering 1,845 BLS data series across state, metro, and Census region geographic levels:
+- Regional CPI (4 regions), Metro CPI (27 metros)
+- State Industry Employment (1,122 series), State Wages (51 series)
+- Metro Industry Employment (594 series), Metro Wages (27 series)
+- JOLTS Regional (20 series)
+
 ## Architecture Note: FileSchema Delegation
 
 The ECON schema operates as a **declarative data pipeline** that:
@@ -76,6 +82,98 @@ Primary key: `(date, series_id, industry_code, occupation_code)`
 | employment_cost_index | DECIMAL | Employment cost index |
 | percent_change_year | DECIMAL | Year-over-year change |
 
+#### `jolts_regional`
+Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions.
+
+Primary key: `(date, region_code, metric)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| region_code | VARCHAR | Census region code (0100-0400) |
+| region_name | VARCHAR | Region name |
+| metric | VARCHAR | JOLTS metric type |
+| series_id | VARCHAR | BLS series identifier |
+| value | DECIMAL | Metric value |
+| rate | DECIMAL | Rate (if applicable) |
+| seasonally_adjusted | BOOLEAN | Whether seasonally adjusted |
+
+**JOLTS Metrics**: Job openings rate, hires rate, total separations rate, quits rate, layoffs/discharges rate
+
+### Regional Employment and Wages Tables
+
+#### `state_industry`
+Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes.
+
+Primary key: `(date, state_fips, supersector_code)`
+
+Foreign keys:
+- `state_fips` → `geo.states.state_fips` (links to geographic/demographic data)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| state_fips | VARCHAR | 2-digit state FIPS code (FK) |
+| state_name | VARCHAR | State name |
+| supersector_code | VARCHAR | 8-digit NAICS supersector code |
+| supersector_name | VARCHAR | Industry sector name |
+| series_id | VARCHAR | BLS series identifier |
+| employment | INTEGER | Number of employees (thousands) |
+| seasonally_adjusted | BOOLEAN | Whether seasonally adjusted |
+
+**Coverage**: 1,122 series (51 jurisdictions × 22 sectors) including total nonfarm, manufacturing, construction, retail, healthcare, government, etc.
+
+#### `state_wages`
+Average weekly wages for all 51 U.S. jurisdictions from BLS QCEW (Quarterly Census of Employment and Wages).
+
+Primary key: `(date, state_fips)`
+
+Foreign keys:
+- `state_fips` → `geo.states.state_fips` (links to geographic/demographic data)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| state_fips | VARCHAR | 2-digit state FIPS code (FK) |
+| state_name | VARCHAR | State name |
+| series_id | VARCHAR | BLS series identifier |
+| average_weekly_wage | DECIMAL | Average weekly wage ($) |
+| total_employment | INTEGER | Total employment count |
+| percent_change_year | DECIMAL | Year-over-year wage change |
+
+#### `metro_industry`
+Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes.
+
+Primary key: `(date, metro_area_code, supersector_code)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| metro_area_code | VARCHAR | BLS metro area code (e.g., A100) |
+| metro_area_name | VARCHAR | Metro area name |
+| supersector_code | VARCHAR | 8-digit NAICS supersector code |
+| supersector_name | VARCHAR | Industry sector name |
+| series_id | VARCHAR | BLS series identifier |
+| employment | INTEGER | Number of employees (thousands) |
+| seasonally_adjusted | BOOLEAN | Whether seasonally adjusted |
+
+**Coverage**: 594 series (27 metros × 22 sectors)
+
+#### `metro_wages`
+Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW.
+
+Primary key: `(date, metro_area_code)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| metro_area_code | VARCHAR | BLS metro area code |
+| metro_area_name | VARCHAR | Metro area name |
+| series_id | VARCHAR | BLS series identifier |
+| average_weekly_wage | DECIMAL | Average weekly wage ($) |
+| total_employment | INTEGER | Total employment count |
+| percent_change_year | DECIMAL | Year-over-year wage change |
+
 ### Price and Inflation Tables
 
 #### `inflation_metrics`
@@ -95,6 +193,38 @@ Primary key: `(date, index_type, item_code, area_code)`
 | percent_change_year | DECIMAL | Annual change |
 | area_name | VARCHAR | Area description |
 | seasonally_adjusted | BOOLEAN | Whether seasonally adjusted |
+
+#### `regional_cpi`
+Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West).
+
+Primary key: `(date, region_code)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| region_code | VARCHAR | Census region code (0100-0400) |
+| region_name | VARCHAR | Region name |
+| series_id | VARCHAR | BLS series identifier |
+| cpi_value | DECIMAL | CPI index value (1982-84=100) |
+| percent_change_month | DECIMAL | Month-over-month change |
+| percent_change_year | DECIMAL | Year-over-year change |
+
+#### `metro_cpi`
+Consumer Price Index for 27 major U.S. metropolitan areas.
+
+Primary key: `(date, metro_area_code)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| date | DATE | Observation date |
+| metro_area_code | VARCHAR | BLS metro area code (e.g., A100) |
+| metro_area_name | VARCHAR | Metro area name |
+| series_id | VARCHAR | BLS series identifier |
+| cpi_value | DECIMAL | CPI index value (1982-84=100) |
+| percent_change_month | DECIMAL | Month-over-month change |
+| percent_change_year | DECIMAL | Year-over-year change |
+
+**Metro Areas Covered**: NYC, LA, Chicago, Houston, Phoenix, Philadelphia, San Antonio, San Diego, Dallas, San Jose, Austin, Jacksonville, Boston, Seattle, Denver, Washington DC, Detroit, Cleveland, Minneapolis, Miami, Atlanta, Portland, Riverside, St. Louis, Baltimore, Tampa, Anchorage
 
 ### Treasury and Federal Debt Tables
 
@@ -156,7 +286,7 @@ Common FRED Series:
 - **DEXUSEU**: USD/EUR Exchange Rate
 - **HOUST**: Housing Starts
 - **UMCSENT**: Consumer Sentiment
-- Plus 12 newly added indicators for banking, real estate, and consumer sentiment
+- Plus 12 additional indicators for banking, real estate, and consumer sentiment
 
 ### Bureau of Economic Analysis (BEA) Tables
 
@@ -251,6 +381,8 @@ Primary key: `(country_code, indicator_code, year)`
 ### Cross-Domain Relationships
 - `regional_employment.state_code` → `geo.tiger_states.state_code`
 - `regional_income.geo_fips` → `geo.tiger_states.state_fips` (state-level only)
+- `state_industry.state_fips` → `geo.states.state_fips` (enables state-level industry analysis with geographic/demographic data)
+- `state_wages.state_fips` → `geo.states.state_fips` (enables regional wage comparisons with cost-of-living data)
 
 ### Complete Reference
 For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
@@ -281,6 +413,61 @@ export BEA_API_KEY=your_bea_api_key      # Bureau of Economic Analysis
   }
 }
 ```
+
+### BLS Table Filtering
+
+Control which BLS tables are downloaded and visible in the schema using `blsConfig`:
+
+#### Include Tables (Whitelist)
+```json
+{
+  "operand": {
+    "blsConfig": {
+      "includeTables": ["regional_cpi", "metro_cpi", "state_wages"]
+    }
+  }
+}
+```
+
+#### Exclude Tables (Blacklist)
+```json
+{
+  "operand": {
+    "blsConfig": {
+      "excludeTables": ["state_industry", "metro_industry"]
+    }
+  }
+}
+```
+
+**Important Notes**:
+- Cannot specify both `includeTables` and `excludeTables` (mutually exclusive)
+- Omitting `blsConfig` downloads all tables (backward compatible)
+- Excluded tables will not appear in the SQL schema
+- Useful for managing BLS API quotas (500 daily requests without key, 500/day with key)
+
+**Available BLS Tables**:
+- `employment_statistics` (~3 series)
+- `inflation_metrics` (~3 series)
+- `regional_cpi` (4 series)
+- `metro_cpi` (27 series)
+- `state_industry` (1,122 series) ⚠️ API intensive
+- `state_wages` (51 series)
+- `metro_industry` (594 series) ⚠️ API intensive
+- `metro_wages` (27 series)
+- `jolts_regional` (20 series)
+- `wage_growth` (~2 series)
+- `regional_employment` (~3 series)
+
+**Example: Minimize API Calls**
+```json
+{
+  "blsConfig": {
+    "excludeTables": ["state_industry", "metro_industry"]
+  }
+}
+```
+This excludes 1,716 series (saves ~35 API calls per year) while retaining all other regional data.
 
 ## Common Query Patterns
 
@@ -314,20 +501,119 @@ WHERE index_type = 'CPI-U'
 ```
 
 ### Regional Analysis
+
+#### Cost of Living by Region
 ```sql
--- State unemployment rates with context
+-- Compare regional CPI trends
 SELECT
-    r.state_code,
+    region_name,
+    date,
+    cpi_value,
+    percent_change_year,
+    LAG(cpi_value, 12) OVER (PARTITION BY region_code ORDER BY date) as cpi_year_ago
+FROM regional_cpi
+WHERE date >= CURRENT_DATE - INTERVAL '2' YEAR
+ORDER BY region_name, date;
+```
+
+#### Metro Area Inflation Comparison
+```sql
+-- Top 10 metros with highest inflation
+SELECT
+    metro_area_name,
+    cpi_value,
+    percent_change_year,
+    percent_change_month
+FROM metro_cpi
+WHERE date = (SELECT MAX(date) FROM metro_cpi)
+ORDER BY percent_change_year DESC
+LIMIT 10;
+```
+
+#### State Industry Employment Analysis
+```sql
+-- Manufacturing employment by state with geographic data
+SELECT
+    si.state_name,
+    si.employment,
+    si.employment * 1000 / s.population as employment_per_capita,
+    s.region,
+    s.division
+FROM state_industry si
+JOIN geo.states s ON si.state_fips = s.state_fips
+WHERE si.supersector_name = 'Manufacturing'
+  AND si.date = (SELECT MAX(date) FROM state_industry)
+ORDER BY si.employment DESC;
+```
+
+#### State Wage Comparison
+```sql
+-- States with highest wage growth
+SELECT
+    sw.state_name,
+    sw.average_weekly_wage,
+    sw.percent_change_year,
+    sw.total_employment,
+    s.population
+FROM state_wages sw
+JOIN geo.states s ON sw.state_fips = s.state_fips
+WHERE sw.date = (SELECT MAX(date) FROM state_wages)
+ORDER BY sw.percent_change_year DESC
+LIMIT 10;
+```
+
+#### Metro Industry Mix Analysis
+```sql
+-- Tech sector employment in major metros
+SELECT
+    metro_area_name,
+    supersector_name,
+    employment,
+    RANK() OVER (PARTITION BY metro_area_name ORDER BY employment DESC) as sector_rank
+FROM metro_industry
+WHERE date = (SELECT MAX(date) FROM metro_industry)
+  AND supersector_name IN ('Information', 'Professional and Business Services')
+ORDER BY metro_area_name, employment DESC;
+```
+
+#### Regional Labor Market Dynamics
+```sql
+-- JOLTS regional comparison
+SELECT
+    region_name,
+    metric,
+    value,
+    rate
+FROM jolts_regional
+WHERE date = (SELECT MAX(date) FROM jolts_regional)
+  AND metric IN ('Job Openings Rate', 'Quits Rate', 'Layoffs Rate')
+ORDER BY region_name, metric;
+```
+
+#### Cross-Schema Regional Economic Dashboard
+```sql
+-- Comprehensive state economic profile
+SELECT
     s.state_name,
-    r.unemployment_rate,
-    r.employment_level,
-    r.labor_force,
-    r.participation_rate
-FROM regional_employment r
-JOIN geo.tiger_states s ON r.state_code = s.state_code
-WHERE r.area_type = 'state'
-  AND r.date = (SELECT MAX(date) FROM regional_employment WHERE area_type = 'state')
-ORDER BY r.unemployment_rate;
+    s.region,
+    si.employment as total_employment,
+    sw.average_weekly_wage,
+    ri.per_capita_value as per_capita_income,
+    s.population,
+    s.land_area_sq_miles
+FROM geo.states s
+LEFT JOIN state_industry si
+    ON s.state_fips = si.state_fips
+    AND si.supersector_name = 'Total Nonfarm'
+    AND si.date = (SELECT MAX(date) FROM state_industry)
+LEFT JOIN state_wages sw
+    ON s.state_fips = sw.state_fips
+    AND sw.date = (SELECT MAX(date) FROM state_wages)
+LEFT JOIN regional_income ri
+    ON s.state_fips = ri.geo_fips
+    AND ri.metric = 'Per capita personal income'
+    AND ri.year = (SELECT MAX(year) FROM regional_income)
+ORDER BY s.state_name;
 ```
 
 ### Time Series Analysis
