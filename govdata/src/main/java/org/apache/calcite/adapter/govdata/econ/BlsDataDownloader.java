@@ -1161,8 +1161,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
+        // Check cache manifest first (consistent with other BLS tables)
+        Map<String, String> cacheParams = new HashMap<>();
+        cacheParams.put("state_fips", stateFips);
+        if (cacheManifest.isParquetConverted("regional_employment", year, cacheParams)) {
+          LOGGER.debug("State {} (FIPS {}) year {} already in manifest - skipping", stateName, stateFips, year);
+          totalStatesSkipped++;
+          lastFile = new File(fullParquetPath);
+          continue;
+        }
+
+        // Defensive check: if file exists but not in manifest, update manifest
         if (storageProvider.exists(fullParquetPath)) {
-          LOGGER.debug("State {} (FIPS {}) year {} already cached - skipping", stateName, stateFips, year);
+          LOGGER.info("State {} (FIPS {}) year {} parquet exists, updating manifest", stateName, stateFips, year);
+          cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
+          cacheManifest.save(operatingDirectory);
           totalStatesSkipped++;
           lastFile = new File(fullParquetPath);
           continue;
@@ -1210,6 +1223,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           // Convert JSON response to Parquet and save
           convertAndSaveRegionalEmployment(batchRoot, fullParquetPath, year, stateFips);
+
+          // Mark as converted in manifest (consistent with other BLS tables)
+          cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
+          cacheManifest.save(operatingDirectory);
+
           totalStatesDownloaded++;
           lastFile = new File(fullParquetPath);
 
