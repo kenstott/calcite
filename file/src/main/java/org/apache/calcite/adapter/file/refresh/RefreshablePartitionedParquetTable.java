@@ -495,6 +495,33 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
               LOGGER.info("Updated baseline for table '{}' with {} files", tableName, newFiles.size());
             }
 
+            // Create PartitionedParquetTable for schema introspection even though queries go to DuckDB view
+            // Extract partition info from config for schema purposes
+            PartitionDetector.PartitionInfo partitionInfo = null;
+            if (config.getPartitions() != null && config.getPartitions().getColumnDefinitions() != null) {
+              List<String> explicitColumns = new ArrayList<>();
+              for (PartitionedTableConfig.ColumnDefinition colDef : config.getPartitions().getColumnDefinitions()) {
+                explicitColumns.add(colDef.getName());
+              }
+              partitionInfo =
+                  new PartitionDetector.PartitionInfo(new java.util.LinkedHashMap<>(),
+                      explicitColumns, true);
+            }
+
+            // Get column types from config
+            Map<String, String> columnTypes = null;
+            if (config.getPartitions() != null && config.getPartitions().getColumnDefinitions() != null) {
+              columnTypes = new java.util.HashMap<>();
+              for (PartitionedTableConfig.ColumnDefinition colDef : config.getPartitions().getColumnDefinitions()) {
+                columnTypes.put(colDef.getName(), colDef.getType());
+              }
+            }
+
+            // Create table instance for schema introspection
+            currentTable =
+                new PartitionedParquetTable(newFiles, partitionInfo,
+                    engineConfig, columnTypes, null, null, constraintConfig, schemaName, tableName, storageProvider);
+
             // Prime HLL statistics if the table supports it
             primeHLLStatistics();
 
@@ -755,7 +782,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     // This ensures queries see the latest view after refresh
     if (refreshInProgress && refreshFuture != null) {
       try {
-        refreshFuture.get(30, TimeUnit.SECONDS); // Wait for completion with timeout
+        refreshFuture.get(120, TimeUnit.SECONDS); // Wait for completion with timeout (increased for S3)
         LOGGER.debug("Waited for refresh to complete for table '{}'", tableName);
       } catch (TimeoutException e) {
         LOGGER.warn("Refresh timeout for table '{}', proceeding with current view", tableName);
@@ -774,7 +801,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     // This ensures queries see the latest view after refresh
     if (refreshInProgress && refreshFuture != null) {
       try {
-        refreshFuture.get(30, TimeUnit.SECONDS); // Wait for completion with timeout
+        refreshFuture.get(120, TimeUnit.SECONDS); // Wait for completion with timeout (increased for S3)
         LOGGER.debug("Waited for refresh to complete for table '{}'", tableName);
       } catch (TimeoutException e) {
         LOGGER.warn("Refresh timeout for table '{}', proceeding with current view", tableName);

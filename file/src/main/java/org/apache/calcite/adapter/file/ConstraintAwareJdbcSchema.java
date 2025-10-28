@@ -61,6 +61,14 @@ public class ConstraintAwareJdbcSchema implements Schema {
                 this.constraintMetadata.keySet());
   }
 
+  /**
+   * Gets the delegate JdbcSchema wrapped by this constraint-aware schema.
+   * @return the underlying JdbcSchema
+   */
+  public JdbcSchema getDelegate() {
+    return delegate;
+  }
+
   @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
     Table table = delegate.getTable(name);
