@@ -21,6 +21,7 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -101,7 +102,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     CENSUS_REGIONS.put("0400", "West");
   }
 
-  // Metro area codes for major metropolitan areas
+  // Metro area codes for major metropolitan areas (Publication codes)
   private static final Map<String, String> METRO_AREA_CODES = new HashMap<>();
   static {
     METRO_AREA_CODES.put("A100", "New York-Newark-Jersey City, NY-NJ-PA");
@@ -131,6 +132,73 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     METRO_AREA_CODES.put("A319", "Baltimore-Columbia-Towson, MD");
     METRO_AREA_CODES.put("A433", "Tampa-St. Petersburg-Clearwater, FL");
     METRO_AREA_CODES.put("A440", "Anchorage, AK");
+  }
+
+  // BLS area codes mapping: Publication Code → State(2) + BLS Area Code(5)
+  // Format for SMU/ENU series: State Code (2 digits) + Area Code (5 digits)
+  private static final Map<String, String> METRO_BLS_AREA_CODES = new HashMap<>();
+  static {
+    METRO_BLS_AREA_CODES.put("A100", "3693561");  // New York: State 36 + Area 93561
+    METRO_BLS_AREA_CODES.put("A400", "0631080");  // Los Angeles: State 06 + Area 31080
+    METRO_BLS_AREA_CODES.put("A207", "1716980");  // Chicago: State 17 + Area 16980
+    METRO_BLS_AREA_CODES.put("A425", "4826420");  // Houston: State 48 + Area 26420
+    METRO_BLS_AREA_CODES.put("A423", "0438060");  // Phoenix: State 04 + Area 38060
+    METRO_BLS_AREA_CODES.put("A102", "4237980");  // Philadelphia: State 42 + Area 37980
+    METRO_BLS_AREA_CODES.put("A426", "4841700");  // San Antonio: State 48 + Area 41700
+    METRO_BLS_AREA_CODES.put("A421", "0641740");  // San Diego: State 06 + Area 41740
+    METRO_BLS_AREA_CODES.put("A127", "4819100");  // Dallas: State 48 + Area 19100
+    METRO_BLS_AREA_CODES.put("A429", "0641940");  // San Jose: State 06 + Area 41940
+    METRO_BLS_AREA_CODES.put("A438", "4812420");  // Austin: State 48 + Area 12420
+    METRO_BLS_AREA_CODES.put("A420", "1227260");  // Jacksonville: State 12 + Area 27260
+    METRO_BLS_AREA_CODES.put("A103", "2514460");  // Boston: State 25 + Area 14460
+    METRO_BLS_AREA_CODES.put("A428", "5342660");  // Seattle: State 53 + Area 42660
+    METRO_BLS_AREA_CODES.put("A427", "0819740");  // Denver: State 08 + Area 19740
+    METRO_BLS_AREA_CODES.put("A101", "1147900");  // Washington DC: State 11 + Area 47900
+    METRO_BLS_AREA_CODES.put("A211", "2619820");  // Detroit: State 26 + Area 19820
+    METRO_BLS_AREA_CODES.put("A104", "3917460");  // Cleveland: State 39 + Area 17460
+    METRO_BLS_AREA_CODES.put("A212", "2733460");  // Minneapolis: State 27 + Area 33460
+    METRO_BLS_AREA_CODES.put("A422", "1233100");  // Miami: State 12 + Area 33100
+    METRO_BLS_AREA_CODES.put("A419", "1312060");  // Atlanta: State 13 + Area 12060
+    METRO_BLS_AREA_CODES.put("A437", "4138900");  // Portland: State 41 + Area 38900
+    METRO_BLS_AREA_CODES.put("A424", "0640140");  // Riverside: State 06 + Area 40140
+    METRO_BLS_AREA_CODES.put("A320", "2941180");  // St. Louis: State 29 + Area 41180
+    METRO_BLS_AREA_CODES.put("A319", "2412580");  // Baltimore: State 24 + Area 12580
+    METRO_BLS_AREA_CODES.put("A433", "1245300");  // Tampa: State 12 + Area 45300
+    METRO_BLS_AREA_CODES.put("A440", "0211260");  // Anchorage: State 02 + Area 11260
+  }
+
+  // QCEW area codes mapping: Publication Code → QCEW Area Code (e.g., "C3562")
+  // Format for QCEW Open Data API: "C" + first 4 digits of CBSA code
+  // Used to download metro wage data from QCEW Open Data API
+  private static final Map<String, String> METRO_QCEW_AREA_CODES = new HashMap<>();
+  static {
+    METRO_QCEW_AREA_CODES.put("A100", "C3562");  // New York-Newark-Jersey City, NY-NJ-PA MSA
+    METRO_QCEW_AREA_CODES.put("A400", "C3108");  // Los Angeles-Long Beach-Anaheim, CA MSA
+    METRO_QCEW_AREA_CODES.put("A207", "C1698");  // Chicago-Naperville-Elgin, IL-IN MSA
+    METRO_QCEW_AREA_CODES.put("A425", "C2642");  // Houston-The Woodlands-Sugar Land, TX MSA (CBSA 26420)
+    METRO_QCEW_AREA_CODES.put("A423", "C3806");  // Phoenix-Mesa-Chandler, AZ MSA
+    METRO_QCEW_AREA_CODES.put("A102", "C3798");  // Philadelphia-Camden-Wilmington, PA-NJ-DE-MD MSA
+    METRO_QCEW_AREA_CODES.put("A426", "C4170");  // San Antonio-New Braunfels, TX MSA
+    METRO_QCEW_AREA_CODES.put("A421", "C4174");  // San Diego-Chula Vista-Carlsbad, CA MSA
+    METRO_QCEW_AREA_CODES.put("A127", "C1910");  // Dallas-Fort Worth-Arlington, TX MSA
+    METRO_QCEW_AREA_CODES.put("A429", "C4194");  // San Jose-Sunnyvale-Santa Clara, CA MSA
+    METRO_QCEW_AREA_CODES.put("A438", "C1242");  // Austin-Round Rock-San Marcos, TX MSA
+    METRO_QCEW_AREA_CODES.put("A420", "C2726");  // Jacksonville, FL MSA
+    METRO_QCEW_AREA_CODES.put("A103", "C1446");  // Boston-Cambridge-Newton, MA-NH MSA
+    METRO_QCEW_AREA_CODES.put("A428", "C4266");  // Seattle-Tacoma-Bellevue, WA MSA
+    METRO_QCEW_AREA_CODES.put("A427", "C1974");  // Denver-Aurora-Centennial, CO MSA
+    METRO_QCEW_AREA_CODES.put("A101", "C4790");  // Washington-Arlington-Alexandria, DC-VA-MD-WV MSA
+    METRO_QCEW_AREA_CODES.put("A211", "C1982");  // Detroit-Warren-Dearborn, MI MSA
+    METRO_QCEW_AREA_CODES.put("A104", "C1746");  // Cleveland-Elyria, OH MSA
+    METRO_QCEW_AREA_CODES.put("A212", "C3346");  // Minneapolis-St. Paul-Bloomington, MN-WI MSA
+    METRO_QCEW_AREA_CODES.put("A422", "C3310");  // Miami-Fort Lauderdale-West Palm Beach, FL MSA
+    METRO_QCEW_AREA_CODES.put("A419", "C1206");  // Atlanta-Sandy Springs-Roswell, GA MSA
+    METRO_QCEW_AREA_CODES.put("A437", "C3890");  // Portland-Vancouver-Hillsboro, OR-WA MSA
+    METRO_QCEW_AREA_CODES.put("A424", "C4014");  // Riverside-San Bernardino-Ontario, CA MSA
+    METRO_QCEW_AREA_CODES.put("A320", "C4118");  // St. Louis, MO-IL MSA
+    METRO_QCEW_AREA_CODES.put("A319", "C1258");  // Baltimore-Columbia-Towson, MD MSA
+    METRO_QCEW_AREA_CODES.put("A433", "C4530");  // Tampa-St. Petersburg-Clearwater, FL MSA
+    METRO_QCEW_AREA_CODES.put("A440", "C1126");  // Anchorage, AK MSA
   }
 
   // NAICS supersector codes for industry employment
@@ -203,11 +271,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS metro area CPI series ID.
-     * Format: CUURS{AREA_CODE}SA0
+     * Format: CUUR{AREA_CODE}SA0
      * @param metroAreaCode Metro area code (e.g., "A100" for NYC)
+     * Area code "A" indicates semi-annual publication frequency
      */
     public static String getMetroCpiSeriesId(String metroAreaCode) {
-      return "CUURS" + metroAreaCode + "SA0";
+      return "CUUR" + metroAreaCode + "SA0";
     }
 
     /**
@@ -230,12 +299,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS state industry employment series ID.
-     * Format: SMS{STATE_FIPS}{SUPERSECTOR}
+     * Format: SMU{STATE_FIPS}{AREA}{SUPERSECTOR}{DATATYPE}
+     * Example: SMU0600000000000001 = California Total Nonfarm Employment
      * @param stateFips 2-digit state FIPS code (e.g., "06" for CA)
      * @param supersector 8-digit NAICS supersector code
      */
     public static String getStateIndustryEmploymentSeriesId(String stateFips, String supersector) {
-      return "SMS" + stateFips + supersector;
+      return "SMU" + stateFips + "00000" + supersector + "01";
     }
 
     /**
@@ -261,25 +331,28 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS state wage series ID from QCEW (Quarterly Census of Employment and Wages).
-     * Format: ENU{STATE_FIPS}00010{DATA_TYPE}
-     * Data types: 10 = average weekly wages, 03 = total employment
+     * Format: ENU{AREA}{DATATYPE}{SIZE}{OWNERSHIP}{INDUSTRY}
+     * Total: 17 chars (EN=2, U=1, Area=5, DataType=1, Size=1, Ownership=1, Industry=6)
+     * Data types: 1 = Employment, 3 = Average weekly wages
      *
      * @param stateFips 2-digit state FIPS code
-     * @param dataType "10" for weekly wages, "03" for employment
+     * @param dataType "1" for employment, "3" for wages
      * @return QCEW series ID
      */
     public static String getStateWageSeriesId(String stateFips, String dataType) {
-      return "ENU" + stateFips + "00010" + dataType;
+      // Area: stateFips + "000" (statewide), DataType: 3 (wages), Size: 0 (all),
+      // Ownership: 5 (private), Industry: 101010 (total all industries)
+      return "ENU" + stateFips + "000" + dataType + "05101010";
     }
 
     /**
      * Gets all state average weekly wage series IDs (51 jurisdictions).
-     * Uses data type "10" for average weekly wages.
+     * Uses data type "3" for average weekly wages.
      */
     public static List<String> getAllStateWageSeriesIds() {
       List<String> seriesIds = new ArrayList<>();
       for (String stateFips : STATE_FIPS_MAP.values()) {
-        seriesIds.add(getStateWageSeriesId(stateFips, "10"));
+        seriesIds.add(getStateWageSeriesId(stateFips, "3"));
       }
       return seriesIds;
     }
@@ -298,15 +371,19 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS metro area industry employment series ID.
-     * Format: SMU{METRO_CODE}{SUPERSECTOR}
-     * Example: SMUA100000000000 for NYC Total Nonfarm
+     * Format: SMU{STATE}{AREA}{SUPERSECTOR}{DATATYPE}
+     * Example: SMU3693561000000000001 for NYC Total Nonfarm
      *
      * @param metroCode Metro area code (e.g., "A100" for NYC)
      * @param supersector NAICS supersector code (e.g., "00000000" for total nonfarm)
      * @return BLS metro industry employment series ID
      */
     public static String getMetroIndustryEmploymentSeriesId(String metroCode, String supersector) {
-      return "SMU" + metroCode + supersector;
+      String blsAreaCode = METRO_BLS_AREA_CODES.get(metroCode);
+      if (blsAreaCode == null) {
+        throw new IllegalArgumentException("Unknown metro code: " + metroCode);
+      }
+      return "SMU" + blsAreaCode + supersector + "01";
     }
 
     /**
@@ -325,14 +402,22 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS metro area wage series ID from QCEW.
-     * Format: ENUC{METRO_CODE}010
-     * Data type: 10 = average weekly wages
+     * Format: ENU{AREA}{DATATYPE}{SIZE}{OWNERSHIP}{INDUSTRY}
+     * Total: 17 chars (EN=2, U=1, Area=5, DataType=1, Size=1, Ownership=1, Industry=6)
+     * Example: ENU9356130510101 for NYC wages
      *
      * @param metroCode Metro area code (e.g., "A100" for NYC)
      * @return QCEW metro wage series ID
      */
     public static String getMetroWageSeriesId(String metroCode) {
-      return "ENUC" + metroCode + "010";
+      String blsAreaCode = METRO_BLS_AREA_CODES.get(metroCode);
+      if (blsAreaCode == null) {
+        throw new IllegalArgumentException("Unknown metro code: " + metroCode);
+      }
+      // Use last 5 digits as area code, DataType: 3 (wages), Size: 0 (all),
+      // Ownership: 5 (private), Industry: 101010 (total)
+      String areaOnly = blsAreaCode.substring(2);  // Remove state code, use area code
+      return "ENU" + areaOnly + "305101010";
     }
 
     /**
@@ -348,7 +433,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     /**
      * Generates BLS JOLTS regional series ID.
-     * Format: JTS{REGION}000000000{METRIC}
+     * Format: JT{S/U}{INDUSTRY}{STATE}{AREA}{SIZE}{DATAELEMENT}{RATELEVEL}
+     * Total: 21 characters (JT=2, S/U=1, Industry=6, State=2, Area=5, Size=2, DataElement=2, RateLevel=1)
+     * Regional data only available at total nonfarm level
      *
      * @param regionCode Region code (1000=NE, 2000=MW, 3000=S, 4000=W)
      * @param metric Metric code (JOR=Job Openings Rate, HIR=Hires Rate, TSR=Total Separations,
@@ -356,7 +443,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
      * @return JOLTS series ID
      */
     public static String getJoltsRegionalSeriesId(String regionCode, String metric) {
-      return "JTS" + regionCode + "000000000" + metric;
+      // Format: JTS + Industry(6) + State(2) + Area(5) + Size(2) + DataElement(2) + RateLevel(1)
+      // Using total nonfarm (000000), region as state code first 2 digits of regionCode,
+      // region code as area, all sizes (00), metric as data element
+      String state = regionCode.substring(0, 2);  // "10" from "1000"
+      return "JTS000000" + state + regionCode.substring(2) + "00" + metric + "R";
     }
 
     /**
@@ -493,11 +584,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public static final String TABLE_METRO_CPI = "metro_cpi";
   public static final String TABLE_STATE_INDUSTRY = "state_industry";
   public static final String TABLE_STATE_WAGES = "state_wages";
+  public static final String TABLE_COUNTY_WAGES = "county_wages";
+  public static final String TABLE_COUNTY_QCEW = "county_qcew";
   public static final String TABLE_METRO_INDUSTRY = "metro_industry";
   public static final String TABLE_METRO_WAGES = "metro_wages";
   public static final String TABLE_JOLTS_REGIONAL = "jolts_regional";
+  public static final String TABLE_JOLTS_STATE = "jolts_state";
   public static final String TABLE_WAGE_GROWTH = "wage_growth";
   public static final String TABLE_REGIONAL_EMPLOYMENT = "regional_employment";
+
+  // Reference table constants
+  public static final String TABLE_REFERENCE_JOLTS_INDUSTRIES = "reference_jolts_industries";
+  public static final String TABLE_REFERENCE_JOLTS_DATAELEMENTS = "reference_jolts_dataelements";
 
   /**
    * Validates BLS API response and saves to cache appropriately.
@@ -674,6 +772,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     for (int year = startYear; year <= endYear; year++) {
       Map<String, ArrayNode> yearSeriesData = dataByYear.get(year);
       if (yearSeriesData == null || yearSeriesData.isEmpty()) {
+        LOGGER.warn("No series data returned for year {} (API returned empty/no series)", year);
         continue;
       }
 
@@ -853,6 +952,20 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Skipping {} (filtered out)", TABLE_STATE_WAGES);
     }
 
+    // Download county wages
+    if (enabledTables == null || enabledTables.contains(TABLE_COUNTY_WAGES)) {
+      downloadCountyWages(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out - saves ~6,000 counties!)", TABLE_COUNTY_WAGES);
+    }
+
+    // Download county QCEW (comprehensive county-level employment and wage data)
+    if (enabledTables == null || enabledTables.contains(TABLE_COUNTY_QCEW)) {
+      downloadCountyQcew(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_COUNTY_QCEW);
+    }
+
     // Download metro industry employment
     if (enabledTables == null || enabledTables.contains(TABLE_METRO_INDUSTRY)) {
       downloadMetroIndustryEmployment(startYear, endYear);
@@ -874,6 +987,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Skipping {} (filtered out)", TABLE_JOLTS_REGIONAL);
     }
 
+    // Download JOLTS state data
+    if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_STATE)) {
+      downloadJoltsState(startYear, endYear);
+    } else {
+      LOGGER.info("Skipping {} (filtered out)", TABLE_JOLTS_STATE);
+    }
+
     // Download wage growth data
     if (enabledTables == null || enabledTables.contains(TABLE_WAGE_GROWTH)) {
       downloadWageGrowth(startYear, endYear);
@@ -887,6 +1007,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     } else {
       LOGGER.info("Skipping {} (filtered out)", TABLE_REGIONAL_EMPLOYMENT);
     }
+
+    // Download reference tables (always downloaded, not subject to filtering)
+    LOGGER.info("Downloading JOLTS reference tables (industries, data elements)");
+    downloadJoltsIndustries();
+    downloadJoltsDataelements();
+    LOGGER.info("BLS data download completed");
   }
 
   /**
@@ -903,15 +1029,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
 
     // Series IDs to fetch (constant across all years)
-    List<String> seriesIds = List.of(
-        Series.UNEMPLOYMENT_RATE,
+    List<String> seriesIds =
+        List.of(Series.UNEMPLOYMENT_RATE,
         Series.EMPLOYMENT_LEVEL,
         Series.LABOR_FORCE_PARTICIPATION);
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String outputDirPath = buildPartitionPath("employment_statistics", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/employment_statistics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -934,7 +1060,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each uncached year
     for (int year : uncachedYears) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String outputDirPath = buildPartitionPath("employment_statistics", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/employment_statistics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -969,7 +1095,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=cpi_regional/year=" + year;
+      String outputDirPath = buildPartitionPath("regional_cpi", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/regional_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -992,7 +1118,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String outputDirPath = "source=econ/type=cpi_regional/year=" + year;
+      String outputDirPath = buildPartitionPath("regional_cpi", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/regional_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -1021,11 +1147,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
 
     List<String> seriesIds = Series.getAllMetroCpiSeriesIds();
+    LOGGER.info("Metro CPI series examples: {}, {}, {}",
+                seriesIds.size() > 0 ? seriesIds.get(0) : "none",
+                seriesIds.size() > 1 ? seriesIds.get(1) : "none",
+                seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=cpi_metro/year=" + year;
+      String outputDirPath = buildPartitionPath("metro_cpi", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/metro_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -1048,12 +1178,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String outputDirPath = "source=econ/type=cpi_metro/year=" + year;
+      String outputDirPath = buildPartitionPath("metro_cpi", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/metro_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("metro_cpi", year, cacheParams, jsonFilePath, rawJson)) {
+      if (rawJson == null) {
+        LOGGER.warn("No data returned from API for metro_cpi year {} - skipping save", year);
+      } else if (validateAndSaveBlsResponse("metro_cpi", year, cacheParams, jsonFilePath, rawJson)) {
         lastFile = new File(jsonFilePath);
       }
     }
@@ -1080,11 +1212,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
     List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
     LOGGER.info("Generated {} state industry employment series IDs", seriesIds.size());
+    LOGGER.info("State industry series examples: {}, {}, {}",
+                seriesIds.size() > 0 ? seriesIds.get(0) : "none",
+                seriesIds.size() > 1 ? seriesIds.get(1) : "none",
+                seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = "source=econ/type=state_industry/year=" + year + "/state_industry.json";
+      String jsonFilePath = buildPartitionPath("state_industry", DataFrequency.QUARTERLY, year) + "/state_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("state_industry", year, cacheParams, jsonFilePath)) {
@@ -1106,11 +1242,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String jsonFilePath = "source=econ/type=state_industry/year=" + year + "/state_industry.json";
+      String jsonFilePath = buildPartitionPath("state_industry", DataFrequency.QUARTERLY, year) + "/state_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("state_industry", year, cacheParams, jsonFilePath, rawJson)) {
+      if (rawJson == null) {
+        LOGGER.warn("No data returned from API for state_industry year {} - skipping save", year);
+      } else if (validateAndSaveBlsResponse("state_industry", year, cacheParams, jsonFilePath, rawJson)) {
         lastFile = new File(jsonFilePath);
       }
     }
@@ -1124,49 +1262,148 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads average weekly wages for all 51 U.S. jurisdictions (50 states + DC)
-   * from BLS QCEW (Quarterly Census of Employment and Wages). Generates 51 series.
+   * from BLS QCEW (Quarterly Census of Employment and Wages) CSV files.
+   *
+   * <p>Note: QCEW (ENU series) data is not available through the BLS API v2.
+   * This method downloads annual QCEW CSV files and extracts state-level wage data.
+   * Uses agglvl_code 50 for state-level aggregation.
    */
   public File downloadStateWages(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading state wages for {} jurisdictions for {}-{}",
-                STATE_FIPS_MAP.size(), startYear, endYear);
+    LOGGER.info("Downloading state wages from QCEW CSV files for {}-{}", startYear, endYear);
     File lastFile = null;
 
-    List<String> seriesIds = Series.getAllStateWageSeriesIds();
-
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=state_wages/year=" + year;
+      // QCEW data only available from 1990 forward
+      if (year < 1990) {
+        LOGGER.warn("QCEW data only available from 1990 forward. Skipping year {}", year);
+        continue;
+      }
+
+      String outputDirPath = buildPartitionPath("state_wages", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/state_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("state_wages", year, cacheParams, jsonFilePath)) {
         LOGGER.info("Found cached state wages for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-      } else {
-        uncachedYears.add(year);
+        continue;
+      }
+
+      // Download QCEW CSV file
+      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
+      byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
+
+      if (zipData == null) {
+        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping state wages", year);
+        continue;
+      }
+
+      // Parse CSV and extract state-level wage data (agglvl_code = 50)
+      String stateWagesJson = parseQcewForStateWages(zipData, year);
+
+      if (stateWagesJson != null) {
+        saveToCache("state_wages", year, cacheParams, jsonFilePath, stateWagesJson);
+        lastFile = new File(jsonFilePath);
+        LOGGER.info("Extracted state wages for year {} ({} states)", year, STATE_FIPS_MAP.size());
       }
     }
 
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All state wages data cached (years {}-{})", startYear, endYear);
-      return lastFile;
-    }
+    return lastFile;
+  }
 
-    // 2. Batch fetch uncached years
-    LOGGER.info("Fetching state wages for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
+  public File downloadCountyWages() throws IOException, InterruptedException {
+    return downloadCountyWages(getDefaultStartYear(), getDefaultEndYear());
+  }
 
-    // 3. Save each year
-    for (int year : uncachedYears) {
-      String outputDirPath = "source=econ/type=state_wages/year=" + year;
-      String jsonFilePath = outputDirPath + "/state_wages.json";
+  /**
+   * Downloads county-level wage data from QCEW annual CSV files and converts to Parquet.
+   * Extracts data for ~6,038 counties (most granular wage data available).
+   * Reuses the same QCEW CSV files already downloaded for state wages.
+   */
+  public File downloadCountyWages(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading county wages from QCEW CSV files for {}-{}", startYear, endYear);
+    File lastFile = null;
+
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = buildPartitionPath("county_wages", DataFrequency.QUARTERLY, year);
+      String jsonFilePath = outputDirPath + "/county_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("state_wages", year, cacheParams, jsonFilePath, rawJson)) {
+      // Check if file is already in cache and up to date
+      if (isCachedOrExists("county_wages", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("County wages data for year {} is already cached", year);
         lastFile = new File(jsonFilePath);
+        continue;
       }
+
+      // Download QCEW CSV (reuses cache from state_wages if available)
+      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
+      byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
+
+      if (zipData == null) {
+        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping county wages", year);
+        continue;
+      }
+
+      // Parse CSV and extract county-level wage data (agglvl_code = 70)
+      String countyWagesJson = parseQcewForCountyWages(zipData, year);
+
+      if (countyWagesJson != null) {
+        saveToCache("county_wages", year, cacheParams, jsonFilePath, countyWagesJson);
+        lastFile = new File(jsonFilePath);
+        LOGGER.info("Extracted county wages for year {}", year);
+      }
+    }
+
+    return lastFile;
+  }
+
+  public File downloadCountyQcew() throws IOException, InterruptedException {
+    return downloadCountyQcew(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads county-level QCEW (Quarterly Census of Employment and Wages) data from BLS annual CSV files.
+   * Extracts comprehensive county employment and wage data including establishment counts, employment levels,
+   * total wages, and average weekly wages by industry (NAICS) and ownership type.
+   *
+   * <p>Reuses QCEW ZIP files already downloaded for state_wages and county_wages to avoid redundant downloads.
+   * Produces detailed county-level labor market data for all ~3,142 U.S. counties with industry and ownership breakdowns.
+   *
+   * @param startYear Start year (inclusive)
+   * @param endYear End year (inclusive)
+   * @return Last File object created, or null if none created
+   * @throws IOException if download or parsing fails
+   * @throws InterruptedException if interrupted
+   */
+  public File downloadCountyQcew(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
+    File lastFile = null;
+
+    for (int year = startYear; year <= endYear; year++) {
+      String parquetPath = buildPartitionPath("county_qcew", DataFrequency.QUARTERLY, year) + "/county_qcew.parquet";
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+      // Check if already exists
+      if (storageProvider.exists(fullParquetPath)) {
+        LOGGER.info("County QCEW data for year {} already exists - skipping", year);
+        lastFile = new File(parquetPath);
+        continue;
+      }
+
+      // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
+      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
+      byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
+
+      if (zipData == null) {
+        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping county QCEW", year);
+        continue;
+      }
+
+      // Parse and convert to Parquet
+      parseAndConvertQcewToParquet(zipData, fullParquetPath, year);
+      lastFile = new File(parquetPath);
+      LOGGER.info("Completed county QCEW data for year {}", year);
     }
 
     return lastFile;
@@ -1191,11 +1428,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
     List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
     LOGGER.info("Generated {} metro industry employment series IDs", seriesIds.size());
+    LOGGER.info("Metro industry series examples: {}, {}, {}",
+                seriesIds.size() > 0 ? seriesIds.get(0) : "none",
+                seriesIds.size() > 1 ? seriesIds.get(1) : "none",
+                seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = "source=econ/type=metro_industry/year=" + year + "/metro_industry.json";
+      String jsonFilePath = buildPartitionPath("metro_industry", DataFrequency.QUARTERLY, year) + "/metro_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("metro_industry", year, cacheParams, jsonFilePath)) {
@@ -1217,11 +1458,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String jsonFilePath = "source=econ/type=metro_industry/year=" + year + "/metro_industry.json";
+      String jsonFilePath = buildPartitionPath("metro_industry", DataFrequency.QUARTERLY, year) + "/metro_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("metro_industry", year, cacheParams, jsonFilePath, rawJson)) {
+      if (rawJson == null) {
+        LOGGER.warn("No data returned from API for metro_industry year {} - skipping save", year);
+      } else if (validateAndSaveBlsResponse("metro_industry", year, cacheParams, jsonFilePath, rawJson)) {
         lastFile = new File(jsonFilePath);
       }
     }
@@ -1235,51 +1478,201 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads average weekly wages for 27 major U.S. metropolitan areas
-   * from BLS QCEW (Quarterly Census of Employment and Wages). Generates 27 series.
+   * from BLS QCEW (Quarterly Census of Employment and Wages) Open Data API.
+   *
+   * <p>Note: QCEW (ENU series) data is not available through the BLS API v2.
+   * This method downloads quarterly QCEW CSV files from the Open Data API
+   * and aggregates them to annual averages for metro-level wage data.
+   * Uses agglvl_code 40 for MSA-level aggregation (Total All Ownerships).
+   * QCEW aggregation codes: 4x=MSA, 5x=State, 7x=County.
+   *
+   * <p>Data is fetched from: https://data.bls.gov/cew/data/api/{year}/{qtr}/area/{area_code}.csv
+   * where area_code is "C" + first 4 digits of CBSA code (e.g., C3562 for NYC).
    */
   public File downloadMetroWages(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading metro wages for {} metropolitan areas for {}-{}",
-                METRO_AREA_CODES.size(), startYear, endYear);
-
+    LOGGER.info("Downloading metro wages from QCEW Open Data API for {}-{}", startYear, endYear);
     File lastFile = null;
-    List<String> seriesIds = Series.getAllMetroWageSeriesIds();
-    LOGGER.info("Generated {} metro wage series IDs", seriesIds.size());
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = "source=econ/type=metro_wages/year=" + year + "/metro_wages.json";
+      // QCEW data only available from 1990 forward
+      if (year < 1990) {
+        LOGGER.warn("QCEW data only available from 1990 forward. Skipping year {}", year);
+        continue;
+      }
+
+      String jsonFilePath = buildPartitionPath("metro_wages", DataFrequency.MONTHLY, year) + "/metro_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("metro_wages", year, cacheParams, jsonFilePath)) {
         LOGGER.info("Found cached metro wages for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-      } else {
-        uncachedYears.add(year);
+        continue;
       }
-    }
 
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All metro wages data cached (years {}-{})", startYear, endYear);
-      return lastFile;
-    }
+      // Download quarterly data from QCEW Open Data API for all 27 metros
+      String metroWagesJson = downloadQcewMetroWagesFromApi(year);
 
-    // 2. Batch fetch uncached years (up to 20 years per API call)
-    LOGGER.info("Fetching metro wages for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each year
-    for (int year : uncachedYears) {
-      String jsonFilePath = "source=econ/type=metro_wages/year=" + year + "/metro_wages.json";
-      Map<String, String> cacheParams = new HashMap<>();
-
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("metro_wages", year, cacheParams, jsonFilePath, rawJson)) {
+      if (metroWagesJson != null) {
+        saveToCache("metro_wages", year, cacheParams, jsonFilePath, metroWagesJson);
         lastFile = new File(jsonFilePath);
+        LOGGER.info("Downloaded metro wages for year {} ({} metros)", year, METRO_QCEW_AREA_CODES.size());
+      } else {
+        LOGGER.warn("Failed to download metro wages for year {}", year);
       }
     }
 
     return lastFile;
+  }
+
+  /**
+   * Downloads metro wage data from QCEW Open Data API for a specific year.
+   * Fetches quarterly data for all 27 metros and aggregates to annual averages.
+   *
+   * @param year The year to download data for
+   * @return JSON array string containing metro wage records, or null if download fails
+   */
+  private String downloadQcewMetroWagesFromApi(int year) throws IOException, InterruptedException {
+    List<Map<String, Object>> allMetroWages = new ArrayList<>();
+
+    LOGGER.info("Downloading QCEW metro wages from API for {} metros in year {}",
+        METRO_QCEW_AREA_CODES.size(), year);
+
+    // Process each metro area
+    for (Map.Entry<String, String> entry : METRO_QCEW_AREA_CODES.entrySet()) {
+      String publicationCode = entry.getKey();  // e.g., "A100"
+      String qcewAreaCode = entry.getValue();   // e.g., "C3562"
+      String metroName = METRO_AREA_CODES.get(publicationCode);
+
+      if (metroName == null) {
+        LOGGER.warn("No metro name found for publication code: {}", publicationCode);
+        continue;
+      }
+
+      // Download and aggregate quarterly wage data
+      Integer annualAvgWage = downloadQcewQuarterlyWages(qcewAreaCode, year);
+
+      if (annualAvgWage != null) {
+        Map<String, Object> wageData = new HashMap<>();
+        wageData.put("metro_area_code", publicationCode);
+        wageData.put("metro_area_name", metroName);
+        wageData.put("average_weekly_wage", annualAvgWage);
+        wageData.put("year", year);
+
+        allMetroWages.add(wageData);
+        LOGGER.debug("Successfully downloaded wage data for {}: ${}/week", metroName, annualAvgWage);
+      } else {
+        LOGGER.warn("Failed to download wage data for {} ({})", metroName, qcewAreaCode);
+      }
+    }
+
+    if (allMetroWages.isEmpty()) {
+      LOGGER.error("No metro wage data downloaded for year {}", year);
+      return null;
+    }
+
+    LOGGER.info("Successfully downloaded wage data for {} of {} metros",
+        allMetroWages.size(), METRO_QCEW_AREA_CODES.size());
+
+    // Convert to JSON array format
+    try {
+      return MAPPER.writeValueAsString(allMetroWages);
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize metro wages to JSON: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Downloads quarterly QCEW wage data for a specific metro area and calculates annual average.
+   *
+   * @param qcewAreaCode QCEW area code (e.g., "C3562" for NYC)
+   * @param year Year to download
+   * @return Annual average weekly wage, or null if data incomplete
+   */
+  private Integer downloadQcewQuarterlyWages(String qcewAreaCode, int year)
+      throws IOException, InterruptedException {
+    List<Integer> quarterlyWages = new ArrayList<>();
+
+    // Download data for all 4 quarters
+    for (int quarter = 1; quarter <= 4; quarter++) {
+      String url =
+          String.format("https://data.bls.gov/cew/data/api/%d/%d/area/%s.csv", year, quarter, qcewAreaCode);
+
+      try {
+        byte[] csvData = downloadFile(url);
+
+        if (csvData == null) {
+          LOGGER.warn("Failed to download QCEW data: {} Q{}", qcewAreaCode, quarter);
+          continue;
+        }
+
+        // Parse CSV and extract avg_wkly_wage for agglvl=40, own=0, industry=10
+        Integer wage = parseQcewCsvForWage(csvData);
+
+        if (wage != null) {
+          quarterlyWages.add(wage);
+        }
+      } catch (IOException e) {
+        LOGGER.warn("Error downloading QCEW Q{} for {}: {}", quarter, qcewAreaCode, e.getMessage());
+      }
+    }
+
+    // Need at least 3 quarters for reliable annual average
+    if (quarterlyWages.size() < 3) {
+      LOGGER.warn("Insufficient quarterly data for {} (only {} quarters)", qcewAreaCode, quarterlyWages.size());
+      return null;
+    }
+
+    // Calculate annual average
+    int sum = 0;
+    for (Integer wage : quarterlyWages) {
+      sum += wage;
+    }
+    return sum / quarterlyWages.size();
+  }
+
+  /**
+   * Parses QCEW quarterly CSV and extracts average weekly wage.
+   * Filters for agglvl_code=40 (MSA Total), own_code=0 (All), industry_code=10 (Total).
+   *
+   * @param csvData Raw CSV data bytes
+   * @return Average weekly wage, or null if not found
+   */
+  private Integer parseQcewCsvForWage(byte[] csvData) throws IOException {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(csvData), StandardCharsets.UTF_8))) {
+
+      String line;
+      boolean isHeader = true;
+
+      while ((line = reader.readLine()) != null) {
+        if (isHeader) {
+          isHeader = false;
+          continue;
+        }
+
+        String[] fields = parseCsvLine(line);
+        if (fields.length < 16) continue;  // Need at least 16 fields to access index 15
+
+        String areaFips = fields[0].trim();
+        String ownCode = fields[1].trim();
+        String industryCode = fields[2].trim();
+        String agglvlCode = fields[3].trim();
+
+        // Filter: MSA level (40), all ownership (0), total industry (10)
+        if (agglvlCode.equals("40") && ownCode.equals("0") && industryCode.equals("10")) {
+          // Field 15 = avg_wkly_wage (0-indexed: area_fips, own_code, industry_code, agglvl_code,
+          // size_code, year, qtr, disclosure_code, qtrly_estabs, month1_emplvl, month2_emplvl,
+          // month3_emplvl, total_qtrly_wages, taxable_qtrly_wages, qtrly_contributions, avg_wkly_wage)
+          Integer wage = parseIntOrNull(fields[15]);
+          if (wage != null) {
+            return wage;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   public File downloadJoltsRegional() throws IOException, InterruptedException {
@@ -1287,53 +1680,226 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads JOLTS (Job Openings and Labor Turnover Survey) data for 4 Census regions.
-   * Covers job openings, hires, total separations, quits, and layoffs/discharges.
-   * Generates 20 series (4 regions × 5 metrics).
+   * Downloads JOLTS (Job Openings and Labor Turnover Survey) regional data from BLS FTP flat files.
+   * Regional data is NOT available via BLS API v2 - must use download.bls.gov flat files.
+   * Covers 4 Census regions (Northeast, Midwest, South, West) with 5 metrics each (20 series).
    */
   public File downloadJoltsRegional(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading JOLTS regional data for 4 Census regions × 5 metrics (20 series) for {}-{}",
-                startYear, endYear);
-
+    LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", startYear, endYear);
     File lastFile = null;
-    List<String> seriesIds = Series.getAllJoltsRegionalSeriesIds();
-    LOGGER.info("Generated {} JOLTS regional series IDs", seriesIds.size());
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = "source=econ/type=jolts_regional/year=" + year + "/jolts_regional.json";
+      if (year < 2001) {
+        LOGGER.warn("JOLTS data only available from 2001 forward. Skipping year {}", year);
+        continue;
+      }
+
+      String jsonFilePath = buildPartitionPath("jolts_regional", DataFrequency.MONTHLY, year) + "/jolts_regional.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("jolts_regional", year, cacheParams, jsonFilePath)) {
         LOGGER.info("Found cached JOLTS regional for year {} - skipping", year);
         lastFile = new File(jsonFilePath);
-      } else {
-        uncachedYears.add(year);
+        continue;
       }
-    }
 
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All JOLTS regional data cached (years {}-{})", startYear, endYear);
-      return lastFile;
-    }
+      String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
+      byte[] seriesData = downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
 
-    // 2. Batch fetch uncached years (up to 20 years per API call)
-    LOGGER.info("Fetching JOLTS regional for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
+      if (seriesData == null) {
+        LOGGER.warn("Failed to download JOLTS series file - skipping year {}", year);
+        continue;
+      }
 
-    // 3. Save each year
-    for (int year : uncachedYears) {
-      String jsonFilePath = "source=econ/type=jolts_regional/year=" + year + "/jolts_regional.json";
-      Map<String, String> cacheParams = new HashMap<>();
+      String joltsRegionalJson = parseJoltsFtpForRegional(year);
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null && validateAndSaveBlsResponse("jolts_regional", year, cacheParams, jsonFilePath, rawJson)) {
+      if (joltsRegionalJson != null) {
+        String fullJsonPath = cacheStorageProvider.resolvePath(operatingDirectory, jsonFilePath);
+        cacheStorageProvider.writeFile(fullJsonPath, joltsRegionalJson.getBytes(StandardCharsets.UTF_8));
+        saveToCache("jolts_regional", year, cacheParams, jsonFilePath, "");
         lastFile = new File(jsonFilePath);
+        LOGGER.info("Extracted JOLTS regional data for year {} (4 regions × 5 metrics)", year);
       }
     }
 
     return lastFile;
+  }
+
+  public File downloadJoltsState() throws IOException, InterruptedException {
+    return downloadJoltsState(getDefaultStartYear(), getDefaultEndYear());
+  }
+
+  /**
+   * Downloads JOLTS state-level data from BLS FTP flat files and converts to Parquet.
+   * Extracts data for all 51 states (including DC) for 5 metrics (job openings, hires, separations, quits, layoffs).
+   */
+  public File downloadJoltsState(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", startYear, endYear);
+    File lastFile = null;
+
+    for (int year = startYear; year <= endYear; year++) {
+      String outputDirPath = buildPartitionPath("jolts_state", DataFrequency.MONTHLY, year);
+      String jsonFilePath = outputDirPath + "/jolts_state.json";
+      Map<String, String> cacheParams = new HashMap<>();
+
+      // Check if file is already in cache and up to date
+      if (isCachedOrExists("jolts_state", year, cacheParams, jsonFilePath)) {
+        LOGGER.info("JOLTS state data for year {} is already cached", year);
+        lastFile = new File(jsonFilePath);
+        continue;
+      }
+
+      // Parse JOLTS FTP files for state data
+      String joltsStateJson = parseJoltsFtpForState(year);
+
+      if (joltsStateJson != null) {
+        saveToCache("jolts_state", year, cacheParams, jsonFilePath, joltsStateJson);
+        lastFile = new File(jsonFilePath);
+        LOGGER.info("Extracted JOLTS state data for year {} (51 states × 5 metrics)", year);
+      }
+    }
+
+    return lastFile;
+  }
+
+  /**
+   * Downloads JOLTS industry code reference table from BLS FTP.
+   * Downloads once (not partitioned by year).
+   *
+   * @return Reference file
+   * @throws IOException if download fails
+   * @throws InterruptedException if interrupted
+   */
+  public File downloadJoltsIndustries() throws IOException, InterruptedException {
+    LOGGER.info("Downloading JOLTS industry reference data from BLS FTP");
+
+    String outputDirPath = "source=econ/type=reference";
+    String jsonFilePath = outputDirPath + "/jolts_industries.json";
+    Map<String, String> cacheParams = new HashMap<>();
+
+    // Check if already cached (use year=-1 for non-partitioned reference data)
+    if (isCachedOrExists("jolts_industries", -1, cacheParams, jsonFilePath)) {
+      LOGGER.info("JOLTS industry reference data already cached");
+      return new File(jsonFilePath);
+    }
+
+    String url = "https://download.bls.gov/pub/time.series/jt/jt.industry";
+    String ftpPath = "type=jolts_ftp/jt.industry";
+
+    // Download file (will be cached by downloadJoltsFtpFileIfNeeded)
+    byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
+    if (data == null) {
+      LOGGER.warn("Failed to download JOLTS industry reference file");
+      return null;
+    }
+
+    // Parse tab-delimited file
+    List<Map<String, Object>> industries = new ArrayList<>();
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+      String line;
+      boolean isHeader = true;
+
+      while ((line = reader.readLine()) != null) {
+        if (isHeader) {
+          isHeader = false;
+          continue;
+        }
+
+        String[] fields = line.split("\\t");
+        if (fields.length < 2) continue;
+
+        Map<String, Object> industry = new HashMap<>();
+        industry.put("industry_code", fields[0].trim());
+        industry.put("industry_name", fields[1].trim());
+        industries.add(industry);
+      }
+    }
+
+    LOGGER.info("Parsed {} JOLTS industries from reference file", industries.size());
+
+    // Convert to JSON
+    String json;
+    try {
+      json = MAPPER.writeValueAsString(industries);
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize JOLTS industries to JSON: {}", e.getMessage());
+      return null;
+    }
+
+    // Save to cache (use year=-1 for non-partitioned reference data)
+    saveToCache("jolts_industries", -1, cacheParams, jsonFilePath, json);
+    return new File(jsonFilePath);
+  }
+
+  /**
+   * Downloads JOLTS data element code reference table from BLS FTP.
+   * Downloads once (not partitioned by year).
+   *
+   * @return Reference file
+   * @throws IOException if download fails
+   * @throws InterruptedException if interrupted
+   */
+  public File downloadJoltsDataelements() throws IOException, InterruptedException {
+    LOGGER.info("Downloading JOLTS data element reference data from BLS FTP");
+
+    String outputDirPath = "source=econ/type=reference";
+    String jsonFilePath = outputDirPath + "/jolts_dataelements.json";
+    Map<String, String> cacheParams = new HashMap<>();
+
+    // Check if already cached (use year=-1 for non-partitioned reference data)
+    if (isCachedOrExists("jolts_dataelements", -1, cacheParams, jsonFilePath)) {
+      LOGGER.info("JOLTS data element reference data already cached");
+      return new File(jsonFilePath);
+    }
+
+    String url = "https://download.bls.gov/pub/time.series/jt/jt.dataelement";
+    String ftpPath = "type=jolts_ftp/jt.dataelement";
+
+    // Download file (will be cached by downloadJoltsFtpFileIfNeeded)
+    byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
+    if (data == null) {
+      LOGGER.warn("Failed to download JOLTS data element reference file");
+      return null;
+    }
+
+    // Parse tab-delimited file
+    List<Map<String, Object>> dataElements = new ArrayList<>();
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+      String line;
+      boolean isHeader = true;
+
+      while ((line = reader.readLine()) != null) {
+        if (isHeader) {
+          isHeader = false;
+          continue;
+        }
+
+        String[] fields = line.split("\\t");
+        if (fields.length < 2) continue;
+
+        Map<String, Object> dataElement = new HashMap<>();
+        dataElement.put("dataelement_code", fields[0].trim());
+        dataElement.put("dataelement_text", fields[1].trim());
+        dataElements.add(dataElement);
+      }
+    }
+
+    LOGGER.info("Parsed {} JOLTS data elements from reference file", dataElements.size());
+
+    // Convert to JSON
+    String json;
+    try {
+      json = MAPPER.writeValueAsString(dataElements);
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize JOLTS data elements to JSON: {}", e.getMessage());
+      return null;
+    }
+
+    // Save to cache (use year=-1 for non-partitioned reference data)
+    saveToCache("jolts_dataelements", -1, cacheParams, jsonFilePath, json);
+    return new File(jsonFilePath);
   }
 
   public File downloadInflationMetrics() throws IOException, InterruptedException {
@@ -1346,15 +1912,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadInflationMetrics(int startYear, int endYear) throws IOException, InterruptedException {
     File lastFile = null;
 
-    List<String> seriesIds = List.of(
-        Series.CPI_ALL_URBAN,
+    List<String> seriesIds =
+        List.of(Series.CPI_ALL_URBAN,
         Series.CPI_CORE,
         Series.PPI_FINAL_DEMAND);
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String outputDirPath = buildPartitionPath("inflation_metrics", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/inflation_metrics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -1377,7 +1943,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String outputDirPath = "source=econ/type=indicators/year=" + year;
+      String outputDirPath = buildPartitionPath("inflation_metrics", DataFrequency.MONTHLY, year);
       String jsonFilePath = outputDirPath + "/inflation_metrics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -1403,14 +1969,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadWageGrowth(int startYear, int endYear) throws IOException, InterruptedException {
     File lastFile = null;
 
-    List<String> seriesIds = List.of(
-        Series.AVG_HOURLY_EARNINGS,
+    List<String> seriesIds =
+        List.of(Series.AVG_HOURLY_EARNINGS,
         Series.EMPLOYMENT_COST_INDEX);
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+      String relativePath = buildPartitionPath("wage_growth", DataFrequency.QUARTERLY, year) + "/wage_growth.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
@@ -1432,7 +1998,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 3. Save each year
     for (int year : uncachedYears) {
-      String relativePath = "source=econ/type=indicators/year=" + year + "/wage_growth.json";
+      String relativePath = buildPartitionPath("wage_growth", DataFrequency.QUARTERLY, year) + "/wage_growth.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       String rawJson = resultsByYear.get(year);
@@ -1478,7 +2044,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // 1. Identify uncached years for this state
       List<Integer> uncachedYears = new ArrayList<>();
       for (int year = startYear; year <= endYear; year++) {
-        String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
+        String relativeParquetPath = "type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
         Map<String, String> cacheParams = new HashMap<>();
@@ -1538,7 +2104,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       // 4. Save each year
       for (int year : uncachedYears) {
-        String relativeParquetPath = "source=econ/type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
+        String relativeParquetPath = "type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
         String rawJson = resultsByYear.get(year);
@@ -1747,7 +2313,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Download for each year separately
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=county/year=" + year + "/county_employment.json";
+      String relativePath = "type=county/year=" + year + "/county_employment.json";
 
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -1833,109 +2399,31 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads county-level QCEW (Quarterly Census of Employment and Wages) data via flat file downloads.
-   *
-   * <p>IMPORTANT: County-level QCEW data with industry breakdown would generate 100,000+ series
-   * via the API, which is not practical. Instead, this method downloads BLS QCEW flat files (CSV format)
-   * which provide comprehensive county-level data for all industries, ownership types, and establishment sizes.
-   *
-   * <p>BLS QCEW Flat File Structure:
-   * - Annual files: One CSV file per year with all counties, industries, and metrics
-   * - Quarterly files: Separate files for each quarter
-   * - URL pattern: https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip
-   *
-   * <p>This implementation downloads annual single files which are smaller and simpler to process.
-   * The files are large (~500MB zipped, ~3GB unzipped) but provide complete coverage.
-   *
-   * <p>TODO: Implement full CSV parsing and Parquet conversion. Current implementation downloads
-   * the files but does not yet parse them. Steps needed:
-   * 1. Download and unzip CSV files
-   * 2. Parse CSV records (millions of rows per year)
-   * 3. Filter to relevant metrics (employment, wages, establishments)
-   * 4. Convert to Parquet format with proper partitioning
-   * 5. Add table schema definition for query access
-   *
-   * @param startYear First year to download
-   * @param endYear Last year to download
-   * @return Last file downloaded
-   * @throws IOException if download fails
-   * @throws InterruptedException if interrupted
-   */
-  public File downloadCountyWages(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading BLS QCEW flat files for county-level wage and employment data");
-    LOGGER.warn("QCEW flat file parsing not yet fully implemented. Files will be downloaded but " +
-        "conversion to queryable Parquet format is pending. See source code TODOs for implementation details.");
-
-    File lastFile = null;
-
-    for (int year = startYear; year <= endYear; year++) {
-      // QCEW data only available from 1990 forward in current format
-      if (year < 1990) {
-        LOGGER.warn("QCEW flat files only available from 1990 forward. Skipping year {}", year);
-        continue;
-      }
-
-      String relativePath = "source=econ/type=qcew/year=" + year + "/qcew_annual.zip";
-
-      Map<String, String> cacheParams = new HashMap<>();
-
-      // Check cache using base class helper
-      if (isCachedOrExists("qcew_annual", year, cacheParams, relativePath)) {
-        LOGGER.info("Found cached QCEW flat file for year {} - skipping download", year);
-        lastFile = new File(relativePath);
-        continue;
-      }
-
-      // BLS QCEW flat file URL pattern
-      // Annual single file format is simplest: all counties, industries, and metrics in one CSV
-      String url = String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_annual_singlefile.zip",
-          year, year);
-
-      LOGGER.info("Downloading QCEW flat file for year {} from {}", year, url);
-
-      try {
-        // Download the ZIP file
-        // Note: These files are large (~500MB zipped), so download may take several minutes
-        byte[] zipData = downloadFile(url);
-
-        // Save ZIP file to storage
-        String zipPath = storageProvider.resolvePath(operatingDirectory, relativePath);
-        storageProvider.writeFile(zipPath, zipData);
-
-        LOGGER.info("Downloaded QCEW flat file for year {} ({} MB)",
-            year, zipData.length / (1024 * 1024));
-
-        // Parse CSV and convert to Parquet
-        String relativeParquetPath = "source=econ/type=county_qcew/year=" + year + "/county_qcew.parquet";
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
-        parseAndConvertQcewToParquet(zipData, fullParquetPath, year);
-
-        // Save cache metadata
-        saveToCache("qcew_annual", year, cacheParams, relativePath, "");
-        lastFile = new File(relativePath);
-
-      } catch (Exception e) {
-        LOGGER.error("Failed to download QCEW flat file for year {}: {}", year, e.getMessage());
-        // Continue with other years
-      }
-    }
-
-    return lastFile;
-  }
-
-  /**
    * Downloads a file from a URL and returns the bytes.
+   *
+   * <p>For downloads from download.bls.gov (BLS FTP site), uses browser-like headers
+   * to bypass Akamai bot detection. For other URLs, uses default Java HTTP client.
    *
    * @param url URL to download from
    * @return File contents as byte array
    * @throws IOException if download fails
    */
   private byte[] downloadFile(String url) throws IOException {
-    HttpRequest request = HttpRequest.newBuilder()
+    HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofMinutes(10)) // Large files may take time
-        .GET()
-        .build();
+        .GET();
+
+    // BLS FTP site (download.bls.gov) blocks default Java HTTP client via Akamai
+    // Add browser-like headers to bypass bot detection
+    if (url.contains("download.bls.gov")) {
+      requestBuilder
+          .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+          .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+          .header("Accept-Language", "en-US,en;q=0.9");
+    }
+
+    HttpRequest request = requestBuilder.build();
 
     try {
       HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
@@ -2002,11 +2490,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         if (entry.getName().endsWith(".csv")) {
           LOGGER.info("Processing CSV file: {}", entry.getName());
 
-          try (BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8))) {
-            String line;
-            boolean isHeader = true;
+          // Don't use try-with-resources for BufferedReader as it would close the underlying ZipInputStream
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
+          String line;
+          boolean isHeader = true;
 
-            while ((line = reader.readLine()) != null) {
+          while ((line = reader.readLine()) != null) {
               // Skip header row
               if (isHeader) {
                 isHeader = false;
@@ -2071,10 +2560,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 LOGGER.info("Processed {} total records, {} county records extracted", recordCount, countyRecordCount);
               }
             }
-          }
         }
-
-        zis.closeEntry();
       }
     }
 
@@ -2087,6 +2573,328 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", fullParquetPath, records.size());
     } else {
       LOGGER.warn("No county records found in QCEW data for year {}", year);
+    }
+  }
+
+  /**
+   * Downloads QCEW CSV file if not already cached.
+   * Reuses cached data if available to avoid redundant downloads.
+   *
+   * @param year Year to download
+   * @param qcewZipPath Relative path for caching
+   * @return ZIP file bytes, or null if download fails
+   */
+  private byte[] downloadQcewCsvIfNeeded(int year, String qcewZipPath) throws IOException {
+    // Check cache manifest first
+    Map<String, String> cacheParams = new HashMap<>();
+    if (cacheManifest.isCached("qcew_zip", year, cacheParams)) {
+      String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, qcewZipPath);
+      if (cacheStorageProvider.exists(fullPath)) {
+        LOGGER.info("Using cached QCEW CSV for year {} (from manifest)", year);
+        try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+          return inputStream.readAllBytes();
+        }
+      } else {
+        LOGGER.warn("Cache manifest lists QCEW ZIP for year {} but file not found - re-downloading", year);
+      }
+    }
+
+    // Download from BLS
+    String url =
+        String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_annual_singlefile.zip", year, year);
+
+    LOGGER.info("Downloading QCEW CSV for year {} from {}", year, url);
+    byte[] zipData = downloadFile(url);
+
+    // Cache for reuse - use cacheStorageProvider for intermediate files
+    String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, qcewZipPath);
+    cacheStorageProvider.writeFile(fullPath, zipData);
+
+    // Mark in cache manifest - QCEW data is immutable (historical), never refresh
+    long refreshAfter = Long.MAX_VALUE;
+    cacheManifest.markCached("qcew_zip", year, cacheParams, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
+    cacheManifest.save(operatingDirectory);
+
+    LOGGER.info("Downloaded and cached QCEW CSV for year {} ({} MB)", year, zipData.length / (1024 * 1024));
+
+    return zipData;
+  }
+
+  /**
+   * Parses QCEW CSV and extracts state-level wage data.
+   * Filters for agglvl_code = 50 (state level), own_code = 0 (all ownership),
+   * industry_code = 10 (total all industries).
+   *
+   * @param zipData QCEW CSV ZIP file bytes
+   * @param year Year of data
+   * @return JSON string in BLS API response format, or null if parsing fails
+   */
+  private String parseQcewForStateWages(byte[] zipData, int year) throws IOException {
+    Map<String, Map<String, Object>> stateWages = new HashMap<>();
+
+    try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+      ZipEntry entry;
+
+      while ((entry = zis.getNextEntry()) != null) {
+        if (entry.getName().endsWith(".csv")) {
+          // Don't use try-with-resources for BufferedReader - it would close the ZipInputStream
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
+          String line;
+          boolean isHeader = true;
+
+          while ((line = reader.readLine()) != null) {
+            if (isHeader) {
+              isHeader = false;
+              continue;
+            }
+
+            String[] fields = parseCsvLine(line);
+            if (fields.length < 20) continue;
+
+            String areaFips = fields[0].trim();
+            String ownCode = fields[1].trim();
+            String industryCode = fields[2].trim();
+            String agglvlCode = fields[3].trim();
+
+            // Filter: state level (50), all ownership (0), total industry (10)
+            if (!agglvlCode.equals("50") || !ownCode.equals("0") || !industryCode.equals("10")) {
+              continue;
+            }
+
+            // State FIPS should be 2 digits + "000"
+            if (areaFips.length() != 5 || !areaFips.endsWith("000")) {
+              continue;
+            }
+
+            String stateFips = areaFips.substring(0, 2);
+            String stateName = Series.getStateName(stateFips);
+
+            // QCEW CSV fields: [13]=annual_avg_wkly_wage, [9]=annual_avg_emplvl
+            Integer avgWklyWage = parseIntOrNull(fields[13]);
+            Integer avgEmplvl = parseIntOrNull(fields[9]);
+
+            if (avgWklyWage != null) {
+              Map<String, Object> wageData = new HashMap<>();
+              wageData.put("state_fips", stateFips);
+              wageData.put("state_name", stateName);
+              wageData.put("average_weekly_wage", avgWklyWage);
+              wageData.put("total_employment", avgEmplvl);
+              wageData.put("year", year);
+
+              stateWages.put(stateFips, wageData);
+            }
+          }
+          zis.closeEntry();
+        }
+      }
+    }
+
+    if (stateWages.isEmpty()) {
+      LOGGER.warn("No state wage data found in QCEW CSV for year {}", year);
+      return null;
+    }
+
+    LOGGER.info("Extracted wage data for {} states from QCEW CSV (year {})", stateWages.size(), year);
+
+    // Convert to JSON array format
+    try {
+      return MAPPER.writeValueAsString(new ArrayList<>(stateWages.values()));
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize state wages to JSON: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Parses QCEW CSV and extracts metro-level wage data.
+   * Filters for agglvl_code = 40 (MSA Total All Ownerships), own_code = 0, industry_code = 10.
+   * QCEW aggregation codes: 4x=MSA, 5x=State, 7x=County.
+   *
+   * @param zipData QCEW CSV ZIP file bytes
+   * @param year Year of data
+   * @return JSON string in BLS API response format, or null if parsing fails
+   */
+  private String parseQcewForMetroWages(byte[] zipData, int year) throws IOException {
+    Map<String, Map<String, Object>> metroWages = new HashMap<>();
+
+    // QCEW CSV uses area codes in format: State(2) + Area(5) = 7 digits
+    // Build reverse map of QCEW area codes to metro names
+    Map<String, String> qcewAreaToMetroName = new HashMap<>();
+    for (Map.Entry<String, String> entry : METRO_BLS_AREA_CODES.entrySet()) {
+      String publicationCode = entry.getKey();  // e.g., "A100"
+      String qcewAreaCode = entry.getValue();   // e.g., "3693561" (State 36 + Area 93561)
+      String metroName = METRO_AREA_CODES.get(publicationCode);
+      if (metroName != null) {
+        qcewAreaToMetroName.put(qcewAreaCode, metroName);
+      }
+    }
+
+    try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+      ZipEntry entry;
+
+      while ((entry = zis.getNextEntry()) != null) {
+        if (entry.getName().endsWith(".csv")) {
+          // Don't use try-with-resources for BufferedReader - it would close the ZipInputStream
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
+          String line;
+          boolean isHeader = true;
+          int debugCount = 0;
+
+          while ((line = reader.readLine()) != null) {
+            if (isHeader) {
+              isHeader = false;
+              continue;
+            }
+
+            String[] fields = parseCsvLine(line);
+            if (fields.length < 20) continue;
+
+            String areaFips = fields[0].trim();
+            String ownCode = fields[1].trim();
+            String industryCode = fields[2].trim();
+            String agglvlCode = fields[3].trim();
+
+            // Filter: MSA level (40), all ownership (0), total industry (10)
+            // QCEW aggregation codes: 4x=MSA, 5x=State, 7x=County
+            // 40 = MSA Total All Ownerships, 44 = MSA Sector by Ownership
+            if (!agglvlCode.equals("40") || !ownCode.equals("0") || !industryCode.equals("10")) {
+              continue;
+            }
+
+            // Log first 10 MSA records to see actual area codes
+            if (debugCount < 10) {
+              LOGGER.info("QCEW Metro Debug: areaFips={}, agglvlCode={}, ownCode={}, industryCode={}",
+                  areaFips, agglvlCode, ownCode, industryCode);
+              debugCount++;
+            }
+
+            // Check if this is one of our tracked metros
+            String metroName = qcewAreaToMetroName.get(areaFips);
+            if (metroName == null) {
+              continue;
+            }
+
+            // QCEW CSV fields: [13]=annual_avg_wkly_wage, [9]=annual_avg_emplvl
+            Integer avgWklyWage = parseIntOrNull(fields[13]);
+            Integer avgEmplvl = parseIntOrNull(fields[9]);
+
+            if (avgWklyWage != null) {
+              Map<String, Object> wageData = new HashMap<>();
+              wageData.put("metro_area_code", areaFips);
+              wageData.put("metro_area_name", metroName);
+              wageData.put("average_weekly_wage", avgWklyWage);
+              wageData.put("total_employment", avgEmplvl);
+              wageData.put("year", year);
+
+              metroWages.put(areaFips, wageData);
+            }
+          }
+          zis.closeEntry();
+        }
+      }
+    }
+
+    if (metroWages.isEmpty()) {
+      LOGGER.warn("No metro wage data found in QCEW CSV for year {}", year);
+      return null;
+    }
+
+    LOGGER.info("Extracted wage data for {} metros from QCEW CSV (year {})", metroWages.size(), year);
+
+    // Convert to JSON array format
+    try {
+      return MAPPER.writeValueAsString(new ArrayList<>(metroWages.values()));
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize metro wages to JSON: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Parses QCEW CSV and extracts county-level wage data.
+   * Filters for agglvl_code = 70 (county level), own_code = 0, industry_code = 10.
+   * Most granular wage data available (~6,038 counties).
+   *
+   * @param zipData QCEW CSV ZIP file bytes
+   * @param year Year of data
+   * @return JSON string in BLS API response format, or null if parsing fails
+   */
+  private String parseQcewForCountyWages(byte[] zipData, int year) throws IOException {
+    Map<String, Map<String, Object>> countyWages = new HashMap<>();
+
+    try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+      ZipEntry entry;
+
+      while ((entry = zis.getNextEntry()) != null) {
+        if (entry.getName().endsWith(".csv")) {
+          // Don't use try-with-resources for BufferedReader - it would close the ZipInputStream
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
+          String line;
+          boolean isHeader = true;
+
+          while ((line = reader.readLine()) != null) {
+            if (isHeader) {
+              isHeader = false;
+              continue;
+            }
+
+            String[] fields = parseCsvLine(line);
+            if (fields.length < 20) continue;
+
+            String areaFips = fields[0].trim();
+            String ownCode = fields[1].trim();
+            String industryCode = fields[2].trim();
+            String agglvlCode = fields[3].trim();
+
+            // Filter: county level (70), all ownership (0), total industry (10)
+            if (!agglvlCode.equals("70") || !ownCode.equals("0") || !industryCode.equals("10")) {
+              continue;
+            }
+
+            // County FIPS should be 5 digits: state (2) + county (3)
+            if (areaFips.length() != 5) {
+              continue;
+            }
+
+            String stateFips = areaFips.substring(0, 2);
+            String stateName = Series.getStateName(stateFips);
+
+            // QCEW CSV fields: [13]=annual_avg_wkly_wage, [9]=annual_avg_emplvl, [8]=area_title
+            Integer avgWklyWage = parseIntOrNull(fields[13]);
+            Integer avgEmplvl = parseIntOrNull(fields[9]);
+            String countyName = fields.length > 8 ? fields[8].trim() : "";
+
+            if (avgWklyWage != null) {
+              Map<String, Object> wageData = new HashMap<>();
+              wageData.put("county_fips", areaFips);
+              wageData.put("county_name", countyName);
+              wageData.put("state_fips", stateFips);
+              wageData.put("state_name", stateName);
+              wageData.put("average_weekly_wage", avgWklyWage);
+              wageData.put("total_employment", avgEmplvl);
+              wageData.put("year", year);
+
+              countyWages.put(areaFips, wageData);
+            }
+          }
+          zis.closeEntry();
+        }
+      }
+    }
+
+    if (countyWages.isEmpty()) {
+      LOGGER.warn("No county wage data found in QCEW CSV for year {}", year);
+      return null;
+    }
+
+    LOGGER.info("Extracted wage data for {} counties from QCEW CSV (year {})", countyWages.size(), year);
+
+    // Convert to JSON array format
+    try {
+      return MAPPER.writeValueAsString(new ArrayList<>(countyWages.values()));
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize county wages to JSON: {}", e.getMessage());
+      return null;
     }
   }
 
@@ -2118,6 +2926,260 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     fields.add(currentField.toString());
 
     return fields.toArray(new String[0]);
+  }
+
+  /**
+   * Downloads a JOLTS FTP file if not already cached.
+   * Returns cached data if available.
+   */
+  private byte[] downloadJoltsFtpFileIfNeeded(String ftpPath, String url) throws IOException {
+    // Extract file name for cache key (e.g., "jt.series" from "type=jolts_ftp/jt.series")
+    String fileName = ftpPath.substring(ftpPath.lastIndexOf('/') + 1);
+    String dataType = "jolts_ftp_" + fileName.replace(".", "_");
+
+    // Check cache manifest first (use year=0 for non-year-partitioned files)
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("file", fileName);
+    if (cacheManifest.isCached(dataType, 0, cacheParams)) {
+      String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, ftpPath);
+      if (cacheStorageProvider.exists(fullPath)) {
+        LOGGER.info("Using cached JOLTS FTP file: {} (from manifest)", ftpPath);
+        try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+          return inputStream.readAllBytes();
+        }
+      } else {
+        LOGGER.warn("Cache manifest lists JOLTS FTP file {} but file not found - re-downloading", fileName);
+      }
+    }
+
+    LOGGER.info("Downloading JOLTS FTP file from {}", url);
+    byte[] data = downloadFile(url);
+
+    // Cache for reuse - use cacheStorageProvider for intermediate files
+    String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, ftpPath);
+    cacheStorageProvider.writeFile(fullPath, data);
+
+    // Mark in cache manifest - refresh monthly (JOLTS data updates monthly with ~2 month lag)
+    long refreshAfter = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000); // 30 days in milliseconds
+    cacheManifest.markCached(dataType, 0, cacheParams, ftpPath, data.length, refreshAfter, "monthly_refresh");
+    cacheManifest.save(operatingDirectory);
+
+    LOGGER.info("Downloaded and cached JOLTS FTP file ({} KB)", data.length / 1024);
+
+    return data;
+  }
+
+  /**
+   * Parses JOLTS FTP flat files and extracts regional data for a given year.
+   * Downloads and parses tab-delimited data files for job openings, hires, separations, quits, layoffs.
+   * Filters for 4 Census regions (NE, MW, SO, WE) and converts to JSON format.
+   */
+  private String parseJoltsFtpForRegional(int year) throws IOException {
+    // Regional series patterns (state codes in positions 10-11 of series ID)
+    String[] regionCodes = {"NE", "MW", "SO", "WE"};
+    String[] regionNames = {"Northeast", "Midwest", "South", "West"};
+
+    // Data element files to download
+    String[] dataFiles = {
+        "jt.data.2.JobOpenings",
+        "jt.data.3.Hires",
+        "jt.data.4.TotalSeparations",
+        "jt.data.5.Quits",
+        "jt.data.6.LayoffsDischarges"
+    };
+
+    Map<String, Map<String, Object>> regionalDataMap = new HashMap<>();
+
+    for (String dataFile : dataFiles) {
+      String ftpPath = "type=jolts_ftp/" + dataFile;
+      String url = "https://download.bls.gov/pub/time.series/jt/" + dataFile;
+
+      byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
+      if (data == null) {
+        LOGGER.warn("Failed to download {}", dataFile);
+        continue;
+      }
+
+      // Parse tab-delimited file
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+        String line;
+        boolean isHeader = true;
+
+        int recordCount = 0;
+        int debugSamples = 0;
+        while ((line = reader.readLine()) != null) {
+          if (isHeader) {
+            isHeader = false;
+            continue;
+          }
+
+          String[] fields = line.split("\\t");
+          if (fields.length < 4) continue;
+
+          String seriesId = fields[0].trim();
+          String yearStr = fields[1].trim();
+          String period = fields[2].trim();
+          String valueStr = fields[3].trim();
+
+          recordCount++;
+
+          // Log first 5 records and any matching records for debugging
+          if (debugSamples < 5 || (yearStr.equals(String.valueOf(year)) && period.equals("M13"))) {
+            LOGGER.info("JOLTS Debug [{}]: seriesId={}, year={}, period={}, value={}, state_code[9-10]={}",
+                debugSamples, seriesId, yearStr, period, valueStr,
+                seriesId.length() >= 11 ? seriesId.substring(9, 11) : "N/A");
+            if (debugSamples < 5) debugSamples++;
+          }
+
+          // Check if this is a regional series and matches our target year
+          if (yearStr.equals(String.valueOf(year)) && period.equals("M13")) { // Use annual average (M13)
+            for (int i = 0; i < regionCodes.length; i++) {
+              // Regional series: JTS000000MW00000JOR - region code at positions 10-11 (state_code field, 0-indexed substring 9-11)
+              if (seriesId.length() >= 11 && seriesId.substring(9, 11).equals(regionCodes[i])) {
+                String regionKey = regionNames[i];
+
+                regionalDataMap.putIfAbsent(regionKey, new HashMap<>());
+                Map<String, Object> regionData = regionalDataMap.get(regionKey);
+
+                regionData.put("region", regionNames[i]);
+                regionData.put("region_code", regionCodes[i]);
+                regionData.put("year", year);
+
+                // Extract data element type from filename
+                String dataElement = dataFile.replace("jt.data.", "").replaceAll("^[0-9]+\\.", "");
+
+                try {
+                  double value = Double.parseDouble(valueStr);
+                  regionData.put(dataElement.toLowerCase() + "_rate", value);
+                } catch (NumberFormatException e) {
+                  LOGGER.warn("Failed to parse value for {} {}: {}", regionKey, dataElement, valueStr);
+                }
+
+                break;
+              }
+            }
+          }
+        }
+
+        LOGGER.info("JOLTS file {} processed {} records", dataFile, recordCount);
+      }
+    }
+
+    if (regionalDataMap.isEmpty()) {
+      LOGGER.warn("No regional JOLTS data found for year {} (processed {} data files)", year, dataFiles.length);
+      return null;
+    }
+
+    LOGGER.info("Extracted JOLTS data for {} regions (year {})", regionalDataMap.size(), year);
+
+    try {
+      return MAPPER.writeValueAsString(new ArrayList<>(regionalDataMap.values()));
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize JOLTS regional data to JSON: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Parses JOLTS FTP flat files and extracts state-level data for a given year.
+   * Downloads and parses tab-delimited data files for job openings, hires, separations, quits, layoffs.
+   * Filters for 51 states (including DC) using state codes 01-56 and converts to JSON format.
+   */
+  private String parseJoltsFtpForState(int year) throws IOException {
+    // Data element files to download
+    String[] dataFiles = {
+        "jt.data.2.JobOpenings",
+        "jt.data.3.Hires",
+        "jt.data.4.TotalSeparations",
+        "jt.data.5.Quits",
+        "jt.data.6.LayoffsDischarges"
+    };
+
+    // Map from state_code to state data
+    Map<String, Map<String, Object>> stateDataMap = new HashMap<>();
+
+    for (String dataFile : dataFiles) {
+      String ftpPath = "type=jolts_ftp/" + dataFile;
+      String url = "https://download.bls.gov/pub/time.series/jt/" + dataFile;
+
+      byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
+      if (data == null) {
+        LOGGER.warn("Failed to download {}", dataFile);
+        continue;
+      }
+
+      // Parse tab-delimited file
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+        String line;
+        boolean isHeader = true;
+
+        int recordCount = 0;
+        while ((line = reader.readLine()) != null) {
+          if (isHeader) {
+            isHeader = false;
+            continue;
+          }
+
+          String[] fields = line.split("\\t");
+          if (fields.length < 4) continue;
+
+          String seriesId = fields[0].trim();
+          String yearStr = fields[1].trim();
+          String period = fields[2].trim();
+          String valueStr = fields[3].trim();
+
+          recordCount++;
+
+          // Check if this is a state series and matches our target year
+          // State series: JTS00000006000000JOR - state code at positions 10-11 (state_code field, 0-indexed substring 9-11)
+          // Filter for annual average (M13), total nonfarm (industry=000000), all sizes (00), level data (L)
+          if (yearStr.equals(String.valueOf(year)) && period.equals("M13") && seriesId.length() >= 21) {
+            String stateCode = seriesId.substring(9, 11);
+
+            // Check if it's a state code (01-56, excluding regional codes MW, NE, SO, WE and national code 00)
+            if (stateCode.matches("[0-5][0-9]") && !stateCode.equals("00")) {
+              String stateName = Series.getStateName(stateCode);
+              if (stateName == null) continue;
+
+              stateDataMap.putIfAbsent(stateCode, new HashMap<>());
+              Map<String, Object> stateData = stateDataMap.get(stateCode);
+
+              stateData.put("state_fips", stateCode);
+              stateData.put("state_name", stateName);
+              stateData.put("year", year);
+
+              // Extract data element type from filename
+              String dataElement = dataFile.replace("jt.data.", "").replaceAll("^[0-9]+\\.", "");
+
+              try {
+                double value = Double.parseDouble(valueStr);
+                stateData.put(dataElement.toLowerCase() + "_rate", value);
+              } catch (NumberFormatException e) {
+                LOGGER.warn("Failed to parse value for {} {}: {}", stateName, dataElement, valueStr);
+              }
+            }
+          }
+        }
+
+        LOGGER.info("JOLTS file {} processed {} records for states", dataFile, recordCount);
+      }
+    }
+
+    if (stateDataMap.isEmpty()) {
+      LOGGER.warn("No state JOLTS data found for year {} (processed {} data files)", year, dataFiles.length);
+      return null;
+    }
+
+    LOGGER.info("Extracted JOLTS data for {} states (year {})", stateDataMap.size(), year);
+
+    try {
+      return MAPPER.writeValueAsString(new ArrayList<>(stateDataMap.values()));
+    } catch (Exception e) {
+      LOGGER.error("Failed to serialize JOLTS state data to JSON: {}", e.getMessage());
+      return null;
+    }
   }
 
   /**
@@ -2487,6 +3549,517 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
   }
 
+  private void writeRegionalCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("regional_cpi")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("area_code").doc("Census region code").type().stringType().noDefault()
+        .name("area_name").doc("Census region name").type().stringType().noDefault()
+        .name("value").doc("CPI value (base period = 100)").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("area_code", extractAreaCodeFromSeries(seriesId));
+        record.put("area_name", extractAreaNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeMetroCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("metro_cpi")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("area_code").doc("Metro area code").type().stringType().noDefault()
+        .name("area_name").doc("Metro area name").type().stringType().noDefault()
+        .name("value").doc("CPI value (base period = 100)").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("area_code", extractMetroCodeFromSeries(seriesId));
+        record.put("area_name", extractMetroNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeStateIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("state_industry")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("state_code").doc("State FIPS code").type().stringType().noDefault()
+        .name("state_name").doc("State name").type().stringType().noDefault()
+        .name("industry_code").doc("NAICS supersector code").type().stringType().noDefault()
+        .name("industry_name").doc("Industry name").type().stringType().noDefault()
+        .name("value").doc("Employment in thousands").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("state_code", extractStateCodeFromSeries(seriesId));
+        record.put("state_name", extractStateNameFromSeries(seriesId));
+        record.put("industry_code", extractIndustryCodeFromSeries(seriesId));
+        record.put("industry_name", extractIndustryNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeStateWagesParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("state_wages")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("state_code").doc("State FIPS code").type().stringType().noDefault()
+        .name("state_name").doc("State name").type().stringType().noDefault()
+        .name("value").doc("Average weekly wage in dollars").type().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("state_code", extractStateCodeFromSeries(seriesId));
+        record.put("state_name", extractStateNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeStateWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
+    // Schema for QCEW-based state wages data (flat array format)
+    Schema schema = SchemaBuilder.record("state_wages")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("year").doc("Year of observation").type().intType().noDefault()
+        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
+        .name("state_name").doc("State name").type().stringType().noDefault()
+        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().doubleType().noDefault()
+        .name("total_employment").doc("Total employment count").type().intType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> avroRecords = new ArrayList<>();
+    for (Map<String, Object> record : records) {
+      GenericRecord avroRecord = new GenericData.Record(schema);
+      avroRecord.put("year", record.get("year"));
+      avroRecord.put("state_fips", record.get("state_fips"));
+      avroRecord.put("state_name", record.get("state_name"));
+      avroRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
+      avroRecord.put("total_employment", record.get("total_employment"));
+      avroRecords.add(avroRecord);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, avroRecords, schema.getName());
+  }
+
+  private void writeMetroIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("metro_industry")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("metro_code").doc("Metro area code").type().stringType().noDefault()
+        .name("metro_name").doc("Metro area name").type().stringType().noDefault()
+        .name("industry_code").doc("NAICS supersector code").type().stringType().noDefault()
+        .name("industry_name").doc("Industry name").type().stringType().noDefault()
+        .name("value").doc("Employment in thousands").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("metro_code", extractMetroCodeFromSeries(seriesId));
+        record.put("metro_name", extractMetroNameFromSeries(seriesId));
+        record.put("industry_code", extractIndustryCodeFromSeries(seriesId));
+        record.put("industry_name", extractIndustryNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeMetroWagesParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("metro_wages")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("metro_code").doc("Metro area code").type().stringType().noDefault()
+        .name("metro_name").doc("Metro area name").type().stringType().noDefault()
+        .name("value").doc("Average weekly wage in dollars").type().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("metro_code", extractMetroCodeFromSeries(seriesId));
+        record.put("metro_name", extractMetroNameFromSeries(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeMetroWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
+    // Schema for QCEW-based metro wages data (flat array format)
+    Schema schema = SchemaBuilder.record("metro_wages")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("year").doc("Year of observation").type().intType().noDefault()
+        .name("metro_area_code").doc("Metro area code").type().stringType().noDefault()
+        .name("metro_area_name").doc("Metro area name").type().stringType().noDefault()
+        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().doubleType().noDefault()
+        .name("total_employment").doc("Total employment count").type().nullable().intType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> avroRecords = new ArrayList<>();
+    for (Map<String, Object> record : records) {
+      GenericRecord avroRecord = new GenericData.Record(schema);
+      avroRecord.put("year", record.get("year"));
+      avroRecord.put("metro_area_code", record.get("metro_area_code"));
+      avroRecord.put("metro_area_name", record.get("metro_area_name"));
+      avroRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
+      avroRecord.put("total_employment", record.get("total_employment"));
+      avroRecords.add(avroRecord);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, avroRecords, schema.getName());
+  }
+
+  private void writeJoltsRegionalParquet(Map<String, List<Map<String, Object>>> seriesData,
+      String targetPath) throws IOException {
+
+    Schema schema = SchemaBuilder.record("jolts_regional")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
+        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
+        .name("region_code").doc("Census region code").type().stringType().noDefault()
+        .name("region_name").doc("Census region name").type().stringType().noDefault()
+        .name("metric_type").doc("JOLTS metric (hires, separations, openings, quits, layoffs)").type().stringType().noDefault()
+        .name("value").doc("Metric value in thousands").type().doubleType().noDefault()
+        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
+        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+      String seriesId = entry.getKey();
+      for (Map<String, Object> dataPoint : entry.getValue()) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("date", dataPoint.get("date"));
+        record.put("series_id", seriesId);
+        record.put("region_code", extractRegionCodeFromJoltsSeries(seriesId));
+        record.put("region_name", extractRegionNameFromJoltsSeries(seriesId));
+        record.put("metric_type", extractJoltsMetricType(seriesId));
+        record.put("value", dataPoint.get("value"));
+        record.put("percent_change_month", dataPoint.get("percent_change_month"));
+        record.put("percent_change_year", dataPoint.get("percent_change_year"));
+        records.add(record);
+      }
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeCountyWagesParquet(List<Map<String, Object>> countyWages, String targetPath) throws IOException {
+    Schema schema = SchemaBuilder.record("county_wages")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("county_fips").doc("County FIPS code").type().stringType().noDefault()
+        .name("county_name").doc("County name").type().stringType().noDefault()
+        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
+        .name("state_name").doc("State name").type().stringType().noDefault()
+        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().intType().noDefault()
+        .name("total_employment").doc("Total employment count").type().nullable().intType().noDefault()
+        .name("year").doc("Year").type().intType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> countyWage : countyWages) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("county_fips", countyWage.get("county_fips"));
+      record.put("county_name", countyWage.get("county_name"));
+      record.put("state_fips", countyWage.get("state_fips"));
+      record.put("state_name", countyWage.get("state_name"));
+      record.put("average_weekly_wage", countyWage.get("average_weekly_wage"));
+      record.put("total_employment", countyWage.get("total_employment"));
+      record.put("year", countyWage.get("year"));
+      records.add(record);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeJoltsStateParquet(List<Map<String, Object>> joltsState, String targetPath) throws IOException {
+    Schema schema = SchemaBuilder.record("jolts_state")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
+        .name("state_name").doc("State name").type().stringType().noDefault()
+        .name("year").doc("Year").type().intType().noDefault()
+        .name("hires_rate").doc("Hires rate").type().doubleType().noDefault()
+        .name("jobopenings_rate").doc("Job openings rate").type().doubleType().noDefault()
+        .name("quits_rate").doc("Quits rate").type().doubleType().noDefault()
+        .name("layoffsdischarges_rate").doc("Layoffs and discharges rate").type().doubleType().noDefault()
+        .name("totalseparations_rate").doc("Total separations rate").type().doubleType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> jolts : joltsState) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("state_fips", jolts.get("state_fips"));
+      record.put("state_name", jolts.get("state_name"));
+      record.put("year", jolts.get("year"));
+      record.put("hires_rate", jolts.get("hires_rate"));
+      record.put("jobopenings_rate", jolts.get("jobopenings_rate"));
+      record.put("quits_rate", jolts.get("quits_rate"));
+      record.put("layoffsdischarges_rate", jolts.get("layoffsdischarges_rate"));
+      record.put("totalseparations_rate", jolts.get("totalseparations_rate"));
+      records.add(record);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeJoltsIndustriesParquet(List<Map<String, Object>> industries, String targetPath) throws IOException {
+    Schema schema = SchemaBuilder.record("jolts_industries")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("industry_code").doc("JOLTS industry code").type().stringType().noDefault()
+        .name("industry_name").doc("Industry name").type().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> industry : industries) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("industry_code", industry.get("industry_code"));
+      record.put("industry_name", industry.get("industry_name"));
+      records.add(record);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private void writeJoltsDataelementsParquet(List<Map<String, Object>> dataelements, String targetPath) throws IOException {
+    Schema schema = SchemaBuilder.record("jolts_dataelements")
+        .namespace("org.apache.calcite.adapter.govdata.econ")
+        .fields()
+        .name("dataelement_code").doc("JOLTS data element code").type().stringType().noDefault()
+        .name("dataelement_text").doc("Data element description").type().stringType().noDefault()
+        .endRecord();
+
+    List<GenericRecord> records = new ArrayList<>();
+    for (Map<String, Object> dataelement : dataelements) {
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("dataelement_code", dataelement.get("dataelement_code"));
+      record.put("dataelement_text", dataelement.get("dataelement_text"));
+      records.add(record);
+    }
+
+    // Write parquet using StorageProvider
+    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+  }
+
+  private String extractAreaCodeFromSeries(String seriesId) {
+    // Regional CPI series format: CUUR{area}{item}SA0
+    if (seriesId.length() >= 8) {
+      return seriesId.substring(4, 7);  // Extract region code
+    }
+    return "UNKNOWN";
+  }
+
+  private String extractAreaNameFromSeries(String seriesId) {
+    String areaCode = extractAreaCodeFromSeries(seriesId);
+    switch (areaCode) {
+      case "S10": return "Northeast";
+      case "S20": return "Midwest";
+      case "S30": return "South";
+      case "S40": return "West";
+      default: return "Unknown Region";
+    }
+  }
+
+  private String extractMetroCodeFromSeries(String seriesId) {
+    // Metro CPI series format: CUUR{metro_code}{item}SA0
+    if (seriesId.length() >= 8) {
+      return seriesId.substring(4, 7);
+    }
+    return "UNKNOWN";
+  }
+
+  private String extractMetroNameFromSeries(String seriesId) {
+    // Simplified metro name extraction - in production, use lookup map
+    String code = extractMetroCodeFromSeries(seriesId);
+    return "Metro Area " + code;
+  }
+
+  private String extractStateCodeFromSeries(String seriesId) {
+    // State employment series format: SMS{state_fips}{supersector}...
+    if (seriesId.startsWith("SMS") && seriesId.length() >= 5) {
+      return seriesId.substring(3, 5);  // Extract state FIPS
+    }
+    // State wages series format: ENU{state_fips}...
+    if (seriesId.startsWith("ENU") && seriesId.length() >= 5) {
+      return seriesId.substring(3, 5);
+    }
+    return "UNKNOWN";
+  }
+
+  private String extractStateNameFromSeries(String seriesId) {
+    // Simplified state name extraction
+    String fips = extractStateCodeFromSeries(seriesId);
+    return "State " + fips;
+  }
+
+  private String extractIndustryCodeFromSeries(String seriesId) {
+    // State industry: SMS{state}{supersector}0000000000SA
+    if (seriesId.startsWith("SMS") && seriesId.length() >= 10) {
+      return seriesId.substring(5, 13);  // Extract supersector + detail codes
+    }
+    // Metro industry: SMU{metro}{supersector}0000000001SA
+    if (seriesId.startsWith("SMU") && seriesId.length() >= 12) {
+      return seriesId.substring(8, 16);
+    }
+    return "UNKNOWN";
+  }
+
+  private String extractIndustryNameFromSeries(String seriesId) {
+    // Simplified industry name extraction
+    String code = extractIndustryCodeFromSeries(seriesId);
+    return "Industry " + code;
+  }
+
+  private String extractRegionCodeFromJoltsSeries(String seriesId) {
+    // JOLTS series format: JTU{region}00...
+    if (seriesId.startsWith("JTU") && seriesId.length() >= 6) {
+      return seriesId.substring(3, 6);
+    }
+    return "UNKNOWN";
+  }
+
+  private String extractRegionNameFromJoltsSeries(String seriesId) {
+    String code = extractRegionCodeFromJoltsSeries(seriesId);
+    switch (code) {
+      case "100": return "Northeast";
+      case "200": return "Midwest";
+      case "300": return "South";
+      case "400": return "West";
+      default: return "Unknown Region";
+    }
+  }
+
+  private String extractJoltsMetricType(String seriesId) {
+    // JOLTS series format: JTU{region}{industry}{datatype}...
+    if (seriesId.length() >= 12) {
+      String datatype = seriesId.substring(9, 11);
+      switch (datatype) {
+        case "HI": return "hires";
+        case "TS": return "separations";
+        case "JO": return "openings";
+        case "QU": return "quits";
+        case "LD": return "layoffs";
+        default: return "unknown";
+      }
+    }
+    return "unknown";
+  }
+
   private String getUnit(String seriesId) {
     if (seriesId.contains("RATE") || seriesId.contains("000003")) {
       return "percent";
@@ -2662,6 +4235,28 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       convertWageGrowthToParquet(sourceDirPath, targetFilePath);
     } else if (fileName.equals("regional_employment.parquet")) {
       convertRegionalEmploymentToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("regional_cpi.parquet")) {
+      convertRegionalCpiToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("metro_cpi.parquet")) {
+      convertMetroCpiToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("state_industry.parquet")) {
+      convertStateIndustryToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("state_wages.parquet")) {
+      convertStateWagesToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("metro_industry.parquet")) {
+      convertMetroIndustryToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("metro_wages.parquet")) {
+      convertMetroWagesToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("jolts_regional.parquet")) {
+      convertJoltsRegionalToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("county_wages.parquet")) {
+      convertCountyWagesToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("jolts_state.parquet")) {
+      convertJoltsStateToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("jolts_industries.parquet")) {
+      convertJoltsIndustriesToParquet(sourceDirPath, targetFilePath);
+    } else if (fileName.equals("jolts_dataelements.parquet")) {
+      convertJoltsDataelementsToParquet(sourceDirPath, targetFilePath);
     }
   }
 
@@ -2870,6 +4465,505 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converting regional employment data with {} series to parquet: {}", seriesData.size(), targetPath);
     writeRegionalEmploymentParquet(seriesData, targetPath);
     LOGGER.info("Converted BLS regional employment data to parquet: {}", targetPath);
+  }
+
+  private void convertRegionalCpiToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read regional CPI JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "regional_cpi.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No regional_cpi.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS regional CPI JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in regional CPI JSON file");
+      return;
+    }
+
+    // Write to parquet using regional CPI schema
+    LOGGER.info("Converting regional CPI data with {} series to parquet: {}", seriesData.size(), targetPath);
+    writeRegionalCpiParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS regional CPI data to parquet: {}", targetPath);
+  }
+
+  private void convertMetroCpiToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read metro CPI JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "metro_cpi.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No metro_cpi.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS metro CPI JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in metro CPI JSON file");
+      return;
+    }
+
+    // Write to parquet using metro CPI schema
+    LOGGER.info("Converting metro CPI data with {} series to parquet: {}", seriesData.size(), targetPath);
+    writeMetroCpiParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS metro CPI data to parquet: {}", targetPath);
+  }
+
+  private void convertStateIndustryToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read state industry JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "state_industry.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No state_industry.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS state industry JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in state industry JSON file");
+      return;
+    }
+
+    // Write to parquet using state industry schema
+    LOGGER.info("Converting state industry data with {} series to parquet: {}", seriesData.size(), targetPath);
+    writeStateIndustryParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS state industry data to parquet: {}", targetPath);
+  }
+
+  private void convertStateWagesToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read state wages JSON file from cache using cacheStorageProvider
+    // Note: state_wages.json is in flat array format from QCEW CSV, not BLS API format
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "state_wages.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No state_wages.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      // Check if root is an array (QCEW format)
+      if (root.isArray()) {
+        for (JsonNode record : root) {
+          Map<String, Object> dataPoint = new HashMap<>();
+          dataPoint.put("year", record.get("year").asInt());
+          dataPoint.put("state_fips", record.get("state_fips").asText());
+          dataPoint.put("state_name", record.get("state_name").asText());
+          dataPoint.put("average_weekly_wage", record.get("average_weekly_wage").asDouble());
+          dataPoint.put("total_employment", record.get("total_employment").asInt());
+          records.add(dataPoint);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS state wages JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (records.isEmpty()) {
+      LOGGER.warn("No data found in state wages JSON file");
+      return;
+    }
+
+    // Write to parquet using simplified state wages schema
+    LOGGER.info("Converting state wages data with {} records to parquet: {}", records.size(), targetPath);
+    writeStateWagesQcewParquet(records, targetPath);
+    LOGGER.info("Converted BLS state wages data to parquet: {}", targetPath);
+  }
+
+  private void convertMetroIndustryToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read metro industry JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "metro_industry.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No metro_industry.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS metro industry JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in metro industry JSON file");
+      return;
+    }
+
+    // Write to parquet using metro industry schema
+    LOGGER.info("Converting metro industry data with {} series to parquet: {}", seriesData.size(), targetPath);
+    writeMetroIndustryParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS metro industry data to parquet: {}", targetPath);
+  }
+
+  private void convertMetroWagesToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read metro wages JSON file from cache using cacheStorageProvider
+    // Note: metro_wages.json is in flat array format from QCEW CSV, not BLS API format
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "metro_wages.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No metro_wages.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      // Check if root is an array (QCEW format)
+      if (root.isArray()) {
+        for (JsonNode record : root) {
+          Map<String, Object> dataPoint = new HashMap<>();
+          dataPoint.put("year", record.get("year").asInt());
+          dataPoint.put("metro_area_code", record.get("metro_area_code").asText());
+          dataPoint.put("metro_area_name", record.get("metro_area_name").asText());
+          dataPoint.put("average_weekly_wage", record.get("average_weekly_wage").asDouble());
+          if (record.has("total_employment") && !record.get("total_employment").isNull()) {
+            dataPoint.put("total_employment", record.get("total_employment").asInt());
+          } else {
+            dataPoint.put("total_employment", null);
+          }
+          records.add(dataPoint);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS metro wages JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (records.isEmpty()) {
+      LOGGER.warn("No data found in metro wages JSON file");
+      return;
+    }
+
+    // Write to parquet using simplified metro wages schema
+    LOGGER.info("Converting metro wages data with {} records to parquet: {}", records.size(), targetPath);
+    writeMetroWagesQcewParquet(records, targetPath);
+    LOGGER.info("Converted BLS metro wages data to parquet: {}", targetPath);
+  }
+
+  private void convertJoltsRegionalToParquet(String sourceDirPath, String targetPath) throws IOException {
+    Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
+
+    // Read JOLTS regional JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "jolts_regional.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No jolts_regional.json found in {}", sourceDirPath);
+      return;
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      if (root.has("Results") && root.get("Results").has("series")) {
+        JsonNode series = root.get("Results").get("series");
+        for (JsonNode seriesNode : series) {
+          String seriesId = seriesNode.get("seriesID").asText();
+          List<Map<String, Object>> dataPoints = new ArrayList<>();
+
+          if (seriesNode.has("data")) {
+            for (JsonNode dataNode : seriesNode.get("data")) {
+              Map<String, Object> dataPoint = new HashMap<>();
+              dataPoint.put("date", dataNode.get("year").asText() + "-" +
+                String.format("%02d", periodToMonth(dataNode.get("period").asText())) + "-01");
+              dataPoint.put("value", dataNode.get("value").asDouble());
+
+              // Extract percentage changes from BLS API calculations
+              if (dataNode.has("calculations") && dataNode.get("calculations").has("pct_changes")) {
+                JsonNode pctChanges = dataNode.get("calculations").get("pct_changes");
+                if (pctChanges.has("1")) {
+                  dataPoint.put("percent_change_month", pctChanges.get("1").asDouble());
+                }
+                if (pctChanges.has("12")) {
+                  dataPoint.put("percent_change_year", pctChanges.get("12").asDouble());
+                }
+              }
+
+              dataPoints.add(dataPoint);
+            }
+          }
+          seriesData.put(seriesId, dataPoints);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error reading BLS JOLTS regional JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+    }
+
+    if (seriesData.isEmpty()) {
+      LOGGER.warn("No data found in JOLTS regional JSON file");
+      return;
+    }
+
+    // Write to parquet using JOLTS regional schema
+    LOGGER.info("Converting JOLTS regional data with {} series to parquet: {}", seriesData.size(), targetPath);
+    writeJoltsRegionalParquet(seriesData, targetPath);
+    LOGGER.info("Converted BLS JOLTS regional data to parquet: {}", targetPath);
+  }
+
+  private void convertCountyWagesToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read county wages JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "county_wages.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No county_wages.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> countyWages = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      // JSON is a simple array of county wage objects
+      countyWages = MAPPER.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+    } catch (Exception e) {
+      LOGGER.error("Error reading county wages JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (countyWages.isEmpty()) {
+      LOGGER.warn("No data found in county wages JSON file");
+      return;
+    }
+
+    // Write to parquet
+    LOGGER.info("Converting county wages data with {} records to parquet: {}", countyWages.size(), targetPath);
+    writeCountyWagesParquet(countyWages, targetPath);
+    LOGGER.info("Converted county wages data to parquet: {}", targetPath);
+  }
+
+  private void convertJoltsStateToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read JOLTS state JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "jolts_state.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No jolts_state.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> joltsState = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      // JSON is a simple array of state JOLTS objects
+      joltsState = MAPPER.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+    } catch (Exception e) {
+      LOGGER.error("Error reading JOLTS state JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (joltsState.isEmpty()) {
+      LOGGER.warn("No data found in JOLTS state JSON file");
+      return;
+    }
+
+    // Write to parquet
+    LOGGER.info("Converting JOLTS state data with {} records to parquet: {}", joltsState.size(), targetPath);
+    writeJoltsStateParquet(joltsState, targetPath);
+    LOGGER.info("Converted JOLTS state data to parquet: {}", targetPath);
+  }
+
+  private void convertJoltsIndustriesToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read JOLTS industries reference JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "jolts_industries.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No jolts_industries.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> industries = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      // JSON is a simple array of industry reference objects
+      industries = MAPPER.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+    } catch (Exception e) {
+      LOGGER.error("Error reading JOLTS industries JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (industries.isEmpty()) {
+      LOGGER.warn("No data found in JOLTS industries JSON file");
+      return;
+    }
+
+    // Write to parquet
+    LOGGER.info("Converting JOLTS industries reference with {} records to parquet: {}", industries.size(), targetPath);
+    writeJoltsIndustriesParquet(industries, targetPath);
+    LOGGER.info("Converted JOLTS industries reference to parquet: {}", targetPath);
+  }
+
+  private void convertJoltsDataelementsToParquet(String sourceDirPath, String targetPath) throws IOException {
+    // Read JOLTS data elements reference JSON file from cache using cacheStorageProvider
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "jolts_dataelements.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("No jolts_dataelements.json found in {}", sourceDirPath);
+      return;
+    }
+
+    List<Map<String, Object>> dataelements = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      // JSON is a simple array of data element reference objects
+      dataelements = MAPPER.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+    } catch (Exception e) {
+      LOGGER.error("Error reading JOLTS data elements JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      return;
+    }
+
+    if (dataelements.isEmpty()) {
+      LOGGER.warn("No data found in JOLTS data elements JSON file");
+      return;
+    }
+
+    // Write to parquet
+    LOGGER.info("Converting JOLTS data elements reference with {} records to parquet: {}", dataelements.size(), targetPath);
+    writeJoltsDataelementsParquet(dataelements, targetPath);
+    LOGGER.info("Converted JOLTS data elements reference to parquet: {}", targetPath);
   }
 
   /**
