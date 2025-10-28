@@ -462,7 +462,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         for (int year = startYear; year <= endYear; year++) {
           String cacheTimeseriesYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=timeseries/year=" + year);
 
-          String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/treasury_yields.parquet");
+          String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/frequency=daily/year=" + year + "/treasury_yields.parquet");
           String yieldsRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "treasury_yields.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "treasury_yields", year, yieldsRawPath, yieldsParquetPath)) {
             treasuryDownloader.convertToParquet(cacheTimeseriesYearPath, yieldsParquetPath);
@@ -470,7 +470,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           }
 
           // Convert federal debt data to parquet
-          String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/year=" + year + "/federal_debt.parquet");
+          String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/frequency=daily/year=" + year + "/federal_debt.parquet");
           String debtRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "federal_debt.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "federal_debt", year, debtRawPath, debtParquetPath)) {
             treasuryDownloader.convertFederalDebtToParquet(cacheTimeseriesYearPath, debtParquetPath);
@@ -694,13 +694,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           if (analysis.getStrategy() == FredSeriesGroup.PartitionStrategy.NONE) {
             // No partitioning - single file
             String parquetPath = storageProvider.resolvePath(groupParquetDir, groupTableName + ".parquet");
-            fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null);
+            fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null, startYear, endYear);
           } else {
             // Apply partitioning strategy
             List<String> partitionFields = analysis.getPartitionFields();
             for (int year = startYear; year <= endYear; year++) {
               String partitionPath = buildPartitionPath(groupParquetDir, groupTableName, partitionFields, year, seriesId);
-              fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields);
+              fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields, year, year);
             }
           }
 
@@ -744,14 +744,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             if (analysis.getStrategy() == FredSeriesGroup.PartitionStrategy.NONE) {
               // No partitioning
               String parquetPath = storageProvider.resolvePath(parquetDir, "type=custom/" + tableName + ".parquet");
-              fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null);
+              fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null, startYear, endYear);
               LOGGER.debug("Created non-partitioned parquet for series {} at: {}", seriesId, parquetPath);
             } else {
               // Apply partitioning
               List<String> partitionFields = analysis.getPartitionFields();
               for (int year = startYear; year <= endYear; year++) {
                 String partitionPath = buildPartitionPath(parquetDir, tableName, partitionFields, year, seriesId);
-                fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields);
+                fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields, year, year);
               }
               LOGGER.debug("Created partitioned parquet for series {} as table: {}", seriesId, tableName);
             }

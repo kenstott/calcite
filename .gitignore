@@ -108,3 +108,4 @@ geo-credentials.properties
 # Production environment files (contain credentials)
 djia-production-env.sh
 govdata-production-cache/
+govdata/src/test/java/org/apache/calcite/adapter/govdata/econ/EconDataValidationTest.java
