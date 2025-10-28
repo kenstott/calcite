@@ -526,5 +526,37 @@
         ["source_name"]
       ]
     }
-  }
+  },
+  "tables": [
+    {
+      "name": "interest_rate_spreads",
+      "type": "view",
+      "sql": "SELECT date, MAX(CASE WHEN series_id = 'DGS10' THEN value END) AS ten_year_yield, MAX(CASE WHEN series_id = 'DGS3MO' THEN value END) AS three_month_yield, MAX(CASE WHEN series_id = 'DGS10' THEN value END) - MAX(CASE WHEN series_id = 'DGS3MO' THEN value END) AS term_spread_10y_3m, MAX(CASE WHEN series_id = 'DFF' THEN value END) AS fed_funds_rate, MAX(CASE WHEN series_id = 'BAMLC0A0CM' THEN value END) AS corporate_spread_bps FROM fred_indicators WHERE series_id IN ('DGS10', 'DGS3MO', 'DFF', 'BAMLC0A0CM') GROUP BY date",
+      "comment": "Interest rate spreads and yield curve metrics including 10Y-3M term spread, federal funds rate, and investment grade corporate credit spreads. Useful for recession prediction and credit market analysis."
+    },
+    {
+      "name": "housing_indicators",
+      "type": "view",
+      "sql": "SELECT date, MAX(CASE WHEN series_id = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series_id = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series_id = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series_id = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series_id = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series_id = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series_id = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series_id = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM fred_indicators WHERE series_id IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date",
+      "comment": "Comprehensive housing market indicators including starts, permits, sales, prices, and mortgage rates. Aggregates key housing metrics for real estate and macroeconomic analysis."
+    },
+    {
+      "name": "monetary_aggregates",
+      "type": "view",
+      "sql": "SELECT date, MAX(CASE WHEN series_id = 'M1SL' THEN value END) AS m1_money_supply, MAX(CASE WHEN series_id = 'M2SL' THEN value END) AS m2_money_supply, MAX(CASE WHEN series_id = 'BOGMBASE' THEN value END) AS monetary_base, MAX(CASE WHEN series_id = 'GDP' THEN value END) AS nominal_gdp, MAX(CASE WHEN series_id = 'GDP' THEN value END) / NULLIF(MAX(CASE WHEN series_id = 'M2SL' THEN value END), 0) AS m2_velocity FROM fred_indicators WHERE series_id IN ('M1SL', 'M2SL', 'BOGMBASE', 'GDP') GROUP BY date",
+      "comment": "Money supply metrics including M1, M2, monetary base, and calculated M2 velocity of money. Essential for monetary policy analysis and inflation forecasting."
+    },
+    {
+      "name": "business_indicators",
+      "type": "view",
+      "sql": "SELECT date, MAX(CASE WHEN series_id = 'INDPRO' THEN value END) AS industrial_production_index, MAX(CASE WHEN series_id = 'TCU' THEN value END) AS capacity_utilization_pct, MAX(CASE WHEN series_id = 'RSXFS' THEN value END) AS retail_sales_millions, MAX(CASE WHEN series_id = 'TOTBKCR' THEN value END) AS bank_credit_billions, MAX(CASE WHEN series_id = 'DRTSCILM' THEN value END) AS lending_standards_net_pct FROM fred_indicators WHERE series_id IN ('INDPRO', 'TCU', 'RSXFS', 'TOTBKCR', 'DRTSCILM') GROUP BY date",
+      "comment": "Business cycle indicators including industrial production, capacity utilization, retail sales, bank credit, and lending standards. Core metrics for tracking economic expansion and contraction."
+    },
+    {
+      "name": "trade_balance_summary",
+      "type": "view",
+      "sql": "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM trade_statistics GROUP BY year, quarter, line_description",
+      "comment": "Aggregated trade statistics by category showing exports, imports, and calculated trade balance. Summarizes BEA trade data for easier cross-category analysis."
+    }
+  ]
 }
