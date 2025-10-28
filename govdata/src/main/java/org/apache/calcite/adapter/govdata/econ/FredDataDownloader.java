@@ -731,6 +731,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     List<Map<String, Object>> observations = new ArrayList<>();
 
     // Read FRED indicators JSON file from cache using cacheStorageProvider
+    // sourceDirPath is already the correct cache structure path from EconRawToParquetConverter
+    // Storage provider combines: base path (s3://bucket) + relative path (sourceDirPath) + filename
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "fred_indicators.json");
     if (!cacheStorageProvider.exists(jsonFilePath)) {
       LOGGER.warn("No fred_indicators.json found in {}", sourceDirPath);
@@ -755,8 +757,10 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           observations.add(observation);
         }
       }
+      LOGGER.info("FRED CONVERSION: Read {} observations from {}", observations.size(), jsonFilePath);
     } catch (Exception e) {
-      LOGGER.error("Failed to process FRED JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      LOGGER.error("FRED CONVERSION: ❌ Failed to process FRED JSON file {}: {}", jsonFilePath, e.getMessage(), e);
+      throw new IOException("Failed to read FRED JSON: " + e.getMessage(), e);
     }
 
     if (observations.isEmpty()) {
@@ -765,7 +769,16 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Write parquet file
+    LOGGER.info("FRED CONVERSION: Writing {} rows to parquet: {}", observations.size(), targetFilePath);
     writeFredIndicatorsParquet(observations, targetFilePath);
+
+    // Verify the file was actually written
+    if (storageProvider.exists(targetFilePath)) {
+      LOGGER.info("FRED CONVERSION: ✅ Successfully wrote and verified file at: {}", targetFilePath);
+    } else {
+      LOGGER.error("FRED CONVERSION: ❌ File does NOT exist after write: {}", targetFilePath);
+      throw new IOException("FRED parquet file not found after write: " + targetFilePath);
+    }
 
     LOGGER.info("Converted FRED data to parquet: {} ({} observations)", targetFilePath, observations.size());
 
@@ -910,46 +923,67 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   /**
    * Convert a specific FRED series to Parquet format with optional partitioning.
    *
-   * <p>This method trusts FileSchema's conversion registry to prevent redundant conversions.
-   * No defensive file existence check is needed here.
+   * <p>This method reads cached series data using StorageProvider API (supports S3)
+   * and converts it to Parquet format. If partition fields are specified,
+   * the data will be organized according to those fields.</p>
    *
    * @param seriesId FRED series identifier
    * @param targetPath Target parquet file path
    * @param partitionFields List of partition fields (can be null for no partitioning)
+   * @param startYear Start year to read cached data from
+   * @param endYear End year to read cached data through
    */
-  public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields)
+  public void convertSeriesToParquet(String seriesId, String targetPath, List<String> partitionFields,
+      int startYear, int endYear)
       throws IOException {
-    LOGGER.debug("Converting FRED series {} to parquet: {}", seriesId, targetPath);
+    LOGGER.debug("Converting FRED series {} to parquet for years {}-{}: {}", seriesId, startYear, endYear, targetPath);
 
-    // Find the cached JSON file for this series in cache directory
-    // Note: Cache files are stored in cacheDirectory via cacheStorageProvider (supports S3)
-    File cacheRoot = new File(cacheDirectory);
+    // Read cached data using StorageProvider API (supports S3)
     List<Map<String, Object>> observations = new ArrayList<>();
 
-    // Search through cache directory structure for cached data
-    if (!findAndLoadSeriesData(cacheRoot, seriesId, observations)) {
-      LOGGER.warn("No cached data found for FRED series: {}", seriesId);
-      return;
-    }
+    // Load data for each year in range using known cache paths
+    for (int year = startYear; year <= endYear; year++) {
+      String relativePath =
+          String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, year, year);
+      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
 
-    if (observations.isEmpty()) {
-      LOGGER.warn("No observations found for FRED series: {}", seriesId);
-      return;
-    }
+      if (cacheStorageProvider.exists(fullPath)) {
+        try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath);
+             java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+          JsonNode root = MAPPER.readTree(reader);
 
-    // Filter observations for this specific series (in case cache contains multiple series)
-    List<Map<String, Object>> seriesObservations = new ArrayList<>();
-    for (Map<String, Object> obs : observations) {
-      if (seriesId.equals(obs.get("series_id"))) {
-        seriesObservations.add(obs);
+          // Extract observations from the cached JSON
+          JsonNode obsArray = root.get("observations");
+          if (obsArray != null && obsArray.isArray()) {
+            for (JsonNode obs : obsArray) {
+              if (seriesId.equals(obs.get("series_id").asText())) {
+                Map<String, Object> observation = new HashMap<>();
+                observation.put("series_id", obs.get("series_id").asText());
+                observation.put("series_name", obs.get("series_name").asText());
+                observation.put("date", obs.get("date").asText());
+                observation.put("value", obs.get("value").asDouble());
+                observation.put("units", obs.get("units").asText());
+                observation.put("frequency", obs.get("frequency").asText());
+                observations.add(observation);
+              }
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Failed to load cached data for FRED series {} year {}: {}", seriesId, year, e.getMessage());
+        }
       }
     }
 
-    // Write parquet file
-    writeFredIndicatorsParquet(seriesObservations, targetPath);
+    if (observations.isEmpty()) {
+      LOGGER.warn("No cached data found for FRED series {} (years {}-{})", seriesId, startYear, endYear);
+      return;
+    }
 
-    LOGGER.info("Converted FRED series {} to parquet: {} ({} observations)",
-        seriesId, targetPath, seriesObservations.size());
+    // Write parquet file
+    writeFredIndicatorsParquet(observations, targetPath);
+
+    LOGGER.info("Converted FRED series {} to parquet: {} ({} observations from {}-{})",
+        seriesId, targetPath, observations.size(), startYear, endYear);
 
     // FileSchema's conversion registry automatically tracks this conversion
   }
