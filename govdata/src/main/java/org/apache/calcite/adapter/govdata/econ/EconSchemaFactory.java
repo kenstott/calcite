@@ -362,6 +362,24 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
           }
 
+          // Convert county wages
+          String countyWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=county_wages/year=" + year);
+          String countyWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=county_wages/year=" + year + "/county_wages.parquet");
+          String countyWagesRawPath = cacheStorageProvider.resolvePath(countyWagesCacheYearPath, "county_wages.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "county_wages", year, countyWagesRawPath, countyWagesParquetPath)) {
+            blsDownloader.convertToParquet(countyWagesCacheYearPath, countyWagesParquetPath);
+            cacheManifest.markParquetConverted("county_wages", year, null, countyWagesParquetPath);
+          }
+
+          // Convert JOLTS state
+          String joltsStateCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=jolts_state/year=" + year);
+          String joltsStateParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_state/year=" + year + "/jolts_state.parquet");
+          String joltsStateRawPath = cacheStorageProvider.resolvePath(joltsStateCacheYearPath, "jolts_state.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_state", year, joltsStateRawPath, joltsStateParquetPath)) {
+            blsDownloader.convertToParquet(joltsStateCacheYearPath, joltsStateParquetPath);
+            cacheManifest.markParquetConverted("jolts_state", year, null, joltsStateParquetPath);
+          }
+
           // Convert wage growth
           String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/wage_growth.parquet");
           String wageRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "wage_growth.json");
@@ -373,6 +391,23 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           // NOTE: regional_employment conversion removed - downloadRegionalEmployment() now creates
           // Parquet files directly with state-level partitioning (year + state_fips).
           // No intermediate JSON files are created, and no conversion step is needed.
+        }
+
+        // Convert reference tables (not partitioned by year, use 0 as sentinel)
+        String joltsIndustriesCachePath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=reference");
+        String joltsIndustriesParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_industries.parquet");
+        String joltsIndustriesRawPath = cacheStorageProvider.resolvePath(joltsIndustriesCachePath, "jolts_industries.json");
+        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_industries", 0, joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
+          blsDownloader.convertToParquet(joltsIndustriesCachePath, joltsIndustriesParquetPath);
+          cacheManifest.markParquetConverted("jolts_industries", 0, null, joltsIndustriesParquetPath);
+        }
+
+        String joltsDataelementsCachePath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=reference");
+        String joltsDataelementsParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_dataelements.parquet");
+        String joltsDataelementsRawPath = cacheStorageProvider.resolvePath(joltsDataelementsCachePath, "jolts_dataelements.json");
+        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_dataelements", 0, joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
+          blsDownloader.convertToParquet(joltsDataelementsCachePath, joltsDataelementsParquetPath);
+          cacheManifest.markParquetConverted("jolts_dataelements", 0, null, joltsDataelementsParquetPath);
         }
 
         LOGGER.debug("BLS data download completed");
@@ -1065,8 +1100,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     if (excludeTables != null) {
       // Return all tables except excluded ones
-      java.util.Set<String> allTables = new java.util.HashSet<>(java.util.Arrays.asList(
-          BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
+      java.util.Set<String> allTables =
+          new java.util.HashSet<>(
+              java.util.Arrays.asList(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
           BlsDataDownloader.TABLE_INFLATION_METRICS,
           BlsDataDownloader.TABLE_REGIONAL_CPI,
           BlsDataDownloader.TABLE_METRO_CPI,
@@ -1076,8 +1112,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           BlsDataDownloader.TABLE_METRO_WAGES,
           BlsDataDownloader.TABLE_JOLTS_REGIONAL,
           BlsDataDownloader.TABLE_WAGE_GROWTH,
-          BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT
-      ));
+          BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT));
       allTables.removeAll(excludeTables);
       LOGGER.info("BLS table filter: excluding {} tables, downloading {} tables",
           excludeTables.size(), allTables.size());
