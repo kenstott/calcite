@@ -50,24 +50,33 @@ public class TestEnvironmentLoader {
       return;
     }
 
+    // Log current working directory for debugging
+    String cwd = System.getProperty("user.dir");
+    LOGGER.info("Loading environment from working directory: {}", cwd);
+
     // Look for .env.test file in the govdata module directory
     Path[] possiblePaths = {
         Paths.get("govdata/.env.test"),
         Paths.get(".env.test"),
-        Paths.get("../govdata/.env.test"),
-        Paths.get("/Users/kennethstott/calcite/govdata/.env.test")
+        Paths.get("../.env.test")
     };
 
     File envFile = null;
     for (Path path : possiblePaths) {
+      LOGGER.debug("Checking path: {} (exists: {})", path.toAbsolutePath(), Files.exists(path));
       if (Files.exists(path)) {
         envFile = path.toFile();
+        LOGGER.info("Found .env.test at: {}", path.toAbsolutePath());
         break;
       }
     }
 
     if (envFile == null || !envFile.exists()) {
       LOGGER.warn("Warning: .env.test file not found. Tests may fail if they require environment variables.");
+      LOGGER.warn("Searched paths:");
+      for (Path path : possiblePaths) {
+        LOGGER.warn("  - {} (absolute: {})", path, path.toAbsolutePath());
+      }
       loaded = true;
       return;
     }
