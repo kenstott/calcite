@@ -48,25 +48,46 @@ public class EconDataValidationTest {
   }
 
   @Test public void testEconTablesExistAndHaveData() throws Exception {
-    System.out.println("\n=== ECON Data Validation Test ===");
-    System.out.println("GOVDATA_CACHE_DIR: " +
-        (System.getenv("GOVDATA_CACHE_DIR") != null ?
-         System.getenv("GOVDATA_CACHE_DIR") :
-         System.getProperty("GOVDATA_CACHE_DIR")));
-    System.out.println("GOVDATA_PARQUET_DIR: " +
-        (System.getenv("GOVDATA_PARQUET_DIR") != null ?
-         System.getenv("GOVDATA_PARQUET_DIR") :
-         System.getProperty("GOVDATA_PARQUET_DIR")));
+    // Get directories from environment variables or system properties
+    String cacheDir = System.getenv("GOVDATA_CACHE_DIR");
+    String parquetDir = System.getenv("GOVDATA_PARQUET_DIR");
 
-    // Create model JSON with auto-download enabled
+    if (cacheDir == null) {
+      cacheDir = System.getProperty("GOVDATA_CACHE_DIR");
+    }
+    if (parquetDir == null) {
+      parquetDir = System.getProperty("GOVDATA_PARQUET_DIR");
+    }
+
+    System.out.println("\n=== ECON Data Validation Test ===");
+    System.out.println("GOVDATA_CACHE_DIR: " + cacheDir);
+    System.out.println("GOVDATA_PARQUET_DIR: " + parquetDir);
+
+    // Get API keys from environment or use test keys
+    String blsApiKey = System.getenv("BLS_API_KEY");
+    if (blsApiKey == null) blsApiKey = "a8d2d6de36194ea580c65560da6323ca";
+
+    String fredApiKey = System.getenv("FRED_API_KEY");
+    if (fredApiKey == null) fredApiKey = "e0ea47affdc2e77a721f447d9ee0460e";
+
+    String beaApiKey = System.getenv("BEA_API_KEY");
+    if (beaApiKey == null) beaApiKey = "2195EDB1-5226-4670-9274-FE859D5830DB";
+
+    // Create model JSON with auto-download enabled and explicit directories AND API keys
     String modelJson = "{"
         + "\"version\": \"1.0\","
         + "\"defaultSchema\": \"econ\","
         + "\"schemas\": [{"
         + "  \"name\": \"econ\","
         + "  \"type\": \"custom\","
-        + "  \"factory\": \"org.apache.calcite.adapter.govdata.econ.EconSchemaFactory\","
+        + "  \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "  \"operand\": {"
+        + "    \"dataSource\": \"econ\","
+        + "    \"directory\": \"" + parquetDir + "\","
+        + "    \"cacheDirectory\": \"" + cacheDir + "\","
+        + "    \"blsApiKey\": \"" + blsApiKey + "\","
+        + "    \"fredApiKey\": \"" + fredApiKey + "\","
+        + "    \"beaApiKey\": \"" + beaApiKey + "\","
         + "    \"autoDownload\": true,"
         + "    \"startYear\": 2023,"
         + "    \"endYear\": 2024,"
