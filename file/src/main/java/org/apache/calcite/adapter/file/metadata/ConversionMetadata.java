@@ -1566,7 +1566,7 @@ public class ConversionMetadata {
   /**
    * Saves metadata to disk with file locking for concurrent access.
    */
-  private void saveMetadata() {
+  public void saveMetadata() {
     // Use unique temp file per thread to avoid race conditions
     // Combine thread hashcode with nanotime for uniqueness across concurrent threads
     long uniqueId = System.nanoTime() + Thread.currentThread().hashCode();
