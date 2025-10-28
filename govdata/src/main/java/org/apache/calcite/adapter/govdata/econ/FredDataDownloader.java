@@ -336,7 +336,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       throw new IllegalStateException("FRED API key is required. Set FRED_API_KEY environment variable.");
     }
 
-    String relativePath = "source=econ/type=indicators/year=" + year + "/fred_indicators.json";
+    String relativePath = buildPartitionPath("fred_indicators", DataFrequency.MONTHLY, year) + "/fred_indicators.json";
 
     Map<String, String> cacheParams = new HashMap<>();
     // Don't include redundant params - year and type are already separate params

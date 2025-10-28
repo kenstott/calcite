@@ -261,8 +261,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Check if file exists using StorageProvider and update manifest
-    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
+    // Check if file exists using StorageProvider and update manifest (Quarterly frequency)
+    String relativePath = buildPartitionPath("gdp_components", DataFrequency.QUARTERLY, year) + "/gdp_components.json";
     try {
       if (cacheStorageProvider.exists(relativePath)) {
         LOGGER.debug("Found existing GDP components file for year {} - updating manifest", year);
@@ -673,8 +673,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to cache using StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/regional_income.json";
+    // Save as JSON to cache using StorageProvider (Annual frequency)
+    String relativePath = buildPartitionPath("regional_income", DataFrequency.ANNUAL, year) + "/regional_income.json";
     LOGGER.debug("Preparing to save {} regional income records to {}", incomeData.size(), relativePath);
 
     Map<String, Object> data = new HashMap<>();
@@ -891,8 +891,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Calculate trade balances for matching export/import pairs
     calculateTradeBalances(tradeData);
 
-    // Save as JSON to cache using StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
+    // Save as JSON to cache using StorageProvider (Annual frequency)
+    String relativePath = buildPartitionPath("trade_statistics", DataFrequency.ANNUAL, year) + "/trade_statistics.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> tradeList = new ArrayList<>();
 
@@ -1274,8 +1274,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to cache using StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
+    // Save as JSON to cache using StorageProvider (Quarterly frequency)
+    String relativePath = buildPartitionPath("ita_data", DataFrequency.QUARTERLY, year) + "/ita_data.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> itaList = new ArrayList<>();
 
@@ -1488,7 +1488,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Check if JSON file exists using StorageProvider and update manifest
-    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
+    // Note: Industry GDP is mostly annual, but manufacturing can be quarterly (TODO: detect from data)
+    String relativePath = buildPartitionPath("industry_gdp", DataFrequency.ANNUAL, year) + "/industry_gdp.json";
     try {
       if (cacheStorageProvider.exists(relativePath)) {
         LOGGER.debug("Found existing industry GDP JSON file for year {} - updating manifest", year);
@@ -1987,7 +1988,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private void createEmptyGdpComponentsFile(int year, String reason) throws IOException {
     // Directory creation handled automatically by StorageProvider when writing files
 
-    String relativePath = "source=econ/type=indicators/year=" + year + "/gdp_components.json";
+    String relativePath = buildPartitionPath("gdp_components", DataFrequency.QUARTERLY, year) + "/gdp_components.json";
     Map<String, Object> data = new HashMap<>();
     data.put("components", new ArrayList<>());
     data.put("download_date", LocalDate.now().toString());
@@ -2185,8 +2186,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Check if data already exists using StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/state_gdp.json";
+    // Check if data already exists using StorageProvider (Annual frequency)
+    String relativePath = buildPartitionPath("state_gdp", DataFrequency.ANNUAL, year) + "/state_gdp.json";
     try {
       if (cacheStorageProvider.exists(relativePath)) {
         LOGGER.debug("Found existing state GDP file for year {} - updating manifest", year);
