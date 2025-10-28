@@ -172,11 +172,12 @@
     },
     {
       "name": "treasury_yields",
-      "pattern": "type=timeseries/year=*/treasury_yields.parquet",
+      "pattern": "type=timeseries/frequency=daily/year=*/treasury_yields.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {"name": "type", "type": "VARCHAR"},
+          {"name": "frequency", "type": "VARCHAR"},
           {"name": "year", "type": "INTEGER"}
         ]
       },
@@ -184,11 +185,12 @@
     },
     {
       "name": "federal_debt",
-      "pattern": "type=timeseries/year=*/federal_debt.parquet",
+      "pattern": "type=timeseries/frequency=daily/year=*/federal_debt.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {"name": "type", "type": "VARCHAR"},
+          {"name": "frequency", "type": "VARCHAR"},
           {"name": "year", "type": "INTEGER"}
         ]
       },

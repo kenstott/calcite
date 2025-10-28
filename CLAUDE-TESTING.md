@@ -2,6 +2,31 @@
 
 ## 🚨 CRITICAL TEST EXECUTION RULES
 
+### REQUIRED: Environment Variables Setup
+
+**BEFORE RUNNING ANY TEST**, you MUST source the environment variables:
+
+```bash
+# REQUIRED: Source environment variables before running tests
+cd /Users/kennethstott/calcite/govdata
+source .env.sh
+
+# Then run your test
+./gradlew :govdata:test -PincludeTags=integration --tests "*YourTest*"
+```
+
+**Why This is Required**:
+- Government data APIs require authentication (BLS_API_KEY, FRED_API_KEY, BEA_API_KEY)
+- S3/MinIO storage requires AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+- Data directories must be configured (GOVDATA_CACHE_DIR, GOVDATA_PARQUET_DIR)
+- DuckDB and other native libraries need proper environment setup
+
+**What Happens If You Forget**:
+- Tests will fail with "environment variable not set" errors
+- Native library loading failures
+- Authentication errors from government APIs
+- S3 connection failures
+
 ### Tag-Based Test System
 ```kotlin
 // In build.gradle.kts - this is WHY tests don't run by default
