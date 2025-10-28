@@ -169,25 +169,26 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads treasury yields using default date range from environment.
    */
-  public File downloadTreasuryYields() throws IOException, InterruptedException {
+  public String downloadTreasuryYields() throws IOException, InterruptedException {
     return downloadTreasuryYields(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**
    * Downloads daily treasury yield curve data.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
     // Download for each year separately to match FileSchema partitioning expectations
-    File lastFile = null;
+    String lastPath = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = buildPartitionPath("treasury_yields", DataFrequency.DAILY, year) + "/treasury_yields.json";
+      String relativePath = buildPartitionPath("timeseries", DataFrequency.DAILY, year) + "/treasury_yields.json";
 
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check cache using base class helper
       if (isCachedOrExists("treasury_yields", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
-        lastFile = new File(relativePath);
+        lastPath = relativePath;
         continue;
       }
 
@@ -216,34 +217,35 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
 
       // Save to cache using base class helper
       saveToCache("treasury_yields", year, cacheParams, relativePath, response.body());
-      lastFile = new File(relativePath);
+      lastPath = relativePath;
     }
 
-    return lastFile;
+    return lastPath;
   }
 
   /**
    * Downloads federal debt using default date range from environment.
    */
-  public File downloadFederalDebt() throws IOException, InterruptedException {
+  public String downloadFederalDebt() throws IOException, InterruptedException {
     return downloadFederalDebt(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**
    * Downloads federal debt statistics.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
     // Download for each year separately to match FileSchema partitioning expectations
-    File lastFile = null;
+    String lastPath = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = buildPartitionPath("federal_debt", DataFrequency.DAILY, year) + "/federal_debt.json";
+      String relativePath = buildPartitionPath("timeseries", DataFrequency.DAILY, year) + "/federal_debt.json";
 
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check cache using base class helper
       if (isCachedOrExists("federal_debt", year, cacheParams, relativePath)) {
         LOGGER.info("Found cached federal debt for year {} - skipping download", year);
-        lastFile = new File(relativePath);
+        lastPath = relativePath;
         continue;
       }
 
@@ -272,10 +274,10 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
 
       // Save to cache using base class helper
       saveToCache("federal_debt", year, cacheParams, relativePath, response.body());
-      lastFile = new File(relativePath);
+      lastPath = relativePath;
     }
 
-    return lastFile;
+    return lastPath;
   }
 
   private int parseMaturityMonths(String description) {
@@ -407,36 +409,70 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     List<TreasuryYield> yields = new ArrayList<>();
 
     // Read treasury yields JSON file from cache using cacheStorageProvider
-    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "treasury_yields.json");
-    if (cacheStorageProvider.exists(jsonFilePath)) {
-      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
-           InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
-        JsonNode root = MAPPER.readTree(reader);
-        JsonNode data = root.get("data");
+    // Treasury data is stored with frequency=daily partition: type=timeseries/frequency=daily/year=YYYY
+    // sourceDirPath is like: <base>/type=timeseries/year=2020
+    // We need to insert frequency=daily between type and year
 
-        if (data != null && data.isArray()) {
-          for (JsonNode record : data) {
-            TreasuryYield yield = new TreasuryYield();
-            yield.date = record.get("record_date").asText();
-            yield.securityType = record.get("security_type_desc").asText("");
-            yield.securityDesc = record.get("security_desc").asText("");
-            yield.avgInterestRate = record.get("avg_interest_rate_amt").asDouble(0.0);
+    int yearIndex = sourceDirPath.lastIndexOf("/year=");
+    if (yearIndex == -1) {
+      throw new IOException("Cannot find year partition in source path: " + sourceDirPath);
+    }
 
-            // Parse maturity from description
-            yield.maturityMonths = parseMaturityMonths(yield.securityDesc);
-            yield.maturityLabel = formatMaturityLabel(yield.maturityMonths);
+    String basePath = sourceDirPath.substring(0, yearIndex);  // Everything before /year=
+    String yearDir = sourceDirPath.substring(yearIndex + 1);  // Skip the leading /: "year=2020"
 
-            yields.add(yield);
-          }
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Error reading Treasury JSON file {}: {}", jsonFilePath, e.getMessage());
+    // Build correct path: base/frequency=daily/year=YYYY/treasury_yields.json
+    String pathWithFrequency = cacheStorageProvider.resolvePath(basePath, "frequency=daily");
+    String pathWithYear = cacheStorageProvider.resolvePath(pathWithFrequency, yearDir);
+    String jsonFilePath = cacheStorageProvider.resolvePath(pathWithYear, "treasury_yields.json");
+
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      throw new IOException("Source JSON file not found: " + jsonFilePath
+          + ". Cannot convert to parquet without source data.");
+    }
+
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+      JsonNode data = root.get("data");
+
+      if (data == null || !data.isArray()) {
+        throw new IOException("Invalid Treasury JSON format in " + jsonFilePath
+            + ": missing or invalid 'data' array");
       }
+
+      for (JsonNode record : data) {
+        TreasuryYield yield = new TreasuryYield();
+        yield.date = record.get("record_date").asText();
+        yield.securityType = record.get("security_type_desc").asText("");
+        yield.securityDesc = record.get("security_desc").asText("");
+        yield.avgInterestRate = record.get("avg_interest_rate_amt").asDouble(0.0);
+
+        // Parse maturity from description
+        yield.maturityMonths = parseMaturityMonths(yield.securityDesc);
+        yield.maturityLabel = formatMaturityLabel(yield.maturityMonths);
+
+        yields.add(yield);
+      }
+    } catch (IOException e) {
+      throw e; // Re-throw IOExceptions
+    } catch (Exception e) {
+      throw new IOException("Error reading Treasury JSON file " + jsonFilePath + ": " + e.getMessage(), e);
+    }
+
+    if (yields.isEmpty()) {
+      throw new IOException("No treasury yield records found in " + jsonFilePath
+          + ". Refusing to create empty parquet file.");
     }
 
     // Create parquet file
+    LOGGER.info("=== TREASURY CONVERSION DEBUG ===");
+    LOGGER.info("Raw JSON file: {}", jsonFilePath);
+    LOGGER.info("Records parsed: {}", yields.size());
+    LOGGER.info("Target parquet location: {}", targetFilePath);
     writeTreasuryYieldsParquet(yields, targetFilePath);
-    LOGGER.info("Converted Treasury yields data to parquet: {} ({} records)", targetFilePath, yields.size());
+    LOGGER.info("Parquet file written successfully to: {}", targetFilePath);
+    LOGGER.info("=== CONVERSION COMPLETE ===");
 
     // FileSchema's conversion registry automatically tracks this conversion
   }
@@ -456,43 +492,72 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     List<FederalDebt> debtRecords = new ArrayList<>();
 
     // Read federal debt JSON file from cache using cacheStorageProvider
-    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "federal_debt.json");
-    if (cacheStorageProvider.exists(jsonFilePath)) {
-      try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
-           InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
-        JsonNode root = MAPPER.readTree(reader);
-        JsonNode data = root.get("data");
+    // Federal debt data is stored with frequency=daily partition: type=timeseries/frequency=daily/year=YYYY
+    // sourceDirPath is like: <base>/type=timeseries/year=2020
+    // We need to insert frequency=daily between type and year
 
-        if (data != null && data.isArray()) {
-          for (JsonNode record : data) {
-            FederalDebt debt = new FederalDebt();
-            debt.date = record.get("record_date").asText();
-            debt.debtType = "Total Public Debt Outstanding";
+    int yearIndex = sourceDirPath.lastIndexOf("/year=");
+    if (yearIndex == -1) {
+      throw new IOException("Cannot find year partition in source path: " + sourceDirPath);
+    }
 
-            // Parse debt amounts (convert from millions to billions)
-            JsonNode totalDebtNode = record.get("tot_pub_debt_out_amt");
-            if (totalDebtNode != null) {
-              debt.totalDebt = totalDebtNode.asDouble(0.0) / 1000.0; // Convert millions to billions
-            }
+    String basePath = sourceDirPath.substring(0, yearIndex);  // Everything before /year=
+    String yearDir = sourceDirPath.substring(yearIndex + 1);  // Skip the leading /: "year=2020"
 
-            JsonNode publicDebtNode = record.get("debt_held_public_amt");
-            if (publicDebtNode != null) {
-              debt.debtHeldByPublic = publicDebtNode.asDouble(0.0) / 1000.0;
-            }
+    // Build correct path: base/frequency=daily/year=YYYY/federal_debt.json
+    String pathWithFrequency = cacheStorageProvider.resolvePath(basePath, "frequency=daily");
+    String pathWithYear = cacheStorageProvider.resolvePath(pathWithFrequency, yearDir);
+    String jsonFilePath = cacheStorageProvider.resolvePath(pathWithYear, "federal_debt.json");
 
-            JsonNode intragovDebtNode = record.get("intragov_hold_amt");
-            if (intragovDebtNode != null) {
-              debt.intragovDebt = intragovDebtNode.asDouble(0.0) / 1000.0;
-            }
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      throw new IOException("Source JSON file not found: " + jsonFilePath
+          + ". Cannot convert to parquet without source data.");
+    }
 
-            debt.holderCategory = "All";
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
+         InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+      JsonNode data = root.get("data");
 
-            debtRecords.add(debt);
-          }
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Error reading federal debt JSON file {}: {}", jsonFilePath, e.getMessage());
+      if (data == null || !data.isArray()) {
+        throw new IOException("Invalid federal debt JSON format in " + jsonFilePath
+            + ": missing or invalid 'data' array");
       }
+
+      for (JsonNode record : data) {
+        FederalDebt debt = new FederalDebt();
+        debt.date = record.get("record_date").asText();
+        debt.debtType = "Total Public Debt Outstanding";
+
+        // Parse debt amounts (convert from millions to billions)
+        JsonNode totalDebtNode = record.get("tot_pub_debt_out_amt");
+        if (totalDebtNode != null) {
+          debt.totalDebt = totalDebtNode.asDouble(0.0) / 1000.0; // Convert millions to billions
+        }
+
+        JsonNode publicDebtNode = record.get("debt_held_public_amt");
+        if (publicDebtNode != null) {
+          debt.debtHeldByPublic = publicDebtNode.asDouble(0.0) / 1000.0;
+        }
+
+        JsonNode intragovDebtNode = record.get("intragov_hold_amt");
+        if (intragovDebtNode != null) {
+          debt.intragovDebt = intragovDebtNode.asDouble(0.0) / 1000.0;
+        }
+
+        debt.holderCategory = "All";
+
+        debtRecords.add(debt);
+      }
+    } catch (IOException e) {
+      throw e; // Re-throw IOExceptions
+    } catch (Exception e) {
+      throw new IOException("Error reading federal debt JSON file " + jsonFilePath + ": " + e.getMessage(), e);
+    }
+
+    if (debtRecords.isEmpty()) {
+      throw new IOException("No federal debt records found in " + jsonFilePath
+          + ". Refusing to create empty parquet file.");
     }
 
     // Create parquet file

@@ -1714,7 +1714,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String joltsRegionalJson = parseJoltsFtpForRegional(year);
 
       if (joltsRegionalJson != null) {
-        String fullJsonPath = cacheStorageProvider.resolvePath(operatingDirectory, jsonFilePath);
+        String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonFilePath);
         cacheStorageProvider.writeFile(fullJsonPath, joltsRegionalJson.getBytes(StandardCharsets.UTF_8));
         saveToCache("jolts_regional", year, cacheParams, jsonFilePath, "");
         lastFile = new File(jsonFilePath);
@@ -2588,7 +2588,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
     if (cacheManifest.isCached("qcew_zip", year, cacheParams)) {
-      String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, qcewZipPath);
+      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
       if (cacheStorageProvider.exists(fullPath)) {
         LOGGER.info("Using cached QCEW CSV for year {} (from manifest)", year);
         try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
@@ -2607,7 +2607,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     byte[] zipData = downloadFile(url);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
-    String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, qcewZipPath);
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
     cacheStorageProvider.writeFile(fullPath, zipData);
 
     // Mark in cache manifest - QCEW data is immutable (historical), never refresh
@@ -2941,7 +2941,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("file", fileName);
     if (cacheManifest.isCached(dataType, 0, cacheParams)) {
-      String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, ftpPath);
+      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
       if (cacheStorageProvider.exists(fullPath)) {
         LOGGER.info("Using cached JOLTS FTP file: {} (from manifest)", ftpPath);
         try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
@@ -2956,7 +2956,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     byte[] data = downloadFile(url);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
-    String fullPath = cacheStorageProvider.resolvePath(operatingDirectory, ftpPath);
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
     cacheStorageProvider.writeFile(fullPath, data);
 
     // Mark in cache manifest - refresh monthly (JOLTS data updates monthly with ~2 month lag)
