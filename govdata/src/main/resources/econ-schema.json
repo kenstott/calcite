@@ -4,121 +4,339 @@
     {
       "name": "employment_statistics",
       "pattern": "type=indicators/year=*/employment_statistics.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments."
     },
     {
       "name": "inflation_metrics",
       "pattern": "type=indicators/year=*/inflation_metrics.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates."
     },
     {
       "name": "regional_cpi",
       "pattern": "type=cpi_regional/year=*/regional_cpi.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas."
     },
     {
       "name": "metro_cpi",
       "pattern": "type=cpi_metro/year=*/metro_cpi.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Consumer Price Index for 27 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends."
     },
     {
       "name": "state_industry",
       "pattern": "type=state_industry/year=*/state_industry.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons."
     },
     {
       "name": "state_wages",
       "pattern": "type=state_wages/year=*/state_wages.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis."
     },
     {
       "name": "metro_industry",
       "pattern": "type=metro_industry/year=*/metro_industry.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons."
     },
     {
       "name": "metro_wages",
       "pattern": "type=metro_wages/year=*/metro_wages.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis."
     },
     {
       "name": "county_qcew",
       "pattern": "type=county_qcew/year=*/county_qcew.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research."
+    },
+    {
+      "name": "county_wages",
+      "pattern": "type=county_wages/year=*/county_wages.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
+      "comment": "Average weekly wages for all 6,038 U.S. counties from BLS QCEW (Quarterly Census of Employment and Wages). Most granular geographic wage data available, enabling county-level compensation analysis, local labor market studies, and rural-urban wage comparisons. Essential for detailed regional economic analysis."
     },
     {
       "name": "jolts_regional",
       "pattern": "type=jolts_regional/year=*/jolts_regional.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends."
+    },
+    {
+      "name": "jolts_state",
+      "pattern": "type=jolts_state/year=*/jolts_state.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
+      "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for all 51 U.S. jurisdictions (50 states + DC). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate at state level. Provides state-specific insights into labor market dynamics, worker mobility, and employment trends for state-level policy analysis."
     },
     {
       "name": "wage_growth",
       "pattern": "type=indicators/year=*/wage_growth.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Average hourly earnings, weekly earnings, and employment cost index by industry and occupation. Tracks wage growth trends and labor cost pressures."
     },
     {
       "name": "regional_employment",
       "pattern": "type=regional/year=*/state_fips=*/regional_employment.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"},
+          {"name": "state_fips", "type": "VARCHAR"}
+        ]
+      },
       "comment": "State and metropolitan area employment statistics including unemployment rates, job growth, and labor force participation by geographic region."
     },
     {
       "name": "treasury_yields",
       "pattern": "type=timeseries/year=*/treasury_yields.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API."
     },
     {
       "name": "federal_debt",
       "pattern": "type=timeseries/year=*/federal_debt.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API."
     },
     {
       "name": "world_indicators",
       "pattern": "type=indicators/year=*/world_indicators.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "International economic indicators from World Bank for major economies. Includes GDP, inflation, unemployment, government debt, and population statistics. Enables comparison of U.S. economic performance with global peers."
     },
     {
       "name": "fred_indicators",
       "pattern": "type=indicators/year=*/fred_indicators.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Federal Reserve Economic Data (FRED) time series including GDP, interest rates, monetary aggregates, and other key economic indicators."
     },
     {
       "name": "gdp_components",
       "pattern": "type=indicators/year=*/gdp_components.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Detailed GDP components from BEA including consumption, investment, government spending, and net exports broken down by subcategories."
     },
     {
       "name": "gdp_statistics",
       "pattern": "type=indicators/year=*/gdp_statistics.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Quarterly and annual GDP growth rates, nominal and real GDP values."
     },
     {
       "name": "regional_income",
       "pattern": "type=indicators/year=*/regional_income.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state."
     },
     {
       "name": "state_gdp",
       "pattern": "type=indicators/year=*/state_gdp.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table). Provides both total GDP and per capita real GDP by state across all NAICS industry sectors."
     },
     {
       "name": "trade_statistics",
       "pattern": "type=indicators/year=*/trade_statistics.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "Detailed U.S. export and import statistics from BEA NIPA Table T40205B. Comprehensive breakdown of goods and services trade by category with calculated trade balances."
     },
     {
       "name": "ita_data",
       "pattern": "type=indicators/year=*/ita_data.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances."
     },
     {
       "name": "industry_gdp",
       "pattern": "type=indicators/year=*/industry_gdp.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "year", "type": "INTEGER"}
+        ]
+      },
       "comment": "GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis."
+    },
+    {
+      "name": "reference_jolts_industries",
+      "pattern": "type=reference/jolts_industries.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"}
+        ]
+      },
+      "comment": "JOLTS industry code reference table from BLS. Maps industry codes to human-readable industry names for JOLTS data (jolts_regional, jolts_state tables). Essential dimension table for decoding JOLTS industry classifications."
+    },
+    {
+      "name": "reference_jolts_dataelements",
+      "pattern": "type=reference/jolts_dataelements.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"}
+        ]
+      },
+      "comment": "JOLTS data element code reference table from BLS. Maps metric codes (JOR, HIR, QUR, TSR, LDR) to descriptions (Job Openings Rate, Hires Rate, etc.). Essential dimension table for understanding JOLTS metrics in jolts_regional and jolts_state tables."
     },
     {
       "name": "fred_data_series_catalog",
       "pattern": "type=catalog/category=*/frequency=*/source=*/status=*/fred_data_series_catalog.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {"name": "type", "type": "VARCHAR"},
+          {"name": "category", "type": "VARCHAR"},
+          {"name": "frequency", "type": "VARCHAR"},
+          {"name": "source", "type": "VARCHAR"},
+          {"name": "status", "type": "VARCHAR"}
+        ]
+      },
       "comment": "Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access."
     }
   ],
@@ -181,8 +399,39 @@
     "metro_wages": {
       "primaryKey": ["date", "metro_area_code"]
     },
+    "county_wages": {
+      "primaryKey": ["year", "county_fips"],
+      "foreignKeys": [
+        {
+          "columns": ["county_fips"],
+          "targetSchema": "geo",
+          "targetTable": "counties",
+          "targetColumns": ["county_fips"],
+          "comment": "Links county wage data to geographic and demographic data for granular regional compensation analysis and rural-urban wage comparisons"
+        },
+        {
+          "columns": ["state_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links county wage data to state-level geography for state-aggregated analysis"
+        }
+      ]
+    },
     "jolts_regional": {
       "primaryKey": ["date", "region_code", "metric"]
+    },
+    "jolts_state": {
+      "primaryKey": ["year", "state_fips", "metric"],
+      "foreignKeys": [
+        {
+          "columns": ["state_fips"],
+          "targetSchema": "geo",
+          "targetTable": "states",
+          "targetColumns": ["state_fips"],
+          "comment": "Links state JOLTS data to geographic and demographic data for state-level labor market dynamics analysis"
+        }
+      ]
     },
     "wage_growth": {
       "primaryKey": ["date", "series_id", "industry_code", "occupation_code"]
@@ -257,6 +506,14 @@
     },
     "industry_gdp": {
       "primaryKey": ["industry_code", "year", "quarter"]
+    },
+    "reference_jolts_industries": {
+      "primaryKey": ["industry_code"],
+      "comment": "Reference dimension table for JOLTS industry classifications"
+    },
+    "reference_jolts_dataelements": {
+      "primaryKey": ["dataelement_code"],
+      "comment": "Reference dimension table for JOLTS metric codes and descriptions"
     },
     "fred_data_series_catalog": {
       "primaryKey": ["series_id"],
