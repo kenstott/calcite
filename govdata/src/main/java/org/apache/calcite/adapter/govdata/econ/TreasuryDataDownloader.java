@@ -180,7 +180,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=timeseries/year=" + year + "/treasury_yields.json";
+      String relativePath = buildPartitionPath("treasury_yields", DataFrequency.DAILY, year) + "/treasury_yields.json";
 
       Map<String, String> cacheParams = new HashMap<>();
 
@@ -236,7 +236,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Download for each year separately to match FileSchema partitioning expectations
     File lastFile = null;
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = "source=econ/type=timeseries/year=" + year + "/federal_debt.json";
+      String relativePath = buildPartitionPath("federal_debt", DataFrequency.DAILY, year) + "/federal_debt.json";
 
       Map<String, String> cacheParams = new HashMap<>();
 

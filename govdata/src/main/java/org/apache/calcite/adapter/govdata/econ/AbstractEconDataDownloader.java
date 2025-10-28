@@ -73,6 +73,49 @@ public abstract class AbstractEconDataDownloader {
   /** Shared ObjectMapper for JSON serialization */
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 
+  /**
+   * Data frequency for partitioning strategy (Phase 4).
+   * Enables partition pruning for time-range queries.
+   */
+  public enum DataFrequency {
+    DAILY("daily", "D"),
+    MONTHLY("monthly", "M"),
+    QUARTERLY("quarterly", "Q"),
+    ANNUAL("annual", "A");
+
+    private final String partitionName;
+    private final String shortCode;
+
+    DataFrequency(String partitionName, String shortCode) {
+      this.partitionName = partitionName;
+      this.shortCode = shortCode;
+    }
+
+    public String getPartitionName() {
+      return partitionName;
+    }
+
+    public String getShortCode() {
+      return shortCode;
+    }
+
+    /**
+     * Parse frequency from short code (D, M, Q, A).
+     *
+     * @param code Short frequency code
+     * @return Corresponding DataFrequency
+     * @throws IllegalArgumentException if code is unknown
+     */
+    public static DataFrequency fromShortCode(String code) {
+      for (DataFrequency freq : values()) {
+        if (freq.shortCode.equals(code)) {
+          return freq;
+        }
+      }
+      throw new IllegalArgumentException("Unknown frequency code: " + code);
+    }
+  }
+
   /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/econ/) */
   protected final String cacheDirectory;
 
@@ -213,6 +256,43 @@ public abstract class AbstractEconDataDownloader {
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
+  }
+
+  /**
+   * Build partition path with frequency dimension (Phase 4).
+   * Format: source=econ/type=X/frequency=Y/year=YYYY/
+   *
+   * @param dataType Data type (e.g., "state_wages", "treasury_yields")
+   * @param frequency Data frequency
+   * @param year Year
+   * @return Partition path
+   */
+  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year) {
+    return buildPartitionPath(dataType, frequency, year, null);
+  }
+
+  /**
+   * Build partition path with frequency and optional month (for daily data).
+   * Format: source=econ/type=X/frequency=Y/year=YYYY/month=MM/
+   *
+   * @param dataType Data type (e.g., "treasury_yields")
+   * @param frequency Data frequency
+   * @param year Year
+   * @param month Optional month (1-12) for daily data
+   * @return Partition path
+   */
+  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year, Integer month) {
+    StringBuilder path = new StringBuilder();
+    path.append("source=econ");
+    path.append("/type=").append(dataType);
+    path.append("/frequency=").append(frequency.getPartitionName());
+    path.append("/year=").append(year);
+
+    if (month != null && frequency == DataFrequency.DAILY) {
+      path.append("/month=").append(String.format("%02d", month));
+    }
+
+    return path.toString();
   }
 
   // REMOVED: isParquetConverted() and markParquetConverted()

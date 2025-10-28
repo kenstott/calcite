@@ -193,7 +193,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading world economic indicators for year {}", year);
 
     // Build relative path for JSON file - directories created automatically by StorageProvider
-    String relativePath = "source=econ/type=indicators/year=" + year + "/world_indicators.json";
+    String relativePath = buildPartitionPath("indicators", DataFrequency.ANNUAL, year) + "/world_indicators.json";
 
     List<Map<String, Object>> indicators = new ArrayList<>();
 
@@ -278,10 +278,12 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    // Resolve relative path against cache directory before writing
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    LOGGER.info("Writing world indicators to: {}", fullPath);
+    cacheStorageProvider.writeFile(fullPath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-    LOGGER.info("World indicators saved to: {} ({} records)", relativePath, indicators.size());
+    LOGGER.info("World indicators saved to: {} ({} records)", fullPath, indicators.size());
   }
 
   /**
@@ -552,11 +554,18 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Look for World Bank indicators JSON file in the source directory
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "world_indicators.json");
+    LOGGER.info("Looking for world indicators JSON at: {}", jsonFilePath);
     if (cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.info("Found world indicators JSON file");
       try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
            InputStreamReader reader = new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
         JsonNode root = MAPPER.readTree(reader);
         JsonNode indicatorsArray = root.get("indicators");
+
+        LOGGER.info("Indicators array: {}", indicatorsArray != null ? "found" : "null");
+        if (indicatorsArray != null) {
+          LOGGER.info("Indicators array is array: {}, size: {}", indicatorsArray.isArray(), indicatorsArray.size());
+        }
 
         if (indicatorsArray != null && indicatorsArray.isArray()) {
           for (JsonNode ind : indicatorsArray) {
@@ -574,8 +583,10 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
           }
         }
       } catch (Exception e) {
-        LOGGER.warn("Failed to process World Bank JSON file {}: {}", jsonFilePath, e.getMessage());
+        LOGGER.error("Failed to process World Bank JSON file {}: {}", jsonFilePath, e.getMessage(), e);
       }
+    } else {
+      LOGGER.warn("World indicators JSON file not found: {}", jsonFilePath);
     }
 
     // Write parquet file
@@ -595,6 +606,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
         .name("country_name").doc("Full country name").type().stringType().noDefault()
         .name("indicator_code").doc("World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)").type().stringType().noDefault()
         .name("indicator_name").doc("Full description of the World Bank indicator").type().stringType().noDefault()
+        .name("year").doc("Year of observation").type().intType().noDefault()
         .name("value").doc("Indicator value for the given country and year").type().doubleType().noDefault()
         .name("unit").doc("Unit of measurement (e.g., 'current US$', 'percent')").type().nullable().stringType().noDefault()
         .name("scale").doc("Scale factor (e.g., 'Millions', 'Billions')").type().nullable().stringType().noDefault()
@@ -607,6 +619,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       record.put("country_name", ind.get("country_name"));
       record.put("indicator_code", ind.get("indicator_code"));
       record.put("indicator_name", ind.get("indicator_name"));
+      record.put("year", ind.get("year"));
       record.put("value", ind.get("value"));
       record.put("unit", ind.get("unit"));
       record.put("scale", ind.get("scale"));
