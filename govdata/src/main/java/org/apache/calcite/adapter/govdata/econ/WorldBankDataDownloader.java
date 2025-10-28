@@ -288,15 +288,17 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads world economic indicators using default date range.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadWorldIndicators() throws IOException, InterruptedException {
+  public String downloadWorldIndicators() throws IOException, InterruptedException {
     return downloadWorldIndicators(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**
    * Downloads world economic indicators for major economies.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadWorldIndicators(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadWorldIndicators(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading world economic indicators for {}-{}", startYear, endYear);
 
     // Build RELATIVE path (StorageProvider will add base path)
@@ -308,12 +310,9 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     cacheParams.put("start_year", String.valueOf(startYear));
     cacheParams.put("end_year", String.valueOf(endYear));
 
-    // For return value compatibility - create dummy File
-    File parquetFile = new File(relativePath);
-
     if (cacheManifest.isCached("world_indicators", startYear, cacheParams)) {
       LOGGER.info("Found cached world indicators for {}-{} - skipping download", startYear, endYear);
-      return parquetFile;
+      return relativePath;
     }
 
     // Check if file exists but not in manifest - update manifest
@@ -322,7 +321,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
         LOGGER.info("Found existing world indicators file for {}-{} - updating manifest", startYear, endYear);
         cacheManifest.markCached("world_indicators", startYear, cacheParams, relativePath, 0L);
         cacheManifest.save(operatingDirectory);
-        return parquetFile;
+        return relativePath;
       }
     } catch (Exception e) {
       LOGGER.debug("Could not check if file exists: {}", e.getMessage());
@@ -399,7 +398,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("World indicators saved to: {} ({} records)", relativePath, indicators.size());
-    return parquetFile;
+    return relativePath;
   }
 
   /**

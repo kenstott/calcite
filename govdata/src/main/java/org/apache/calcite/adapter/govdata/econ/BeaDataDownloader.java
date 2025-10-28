@@ -393,14 +393,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads GDP components using default date range.
    */
-  public File downloadGdpComponents() throws IOException, InterruptedException {
+  public String downloadGdpComponents() throws IOException, InterruptedException {
     return downloadGdpComponents(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**
    * Downloads detailed GDP components data.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadGdpComponents(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadGdpComponents(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
@@ -522,7 +523,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     writeGdpComponentsParquet(components, relativePath);
 
     LOGGER.debug("GDP components saved to: {} ({} records)", relativePath, components.size());
-    return new File(relativePath); // For return value compatibility
+    return relativePath;
   }
 
   /**
@@ -1151,7 +1152,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads International Transactions Accounts data using default date range.
    */
-  public File downloadItaData() throws IOException, InterruptedException {
+  public String downloadItaData() throws IOException, InterruptedException {
     return downloadItaData(getDefaultStartYear(), getDefaultEndYear());
   }
 
@@ -1311,8 +1312,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads comprehensive International Transactions Accounts (ITA) data.
    * Provides detailed trade balances, current account, and capital flows.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadItaData(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadItaData(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
@@ -1400,7 +1402,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     writeItaDataParquet(itaRecords, relativePath);
 
     LOGGER.debug("ITA data saved to: {} ({} records)", relativePath, itaRecords.size());
-    return new File(relativePath); // For return value compatibility
+    return relativePath;
   }
 
   /**
@@ -1459,7 +1461,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads GDP by Industry data using default date range.
    */
-  public File downloadIndustryGdp() throws IOException, InterruptedException {
+  public String downloadIndustryGdp() throws IOException, InterruptedException {
     return downloadIndustryGdp(getDefaultStartYear(), getDefaultEndYear());
   }
 
@@ -1619,8 +1621,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Downloads GDP by Industry data showing value added by NAICS industry classification.
    * Provides quarterly and annual data for all industries including manufacturing,
    * services, finance, technology, and government sectors.
+   * @return The storage path (local or S3) where the data was saved
    */
-  public File downloadIndustryGdp(int startYear, int endYear) throws IOException, InterruptedException {
+  public String downloadIndustryGdp(int startYear, int endYear) throws IOException, InterruptedException {
     if (apiKey == null || apiKey.isEmpty()) {
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
@@ -1790,7 +1793,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     writeIndustryGdpParquet(industryData, relativePath);
 
     LOGGER.debug("Industry GDP data saved to: {} ({} records)", relativePath, industryData.size());
-    return new File(relativePath); // For return value compatibility
+    return relativePath;
   }
 
   @SuppressWarnings("deprecation")
