@@ -24,7 +24,6 @@ import org.apache.calcite.model.JsonTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -679,9 +678,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
           rootCauseMessage = rootCause.getMessage();
         }
 
-        boolean isNoDataError = (errorMessage != null && (errorMessage.contains("No data") ||
+        boolean isNoDataError =
+            (
+                errorMessage != null && (errorMessage.contains("No data") ||
             errorMessage.contains("empty") || errorMessage.contains("insufficient data"))) ||
-            (rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
+            (
+                rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
             rootCauseMessage.contains("empty") || rootCauseMessage.contains("insufficient data")));
 
         if (isNoDataError) {
@@ -732,9 +734,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
           rootCauseMessage = rootCause.getMessage();
         }
 
-        boolean isNoDataError = (errorMessage != null && (errorMessage.contains("No data") ||
+        boolean isNoDataError =
+            (
+                errorMessage != null && (errorMessage.contains("No data") ||
             errorMessage.contains("empty") || errorMessage.contains("insufficient data"))) ||
-            (rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
+            (
+                rootCauseMessage != null && (rootCauseMessage.contains("No data") ||
             rootCauseMessage.contains("empty") || rootCauseMessage.contains("insufficient data")));
 
         if (isNoDataError) {
