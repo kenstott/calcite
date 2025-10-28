@@ -517,18 +517,28 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * @param operand The original ECON operand configuration
    */
   private void registerEconConverter(Schema schema, Map<String, Object> operand) {
+    LOGGER.info("registerEconConverter called with schema type: {}", schema.getClass().getName());
     FileSchema fileSchema = null;
 
+    // Handle ConstraintAwareJdbcSchema wrapper (unwrap to get delegate)
+    Schema unwrappedSchema = schema;
+    if (schema instanceof org.apache.calcite.adapter.file.ConstraintAwareJdbcSchema) {
+      unwrappedSchema = ((org.apache.calcite.adapter.file.ConstraintAwareJdbcSchema) schema).getDelegate();
+      LOGGER.debug("Unwrapped ConstraintAwareJdbcSchema to get delegate: {}", unwrappedSchema.getClass().getName());
+    }
+
     // Handle DuckDB execution engine case
-    if (schema instanceof DuckDBJdbcSchema) {
-      fileSchema = ((DuckDBJdbcSchema) schema).getFileSchema();
+    if (unwrappedSchema instanceof DuckDBJdbcSchema) {
+      fileSchema = ((DuckDBJdbcSchema) unwrappedSchema).getFileSchema();
       LOGGER.debug("Extracted internal FileSchema from DuckDBJdbcSchema for converter registration");
-    } else if (schema instanceof FileSchema) {
-      fileSchema = (FileSchema) schema;
+    } else if (unwrappedSchema instanceof FileSchema) {
+      fileSchema = (FileSchema) unwrappedSchema;
+      LOGGER.debug("Using FileSchema directly for converter registration");
     }
 
     if (fileSchema == null) {
-      LOGGER.warn("Schema is not a FileSchema or DuckDBJdbcSchema, cannot register ECON converter");
+      LOGGER.warn("Schema is not a FileSchema or DuckDBJdbcSchema (actual type: {}), cannot register ECON converter",
+          unwrappedSchema.getClass().getName());
       return;
     }
 

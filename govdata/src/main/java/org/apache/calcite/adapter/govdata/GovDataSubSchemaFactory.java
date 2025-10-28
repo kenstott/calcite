@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -91,27 +92,51 @@ public interface GovDataSubSchemaFactory {
 
   /**
    * Load table definitions from schema JSON resource file.
+   * Loads both "partitionedTables" (Parquet files) and "tables" (views, etc.).
    *
-   * @return List of partitioned table definitions
+   * @return List of all table definitions (partitioned tables + views)
    */
   default List<Map<String, Object>> loadTableDefinitions() {
     try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
       if (is == null) {
-        throw new IllegalStateException("Could not find " + getSchemaResourceName() + " resource file");
+        throw new IllegalStateException(
+            "Could not find " + getSchemaResourceName() + " resource file");
       }
 
       @SuppressWarnings("unchecked")
       Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+
+      // Load partitioned tables (Parquet files)
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> tables = (List<Map<String, Object>>) schema.get("partitionedTables");
-      if (tables == null) {
+      List<Map<String, Object>> partitionedTables = (List<Map<String, Object>>) schema.get("partitionedTables");
+      if (partitionedTables == null) {
         throw new IllegalStateException("No 'partitionedTables' field found in " + getSchemaResourceName());
       }
-      LOGGER.info("Loaded {} table definitions from {}", tables.size(), getSchemaResourceName());
-      for (Map<String, Object> table : tables) {
-        LOGGER.debug("  - Table: {} with pattern: {}", table.get("name"), table.get("pattern"));
+
+      // Load regular tables (views, etc.) - optional
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> regularTables = (List<Map<String, Object>>) schema.get("tables");
+
+      // Combine both lists
+      List<Map<String, Object>> allTables = new ArrayList<>(partitionedTables);
+      if (regularTables != null && !regularTables.isEmpty()) {
+        allTables.addAll(regularTables);
+        LOGGER.info("Loaded {} partitioned tables and {} view/regular tables from {}",
+            partitionedTables.size(), regularTables.size(), getSchemaResourceName());
+      } else {
+        LOGGER.info("Loaded {} partitioned tables from {} (no views)",
+            partitionedTables.size(), getSchemaResourceName());
       }
-      return tables;
+
+      for (Map<String, Object> table : allTables) {
+        String tableType = (String) table.get("type");
+        if ("view".equals(tableType)) {
+          LOGGER.debug("  - View: {}", table.get("name"));
+        } else {
+          LOGGER.debug("  - Table: {} with pattern: {}", table.get("name"), table.get("pattern"));
+        }
+      }
+      return allTables;
     } catch (IOException e) {
       throw new RuntimeException("Error loading " + getSchemaResourceName(), e);
     }

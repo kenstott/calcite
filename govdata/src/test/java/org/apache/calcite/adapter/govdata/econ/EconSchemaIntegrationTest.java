@@ -147,12 +147,15 @@ public class EconSchemaIntegrationTest {
 
       // Try to download each BEA dataset
       try {
-        File gdpFile = beaDownloader.downloadGdpComponents(2024, 2024);
-        if (gdpFile != null && gdpFile.exists()) {
-          File targetDir = new File(parquetDir, "source=econ/type=gdp/year=2024");
-          targetDir.mkdirs();
-          Files.copy(gdpFile.toPath(),
-                     new File(targetDir, "gdp_components.parquet").toPath());
+        String gdpPath = beaDownloader.downloadGdpComponents(2024, 2024);
+        if (gdpPath != null) {
+          File gdpFile = new File(gdpPath);
+          if (gdpFile.exists()) {
+            File targetDir = new File(parquetDir, "source=econ/type=gdp/year=2024");
+            targetDir.mkdirs();
+            Files.copy(gdpFile.toPath(),
+                       new File(targetDir, "gdp_components.parquet").toPath());
+          }
         }
       } catch (Exception e) {
         // Ignore
@@ -171,24 +174,30 @@ public class EconSchemaIntegrationTest {
       }
 
       try {
-        File itaFile = beaDownloader.downloadItaData(2022, 2023);
-        if (itaFile != null && itaFile.exists()) {
-          File targetDir = new File(parquetDir, "source=econ/type=ita/year_range=2022_2023");
-          targetDir.mkdirs();
-          Files.copy(itaFile.toPath(),
-                     new File(targetDir, "ita_data.parquet").toPath());
+        String itaPath = beaDownloader.downloadItaData(2022, 2023);
+        if (itaPath != null) {
+          File itaFile = new File(itaPath);
+          if (itaFile.exists()) {
+            File targetDir = new File(parquetDir, "source=econ/type=ita/year_range=2022_2023");
+            targetDir.mkdirs();
+            Files.copy(itaFile.toPath(),
+                       new File(targetDir, "ita_data.parquet").toPath());
+          }
         }
       } catch (Exception e) {
         // Ignore
       }
 
       try {
-        File industryFile = beaDownloader.downloadIndustryGdp(2022, 2023);
-        if (industryFile != null && industryFile.exists()) {
-          File targetDir = new File(parquetDir, "source=econ/type=industry_gdp/year_range=2022_2023");
-          targetDir.mkdirs();
-          Files.copy(industryFile.toPath(),
-                     new File(targetDir, "industry_gdp.parquet").toPath());
+        String industryPath = beaDownloader.downloadIndustryGdp(2022, 2023);
+        if (industryPath != null) {
+          File industryFile = new File(industryPath);
+          if (industryFile.exists()) {
+            File targetDir = new File(parquetDir, "source=econ/type=industry_gdp/year_range=2022_2023");
+            targetDir.mkdirs();
+            Files.copy(industryFile.toPath(),
+                       new File(targetDir, "industry_gdp.parquet").toPath());
+          }
         }
       } catch (Exception e) {
         // Ignore

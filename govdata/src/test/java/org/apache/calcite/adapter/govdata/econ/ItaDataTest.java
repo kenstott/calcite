@@ -49,9 +49,10 @@ public class ItaDataTest {
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
 
     // Test ITA data for a 2-year period for faster testing
-    File parquetFile = downloader.downloadItaData(2022, 2023);
+    String parquetPath = downloader.downloadItaData(2022, 2023);
 
-    assertNotNull(parquetFile);
+    assertNotNull(parquetPath);
+    File parquetFile = new File(parquetPath);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
 

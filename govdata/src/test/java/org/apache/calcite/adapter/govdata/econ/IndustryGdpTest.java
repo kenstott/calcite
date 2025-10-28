@@ -50,9 +50,10 @@ public class IndustryGdpTest {
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
 
     // Test industry GDP data for a 2-year period
-    File parquetFile = downloader.downloadIndustryGdp(2022, 2023);
+    String parquetPath = downloader.downloadIndustryGdp(2022, 2023);
 
-    assertNotNull(parquetFile);
+    assertNotNull(parquetPath);
+    File parquetFile = new File(parquetPath);
     assertTrue(parquetFile.exists());
     assertTrue(parquetFile.length() > 0);
 

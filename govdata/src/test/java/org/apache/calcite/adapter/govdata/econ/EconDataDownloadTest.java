@@ -163,7 +163,7 @@ public class EconDataDownloadTest {
 
     // Test series conversion to parquet
     String targetPath = tempDir.toString() + "/test_unrate.parquet";
-    downloader.convertSeriesToParquet("UNRATE", targetPath, null);
+    downloader.convertSeriesToParquet("UNRATE", targetPath, null, 2023, 2024);
 
     // Verify file exists and is readable
     assertTrue(new File(targetPath).exists(), "UNRATE parquet file should exist");
