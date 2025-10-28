@@ -968,8 +968,8 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.debug("⚡ Iceberg view exists, skipped: {}.{}", duckdbSchema, tableName);
             } else {
               // View doesn't exist - create it
-              String sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')",
-                  duckdbSchema, tableName, record.getSourceFile());
+              String sql =
+                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, record.getSourceFile());
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
                          duckdbSchema, tableName, record.getSourceFile());
 
@@ -1031,8 +1031,8 @@ public class DuckDBJdbcSchemaFactory {
                 boolean useUnionByName = shouldUseUnionByName(record);
 
                 // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
-                sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)",
-                                   duckdbSchema, tableName, pattern, useUnionByName);
+                sql =
+                                   String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)", duckdbSchema, tableName, pattern, useUnionByName);
                 LOGGER.info("Creating DuckDB view with stored table-specific pattern (from config, union_by_name={}): \"{}.{}\" -> {}",
                            useUnionByName, duckdbSchema, tableName, pattern);
               } else {
@@ -1072,8 +1072,8 @@ public class DuckDBJdbcSchemaFactory {
               boolean useUnionByName = shouldUseUnionByName(record);
 
               // Use IF NOT EXISTS to skip view creation if catalog already has it (fast restart)
-              sql = String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)",
-                                 duckdbSchema, tableName, parquetPath, useUnionByName);
+              sql =
+                                 String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM parquet_scan('%s', hive_partitioning = true, union_by_name = %s)", duckdbSchema, tableName, parquetPath, useUnionByName);
               LOGGER.info("Creating DuckDB view with glob pattern and Hive partitioning (from config, union_by_name={}): \"{}.{}\" -> {}",
                          useUnionByName, duckdbSchema, tableName, parquetPath);
             } else {
