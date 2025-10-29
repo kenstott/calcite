@@ -65,10 +65,22 @@ ResultSet rs = conn.createStatement().executeQuery(
     "       AVG(fo.value) as avg_metric " +
     "FROM sec.facts f " +
     "JOIN geo.census_states s ON f.state_of_incorporation = s.statefp " +
-    "JOIN econ.fred_observations fo ON fo.series_id = 'GDP' " +
+    "JOIN econ.fred_indicators fo ON fo.series_id = 'GDP' " +
     "GROUP BY s.name"
 );
 ```
+
+## 🔍 Pre-Built Analytical Views
+
+The ECON schema includes analytical views for common economic analysis patterns:
+
+- **interest_rate_spreads** - Treasury yield curve analytics with term spreads for recession forecasting
+- **housing_indicators** - Real estate market dashboard (starts, permits, prices, mortgage rates)
+- **monetary_aggregates** - M1/M2 money supply and velocity analysis
+- **business_indicators** - Business cycle dashboard (industrial production, capacity utilization, credit)
+- **trade_balance_summary** - International trade flows aggregated by category
+
+Views combine data from multiple tables and provide ready-to-query metrics for macroeconomic analysis.
 
 ## 📊 Supported Data Sources
 
@@ -77,7 +89,7 @@ ResultSet rs = conn.createStatement().executeQuery(
 | Schema | Domain | Key Tables | Data Sources |
 |--------|--------|------------|--------------|
 | **SEC** | Financial Data | `facts`, `insider`, `text_blocks`, `stock_prices` | SEC EDGAR, Yahoo Finance |
-| **ECON** | Economic Data | `fred_data_series_catalog`, `fred_observations`, `bea_nipa_*` | BLS, FRED, Treasury, BEA |
+| **ECON** | Economic Data | `fred_data_series_catalog` (841K+ series), `fred_indicators`, employment/wages tables, analytical views | BLS, FRED, Treasury, BEA, World Bank |
 | **GEO** | Geographic Data | `census_states`, `census_counties`, `hud_zip_county_*` | Census TIGER, HUD |
 
 ### Future Planned

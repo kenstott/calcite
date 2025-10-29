@@ -320,6 +320,53 @@ Common FRED Series:
 - **UMCSENT**: Consumer Sentiment
 - Plus 12 additional indicators for banking, real estate, and consumer sentiment
 
+#### `fred_data_series_catalog`
+Complete FRED economic data series catalog with 841,000+ series for data discovery and programmatic access.
+
+Primary key: `(series_id)`
+
+Partitions: `(type, category, frequency, source, status)` - Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series
+
+Indexes: `title`, `category_id`, `units`, `frequency`, `seasonal_adjustment`, `source_name`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| series_id | VARCHAR | FRED series identifier (e.g., 'GDP', 'UNRATE') |
+| title | VARCHAR | Human-readable series title |
+| observation_start | DATE | First available observation date |
+| observation_end | DATE | Most recent observation date |
+| frequency | VARCHAR | Data frequency (Daily, Weekly, Monthly, Quarterly, Annual) |
+| units | VARCHAR | Unit of measurement |
+| seasonal_adjustment | VARCHAR | Seasonal adjustment status |
+| last_updated | TIMESTAMP | Last update timestamp |
+| popularity | INTEGER | Series popularity ranking |
+| notes | VARCHAR | Series description and methodology |
+| category_id | INTEGER | FRED category classification |
+| source_name | VARCHAR | Data source organization |
+
+**Usage**: Query this table to discover available economic data series before downloading observations.
+
+**Example - Find all GDP-related series**:
+```sql
+SELECT series_id, title, frequency, observation_start, observation_end
+FROM fred_data_series_catalog
+WHERE title LIKE '%GDP%'
+  AND status = 'active'
+  AND frequency = 'Quarterly'
+ORDER BY popularity DESC
+LIMIT 20;
+```
+
+**Example - Discover housing market indicators**:
+```sql
+SELECT series_id, title, units, last_updated
+FROM fred_data_series_catalog
+WHERE category = 'housing'
+  AND status = 'active'
+  AND frequency IN ('Monthly', 'Quarterly')
+ORDER BY popularity DESC;
+```
+
 ### Bureau of Economic Analysis (BEA) Tables
 
 #### `gdp_components`
@@ -370,19 +417,62 @@ Primary key: `(year, line_number)`
 | category | VARCHAR | Trade category |
 | value | DECIMAL | Value in billions |
 
-#### `industry_gdp`
-GDP by industry (NAICS classification).
+#### `state_gdp`
+State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table).
 
-Primary key: `(industry_code, year, frequency)`
+Primary key: `(geo_fips, line_code, year)`
+
+Foreign keys:
+- `geo_fips` → `geo.states.state_fips`
 
 | Column | Type | Description |
 |--------|------|-------------|
-| industry_code | VARCHAR | NAICS code |
-| industry_name | VARCHAR | Industry description |
-| year | INTEGER | Observation year |
-| frequency | VARCHAR | A (Annual) or Q (Quarterly) |
-| value | DECIMAL | Value added in billions |
-| table_id | VARCHAR | Source table |
+| geo_fips | VARCHAR | State FIPS code (FK) |
+| geo_name | VARCHAR | State name |
+| line_code | INTEGER | BEA line code |
+| line_description | VARCHAR | GDP metric description |
+| year | INTEGER | Calendar year |
+| value | DECIMAL | GDP value (millions $) |
+| unit | VARCHAR | Unit of measurement |
+
+**Coverage**: Provides both total GDP and per capita real GDP by state across all NAICS industry sectors.
+
+---
+
+#### `industry_gdp`
+GDP by Industry data from BEA showing value added by NAICS industry sectors.
+
+Primary key: `(industry_code, year, quarter)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| industry_code | VARCHAR | NAICS industry code |
+| industry_title | VARCHAR | Industry description |
+| year | INTEGER | Calendar year |
+| quarter | INTEGER | Quarter (1-4 for quarterly, null for annual) |
+| value | DECIMAL | Value added (billions $) |
+| unit | VARCHAR | Unit of measurement |
+| frequency | VARCHAR | Annual or Quarterly |
+
+**Coverage**: Comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.
+
+---
+
+#### `ita_data`
+International Transactions Accounts (ITA) from BEA providing balance of payments statistics.
+
+Primary key: `(year, quarter, account_type)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| year | INTEGER | Calendar year |
+| quarter | VARCHAR | Quarter (Q1-Q4) |
+| account_type | VARCHAR | Type of account |
+| account_description | VARCHAR | Account description |
+| value | DECIMAL | Value (millions $) |
+| unit | VARCHAR | Unit of measurement |
+
+**Coverage**: Includes trade balance, current account, capital account, and income balances.
 
 ### World Bank Tables
 
