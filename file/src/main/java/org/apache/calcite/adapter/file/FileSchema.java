@@ -2013,12 +2013,25 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         String sql = (String) view.get("sql");
 
         if (viewName != null && sql != null) {
-          // For now, just log the view registration
-          // In a full implementation, we would create a proper view table
-          LOGGER.debug("View registered: {}", viewName);
-          // TODO: Implement actual view creation
-          // NOTE: When implementing, use explicit viewName without casing transformation
-          // (same as materialized views)
+          try {
+            LOGGER.debug("Creating view: {}", viewName);
+            // Create a ViewTable using Calcite's built-in ViewTable class
+            // The ViewTable will expand the SQL query during query planning
+            org.apache.calcite.schema.impl.ViewTable viewTable =
+                new org.apache.calcite.schema.impl.ViewTable(
+                    Object.class,           // element type
+                    null,                   // row type proto (inferred from SQL)
+                    sql,                    // view SQL
+                    java.util.Collections.singletonList(name), // schema path
+                    null);                  // view path (optional)
+
+            // Register the view using explicit viewName without casing transformation
+            // (same as materialized views)
+            builder.put(viewName, viewTable);
+            LOGGER.debug("Successfully registered view: {}", viewName);
+          } catch (Exception e) {
+            LOGGER.error("Failed to create view {}: {}", viewName, e.getMessage(), e);
+          }
         }
       }
     }
