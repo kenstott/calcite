@@ -90,6 +90,12 @@ public class EconIntegrationTest {
           "trade_balance_summary"
       ));
 
+  private static final Set<String> PHASE6_EXPECTED_TABLES =
+      new HashSet<>(Arrays.asList(
+          "county_qcew",
+          "county_wages"
+      ));
+
   @BeforeAll
   public static void setup() {
     TestEnvironmentLoader.ensureLoaded();
@@ -559,6 +565,39 @@ public class EconIntegrationTest {
         }
         assertEquals(PHASE5_EXPECTED_VIEWS.size(), found,
             "Phase 6: Expected all " + PHASE5_EXPECTED_VIEWS.size() + " views to be queryable");
+      }
+    }
+  }
+
+  @Test public void testPhase6CountyQcewTables() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" PHASE 6: County-Level QCEW Data Validation");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates county-level QCEW tables:");
+    LOGGER.info("   - county_qcew: ~3,142 U.S. counties with employment/wages data");
+    LOGGER.info("   - county_wages: ~6,038 U.S. counties with average weekly wages");
+    LOGGER.info("================================================================================");
+
+    String cacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
+    String parquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
+    int startYear = Integer.parseInt(TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR") != null
+        ? TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR") : "2020");
+    int endYear = Integer.parseInt(TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR") != null
+        ? TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR") : "2024");
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        LOGGER.info("\n1. Validating county_qcew table:");
+        validatePhase2Table(stmt, "county_qcew", cacheDir, parquetDir,
+            "source=econ/type=county_qcew", "year", startYear, endYear);
+
+        LOGGER.info("\n2. Validating county_wages table:");
+        validatePhase2Table(stmt, "county_wages", cacheDir, parquetDir,
+            "source=econ/type=county_wages", "year", startYear, endYear);
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" ✅ PHASE 6 COMPLETE: County-level QCEW data validated!");
+        LOGGER.info("================================================================================");
       }
     }
   }

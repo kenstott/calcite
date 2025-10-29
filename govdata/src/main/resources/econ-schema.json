@@ -99,11 +99,12 @@
     },
     {
       "name": "county_qcew",
-      "pattern": "type=county_qcew/year=*/county_qcew.parquet",
+      "pattern": "type=county_qcew/frequency=*/year=*/county_qcew.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {"name": "type", "type": "VARCHAR"},
+          {"name": "frequency", "type": "VARCHAR"},
           {"name": "year", "type": "INTEGER"}
         ]
       },
@@ -111,11 +112,12 @@
     },
     {
       "name": "county_wages",
-      "pattern": "type=county_wages/year=*/county_wages.parquet",
+      "pattern": "type=county_wages/frequency=*/year=*/county_wages.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {"name": "type", "type": "VARCHAR"},
+          {"name": "frequency", "type": "VARCHAR"},
           {"name": "year", "type": "INTEGER"}
         ]
       },
