@@ -1381,13 +1381,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
 
     for (int year = startYear; year <= endYear; year++) {
-      String parquetPath = buildPartitionPath("county_qcew", DataFrequency.QUARTERLY, year) + "/county_qcew.parquet";
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+          "type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
 
       // Check if already exists
       if (storageProvider.exists(fullParquetPath)) {
         LOGGER.info("County QCEW data for year {} already exists - skipping", year);
-        lastFile = new File(parquetPath);
+        lastFile = new File("type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
         continue;
       }
 
@@ -1402,7 +1402,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       // Parse and convert to Parquet
       parseAndConvertQcewToParquet(zipData, fullParquetPath, year);
-      lastFile = new File(parquetPath);
+      lastFile = new File("type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
       LOGGER.info("Completed county QCEW data for year {}", year);
     }
 
@@ -2508,6 +2508,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               String[] fields = parseCsvLine(line);
 
               if (fields.length < 20) {
+                if (recordCount <= 5) {
+                  LOGGER.info("DEBUG county_qcew: Skipping malformed record {} with only {} fields", recordCount, fields.length);
+                }
                 continue; // Skip malformed records
               }
 
@@ -2517,19 +2520,35 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 String industryCode = fields[2].trim();
                 String agglvlCode = fields[3].trim();
 
+                // Log first few records for debugging
+                if (recordCount <= 5) {
+                  LOGGER.info("DEBUG county_qcew: Record {}: areaFips='{}', ownCode='{}', industryCode='{}', agglvlCode='{}'",
+                      recordCount, areaFips, ownCode, industryCode, agglvlCode);
+                }
+
                 // Filter to county-level data only (agglvl 70-78 are county aggregations)
                 // 70 = County, Total
                 // 71-78 = Various county-level industry aggregations
                 if (!agglvlCode.startsWith("7")) {
+                  if (recordCount <= 10 && !agglvlCode.isEmpty()) {
+                    LOGGER.info("DEBUG county_qcew: Skipping record {} - agglvlCode '{}' doesn't start with '7'", recordCount, agglvlCode);
+                  }
                   continue;
                 }
 
                 // Filter to actual counties (5-digit FIPS codes, not state or national)
                 if (areaFips.length() != 5 || areaFips.equals("US000")) {
+                  if (countyRecordCount < 5) {
+                    LOGGER.info("DEBUG county_qcew: Skipping record {} - areaFips '{}' is not 5 digits or is US000", recordCount, areaFips);
+                  }
                   continue;
                 }
 
                 countyRecordCount++;
+
+                if (countyRecordCount <= 5) {
+                  LOGGER.info("DEBUG county_qcew: Accepted county record {}: areaFips='{}', agglvlCode='{}'", countyRecordCount, areaFips, agglvlCode);
+                }
 
                 // Parse numeric fields (handle empty values)
                 Integer avgEstabs = parseIntOrNull(fields[13]);

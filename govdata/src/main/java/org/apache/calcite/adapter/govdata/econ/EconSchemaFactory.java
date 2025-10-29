@@ -992,6 +992,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           || tableName.equals(BlsDataDownloader.TABLE_METRO_CPI)
           || tableName.equals(BlsDataDownloader.TABLE_STATE_INDUSTRY)
           || tableName.equals(BlsDataDownloader.TABLE_STATE_WAGES)
+          || tableName.equals(BlsDataDownloader.TABLE_COUNTY_WAGES)
+          || tableName.equals(BlsDataDownloader.TABLE_COUNTY_QCEW)
           || tableName.equals(BlsDataDownloader.TABLE_METRO_INDUSTRY)
           || tableName.equals(BlsDataDownloader.TABLE_METRO_WAGES)
           || tableName.equals(BlsDataDownloader.TABLE_JOLTS_REGIONAL)
