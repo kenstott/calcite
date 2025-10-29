@@ -223,6 +223,21 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
         return true;
       }
 
+      // BLS metro_wages - raw files at source=econ/type=metro_wages/year=YYYY/
+      if (rawFilePath.contains("type=metro_wages") || rawFilePath.contains("metro_wages")) {
+        LOGGER.info("CONVERT: Routing to BLS downloader for metro_wages");
+        String correctRawPath = "source=econ/type=metro_wages/year=" + year;
+        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
+        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        LOGGER.info("CONVERT: ✅ BLS metro_wages conversion completed");
+        if (storageProvider.exists(correctedParquetPath)) {
+          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+        } else {
+          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+        }
+        return true;
+      }
+
       // Phase 3: BEA regional_income - raw files at source=econ/type=indicators/year=YYYY/regional_income.json
       if (rawFilePath.contains("regional_income")) {
         LOGGER.info("CONVERT: Routing to BEA downloader for regional_income");
