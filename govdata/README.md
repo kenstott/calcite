@@ -95,7 +95,9 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 
 ### Future Planned
 - **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters (not yet implemented)
-- **PUB**: NIH grants, NASA projects, NSF research (not yet implemented)
+- **PUB**: NIH grants, NASA projects, NSF research, PTO patents (not yet implemented)
+- **HEALTH**: FDA approvals/recalls, CDC health statistics (not yet implemented)
+- **WEATHER**: NOAA weather data, climate indicators (not yet implemented)
 
 ## 🔧 Installation
 
