@@ -167,19 +167,65 @@ Primary key: `(date, metro_area_code, supersector_code)`
 **Coverage**: 594 series (27 metros × 22 sectors)
 
 #### `metro_wages`
-Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW.
+Average weekly wages and annual pay for 27 major U.S. metropolitan areas from BLS QCEW bulk CSV files.
 
-Primary key: `(date, metro_area_code)`
+Primary key: `(year, qtr, metro_area_code)`
 
 | Column | Type | Description |
 |--------|------|-------------|
-| date | DATE | Observation date |
-| metro_area_code | VARCHAR | BLS metro area code |
+| metro_area_code | VARCHAR | BLS metro publication code (e.g., "A419" for Atlanta) |
 | metro_area_name | VARCHAR | Metro area name |
-| series_id | VARCHAR | BLS series identifier |
+| year | INTEGER | Calendar year |
+| qtr | VARCHAR | Quarter: "A" = annual average, "1"-"4" = quarterly data |
 | average_weekly_wage | DECIMAL | Average weekly wage ($) |
-| total_employment | INTEGER | Total employment count |
-| percent_change_year | DECIMAL | Year-over-year wage change |
+| average_annual_pay | DECIMAL | Average annual pay ($) |
+
+**Data Availability**: 1990-present, both annual and quarterly granularities
+
+**Data Source**: BLS QCEW bulk CSV files (~80MB annual, ~323MB quarterly per year)
+
+**Example Queries**:
+
+Get annual average wages for all metros:
+```sql
+SELECT metro_area_name, year, average_weekly_wage, average_annual_pay
+FROM metro_wages
+WHERE qtr = 'A'
+  AND year >= 2020
+ORDER BY year DESC, metro_area_name;
+```
+
+Compare quarterly wage trends for a specific metro:
+```sql
+SELECT year, qtr, average_weekly_wage,
+    LAG(average_weekly_wage) OVER (ORDER BY year, qtr) as prev_qtr_wage,
+    ROUND((average_weekly_wage - LAG(average_weekly_wage) OVER (ORDER BY year, qtr)) /
+          LAG(average_weekly_wage) OVER (ORDER BY year, qtr) * 100, 2) as pct_change
+FROM metro_wages
+WHERE metro_area_code = 'A419'  -- Atlanta
+  AND qtr IN ('1', '2', '3', '4')
+  AND year >= 2022
+ORDER BY year, qtr;
+```
+
+Find metros with highest annual wage growth:
+```sql
+WITH annual_data AS (
+    SELECT metro_area_name, year, average_annual_pay
+    FROM metro_wages
+    WHERE qtr = 'A' AND year IN (2022, 2023)
+)
+SELECT
+    cur.metro_area_name,
+    prev.average_annual_pay as pay_2022,
+    cur.average_annual_pay as pay_2023,
+    ROUND((cur.average_annual_pay - prev.average_annual_pay) / prev.average_annual_pay * 100, 2) as growth_pct
+FROM annual_data cur
+JOIN annual_data prev ON cur.metro_area_name = prev.metro_area_name
+WHERE cur.year = 2023 AND prev.year = 2022
+ORDER BY growth_pct DESC
+LIMIT 10;
+```
 
 #### `county_qcew`
 County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties.
