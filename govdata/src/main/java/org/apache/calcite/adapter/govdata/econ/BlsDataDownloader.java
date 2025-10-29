@@ -31,8 +31,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -199,6 +201,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     METRO_QCEW_AREA_CODES.put("A319", "C1258");  // Baltimore-Columbia-Towson, MD MSA
     METRO_QCEW_AREA_CODES.put("A433", "C4530");  // Tampa-St. Petersburg-Clearwater, FL MSA
     METRO_QCEW_AREA_CODES.put("A440", "C1126");  // Anchorage, AK MSA
+  }
+
+  // Metro area names (publication code -> name)
+  // Used for metro_wages table metro_name column
+  private static final Map<String, String> METRO_NAMES = new HashMap<>();
+  static {
+    METRO_NAMES.put("A100", "New York-Newark-Jersey City, NY-NJ-PA");
+    METRO_NAMES.put("A400", "Los Angeles-Long Beach-Anaheim, CA");
+    METRO_NAMES.put("A207", "Chicago-Naperville-Elgin, IL-IN");
+    METRO_NAMES.put("A425", "Houston-The Woodlands-Sugar Land, TX");
+    METRO_NAMES.put("A423", "Phoenix-Mesa-Chandler, AZ");
+    METRO_NAMES.put("A102", "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD");
+    METRO_NAMES.put("A426", "San Antonio-New Braunfels, TX");
+    METRO_NAMES.put("A421", "San Diego-Chula Vista-Carlsbad, CA");
+    METRO_NAMES.put("A127", "Dallas-Fort Worth-Arlington, TX");
+    METRO_NAMES.put("A429", "San Jose-Sunnyvale-Santa Clara, CA");
+    METRO_NAMES.put("A438", "Austin-Round Rock-San Marcos, TX");
+    METRO_NAMES.put("A420", "Jacksonville, FL");
+    METRO_NAMES.put("A103", "Boston-Cambridge-Newton, MA-NH");
+    METRO_NAMES.put("A428", "Seattle-Tacoma-Bellevue, WA");
+    METRO_NAMES.put("A427", "Denver-Aurora-Centennial, CO");
+    METRO_NAMES.put("A101", "Washington-Arlington-Alexandria, DC-VA-MD-WV");
+    METRO_NAMES.put("A211", "Detroit-Warren-Dearborn, MI");
+    METRO_NAMES.put("A104", "Cleveland-Elyria, OH");
+    METRO_NAMES.put("A212", "Minneapolis-St. Paul-Bloomington, MN-WI");
+    METRO_NAMES.put("A422", "Miami-Fort Lauderdale-West Palm Beach, FL");
+    METRO_NAMES.put("A419", "Atlanta-Sandy Springs-Roswell, GA");
+    METRO_NAMES.put("A437", "Portland-Vancouver-Hillsboro, OR-WA");
+    METRO_NAMES.put("A424", "Riverside-San Bernardino-Ontario, CA");
+    METRO_NAMES.put("A320", "St. Louis, MO-IL");
+    METRO_NAMES.put("A319", "Baltimore-Columbia-Towson, MD");
+    METRO_NAMES.put("A433", "Tampa-St. Petersburg-Clearwater, FL");
+    METRO_NAMES.put("A440", "Anchorage, AK");
   }
 
   // NAICS supersector codes for industry employment
@@ -1478,16 +1513,45 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads average weekly wages for 27 major U.S. metropolitan areas
-   * from BLS QCEW (Quarterly Census of Employment and Wages) Open Data API.
+   * from BLS QCEW (Quarterly Census of Employment and Wages) bulk CSV files.
    *
-   * <p>Note: QCEW (ENU series) data is not available through the BLS API v2.
-   * This method downloads quarterly QCEW CSV files from the Open Data API
-   * and aggregates them to annual averages for metro-level wage data.
-   * Uses agglvl_code 40 for MSA-level aggregation (Total All Ownerships).
-   * QCEW aggregation codes: 4x=MSA, 5x=State, 7x=County.
+   * <p><b>Data Source:</b>
+   * Downloads both annual and quarterly bulk CSV files from BLS:
+   * <pre>
+   * Annual:    https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip (~80MB)
+   * Quarterly: https://data.bls.gov/cew/data/files/{year}/csv/{year}_qtrly_singlefile.zip (~323MB)
+   * </pre>
    *
-   * <p>Data is fetched from: https://data.bls.gov/cew/data/api/{year}/{qtr}/area/{area_code}.csv
-   * where area_code is "C" + first 4 digits of CBSA code (e.g., C3562 for NYC).
+   * <p><b>Data Structure:</b>
+   * Each record contains:
+   * <ul>
+   *   <li>{@code metro_area_code} - Metro publication code (e.g., "A419" for Atlanta)</li>
+   *   <li>{@code metro_area_name} - Metro area name</li>
+   *   <li>{@code year} - Year of data</li>
+   *   <li>{@code qtr} - Quarter: "A" for annual average, "1"-"4" for quarterly data</li>
+   *   <li>{@code average_weekly_wage} - Average weekly wage (CSV field 14)</li>
+   *   <li>{@code average_annual_pay} - Average annual pay (CSV field 15)</li>
+   * </ul>
+   *
+   * <p><b>Cache Structure:</b>
+   * <pre>
+   * ZIP files:      source=econ/type=qcew_bulk/year={year}/{frequency}_singlefile.zip
+   * Extracted CSV:  source=econ/type=qcew_bulk/year={year}/{year}.{frequency}.singlefile.csv
+   * JSON output:    source=econ/type=metro_wages/frequency=monthly/year={year}/metro_wages.json
+   * </pre>
+   *
+   * <p><b>Coverage:</b>
+   * 27 major metropolitan areas (defined in {@code METRO_QCEW_AREA_CODES}) with both
+   * annual and quarterly data from 1990 to present.
+   *
+   * @param startYear Start year (must be >= 1990, when QCEW data begins)
+   * @param endYear End year
+   * @return Last processed File reference, or null if no data was downloaded
+   * @throws IOException If download or file operations fail
+   * @throws InterruptedException If download is interrupted
+   * @see #downloadQcewMetroWagesFromApi(int) For implementation details
+   * @see #downloadQcewBulkFile(int, String) For bulk file download logic
+   * @see #parseQcewBulkFile(String, java.util.Set) For CSV parsing and filtering logic
    */
   public File downloadMetroWages(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading metro wages from QCEW Open Data API for {}-{}", startYear, endYear);
@@ -1525,61 +1589,391 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads metro wage data from QCEW Open Data API for a specific year.
-   * Fetches quarterly data for all 27 metros and aggregates to annual averages.
+   * Downloads metro wage data from QCEW bulk CSV files for a specific year.
+   * Uses bulk download approach instead of per-metro API calls to avoid HTTP 404 errors.
+   *
+   * <p>Downloads both annual and quarterly bulk files, extracts data for all 27 metros,
+   * and returns combined records with qtr field ("A" for annual, "1"-"4" for quarters).
    *
    * @param year The year to download data for
    * @return JSON array string containing metro wage records, or null if download fails
    */
   private String downloadQcewMetroWagesFromApi(int year) throws IOException, InterruptedException {
-    List<Map<String, Object>> allMetroWages = new ArrayList<>();
-
-    LOGGER.info("Downloading QCEW metro wages from API for {} metros in year {}",
+    LOGGER.info("Downloading QCEW metro wages from bulk files for {} metros in year {}",
         METRO_QCEW_AREA_CODES.size(), year);
 
-    // Process each metro area
-    for (Map.Entry<String, String> entry : METRO_QCEW_AREA_CODES.entrySet()) {
-      String publicationCode = entry.getKey();  // e.g., "A100"
-      String qcewAreaCode = entry.getValue();   // e.g., "C3562"
-      String metroName = METRO_AREA_CODES.get(publicationCode);
+    List<Map<String, Object>> allMetroWages = new ArrayList<>();
 
-      if (metroName == null) {
-        LOGGER.warn("No metro name found for publication code: {}", publicationCode);
-        continue;
-      }
+    try {
+      // Download and extract bulk files (annual + quarterly)
+      String annualZipPath = downloadQcewBulkFile(year, "annual");
+      String annualCsvPath = extractQcewBulkFile(annualZipPath, year, "annual");
 
-      // Download and aggregate quarterly wage data
-      Integer annualAvgWage = downloadQcewQuarterlyWages(qcewAreaCode, year);
+      String qtrlyZipPath = downloadQcewBulkFile(year, "qtrly");
+      String qtrlyCsvPath = extractQcewBulkFile(qtrlyZipPath, year, "qtrly");
 
-      if (annualAvgWage != null) {
+      // Build set of C-codes to extract from bulk files
+      java.util.Set<String> metroCCodes = new java.util.HashSet<>(METRO_QCEW_AREA_CODES.values());
+
+      // Parse annual data (qtr="A")
+      List<MetroWageRecord> annualRecords = parseQcewBulkFile(annualCsvPath, metroCCodes);
+      LOGGER.info("Extracted {} annual metro wage records from bulk file", annualRecords.size());
+
+      // Parse quarterly data (qtr="1","2","3","4")
+      List<MetroWageRecord> qtrlyRecords = parseQcewBulkFile(qtrlyCsvPath, metroCCodes);
+      LOGGER.info("Extracted {} quarterly metro wage records from bulk file", qtrlyRecords.size());
+
+      // Combine annual + quarterly records and convert to JSON format
+      List<MetroWageRecord> allRecords = new ArrayList<>();
+      allRecords.addAll(annualRecords);
+      allRecords.addAll(qtrlyRecords);
+
+      for (MetroWageRecord record : allRecords) {
         Map<String, Object> wageData = new HashMap<>();
-        wageData.put("metro_area_code", publicationCode);
-        wageData.put("metro_area_name", metroName);
-        wageData.put("average_weekly_wage", annualAvgWage);
-        wageData.put("year", year);
+        wageData.put("metro_area_code", record.metroCode);
+        wageData.put("metro_area_name", record.metroName);
+        wageData.put("year", record.year);
+        wageData.put("qtr", record.qtr);
+
+        if (record.avgWklyWage != null) {
+          wageData.put("average_weekly_wage", record.avgWklyWage);
+        }
+        if (record.avgAnnualPay != null) {
+          wageData.put("average_annual_pay", record.avgAnnualPay);
+        }
 
         allMetroWages.add(wageData);
-        LOGGER.debug("Successfully downloaded wage data for {}: ${}/week", metroName, annualAvgWage);
-      } else {
-        LOGGER.warn("Failed to download wage data for {} ({})", metroName, qcewAreaCode);
+      }
+
+      if (allMetroWages.isEmpty()) {
+        LOGGER.error("No metro wage data extracted from bulk files for year {}", year);
+        return null;
+      }
+
+      LOGGER.info("Successfully processed {} metro wage records (annual + quarterly) for year {}",
+          allMetroWages.size(), year);
+
+      // Convert to JSON array format
+      return MAPPER.writeValueAsString(allMetroWages);
+
+    } catch (Exception e) {
+      LOGGER.error("Failed to download/parse metro wages from bulk files for year {}: {}",
+          year, e.getMessage(), e);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads QCEW bulk CSV file from BLS for a given year and frequency.
+   *
+   * <p>Downloads bulk QCEW files containing all metro area wage data in a single ZIP file.
+   * This replaces per-metro API calls which return HTTP 404 errors for metro C-codes.
+   *
+   * <p>Bulk files are cached in: source=econ/type=qcew_bulk/{year}/{frequency}_singlefile.zip
+   *
+   * <p>File sizes:
+   * - Annual: ~80MB compressed → ~500MB uncompressed CSV
+   * - Quarterly: ~323MB compressed → larger uncompressed CSV
+   *
+   * @param year Year to download (e.g., 2023)
+   * @param frequency Frequency type: "annual" or "qtrly"
+   * @return Path to cached ZIP file
+   * @throws IOException if download fails
+   */
+  String downloadQcewBulkFile(int year, String frequency) throws IOException {
+    // Validate frequency parameter
+    if (!"annual".equals(frequency) && !"qtrly".equals(frequency)) {
+      throw new IllegalArgumentException("Frequency must be 'annual' or 'qtrly', got: " + frequency);
+    }
+
+    // Build cache path: source=econ/type=qcew_bulk/{year}/{frequency}_singlefile.zip
+    String relativePath = String.format("source=econ/type=qcew_bulk/year=%d/%s_singlefile.zip", year, frequency);
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+
+    // Check if file already cached
+    if (cacheStorageProvider.exists(fullPath)) {
+      LOGGER.info("Using cached QCEW bulk {} file for {}: {}", frequency, year, relativePath);
+      return fullPath;
+    }
+
+    // Download bulk file from BLS
+    String url = String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_%s_singlefile.zip",
+                                year, year, frequency);
+
+    LOGGER.info("Downloading QCEW bulk {} file for {} (~{}MB): {}",
+                frequency, year, "annual".equals(frequency) ? "80" : "323", url);
+
+    try {
+      // Download file (downloadFile() adds required User-Agent header for data.bls.gov)
+      byte[] zipData = downloadFile(url);
+
+      if (zipData == null) {
+        throw new IOException("Failed to download QCEW bulk file: " + url);
+      }
+
+      // Write to cache
+      cacheStorageProvider.writeFile(fullPath, zipData);
+
+      LOGGER.info("Downloaded and cached QCEW bulk {} file for {}: {} bytes",
+                  frequency, year, zipData.length);
+
+      return fullPath;
+
+    } catch (IOException e) {
+      LOGGER.error("Error downloading QCEW bulk {} file for {}: {}", frequency, year, e.getMessage());
+      throw new IOException("Failed to download QCEW bulk file for year " + year + ": " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Extracts QCEW bulk ZIP file to cached CSV file.
+   *
+   * <p>Extracts the single CSV file contained in the QCEW bulk ZIP file to a cached location
+   * to avoid re-extraction on subsequent runs. For large files (500MB+ uncompressed), this
+   * disk-based caching is more efficient than in-memory processing.
+   *
+   * <p>Extracted CSV cached at: source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
+   *
+   * @param zipFilePath Path to cached ZIP file (from downloadQcewBulkFile)
+   * @param year Year of the data
+   * @param frequency Frequency type: "annual" or "qtrly"
+   * @return Path to extracted CSV file
+   * @throws IOException if extraction fails
+   */
+  String extractQcewBulkFile(String zipFilePath, int year, String frequency) throws IOException {
+    // Build cache path for extracted CSV: source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
+    String csvRelativePath = String.format("source=econ/type=qcew_bulk/year=%d/%d.%s.singlefile.csv",
+                                            year, year, frequency);
+    String csvFullPath = cacheStorageProvider.resolvePath(cacheDirectory, csvRelativePath);
+
+    // Check if CSV already extracted
+    if (cacheStorageProvider.exists(csvFullPath)) {
+      LOGGER.info("Using cached extracted QCEW {} CSV for {}: {}", frequency, year, csvRelativePath);
+      return csvFullPath;
+    }
+
+    LOGGER.info("Extracting QCEW bulk {} file for {} to cache", frequency, year);
+
+    try {
+      // Read ZIP file from cache using InputStream
+      byte[] zipData;
+      try (InputStream zipInputStream = cacheStorageProvider.openInputStream(zipFilePath);
+           ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+
+        byte[] readBuffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = zipInputStream.read(readBuffer)) != -1) {
+          buffer.write(readBuffer, 0, bytesRead);
+        }
+        zipData = buffer.toByteArray();
+      }
+
+      if (zipData == null || zipData.length == 0) {
+        throw new IOException("ZIP file is empty or not found: " + zipFilePath);
+      }
+
+      // Extract the single CSV file from ZIP
+      // The ZIP contains exactly one file: {year}.{frequency}.singlefile.csv
+      try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+        ZipEntry entry = zis.getNextEntry();
+
+        if (entry == null) {
+          throw new IOException("ZIP file contains no entries: " + zipFilePath);
+        }
+
+        LOGGER.debug("Extracting ZIP entry: {} (compressed: {} bytes, uncompressed: {} bytes)",
+                     entry.getName(), entry.getCompressedSize(), entry.getSize());
+
+        // Read CSV data from ZIP entry
+        // Note: For large files, we read in chunks to avoid memory issues
+        ByteArrayOutputStream csvOutput = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytesRead = 0;
+
+        while ((bytesRead = zis.read(buffer)) != -1) {
+          csvOutput.write(buffer, 0, bytesRead);
+          totalBytesRead += bytesRead;
+
+          // Log progress every 50MB
+          if (totalBytesRead % (50 * 1024 * 1024) == 0) {
+            LOGGER.debug("Extracted {} MB...", totalBytesRead / (1024 * 1024));
+          }
+        }
+
+        byte[] csvData = csvOutput.toByteArray();
+
+        // Write extracted CSV to cache
+        cacheStorageProvider.writeFile(csvFullPath, csvData);
+
+        LOGGER.info("Extracted and cached QCEW {} CSV for {}: {} bytes ({}MB)",
+                    frequency, year, csvData.length, csvData.length / (1024 * 1024));
+
+        return csvFullPath;
+
+      } catch (IOException e) {
+        LOGGER.error("Error extracting ZIP file {}: {}", zipFilePath, e.getMessage());
+        throw new IOException("Failed to extract QCEW bulk file: " + e.getMessage(), e);
+      }
+
+    } catch (IOException e) {
+      LOGGER.error("Error reading ZIP file {}: {}", zipFilePath, e.getMessage());
+      throw new IOException("Failed to read QCEW bulk ZIP file: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Data class for holding metro wage records extracted from QCEW bulk files.
+   */
+  static class MetroWageRecord {
+    final String metroCode;      // Publication code (e.g., "A419" for Atlanta)
+    final String metroName;      // Metro area name
+    final int year;              // Year
+    final String qtr;            // Quarter: "1", "2", "3", "4", or "A" for annual
+    final Integer avgWklyWage;   // Average weekly wage (field 14)
+    final Integer avgAnnualPay;  // Average annual pay (field 15)
+
+    MetroWageRecord(String metroCode, String metroName, int year, String qtr,
+                    Integer avgWklyWage, Integer avgAnnualPay) {
+      this.metroCode = metroCode;
+      this.metroName = metroName;
+      this.year = year;
+      this.qtr = qtr;
+      this.avgWklyWage = avgWklyWage;
+      this.avgAnnualPay = avgAnnualPay;
+    }
+  }
+
+  /**
+   * Parses QCEW bulk CSV file and extracts metro wage data for specified metro areas.
+   *
+   * <p>Bulk CSV files contain ALL metro areas. This method filters rows for the specified
+   * metro C-codes and extracts wage data. Uses stream processing to handle large files (500MB+).
+   *
+   * <p>Filtering criteria:
+   * - area_fips IN metroC-codes (e.g., "C1206", "C1242", "C3890")
+   * - own_code = "0" (total, all ownership)
+   * - industry_code = "10" (total, all industries)
+   * - agglvl_code = "80" (MSA level, not "40" which is county)
+   *
+   * <p>Extracts fields:
+   * - Field 6: year
+   * - Field 7: qtr ("1", "2", "3", "4", or "A" for annual)
+   * - Field 14: annual_avg_wkly_wage
+   * - Field 15: avg_annual_pay
+   *
+   * @param csvFilePath Path to extracted CSV file (from extractQcewBulkFile)
+   * @param metroC-codes Set of QCEW C-codes to extract (e.g., {"C1206", "C1242", "C3890"})
+   * @return List of metro wage records extracted from the CSV
+   * @throws IOException if reading or parsing fails
+   */
+  List<MetroWageRecord> parseQcewBulkFile(String csvFilePath, java.util.Set<String> metroCCodes)
+      throws IOException {
+    List<MetroWageRecord> records = new ArrayList<>();
+
+    LOGGER.info("Parsing QCEW bulk CSV file for {} metro areas: {}", metroCCodes.size(), csvFilePath);
+
+    long linesProcessed = 0;
+    long matchedRows = 0;
+
+    try (InputStream csvInputStream = cacheStorageProvider.openInputStream(csvFilePath);
+         BufferedReader reader = new BufferedReader(
+             new InputStreamReader(csvInputStream, StandardCharsets.UTF_8))) {
+
+      String line;
+      boolean isHeader = true;
+
+      while ((line = reader.readLine()) != null) {
+        linesProcessed++;
+
+        // Log progress every 100K lines
+        if (linesProcessed % 100000 == 0) {
+          LOGGER.debug("Processed {} lines, found {} matching metro records", linesProcessed, matchedRows);
+        }
+
+        if (isHeader) {
+          isHeader = false;
+          continue;
+        }
+
+        String[] fields = parseCsvLine(line);
+        if (fields.length < 16) continue;  // Need at least 16 fields
+
+        String areaFips = fields[0].trim();
+        String ownCode = fields[1].trim();
+        String industryCode = fields[2].trim();
+        String agglvlCode = fields[3].trim();
+
+        // Filter: MSA level (80), all ownership (0), total industry (10), and metro C-code
+        if (!agglvlCode.equals("80") || !ownCode.equals("0") || !industryCode.equals("10")) {
+          continue;
+        }
+
+        if (!metroCCodes.contains(areaFips)) {
+          continue;
+        }
+
+        // Found a matching metro record - extract fields
+        matchedRows++;
+
+        try {
+          int year = Integer.parseInt(fields[5].trim());
+          String qtr = fields[6].trim();
+          Integer avgWklyWage = parseIntOrNull(fields[14]);
+          Integer avgAnnualPay = parseIntOrNull(fields[15]);
+
+          // Map C-code to publication code and metro name
+          String publicationCode = getMetroPublicationCode(areaFips);
+          String metroName = getMetroName(publicationCode);
+
+          if (publicationCode != null && metroName != null) {
+            MetroWageRecord record = new MetroWageRecord(
+                publicationCode, metroName, year, qtr, avgWklyWage, avgAnnualPay);
+            records.add(record);
+          } else {
+            LOGGER.warn("Could not map C-code {} to publication code/name", areaFips);
+          }
+
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Error parsing numeric fields in line {}: {}", linesProcessed, e.getMessage());
+        }
+      }
+
+      LOGGER.info("Completed parsing QCEW bulk CSV: processed {} lines, found {} metro wage records",
+                  linesProcessed, matchedRows);
+
+    } catch (IOException e) {
+      LOGGER.error("Error reading CSV file {}: {}", csvFilePath, e.getMessage());
+      throw new IOException("Failed to parse QCEW bulk CSV file: " + e.getMessage(), e);
+    }
+
+    return records;
+  }
+
+  /**
+   * Maps a QCEW C-code to the metro publication code.
+   * Uses reverse lookup in METRO_QCEW_AREA_CODES map.
+   *
+   * @param cCode QCEW C-code (e.g., "C1206")
+   * @return Publication code (e.g., "A419"), or null if not found
+   */
+  private String getMetroPublicationCode(String cCode) {
+    for (Map.Entry<String, String> entry : METRO_QCEW_AREA_CODES.entrySet()) {
+      if (entry.getValue().equals(cCode)) {
+        return entry.getKey();
       }
     }
+    return null;
+  }
 
-    if (allMetroWages.isEmpty()) {
-      LOGGER.error("No metro wage data downloaded for year {}", year);
-      return null;
-    }
-
-    LOGGER.info("Successfully downloaded wage data for {} of {} metros",
-        allMetroWages.size(), METRO_QCEW_AREA_CODES.size());
-
-    // Convert to JSON array format
-    try {
-      return MAPPER.writeValueAsString(allMetroWages);
-    } catch (Exception e) {
-      LOGGER.error("Failed to serialize metro wages to JSON: {}", e.getMessage());
-      return null;
-    }
+  /**
+   * Gets the metro area name for a publication code.
+   *
+   * @param publicationCode Metro publication code (e.g., "A419")
+   * @return Metro area name, or null if not found
+   */
+  private String getMetroName(String publicationCode) {
+    return METRO_NAMES.get(publicationCode);
   }
 
   /**
@@ -2401,8 +2795,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads a file from a URL and returns the bytes.
    *
-   * <p>For downloads from download.bls.gov (BLS FTP site), uses browser-like headers
-   * to bypass Akamai bot detection. For other URLs, uses default Java HTTP client.
+   * <p>For downloads from BLS sites (download.bls.gov and data.bls.gov), uses browser-like
+   * headers to bypass bot detection. For other URLs, uses default Java HTTP client.
    *
    * @param url URL to download from
    * @return File contents as byte array
@@ -2414,9 +2808,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         .timeout(Duration.ofMinutes(10)) // Large files may take time
         .GET();
 
-    // BLS FTP site (download.bls.gov) blocks default Java HTTP client via Akamai
+    // BLS sites (download.bls.gov and data.bls.gov) block default Java HTTP client
     // Add browser-like headers to bypass bot detection
-    if (url.contains("download.bls.gov")) {
+    if (url.contains("download.bls.gov") || url.contains("data.bls.gov")) {
       requestBuilder
           .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
           .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
