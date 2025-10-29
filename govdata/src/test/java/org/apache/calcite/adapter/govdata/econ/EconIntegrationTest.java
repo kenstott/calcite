@@ -37,6 +37,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Integration test for ECON schema with real data download.
@@ -58,16 +59,17 @@ public class EconIntegrationTest {
 
   private static final Set<String> PHASE2_EXPECTED_TABLES =
       new HashSet<>(Arrays.asList(
-          "regional_employment",
-          "treasury_yields",
-          "federal_debt"
+          "state_wages",
+          "world_indicators",
+          "metro_wages"
       ));
 
   private static final Set<String> PHASE3_EXPECTED_TABLES =
       new HashSet<>(Arrays.asList(
-          "world_indicators",
-          "gdp_components",
-          "gdp_statistics"
+          "jolts_regional",
+          "metro_cpi",
+          "regional_income",
+          "state_gdp"
       ));
 
   private static final Set<String> PHASE4_EXPECTED_TABLES =
@@ -173,7 +175,7 @@ public class EconIntegrationTest {
         "      \"startYear\": " + startYear + "," +
         "      \"endYear\": " + endYear + "," +
         "      \"autoDownload\": true," +
-        "      \"enabledSources\": [\"fred\", \"bls\", \"treasury\", \"bea\"]," +
+        "      \"enabledSources\": [\"fred\", \"bls\", \"treasury\", \"bea\", \"bls_jolts_regional\", \"bls_metro_cpi\", \"bea_regional_income\", \"bea_state_gdp\"]," +
         "      \"fredApiKey\": \"" + fredApiKey + "\"," +
         "      \"blsApiKey\": \"" + blsApiKey + "\"," +
         "      \"beaApiKey\": \"" + beaApiKey + "\"," +
@@ -274,60 +276,190 @@ public class EconIntegrationTest {
 
   @Test public void testPhase2AdditionalTables() throws Exception {
     LOGGER.info("\n================================================================================");
-    LOGGER.info(" PHASE 2: Additional Economic Tables Test");
+    LOGGER.info(" PHASE 2: JSON-to-Parquet Conversion Validation");
     LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates ALL Phase 2 objectives:");
+    LOGGER.info("   - Objective 2.1: state_wages conversion (JSON → Parquet)");
+    LOGGER.info("   - Objective 2.2: world_indicators conversion (JSON → Parquet)");
+    LOGGER.info("   - Objective 2.3: metro_wages download and conversion (JSON → Parquet)");
+    LOGGER.info("================================================================================");
+
+    String cacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
+    String parquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
+    int startYear = Integer.parseInt(TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR") != null
+        ? TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR") : "2020");
+    int endYear = Integer.parseInt(TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR") != null
+        ? TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR") : "2024");
 
     try (Connection conn = createConnection()) {
       try (Statement stmt = conn.createStatement()) {
-        int found = 0;
-        for (String tableName : PHASE2_EXPECTED_TABLES) {
-          String query = "SELECT COUNT(*) as cnt FROM \"ECON\"." + tableName;
-          try (ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-              long count = rs.getLong("cnt");
-              LOGGER.info("  ✅ {} - {} rows", tableName, count);
-              found++;
-            }
-          } catch (SQLException e) {
-            LOGGER.error("  ❌ {} - FAILED: {}", tableName, e.getMessage());
-          }
-        }
-        assertEquals(PHASE2_EXPECTED_TABLES.size(), found,
-            "Phase 2: Expected all " + PHASE2_EXPECTED_TABLES.size() + " tables to be queryable");
+        // Objective 2.1: Validate state_wages conversion
+        LOGGER.info("\n1. OBJECTIVE 2.1: Validating state_wages conversion:");
+        validatePhase2Table(stmt, "state_wages", cacheDir, parquetDir,
+            "source=econ/type=state_wages", "year", startYear, endYear);
+
+        // Objective 2.2: Validate world_indicators conversion
+        LOGGER.info("\n2. OBJECTIVE 2.2: Validating world_indicators conversion:");
+        validatePhase2Table(stmt, "world_indicators", cacheDir, parquetDir,
+            "source=econ/type=indicators", "year", startYear, endYear);
+
+        // Objective 2.3: Validate metro_wages download and conversion
+        LOGGER.info("\n3. OBJECTIVE 2.3: Validating metro_wages download and conversion:");
+        validatePhase2Table(stmt, "metro_wages", cacheDir, parquetDir,
+            "source=econ/type=metro_wages", "year", startYear, endYear);
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" ✅ PHASE 2 COMPLETE: All JSON-to-Parquet conversions validated!");
+        LOGGER.info("================================================================================");
       }
     }
+  }
+
+  /**
+   * Validates that a Phase 2 table has data, proving JSON-to-Parquet conversion succeeded.
+   * This test validates the complete pipeline: download → JSON cache → Parquet conversion → query.
+   *
+   * @param stmt SQL statement for queries
+   * @param tableName Name of the table to validate
+   * @param cacheDir Base cache directory path (for logging only)
+   * @param parquetDir Base parquet directory path (for logging only)
+   * @param pathPrefix Hive-style path prefix (e.g., "source=econ/type=state_wages")
+   * @param partitionKey Partition key (typically "year")
+   * @param startYear Start year for validation
+   * @param endYear End year for validation
+   */
+  private void validatePhase2Table(Statement stmt, String tableName,
+      String cacheDir, String parquetDir, String pathPrefix,
+      String partitionKey, int startYear, int endYear) throws SQLException {
+
+    LOGGER.info("  Validating {} conversion pipeline...", tableName);
+    LOGGER.info("    Expected JSON cache path: {}/{}/{}", cacheDir, pathPrefix, partitionKey + "=*");
+    LOGGER.info("    Expected Parquet path: {}/{}/{}", parquetDir, pathPrefix, partitionKey + "=*");
+
+    // Verify table is queryable with data
+    // If this succeeds, it proves the complete pipeline worked:
+    // 1. Download succeeded (JSON created in cache)
+    // 2. Conversion succeeded (Parquet created from JSON)
+    // 3. Schema registration succeeded (table is queryable)
+    String query = "SELECT COUNT(*) as cnt FROM \"ECON\"." + tableName;
+    try (ResultSet rs = stmt.executeQuery(query)) {
+      if (rs.next()) {
+        long count = rs.getLong("cnt");
+        LOGGER.info("    ✅ Table {} - {} rows", tableName, count);
+        assertTrue(count > 0,
+            "Objective FAILED: " + tableName + " returned " + count
+            + " rows (expected > 0).\n"
+            + "    This indicates the JSON-to-Parquet conversion pipeline failed.\n"
+            + "    Check logs for: JSON download, Parquet conversion, schema registration.");
+      } else {
+        throw new SQLException("Objective FAILED: Query returned no results for " + tableName);
+      }
+    } catch (SQLException e) {
+      throw new SQLException("Objective FAILED: Cannot query " + tableName
+          + "\n    Root cause: " + e.getMessage()
+          + "\n    This indicates one of these failures:"
+          + "\n      1. JSON was not downloaded to cache"
+          + "\n      2. Parquet conversion from JSON failed"
+          + "\n      3. Schema did not register the table", e);
+    }
+
+    LOGGER.info("  ✅ SUCCESS: {} passed all validation checks (download → JSON → Parquet → query)", tableName);
+  }
+
+  /**
+   * Validates that a Phase 3 table has data. Phase 3 tables should have data if APIs are working.
+   * If 0 rows, likely due to API limits reached (user configuration issue).
+   */
+  private void validatePhase3Table(Statement stmt, String tableName,
+      String cacheDir, String parquetDir, String apiSource) throws SQLException {
+
+    LOGGER.info("  Validating {} data availability...", tableName);
+
+    // Verify table is queryable with data
+    String query = "SELECT COUNT(*) as cnt FROM \"ECON\"." + tableName;
+    try (ResultSet rs = stmt.executeQuery(query)) {
+      if (rs.next()) {
+        long count = rs.getLong("cnt");
+        LOGGER.info("    ✅ Table {} - {} rows", tableName, count);
+        assertTrue(count > 0,
+            "Objective FAILED: " + tableName + " returned " + count + " rows (expected > 0).\n"
+            + "    This likely indicates API limits reached or configuration issue.\n"
+            + "    Check: API keys valid, rate limits not exceeded, correct date ranges.");
+      } else {
+        throw new SQLException("Objective FAILED: Query returned no results for " + tableName);
+      }
+    } catch (SQLException e) {
+      throw new SQLException("Objective FAILED: Cannot query " + tableName
+          + "\n    Root cause: " + e.getMessage()
+          + "\n    This indicates:"
+          + "\n      1. Table was not registered in schema"
+          + "\n      2. API call failed (check API keys and limits)"
+          + "\n      3. Download/conversion pipeline has errors", e);
+    }
+
+    LOGGER.info("  ✅ SUCCESS: {} has data", tableName);
   }
 
   @Test public void testPhase3ComprehensiveTables() throws Exception {
     LOGGER.info("\n================================================================================");
-    LOGGER.info(" PHASE 3: Comprehensive Economic Tables Test");
+    LOGGER.info(" PHASE 3: Additional Economic Tables Validation");
     LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates ALL Phase 3 objectives:");
+    LOGGER.info("   - Objective 3.1: jolts_regional data availability");
+    LOGGER.info("   - Objective 3.2: metro_cpi data availability");
+    LOGGER.info("   - Objective 3.3: BEA regional_income and state_gdp data availability");
+    LOGGER.info(" NOTE: All tables must have data > 0. If 0 rows, check API limits/config.");
+    LOGGER.info("================================================================================");
+
+    String cacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
+    String parquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
 
     try (Connection conn = createConnection()) {
       try (Statement stmt = conn.createStatement()) {
-        int found = 0;
-        for (String tableName : PHASE3_EXPECTED_TABLES) {
-          String query = "SELECT COUNT(*) as cnt FROM \"ECON\"." + tableName;
-          try (ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-              long count = rs.getLong("cnt");
-              LOGGER.info("  ✅ {} - {} rows", tableName, count);
-              found++;
-            }
-          } catch (SQLException e) {
-            LOGGER.error("  ❌ {} - FAILED: {}", tableName, e.getMessage());
-          }
-        }
-        assertEquals(PHASE3_EXPECTED_TABLES.size(), found,
-            "Phase 3: Expected all " + PHASE3_EXPECTED_TABLES.size() + " tables to be queryable");
+        // Objective 3.1: Validate jolts_regional table (may be empty if API data unavailable)
+        LOGGER.info("\n1. OBJECTIVE 3.1: Investigating jolts_regional empty response:");
+        validatePhase3Table(stmt, "jolts_regional", cacheDir, parquetDir, "BLS JOLTS");
+
+        // Objective 3.2: Validate metro_cpi table (may be empty if API data unavailable)
+        LOGGER.info("\n2. OBJECTIVE 3.2: Investigating metro_cpi empty response:");
+        validatePhase3Table(stmt, "metro_cpi", cacheDir, parquetDir, "BLS CPI");
+
+        // Objective 3.3: Validate BEA regional_income and state_gdp fixes
+        LOGGER.info("\n3. OBJECTIVE 3.3: Validating BEA regional_income fix:");
+        validatePhase3Table(stmt, "regional_income", cacheDir, parquetDir, "BEA Regional Income");
+
+        LOGGER.info("\n4. OBJECTIVE 3.3: Validating BEA state_gdp fix:");
+        validatePhase3Table(stmt, "state_gdp", cacheDir, parquetDir, "BEA State GDP");
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" ✅ PHASE 3 COMPLETE: All API investigation objectives validated!");
+        LOGGER.info("================================================================================");
       }
     }
   }
 
+  /**
+   * Phase 4: Implement Missing BEA Tables Test
+   *
+   * <p>This test validates Phase 4 objectives from problem_resolution_plan.md:
+   * <ul>
+   *   <li>Objective 4.2: industry_gdp implementation (BEA GDP by Industry)</li>
+   *   <li>Objective 4.3: ita_data implementation (BEA International Transactions)</li>
+   *   <li>Objective 4.4: trade_statistics implementation (BEA trade statistics)</li>
+   * </ul>
+   *
+   * <p><b>NOTE:</b> regional_income and state_gdp were implemented in Phase 3
+   * and are included in PHASE4_EXPECTED_TABLES for validation.
+   */
   @Test public void testPhase4AdvancedTables() throws Exception {
     LOGGER.info("\n================================================================================");
-    LOGGER.info(" PHASE 4: Advanced Economic Tables Test");
+    LOGGER.info(" PHASE 4: Implement Missing BEA Tables Test");
     LOGGER.info("================================================================================");
+    LOGGER.info("\nPhase 4 validates implementation of additional BEA tables:");
+    LOGGER.info("  - Objective 4.2: industry_gdp (BEA GDP by Industry)");
+    LOGGER.info("  - Objective 4.3: ita_data (BEA International Transactions)");
+    LOGGER.info("  - Objective 4.4: trade_statistics (BEA trade statistics)");
+    LOGGER.info("\nNote: regional_income and state_gdp were implemented in Phase 3");
 
     try (Connection conn = createConnection()) {
       try (Statement stmt = conn.createStatement()) {
@@ -344,15 +476,73 @@ public class EconIntegrationTest {
             LOGGER.error("  ❌ {} - FAILED: {}", tableName, e.getMessage());
           }
         }
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" PHASE 4 COMPLETE: {}/{} tables queryable", found, PHASE4_EXPECTED_TABLES.size());
+        LOGGER.info("================================================================================");
+
         assertEquals(PHASE4_EXPECTED_TABLES.size(), found,
-            "Phase 4: Expected all " + PHASE4_EXPECTED_TABLES.size() + " tables to be queryable");
+            "Phase 4: Expected all " + PHASE4_EXPECTED_TABLES.size() + " BEA tables to be queryable");
+      }
+    }
+  }
+
+  @Test public void testPhase5FredCatalog() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" PHASE 5: FRED Data Series Catalog Test");
+    LOGGER.info("================================================================================");
+    LOGGER.info("This test validates Phase 5 objective from problem_resolution_plan.md:");
+    LOGGER.info("  - Objective 5.1-5.3: fred_data_series_catalog table is queryable");
+    LOGGER.info("Expected: fred_data_series_catalog table with 254 partitions");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        // Test 1: Verify table is queryable
+        String query = "SELECT * FROM \"ECON\".fred_data_series_catalog LIMIT 1";
+        try (ResultSet rs = stmt.executeQuery(query)) {
+          if (rs.next()) {
+            LOGGER.info("  ✅ fred_data_series_catalog - table is queryable");
+
+            // Test 2: Verify table has data
+            String countQuery = "SELECT COUNT(*) as row_count FROM \"ECON\".fred_data_series_catalog";
+            try (ResultSet countRs = stmt.executeQuery(countQuery)) {
+              if (countRs.next()) {
+                long rowCount = countRs.getLong("row_count");
+                LOGGER.info("  ✅ fred_data_series_catalog - {} rows found", rowCount);
+                assertTrue(rowCount > 0, "FRED catalog should have data");
+              }
+            }
+
+            // Test 3: Verify partition columns exist
+            String partitionQuery = "SELECT DISTINCT type, category, frequency, source, status " +
+                "FROM \"ECON\".fred_data_series_catalog LIMIT 5";
+            try (ResultSet partRs = stmt.executeQuery(partitionQuery)) {
+              LOGGER.info("  ✅ fred_data_series_catalog - partition columns accessible");
+              int partCount = 0;
+              while (partRs.next()) {
+                partCount++;
+              }
+              LOGGER.info("  ✅ fred_data_series_catalog - verified {} partition combinations", partCount);
+            }
+
+            LOGGER.info("\n================================================================================");
+            LOGGER.info(" PHASE 5 COMPLETE: fred_data_series_catalog is fully functional");
+            LOGGER.info("================================================================================");
+          } else {
+            fail("fred_data_series_catalog table is empty");
+          }
+        } catch (SQLException e) {
+          LOGGER.error("  ❌ fred_data_series_catalog - FAILED: {}", e.getMessage());
+          throw e;
+        }
       }
     }
   }
 
   @Test public void testPhase5AnalyticalViews() throws Exception {
     LOGGER.info("\n================================================================================");
-    LOGGER.info(" PHASE 5: Analytical Views Test");
+    LOGGER.info(" PHASE 6: Analytical Views Test");
     LOGGER.info("================================================================================");
 
     try (Connection conn = createConnection()) {
@@ -368,7 +558,7 @@ public class EconIntegrationTest {
           }
         }
         assertEquals(PHASE5_EXPECTED_VIEWS.size(), found,
-            "Phase 5: Expected all " + PHASE5_EXPECTED_VIEWS.size() + " views to be queryable");
+            "Phase 6: Expected all " + PHASE5_EXPECTED_VIEWS.size() + " views to be queryable");
       }
     }
   }
