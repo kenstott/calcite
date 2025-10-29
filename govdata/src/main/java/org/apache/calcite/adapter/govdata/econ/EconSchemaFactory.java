@@ -206,7 +206,29 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Set the directory for FileSchemaFactory to use
     mutableOperand.put("directory", econParquetDir);
-    mutableOperand.put("partitionedTables", loadTableDefinitions());
+
+    // Separate table definitions into partitioned tables and views
+    List<Map<String, Object>> allTables = loadTableDefinitions();
+    List<Map<String, Object>> partitionedTables = new ArrayList<>();
+    List<Map<String, Object>> regularTables = new ArrayList<>();
+
+    for (Map<String, Object> table : allTables) {
+      String tableType = (String) table.get("type");
+      if ("view".equals(tableType)) {
+        // This is a view definition - add to regular tables
+        regularTables.add(table);
+        LOGGER.debug("Adding view to tables array: {}", table.get("name"));
+      } else {
+        // This is a partitioned table - add to partitioned tables
+        partitionedTables.add(table);
+      }
+    }
+
+    mutableOperand.put("partitionedTables", partitionedTables);
+    if (!regularTables.isEmpty()) {
+      mutableOperand.put("views", regularTables);
+      LOGGER.info("Added {} views to 'views' operand for FileSchema", regularTables.size());
+    }
 
     // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
     if (operand.containsKey("executionEngine")) {
@@ -556,6 +578,105 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("BEA data download completed");
       } catch (Exception e) {
         LOGGER.error("Error downloading BEA data", e);
+      }
+    }
+
+    // Phase 3: Optional BLS data sources (jolts_regional, metro_cpi)
+    // These are downloaded separately to allow fine-grained control
+    if (enabledSources.contains("bls_jolts_regional") && blsApiKey != null && !blsApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Phase 3: Downloading optional BLS jolts_regional data");
+        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+        blsDownloader.downloadJoltsRegional(startYear, endYear);
+        LOGGER.debug("Phase 3: jolts_regional download completed");
+
+        // Convert jolts_regional to parquet for each year
+        for (int year = startYear; year <= endYear; year++) {
+          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=jolts_regional/year=" + year);
+          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/year=" + year + "/jolts_regional.parquet");
+          String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
+            blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
+            cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
+          }
+        }
+        LOGGER.debug("Phase 3: jolts_regional conversion completed");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading Phase 3 jolts_regional data", e);
+      }
+    }
+
+    if (enabledSources.contains("bls_metro_cpi") && blsApiKey != null && !blsApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Phase 3: Downloading optional BLS metro_cpi data");
+        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+        blsDownloader.downloadMetroCpi(startYear, endYear);
+        LOGGER.debug("Phase 3: metro_cpi download completed");
+
+        // Convert metro CPI to parquet for each year
+        for (int year = startYear; year <= endYear; year++) {
+          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=cpi_metro/year=" + year);
+          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_metro/year=" + year + "/metro_cpi.parquet");
+          String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
+            blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
+            cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
+          }
+        }
+        LOGGER.debug("Phase 3: metro_cpi conversion completed");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading Phase 3 metro_cpi data", e);
+      }
+    }
+
+    // Phase 3: Optional BEA data sources (regional_income, state_gdp)
+    if (enabledSources.contains("bea_regional_income") && beaApiKey != null && !beaApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Phase 3: Downloading optional BEA regional_income data");
+        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest);
+        for (int year = startYear; year <= endYear; year++) {
+          beaDownloader.downloadRegionalIncomeForYear(year);
+        }
+        LOGGER.debug("Phase 3: regional_income download completed");
+
+        // Convert regional income to parquet for each year
+        for (int year = startYear; year <= endYear; year++) {
+          String cacheIndicatorsYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
+          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "regional_income.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_income", year, regionalIncomeRawPath, regionalIncomeParquetPath)) {
+            beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
+            cacheManifest.markParquetConverted("regional_income", year, null, regionalIncomeParquetPath);
+          }
+        }
+        LOGGER.debug("Phase 3: regional_income conversion completed");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading Phase 3 regional_income data", e);
+      }
+    }
+
+    if (enabledSources.contains("bea_state_gdp") && beaApiKey != null && !beaApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Phase 3: Downloading optional BEA state_gdp data");
+        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest);
+        for (int year = startYear; year <= endYear; year++) {
+          beaDownloader.downloadStateGdpForYear(year);
+        }
+        LOGGER.debug("Phase 3: state_gdp download completed");
+
+        // Convert State GDP data to parquet for each year
+        for (int year = startYear; year <= endYear; year++) {
+          String cacheIndicatorsYearPath = cacheStorageProvider.resolvePath(cacheDir, "source=econ/type=indicators/year=" + year);
+          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
+          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "state_gdp.json");
+          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_gdp", year, stateGdpRawPath, stateGdpParquetPath)) {
+            beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
+            cacheManifest.markParquetConverted("state_gdp", year, null, stateGdpParquetPath);
+          }
+        }
+        LOGGER.debug("Phase 3: state_gdp conversion completed");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading Phase 3 state_gdp data", e);
       }
     }
 
