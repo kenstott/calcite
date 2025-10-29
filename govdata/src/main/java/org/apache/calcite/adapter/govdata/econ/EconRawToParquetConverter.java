@@ -193,8 +193,70 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
         return true;
       }
 
+      // Phase 3: BLS jolts_regional - raw files at source=econ/type=jolts_regional/year=YYYY/
+      if (rawFilePath.contains("type=jolts_regional")) {
+        LOGGER.info("CONVERT: Routing to BLS downloader for jolts_regional");
+        String correctRawPath = "source=econ/type=jolts_regional/year=" + year;
+        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
+        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        LOGGER.info("CONVERT: ✅ BLS jolts_regional conversion completed");
+        if (storageProvider.exists(correctedParquetPath)) {
+          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+        } else {
+          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+        }
+        return true;
+      }
+
+      // Phase 3: BLS metro_cpi - raw files at source=econ/type=cpi_metro/year=YYYY/
+      if (rawFilePath.contains("type=cpi_metro") || rawFilePath.contains("metro_cpi")) {
+        LOGGER.info("CONVERT: Routing to BLS downloader for metro_cpi");
+        String correctRawPath = "source=econ/type=cpi_metro/year=" + year;
+        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
+        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        LOGGER.info("CONVERT: ✅ BLS metro_cpi conversion completed");
+        if (storageProvider.exists(correctedParquetPath)) {
+          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+        } else {
+          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+        }
+        return true;
+      }
+
+      // Phase 3: BEA regional_income - raw files at source=econ/type=indicators/year=YYYY/regional_income.json
+      if (rawFilePath.contains("regional_income")) {
+        LOGGER.info("CONVERT: Routing to BEA downloader for regional_income");
+        String cacheIndicatorsYearPath = "source=econ/type=indicators/year=" + year;
+        String regionalIncomeParquetPath = "type=indicators/year=" + year + "/regional_income.parquet";
+        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, regionalIncomeParquetPath);
+        beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
+        LOGGER.info("CONVERT: ✅ BEA regional_income conversion completed");
+        if (storageProvider.exists(regionalIncomeParquetPath)) {
+          LOGGER.info("CONVERT: ✅ File confirmed at: {}", regionalIncomeParquetPath);
+        } else {
+          LOGGER.error("CONVERT: ❌ File NOT found at: {}", regionalIncomeParquetPath);
+        }
+        return true;
+      }
+
+      // Phase 3: BEA state_gdp - raw files at source=econ/type=indicators/year=YYYY/state_gdp.json
+      if (rawFilePath.contains("state_gdp")) {
+        LOGGER.info("CONVERT: Routing to BEA downloader for state_gdp");
+        String cacheIndicatorsYearPath = "source=econ/type=indicators/year=" + year;
+        String stateGdpParquetPath = "type=indicators/year=" + year + "/state_gdp.parquet";
+        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, stateGdpParquetPath);
+        beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
+        LOGGER.info("CONVERT: ✅ BEA state_gdp conversion completed");
+        if (storageProvider.exists(stateGdpParquetPath)) {
+          LOGGER.info("CONVERT: ✅ File confirmed at: {}", stateGdpParquetPath);
+        } else {
+          LOGGER.error("CONVERT: ❌ File NOT found at: {}", stateGdpParquetPath);
+        }
+        return true;
+      }
+
       // TODO: Implement correct path mapping for remaining data sources
-      // For now, only Phase 1 tables (fred_indicators, employment_statistics, inflation_metrics, wage_growth) are fully implemented
+      // For now, Phase 1 and Phase 3 tables are fully implemented
 
       LOGGER.warn("CONVERT: Path mapping not yet implemented for: {}", rawFilePath);
       LOGGER.warn("CONVERT: This conversion will be skipped. Add path mapping for this data source.");

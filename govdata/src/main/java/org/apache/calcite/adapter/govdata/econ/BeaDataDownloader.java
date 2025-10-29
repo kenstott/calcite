@@ -809,27 +809,35 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Downloads trade statistics for a single year.
    */
   public void downloadTradeStatisticsForYear(int year) throws IOException, InterruptedException {
+    LOGGER.info("=== PHASE 4 DEBUG: downloadTradeStatisticsForYear() called for year {} ===", year);
+
     if (apiKey == null || apiKey.isEmpty()) {
+      LOGGER.error("PHASE 4 DEBUG: BEA API key is NULL or EMPTY!");
       throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
     }
+    LOGGER.info("PHASE 4 DEBUG: BEA API key is present");
 
     // Check if parquet file already exists (skip download if already converted)
     String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
+    LOGGER.info("PHASE 4 DEBUG: Checking if parquet exists at: {}", tradeParquetPath);
     if (storageProvider.exists(tradeParquetPath)) {
-      LOGGER.debug("Found existing trade statistics parquet for year {} - skipping download", year);
+      LOGGER.info("PHASE 4 DEBUG: *** SKIPPING *** Found existing trade statistics parquet for year {} at {}", year, tradeParquetPath);
       return;
     }
+    LOGGER.info("PHASE 4 DEBUG: Parquet does NOT exist, continuing...");
 
     // Check cache first
     Map<String, String> cacheParams = new HashMap<>();
     // Don't include redundant params - year is already a parameter, type is the dataType
 
+    LOGGER.info("PHASE 4 DEBUG: Checking cache manifest for trade_statistics year {}", year);
     if (cacheManifest.isCached("trade_statistics", year, cacheParams)) {
-      LOGGER.debug("Found cached trade statistics for year {} - skipping download", year);
+      LOGGER.info("PHASE 4 DEBUG: *** SKIPPING *** Found cached trade statistics for year {}", year);
       return;
     }
+    LOGGER.info("PHASE 4 DEBUG: Not in cache, proceeding with download...");
 
-    LOGGER.debug("Downloading BEA trade statistics for year {}", year);
+    LOGGER.info("PHASE 4 DEBUG: Starting HTTP download for BEA trade statistics year {}", year);
 
     // Directory creation handled automatically by StorageProvider when writing files
 
@@ -892,8 +900,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Calculate trade balances for matching export/import pairs
     calculateTradeBalances(tradeData);
 
-    // Save as JSON to cache using StorageProvider (Annual frequency)
-    String relativePath = buildPartitionPath("trade_statistics", DataFrequency.ANNUAL, year) + "/trade_statistics.json";
+    // Save as JSON to cache using StorageProvider
+    // Use type=indicators pattern to match where converters expect files
+    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> tradeList = new ArrayList<>();
 
@@ -1275,8 +1284,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Save as JSON to cache using StorageProvider (Quarterly frequency)
-    String relativePath = buildPartitionPath("ita_data", DataFrequency.QUARTERLY, year) + "/ita_data.json";
+    // Save as JSON to cache using StorageProvider
+    // Use type=indicators pattern to match where converters expect files
+    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> itaList = new ArrayList<>();
 
@@ -1491,7 +1501,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Check if JSON file exists using StorageProvider and update manifest
     // Note: Industry GDP is mostly annual, but manufacturing can be quarterly (TODO: detect from data)
-    String relativePath = buildPartitionPath("industry_gdp", DataFrequency.ANNUAL, year) + "/industry_gdp.json";
+    // Use type=indicators pattern to match where converters expect files
+    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
     try {
       if (cacheStorageProvider.exists(relativePath)) {
         LOGGER.debug("Found existing industry GDP JSON file for year {} - updating manifest", year);
