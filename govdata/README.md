@@ -90,7 +90,8 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 |--------|--------|------------|--------------|
 | **SEC** | Financial Data | `facts`, `insider`, `text_blocks`, `stock_prices` | SEC EDGAR, Yahoo Finance |
 | **ECON** | Economic Data | `fred_data_series_catalog` (841K+ series), `fred_indicators`, employment/wages tables, analytical views | BLS, FRED, Treasury, BEA, World Bank |
-| **GEO** | Geographic Data | `census_states`, `census_counties`, `hud_zip_county_*` | Census TIGER, HUD |
+| **GEO** | Geographic Boundaries | `states`, `counties`, `places`, `zctas`, `census_tracts`, `cbsa`, `congressional_districts` | Census TIGER/Line, HUD |
+| **CENSUS** | Demographics & Population | `acs_population`, `acs_demographics`, `acs_income`, `acs_education`, `acs_housing` | Census Bureau ACS, Decennial Census |
 
 ### Future Planned
 - **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters (not yet implemented)
