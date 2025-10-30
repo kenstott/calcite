@@ -163,7 +163,7 @@ public class InformationSchema extends AbstractSchema {
           .add("TABLE_SCHEMA", SqlTypeName.VARCHAR)
           .add("TABLE_NAME", SqlTypeName.VARCHAR)
           .add("TABLE_TYPE", SqlTypeName.VARCHAR)
-          .add("TABLE_COMMENT", SqlTypeName.VARCHAR)  // Added for business definitions
+          .add("REMARKS", SqlTypeName.VARCHAR)  // Standard JDBC column for table comments
           .add("SELF_REFERENCING_COLUMN_NAME", SqlTypeName.VARCHAR)
           .add("REFERENCE_GENERATION", SqlTypeName.VARCHAR)
           .add("USER_DEFINED_TYPE_CATALOG", SqlTypeName.VARCHAR)
@@ -195,7 +195,7 @@ public class InformationSchema extends AbstractSchema {
                 schemaName,
                 tableName,
                 "BASE TABLE",
-                tableComment,  // TABLE_COMMENT
+                tableComment,  // REMARKS
                 null,
                 null,
                 null,
@@ -267,7 +267,7 @@ public class InformationSchema extends AbstractSchema {
           .add("IS_GENERATED", SqlTypeName.VARCHAR)
           .add("GENERATION_EXPRESSION", SqlTypeName.VARCHAR)
           .add("IS_UPDATABLE", SqlTypeName.VARCHAR)
-          .add("COLUMN_COMMENT", SqlTypeName.VARCHAR)  // Added for business definitions
+          .add("REMARKS", SqlTypeName.VARCHAR)  // Standard JDBC column for column comments
           .build();
     }
 
@@ -346,7 +346,7 @@ public class InformationSchema extends AbstractSchema {
                     "NEVER",                          // IS_GENERATED
                     null,                             // GENERATION_EXPRESSION
                     "YES",                            // IS_UPDATABLE
-                    columnComment                     // COLUMN_COMMENT
+                    columnComment                     // REMARKS
                 });
               }
             }
