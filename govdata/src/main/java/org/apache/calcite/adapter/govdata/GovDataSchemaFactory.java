@@ -146,10 +146,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Track this schema for cross-domain constraint detection
     schemaDataSources.put(name.toUpperCase(), dataSource.toUpperCase());
 
-    // Create schema - use custom schema class for schemas with comments
     // Create schema using FileSchemaFactory which properly handles StorageProvider and path resolution
-    // Custom schema classes (SecSchema, EconSchema, CensusSchema, etc.) only provide schema-level comments
-    // FileSchemaFactory will instantiate the correct schema class based on the comment in the operand
     LOGGER.info("Creating schema with unified operand for {} data", dataSource);
     Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
 
