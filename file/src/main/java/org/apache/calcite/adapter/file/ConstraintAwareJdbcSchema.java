@@ -24,6 +24,8 @@ import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelProtoDataType;
+import org.apache.calcite.schema.CommentableSchema;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -47,8 +49,11 @@ import java.util.Set;
 /**
  * Schema wrapper that adds constraint metadata to JdbcTable instances.
  * Acts as a delegating wrapper that intercepts getTable() calls.
+ *
+ * <p>This wrapper implements CommentableSchema to delegate comment requests
+ * to the underlying schema if it supports comments.
  */
-public class ConstraintAwareJdbcSchema implements Schema {
+public class ConstraintAwareJdbcSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConstraintAwareJdbcSchema.class);
 
   private final JdbcSchema delegate;
@@ -123,10 +128,26 @@ public class ConstraintAwareJdbcSchema implements Schema {
   }
 
   /**
+   * Returns the schema comment by delegating to the underlying schema
+   * if it implements CommentableSchema.
+   *
+   * @return schema comment, or null if delegate doesn't support comments
+   */
+  @Override public @Nullable String getComment() {
+    if (delegate instanceof CommentableSchema) {
+      return ((CommentableSchema) delegate).getComment();
+    }
+    return null;
+  }
+
+  /**
    * Wrapper for JdbcTable that adds constraint metadata.
    * Delegates all methods to the original table except getStatistic().
+   *
+   * <p>This wrapper implements CommentableTable to delegate comment requests
+   * to the underlying table if it supports comments.
    */
-  private static class ConstraintAwareJdbcTable implements Table {
+  private static class ConstraintAwareJdbcTable implements CommentableTable {
     private final JdbcTable delegate;
     private final Map<String, Object> constraintConfig;
     private Statistic statistic;  // Non-final to allow lazy initialization
@@ -188,6 +209,33 @@ public class ConstraintAwareJdbcSchema implements Schema {
     @Override public boolean rolledUpColumnValidInsideAgg(String column,
         SqlCall call, SqlNode parent, CalciteConnectionConfig config) {
       return delegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
+    }
+
+    /**
+     * Returns the table comment by delegating to the underlying table
+     * if it implements CommentableTable.
+     *
+     * @return table comment, or null if delegate doesn't support comments
+     */
+    @Override public @Nullable String getTableComment() {
+      if (delegate instanceof CommentableTable) {
+        return ((CommentableTable) delegate).getTableComment();
+      }
+      return null;
+    }
+
+    /**
+     * Returns the column comment by delegating to the underlying table
+     * if it implements CommentableTable.
+     *
+     * @param columnName the column name
+     * @return column comment, or null if delegate doesn't support comments
+     */
+    @Override public @Nullable String getColumnComment(String columnName) {
+      if (delegate instanceof CommentableTable) {
+        return ((CommentableTable) delegate).getColumnComment(columnName);
+      }
+      return null;
     }
   }
 }
