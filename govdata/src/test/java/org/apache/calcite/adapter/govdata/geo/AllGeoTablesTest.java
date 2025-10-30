@@ -69,6 +69,18 @@ public class AllGeoTablesTest {
   public void testAllGeoTablesQueryable() throws Exception {
     System.out.println("\n=== COMPREHENSIVE GEO TABLES TEST ===");
 
+    // Get values from TestEnvironmentLoader instead of using ${} syntax
+    String govdataParquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
+    String govdataCacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
+    String censusApiKey = TestEnvironmentLoader.getEnv("CENSUS_API_KEY");
+    String hudUsername = TestEnvironmentLoader.getEnv("HUD_USERNAME");
+    String hudPassword = TestEnvironmentLoader.getEnv("HUD_PASSWORD");
+
+    if (govdataParquetDir == null || govdataCacheDir == null) {
+      throw new IllegalStateException(
+          "GOVDATA_PARQUET_DIR and GOVDATA_CACHE_DIR must be set in .env.test");
+    }
+
     // Create model file with full geographic data configuration
     String modelJson = "{\n"
   +
@@ -90,7 +102,9 @@ public class AllGeoTablesTest {
   +
         "        \"dataSource\": \"geo\",\n"
   +
-        "        \"cacheDirectory\": \"${GEO_CACHE_DIR:/Volumes/T9/geo-test-all}\",\n"
+        "        \"govdataParquetDir\": \"" + govdataParquetDir + "\",\n"
+  +
+        "        \"govdataCacheDir\": \"" + govdataCacheDir + "\",\n"
   +
         "        \"autoDownload\": false,\n"
   +
@@ -98,11 +112,11 @@ public class AllGeoTablesTest {
   +
         "        \"enabledSources\": [\"tiger\", \"census\", \"hud\"],\n"
   +
-        "        \"censusApiKey\": \"${CENSUS_API_KEY:}\",\n"
+        "        \"censusApiKey\": \"" + (censusApiKey != null ? censusApiKey : "") + "\",\n"
   +
-        "        \"hudUsername\": \"${HUD_USERNAME:}\",\n"
+        "        \"hudUsername\": \"" + (hudUsername != null ? hudUsername : "") + "\",\n"
   +
-        "        \"hudPassword\": \"${HUD_PASSWORD:}\"\n"
+        "        \"hudPassword\": \"" + (hudPassword != null ? hudPassword : "") + "\"\n"
   +
         "      }\n"
   +
