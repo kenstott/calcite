@@ -601,4 +601,78 @@ public class EconIntegrationTest {
       }
     }
   }
+
+  @Tag("integration")
+  @Test public void testEconSchemaComments() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" ECON SCHEMA COMMENTS: INFORMATION_SCHEMA Validation");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates that:");
+    LOGGER.info("   - Table comments are available via INFORMATION_SCHEMA.TABLES");
+    LOGGER.info("   - Column comments are available via INFORMATION_SCHEMA.COLUMNS");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      // Test 1: Verify table comments via INFORMATION_SCHEMA.TABLES
+      LOGGER.info("\n1. Testing ECON table comments via INFORMATION_SCHEMA.TABLES:");
+      String tableQuery = "SELECT \"TABLE_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.TABLES "
+          + "WHERE \"TABLE_SCHEMA\" = 'ECON' AND \"REMARKS\" IS NOT NULL ORDER BY \"TABLE_NAME\"";
+
+      int tableCommentCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(tableQuery)) {
+        while (rs.next()) {
+          String tableName = rs.getString("TABLE_NAME");
+          String remarks = rs.getString("REMARKS");
+          LOGGER.info("  ✅ {} - comment: {}", tableName,
+              remarks != null && remarks.length() > 100
+                  ? remarks.substring(0, 97) + "..." : remarks);
+          tableCommentCount++;
+        }
+      }
+      assertTrue(tableCommentCount > 0,
+          "At least one ECON table should have a comment in INFORMATION_SCHEMA.TABLES");
+      LOGGER.info("  Found {} tables with comments", tableCommentCount);
+
+      // Test 2: Verify column comments via INFORMATION_SCHEMA.COLUMNS
+      LOGGER.info("\n2. Testing ECON column comments via INFORMATION_SCHEMA.COLUMNS:");
+      String columnQuery = "SELECT \"TABLE_NAME\", \"COLUMN_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.COLUMNS "
+          + "WHERE \"TABLE_SCHEMA\" = 'ECON' AND \"REMARKS\" IS NOT NULL "
+          + "ORDER BY \"TABLE_NAME\", \"ORDINAL_POSITION\"";
+
+      int columnCommentCount = 0;
+      String lastTable = null;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(columnQuery)) {
+        while (rs.next()) {
+          String tableName = rs.getString("TABLE_NAME");
+          String columnName = rs.getString("COLUMN_NAME");
+          String remarks = rs.getString("REMARKS");
+
+          // Print table header when we encounter a new table
+          if (!tableName.equals(lastTable)) {
+            if (lastTable != null) {
+              LOGGER.info("");  // Blank line between tables
+            }
+            LOGGER.info("  Table: {}", tableName);
+            lastTable = tableName;
+          }
+
+          LOGGER.info("    ✅ {} - comment: {}", columnName,
+              remarks != null && remarks.length() > 80
+                  ? remarks.substring(0, 77) + "..." : remarks);
+          columnCommentCount++;
+        }
+      }
+      assertTrue(columnCommentCount > 0,
+          "At least one column should have a comment in INFORMATION_SCHEMA.COLUMNS");
+      LOGGER.info("  Found {} columns with comments across all ECON tables", columnCommentCount);
+
+      LOGGER.info("\n================================================================================");
+      LOGGER.info(" ✅ ECON SCHEMA COMMENTS TEST COMPLETE!");
+      LOGGER.info("   - Table comments: {} tables", tableCommentCount);
+      LOGGER.info("   - Column comments: {} columns", columnCommentCount);
+      LOGGER.info("================================================================================");
+    }
+  }
 }
