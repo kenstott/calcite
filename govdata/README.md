@@ -94,6 +94,8 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 | **CENSUS** | Demographics & Population | `acs_population`, `acs_demographics`, `acs_income`, `acs_education`, `acs_housing` | Census Bureau ACS, Decennial Census |
 
 ### Future Planned
+- **LEG**: Congressional bills, votes, committees, nominations, hearings - legislative process data (planning stage - see [LEG/POL Implementation Plan](LEG_POL_SCHEMAS_PLAN.md))
+- **POL**: Political offices (Presidents, Governors, Cabinet, SCOTUS), campaigns, executive orders (planning stage - see [LEG/POL Implementation Plan](LEG_POL_SCHEMAS_PLAN.md))
 - **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters (not yet implemented)
 - **PUB**: NIH grants, NASA projects, NSF research, PTO patents (not yet implemented)
 - **HEALTH**: FDA approvals/recalls, CDC health statistics (not yet implemented)
