@@ -16,11 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -2562,19 +2557,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void convertAndSaveRegionalEmployment(JsonNode jsonResponse, String fullParquetPath,
       int year, String stateFips) throws IOException {
 
-    // Define schema matching regional_employment table
-    Schema schema = SchemaBuilder.record("regional_employment")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").type().stringType().noDefault()
-        .name("series_id").type().stringType().noDefault()
-        .name("value").type().nullable().doubleType().noDefault()
-        .name("area_code").type().nullable().stringType().noDefault()
-        .name("area_type").type().nullable().stringType().noDefault()
-        .name("measure").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
 
     // Parse series from JSON response
     JsonNode seriesArray = jsonResponse.path("Results").path("series");
@@ -2612,8 +2596,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String month = period.replace("M", "");
         String date = String.format("%s-%02d-01", yearStr, Integer.parseInt(month));
 
-        // Create Avro record
-        GenericRecord record = new GenericData.Record(schema);
+        // Create data record
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", date);
         record.put("series_id", seriesId);
         record.put("value", value);
@@ -2621,19 +2605,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("area_type", "state");
         record.put("measure", measure);
 
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    if (records.isEmpty()) {
+    if (dataRecords.isEmpty()) {
       LOGGER.warn("No records parsed from BLS response for state FIPS {}", stateFips);
       return;
     }
 
-    // Write Parquet file - fullParquetPath is already resolved, so pass it directly
-    storageProvider.writeAvroParquet(fullParquetPath, schema, records, "regional_employment");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("regional_employment");
+    storageProvider.writeAvroParquet(fullParquetPath, columns, dataRecords, "regional_employment", "regional_employment");
 
-    LOGGER.debug("Wrote {} records to {}", records.size(), fullParquetPath);
+    LOGGER.debug("Wrote {} records to {}", dataRecords.size(), fullParquetPath);
   }
 
   /**
@@ -2857,21 +2843,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void parseAndConvertQcewToParquet(byte[] zipData, String fullParquetPath, int year) throws IOException {
     LOGGER.info("Parsing QCEW CSV for year {} and converting to Parquet", year);
 
-    // Define Avro schema for QCEW county data
-    Schema schema = SchemaBuilder.record("CountyQcew")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("area_fips").type().stringType().noDefault()
-        .name("own_code").type().stringType().noDefault()
-        .name("industry_code").type().stringType().noDefault()
-        .name("agglvl_code").type().stringType().noDefault()
-        .name("annual_avg_estabs").type().nullable().intType().noDefault()
-        .name("annual_avg_emplvl").type().nullable().intType().noDefault()
-        .name("total_annual_wages").type().nullable().longType().noDefault()
-        .name("annual_avg_wkly_wage").type().nullable().intType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     int recordCount = 0;
     int countyRecordCount = 0;
 
@@ -2950,8 +2923,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 Long totalWages = parseLongOrNull(fields[15]);
                 Integer avgWklyWage = parseIntOrNull(fields[18]);
 
-                // Create Avro record
-                GenericRecord record = new GenericData.Record(schema);
+                // Create data record
+                java.util.Map<String, Object> record = new java.util.HashMap<>();
                 record.put("area_fips", areaFips);
                 record.put("own_code", ownCode);
                 record.put("industry_code", industryCode);
@@ -2961,7 +2934,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 record.put("total_annual_wages", totalWages);
                 record.put("annual_avg_wkly_wage", avgWklyWage);
 
-                records.add(record);
+                dataRecords.add(record);
 
               } catch (Exception e) {
                 // Skip malformed records
@@ -2979,11 +2952,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Parsed {} county records from {} total QCEW records", countyRecordCount, recordCount);
 
-    // Convert to Parquet and save
-    if (!records.isEmpty()) {
-      // fullParquetPath is already resolved, pass it directly
-      storageProvider.writeAvroParquet(fullParquetPath, schema, records, "county_qcew");
-      LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", fullParquetPath, records.size());
+    // Load column metadata and write parquet
+    if (!dataRecords.isEmpty()) {
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          loadTableColumns("county_qcew");
+      storageProvider.writeAvroParquet(fullParquetPath, columns, dataRecords, "CountyQcew", "CountyQcew");
+      LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", fullParquetPath, dataRecords.size());
     } else {
       LOGGER.warn("No county records found in QCEW data for year {}", year);
     }
@@ -3788,25 +3762,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void writeEmploymentStatisticsParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("employment_statistics")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier (e.g., 'LNS14000000' for unemployment rate)").type().stringType().noDefault()
-        .name("series_name").doc("Descriptive name of employment series").type().stringType().noDefault()
-        .name("value").doc("Employment statistic value (e.g., unemployment rate as percentage)").type().doubleType().noDefault()
-        .name("unit").doc("Unit of measurement (e.g., 'Percent', 'Thousands of Persons')").type().nullable().stringType().noDefault()
-        .name("seasonally_adjusted").doc("Whether data is seasonally adjusted").type().nullable().booleanType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .name("category").doc("Employment category (e.g., 'Labor Force', 'Employment Level')").type().nullable().stringType().noDefault()
-        .name("subcategory").doc("Employment subcategory for detailed classification").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date") != null ? dataPoint.get("date") : "");
         record.put("series_id", dataPoint.get("series_id") != null ? dataPoint.get("series_id") : entry.getKey());
         record.put("series_name", dataPoint.get("series_name") != null ? dataPoint.get("series_name") : getSeriesName(entry.getKey()));
@@ -3817,12 +3777,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
         record.put("category", "Employment");
         record.put("subcategory", getSubcategory(entry.getKey()));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("employment_statistics");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "employment_statistics", "employment_statistics");
   }
 
   /**
@@ -3831,26 +3793,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void writeInflationMetricsParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("inflation_metrics")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("index_type").doc("Price index type (CPI=Consumer Price Index, PPI=Producer Price Index)").type().stringType().noDefault()
-        .name("item_code").doc("BLS item code identifying specific goods/services category").type().stringType().noDefault()
-        .name("area_code").doc("BLS area code (e.g., 'U'=U.S. city average, regional codes)").type().stringType().noDefault()
-        .name("item_name").doc("Description of goods/services category (e.g., 'Food', 'Energy', 'All items')").type().stringType().noDefault()
-        .name("index_value").doc("Price index value (typically base period = 100)").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change in price index").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change in price index").type().nullable().doubleType().noDefault()
-        .name("area_name").doc("Geographic area name (e.g., 'U.S. City Average', 'Los Angeles')").type().nullable().stringType().noDefault()
-        .name("seasonally_adjusted").doc("Whether price index is seasonally adjusted").type().nullable().booleanType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date") != null ? dataPoint.get("date") : "");
         record.put("index_type", getIndexType(seriesId));
         record.put("item_code", getItemCode(seriesId));
@@ -3861,12 +3809,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
         record.put("area_name", "U.S. city average");
         record.put("seasonally_adjusted", isSeasonallyAdjusted(seriesId));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("inflation_metrics");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "inflation_metrics", "inflation_metrics");
   }
 
   /**
@@ -3875,26 +3825,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void writeWageGrowthParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("wage_growth")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier for wage/earnings data").type().stringType().noDefault()
-        .name("industry_code").doc("NAICS industry code (e.g., '00'=All industries)").type().stringType().noDefault()
-        .name("occupation_code").doc("SOC occupation code (e.g., '000000'=All occupations)").type().stringType().noDefault()
-        .name("industry_name").doc("Industry name or sector description").type().nullable().stringType().noDefault()
-        .name("occupation_name").doc("Occupation title or job category").type().nullable().stringType().noDefault()
-        .name("average_hourly_earnings").doc("Average hourly earnings in dollars").type().nullable().doubleType().noDefault()
-        .name("average_weekly_earnings").doc("Average weekly earnings in dollars").type().nullable().doubleType().noDefault()
-        .name("employment_cost_index").doc("Employment Cost Index measuring compensation costs").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change in wages/earnings").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("industry_code", "00");  // All industries
@@ -3912,12 +3848,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           record.put("percent_change_year", dataPoint.get("percent_change_year"));
         }
 
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("wage_growth");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "wage_growth", "wage_growth");
   }
 
   /**
@@ -3926,62 +3864,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void writeRegionalEmploymentParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("regional_employment")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("area_code").doc("BLS area code identifying geographic region").type().stringType().noDefault()
-        .name("area_name").doc("Geographic area name (state, metropolitan area, or county)").type().stringType().noDefault()
-        .name("area_type").doc("Type of geographic area (state, metro, county)").type().stringType().noDefault()
-        .name("state_code").doc("2-letter state postal code (e.g., 'CA', 'NY')").type().nullable().stringType().noDefault()
-        .name("unemployment_rate").doc("Unemployment rate as percentage of labor force").type().nullable().doubleType().noDefault()
-        .name("employment_level").doc("Total employed persons in thousands").type().nullable().longType().noDefault()
-        .name("labor_force").doc("Total civilian labor force in thousands").type().nullable().longType().noDefault()
-        .name("participation_rate").doc("Labor force participation rate as percentage of population").type().nullable().doubleType().noDefault()
-        .name("employment_population_ratio").doc("Employment-to-population ratio as percentage").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
       String stateCode = getStateCode(seriesId);
 
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("area_code", stateCode);
         record.put("area_name", getStateName(stateCode));
         record.put("area_type", "state");
         record.put("state_code", stateCode);
         record.put("unemployment_rate", dataPoint.get("value"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("regional_employment");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "regional_employment", "regional_employment");
   }
 
   private void writeRegionalCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("regional_cpi")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("area_code").doc("Census region code").type().stringType().noDefault()
-        .name("area_name").doc("Census region name").type().stringType().noDefault()
-        .name("value").doc("CPI value (base period = 100)").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("area_code", extractAreaCodeFromSeries(seriesId));
@@ -3989,34 +3904,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_month", dataPoint.get("percent_change_month"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("regional_cpi");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "regional_cpi", "regional_cpi");
   }
 
   private void writeMetroCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("metro_cpi")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("area_code").doc("Metro area code").type().stringType().noDefault()
-        .name("area_name").doc("Metro area name").type().stringType().noDefault()
-        .name("value").doc("CPI value (base period = 100)").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("area_code", extractMetroCodeFromSeries(seriesId));
@@ -4024,36 +3930,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_month", dataPoint.get("percent_change_month"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("metro_cpi");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_cpi", "metro_cpi");
   }
 
   private void writeStateIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("state_industry")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("state_code").doc("State FIPS code").type().stringType().noDefault()
-        .name("state_name").doc("State name").type().stringType().noDefault()
-        .name("industry_code").doc("NAICS supersector code").type().stringType().noDefault()
-        .name("industry_name").doc("Industry name").type().stringType().noDefault()
-        .name("value").doc("Employment in thousands").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("state_code", extractStateCodeFromSeries(seriesId));
@@ -4063,96 +3958,69 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_month", dataPoint.get("percent_change_month"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("state_industry");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "state_industry", "state_industry");
   }
 
   private void writeStateWagesParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("state_wages")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("state_code").doc("State FIPS code").type().stringType().noDefault()
-        .name("state_name").doc("State name").type().stringType().noDefault()
-        .name("value").doc("Average weekly wage in dollars").type().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("state_code", extractStateCodeFromSeries(seriesId));
         record.put("state_name", extractStateNameFromSeries(seriesId));
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("state_wages");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "state_wages", "state_wages");
   }
 
   private void writeStateWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
-    // Schema for QCEW-based state wages data (flat array format)
-    Schema schema = SchemaBuilder.record("state_wages")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("year").doc("Year of observation").type().intType().noDefault()
-        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
-        .name("state_name").doc("State name").type().stringType().noDefault()
-        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().doubleType().noDefault()
-        .name("total_employment").doc("Total employment count").type().intType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> avroRecords = new ArrayList<>();
-    for (Map<String, Object> record : records) {
-      GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("year", record.get("year"));
-      avroRecord.put("state_fips", record.get("state_fips"));
-      avroRecord.put("state_name", record.get("state_name"));
-      avroRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
-      avroRecord.put("total_employment", record.get("total_employment"));
-      avroRecords.add(avroRecord);
+    // Build data records (flat array format)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> record : records) {
+      java.util.Map<String, Object> dataRecord = new java.util.HashMap<>();
+      dataRecord.put("year", record.get("year"));
+      dataRecord.put("state_fips", record.get("state_fips"));
+      dataRecord.put("state_name", record.get("state_name"));
+      dataRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
+      dataRecord.put("total_employment", record.get("total_employment"));
+      dataRecords.add(dataRecord);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, avroRecords, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("state_wages");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "state_wages", "state_wages");
   }
 
   private void writeMetroIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("metro_industry")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("metro_code").doc("Metro area code").type().stringType().noDefault()
-        .name("metro_name").doc("Metro area name").type().stringType().noDefault()
-        .name("industry_code").doc("NAICS supersector code").type().stringType().noDefault()
-        .name("industry_name").doc("Industry name").type().stringType().noDefault()
-        .name("value").doc("Employment in thousands").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("metro_code", extractMetroCodeFromSeries(seriesId));
@@ -4162,95 +4030,69 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_month", dataPoint.get("percent_change_month"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("metro_industry");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_industry", "metro_industry");
   }
 
   private void writeMetroWagesParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("metro_wages")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("metro_code").doc("Metro area code").type().stringType().noDefault()
-        .name("metro_name").doc("Metro area name").type().stringType().noDefault()
-        .name("value").doc("Average weekly wage in dollars").type().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("metro_code", extractMetroCodeFromSeries(seriesId));
         record.put("metro_name", extractMetroNameFromSeries(seriesId));
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("metro_wages");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_wages", "metro_wages");
   }
 
   private void writeMetroWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
-    // Schema for QCEW-based metro wages data (flat array format)
-    Schema schema = SchemaBuilder.record("metro_wages")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("year").doc("Year of observation").type().intType().noDefault()
-        .name("metro_area_code").doc("Metro area code").type().stringType().noDefault()
-        .name("metro_area_name").doc("Metro area name").type().stringType().noDefault()
-        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().doubleType().noDefault()
-        .name("total_employment").doc("Total employment count").type().nullable().intType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> avroRecords = new ArrayList<>();
-    for (Map<String, Object> record : records) {
-      GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("year", record.get("year"));
-      avroRecord.put("metro_area_code", record.get("metro_area_code"));
-      avroRecord.put("metro_area_name", record.get("metro_area_name"));
-      avroRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
-      avroRecord.put("total_employment", record.get("total_employment"));
-      avroRecords.add(avroRecord);
+    // Build data records (flat array format)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> record : records) {
+      java.util.Map<String, Object> dataRecord = new java.util.HashMap<>();
+      dataRecord.put("year", record.get("year"));
+      dataRecord.put("metro_area_code", record.get("metro_area_code"));
+      dataRecord.put("metro_area_name", record.get("metro_area_name"));
+      dataRecord.put("average_weekly_wage", record.get("average_weekly_wage"));
+      dataRecord.put("total_employment", record.get("total_employment"));
+      dataRecords.add(dataRecord);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, avroRecords, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("metro_wages");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_wages", "metro_wages");
   }
 
   private void writeJoltsRegionalParquet(Map<String, List<Map<String, Object>>> seriesData,
       String targetPath) throws IOException {
 
-    Schema schema = SchemaBuilder.record("jolts_regional")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("series_id").doc("BLS series identifier").type().stringType().noDefault()
-        .name("region_code").doc("Census region code").type().stringType().noDefault()
-        .name("region_name").doc("Census region name").type().stringType().noDefault()
-        .name("metric_type").doc("JOLTS metric (hires, separations, openings, quits, layoffs)").type().stringType().noDefault()
-        .name("value").doc("Metric value in thousands").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change").type().nullable().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : seriesData.entrySet()) {
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map.Entry<String, java.util.List<java.util.Map<String, Object>>> entry : seriesData.entrySet()) {
       String seriesId = entry.getKey();
-      for (Map<String, Object> dataPoint : entry.getValue()) {
-        GenericRecord record = new GenericData.Record(schema);
+      for (java.util.Map<String, Object> dataPoint : entry.getValue()) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("date", dataPoint.get("date"));
         record.put("series_id", seriesId);
         record.put("region_code", extractRegionCodeFromJoltsSeries(seriesId));
@@ -4259,30 +4101,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         record.put("value", dataPoint.get("value"));
         record.put("percent_change_month", dataPoint.get("percent_change_month"));
         record.put("percent_change_year", dataPoint.get("percent_change_year"));
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("jolts_regional");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_regional", "jolts_regional");
   }
 
   private void writeCountyWagesParquet(List<Map<String, Object>> countyWages, String targetPath) throws IOException {
-    Schema schema = SchemaBuilder.record("county_wages")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("county_fips").doc("County FIPS code").type().stringType().noDefault()
-        .name("county_name").doc("County name").type().stringType().noDefault()
-        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
-        .name("state_name").doc("State name").type().stringType().noDefault()
-        .name("average_weekly_wage").doc("Average weekly wage in dollars").type().intType().noDefault()
-        .name("total_employment").doc("Total employment count").type().nullable().intType().noDefault()
-        .name("year").doc("Year").type().intType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> countyWage : countyWages) {
-      GenericRecord record = new GenericData.Record(schema);
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> countyWage : countyWages) {
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("county_fips", countyWage.get("county_fips"));
       record.put("county_name", countyWage.get("county_name"));
       record.put("state_fips", countyWage.get("state_fips"));
@@ -4290,30 +4123,20 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       record.put("average_weekly_wage", countyWage.get("average_weekly_wage"));
       record.put("total_employment", countyWage.get("total_employment"));
       record.put("year", countyWage.get("year"));
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("county_wages");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "county_wages", "county_wages");
   }
 
   private void writeJoltsStateParquet(List<Map<String, Object>> joltsState, String targetPath) throws IOException {
-    Schema schema = SchemaBuilder.record("jolts_state")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("state_fips").doc("State FIPS code").type().stringType().noDefault()
-        .name("state_name").doc("State name").type().stringType().noDefault()
-        .name("year").doc("Year").type().intType().noDefault()
-        .name("hires_rate").doc("Hires rate").type().doubleType().noDefault()
-        .name("jobopenings_rate").doc("Job openings rate").type().doubleType().noDefault()
-        .name("quits_rate").doc("Quits rate").type().doubleType().noDefault()
-        .name("layoffsdischarges_rate").doc("Layoffs and discharges rate").type().doubleType().noDefault()
-        .name("totalseparations_rate").doc("Total separations rate").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> jolts : joltsState) {
-      GenericRecord record = new GenericData.Record(schema);
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> jolts : joltsState) {
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("state_fips", jolts.get("state_fips"));
       record.put("state_name", jolts.get("state_name"));
       record.put("year", jolts.get("year"));
@@ -4322,51 +4145,45 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       record.put("quits_rate", jolts.get("quits_rate"));
       record.put("layoffsdischarges_rate", jolts.get("layoffsdischarges_rate"));
       record.put("totalseparations_rate", jolts.get("totalseparations_rate"));
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("jolts_state");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_state", "jolts_state");
   }
 
   private void writeJoltsIndustriesParquet(List<Map<String, Object>> industries, String targetPath) throws IOException {
-    Schema schema = SchemaBuilder.record("jolts_industries")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("industry_code").doc("JOLTS industry code").type().stringType().noDefault()
-        .name("industry_name").doc("Industry name").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> industry : industries) {
-      GenericRecord record = new GenericData.Record(schema);
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> industry : industries) {
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("industry_code", industry.get("industry_code"));
       record.put("industry_name", industry.get("industry_name"));
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("reference_jolts_industries");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_industries", "jolts_industries");
   }
 
   private void writeJoltsDataelementsParquet(List<Map<String, Object>> dataelements, String targetPath) throws IOException {
-    Schema schema = SchemaBuilder.record("jolts_dataelements")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("dataelement_code").doc("JOLTS data element code").type().stringType().noDefault()
-        .name("dataelement_text").doc("Data element description").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> dataelement : dataelements) {
-      GenericRecord record = new GenericData.Record(schema);
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> dataelement : dataelements) {
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("dataelement_code", dataelement.get("dataelement_code"));
       record.put("dataelement_text", dataelement.get("dataelement_text"));
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, schema.getName());
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("reference_jolts_dataelements");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_dataelements", "jolts_dataelements");
   }
 
   private String extractAreaCodeFromSeries(String seriesId) {
@@ -5389,19 +5206,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("ConsumerPriceIndex")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("index_type").doc("CPI series type (CPI-U=Urban Consumers, CPI-W=Urban Wage Earners)").type().stringType().noDefault()
-        .name("item_code").doc("BLS item code for goods/services category").type().stringType().noDefault()
-        .name("area_code").doc("BLS area code for geographic region").type().stringType().noDefault()
-        .name("value").doc("Consumer price index value (base period = 100)").type().doubleType().noDefault()
-        .name("percent_change_month").doc("Month-over-month percentage change").type().nullable().doubleType().noDefault()
-        .name("percent_change_year").doc("Year-over-year percentage change (inflation rate)").type().nullable().doubleType().noDefault()
-        .name("seasonally_adjusted").doc("Seasonal adjustment status ('SA'=Seasonally Adjusted, 'NSA'=Not Seasonally Adjusted)").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     Map<String, Object> data = MAPPER.readValue(jsonFile, Map.class);
     List<Map<String, Object>> metrics = (List<Map<String, Object>>) data.get("inflation_metrics");
 
@@ -5410,7 +5216,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String seriesId = (String) metric.get("series_id");
         // Only include CPI series (starts with CU)
         if (seriesId != null && seriesId.startsWith("CU")) {
-          GenericRecord record = new GenericData.Record(schema);
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
           record.put("date", metric.get("date"));
           record.put("index_type", seriesId.startsWith("CUUR") ? "CPI-U" : "CPI-W");
           record.put("item_code", seriesId.length() > 9 ? seriesId.substring(9) : "SA0");
@@ -5419,12 +5225,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           record.put("percent_change_month", metric.get("percent_change_month"));
           record.put("percent_change_year", metric.get("percent_change_year"));
           record.put("seasonally_adjusted", metric.getOrDefault("seasonally_adjusted", "N"));
-          records.add(record);
+          dataRecords.add(record);
         }
       }
     }
 
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "ConsumerPriceIndex");
-    LOGGER.info("Converted {} CPI records to parquet: {}", records.size(), targetFilePath);
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("regional_cpi");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "ConsumerPriceIndex", "ConsumerPriceIndex");
+    LOGGER.info("Converted {} CPI records to parquet: {}", dataRecords.size(), targetFilePath);
   }
 }

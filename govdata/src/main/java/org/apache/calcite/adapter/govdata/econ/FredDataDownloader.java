@@ -788,31 +788,13 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   @SuppressWarnings("deprecation")
   private void writeFredIndicatorsParquet(List<Map<String, Object>> observations, String targetPath)
       throws IOException {
-    Schema schema = SchemaBuilder.record("FredIndicator")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("series_id").doc("FRED series identifier").type().stringType().noDefault()
-        .name("series_name").doc("Descriptive name of the economic data series").type().stringType().noDefault()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("value").doc("Observed value for this date").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Percent', 'Billions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')").type().stringType().noDefault()
-        .endRecord();
+    // Load column metadata from econ-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("fred_indicators");
 
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> obs : observations) {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("series_id", obs.get("series_id"));
-      record.put("series_name", obs.get("series_name"));
-      record.put("date", obs.get("date"));
-      record.put("value", obs.get("value"));
-      record.put("units", obs.get("units"));
-      record.put("frequency", obs.get("frequency"));
-      records.add(record);
-    }
-
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, "FredIndicator");
+    // Write parquet using StorageProvider with metadata-driven schema
+    // The StorageProvider handles all Avro schema building and GenericRecord conversion
+    storageProvider.writeAvroParquet(targetPath, columns, observations, "FredIndicator", "FredIndicator");
   }
 
   /**

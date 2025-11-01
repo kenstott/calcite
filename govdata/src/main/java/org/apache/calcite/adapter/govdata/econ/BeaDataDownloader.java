@@ -1118,27 +1118,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
   }
 
-  @SuppressWarnings("deprecation")
   public void writeTradeStatisticsParquet(List<TradeStatistic> tradeStats, String targetFilePath) throws IOException {
-    Schema schema = SchemaBuilder.record("TradeStatistic")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for trade statistics").type().stringType().noDefault()
-        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
-        .name("line_description").doc("Description of the trade statistic line item").type().stringType().noDefault()
-        .name("series_code").doc("BEA series code for this trade statistic").type().stringType().noDefault()
-        .name("year").doc("Year of the trade observation").type().intType().noDefault()
-        .name("value").doc("Trade value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("trade_type").doc("Type of trade: 'Exports', 'Imports', or 'Other'").type().stringType().noDefault()
-        .name("category").doc("Trade category: 'Goods', 'Services', or 'Total'").type().stringType().noDefault()
-        .name("trade_balance").doc("Calculated trade balance (exports minus imports) in millions of dollars").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (TradeStatistic trade : tradeStats) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("table_id", trade.tableId);
       record.put("line_number", trade.lineNumber);
       record.put("line_description", trade.lineDescription);
@@ -1150,11 +1134,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("trade_type", trade.tradeType);
       record.put("category", trade.category);
       record.put("trade_balance", trade.tradeBalance);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "trade_statistics");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("trade_statistics");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "TradeStatistic", "TradeStatistic");
     LOGGER.debug("Trade statistics Parquet written: {} ({} records)", targetFilePath, tradeStats.size());
   }
 
@@ -1431,26 +1417,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
   }
 
-  @SuppressWarnings("deprecation")
   private void writeItaDataParquet(List<ItaData> itaRecords, String outputPath) throws IOException {
-    Schema schema = SchemaBuilder.record("ItaData")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("indicator").doc("BEA indicator code for international transactions").type().stringType().noDefault()
-        .name("indicator_description").doc("Full description of the ITA indicator").type().stringType().noDefault()
-        .name("area_or_country").doc("Geographic area or country name for the transaction").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("year").doc("Year of the ITA observation").type().intType().noDefault()
-        .name("value").doc("Transaction value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("time_series_id").doc("Unique identifier for the time series").type().stringType().noDefault()
-        .name("time_series_description").doc("Description of the time series").type().stringType().noDefault()
-        .endRecord();
-
-    // Convert to GenericRecords
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (ItaData ita : itaRecords) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("indicator", ita.indicator);
       record.put("indicator_description", ita.indicatorDescription);
       record.put("area_or_country", ita.areaOrCountry);
@@ -1460,11 +1431,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("units", ita.units);
       record.put("time_series_id", ita.timeSeriesId);
       record.put("time_series_description", ita.timeSeriesDescription);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputPath, schema, records, "ita_data");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("ita_data");
+    storageProvider.writeAvroParquet(outputPath, columns, dataRecords, "ItaData", "ItaData");
     LOGGER.debug("ITA data Parquet written: {} ({} records)", outputPath, itaRecords.size());
   }
 
@@ -1807,27 +1780,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return relativePath;
   }
 
-  @SuppressWarnings("deprecation")
   private void writeIndustryGdpParquet(List<IndustryGdpData> industryData, String outputPath) throws IOException {
-    Schema schema = SchemaBuilder.record("IndustryGdpData")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for industry GDP data").type().intType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("year").doc("Year of the observation").type().intType().noDefault()
-        .name("quarter").doc("Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data").type().stringType().noDefault()
-        .name("industry_code").doc("NAICS industry code").type().stringType().noDefault()
-        .name("industry_description").doc("Full description of the industry").type().stringType().noDefault()
-        .name("value").doc("GDP value for the industry in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("note_ref").doc("Reference to footnotes or data quality notes").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    // Convert to GenericRecords
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (IndustryGdpData gdp : industryData) {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("table_id", gdp.tableId);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
+      record.put("table_id", String.valueOf(gdp.tableId));
       record.put("frequency", gdp.frequency);
       record.put("year", gdp.year);
       record.put("quarter", gdp.quarter);
@@ -1836,33 +1794,21 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("value", gdp.value);
       record.put("units", gdp.units);
       record.put("note_ref", gdp.noteRef);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputPath, schema, records, "industry_gdp");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("industry_gdp");
+    storageProvider.writeAvroParquet(outputPath, columns, dataRecords, "IndustryGdpData", "IndustryGdpData");
     LOGGER.debug("Industry GDP Parquet written: {} ({} records)", outputPath, industryData.size());
   }
 
-  @SuppressWarnings("deprecation")
   private void writeGdpComponentsParquet(List<GdpComponent> components, String outputPath) throws IOException {
-    Schema schema = SchemaBuilder.record("GdpComponent")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for GDP components").type().stringType().noDefault()
-        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
-        .name("line_description").doc("Description of the GDP component").type().stringType().noDefault()
-        .name("series_code").doc("BEA series code for this component").type().stringType().noDefault()
-        .name("year").doc("Year of the observation").type().intType().noDefault()
-        .name("value").doc("Component value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .endRecord();
-
-    // Convert to GenericRecords
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (GdpComponent component : components) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("table_id", component.tableId);
       record.put("line_number", component.lineNumber);
       record.put("line_description", component.lineDescription);
@@ -1871,33 +1817,22 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("value", component.value);
       record.put("units", component.units);
       record.put("frequency", component.frequency);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputPath, schema, records, "gdp_components");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("gdp_components");
+    storageProvider.writeAvroParquet(outputPath, columns, dataRecords, "GdpComponent", "GdpComponent");
     LOGGER.debug("GDP Components Parquet written: {} ({} records)", outputPath, components.size());
   }
 
-  @SuppressWarnings("deprecation")
   public void writeRegionalIncomeParquet(List<RegionalIncome> incomeData, String targetFilePath) throws IOException {
-    // IMPORTANT: Do not include 'year' in the schema - it's a partition key derived from directory structure
-    Schema schema = SchemaBuilder.record("RegionalIncome")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("geo_fips").doc("FIPS code for the geographic area (state or county)").type().stringType().noDefault()
-        .name("geo_name").doc("Name of the geographic area").type().stringType().noDefault()
-        .name("metric").doc("Income metric type (e.g., 'Personal Income', 'Per Capita Income')").type().nullable().stringType().noDefault()
-        .name("line_code").doc("BEA line code for the income statistic").type().stringType().noDefault()
-        .name("line_description").doc("Description of the income line item").type().stringType().noDefault()
-        // year removed - it's a partition key from directory structure
-        .name("value").doc("Income value in thousands of dollars or dollars (depending on metric)").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Thousands of dollars', 'Dollars')").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // IMPORTANT: Do not include 'year' in the data records - it's a partition key derived from directory structure
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (RegionalIncome income : incomeData) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("geo_fips", income.geoFips);
       record.put("geo_name", income.geoName);
       record.put("metric", income.metric);
@@ -1906,11 +1841,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       // Don't put year - it's derived from the partition directory
       record.put("value", income.value);
       record.put("units", income.units);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "regional_income");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("regional_income");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "RegionalIncome", "RegionalIncome");
   }
 
   // Data classes
@@ -2325,32 +2262,24 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     cacheManifest.save(operatingDirectory);
   }
 
-  @SuppressWarnings("deprecation")
   public void writeStateGdpParquet(List<StateGdp> gdpData, String targetFilePath) throws IOException {
-    // IMPORTANT: Do not include 'year' in the schema - it's a partition key derived from directory structure
-    Schema schema = SchemaBuilder.record("StateGdp")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("geo_fips").doc("State FIPS code (2 digits)").type().stringType().noDefault()
-        .name("geo_name").doc("State name").type().stringType().noDefault()
-        .name("metric").doc("GDP metric or component description").type().stringType().noDefault()
-        .name("value").doc("GDP value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // IMPORTANT: Do not include 'year' in the data records - it's a partition key derived from directory structure
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (StateGdp gdp : gdpData) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("geo_fips", gdp.geoFips);
       record.put("geo_name", gdp.geoName);
       record.put("metric", gdp.lineDescription != null ? gdp.lineDescription : "GDP");
       record.put("value", gdp.value);
       record.put("units", gdp.units);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "state_gdp");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("state_gdp");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "StateGdp", "StateGdp");
   }
 
   /**
@@ -2463,38 +2392,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
 
-  @SuppressWarnings("deprecation")
   private void writeGdpComponentsMapParquet(List<Map<String, Object>> components, String targetFilePath)
       throws IOException {
-    Schema schema = SchemaBuilder.record("GdpComponent")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for GDP components").type().stringType().noDefault()
-        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
-        .name("line_description").doc("Description of the GDP component").type().stringType().noDefault()
-        .name("series_code").doc("BEA series code for this component").type().stringType().noDefault()
-        .name("year").doc("Year of the observation").type().intType().noDefault()
-        .name("value").doc("Component value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .endRecord();
+    // Data is already in Map format, just pass through
+    // (keep all transformation logic - none needed here)
 
-    List<GenericRecord> records = new ArrayList<>();
-    for (Map<String, Object> comp : components) {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("table_id", comp.get("table_id"));
-      record.put("line_number", comp.get("line_number"));
-      record.put("line_description", comp.get("line_description"));
-      record.put("series_code", comp.get("series_code"));
-      record.put("year", comp.get("year"));
-      record.put("value", comp.get("value"));
-      record.put("units", comp.get("units"));
-      record.put("frequency", comp.get("frequency"));
-      records.add(record);
-    }
-
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "gdp_components");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("gdp_components");
+    storageProvider.writeAvroParquet(targetFilePath, columns, components, "GdpComponent", "GdpComponent");
   }
 
   /**
@@ -2577,42 +2483,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return records;
   }
 
-  @SuppressWarnings("deprecation")
   private void writeTradeStatisticsMapParquet(List<Map<String, Object>> records, String targetFilePath) throws IOException {
-    Schema schema = SchemaBuilder.record("TradeStatistics")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for trade statistics").type().stringType().noDefault()
-        .name("line_number").doc("Line number within the BEA table").type().intType().noDefault()
-        .name("line_description").doc("Description of the trade statistic line item").type().stringType().noDefault()
-        .name("series_code").doc("BEA series code for this trade statistic").type().stringType().noDefault()
-        .name("value").doc("Trade value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("trade_type").doc("Type of trade: 'Exports', 'Imports', or 'Other'").type().stringType().noDefault()
-        .name("category").doc("Trade category: 'Goods', 'Services', or 'Total'").type().stringType().noDefault()
-        .name("trade_balance").doc("Calculated trade balance (exports minus imports) in millions of dollars").type().doubleType().noDefault()
-        .endRecord();
+    // Data is already in Map format, just pass through
+    // (keep all transformation logic - none needed here)
 
-    // Convert to GenericRecord list
-    List<GenericRecord> avroRecords = new ArrayList<>();
-    for (Map<String, Object> record : records) {
-      GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("table_id", record.get("table_id"));
-      avroRecord.put("line_number", record.get("line_number"));
-      avroRecord.put("line_description", record.get("line_description"));
-      avroRecord.put("series_code", record.get("series_code"));
-      avroRecord.put("value", record.get("value"));
-      avroRecord.put("units", record.get("units"));
-      avroRecord.put("frequency", record.get("frequency"));
-      avroRecord.put("trade_type", record.get("trade_type"));
-      avroRecord.put("category", record.get("category"));
-      avroRecord.put("trade_balance", record.get("trade_balance"));
-      avroRecords.add(avroRecord);
-    }
-
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(targetFilePath, schema, avroRecords, "trade_statistics");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("trade_statistics");
+    storageProvider.writeAvroParquet(targetFilePath, columns, records, "TradeStatistics", "TradeStatistics");
   }
 
   /**
@@ -2688,40 +2566,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return records;
   }
 
-  @SuppressWarnings("deprecation")
   private void writeItaDataParquetFromMaps(List<Map<String, Object>> records, String outputFile) throws IOException {
-    Schema schema = SchemaBuilder.record("ItaData")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("indicator").doc("BEA indicator code for international transactions").type().stringType().noDefault()
-        .name("indicator_description").doc("Full description of the ITA indicator").type().stringType().noDefault()
-        .name("area_or_country").doc("Geographic area or country name for the transaction").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("year").doc("Year of the ITA observation").type().intType().noDefault()
-        .name("value").doc("Transaction value in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("time_series_id").doc("Unique identifier for the time series").type().stringType().noDefault()
-        .name("time_series_description").doc("Description of the time series").type().stringType().noDefault()
-        .endRecord();
+    // Data is already in Map format, just pass through
+    // (keep all transformation logic - none needed here)
 
-    // Convert to GenericRecord list
-    List<GenericRecord> avroRecords = new ArrayList<>();
-    for (Map<String, Object> record : records) {
-      GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("indicator", record.get("indicator"));
-      avroRecord.put("indicator_description", record.get("indicator_description"));
-      avroRecord.put("area_or_country", record.get("area_or_country"));
-      avroRecord.put("frequency", record.get("frequency"));
-      avroRecord.put("year", record.get("year"));
-      avroRecord.put("value", record.get("value"));
-      avroRecord.put("units", record.get("units"));
-      avroRecord.put("time_series_id", record.get("time_series_id"));
-      avroRecord.put("time_series_description", record.get("time_series_description"));
-      avroRecords.add(avroRecord);
-    }
-
-    // Use StorageProvider to write the parquet file (consistent with rest of codebase)
-    storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "ita_data");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("ita_data");
+    storageProvider.writeAvroParquet(outputFile, columns, records, "ItaData", "ItaData");
     LOGGER.debug("ITA data Parquet written: {} ({} records)", outputFile, records.size());
   }
 
@@ -2800,38 +2652,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return records;
   }
 
-  @SuppressWarnings("deprecation")
   private void writeIndustryGdpParquetFromMaps(List<Map<String, Object>> records, String outputFile) throws IOException {
-    Schema schema = SchemaBuilder.record("IndustryGdp")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("table_id").doc("BEA table identifier for industry GDP data").type().stringType().noDefault()
-        .name("quarter").doc("Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data").type().stringType().noDefault()
-        .name("industry_code").doc("NAICS industry code").type().stringType().noDefault()
-        .name("industry_description").doc("Full description of the industry").type().stringType().noDefault()
-        .name("value").doc("GDP value for the industry in millions of dollars").type().doubleType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Millions of Dollars')").type().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Annual', 'Quarterly')").type().stringType().noDefault()
-        .name("note_ref").doc("Reference to footnotes or data quality notes").type().stringType().noDefault()
-        .endRecord();
+    // Data is already in Map format, just pass through
+    // (keep all transformation logic - none needed here)
 
-    // Convert to GenericRecords
-    List<GenericRecord> avroRecords = new ArrayList<>();
-    for (Map<String, Object> record : records) {
-      GenericRecord avroRecord = new GenericData.Record(schema);
-      avroRecord.put("table_id", String.valueOf(record.get("table_id")));
-      avroRecord.put("quarter", record.get("quarter"));
-      avroRecord.put("industry_code", record.get("industry_code"));
-      avroRecord.put("industry_description", record.get("industry_description"));
-      avroRecord.put("value", record.get("value"));
-      avroRecord.put("units", record.get("units"));
-      avroRecord.put("frequency", record.get("frequency"));
-      avroRecord.put("note_ref", record.get("note_ref"));
-      avroRecords.add(avroRecord);
-    }
-
-    // Use StorageProvider to write the parquet file
-    storageProvider.writeAvroParquet(outputFile, schema, avroRecords, "industry_gdp");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("industry_gdp");
+    storageProvider.writeAvroParquet(outputFile, columns, records, "IndustryGdp", "IndustryGdp");
     LOGGER.debug("Industry GDP Parquet written (Map version): {} ({} records)", outputFile, records.size());
   }
 
@@ -2893,17 +2721,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("GdpStatistics")
-        .fields()
-        .name("year").doc("Year of the GDP observation").type().intType().noDefault()
-        .name("quarter").doc("Quarter number (1-4) for quarterly data, null for annual data").type().nullable().intType().noDefault()
-        .name("metric").doc("GDP metric name (e.g., 'Nominal GDP', 'Real GDP', 'Personal Consumption')").type().stringType().noDefault()
-        .name("value").doc("GDP value in millions of dollars").type().doubleType().noDefault()
-        .name("percent_change").doc("Percent change from previous period").type().nullable().doubleType().noDefault()
-        .name("seasonally_adjusted").doc("Whether the data is seasonally adjusted ('Yes' or 'No')").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     Map<String, Object> data;
     try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
          InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
@@ -2975,7 +2794,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       // Add annual metrics with percent changes
       for (Map.Entry<String, Double> entry : gdpMetrics.entrySet()) {
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("year", year);
         record.put("quarter", null);
         record.put("metric", entry.getKey());
@@ -2992,12 +2811,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         }
         record.put("percent_change", percentChange);
         record.put("seasonally_adjusted", "Y");
-        records.add(record);
+        dataRecords.add(record);
       }
 
       // Calculate and add GDP growth rate if we have both nominal and real GDP
       if (gdpMetrics.containsKey("Real GDP")) {
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("year", year);
         record.put("quarter", null);
         record.put("metric", "GDP Growth Rate");
@@ -3015,12 +2834,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         record.put("value", growthRate != null ? growthRate : null);
         record.put("percent_change", growthRate);
         record.put("seasonally_adjusted", "Y");
-        records.add(record);
+        dataRecords.add(record);
       }
     }
 
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "GdpStatistics");
-    LOGGER.debug("Converted {} GDP statistics records to parquet: {}", records.size(), targetFilePath);
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("gdp_statistics");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "GdpStatistics", "GdpStatistics");
+    LOGGER.debug("Converted {} GDP statistics records to parquet: {}", dataRecords.size(), targetFilePath);
   }
 
 }
