@@ -131,11 +131,35 @@ public class InformationSchema extends AbstractSchema {
     @Override public Enumerable<Object[]> scan(DataContext root) {
       List<Object[]> rows = new ArrayList<>();
 
+      LOGGER.info("========== SchemataTable.scan START ==========");
+      LOGGER.info("rootSchema class: {}", rootSchema.getClass().getName());
+      LOGGER.info("Available schemas: {}", rootSchema.subSchemas().getNames(LikePattern.any()));
+
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
-        Schema schema = rootSchema.subSchemas().get(schemaName);
+        LOGGER.info("--- Processing schema: '{}' ---", schemaName);
+        SchemaPlus schemaPlus = rootSchema.subSchemas().get(schemaName);
+        LOGGER.info("  schemaPlus null? {}, class: {}",
+            schemaPlus == null, schemaPlus != null ? schemaPlus.getClass().getName() : "N/A");
+
+        // Unwrap to get the actual Schema implementation (needed for CommentableSchema support)
+        // Use CalciteSchema.from() to access the public 'schema' field which contains the underlying implementation
+        Schema schema = null;
+        if (schemaPlus != null) {
+          org.apache.calcite.jdbc.CalciteSchema calciteSchema =
+              org.apache.calcite.jdbc.CalciteSchema.from(schemaPlus);
+          schema = calciteSchema.schema;  // Access public field with actual schema implementation
+        }
+        LOGGER.info("  unwrapped Schema null? {}, class: {}, implements CommentableSchema: {}",
+            schema == null, schema != null ? schema.getClass().getName() : "N/A",
+            schema instanceof CommentableSchema);
+
         String comment = null;
         if (schema instanceof CommentableSchema) {
           comment = ((CommentableSchema) schema).getComment();
+          LOGGER.info("  ✓ CommentableSchema.getComment() returned: {}",
+              comment != null && comment.length() > 80 ? comment.substring(0, 77) + "..." : comment);
+        } else {
+          LOGGER.info("  ✗ Schema '{}' does NOT implement CommentableSchema", schemaName);
         }
         rows.add(new Object[]{
             catalogName,
@@ -148,6 +172,8 @@ public class InformationSchema extends AbstractSchema {
             comment  // REMARKS
         });
       }
+
+      LOGGER.info("========== SchemataTable.scan END (processed {} schemas) ==========", rows.size());
 
       // Also add metadata schemas
       rows.add(new Object[]{catalogName, "information_schema", "CALCITE", null, null, "UTF8", null, null});
@@ -299,7 +325,12 @@ public class InformationSchema extends AbstractSchema {
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
             // IMPORTANT: Use getTable() instead of tables().get() to ensure schema's
             // getTable() override is called (needed for wrapped tables with comment support)
-            Schema unwrappedSchema = schema.unwrap(Schema.class);
+            Schema unwrappedSchema = null;
+            if (schema != null) {
+              org.apache.calcite.jdbc.CalciteSchema calciteSchema =
+                  org.apache.calcite.jdbc.CalciteSchema.from(schema);
+              unwrappedSchema = calciteSchema.schema;  // Access public field with actual implementation
+            }
             @SuppressWarnings("deprecation")
             Table table = unwrappedSchema != null ? unwrappedSchema.getTable(tableName) : schema.tables().get(tableName);
             LOGGER.info("ColumnsTable.scan: Processing table '{}' in schema '{}'",

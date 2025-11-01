@@ -216,6 +216,19 @@ public class PartitionedTableConfig {
     Map<String, String> columnComments = parseColumnComments(map.get("column_comments"));
     List<TableColumn> columns = parseColumns(map.get("columns"));
 
+    // Extract column comments from TableColumn objects if no separate column_comments was provided
+    if ((columnComments == null || columnComments.isEmpty()) && columns != null) {
+      columnComments = new java.util.LinkedHashMap<>();
+      for (TableColumn col : columns) {
+        if (col.getComment() != null) {
+          columnComments.put(col.getName(), col.getComment());
+        }
+      }
+      if (columnComments.isEmpty()) {
+        columnComments = null;  // Keep consistent with parseColumnComments behavior
+      }
+    }
+
     PartitionConfig partitionConfig = null;
     Map<String, Object> partitionsMap = (Map<String, Object>) map.get("partitions");
     if (partitionsMap != null) {
