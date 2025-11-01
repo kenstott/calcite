@@ -3,178 +3,578 @@
   "partitionedTables": [
     {
       "name": "employment_statistics",
-      "pattern": "type=indicators/year=*/employment_statistics.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/employment_statistics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier (e.g., 'LNS14000000' for unemployment rate)"},
-        {"name": "series_name", "type": "string", "nullable": false, "comment": "Descriptive name of employment series"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Employment statistic value (e.g., unemployment rate as percentage)"},
-        {"name": "unit", "type": "string", "nullable": true, "comment": "Unit of measurement (e.g., 'Percent', 'Thousands of Persons')"},
-        {"name": "seasonally_adjusted", "type": "boolean", "nullable": true, "comment": "Whether data is seasonally adjusted"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"},
-        {"name": "category", "type": "string", "nullable": true, "comment": "Employment category (e.g., 'Labor Force', 'Employment Level')"},
-        {"name": "subcategory", "type": "string", "nullable": true, "comment": "Employment subcategory for detailed classification"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier (e.g., 'LNS14000000' for unemployment rate)"
+        },
+        {
+          "name": "series_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Descriptive name of employment series"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Employment statistic value (e.g., unemployment rate as percentage)"
+        },
+        {
+          "name": "unit",
+          "type": "string",
+          "nullable": true,
+          "comment": "Unit of measurement (e.g., 'Percent', 'Thousands of Persons')"
+        },
+        {
+          "name": "seasonally_adjusted",
+          "type": "boolean",
+          "nullable": true,
+          "comment": "Whether data is seasonally adjusted"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "nullable": true,
+          "comment": "Employment category (e.g., 'Labor Force', 'Employment Level')"
+        },
+        {
+          "name": "subcategory",
+          "type": "string",
+          "nullable": true,
+          "comment": "Employment subcategory for detailed classification"
+        }
       ]
     },
     {
       "name": "inflation_metrics",
-      "pattern": "type=indicators/year=*/inflation_metrics.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/inflation_metrics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "index_type", "type": "string", "nullable": false, "comment": "Price index type (CPI=Consumer Price Index, PPI=Producer Price Index)"},
-        {"name": "item_code", "type": "string", "nullable": false, "comment": "BLS item code identifying specific goods/services category"},
-        {"name": "area_code", "type": "string", "nullable": false, "comment": "BLS area code (e.g., 'U'=U.S. city average, regional codes)"},
-        {"name": "item_name", "type": "string", "nullable": false, "comment": "Description of goods/services category (e.g., 'Food', 'Energy', 'All items')"},
-        {"name": "index_value", "type": "double", "nullable": false, "comment": "Price index value (typically base period = 100)"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change in price index"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change in price index"},
-        {"name": "area_name", "type": "string", "nullable": true, "comment": "Geographic area name (e.g., 'U.S. City Average', 'Los Angeles')"},
-        {"name": "seasonally_adjusted", "type": "boolean", "nullable": true, "comment": "Whether price index is seasonally adjusted"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "index_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Price index type (CPI=Consumer Price Index, PPI=Producer Price Index)"
+        },
+        {
+          "name": "item_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS item code identifying specific goods/services category"
+        },
+        {
+          "name": "area_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS area code (e.g., 'U'=U.S. city average, regional codes)"
+        },
+        {
+          "name": "item_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Description of goods/services category (e.g., 'Food', 'Energy', 'All items')"
+        },
+        {
+          "name": "index_value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Price index value (typically base period = 100)"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change in price index"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change in price index"
+        },
+        {
+          "name": "area_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Geographic area name (e.g., 'U.S. City Average', 'Los Angeles')"
+        },
+        {
+          "name": "seasonally_adjusted",
+          "type": "boolean",
+          "nullable": true,
+          "comment": "Whether price index is seasonally adjusted"
+        }
       ]
     },
     {
       "name": "regional_cpi",
-      "pattern": "type=cpi_regional/year=*/regional_cpi.parquet",
+      "pattern": "type=cpi_regional/frequency=*/year=*/regional_cpi.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "area_code", "type": "string", "nullable": false, "comment": "Census region code"},
-        {"name": "area_name", "type": "string", "nullable": false, "comment": "Census region name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "CPI value (base period = 100)"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "area_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Census region code"
+        },
+        {
+          "name": "area_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Census region name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "CPI value (base period = 100)"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "metro_cpi",
-      "pattern": "type=cpi_metro/year=*/metro_cpi.parquet",
+      "pattern": "type=cpi_metro/frequency=*/year=*/metro_cpi.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Consumer Price Index for 27 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "area_code", "type": "string", "nullable": false, "comment": "Metro area code"},
-        {"name": "area_name", "type": "string", "nullable": false, "comment": "Metro area name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "CPI value (base period = 100)"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "area_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area code"
+        },
+        {
+          "name": "area_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "CPI value (base period = 100)"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "state_industry",
-      "pattern": "type=state_industry/year=*/state_industry.parquet",
+      "pattern": "type=state_industry/frequency=*/year=*/state_industry.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "state_code", "type": "string", "nullable": false, "comment": "State FIPS code"},
-        {"name": "state_name", "type": "string", "nullable": false, "comment": "State name"},
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "NAICS supersector code"},
-        {"name": "industry_name", "type": "string", "nullable": false, "comment": "Industry name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Employment in thousands"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "state_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "State FIPS code"
+        },
+        {
+          "name": "state_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "State name"
+        },
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "NAICS supersector code"
+        },
+        {
+          "name": "industry_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Industry name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Employment in thousands"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "state_wages",
-      "pattern": "type=state_wages/year=*/state_wages.parquet",
+      "pattern": "type=state_wages/frequency=*/year=*/state_wages.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "state_code", "type": "string", "nullable": false, "comment": "State FIPS code"},
-        {"name": "state_name", "type": "string", "nullable": false, "comment": "State name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Average weekly wage in dollars"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "state_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "State FIPS code"
+        },
+        {
+          "name": "state_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "State name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Average weekly wage in dollars"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "metro_industry",
-      "pattern": "type=metro_industry/year=*/metro_industry.parquet",
+      "pattern": "type=metro_industry/frequency=*/year=*/metro_industry.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "metro_code", "type": "string", "nullable": false, "comment": "Metro area code"},
-        {"name": "metro_name", "type": "string", "nullable": false, "comment": "Metro area name"},
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "NAICS supersector code"},
-        {"name": "industry_name", "type": "string", "nullable": false, "comment": "Industry name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Employment in thousands"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "metro_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area code"
+        },
+        {
+          "name": "metro_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area name"
+        },
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "NAICS supersector code"
+        },
+        {
+          "name": "industry_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Industry name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Employment in thousands"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "metro_wages",
-      "pattern": "type=metro_wages/year=*/metro_wages.parquet",
+      "pattern": "type=metro_wages/frequency=*/year=*/metro_wages.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "metro_code", "type": "string", "nullable": false, "comment": "Metro area code"},
-        {"name": "metro_name", "type": "string", "nullable": false, "comment": "Metro area name"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Average weekly wage in dollars"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "metro_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area code"
+        },
+        {
+          "name": "metro_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Metro area name"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Average weekly wage in dollars"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
@@ -183,21 +583,70 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "frequency", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research.",
       "columns": [
-        {"name": "area_fips", "type": "string", "nullable": false, "comment": "County FIPS code"},
-        {"name": "own_code", "type": "string", "nullable": false, "comment": "Ownership code (private, federal, state, local government)"},
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "NAICS industry code"},
-        {"name": "agglvl_code", "type": "string", "nullable": false, "comment": "Aggregation level code"},
-        {"name": "annual_avg_estabs", "type": "int", "nullable": true, "comment": "Average annual establishment count"},
-        {"name": "annual_avg_emplvl", "type": "int", "nullable": true, "comment": "Average annual employment level"},
-        {"name": "total_annual_wages", "type": "long", "nullable": true, "comment": "Total annual wages in dollars"},
-        {"name": "annual_avg_wkly_wage", "type": "int", "nullable": true, "comment": "Average weekly wage in dollars"}
+        {
+          "name": "area_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "County FIPS code"
+        },
+        {
+          "name": "own_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Ownership code (private, federal, state, local government)"
+        },
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "NAICS industry code"
+        },
+        {
+          "name": "agglvl_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Aggregation level code"
+        },
+        {
+          "name": "annual_avg_estabs",
+          "type": "int",
+          "nullable": true,
+          "comment": "Average annual establishment count"
+        },
+        {
+          "name": "annual_avg_emplvl",
+          "type": "int",
+          "nullable": true,
+          "comment": "Average annual employment level"
+        },
+        {
+          "name": "total_annual_wages",
+          "type": "long",
+          "nullable": true,
+          "comment": "Total annual wages in dollars"
+        },
+        {
+          "name": "annual_avg_wkly_wage",
+          "type": "int",
+          "nullable": true,
+          "comment": "Average weekly wage in dollars"
+        }
       ]
     },
     {
@@ -206,88 +655,292 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "frequency", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Average weekly wages for all 6,038 U.S. counties from BLS QCEW (Quarterly Census of Employment and Wages). Most granular geographic wage data available, enabling county-level compensation analysis, local labor market studies, and rural-urban wage comparisons. Essential for detailed regional economic analysis.",
       "columns": [
-        {"name": "county_fips", "type": "string", "nullable": false, "comment": "County FIPS code"},
-        {"name": "county_name", "type": "string", "nullable": false, "comment": "County name"},
-        {"name": "state_fips", "type": "string", "nullable": false, "comment": "State FIPS code"},
-        {"name": "state_name", "type": "string", "nullable": false, "comment": "State name"},
-        {"name": "average_weekly_wage", "type": "double", "nullable": false, "comment": "Average weekly wage in dollars"},
-        {"name": "total_employment", "type": "int", "nullable": false, "comment": "Total employment count"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year"}
+        {
+          "name": "county_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "County FIPS code"
+        },
+        {
+          "name": "county_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "County name"
+        },
+        {
+          "name": "state_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "State FIPS code"
+        },
+        {
+          "name": "state_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "State name"
+        },
+        {
+          "name": "average_weekly_wage",
+          "type": "double",
+          "nullable": false,
+          "comment": "Average weekly wage in dollars"
+        },
+        {
+          "name": "total_employment",
+          "type": "int",
+          "nullable": false,
+          "comment": "Total employment count"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year"
+        }
       ]
     },
     {
       "name": "jolts_regional",
-      "pattern": "type=jolts_regional/year=*/jolts_regional.parquet",
+      "pattern": "type=jolts_regional/frequency=*/year=*/jolts_regional.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "region_code", "type": "string", "nullable": false, "comment": "Census region code"},
-        {"name": "region_name", "type": "string", "nullable": false, "comment": "Census region name"},
-        {"name": "metric_type", "type": "string", "nullable": false, "comment": "JOLTS metric (hires, separations, openings, quits, layoffs)"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Metric value in thousands"},
-        {"name": "percent_change_month", "type": "double", "nullable": true, "comment": "Month-over-month percentage change"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "region_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Census region code"
+        },
+        {
+          "name": "region_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Census region name"
+        },
+        {
+          "name": "metric_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "JOLTS metric (hires, separations, openings, quits, layoffs)"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Metric value in thousands"
+        },
+        {
+          "name": "percent_change_month",
+          "type": "double",
+          "nullable": true,
+          "comment": "Month-over-month percentage change"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change"
+        }
       ]
     },
     {
       "name": "jolts_state",
-      "pattern": "type=jolts_state/year=*/jolts_state.parquet",
+      "pattern": "type=jolts_state/frequency=*/year=*/jolts_state.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for all 51 U.S. jurisdictions (50 states + DC). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate at state level. Provides state-specific insights into labor market dynamics, worker mobility, and employment trends for state-level policy analysis.",
       "columns": [
-        {"name": "state_fips", "type": "string", "nullable": false, "comment": "State FIPS code"},
-        {"name": "state_name", "type": "string", "nullable": false, "comment": "State name"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year"},
-        {"name": "hires_rate", "type": "double", "nullable": false, "comment": "Hires rate"},
-        {"name": "jobopenings_rate", "type": "double", "nullable": false, "comment": "Job openings rate"},
-        {"name": "quits_rate", "type": "double", "nullable": false, "comment": "Quits rate"},
-        {"name": "layoffsdischarges_rate", "type": "double", "nullable": false, "comment": "Layoffs and discharges rate"},
-        {"name": "totalseparations_rate", "type": "double", "nullable": false, "comment": "Total separations rate"}
+        {
+          "name": "state_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "State FIPS code"
+        },
+        {
+          "name": "state_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "State name"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year"
+        },
+        {
+          "name": "hires_rate",
+          "type": "double",
+          "nullable": false,
+          "comment": "Hires rate"
+        },
+        {
+          "name": "jobopenings_rate",
+          "type": "double",
+          "nullable": false,
+          "comment": "Job openings rate"
+        },
+        {
+          "name": "quits_rate",
+          "type": "double",
+          "nullable": false,
+          "comment": "Quits rate"
+        },
+        {
+          "name": "layoffsdischarges_rate",
+          "type": "double",
+          "nullable": false,
+          "comment": "Layoffs and discharges rate"
+        },
+        {
+          "name": "totalseparations_rate",
+          "type": "double",
+          "nullable": false,
+          "comment": "Total separations rate"
+        }
       ]
     },
     {
       "name": "wage_growth",
-      "pattern": "type=indicators/year=*/wage_growth.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/wage_growth.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Average hourly earnings, weekly earnings, and employment cost index by industry and occupation. Tracks wage growth trends and labor cost pressures.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier for wage/earnings data"},
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "NAICS industry code (e.g., '00'=All industries)"},
-        {"name": "occupation_code", "type": "string", "nullable": false, "comment": "SOC occupation code (e.g., '000000'=All occupations)"},
-        {"name": "industry_name", "type": "string", "nullable": false, "comment": "Industry name or sector description"},
-        {"name": "occupation_name", "type": "string", "nullable": false, "comment": "Occupation title or job category"},
-        {"name": "average_hourly_earnings", "type": "double", "nullable": true, "comment": "Average hourly earnings in dollars"},
-        {"name": "average_weekly_earnings", "type": "double", "nullable": true, "comment": "Average weekly earnings in dollars"},
-        {"name": "employment_cost_index", "type": "double", "nullable": true, "comment": "Employment Cost Index measuring compensation costs"},
-        {"name": "percent_change_year", "type": "double", "nullable": true, "comment": "Year-over-year percentage change in wages/earnings"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier for wage/earnings data"
+        },
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "NAICS industry code (e.g., '00'=All industries)"
+        },
+        {
+          "name": "occupation_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "SOC occupation code (e.g., '000000'=All occupations)"
+        },
+        {
+          "name": "industry_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Industry name or sector description"
+        },
+        {
+          "name": "occupation_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Occupation title or job category"
+        },
+        {
+          "name": "average_hourly_earnings",
+          "type": "double",
+          "nullable": true,
+          "comment": "Average hourly earnings in dollars"
+        },
+        {
+          "name": "average_weekly_earnings",
+          "type": "double",
+          "nullable": true,
+          "comment": "Average weekly earnings in dollars"
+        },
+        {
+          "name": "employment_cost_index",
+          "type": "double",
+          "nullable": true,
+          "comment": "Employment Cost Index measuring compensation costs"
+        },
+        {
+          "name": "percent_change_year",
+          "type": "double",
+          "nullable": true,
+          "comment": "Year-over-year percentage change in wages/earnings"
+        }
       ]
     },
     {
@@ -296,19 +949,58 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"},
-          {"name": "state_fips", "type": "VARCHAR"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          },
+          {
+            "name": "state_fips",
+            "type": "VARCHAR"
+          }
         ]
       },
       "comment": "State and metropolitan area employment statistics including unemployment rates, job growth, and labor force participation by geographic region.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "BLS series identifier"},
-        {"name": "value", "type": "double", "nullable": true, "comment": "Employment statistic value"},
-        {"name": "area_code", "type": "string", "nullable": true, "comment": "BLS area code"},
-        {"name": "area_type", "type": "string", "nullable": true, "comment": "Area type classification"},
-        {"name": "measure", "type": "string", "nullable": true, "comment": "Employment measure type"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BLS series identifier"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": true,
+          "comment": "Employment statistic value"
+        },
+        {
+          "name": "area_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "BLS area code"
+        },
+        {
+          "name": "area_type",
+          "type": "string",
+          "nullable": true,
+          "comment": "Area type classification"
+        },
+        {
+          "name": "measure",
+          "type": "string",
+          "nullable": true,
+          "comment": "Employment measure type"
+        }
       ]
     },
     {
@@ -317,18 +1009,52 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "frequency", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "maturity_months", "type": "int", "nullable": false, "comment": "Maturity period in months (e.g., 1, 3, 6, 12, 60, 120, 360)"},
-        {"name": "maturity_label", "type": "string", "nullable": false, "comment": "Human-readable maturity label (e.g., '1-Month', '10-Year', '30-Year')"},
-        {"name": "yield_percent", "type": "double", "nullable": false, "comment": "Yield rate as a percentage (e.g., 4.25 for 4.25%)"},
-        {"name": "yield_type", "type": "string", "nullable": false, "comment": "Type of Treasury security (e.g., 'Treasury Bill', 'Treasury Note', 'Treasury Bond')"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "maturity_months",
+          "type": "int",
+          "nullable": false,
+          "comment": "Maturity period in months (e.g., 1, 3, 6, 12, 60, 120, 360)"
+        },
+        {
+          "name": "maturity_label",
+          "type": "string",
+          "nullable": false,
+          "comment": "Human-readable maturity label (e.g., '1-Month', '10-Year', '30-Year')"
+        },
+        {
+          "name": "yield_percent",
+          "type": "double",
+          "nullable": false,
+          "comment": "Yield rate as a percentage (e.g., 4.25 for 4.25%)"
+        },
+        {
+          "name": "yield_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of Treasury security (e.g., 'Treasury Bill', 'Treasury Note', 'Treasury Bond')"
+        }
       ]
     },
     {
@@ -337,214 +1063,688 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "frequency", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API.",
       "columns": [
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "debt_type", "type": "string", "nullable": false, "comment": "Type of federal debt (e.g., 'Total Public Debt Outstanding')"},
-        {"name": "amount_billions", "type": "double", "nullable": false, "comment": "Total debt amount in billions of dollars"},
-        {"name": "holder_category", "type": "string", "nullable": false, "comment": "Category of debt holder (always 'All' for total debt)"},
-        {"name": "debt_held_by_public", "type": "double", "nullable": false, "comment": "Portion of debt held by the public in billions of dollars"},
-        {"name": "intragovernmental_holdings", "type": "double", "nullable": false, "comment": "Intragovernmental debt holdings in billions of dollars"}
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "debt_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of federal debt (e.g., 'Total Public Debt Outstanding')"
+        },
+        {
+          "name": "amount_billions",
+          "type": "double",
+          "nullable": false,
+          "comment": "Total debt amount in billions of dollars"
+        },
+        {
+          "name": "holder_category",
+          "type": "string",
+          "nullable": false,
+          "comment": "Category of debt holder (always 'All' for total debt)"
+        },
+        {
+          "name": "debt_held_by_public",
+          "type": "double",
+          "nullable": false,
+          "comment": "Portion of debt held by the public in billions of dollars"
+        },
+        {
+          "name": "intragovernmental_holdings",
+          "type": "double",
+          "nullable": false,
+          "comment": "Intragovernmental debt holdings in billions of dollars"
+        }
       ]
     },
     {
       "name": "world_indicators",
-      "pattern": "type=indicators/year=*/world_indicators.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/world_indicators.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "International economic indicators from World Bank for major economies. Includes GDP, inflation, unemployment, government debt, and population statistics. Enables comparison of U.S. economic performance with global peers.",
       "columns": [
-        {"name": "country_code", "type": "string", "nullable": false, "comment": "ISO 3-letter country code (e.g., 'USA', 'CHN')"},
-        {"name": "country_name", "type": "string", "nullable": false, "comment": "Full country name"},
-        {"name": "indicator_code", "type": "string", "nullable": false, "comment": "World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)"},
-        {"name": "indicator_name", "type": "string", "nullable": false, "comment": "Full description of the World Bank indicator"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of observation"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Indicator value for the given country and year"},
-        {"name": "unit", "type": "string", "nullable": true, "comment": "Unit of measurement (e.g., 'current US$', 'percent')"},
-        {"name": "scale", "type": "string", "nullable": true, "comment": "Scale factor (e.g., 'Millions', 'Billions')"}
+        {
+          "name": "country_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "ISO 3-letter country code (e.g., 'USA', 'CHN')"
+        },
+        {
+          "name": "country_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full country name"
+        },
+        {
+          "name": "indicator_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)"
+        },
+        {
+          "name": "indicator_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full description of the World Bank indicator"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of observation"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Indicator value for the given country and year"
+        },
+        {
+          "name": "unit",
+          "type": "string",
+          "nullable": true,
+          "comment": "Unit of measurement (e.g., 'current US$', 'percent')"
+        },
+        {
+          "name": "scale",
+          "type": "string",
+          "nullable": true,
+          "comment": "Scale factor (e.g., 'Millions', 'Billions')"
+        }
       ]
     },
     {
       "name": "fred_indicators",
-      "pattern": "type=indicators/year=*/fred_indicators.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/fred_indicators.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Federal Reserve Economic Data (FRED) time series including GDP, interest rates, monetary aggregates, and other key economic indicators.",
       "columns": [
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "FRED series identifier"},
-        {"name": "series_name", "type": "string", "nullable": false, "comment": "Descriptive name of the economic data series"},
-        {"name": "date", "type": "string", "nullable": false, "comment": "Observation date (ISO 8601 format)"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Observed value for this date"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Percent', 'Billions of Dollars')"},
-        {"name": "frequency", "type": "string", "nullable": false, "comment": "Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')"}
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "FRED series identifier"
+        },
+        {
+          "name": "series_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Descriptive name of the economic data series"
+        },
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Observation date (ISO 8601 format)"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Observed value for this date"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Percent', 'Billions of Dollars')"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')"
+        }
       ]
     },
     {
       "name": "gdp_components",
-      "pattern": "type=indicators/year=*/gdp_components.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/gdp_components.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Detailed GDP components from BEA including consumption, investment, government spending, and net exports broken down by subcategories.",
       "columns": [
-        {"name": "table_id", "type": "string", "nullable": false, "comment": "BEA table identifier for GDP components"},
-        {"name": "line_number", "type": "int", "nullable": false, "comment": "Line number within the BEA table"},
-        {"name": "line_description", "type": "string", "nullable": false, "comment": "Description of the GDP component"},
-        {"name": "series_code", "type": "string", "nullable": false, "comment": "BEA series code for this component"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of the observation"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Component value in millions of dollars"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Millions of Dollars')"},
-        {"name": "frequency", "type": "string", "nullable": false, "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"}
+        {
+          "name": "table_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA table identifier for GDP components"
+        },
+        {
+          "name": "line_number",
+          "type": "int",
+          "nullable": false,
+          "comment": "Line number within the BEA table"
+        },
+        {
+          "name": "line_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Description of the GDP component"
+        },
+        {
+          "name": "series_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA series code for this component"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of the observation"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Component value in millions of dollars"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
+        }
       ]
     },
     {
       "name": "gdp_statistics",
-      "pattern": "type=indicators/year=*/gdp_statistics.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/gdp_statistics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Quarterly and annual GDP growth rates, nominal and real GDP values.",
       "columns": [
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of the GDP observation"},
-        {"name": "quarter", "type": "int", "nullable": true, "comment": "Quarter number (1-4) for quarterly data, null for annual data"},
-        {"name": "metric", "type": "string", "nullable": false, "comment": "GDP metric name (e.g., 'Nominal GDP', 'Real GDP', 'Personal Consumption')"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "GDP value in millions of dollars"},
-        {"name": "percent_change", "type": "double", "nullable": true, "comment": "Percent change from previous period"},
-        {"name": "seasonally_adjusted", "type": "string", "nullable": false, "comment": "Whether the data is seasonally adjusted ('Yes' or 'No')"}
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of the GDP observation"
+        },
+        {
+          "name": "quarter",
+          "type": "int",
+          "nullable": true,
+          "comment": "Quarter number (1-4) for quarterly data, null for annual data"
+        },
+        {
+          "name": "metric",
+          "type": "string",
+          "nullable": false,
+          "comment": "GDP metric name (e.g., 'Nominal GDP', 'Real GDP', 'Personal Consumption')"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "GDP value in millions of dollars"
+        },
+        {
+          "name": "percent_change",
+          "type": "double",
+          "nullable": true,
+          "comment": "Percent change from previous period"
+        },
+        {
+          "name": "seasonally_adjusted",
+          "type": "string",
+          "nullable": false,
+          "comment": "Whether the data is seasonally adjusted ('Yes' or 'No')"
+        }
       ]
     },
     {
       "name": "regional_income",
-      "pattern": "type=indicators/year=*/regional_income.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/regional_income.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.",
       "columns": [
-        {"name": "geo_fips", "type": "string", "nullable": false, "comment": "FIPS code for the geographic area (state or county)"},
-        {"name": "geo_name", "type": "string", "nullable": false, "comment": "Name of the geographic area"},
-        {"name": "metric", "type": "string", "nullable": true, "comment": "Income metric type (e.g., 'Personal Income', 'Per Capita Income')"},
-        {"name": "line_code", "type": "string", "nullable": false, "comment": "BEA line code for the income statistic"},
-        {"name": "line_description", "type": "string", "nullable": false, "comment": "Description of the income line item"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Income value in thousands of dollars or dollars (depending on metric)"},
-        {"name": "units", "type": "string", "nullable": true, "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"}
+        {
+          "name": "geo_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "FIPS code for the geographic area (state or county)"
+        },
+        {
+          "name": "geo_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Name of the geographic area"
+        },
+        {
+          "name": "metric",
+          "type": "string",
+          "nullable": true,
+          "comment": "Income metric type (e.g., 'Personal Income', 'Per Capita Income')"
+        },
+        {
+          "name": "line_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA line code for the income statistic"
+        },
+        {
+          "name": "line_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Description of the income line item"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Income value in thousands of dollars or dollars (depending on metric)"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": true,
+          "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"
+        }
       ]
     },
     {
       "name": "state_gdp",
-      "pattern": "type=indicators/year=*/state_gdp.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/state_gdp.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table). Provides both total GDP and per capita real GDP by state across all NAICS industry sectors.",
       "columns": [
-        {"name": "geo_fips", "type": "string", "nullable": false, "comment": "State FIPS code (2 digits)"},
-        {"name": "geo_name", "type": "string", "nullable": false, "comment": "State name"},
-        {"name": "metric", "type": "string", "nullable": false, "comment": "GDP metric or component description"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "GDP value in millions of dollars"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Millions of Dollars')"}
+        {
+          "name": "geo_fips",
+          "type": "string",
+          "nullable": false,
+          "comment": "State FIPS code (2 digits)"
+        },
+        {
+          "name": "geo_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "State name"
+        },
+        {
+          "name": "metric",
+          "type": "string",
+          "nullable": false,
+          "comment": "GDP metric or component description"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "GDP value in millions of dollars"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
+        }
       ]
     },
     {
       "name": "trade_statistics",
-      "pattern": "type=indicators/year=*/trade_statistics.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/trade_statistics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "Detailed U.S. export and import statistics from BEA NIPA Table T40205B. Comprehensive breakdown of goods and services trade by category with calculated trade balances.",
       "columns": [
-        {"name": "table_id", "type": "string", "nullable": false, "comment": "BEA table identifier for trade statistics"},
-        {"name": "line_number", "type": "int", "nullable": false, "comment": "Line number within the BEA table"},
-        {"name": "line_description", "type": "string", "nullable": false, "comment": "Description of the trade statistic line item"},
-        {"name": "series_code", "type": "string", "nullable": false, "comment": "BEA series code for this trade statistic"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of the trade observation"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Trade value in millions of dollars"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Millions of Dollars')"},
-        {"name": "frequency", "type": "string", "nullable": false, "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"},
-        {"name": "trade_type", "type": "string", "nullable": false, "comment": "Type of trade: 'Exports', 'Imports', or 'Other'"},
-        {"name": "category", "type": "string", "nullable": false, "comment": "Trade category: 'Goods', 'Services', or 'Total'"},
-        {"name": "trade_balance", "type": "double", "nullable": false, "comment": "Calculated trade balance (exports minus imports) in millions of dollars"}
+        {
+          "name": "table_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA table identifier for trade statistics"
+        },
+        {
+          "name": "line_number",
+          "type": "int",
+          "nullable": false,
+          "comment": "Line number within the BEA table"
+        },
+        {
+          "name": "line_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Description of the trade statistic line item"
+        },
+        {
+          "name": "series_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA series code for this trade statistic"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of the trade observation"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Trade value in millions of dollars"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
+        },
+        {
+          "name": "trade_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of trade: 'Exports', 'Imports', or 'Other'"
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "nullable": false,
+          "comment": "Trade category: 'Goods', 'Services', or 'Total'"
+        },
+        {
+          "name": "trade_balance",
+          "type": "double",
+          "nullable": false,
+          "comment": "Calculated trade balance (exports minus imports) in millions of dollars"
+        }
       ]
     },
     {
       "name": "ita_data",
-      "pattern": "type=indicators/year=*/ita_data.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/ita_data.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.",
       "columns": [
-        {"name": "indicator", "type": "string", "nullable": false, "comment": "BEA indicator code for international transactions"},
-        {"name": "indicator_description", "type": "string", "nullable": false, "comment": "Full description of the ITA indicator"},
-        {"name": "area_or_country", "type": "string", "nullable": false, "comment": "Geographic area or country name for the transaction"},
-        {"name": "frequency", "type": "string", "nullable": false, "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of the ITA observation"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "Transaction value in millions of dollars"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Millions of Dollars')"},
-        {"name": "time_series_id", "type": "string", "nullable": false, "comment": "Unique identifier for the time series"},
-        {"name": "time_series_description", "type": "string", "nullable": false, "comment": "Description of the time series"}
+        {
+          "name": "indicator",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA indicator code for international transactions"
+        },
+        {
+          "name": "indicator_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full description of the ITA indicator"
+        },
+        {
+          "name": "area_or_country",
+          "type": "string",
+          "nullable": false,
+          "comment": "Geographic area or country name for the transaction"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of the ITA observation"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "Transaction value in millions of dollars"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
+        },
+        {
+          "name": "time_series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Unique identifier for the time series"
+        },
+        {
+          "name": "time_series_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Description of the time series"
+        }
       ]
     },
     {
       "name": "industry_gdp",
-      "pattern": "type=indicators/year=*/industry_gdp.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/industry_gdp.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "year", "type": "INTEGER"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
         ]
       },
       "comment": "GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.",
       "columns": [
-        {"name": "table_id", "type": "string", "nullable": false, "comment": "BEA table identifier for industry GDP data"},
-        {"name": "frequency", "type": "string", "nullable": false, "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"},
-        {"name": "year", "type": "int", "nullable": false, "comment": "Year of the observation"},
-        {"name": "quarter", "type": "string", "nullable": false, "comment": "Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data"},
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "NAICS industry code"},
-        {"name": "industry_description", "type": "string", "nullable": false, "comment": "Full description of the industry"},
-        {"name": "value", "type": "double", "nullable": false, "comment": "GDP value for the industry in millions of dollars"},
-        {"name": "units", "type": "string", "nullable": false, "comment": "Units of measurement (e.g., 'Millions of Dollars')"},
-        {"name": "note_ref", "type": "string", "nullable": true, "comment": "Reference to footnotes or data quality notes"}
+        {
+          "name": "table_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA table identifier for industry GDP data"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
+        },
+        {
+          "name": "year",
+          "type": "int",
+          "nullable": false,
+          "comment": "Year of the observation"
+        },
+        {
+          "name": "quarter",
+          "type": "string",
+          "nullable": false,
+          "comment": "Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data"
+        },
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "NAICS industry code"
+        },
+        {
+          "name": "industry_description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full description of the industry"
+        },
+        {
+          "name": "value",
+          "type": "double",
+          "nullable": false,
+          "comment": "GDP value for the industry in millions of dollars"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": false,
+          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
+        },
+        {
+          "name": "note_ref",
+          "type": "string",
+          "nullable": true,
+          "comment": "Reference to footnotes or data quality notes"
+        }
       ]
     },
     {
@@ -553,13 +1753,26 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          }
         ]
       },
       "comment": "JOLTS industry code reference table from BLS. Maps industry codes to human-readable industry names for JOLTS data (jolts_regional, jolts_state tables). Essential dimension table for decoding JOLTS industry classifications.",
       "columns": [
-        {"name": "industry_code", "type": "string", "nullable": false, "comment": "JOLTS industry code"},
-        {"name": "industry_name", "type": "string", "nullable": false, "comment": "Industry name"}
+        {
+          "name": "industry_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "JOLTS industry code"
+        },
+        {
+          "name": "industry_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Industry name"
+        }
       ]
     },
     {
@@ -568,13 +1781,26 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          }
         ]
       },
       "comment": "JOLTS data element code reference table from BLS. Maps metric codes (JOR, HIR, QUR, TSR, LDR) to descriptions (Job Openings Rate, Hires Rate, etc.). Essential dimension table for understanding JOLTS metrics in jolts_regional and jolts_state tables.",
       "columns": [
-        {"name": "dataelement_code", "type": "string", "nullable": false, "comment": "JOLTS data element code"},
-        {"name": "dataelement_text", "type": "string", "nullable": false, "comment": "Data element description"}
+        {
+          "name": "dataelement_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "JOLTS data element code"
+        },
+        {
+          "name": "dataelement_text",
+          "type": "string",
+          "nullable": false,
+          "comment": "Data element description"
+        }
       ]
     },
     {
@@ -583,221 +1809,500 @@
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
-          {"name": "type", "type": "VARCHAR"},
-          {"name": "category", "type": "VARCHAR"},
-          {"name": "frequency", "type": "VARCHAR"},
-          {"name": "source", "type": "VARCHAR"},
-          {"name": "status", "type": "VARCHAR"}
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "category",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "source",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "status",
+            "type": "VARCHAR"
+          }
         ]
       },
       "comment": "Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.",
       "columns": [
-        {"name": "series_id", "type": "string", "nullable": false, "comment": "Unique FRED series identifier (e.g., 'UNRATE', 'GDP')"},
-        {"name": "title", "type": "string", "nullable": true, "comment": "Full descriptive title of the economic data series"},
-        {"name": "observation_start", "type": "string", "nullable": true, "comment": "Date of first available observation (ISO 8601 format)"},
-        {"name": "observation_end", "type": "string", "nullable": true, "comment": "Date of most recent observation (ISO 8601 format)"},
-        {"name": "frequency", "type": "string", "nullable": true, "comment": "Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')"},
-        {"name": "frequency_short", "type": "string", "nullable": true, "comment": "Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')"},
-        {"name": "units", "type": "string", "nullable": true, "comment": "Units of measurement (e.g., 'Percent', 'Billions of Dollars')"},
-        {"name": "units_short", "type": "string", "nullable": true, "comment": "Abbreviated units code"},
-        {"name": "seasonal_adjustment", "type": "string", "nullable": true, "comment": "Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')"},
-        {"name": "seasonal_adjustment_short", "type": "string", "nullable": true, "comment": "Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')"},
-        {"name": "last_updated", "type": "string", "nullable": true, "comment": "Timestamp of last data update (ISO 8601 format)"},
-        {"name": "popularity", "type": "int", "nullable": true, "comment": "FRED popularity score indicating usage/interest level"},
-        {"name": "group_popularity", "type": "int", "nullable": true, "comment": "Popularity score within category group"},
-        {"name": "notes", "type": "string", "nullable": true, "comment": "Detailed description, methodology, and source information"},
-        {"name": "category_id", "type": "int", "nullable": true, "comment": "FRED category ID for hierarchical classification"},
-        {"name": "category_name", "type": "string", "nullable": true, "comment": "Human-readable category name (e.g., 'National Accounts', 'Labor Markets')"},
-        {"name": "source_id", "type": "int", "nullable": true, "comment": "Data source identifier"},
-        {"name": "source_name", "type": "string", "nullable": true, "comment": "Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')"},
-        {"name": "series_status", "type": "string", "nullable": true, "comment": "Series status: 'active' (currently updated) or 'discontinued' (no longer updated)"}
+        {
+          "name": "series_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Unique FRED series identifier (e.g., 'UNRATE', 'GDP')"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "nullable": true,
+          "comment": "Full descriptive title of the economic data series"
+        },
+        {
+          "name": "observation_start",
+          "type": "string",
+          "nullable": true,
+          "comment": "Date of first available observation (ISO 8601 format)"
+        },
+        {
+          "name": "observation_end",
+          "type": "string",
+          "nullable": true,
+          "comment": "Date of most recent observation (ISO 8601 format)"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": true,
+          "comment": "Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')"
+        },
+        {
+          "name": "frequency_short",
+          "type": "string",
+          "nullable": true,
+          "comment": "Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')"
+        },
+        {
+          "name": "units",
+          "type": "string",
+          "nullable": true,
+          "comment": "Units of measurement (e.g., 'Percent', 'Billions of Dollars')"
+        },
+        {
+          "name": "units_short",
+          "type": "string",
+          "nullable": true,
+          "comment": "Abbreviated units code"
+        },
+        {
+          "name": "seasonal_adjustment",
+          "type": "string",
+          "nullable": true,
+          "comment": "Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')"
+        },
+        {
+          "name": "seasonal_adjustment_short",
+          "type": "string",
+          "nullable": true,
+          "comment": "Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')"
+        },
+        {
+          "name": "last_updated",
+          "type": "string",
+          "nullable": true,
+          "comment": "Timestamp of last data update (ISO 8601 format)"
+        },
+        {
+          "name": "popularity",
+          "type": "int",
+          "nullable": true,
+          "comment": "FRED popularity score indicating usage/interest level"
+        },
+        {
+          "name": "group_popularity",
+          "type": "int",
+          "nullable": true,
+          "comment": "Popularity score within category group"
+        },
+        {
+          "name": "notes",
+          "type": "string",
+          "nullable": true,
+          "comment": "Detailed description, methodology, and source information"
+        },
+        {
+          "name": "category_id",
+          "type": "int",
+          "nullable": true,
+          "comment": "FRED category ID for hierarchical classification"
+        },
+        {
+          "name": "category_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Human-readable category name (e.g., 'National Accounts', 'Labor Markets')"
+        },
+        {
+          "name": "source_id",
+          "type": "int",
+          "nullable": true,
+          "comment": "Data source identifier"
+        },
+        {
+          "name": "source_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')"
+        },
+        {
+          "name": "series_status",
+          "type": "string",
+          "nullable": true,
+          "comment": "Series status: 'active' (currently updated) or 'discontinued' (no longer updated)"
+        }
       ]
     }
   ],
   "constraints": {
     "employment_statistics": {
-      "primaryKey": ["date", "series_id"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["series_id"],
+          "columns": [
+            "series_id"
+          ],
           "targetSchema": "econ",
           "targetTable": "fred_indicators",
-          "targetColumns": ["series_id"]
+          "targetColumns": [
+            "series_id"
+          ]
         }
       ]
     },
     "inflation_metrics": {
-      "primaryKey": ["date", "index_type", "item_code", "area_code"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["area_code"],
+          "columns": [
+            "area_code"
+          ],
           "targetSchema": "econ",
           "targetTable": "regional_employment",
-          "targetColumns": ["area_code"]
+          "targetColumns": [
+            "area_code"
+          ]
         }
       ]
     },
     "regional_cpi": {
-      "primaryKey": ["date", "region_code"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "metro_cpi": {
-      "primaryKey": ["date", "metro_area_code"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "state_industry": {
-      "primaryKey": ["date", "state_fips", "supersector_code"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links state industry employment to geographic and demographic data for state-level analysis"
         }
       ]
     },
     "state_wages": {
-      "primaryKey": ["date", "state_fips"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links state wage data to geographic and demographic data for regional compensation analysis"
         }
       ]
     },
     "metro_industry": {
-      "primaryKey": ["date", "metro_area_code", "supersector_code"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "metro_wages": {
-      "primaryKey": ["date", "metro_area_code"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
+    },
+    "county_qcew": {
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "county_wages": {
-      "primaryKey": ["year", "county_fips"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["county_fips"],
+          "columns": [
+            "county_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "counties",
-          "targetColumns": ["county_fips"],
+          "targetColumns": [
+            "county_fips"
+          ],
           "comment": "Links county wage data to geographic and demographic data for granular regional compensation analysis and rural-urban wage comparisons"
         },
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links county wage data to state-level geography for state-aggregated analysis"
         }
       ]
     },
     "jolts_regional": {
-      "primaryKey": ["date", "region_code", "metric"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "jolts_state": {
-      "primaryKey": ["year", "state_fips", "metric"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["state_fips"],
+          "columns": [
+            "state_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links state JOLTS data to geographic and demographic data for state-level labor market dynamics analysis"
         }
       ]
     },
     "wage_growth": {
-      "primaryKey": ["date", "series_id", "industry_code", "occupation_code"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "regional_employment": {
-      "primaryKey": ["date", "area_code"],
+      "primaryKey": [
+        "type",
+        "year",
+        "state_fips"
+      ],
       "foreignKeys": [
         {
-          "columns": ["area_code"],
+          "columns": [
+            "area_code"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links regional employment to state geography when area_code represents state-level data (state FIPS codes)"
         }
       ]
     },
     "treasury_yields": {
-      "primaryKey": ["date", "maturity_months"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "federal_debt": {
-      "primaryKey": ["date", "debt_type"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "world_indicators": {
-      "primaryKey": ["country_code", "indicator_code", "year"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "fred_indicators": {
-      "primaryKey": ["series_id", "date"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "gdp_components": {
-      "primaryKey": ["table_id", "line_number", "year"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["table_id"],
+          "columns": [
+            "table_id"
+          ],
           "targetSchema": "econ",
           "targetTable": "fred_indicators",
-          "targetColumns": ["series_id"]
+          "targetColumns": [
+            "series_id"
+          ]
         }
       ]
     },
     "gdp_statistics": {
-      "primaryKey": ["year", "quarter", "metric"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "regional_income": {
-      "primaryKey": ["geo_fips", "metric", "year"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geo_fips"],
+          "columns": [
+            "geo_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links regional income to state geography for spatial analysis and demographic correlation (when geo_fips is state-level)"
         }
       ]
     },
     "state_gdp": {
-      "primaryKey": ["geo_fips", "line_code", "year"],
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["geo_fips"],
+          "columns": [
+            "geo_fips"
+          ],
           "targetSchema": "geo",
           "targetTable": "states",
-          "targetColumns": ["state_fips"],
+          "targetColumns": [
+            "state_fips"
+          ],
           "comment": "Links state GDP to geographic and demographic data for per capita analysis and regional economic comparisons"
         }
       ]
     },
     "trade_statistics": {
-      "primaryKey": ["year", "quarter", "category"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "ita_data": {
-      "primaryKey": ["year", "quarter", "account_type"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "industry_gdp": {
-      "primaryKey": ["industry_code", "year", "quarter"]
+      "primaryKey": [
+        "type",
+        "frequency",
+        "year"
+      ]
     },
     "reference_jolts_industries": {
-      "primaryKey": ["industry_code"],
+      "primaryKey": [
+        "type"
+      ],
       "comment": "Reference dimension table for JOLTS industry classifications"
     },
     "reference_jolts_dataelements": {
-      "primaryKey": ["dataelement_code"],
+      "primaryKey": [
+        "type"
+      ],
       "comment": "Reference dimension table for JOLTS metric codes and descriptions"
     },
     "fred_data_series_catalog": {
-      "primaryKey": ["series_id"],
+      "primaryKey": [
+        "type",
+        "category",
+        "frequency",
+        "source",
+        "status"
+      ],
       "indexes": [
-        ["title"],
-        ["category_id"],
-        ["units"],
-        ["frequency"],
-        ["seasonal_adjustment"],
-        ["source_name"]
+        [
+          "title"
+        ],
+        [
+          "category_id"
+        ],
+        [
+          "units"
+        ],
+        [
+          "frequency"
+        ],
+        [
+          "seasonal_adjustment"
+        ],
+        [
+          "source_name"
+        ]
       ]
     }
   },

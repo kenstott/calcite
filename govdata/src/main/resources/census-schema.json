@@ -386,7 +386,7 @@
   "constraints": {
     "acs_population": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "uniqueKeys": [
@@ -423,7 +423,7 @@
     },
     "acs_demographics": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -464,7 +464,7 @@
     },
     "acs_income": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -505,7 +505,7 @@
     },
     "acs_poverty": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -546,7 +546,7 @@
     },
     "acs_employment": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -587,7 +587,7 @@
     },
     "acs_education": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -616,7 +616,7 @@
     },
     "acs_housing": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "uniqueKeys": [
@@ -652,7 +652,7 @@
     },
     "acs_housing_costs": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -693,7 +693,7 @@
     },
     "acs_commuting": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -722,7 +722,7 @@
     },
     "acs_health_insurance": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -751,7 +751,7 @@
     },
     "acs_language": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -780,7 +780,7 @@
     },
     "acs_disability": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -809,7 +809,7 @@
     },
     "acs_veterans": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -838,7 +838,7 @@
     },
     "acs_migration": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -867,7 +867,7 @@
     },
     "acs_occupation": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -896,7 +896,7 @@
     },
     "decennial_population": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "uniqueKeys": [
@@ -932,7 +932,7 @@
     },
     "decennial_demographics": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -961,7 +961,7 @@
     },
     "decennial_housing": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [
@@ -990,9 +990,8 @@
     },
     "economic_census": {
       "primaryKey": [
-        "geoid",
-        "year",
-        "naics_code"
+        "type",
+        "year"
       ],
       "foreignKeys": [
         {
@@ -1031,9 +1030,8 @@
     },
     "county_business_patterns": {
       "primaryKey": [
-        "geoid",
-        "year",
-        "naics_code"
+        "type",
+        "year"
       ],
       "foreignKeys": [
         {
@@ -1072,7 +1070,7 @@
     },
     "population_estimates": {
       "primaryKey": [
-        "geoid",
+        "type",
         "year"
       ],
       "foreignKeys": [

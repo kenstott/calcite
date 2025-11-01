@@ -6,256 +6,988 @@
       "pattern": "cik=*/filing_type=*/year=*/*_facts.parquet",
       "comment": "XBRL financial statement data including balance sheet, income statement, and cash flow line items from SEC filings. Includes quarterly and annual data with standard GAAP classifications.",
       "columns": [
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the SEC filing (ISO 8601 format)"},
-        {"name": "concept", "type": "string", "nullable": false, "comment": "XBRL concept name (e.g., 'us-gaap:Assets', 'dei:EntityRegistrantName')"},
-        {"name": "context_ref", "type": "string", "nullable": false, "comment": "Reference to context element defining the reporting period and entity"},
-        {"name": "unit_ref", "type": "string", "nullable": true, "comment": "Reference to unit element defining measurement units (e.g., 'USD', 'shares')"},
-        {"name": "value", "type": "string", "nullable": true, "comment": "Text value of the fact element"},
-        {"name": "full_text", "type": "string", "nullable": true, "comment": "Full text content for TextBlock elements (narrative disclosures)"},
-        {"name": "numeric_value", "type": "double", "nullable": true, "comment": "Numeric value for monetary and numeric facts"},
-        {"name": "period_start", "type": "string", "nullable": true, "comment": "Start date of the reporting period (ISO 8601 format)"},
-        {"name": "period_end", "type": "string", "nullable": true, "comment": "End date of the reporting period (ISO 8601 format)"},
-        {"name": "is_instant", "type": "boolean", "nullable": false, "comment": "Whether this is an instant-in-time fact (true) or duration fact (false)"},
-        {"name": "footnote_refs", "type": "string", "nullable": true, "comment": "Comma-separated list of footnote references"},
-        {"name": "element_id", "type": "string", "nullable": false, "comment": "Unique element identifier for linking to other elements"}
-      ]
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the SEC filing (ISO 8601 format)"
+        },
+        {
+          "name": "concept",
+          "type": "string",
+          "nullable": false,
+          "comment": "XBRL concept name (e.g., 'us-gaap:Assets', 'dei:EntityRegistrantName')"
+        },
+        {
+          "name": "context_ref",
+          "type": "string",
+          "nullable": false,
+          "comment": "Reference to context element defining the reporting period and entity"
+        },
+        {
+          "name": "unit_ref",
+          "type": "string",
+          "nullable": true,
+          "comment": "Reference to unit element defining measurement units (e.g., 'USD', 'shares')"
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "nullable": true,
+          "comment": "Text value of the fact element"
+        },
+        {
+          "name": "full_text",
+          "type": "string",
+          "nullable": true,
+          "comment": "Full text content for TextBlock elements (narrative disclosures)"
+        },
+        {
+          "name": "numeric_value",
+          "type": "double",
+          "nullable": true,
+          "comment": "Numeric value for monetary and numeric facts"
+        },
+        {
+          "name": "period_start",
+          "type": "string",
+          "nullable": true,
+          "comment": "Start date of the reporting period (ISO 8601 format)"
+        },
+        {
+          "name": "period_end",
+          "type": "string",
+          "nullable": true,
+          "comment": "End date of the reporting period (ISO 8601 format)"
+        },
+        {
+          "name": "is_instant",
+          "type": "boolean",
+          "nullable": false,
+          "comment": "Whether this is an instant-in-time fact (true) or duration fact (false)"
+        },
+        {
+          "name": "footnote_refs",
+          "type": "string",
+          "nullable": true,
+          "comment": "Comma-separated list of footnote references"
+        },
+        {
+          "name": "element_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Unique element identifier for linking to other elements"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "filing_metadata",
       "pattern": "cik=*/filing_type=*/year=*/*_metadata.parquet",
       "comment": "SEC filing metadata including form types (10-K, 10-Q, 8-K), company information, filing dates, and document URLs. Core reference table for all SEC data.",
       "columns": [
-        {"name": "cik", "type": "string", "nullable": false, "comment": "Central Index Key (unique company identifier)"},
-        {"name": "accession_number", "type": "string", "nullable": false, "comment": "SEC accession number (unique filing identifier)"},
-        {"name": "filing_type", "type": "string", "nullable": false, "comment": "Type of SEC filing (e.g., '10-K', '10-Q', '8-K', 'DEF 14A')"},
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date the filing was submitted to SEC (ISO 8601 format)"},
-        {"name": "primary_document", "type": "string", "nullable": true, "comment": "Primary document filename in the filing"},
-        {"name": "company_name", "type": "string", "nullable": false, "comment": "Legal name of the registrant company"},
-        {"name": "period_of_report", "type": "string", "nullable": true, "comment": "Reporting period end date (ISO 8601 format)"},
-        {"name": "acceptance_datetime", "type": "string", "nullable": true, "comment": "Date and time the filing was accepted by SEC"},
-        {"name": "file_size", "type": "long", "nullable": true, "comment": "Total size of filing in bytes"},
-        {"name": "fiscal_year", "type": "int", "nullable": true, "comment": "Fiscal year of the reporting period"},
-        {"name": "state_of_incorporation", "type": "string", "nullable": true, "comment": "State or jurisdiction of incorporation"},
-        {"name": "fiscal_year_end", "type": "string", "nullable": true, "comment": "Fiscal year end date (MMDD format)"},
-        {"name": "business_address", "type": "string", "nullable": true, "comment": "Physical business address of the company"},
-        {"name": "mailing_address", "type": "string", "nullable": true, "comment": "Mailing address for correspondence"},
-        {"name": "phone", "type": "string", "nullable": true, "comment": "Company phone number"},
-        {"name": "document_type", "type": "string", "nullable": true, "comment": "Type of filing document (e.g., '10-K', '10-Q', '8-K')"},
-        {"name": "period_end_date", "type": "string", "nullable": true, "comment": "Period end date for the reporting period"},
-        {"name": "sic_code", "type": "string", "nullable": true, "comment": "Standard Industrial Classification code"},
-        {"name": "irs_number", "type": "string", "nullable": true, "comment": "IRS Employer Identification Number (EIN)"}
-      ]
+        {
+          "name": "cik",
+          "type": "string",
+          "nullable": false,
+          "comment": "Central Index Key (unique company identifier)"
+        },
+        {
+          "name": "accession_number",
+          "type": "string",
+          "nullable": false,
+          "comment": "SEC accession number (unique filing identifier)"
+        },
+        {
+          "name": "filing_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of SEC filing (e.g., '10-K', '10-Q', '8-K', 'DEF 14A')"
+        },
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date the filing was submitted to SEC (ISO 8601 format)"
+        },
+        {
+          "name": "primary_document",
+          "type": "string",
+          "nullable": true,
+          "comment": "Primary document filename in the filing"
+        },
+        {
+          "name": "company_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Legal name of the registrant company"
+        },
+        {
+          "name": "period_of_report",
+          "type": "string",
+          "nullable": true,
+          "comment": "Reporting period end date (ISO 8601 format)"
+        },
+        {
+          "name": "acceptance_datetime",
+          "type": "string",
+          "nullable": true,
+          "comment": "Date and time the filing was accepted by SEC"
+        },
+        {
+          "name": "file_size",
+          "type": "long",
+          "nullable": true,
+          "comment": "Total size of filing in bytes"
+        },
+        {
+          "name": "fiscal_year",
+          "type": "int",
+          "nullable": true,
+          "comment": "Fiscal year of the reporting period"
+        },
+        {
+          "name": "state_of_incorporation",
+          "type": "string",
+          "nullable": true,
+          "comment": "State or jurisdiction of incorporation"
+        },
+        {
+          "name": "fiscal_year_end",
+          "type": "string",
+          "nullable": true,
+          "comment": "Fiscal year end date (MMDD format)"
+        },
+        {
+          "name": "business_address",
+          "type": "string",
+          "nullable": true,
+          "comment": "Physical business address of the company"
+        },
+        {
+          "name": "mailing_address",
+          "type": "string",
+          "nullable": true,
+          "comment": "Mailing address for correspondence"
+        },
+        {
+          "name": "phone",
+          "type": "string",
+          "nullable": true,
+          "comment": "Company phone number"
+        },
+        {
+          "name": "document_type",
+          "type": "string",
+          "nullable": true,
+          "comment": "Type of filing document (e.g., '10-K', '10-Q', '8-K')"
+        },
+        {
+          "name": "period_end_date",
+          "type": "string",
+          "nullable": true,
+          "comment": "Period end date for the reporting period"
+        },
+        {
+          "name": "sic_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "Standard Industrial Classification code"
+        },
+        {
+          "name": "irs_number",
+          "type": "string",
+          "nullable": true,
+          "comment": "IRS Employer Identification Number (EIN)"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "filing_contexts",
       "pattern": "cik=*/filing_type=*/year=*/*_contexts.parquet",
       "comment": "XBRL context metadata defining reporting periods, business segments, and dimensional qualifiers for financial data. Links financial facts to their reporting context.",
       "columns": [
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the SEC filing (ISO 8601 format)"},
-        {"name": "context_id", "type": "string", "nullable": false, "comment": "Unique identifier for this context element"},
-        {"name": "entity_identifier", "type": "string", "nullable": false, "comment": "Entity identifier (typically CIK number)"},
-        {"name": "entity_scheme", "type": "string", "nullable": true, "comment": "Entity identifier scheme (e.g., 'http://www.sec.gov/CIK')"},
-        {"name": "period_start", "type": "string", "nullable": true, "comment": "Start date of the reporting period (ISO 8601 format)"},
-        {"name": "period_end", "type": "string", "nullable": true, "comment": "End date of the reporting period (ISO 8601 format)"},
-        {"name": "period_instant", "type": "string", "nullable": true, "comment": "Instant date for point-in-time facts (ISO 8601 format)"},
-        {"name": "segment", "type": "string", "nullable": true, "comment": "Segment dimension information (XML fragment)"},
-        {"name": "scenario", "type": "string", "nullable": true, "comment": "Scenario dimension information (XML fragment)"}
-      ]
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the SEC filing (ISO 8601 format)"
+        },
+        {
+          "name": "context_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Unique identifier for this context element"
+        },
+        {
+          "name": "entity_identifier",
+          "type": "string",
+          "nullable": false,
+          "comment": "Entity identifier (typically CIK number)"
+        },
+        {
+          "name": "entity_scheme",
+          "type": "string",
+          "nullable": true,
+          "comment": "Entity identifier scheme (e.g., 'http://www.sec.gov/CIK')"
+        },
+        {
+          "name": "period_start",
+          "type": "string",
+          "nullable": true,
+          "comment": "Start date of the reporting period (ISO 8601 format)"
+        },
+        {
+          "name": "period_end",
+          "type": "string",
+          "nullable": true,
+          "comment": "End date of the reporting period (ISO 8601 format)"
+        },
+        {
+          "name": "period_instant",
+          "type": "string",
+          "nullable": true,
+          "comment": "Instant date for point-in-time facts (ISO 8601 format)"
+        },
+        {
+          "name": "segment",
+          "type": "string",
+          "nullable": true,
+          "comment": "Segment dimension information (XML fragment)"
+        },
+        {
+          "name": "scenario",
+          "type": "string",
+          "nullable": true,
+          "comment": "Scenario dimension information (XML fragment)"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "mda_sections",
       "pattern": "cik=*/filing_type=*/year=*/*_mda.parquet",
       "comment": "Management Discussion and Analysis (MD&A) sections extracted from 10-K and 10-Q filings. Contains management narrative about company performance and outlook.",
       "columns": [
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the SEC filing (ISO 8601 format)"},
-        {"name": "section", "type": "string", "nullable": false, "comment": "Item section identifier (e.g., 'Item 7', 'Item 7A')"},
-        {"name": "subsection", "type": "string", "nullable": true, "comment": "Subsection name (e.g., 'Overview', 'Results of Operations')"},
-        {"name": "paragraph_number", "type": "int", "nullable": false, "comment": "Sequential paragraph number within the subsection"},
-        {"name": "paragraph_text", "type": "string", "nullable": false, "comment": "Full text content of the paragraph"},
-        {"name": "footnote_refs", "type": "string", "nullable": true, "comment": "Comma-separated list of footnote references"}
-      ]
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the SEC filing (ISO 8601 format)"
+        },
+        {
+          "name": "section",
+          "type": "string",
+          "nullable": false,
+          "comment": "Item section identifier (e.g., 'Item 7', 'Item 7A')"
+        },
+        {
+          "name": "subsection",
+          "type": "string",
+          "nullable": true,
+          "comment": "Subsection name (e.g., 'Overview', 'Results of Operations')"
+        },
+        {
+          "name": "paragraph_number",
+          "type": "int",
+          "nullable": false,
+          "comment": "Sequential paragraph number within the subsection"
+        },
+        {
+          "name": "paragraph_text",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full text content of the paragraph"
+        },
+        {
+          "name": "footnote_refs",
+          "type": "string",
+          "nullable": true,
+          "comment": "Comma-separated list of footnote references"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "xbrl_relationships",
       "pattern": "cik=*/filing_type=*/year=*/*_relationships.parquet",
       "comment": "XBRL calculation and presentation linkbase relationships showing how financial concepts relate to each other in SEC filings.",
       "columns": [
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the SEC filing (ISO 8601 format)"},
-        {"name": "linkbase_type", "type": "string", "nullable": false, "comment": "Type of linkbase relationship (presentation, calculation, definition)"},
-        {"name": "arc_role", "type": "string", "nullable": false, "comment": "Arc role defining relationship type (e.g., parent-child, summation-item)"},
-        {"name": "from_concept", "type": "string", "nullable": false, "comment": "Source concept in the relationship"},
-        {"name": "to_concept", "type": "string", "nullable": false, "comment": "Target concept in the relationship"},
-        {"name": "weight", "type": "double", "nullable": true, "comment": "Calculation weight (+1 for addition, -1 for subtraction)"},
-        {"name": "order", "type": "double", "nullable": true, "comment": "Presentation order for display sequencing"},
-        {"name": "preferred_label", "type": "string", "nullable": true, "comment": "Preferred label role for presentation"}
-      ]
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the SEC filing (ISO 8601 format)"
+        },
+        {
+          "name": "linkbase_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of linkbase relationship (presentation, calculation, definition)"
+        },
+        {
+          "name": "arc_role",
+          "type": "string",
+          "nullable": false,
+          "comment": "Arc role defining relationship type (e.g., parent-child, summation-item)"
+        },
+        {
+          "name": "from_concept",
+          "type": "string",
+          "nullable": false,
+          "comment": "Source concept in the relationship"
+        },
+        {
+          "name": "to_concept",
+          "type": "string",
+          "nullable": false,
+          "comment": "Target concept in the relationship"
+        },
+        {
+          "name": "weight",
+          "type": "double",
+          "nullable": true,
+          "comment": "Calculation weight (+1 for addition, -1 for subtraction)"
+        },
+        {
+          "name": "order",
+          "type": "double",
+          "nullable": true,
+          "comment": "Presentation order for display sequencing"
+        },
+        {
+          "name": "preferred_label",
+          "type": "string",
+          "nullable": true,
+          "comment": "Preferred label role for presentation"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "insider_transactions",
       "pattern": "cik=*/filing_type=*/year=*/*_insider.parquet",
       "comment": "Form 3/4/5 insider trading transactions by company officers, directors, and shareholders. Includes buy/sell transactions with prices and volumes.",
       "columns": [
-        {"name": "cik", "type": "string", "nullable": false, "comment": "Central Index Key of the issuer company"},
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the Form 3/4/5 filing (ISO 8601 format)"},
-        {"name": "filing_type", "type": "string", "nullable": false, "comment": "Type of insider filing (Form 3, Form 4, Form 5)"},
-        {"name": "reporting_person_cik", "type": "string", "nullable": false, "comment": "CIK of the reporting insider"},
-        {"name": "reporting_person_name", "type": "string", "nullable": false, "comment": "Name of the reporting insider"},
-        {"name": "is_director", "type": "boolean", "nullable": false, "comment": "Whether the insider is a director"},
-        {"name": "is_officer", "type": "boolean", "nullable": false, "comment": "Whether the insider is an officer"},
-        {"name": "is_ten_percent_owner", "type": "boolean", "nullable": false, "comment": "Whether the insider owns 10% or more of the company"},
-        {"name": "officer_title", "type": "string", "nullable": true, "comment": "Title of the officer (if applicable)"},
-        {"name": "transaction_date", "type": "string", "nullable": false, "comment": "Date of the transaction (ISO 8601 format)"},
-        {"name": "transaction_code", "type": "string", "nullable": false, "comment": "Transaction code (P=purchase, S=sale, A=award, etc.)"},
-        {"name": "security_title", "type": "string", "nullable": false, "comment": "Title of the security transacted"},
-        {"name": "shares_transacted", "type": "double", "nullable": false, "comment": "Number of shares bought or sold"},
-        {"name": "price_per_share", "type": "double", "nullable": true, "comment": "Price per share in the transaction"},
-        {"name": "shares_owned_after", "type": "double", "nullable": false, "comment": "Shares beneficially owned after the transaction"},
-        {"name": "acquired_disposed_code", "type": "string", "nullable": false, "comment": "Whether shares were acquired (A) or disposed (D)"},
-        {"name": "ownership_type", "type": "string", "nullable": false, "comment": "Type of ownership (direct or indirect)"},
-        {"name": "footnotes", "type": "string", "nullable": true, "comment": "Additional footnotes and explanations"}
-      ]
+        {
+          "name": "cik",
+          "type": "string",
+          "nullable": false,
+          "comment": "Central Index Key of the issuer company"
+        },
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the Form 3/4/5 filing (ISO 8601 format)"
+        },
+        {
+          "name": "filing_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of insider filing (Form 3, Form 4, Form 5)"
+        },
+        {
+          "name": "reporting_person_cik",
+          "type": "string",
+          "nullable": false,
+          "comment": "CIK of the reporting insider"
+        },
+        {
+          "name": "reporting_person_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Name of the reporting insider"
+        },
+        {
+          "name": "is_director",
+          "type": "boolean",
+          "nullable": false,
+          "comment": "Whether the insider is a director"
+        },
+        {
+          "name": "is_officer",
+          "type": "boolean",
+          "nullable": false,
+          "comment": "Whether the insider is an officer"
+        },
+        {
+          "name": "is_ten_percent_owner",
+          "type": "boolean",
+          "nullable": false,
+          "comment": "Whether the insider owns 10% or more of the company"
+        },
+        {
+          "name": "officer_title",
+          "type": "string",
+          "nullable": true,
+          "comment": "Title of the officer (if applicable)"
+        },
+        {
+          "name": "transaction_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the transaction (ISO 8601 format)"
+        },
+        {
+          "name": "transaction_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Transaction code (P=purchase, S=sale, A=award, etc.)"
+        },
+        {
+          "name": "security_title",
+          "type": "string",
+          "nullable": false,
+          "comment": "Title of the security transacted"
+        },
+        {
+          "name": "shares_transacted",
+          "type": "double",
+          "nullable": false,
+          "comment": "Number of shares bought or sold"
+        },
+        {
+          "name": "price_per_share",
+          "type": "double",
+          "nullable": true,
+          "comment": "Price per share in the transaction"
+        },
+        {
+          "name": "shares_owned_after",
+          "type": "double",
+          "nullable": false,
+          "comment": "Shares beneficially owned after the transaction"
+        },
+        {
+          "name": "acquired_disposed_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Whether shares were acquired (A) or disposed (D)"
+        },
+        {
+          "name": "ownership_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of ownership (direct or indirect)"
+        },
+        {
+          "name": "footnotes",
+          "type": "string",
+          "nullable": true,
+          "comment": "Additional footnotes and explanations"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "earnings_transcripts",
       "pattern": "cik=*/filing_type=*/year=*/*_earnings.parquet",
       "comment": "Quarterly earnings data extracted from 8-K filings. Contains earnings paragraphs and exhibits.",
       "columns": [
-        {"name": "cik", "type": "string", "nullable": false, "comment": "Central Index Key of the company"},
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the filing (ISO 8601 format)"},
-        {"name": "filing_type", "type": "string", "nullable": false, "comment": "Type of filing (typically 8-K for earnings)"},
-        {"name": "exhibit_number", "type": "string", "nullable": true, "comment": "Exhibit number within the filing"},
-        {"name": "section_type", "type": "string", "nullable": false, "comment": "Section type (prepared_remarks, qa_session)"},
-        {"name": "paragraph_number", "type": "int", "nullable": false, "comment": "Sequential paragraph number"},
-        {"name": "paragraph_text", "type": "string", "nullable": false, "comment": "Full text of the paragraph"},
-        {"name": "speaker_name", "type": "string", "nullable": true, "comment": "Name of the speaker (for Q&A sections)"},
-        {"name": "speaker_role", "type": "string", "nullable": true, "comment": "Role/title of the speaker"}
-      ]
+        {
+          "name": "cik",
+          "type": "string",
+          "nullable": false,
+          "comment": "Central Index Key of the company"
+        },
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the filing (ISO 8601 format)"
+        },
+        {
+          "name": "filing_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of filing (typically 8-K for earnings)"
+        },
+        {
+          "name": "exhibit_number",
+          "type": "string",
+          "nullable": true,
+          "comment": "Exhibit number within the filing"
+        },
+        {
+          "name": "section_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Section type (prepared_remarks, qa_session)"
+        },
+        {
+          "name": "paragraph_number",
+          "type": "int",
+          "nullable": false,
+          "comment": "Sequential paragraph number"
+        },
+        {
+          "name": "paragraph_text",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full text of the paragraph"
+        },
+        {
+          "name": "speaker_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Name of the speaker (for Q&A sections)"
+        },
+        {
+          "name": "speaker_role",
+          "type": "string",
+          "nullable": true,
+          "comment": "Role/title of the speaker"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "stock_prices",
       "pattern": "stock_prices/ticker=*/year=*/*_prices.parquet",
       "comment": "Daily stock price data including open, high, low, close, and volume for SEC-reporting companies. Historical equity market data.",
       "columns": [
-        {"name": "cik", "type": "string", "nullable": false, "comment": "Central Index Key linking to SEC filing company"},
-        {"name": "ticker", "type": "string", "nullable": false, "comment": "Stock ticker symbol (e.g., 'AAPL', 'MSFT')"},
-        {"name": "date", "type": "string", "nullable": false, "comment": "Trading date (ISO 8601 format)"},
-        {"name": "open", "type": "double", "nullable": false, "comment": "Opening price for the trading day"},
-        {"name": "high", "type": "double", "nullable": false, "comment": "Highest price during the trading day"},
-        {"name": "low", "type": "double", "nullable": false, "comment": "Lowest price during the trading day"},
-        {"name": "close", "type": "double", "nullable": false, "comment": "Closing price for the trading day"},
-        {"name": "volume", "type": "long", "nullable": false, "comment": "Number of shares traded during the day"},
-        {"name": "adjusted_close", "type": "double", "nullable": true, "comment": "Closing price adjusted for splits and dividends"},
-        {"name": "split_coefficient", "type": "double", "nullable": true, "comment": "Stock split multiplier (1.0 if no split)"},
-        {"name": "dividend", "type": "double", "nullable": true, "comment": "Dividend amount paid on this date (if any)"}
-      ]
+        {
+          "name": "cik",
+          "type": "string",
+          "nullable": false,
+          "comment": "Central Index Key linking to SEC filing company"
+        },
+        {
+          "name": "ticker",
+          "type": "string",
+          "nullable": false,
+          "comment": "Stock ticker symbol (e.g., 'AAPL', 'MSFT')"
+        },
+        {
+          "name": "date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Trading date (ISO 8601 format)"
+        },
+        {
+          "name": "open",
+          "type": "double",
+          "nullable": false,
+          "comment": "Opening price for the trading day"
+        },
+        {
+          "name": "high",
+          "type": "double",
+          "nullable": false,
+          "comment": "Highest price during the trading day"
+        },
+        {
+          "name": "low",
+          "type": "double",
+          "nullable": false,
+          "comment": "Lowest price during the trading day"
+        },
+        {
+          "name": "close",
+          "type": "double",
+          "nullable": false,
+          "comment": "Closing price for the trading day"
+        },
+        {
+          "name": "volume",
+          "type": "long",
+          "nullable": false,
+          "comment": "Number of shares traded during the day"
+        },
+        {
+          "name": "adjusted_close",
+          "type": "double",
+          "nullable": true,
+          "comment": "Closing price adjusted for splits and dividends"
+        },
+        {
+          "name": "split_coefficient",
+          "type": "double",
+          "nullable": true,
+          "comment": "Stock split multiplier (1.0 if no split)"
+        },
+        {
+          "name": "dividend",
+          "type": "double",
+          "nullable": true,
+          "comment": "Dividend amount paid on this date (if any)"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "ticker",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     },
     {
       "name": "vectorized_blobs",
       "pattern": "cik=*/filing_type=*/year=*/*_vectorized.parquet",
       "comment": "Text embeddings and vector representations of SEC filing content for semantic search and analysis. Optional table for AI/ML applications.",
       "columns": [
-        {"name": "vector_id", "type": "string", "nullable": false, "comment": "Unique identifier for this vector"},
-        {"name": "original_blob_id", "type": "string", "nullable": false, "comment": "Identifier of the original text blob"},
-        {"name": "blob_type", "type": "string", "nullable": false, "comment": "Type of text blob (footnote, mda_paragraph, concept_group)"},
-        {"name": "filing_date", "type": "string", "nullable": false, "comment": "Date of the filing (ISO 8601 format)"},
-        {"name": "original_text", "type": "string", "nullable": false, "comment": "Original text before enrichment"},
-        {"name": "enriched_text", "type": "string", "nullable": false, "comment": "Text after adding financial context and relationships"},
-        {"name": "embedding", "type": "string", "nullable": false, "comment": "Vector embedding of the enriched text (256-dimensional float array)"},
-        {"name": "parent_section", "type": "string", "nullable": true, "comment": "Parent section identifier (e.g., 'Item 7', 'Note 1')"},
-        {"name": "relationships", "type": "string", "nullable": true, "comment": "JSON string of relationships to other blobs"},
-        {"name": "financial_concepts", "type": "string", "nullable": true, "comment": "Comma-separated list of referenced financial concepts"},
-        {"name": "tokens_used", "type": "int", "nullable": false, "comment": "Number of tokens used for this embedding"},
-        {"name": "token_budget", "type": "int", "nullable": false, "comment": "Token budget allocated for this blob"}
-      ]
+        {
+          "name": "vector_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Unique identifier for this vector"
+        },
+        {
+          "name": "original_blob_id",
+          "type": "string",
+          "nullable": false,
+          "comment": "Identifier of the original text blob"
+        },
+        {
+          "name": "blob_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Type of text blob (footnote, mda_paragraph, concept_group)"
+        },
+        {
+          "name": "filing_date",
+          "type": "string",
+          "nullable": false,
+          "comment": "Date of the filing (ISO 8601 format)"
+        },
+        {
+          "name": "original_text",
+          "type": "string",
+          "nullable": false,
+          "comment": "Original text before enrichment"
+        },
+        {
+          "name": "enriched_text",
+          "type": "string",
+          "nullable": false,
+          "comment": "Text after adding financial context and relationships"
+        },
+        {
+          "name": "embedding",
+          "type": "string",
+          "nullable": false,
+          "comment": "Vector embedding of the enriched text (256-dimensional float array)"
+        },
+        {
+          "name": "parent_section",
+          "type": "string",
+          "nullable": true,
+          "comment": "Parent section identifier (e.g., 'Item 7', 'Note 1')"
+        },
+        {
+          "name": "relationships",
+          "type": "string",
+          "nullable": true,
+          "comment": "JSON string of relationships to other blobs"
+        },
+        {
+          "name": "financial_concepts",
+          "type": "string",
+          "nullable": true,
+          "comment": "Comma-separated list of referenced financial concepts"
+        },
+        {
+          "name": "tokens_used",
+          "type": "int",
+          "nullable": false,
+          "comment": "Number of tokens used for this embedding"
+        },
+        {
+          "name": "token_budget",
+          "type": "int",
+          "nullable": false,
+          "comment": "Token budget allocated for this blob"
+        }
+      ],
+      "partitions": {
+        "columnDefinitions": [
+          {
+            "name": "cik",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "filing_type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          }
+        ]
+      }
     }
   ],
   "constraints": {
     "financial_line_items": {
-      "primaryKey": ["filing_id", "context_id", "concept_id"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["filing_id"],
+          "columns": [
+            "filing_id"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["filing_id"]
+          "targetColumns": [
+            "filing_id"
+          ]
         },
         {
-          "columns": ["context_id"],
+          "columns": [
+            "context_id"
+          ],
           "targetTable": "filing_contexts",
-          "targetColumns": ["context_id"]
+          "targetColumns": [
+            "context_id"
+          ]
         }
       ]
     },
     "filing_metadata": {
-      "primaryKey": ["filing_id"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "unique": [
-        ["cik", "form_type", "filing_date", "period_end_date"]
+        [
+          "cik",
+          "form_type",
+          "filing_date",
+          "period_end_date"
+        ]
       ]
     },
     "filing_contexts": {
-      "primaryKey": ["context_id"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["filing_id"],
+          "columns": [
+            "filing_id"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["filing_id"]
+          "targetColumns": [
+            "filing_id"
+          ]
         }
       ]
     },
     "mda_sections": {
-      "primaryKey": ["filing_id", "section_sequence"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["filing_id"],
+          "columns": [
+            "filing_id"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["filing_id"]
+          "targetColumns": [
+            "filing_id"
+          ]
         }
       ]
     },
     "xbrl_relationships": {
-      "primaryKey": ["cik", "filing_date", "linkbase_type", "from_concept", "to_concept", "arc_role"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["cik"],
+          "columns": [
+            "cik"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["cik"]
+          "targetColumns": [
+            "cik"
+          ]
         }
       ]
     },
     "insider_transactions": {
-      "primaryKey": ["cik", "filing_date", "transaction_date", "reporting_person_cik", "security_title", "shares_transacted", "transaction_code"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["cik"],
+          "columns": [
+            "cik"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["cik"],
+          "targetColumns": [
+            "cik"
+          ],
           "comment": "Links insider transactions to company filings for timing analysis and correlation with filing activity"
         }
       ]
     },
     "earnings_transcripts": {
-      "primaryKey": ["cik", "transcript_date", "transcript_id"],
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["cik"],
+          "columns": [
+            "cik"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["cik"],
+          "targetColumns": [
+            "cik"
+          ],
           "comment": "Links earnings transcripts to company filings for comprehensive earnings analysis and sentiment correlation"
         }
       ]
     },
     "stock_prices": {
-      "primaryKey": ["cik", "date"],
+      "primaryKey": [
+        "ticker",
+        "year"
+      ],
       "foreignKeys": [
         {
-          "columns": ["cik"],
+          "columns": [
+            "cik"
+          ],
           "targetTable": "filing_metadata",
-          "targetColumns": ["cik"],
+          "targetColumns": [
+            "cik"
+          ],
           "comment": "Links stock prices to company filings for event studies and price reaction analysis around filing dates"
         }
       ]
     },
     "vectorized_blobs": {
-      "primaryKey": ["source_table", "source_id", "blob_type"]
+      "primaryKey": [
+        "cik",
+        "filing_type",
+        "year"
+      ]
     }
   }
 }
