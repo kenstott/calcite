@@ -35,6 +35,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -50,51 +51,51 @@ public class EconIntegrationTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconIntegrationTest.class);
 
   private static final Set<String> PHASE1_EXPECTED_TABLES =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "fred_indicators",
           "employment_statistics",
           "inflation_metrics",
-          "wage_growth"
-      ));
+          "wage_growth"));
 
   private static final Set<String> PHASE2_EXPECTED_TABLES =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "state_wages",
           "world_indicators",
-          "metro_wages"
-      ));
+          "metro_wages"));
 
   private static final Set<String> PHASE3_EXPECTED_TABLES =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "jolts_regional",
           "metro_cpi",
           "regional_income",
-          "state_gdp"
-      ));
+          "state_gdp"));
 
   private static final Set<String> PHASE4_EXPECTED_TABLES =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "regional_income",
           "state_gdp",
           "trade_statistics",
           "ita_data",
-          "industry_gdp"
-      ));
+          "industry_gdp"));
 
   private static final Set<String> PHASE5_EXPECTED_VIEWS =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "interest_rate_spreads",
           "housing_indicators",
           "monetary_aggregates",
           "business_indicators",
-          "trade_balance_summary"
-      ));
+          "trade_balance_summary"));
 
   private static final Set<String> PHASE6_EXPECTED_TABLES =
-      new HashSet<>(Arrays.asList(
+      new HashSet<>(
+          Arrays.asList(
           "county_qcew",
-          "county_wages"
-      ));
+          "county_wages"));
 
   @BeforeAll
   public static void setup() {
@@ -628,6 +629,11 @@ public class EconIntegrationTest {
           LOGGER.info("  ✅ {} - comment: {}", schemaName,
               remarks != null && remarks.length() > 100
                   ? remarks.substring(0, 97) + "..." : remarks);
+          // Verify REMARKS actually contains comment text, not just null or empty
+          assertNotNull(remarks,
+              "ECON schema REMARKS should not be null (got null for schema: " + schemaName + ")");
+          assertFalse(remarks.isEmpty(),
+              "ECON schema REMARKS should not be empty (got empty string for schema: " + schemaName + ")");
           schemaCommentCount++;
         }
       }

@@ -63,6 +63,7 @@ public class EconDataIntegrationTest {
       + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
       + "    \"operand\": {\n"
       + "      \"dataSource\": \"econ\",\n"
+      + "      \"executionEngine\": \"DUCKDB\",\n"
       + "      \"testMode\": true,\n"
       + "      \"autoDownload\": false,\n"
       + "      \"startYear\": 2020,\n"

@@ -16,12 +16,12 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
-import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.schema.ScannableTable;
+import org.apache.calcite.schema.CommentableSchema;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlDialect;
 
@@ -39,7 +39,7 @@ import javax.sql.DataSource;
  * All aggregations, filters, joins, and other operations are executed in DuckDB.
  * Maintains a persistent connection to keep the named in-memory database alive.
  */
-public class DuckDBJdbcSchema extends JdbcSchema {
+public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBJdbcSchema.class);
 
   private final String directoryPath;
@@ -156,6 +156,25 @@ public class DuckDBJdbcSchema extends JdbcSchema {
     return fileSchema;
   }
 
+  /**
+   * Returns the schema-level comment from the underlying FileSchema.
+   * This allows INFORMATION_SCHEMA queries to see schema comments even when
+   * using DuckDB execution engine, by delegating to the FileSchema that
+   * implements CommentableSchema.
+   *
+   * @return the schema comment, or null if not available
+   */
+  @Override public @org.checkerframework.checker.nullness.qual.Nullable String getComment() {
+    if (fileSchema != null) {
+      String comment = fileSchema.getComment();
+      LOGGER.info("DuckDBJdbcSchema.getComment() returning: {}",
+                  comment != null && comment.length() > 80 ? comment.substring(0, 77) + "..." : comment);
+      return comment;
+    }
+    LOGGER.info("DuckDBJdbcSchema.getComment() returning null (fileSchema is null)");
+    return null;
+  }
+
   @Override public Set<String> getTableNames() {
     Set<String> tableNames = super.getTableNames();
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
@@ -168,13 +187,9 @@ public class DuckDBJdbcSchema extends JdbcSchema {
     if (table != null) {
       LOGGER.info("Found DuckDB table '{}' - all operations will be pushed to DuckDB", name);
 
-      // If the JDBC table already implements CommentableTable, return it as-is
-      if (table instanceof CommentableTable) {
-        LOGGER.debug("DuckDB table '{}' already implements CommentableTable", name);
-        return table;
-      }
-
       // Get the original table from FileSchema to access comment metadata
+      // ALWAYS wrap the table to provide FileSchema metadata, even if the JDBC table
+      // already implements CommentableTable (the JDBC implementation doesn't have our metadata)
       if (fileSchema != null) {
         Table originalTable = fileSchema.tables().get(name);
         LOGGER.info("Found original table for '{}': {} (CommentableTable: {})",

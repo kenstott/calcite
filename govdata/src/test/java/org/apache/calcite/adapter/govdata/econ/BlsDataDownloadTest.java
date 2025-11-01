@@ -30,7 +30,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -271,20 +270,25 @@ public class BlsDataDownloadTest {
     String csvContent =
         "area_fips,own_code,industry_code,agglvl_code,size_code,year,qtr,disclosure_code," +
         "qtrly_estabs,month1_emplvl,month2_emplvl,month3_emplvl,total_qtrly_wages," +
-        "taxable_qtrly_wages,avg_wkly_wage,avg_annual_pay\n" +
+        "taxable_qtrly_wages,avg_wkly_wage,avg_annual_pay\n"
+  +
         // Atlanta, annual data (agglvl_code=80, own_code=0, industry_code=10)
         // Fields: 0-13 as above, then field 14=1200 (weekly wage), field 15=62400 (annual pay)
         "C1206,0,10,80,0,2023,A,N,100000,2500000,2500000,2500000,50000000000," +
-        "45000000000,1200,62400\n" +
+        "45000000000,1200,62400\n"
+  +
         // Austin, annual data (agglvl_code=80, own_code=0, industry_code=10)
         "C1242,0,10,80,0,2023,A,N,80000,2000000,2000000,2000000,45000000000," +
-        "40000000000,1300,67600\n" +
+        "40000000000,1300,67600\n"
+  +
         // Should be filtered out: wrong agglvl_code (county level)
         "C1206,0,10,40,0,2023,A,N,50000,1000000,1000000,1000000,25000000000," +
-        "22000000000,1100,57200\n" +
+        "22000000000,1100,57200\n"
+  +
         // Should be filtered out: wrong own_code (private only)
         "C1206,5,10,80,0,2023,A,N,60000,1500000,1500000,1500000,30000000000," +
-        "27000000000,1150,59800\n" +
+        "27000000000,1150,59800\n"
+  +
         // Should be filtered out: wrong industry_code (not total)
         "C1206,0,1012,80,0,2023,A,N,70000,1750000,1750000,1750000,35000000000," +
         "31500000000,1175,61100\n";
@@ -351,17 +355,23 @@ public class BlsDataDownloadTest {
 
     // Create test JSON data with both annual and quarterly records
     String jsonPath = "metro_wages_test.json";
-    String jsonContent = "[\n" +
+    String jsonContent = "[\n"
+  +
         "  {\"metro_area_code\":\"A419\",\"metro_area_name\":\"Atlanta-Sandy Springs-Roswell, GA\"," +
-        "\"year\":2023,\"qtr\":\"A\",\"average_weekly_wage\":1200,\"average_annual_pay\":62400},\n" +
+        "\"year\":2023,\"qtr\":\"A\",\"average_weekly_wage\":1200,\"average_annual_pay\":62400},\n"
+  +
         "  {\"metro_area_code\":\"A419\",\"metro_area_name\":\"Atlanta-Sandy Springs-Roswell, GA\"," +
-        "\"year\":2023,\"qtr\":\"1\",\"average_weekly_wage\":1180,\"average_annual_pay\":61360},\n" +
+        "\"year\":2023,\"qtr\":\"1\",\"average_weekly_wage\":1180,\"average_annual_pay\":61360},\n"
+  +
         "  {\"metro_area_code\":\"A419\",\"metro_area_name\":\"Atlanta-Sandy Springs-Roswell, GA\"," +
-        "\"year\":2023,\"qtr\":\"2\",\"average_weekly_wage\":1190,\"average_annual_pay\":61880},\n" +
+        "\"year\":2023,\"qtr\":\"2\",\"average_weekly_wage\":1190,\"average_annual_pay\":61880},\n"
+  +
         "  {\"metro_area_code\":\"A419\",\"metro_area_name\":\"Atlanta-Sandy Springs-Roswell, GA\"," +
-        "\"year\":2023,\"qtr\":\"3\",\"average_weekly_wage\":1210,\"average_annual_pay\":62920},\n" +
+        "\"year\":2023,\"qtr\":\"3\",\"average_weekly_wage\":1210,\"average_annual_pay\":62920},\n"
+  +
         "  {\"metro_area_code\":\"A419\",\"metro_area_name\":\"Atlanta-Sandy Springs-Roswell, GA\"," +
-        "\"year\":2023,\"qtr\":\"4\",\"average_weekly_wage\":1220,\"average_annual_pay\":63440}\n" +
+        "\"year\":2023,\"qtr\":\"4\",\"average_weekly_wage\":1220,\"average_annual_pay\":63440}\n"
+  +
         "]";
 
     storageProvider.writeFile(jsonPath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -383,8 +393,8 @@ public class BlsDataDownloadTest {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       try (Statement stmt = conn.createStatement()) {
         // Test JSON can be read with qtr field
-        String readQuery = String.format(
-            "SELECT metro_area_code, year, qtr, average_weekly_wage, average_annual_pay " +
+        String readQuery =
+            String.format("SELECT metro_area_code, year, qtr, average_weekly_wage, average_annual_pay " +
             "FROM read_json_auto('%s')",
             localJsonFile.getAbsolutePath());
 
@@ -418,8 +428,8 @@ public class BlsDataDownloadTest {
         }
 
         // Test backward compatibility: Query without qtr in WHERE clause
-        String backwardCompatQuery = String.format(
-            "SELECT metro_area_code, year, average_annual_pay FROM read_json_auto('%s') " +
+        String backwardCompatQuery =
+            String.format("SELECT metro_area_code, year, average_annual_pay FROM read_json_auto('%s') " +
             "WHERE metro_area_code = 'A419' AND year = 2023",
             localJsonFile.getAbsolutePath());
 
@@ -434,8 +444,8 @@ public class BlsDataDownloadTest {
         }
 
         // Test new functionality: Query with qtr column filter
-        String qtrQuery = String.format(
-            "SELECT metro_area_code, year, qtr, average_weekly_wage FROM read_json_auto('%s') " +
+        String qtrQuery =
+            String.format("SELECT metro_area_code, year, qtr, average_weekly_wage FROM read_json_auto('%s') " +
             "WHERE metro_area_code = 'A419' AND year = 2023 AND qtr = 'A'",
             localJsonFile.getAbsolutePath());
 
@@ -448,8 +458,8 @@ public class BlsDataDownloadTest {
         }
 
         // Test quarterly filtering
-        String quarterlyQuery = String.format(
-            "SELECT qtr, average_weekly_wage FROM read_json_auto('%s') " +
+        String quarterlyQuery =
+            String.format("SELECT qtr, average_weekly_wage FROM read_json_auto('%s') " +
             "WHERE metro_area_code = 'A419' AND year = 2023 AND qtr IN ('1', '2', '3', '4') " +
             "ORDER BY qtr",
             localJsonFile.getAbsolutePath());
