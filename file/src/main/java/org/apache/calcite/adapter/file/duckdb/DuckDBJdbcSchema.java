@@ -16,8 +16,12 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlDialect;
 
@@ -163,14 +167,100 @@ public class DuckDBJdbcSchema extends JdbcSchema {
     Table table = super.getTable(name);
     if (table != null) {
       LOGGER.info("Found DuckDB table '{}' - all operations will be pushed to DuckDB", name);
+
+      // If the JDBC table already implements CommentableTable, return it as-is
+      if (table instanceof CommentableTable) {
+        LOGGER.debug("DuckDB table '{}' already implements CommentableTable", name);
+        return table;
+      }
+
+      // Get the original table from FileSchema to access comment metadata
+      if (fileSchema != null) {
+        Table originalTable = fileSchema.tables().get(name);
+        LOGGER.info("Found original table for '{}': {} (CommentableTable: {})",
+                    name, originalTable != null ? originalTable.getClass().getSimpleName() : "null",
+                    originalTable instanceof CommentableTable);
+        if (originalTable instanceof CommentableTable) {
+          LOGGER.info("Wrapping DuckDB table '{}' with CommentableTable delegation for metadata access", name);
+          // Wrap the JDBC table to delegate comment methods to the original table
+          return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
+        }
+      } else {
+        LOGGER.info("fileSchema is null for table '{}'", name);
+      }
     } else {
       LOGGER.warn("Table '{}' not found in DuckDB schema", name);
       // Try lowercase version
       table = super.getTable(name.toLowerCase());
       if (table != null) {
         LOGGER.info("Found table with lowercase name: '{}'", name.toLowerCase());
+
+        // Apply same wrapping logic for lowercase lookup
+        if (table instanceof CommentableTable) {
+          return table;
+        }
+
+        if (fileSchema != null) {
+          Table originalTable = fileSchema.tables().get(name.toLowerCase());
+          if (originalTable instanceof CommentableTable) {
+            return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
+          }
+        }
       }
     }
     return table;
+  }
+
+  /**
+   * Wrapper that delegates CommentableTable methods to the original FileSchema table
+   * while maintaining JdbcTable behavior for query execution.
+   * This allows INFORMATION_SCHEMA queries to see table/column comments
+   * while still pushing all query execution to DuckDB for performance.
+   */
+  private static class CommentableJdbcTableWrapper implements Table, CommentableTable {
+    private final Table jdbcTable;           // For query execution
+    private final CommentableTable commentableTable;  // For metadata
+
+    CommentableJdbcTableWrapper(Table jdbcTable, CommentableTable commentableTable) {
+      this.jdbcTable = jdbcTable;
+      this.commentableTable = commentableTable;
+    }
+
+    @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+      return jdbcTable.getRowType(typeFactory);
+    }
+
+    @Override public org.apache.calcite.schema.Statistic getStatistic() {
+      return jdbcTable.getStatistic();
+    }
+
+    @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
+      return jdbcTable.getJdbcTableType();
+    }
+
+    @Override public boolean isRolledUp(String column) {
+      return jdbcTable.isRolledUp(column);
+    }
+
+    @Override public boolean rolledUpColumnValidInsideAgg(String column,
+                                                          org.apache.calcite.sql.SqlCall call,
+                                                          org.apache.calcite.sql.SqlNode parent,
+                                                          org.apache.calcite.config.CalciteConnectionConfig config) {
+      return jdbcTable.rolledUpColumnValidInsideAgg(column, call, parent, config);
+    }
+
+    // CommentableTable methods - delegate to original table for metadata
+    @Override public @org.checkerframework.checker.nullness.qual.Nullable String getTableComment() {
+      String comment = commentableTable.getTableComment();
+      LOGGER.info("CommentableJdbcTableWrapper.getTableComment() called, returning: {}",
+                  comment != null && comment.length() > 50 ? comment.substring(0, 47) + "..." : comment);
+      return comment;
+    }
+
+    @Override public @org.checkerframework.checker.nullness.qual.Nullable String getColumnComment(String columnName) {
+      String comment = commentableTable.getColumnComment(columnName);
+      LOGGER.debug("CommentableJdbcTableWrapper.getColumnComment({}) returning: {}", columnName, comment);
+      return comment;
+    }
   }
 }

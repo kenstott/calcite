@@ -608,14 +608,36 @@ public class EconIntegrationTest {
     LOGGER.info(" ECON SCHEMA COMMENTS: INFORMATION_SCHEMA Validation");
     LOGGER.info("================================================================================");
     LOGGER.info(" This test validates that:");
+    LOGGER.info("   - Schema comments are available via INFORMATION_SCHEMA.SCHEMATA");
     LOGGER.info("   - Table comments are available via INFORMATION_SCHEMA.TABLES");
     LOGGER.info("   - Column comments are available via INFORMATION_SCHEMA.COLUMNS");
     LOGGER.info("================================================================================");
 
     try (Connection conn = createConnection()) {
-      // Test 1: Verify table comments via INFORMATION_SCHEMA.TABLES
-      LOGGER.info("\n1. Testing ECON table comments via INFORMATION_SCHEMA.TABLES:");
-      String tableQuery = "SELECT \"TABLE_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.TABLES "
+      // Test 1: Verify schema comments via INFORMATION_SCHEMA.SCHEMATA
+      LOGGER.info("\n1. Testing ECON schema comments via INFORMATION_SCHEMA.SCHEMATA:");
+      String schemaQuery = "SELECT \"SCHEMA_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.\"SCHEMATA\" "
+          + "WHERE \"SCHEMA_NAME\" = 'ECON' AND \"REMARKS\" IS NOT NULL";
+
+      int schemaCommentCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(schemaQuery)) {
+        while (rs.next()) {
+          String schemaName = rs.getString("SCHEMA_NAME");
+          String remarks = rs.getString("REMARKS");
+          LOGGER.info("  ✅ {} - comment: {}", schemaName,
+              remarks != null && remarks.length() > 100
+                  ? remarks.substring(0, 97) + "..." : remarks);
+          schemaCommentCount++;
+        }
+      }
+      assertTrue(schemaCommentCount > 0,
+          "ECON schema should have a comment in INFORMATION_SCHEMA.SCHEMATA");
+      LOGGER.info("  Found schema comment for ECON schema");
+
+      // Test 2: Verify table comments via INFORMATION_SCHEMA.TABLES
+      LOGGER.info("\n2. Testing ECON table comments via INFORMATION_SCHEMA.TABLES:");
+      String tableQuery = "SELECT \"TABLE_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.\"TABLES\" "
           + "WHERE \"TABLE_SCHEMA\" = 'ECON' AND \"REMARKS\" IS NOT NULL ORDER BY \"TABLE_NAME\"";
 
       int tableCommentCount = 0;
@@ -634,9 +656,9 @@ public class EconIntegrationTest {
           "At least one ECON table should have a comment in INFORMATION_SCHEMA.TABLES");
       LOGGER.info("  Found {} tables with comments", tableCommentCount);
 
-      // Test 2: Verify column comments via INFORMATION_SCHEMA.COLUMNS
-      LOGGER.info("\n2. Testing ECON column comments via INFORMATION_SCHEMA.COLUMNS:");
-      String columnQuery = "SELECT \"TABLE_NAME\", \"COLUMN_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.COLUMNS "
+      // Test 3: Verify column comments via INFORMATION_SCHEMA.COLUMNS
+      LOGGER.info("\n3. Testing ECON column comments via INFORMATION_SCHEMA.COLUMNS:");
+      String columnQuery = "SELECT \"TABLE_NAME\", \"COLUMN_NAME\", \"REMARKS\" FROM INFORMATION_SCHEMA.\"COLUMNS\" "
           + "WHERE \"TABLE_SCHEMA\" = 'ECON' AND \"REMARKS\" IS NOT NULL "
           + "ORDER BY \"TABLE_NAME\", \"ORDINAL_POSITION\"";
 
@@ -670,6 +692,7 @@ public class EconIntegrationTest {
 
       LOGGER.info("\n================================================================================");
       LOGGER.info(" ✅ ECON SCHEMA COMMENTS TEST COMPLETE!");
+      LOGGER.info("   - Schema comment: {} schema", schemaCommentCount);
       LOGGER.info("   - Table comments: {} tables", tableCommentCount);
       LOGGER.info("   - Column comments: {} columns", columnCommentCount);
       LOGGER.info("================================================================================");
