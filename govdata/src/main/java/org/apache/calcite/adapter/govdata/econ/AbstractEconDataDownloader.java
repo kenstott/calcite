@@ -537,7 +537,8 @@ public abstract class AbstractEconDataDownloader {
             String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
 
             if (colName != null) {
-              columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+              columns.add(
+                  new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
                   colName, colType, nullable, comment));
             }
           }

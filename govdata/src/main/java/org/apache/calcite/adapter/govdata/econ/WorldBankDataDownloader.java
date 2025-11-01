@@ -16,11 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.slf4j.Logger;
@@ -502,7 +497,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       record.put("country_name", indicator.countryName);
       record.put("indicator_code", indicator.indicatorCode);
       record.put("indicator_name", indicator.indicatorName);
-      record.put("year", indicator.year);
+      // year comes from partition key (year=*/), not parquet file
       record.put("value", indicator.value);
       record.put("unit", indicator.unit);
       record.put("scale", indicator.scale);
