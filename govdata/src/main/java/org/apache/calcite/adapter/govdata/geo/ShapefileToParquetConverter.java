@@ -38,7 +38,7 @@ import java.util.List;
  * this converter focuses on extracting attribute data from the .dbf file
  * and converting it to Parquet. Geometry is stored as WKT strings for now.
  */
-public class ShapefileToParquetConverter {
+public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShapefileToParquetConverter.class);
 
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
@@ -712,19 +712,12 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("State")
-        .fields()
-        .name("state_fips").doc("2-digit FIPS code identifying the state (e.g., '06' for California)").type().stringType().noDefault()
-        .name("state_code").doc("Geographic identifier (GEOID) for the state, matches state_fips").type().stringType().noDefault()
-        .name("state_name").doc("Full state name (e.g., 'California')").type().stringType().noDefault()
-        .name("state_abbr").doc("2-letter postal abbreviation (e.g., 'CA')").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of state boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("states");
 
     String expectedPrefix = "tl_" + year + "_us_state";
-    List<Object[]> statesData = TigerShapefileParser.parseShapefile(statesDir, expectedPrefix, feature -> {
+    List<Object[]> statesDataArrays = TigerShapefileParser.parseShapefile(statesDir, expectedPrefix, feature -> {
       return new Object[]{
           TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
           TigerShapefileParser.getStringAttribute(feature, "GEOID"),
@@ -736,10 +729,22 @@ public class ShapefileToParquetConverter {
       };
     });
 
-    if (!statesData.isEmpty()) {
-      List<GenericRecord> records = convertToGenericRecords(schema, statesData);
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, schema.getName());
-      LOGGER.info("Created states parquet file: {} with {} records", targetFilePath, records.size());
+    if (!statesDataArrays.isEmpty()) {
+      // Convert Object[] to Map<String, Object>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
+      for (Object[] arr : statesDataArrays) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
+        record.put("state_fips", arr[0]);
+        record.put("state_code", arr[1]);
+        record.put("state_name", arr[2]);
+        record.put("state_abbr", arr[3]);
+        record.put("land_area", arr[4]);
+        record.put("water_area", arr[5]);
+        record.put("geometry", arr[6]);
+        dataList.add(record);
+      }
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "State", "State");
+      LOGGER.info("Created states parquet file: {} with {} records", targetFilePath, dataList.size());
     }
   }
 
@@ -751,19 +756,12 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("County")
-        .fields()
-        .name("county_fips").doc("5-digit FIPS code for county (state + county, e.g., '06037' for Los Angeles County)").type().stringType().noDefault()
-        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
-        .name("county_name").doc("Full county name (e.g., 'Los Angeles County')").type().stringType().noDefault()
-        .name("county_code").doc("Geographic identifier (GEOID) for the county").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of county boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("counties");
 
     String expectedPrefix = "tl_" + year + "_us_county";
-    List<Object[]> countiesData = TigerShapefileParser.parseShapefile(countiesDir, expectedPrefix, feature -> {
+    List<Object[]> countiesDataArrays = TigerShapefileParser.parseShapefile(countiesDir, expectedPrefix, feature -> {
       return new Object[]{
           TigerShapefileParser.getStringAttribute(feature, "GEOID"),
           TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
@@ -775,10 +773,22 @@ public class ShapefileToParquetConverter {
       };
     });
 
-    if (!countiesData.isEmpty()) {
-      List<GenericRecord> records = convertToGenericRecords(schema, countiesData);
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, schema.getName());
-      LOGGER.info("Created counties parquet file: {} with {} records", targetFilePath, records.size());
+    if (!countiesDataArrays.isEmpty()) {
+      // Convert Object[] to Map<String, Object>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
+      for (Object[] arr : countiesDataArrays) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
+        record.put("county_fips", arr[0]);
+        record.put("state_fips", arr[1]);
+        record.put("county_name", arr[2]);
+        record.put("county_code", arr[3]);
+        record.put("land_area", arr[4]);
+        record.put("water_area", arr[5]);
+        record.put("geometry", arr[6]);
+        dataList.add(record);
+      }
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "County", "County");
+      LOGGER.info("Created counties parquet file: {} with {} records", targetFilePath, dataList.size());
     }
   }
 
@@ -790,18 +800,11 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("Place")
-        .fields()
-        .name("place_fips").doc("7-digit FIPS code for place (state + place code, e.g., '0644000' for Los Angeles city)").type().stringType().noDefault()
-        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
-        .name("place_name").doc("Name of incorporated place or census-designated place").type().stringType().noDefault()
-        .name("place_type").doc("Classification of place (e.g., 'city', 'town', 'CDP')").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of place boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("places");
 
-    List<GenericRecord> allRecords = new ArrayList<>();
+    java.util.List<java.util.Map<String, Object>> allData = new java.util.ArrayList<>();
 
     // Process places from each state subdirectory
     File[] stateDirs = placesDir.listFiles(File::isDirectory);
@@ -810,25 +813,32 @@ public class ShapefileToParquetConverter {
         String stateFips = stateDir.getName();
         String expectedPrefix = "tl_" + year + "_" + stateFips + "_place";
 
-        List<Object[]> placesData = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+        List<Object[]> placesDataArrays = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
           return new Object[]{
               TigerShapefileParser.getStringAttribute(feature, "GEOID"),
               TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
               TigerShapefileParser.getStringAttribute(feature, "NAME"),
               TigerShapefileParser.getStringAttribute(feature, "LSAD"),
-              TigerShapefileParser.getDoubleAttribute(feature, "ALAND"),
-              TigerShapefileParser.getDoubleAttribute(feature, "AWATER"),
               TigerShapefileParser.getGeometryAttribute(feature)
           };
         });
 
-        allRecords.addAll(convertToGenericRecords(schema, placesData));
+        // Convert Object[] to Map<String, Object>
+        for (Object[] arr : placesDataArrays) {
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          record.put("place_fips", arr[0]);
+          record.put("state_fips", arr[1]);
+          record.put("place_name", arr[2]);
+          record.put("place_type", arr[3]);
+          record.put("geometry", arr[4]);
+          allData.add(record);
+        }
       }
     }
 
-    if (!allRecords.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, allRecords, schema.getName());
-      LOGGER.info("Created places parquet file: {} with {} records", targetFilePath, allRecords.size());
+    if (!allData.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, allData, "Place", "Place");
+      LOGGER.info("Created places parquet file: {} with {} records", targetFilePath, allData.size());
     }
   }
 
@@ -840,13 +850,9 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("ZCTA")
-        .fields()
-        .name("zcta").doc("5-digit ZIP Code Tabulation Area code approximating USPS ZIP Code delivery areas").type().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of ZCTA boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("zctas");
 
     // 2010 uses different naming: zcta510 instead of zcta520, and field suffix "10" instead of "20"
     boolean is2010 = "2010".equals(year);
@@ -855,7 +861,7 @@ public class ShapefileToParquetConverter {
     String alandField = is2010 ? "ALAND10" : "ALAND20";
     String awaterField = is2010 ? "AWATER10" : "AWATER20";
 
-    List<Object[]> zctasData = TigerShapefileParser.parseShapefile(zctasDir, expectedPrefix, feature -> {
+    List<Object[]> zctasDataArrays = TigerShapefileParser.parseShapefile(zctasDir, expectedPrefix, feature -> {
       return new Object[]{
           TigerShapefileParser.getStringAttribute(feature, zctaField),
           TigerShapefileParser.getDoubleAttribute(feature, alandField),
@@ -864,10 +870,19 @@ public class ShapefileToParquetConverter {
       };
     });
 
-    if (!zctasData.isEmpty()) {
-      List<GenericRecord> records = convertToGenericRecords(schema, zctasData);
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, schema.getName());
-      LOGGER.info("Created zctas parquet file: {} with {} records", targetFilePath, records.size());
+    if (!zctasDataArrays.isEmpty()) {
+      // Convert Object[] to Map<String, Object>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
+      for (Object[] arr : zctasDataArrays) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
+        record.put("zcta", arr[0]);
+        record.put("land_area", arr[1]);
+        record.put("water_area", arr[2]);
+        record.put("geometry", arr[3]);
+        dataList.add(record);
+      }
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "ZCTA", "ZCTA");
+      LOGGER.info("Created zctas parquet file: {} with {} records", targetFilePath, dataList.size());
     }
   }
 
@@ -879,17 +894,11 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("CensusTract")
-        .fields()
-        .name("tract_code").doc("11-digit FIPS code for census tract (state + county + tract)").type().stringType().noDefault()
-        .name("county_fips").doc("5-digit FIPS code of the parent county").type().stringType().noDefault()
-        .name("tract_name").doc("Census tract number (e.g., '4201.02')").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of census tract boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("census_tracts");
 
-    List<GenericRecord> allRecords = new ArrayList<>();
+    java.util.List<java.util.Map<String, Object>> allData = new java.util.ArrayList<>();
 
     // Process tracts from each state subdirectory
     File[] stateDirs = tractsDir.listFiles(File::isDirectory);
@@ -898,11 +907,12 @@ public class ShapefileToParquetConverter {
         String stateFips = stateDir.getName();
         String expectedPrefix = "tl_" + year + "_" + stateFips + "_tract";
 
-        List<Object[]> tractsData = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+        List<Object[]> tractsDataArrays = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+          String countyfp = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
           return new Object[]{
               TigerShapefileParser.getStringAttribute(feature, "GEOID"),
-              TigerShapefileParser.getStringAttribute(feature, "COUNTYFP") != null ?
-                  stateFips + TigerShapefileParser.getStringAttribute(feature, "COUNTYFP") : null,
+              TigerShapefileParser.getStringAttribute(feature, "STATEFP"),
+              countyfp != null ? stateFips + countyfp : null,
               TigerShapefileParser.getStringAttribute(feature, "NAME"),
               TigerShapefileParser.getDoubleAttribute(feature, "ALAND"),
               TigerShapefileParser.getDoubleAttribute(feature, "AWATER"),
@@ -910,13 +920,24 @@ public class ShapefileToParquetConverter {
           };
         });
 
-        allRecords.addAll(convertToGenericRecords(schema, tractsData));
+        // Convert Object[] to Map<String, Object>
+        for (Object[] arr : tractsDataArrays) {
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          record.put("tract_fips", arr[0]);
+          record.put("state_fips", arr[1]);
+          record.put("county_fips", arr[2]);
+          record.put("tract_name", arr[3]);
+          record.put("land_area", arr[4]);
+          record.put("water_area", arr[5]);
+          record.put("geometry", arr[6]);
+          allData.add(record);
+        }
       }
     }
 
-    if (!allRecords.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, allRecords, schema.getName());
-      LOGGER.info("Created census_tracts parquet file: {} with {} records", targetFilePath, allRecords.size());
+    if (!allData.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, allData, "CensusTract", "CensusTract");
+      LOGGER.info("Created census_tracts parquet file: {} with {} records", targetFilePath, allData.size());
     }
   }
 
@@ -928,16 +949,11 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("BlockGroup")
-        .fields()
-        .name("block_group_code").doc("12-digit FIPS code for block group (state + county + tract + block group)").type().stringType().noDefault()
-        .name("tract_code").doc("11-digit FIPS code of the parent census tract").type().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of block group boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("block_groups");
 
-    List<GenericRecord> allRecords = new ArrayList<>();
+    java.util.List<java.util.Map<String, Object>> allData = new java.util.ArrayList<>();
 
     // Process block groups from each state subdirectory
     File[] stateDirs = blockGroupsDir.listFiles(File::isDirectory);
@@ -946,25 +962,40 @@ public class ShapefileToParquetConverter {
         String stateFips = stateDir.getName();
         String expectedPrefix = "tl_" + year + "_" + stateFips + "_bg";
 
-        List<Object[]> bgData = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+        List<Object[]> bgDataArrays = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
           String geoid = TigerShapefileParser.getStringAttribute(feature, "GEOID");
+          String statefp = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
+          String countyfp = TigerShapefileParser.getStringAttribute(feature, "COUNTYFP");
           String tractce = TigerShapefileParser.getStringAttribute(feature, "TRACTCE");
           return new Object[]{
               geoid,
-              tractce != null ? stateFips + tractce : null,
+              statefp,
+              countyfp != null ? statefp + countyfp : null,
+              tractce,
               TigerShapefileParser.getDoubleAttribute(feature, "ALAND"),
               TigerShapefileParser.getDoubleAttribute(feature, "AWATER"),
               TigerShapefileParser.getGeometryAttribute(feature)
           };
         });
 
-        allRecords.addAll(convertToGenericRecords(schema, bgData));
+        // Convert Object[] to Map<String, Object>
+        for (Object[] arr : bgDataArrays) {
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          record.put("block_group_fips", arr[0]);
+          record.put("state_fips", arr[1]);
+          record.put("county_fips", arr[2]);
+          record.put("tract_fips", arr[3]);
+          record.put("land_area", arr[4]);
+          record.put("water_area", arr[5]);
+          record.put("geometry", arr[6]);
+          allData.add(record);
+        }
       }
     }
 
-    if (!allRecords.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, allRecords, schema.getName());
-      LOGGER.info("Created block_groups parquet file: {} with {} records", targetFilePath, allRecords.size());
+    if (!allData.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, allData, "BlockGroup", "BlockGroup");
+      LOGGER.info("Created block_groups parquet file: {} with {} records", targetFilePath, allData.size());
     }
   }
 
@@ -978,18 +1009,12 @@ public class ShapefileToParquetConverter {
     }
     LOGGER.info("CBSA directory exists, proceeding with conversion");
 
-    Schema schema = SchemaBuilder.record("CBSA")
-        .fields()
-        .name("cbsa_fips").doc("5-digit CBSA code for Core Based Statistical Area").type().stringType().noDefault()
-        .name("cbsa_name").doc("Name of metropolitan or micropolitan statistical area").type().nullable().stringType().noDefault()
-        .name("metro_micro").doc("LSAD code indicating Metropolitan or Micropolitan designation").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of CBSA boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("cbsa");
 
     String expectedPrefix = "tl_" + year + "_us_cbsa";
-    List<Object[]> cbsaData = TigerShapefileParser.parseShapefile(cbsaDir, expectedPrefix, feature -> {
+    List<Object[]> cbsaDataArrays = TigerShapefileParser.parseShapefile(cbsaDir, expectedPrefix, feature -> {
       return new Object[]{
           TigerShapefileParser.getStringAttribute(feature, "GEOID"),
           TigerShapefileParser.getStringAttribute(feature, "NAME"),
@@ -1000,10 +1025,21 @@ public class ShapefileToParquetConverter {
       };
     });
 
-    if (!cbsaData.isEmpty()) {
-      List<GenericRecord> records = convertToGenericRecords(schema, cbsaData);
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, schema.getName());
-      LOGGER.info("Created cbsa parquet file: {} with {} records", targetFilePath, records.size());
+    if (!cbsaDataArrays.isEmpty()) {
+      // Convert Object[] to Map<String, Object>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
+      for (Object[] arr : cbsaDataArrays) {
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
+        record.put("cbsa_fips", arr[0]);
+        record.put("cbsa_name", arr[1]);
+        record.put("metro_micro", arr[2]);
+        record.put("land_area", arr[3]);
+        record.put("water_area", arr[4]);
+        record.put("geometry", arr[5]);
+        dataList.add(record);
+      }
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "CBSA", "CBSA");
+      LOGGER.info("Created cbsa parquet file: {} with {} records", targetFilePath, dataList.size());
     }
   }
 
@@ -1015,15 +1051,9 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("CongressionalDistrict")
-        .fields()
-        .name("cd_fips").doc("4-digit congressional district code (state + district number)").type().stringType().noDefault()
-        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
-        .name("cd_name").doc("Congressional district name or number").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of congressional district boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("congressional_districts");
 
     // Calculate correct Congress number: ((year - 1789) / 2) + 1
     int yearNum = Integer.parseInt(year);
@@ -1037,14 +1067,14 @@ public class ShapefileToParquetConverter {
     String alandField = is2010 ? "ALAND10" : "ALAND";
     String awaterField = is2010 ? "AWATER10" : "AWATER";
 
-    List<Object[]> allCdData = new ArrayList<>();
+    java.util.List<java.util.Map<String, Object>> allData = new java.util.ArrayList<>();
     File[] shpFiles = cdDir.listFiles((dir, name) -> name.endsWith(".shp") && name.contains("_cd" + congressNum));
 
     if (shpFiles != null) {
       for (File shpFile : shpFiles) {
         LOGGER.debug("Processing congressional district file: {}", shpFile.getName());
         String expectedPrefix = shpFile.getName().replace(".shp", "");
-        List<Object[]> stateData = TigerShapefileParser.parseShapefile(cdDir, expectedPrefix, feature -> {
+        List<Object[]> cdDataArrays = TigerShapefileParser.parseShapefile(cdDir, expectedPrefix, feature -> {
           return new Object[]{
               TigerShapefileParser.getStringAttribute(feature, geoidField),
               TigerShapefileParser.getStringAttribute(feature, statefpField),
@@ -1054,14 +1084,24 @@ public class ShapefileToParquetConverter {
               TigerShapefileParser.getGeometryAttribute(feature)
           };
         });
-        allCdData.addAll(stateData);
+
+        // Convert Object[] to Map<String, Object>
+        for (Object[] arr : cdDataArrays) {
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          record.put("cd_fips", arr[0]);
+          record.put("state_fips", arr[1]);
+          record.put("cd_name", arr[2]);
+          record.put("land_area", arr[3]);
+          record.put("water_area", arr[4]);
+          record.put("geometry", arr[5]);
+          allData.add(record);
+        }
       }
     }
 
-    if (!allCdData.isEmpty()) {
-      List<GenericRecord> records = convertToGenericRecords(schema, allCdData);
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, schema.getName());
-      LOGGER.info("Created congressional_districts parquet file: {} with {} records", targetFilePath, records.size());
+    if (!allData.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, allData, "CongressionalDistrict", "CongressionalDistrict");
+      LOGGER.info("Created congressional_districts parquet file: {} with {} records", targetFilePath, allData.size());
     } else {
       LOGGER.warn("No congressional district data found in {}", cdDir);
     }
@@ -1075,18 +1115,11 @@ public class ShapefileToParquetConverter {
       return;
     }
 
-    Schema schema = SchemaBuilder.record("SchoolDistrict")
-        .fields()
-        .name("sd_lea").doc("Local Education Agency (LEA) code identifying the school district").type().stringType().noDefault()
-        .name("state_fips").doc("2-digit FIPS code of the parent state").type().stringType().noDefault()
-        .name("sd_name").doc("School district name").type().nullable().stringType().noDefault()
-        .name("sd_type").doc("School district type (elementary, secondary, or unified)").type().nullable().stringType().noDefault()
-        .name("land_area").doc("Land area in square meters").type().nullable().doubleType().noDefault()
-        .name("water_area").doc("Water area in square meters").type().nullable().doubleType().noDefault()
-        .name("geometry").doc("WKT representation of school district boundary polygon").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("school_districts");
 
-    List<GenericRecord> allRecords = new ArrayList<>();
+    java.util.List<java.util.Map<String, Object>> allData = new java.util.ArrayList<>();
 
     // Process school districts from each state subdirectory
     File[] stateDirs = sdDir.listFiles(File::isDirectory);
@@ -1109,7 +1142,7 @@ public class ShapefileToParquetConverter {
           String alandField = is2010 ? "ALAND10" : "ALAND";
           String awaterField = is2010 ? "AWATER10" : "AWATER";
 
-          List<Object[]> sdData = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
+          List<Object[]> sdDataArrays = TigerShapefileParser.parseShapefile(stateDir, expectedPrefix, feature -> {
             return new Object[]{
                 TigerShapefileParser.getStringAttribute(feature, geoidField),
                 TigerShapefileParser.getStringAttribute(feature, statefpField),
@@ -1121,14 +1154,25 @@ public class ShapefileToParquetConverter {
             };
           });
 
-          allRecords.addAll(convertToGenericRecords(schema, sdData));
+          // Convert Object[] to Map<String, Object>
+          for (Object[] arr : sdDataArrays) {
+            java.util.Map<String, Object> record = new java.util.HashMap<>();
+            record.put("sd_lea", arr[0]);
+            record.put("state_fips", arr[1]);
+            record.put("sd_name", arr[2]);
+            record.put("sd_type", arr[3]);
+            record.put("land_area", arr[4]);
+            record.put("water_area", arr[5]);
+            record.put("geometry", arr[6]);
+            allData.add(record);
+          }
         }
       }
     }
 
-    if (!allRecords.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, allRecords, schema.getName());
-      LOGGER.info("Created school_districts parquet file: {} with {} records", targetFilePath, allRecords.size());
+    if (!allData.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, allData, "SchoolDistrict", "SchoolDistrict");
+      LOGGER.info("Created school_districts parquet file: {} with {} records", targetFilePath, allData.size());
     }
   }
 

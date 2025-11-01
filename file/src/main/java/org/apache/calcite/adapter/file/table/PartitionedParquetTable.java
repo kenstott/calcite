@@ -79,6 +79,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   private final PartitionDetector.PartitionInfo partitionInfo;
   private final ExecutionEngineConfig engineConfig;
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+  private final PartitionedTableConfig config;
   private RelProtoDataType protoRowType;
   private List<String> partitionColumns;
   private List<String> addedPartitionColumns;  // Partition columns actually added to schema
@@ -147,10 +148,26 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
                                  String schemaName,
                                  String tableName,
                                  org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+    this(filePaths, partitionInfo, engineConfig, partitionColumnTypes, customRegex,
+        columnMappings, constraintConfig, schemaName, tableName, storageProvider, null);
+  }
+
+  public PartitionedParquetTable(List<String> filePaths,
+                                 PartitionDetector.PartitionInfo partitionInfo,
+                                 ExecutionEngineConfig engineConfig,
+                                 Map<String, String> partitionColumnTypes,
+                                 String customRegex,
+                                 List<PartitionedTableConfig.ColumnMapping> columnMappings,
+                                 Map<String, Object> constraintConfig,
+                                 String schemaName,
+                                 String tableName,
+                                 org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+                                 PartitionedTableConfig config) {
     this.filePaths = filePaths;
     this.partitionInfo = partitionInfo;
     this.engineConfig = engineConfig;
     this.storageProvider = storageProvider;
+    this.config = config;
     this.partitionColumnTypes = partitionColumnTypes;
     this.customRegex = customRegex;
     this.columnMappings = columnMappings;
@@ -291,9 +308,28 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   }
 
   /**
-   * Extract table and column comments from Parquet file metadata.
+   * Extract table and column comments from config (primary) and Parquet file metadata (fallback).
+   * Config-based comments take precedence over Parquet metadata.
    */
   private void extractComments() {
+    // STEP 1: Initialize from config (primary source)
+    if (config != null) {
+      this.tableComment = config.getComment();
+      this.columnComments = config.getColumnComments() != null
+          ? new LinkedHashMap<>(config.getColumnComments())
+          : new LinkedHashMap<>();
+
+      if (tableComment != null) {
+        LOGGER.debug("Loaded table comment from config: {}", tableComment);
+      }
+      if (!columnComments.isEmpty()) {
+        LOGGER.debug("Loaded {} column comments from config", columnComments.size());
+      }
+    } else {
+      this.columnComments = new LinkedHashMap<>();
+    }
+
+    // STEP 2: Extract from Parquet metadata (fallback)
     if (filePaths == null || filePaths.isEmpty()) {
       LOGGER.debug("No files to extract comments from");
       return;
@@ -304,7 +340,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       String firstFile = filePaths.get(0);
 
       if (storageProvider == null) {
-        LOGGER.debug("No StorageProvider available, skipping comment extraction");
+        LOGGER.debug("No StorageProvider available, skipping Parquet comment extraction");
         return;
       }
 
@@ -318,33 +354,47 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       }
       FileMetaData fileMetaData = metadata.getFileMetaData();
 
-      // Extract table comment from file key-value metadata
-      Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
-      if (keyValueMetaData != null) {
-        // Look for table comment in various possible keys
-        tableComment = keyValueMetaData.get("table.comment");
-        if (tableComment == null) {
-          tableComment = keyValueMetaData.get("comment");
-        }
-        if (tableComment == null) {
-          tableComment = keyValueMetaData.get("description");
-        }
+      // Extract table comment from file key-value metadata (only if not already set from config)
+      if (tableComment == null) {
+        Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
+        if (keyValueMetaData != null) {
+          // Look for table comment in various possible keys
+          String parquetTableComment = keyValueMetaData.get("table.comment");
+          if (parquetTableComment == null) {
+            parquetTableComment = keyValueMetaData.get("comment");
+          }
+          if (parquetTableComment == null) {
+            parquetTableComment = keyValueMetaData.get("description");
+          }
 
-        if (tableComment != null) {
-          LOGGER.debug("Found table comment: {}", tableComment);
+          if (parquetTableComment != null) {
+            tableComment = parquetTableComment;
+            LOGGER.debug("Found table comment from Parquet metadata: {}", tableComment);
+          }
         }
+      } else {
+        LOGGER.debug("Table comment from config takes precedence over Parquet metadata");
       }
 
-      // Extract column comments from schema
+      // Extract column comments from schema (only add comments not already in config)
       MessageType schema = fileMetaData.getSchema();
-      columnComments = new LinkedHashMap<>();
 
       // Extract column names from Parquet schema for constraint mapping
       parquetColumnNames = new ArrayList<>();
 
+      Map<String, String> keyValueMetaData = fileMetaData.getKeyValueMetaData();
+      int parquetCommentsAdded = 0;
+      int parquetCommentsSkipped = 0;
+
       for (Type field : schema.getFields()) {
         String fieldName = field.getName();
         parquetColumnNames.add(fieldName);
+
+        // Skip if comment already exists from config (config wins)
+        if (columnComments.containsKey(fieldName)) {
+          parquetCommentsSkipped++;
+          continue;
+        }
 
         // Try to get comment from field's original type (if it has one)
         String fieldComment = null;
@@ -360,8 +410,16 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
         // Store the comment if found
         if (fieldComment != null) {
           columnComments.put(fieldName, fieldComment);
-          LOGGER.debug("Found comment for column '{}': {}", fieldName, fieldComment);
+          parquetCommentsAdded++;
+          LOGGER.debug("Added comment for column '{}' from Parquet metadata: {}", fieldName, fieldComment);
         }
+      }
+
+      if (parquetCommentsSkipped > 0) {
+        LOGGER.debug("Skipped {} column comments from Parquet (config takes precedence)", parquetCommentsSkipped);
+      }
+      if (parquetCommentsAdded > 0) {
+        LOGGER.debug("Added {} column comments from Parquet metadata (not in config)", parquetCommentsAdded);
       }
 
       // Add partition columns to the column names list

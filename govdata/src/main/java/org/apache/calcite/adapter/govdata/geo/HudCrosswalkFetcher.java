@@ -18,11 +18,6 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -63,7 +58,7 @@ import java.util.List;
  * <p>Data includes residential, business, and other address ratios for
  * proportional allocation of data from ZIP codes to Census geographies.
  */
-public class HudCrosswalkFetcher {
+public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(HudCrosswalkFetcher.class);
 
   private static final String HUD_API_BASE = "https://www.huduser.gov/hudapi/public/usps";
@@ -638,41 +633,34 @@ public class HudCrosswalkFetcher {
   private void convertZipCountyCrosswalkToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for ZIP-County crosswalk
-    Schema schema = SchemaBuilder.record("ZipCountyCrosswalk")
-        .fields()
-        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
-        .name("county_fips").doc("5-digit county FIPS code").type().stringType().noDefault()
-        .name("res_ratio").doc("Ratio of residential addresses in this ZIP that are in this county").type().doubleType().noDefault()
-        .name("bus_ratio").doc("Ratio of business addresses in this ZIP that are in this county").type().doubleType().noDefault()
-        .name("oth_ratio").doc("Ratio of other addresses in this ZIP that are in this county").type().doubleType().noDefault()
-        .name("tot_ratio").doc("Ratio of total addresses in this ZIP that are in this county").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("zip_county_crosswalk");
 
     // Find the CSV file in the source directory
     File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_COUNTY") && name.endsWith(".csv"));
     if (csvFiles != null && csvFiles.length > 0) {
       List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
 
+      // Convert to List<Map<String, Object>>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
       for (CrosswalkRecord cr : crosswalkRecords) {
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("zip", cr.zip);
         record.put("county_fips", cr.geoCode);
         record.put("res_ratio", cr.resRatio);
         record.put("bus_ratio", cr.busRatio);
         record.put("oth_ratio", cr.othRatio);
         record.put("tot_ratio", cr.totRatio);
-        records.add(record);
+        dataList.add(record);
       }
-    }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "ZipCountyCrosswalk");
-      LOGGER.info("Created ZIP-County crosswalk parquet: {} with {} records",
-          targetFilePath, records.size());
+      // Write to Parquet using StorageProvider
+      if (storageProvider != null && !dataList.isEmpty()) {
+        storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "ZipCountyCrosswalk", "ZipCountyCrosswalk");
+        LOGGER.info("Created ZIP-County crosswalk parquet: {} with {} records",
+            targetFilePath, dataList.size());
+      }
     }
   }
 
@@ -683,41 +671,34 @@ public class HudCrosswalkFetcher {
   private void convertZipCbsaCrosswalkToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for ZIP-CBSA crosswalk
-    Schema schema = SchemaBuilder.record("ZipCbsaCrosswalk")
-        .fields()
-        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
-        .name("cbsa_code").doc("5-digit CBSA code for Core Based Statistical Area").type().stringType().noDefault()
-        .name("res_ratio").doc("Ratio of residential addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
-        .name("bus_ratio").doc("Ratio of business addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
-        .name("oth_ratio").doc("Ratio of other addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
-        .name("tot_ratio").doc("Ratio of total addresses in this ZIP that are in this CBSA").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("zip_cbsa_crosswalk");
 
     // Find the CSV file in the source directory
     File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_CBSA") && name.endsWith(".csv"));
     if (csvFiles != null && csvFiles.length > 0) {
       List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
 
+      // Convert to List<Map<String, Object>>
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
       for (CrosswalkRecord cr : crosswalkRecords) {
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("zip", cr.zip);
         record.put("cbsa_code", cr.geoCode);
         record.put("res_ratio", cr.resRatio);
         record.put("bus_ratio", cr.busRatio);
         record.put("oth_ratio", cr.othRatio);
         record.put("tot_ratio", cr.totRatio);
-        records.add(record);
+        dataList.add(record);
       }
-    }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "ZipCbsaCrosswalk");
-      LOGGER.info("Created ZIP-CBSA crosswalk parquet: {} with {} records",
-          targetFilePath, records.size());
+      // Write to Parquet using StorageProvider
+      if (storageProvider != null && !dataList.isEmpty()) {
+        storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "ZipCbsaCrosswalk", "ZipCbsaCrosswalk");
+        LOGGER.info("Created ZIP-CBSA crosswalk parquet: {} with {} records",
+            targetFilePath, dataList.size());
+      }
     }
   }
 
@@ -728,42 +709,35 @@ public class HudCrosswalkFetcher {
   private void convertTractZipCrosswalkToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for Tract-ZIP crosswalk
-    Schema schema = SchemaBuilder.record("TractZipCrosswalk")
-        .fields()
-        .name("tract_fips").doc("11-digit census tract FIPS code").type().stringType().noDefault()
-        .name("zip").doc("5-digit ZIP Code").type().stringType().noDefault()
-        .name("res_ratio").doc("Ratio of residential addresses in this tract that are in this ZIP").type().doubleType().noDefault()
-        .name("bus_ratio").doc("Ratio of business addresses in this tract that are in this ZIP").type().doubleType().noDefault()
-        .name("oth_ratio").doc("Ratio of other addresses in this tract that are in this ZIP").type().doubleType().noDefault()
-        .name("tot_ratio").doc("Ratio of total addresses in this tract that are in this ZIP").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("tract_zip_crosswalk");
 
     // Find the CSV file in the source directory (ZIP_TRACT files)
     File[] csvFiles = sourceDir.listFiles((dir, name) -> name.startsWith("ZIP_TRACT") && name.endsWith(".csv"));
     if (csvFiles != null && csvFiles.length > 0) {
       List<CrosswalkRecord> crosswalkRecords = loadCrosswalkData(csvFiles[0]);
 
+      // Convert to List<Map<String, Object>>
       // For tract-zip crosswalk, we need to flip the perspective
+      java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
       for (CrosswalkRecord cr : crosswalkRecords) {
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("tract_fips", cr.geoCode); // geoCode is tract in ZIP_TRACT files
         record.put("zip", cr.zip);
         record.put("res_ratio", cr.resRatio);
         record.put("bus_ratio", cr.busRatio);
         record.put("oth_ratio", cr.othRatio);
         record.put("tot_ratio", cr.totRatio);
-        records.add(record);
+        dataList.add(record);
       }
-    }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "TractZipCrosswalk");
-      LOGGER.info("Created Tract-ZIP crosswalk parquet: {} with {} records",
-          targetFilePath, records.size());
+      // Write to Parquet using StorageProvider
+      if (storageProvider != null && !dataList.isEmpty()) {
+        storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "TractZipCrosswalk", "TractZipCrosswalk");
+        LOGGER.info("Created Tract-ZIP crosswalk parquet: {} with {} records",
+            targetFilePath, dataList.size());
+      }
     }
   }
 }

@@ -18,11 +18,6 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -59,7 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Rate limits: 500 requests per IP address per day (very generous)
  */
-public class CensusApiClient {
+public class CensusApiClient extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusApiClient.class);
 
   private static final String BASE_URL = "https://api.census.gov/data";
@@ -968,23 +963,16 @@ public class CensusApiClient {
   private void convertPopulationDemographicsToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for population demographics
-    Schema schema = SchemaBuilder.record("PopulationDemographics")
-        .fields()
-        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
-        .name("year").doc("Census survey year").type().intType().noDefault()
-        .name("total_population").doc("Total population count").type().nullable().longType().noDefault()
-        .name("male_population").doc("Male population count").type().nullable().longType().noDefault()
-        .name("female_population").doc("Female population count").type().nullable().longType().noDefault()
-        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
-        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("population_demographics");
 
     // Extract year from source directory
     String yearStr = sourceDir.getName().replace("year=", "");
     int year = Integer.parseInt(yearStr);
+
+    // Prepare data as List<Map<String, Object>>
+    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
 
     // Read and convert state-level data
     File stateFile = new File(sourceDir, "population_demographics_states.json");
@@ -992,15 +980,15 @@ public class CensusApiClient {
       JsonNode data = objectMapper.readTree(stateFile);
       for (int i = 1; i < data.size(); i++) { // Skip header row
         JsonNode row = data.get(i);
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("geo_id", row.get(row.size() - 1).asText()); // Last column is usually state FIPS
         record.put("year", year);
-        record.put("total_population", row.get(0).asLong(0L));
-        record.put("male_population", row.get(1).asLong(0L));
-        record.put("female_population", row.get(2).asLong(0L));
+        record.put("total_population", (int) row.get(0).asLong(0L));
+        record.put("male_population", (int) row.get(1).asLong(0L));
+        record.put("female_population", (int) row.get(2).asLong(0L));
         record.put("state_fips", row.get(row.size() - 1).asText());
         record.put("county_fips", null);
-        records.add(record);
+        dataList.add(record);
       }
     }
 
@@ -1012,25 +1000,25 @@ public class CensusApiClient {
         JsonNode data = objectMapper.readTree(countyFile);
         for (int i = 1; i < data.size(); i++) { // Skip header row
           JsonNode row = data.get(i);
-          GenericRecord record = new GenericData.Record(schema);
-          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFips);
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFipsVal);
           record.put("year", year);
-          record.put("total_population", row.get(0).asLong(0L));
-          record.put("male_population", row.get(1).asLong(0L));
-          record.put("female_population", row.get(2).asLong(0L));
+          record.put("total_population", (int) row.get(0).asLong(0L));
+          record.put("male_population", (int) row.get(1).asLong(0L));
+          record.put("female_population", (int) row.get(2).asLong(0L));
           record.put("state_fips", state);
-          record.put("county_fips", countyFips);
-          records.add(record);
+          record.put("county_fips", countyFipsVal);
+          dataList.add(record);
         }
       }
     }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "PopulationDemographics");
+    // Write to Parquet using StorageProvider
+    if (storageProvider != null && !dataList.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "PopulationDemographics", "PopulationDemographics");
       LOGGER.info("Created population demographics parquet: {} with {} records",
-          targetFilePath, records.size());
+          targetFilePath, dataList.size());
     }
   }
 
@@ -1041,24 +1029,16 @@ public class CensusApiClient {
   private void convertHousingCharacteristicsToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for housing characteristics
-    Schema schema = SchemaBuilder.record("HousingCharacteristics")
-        .fields()
-        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
-        .name("year").doc("Census survey year").type().intType().noDefault()
-        .name("total_housing_units").doc("Total number of housing units").type().nullable().longType().noDefault()
-        .name("occupied_units").doc("Number of occupied housing units").type().nullable().longType().noDefault()
-        .name("vacant_units").doc("Number of vacant housing units").type().nullable().longType().noDefault()
-        .name("median_home_value").doc("Median home value in dollars").type().nullable().doubleType().noDefault()
-        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
-        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("housing_characteristics");
 
     // Extract year from source directory
     String yearStr = sourceDir.getName().replace("year=", "");
     int year = Integer.parseInt(yearStr);
+
+    // Prepare data as List<Map<String, Object>>
+    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
 
     // Read and convert state-level data
     File stateFile = new File(sourceDir, "housing_characteristics_states.json");
@@ -1066,16 +1046,16 @@ public class CensusApiClient {
       JsonNode data = objectMapper.readTree(stateFile);
       for (int i = 1; i < data.size(); i++) { // Skip header row
         JsonNode row = data.get(i);
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("geo_id", row.get(row.size() - 1).asText());
         record.put("year", year);
-        record.put("total_housing_units", row.get(0).asLong(0L));
-        record.put("occupied_units", row.get(1).asLong(0L));
-        record.put("vacant_units", row.get(2).asLong(0L));
+        record.put("total_housing_units", (int) row.get(0).asLong(0L));
+        record.put("occupied_units", (int) row.get(1).asLong(0L));
+        record.put("vacant_units", (int) row.get(2).asLong(0L));
         record.put("median_home_value", row.get(3).asDouble(0.0));
         record.put("state_fips", row.get(row.size() - 1).asText());
         record.put("county_fips", null);
-        records.add(record);
+        dataList.add(record);
       }
     }
 
@@ -1087,26 +1067,26 @@ public class CensusApiClient {
         JsonNode data = objectMapper.readTree(countyFile);
         for (int i = 1; i < data.size(); i++) { // Skip header row
           JsonNode row = data.get(i);
-          GenericRecord record = new GenericData.Record(schema);
-          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFips);
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFipsVal);
           record.put("year", year);
-          record.put("total_housing_units", row.get(0).asLong(0L));
-          record.put("occupied_units", row.get(1).asLong(0L));
-          record.put("vacant_units", row.get(2).asLong(0L));
+          record.put("total_housing_units", (int) row.get(0).asLong(0L));
+          record.put("occupied_units", (int) row.get(1).asLong(0L));
+          record.put("vacant_units", (int) row.get(2).asLong(0L));
           record.put("median_home_value", row.get(3).asDouble(0.0));
           record.put("state_fips", state);
-          record.put("county_fips", countyFips);
-          records.add(record);
+          record.put("county_fips", countyFipsVal);
+          dataList.add(record);
         }
       }
     }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "HousingCharacteristics");
+    // Write to Parquet using StorageProvider
+    if (storageProvider != null && !dataList.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "HousingCharacteristics", "HousingCharacteristics");
       LOGGER.info("Created housing characteristics parquet: {} with {} records",
-          targetFilePath, records.size());
+          targetFilePath, dataList.size());
     }
   }
 
@@ -1117,25 +1097,16 @@ public class CensusApiClient {
   private void convertEconomicIndicatorsToParquet(File sourceDir, String targetFilePath)
       throws IOException {
 
-    // Create Avro schema for economic indicators
-    Schema schema = SchemaBuilder.record("EconomicIndicators")
-        .fields()
-        .name("geo_id").doc("Census geographic identifier (state or county FIPS code)").type().stringType().noDefault()
-        .name("year").doc("Census survey year").type().intType().noDefault()
-        .name("median_household_income").doc("Median household income in dollars").type().nullable().doubleType().noDefault()
-        .name("per_capita_income").doc("Per capita income in dollars").type().nullable().doubleType().noDefault()
-        .name("labor_force").doc("Total civilian labor force count").type().nullable().longType().noDefault()
-        .name("employed").doc("Number of employed persons").type().nullable().longType().noDefault()
-        .name("unemployed").doc("Number of unemployed persons").type().nullable().longType().noDefault()
-        .name("state_fips").doc("2-digit state FIPS code").type().nullable().stringType().noDefault()
-        .name("county_fips").doc("5-digit county FIPS code (state + county)").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Load schema metadata from geo-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumns("economic_indicators");
 
     // Extract year from source directory
     String yearStr = sourceDir.getName().replace("year=", "");
     int year = Integer.parseInt(yearStr);
+
+    // Prepare data as List<Map<String, Object>>
+    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
 
     // Read and convert state-level data
     File stateFile = new File(sourceDir, "economic_indicators_states.json");
@@ -1143,17 +1114,17 @@ public class CensusApiClient {
       JsonNode data = objectMapper.readTree(stateFile);
       for (int i = 1; i < data.size(); i++) { // Skip header row
         JsonNode row = data.get(i);
-        GenericRecord record = new GenericData.Record(schema);
+        java.util.Map<String, Object> record = new java.util.HashMap<>();
         record.put("geo_id", row.get(row.size() - 1).asText());
         record.put("year", year);
         record.put("median_household_income", row.get(0).asDouble(0.0));
         record.put("per_capita_income", row.get(1).asDouble(0.0));
-        record.put("labor_force", row.get(2).asLong(0L));
-        record.put("employed", row.get(3).asLong(0L));
-        record.put("unemployed", row.get(4).asLong(0L));
+        record.put("labor_force", (Integer) (int) row.get(2).asLong(0L));
+        record.put("employed", (Integer) (int) row.get(3).asLong(0L));
+        record.put("unemployed", (Integer) (int) row.get(4).asLong(0L));
         record.put("state_fips", row.get(row.size() - 1).asText());
         record.put("county_fips", null);
-        records.add(record);
+        dataList.add(record);
       }
     }
 
@@ -1165,27 +1136,27 @@ public class CensusApiClient {
         JsonNode data = objectMapper.readTree(countyFile);
         for (int i = 1; i < data.size(); i++) { // Skip header row
           JsonNode row = data.get(i);
-          GenericRecord record = new GenericData.Record(schema);
-          String countyFips = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFips);
+          java.util.Map<String, Object> record = new java.util.HashMap<>();
+          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
+          record.put("geo_id", countyFipsVal);
           record.put("year", year);
           record.put("median_household_income", row.get(0).asDouble(0.0));
           record.put("per_capita_income", row.get(1).asDouble(0.0));
-          record.put("labor_force", row.get(2).asLong(0L));
-          record.put("employed", row.get(3).asLong(0L));
-          record.put("unemployed", row.get(4).asLong(0L));
+          record.put("labor_force", (Integer) (int) row.get(2).asLong(0L));
+          record.put("employed", (Integer) (int) row.get(3).asLong(0L));
+          record.put("unemployed", (Integer) (int) row.get(4).asLong(0L));
           record.put("state_fips", state);
-          record.put("county_fips", countyFips);
-          records.add(record);
+          record.put("county_fips", countyFipsVal);
+          dataList.add(record);
         }
       }
     }
 
-    // Write to Parquet
-    if (storageProvider != null && !records.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, schema, records, "EconomicIndicators");
+    // Write to Parquet using StorageProvider
+    if (storageProvider != null && !dataList.isEmpty()) {
+      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "EconomicIndicators", "EconomicIndicators");
       LOGGER.info("Created economic indicators parquet: {} with {} records",
-          targetFilePath, records.size());
+          targetFilePath, dataList.size());
     }
   }
 }

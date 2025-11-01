@@ -207,6 +207,102 @@ public interface StorageProvider {
 
 
   /**
+   * Writes data to a Parquet file using column metadata to generate schema.
+   * This overload accepts raw data as Maps and handles all Avro/Parquet details internally.
+   *
+   * @param path The file path where the Parquet file should be written
+   * @param columns The table column definitions with types, nullability, and comments
+   * @param dataRecords The list of data records as Maps (field name → value)
+   * @param recordType Descriptive name for logging (e.g., "facts", "metadata")
+   * @param recordName The record name for the Avro schema
+   * @throws IOException If an I/O error occurs
+   * @throws UnsupportedOperationException If this storage provider is read-only
+   */
+  default void writeAvroParquet(String path,
+                               java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+                               java.util.List<java.util.Map<String, Object>> dataRecords,
+                               String recordType,
+                               String recordName) throws IOException {
+    // Build Avro schema from column metadata
+    org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fields =
+        org.apache.avro.SchemaBuilder.record(recordName).fields();
+
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      // Map column type to Avro type
+      String colType = column.getType().toLowerCase();
+
+      // Build field based on type and nullability
+      switch (colType) {
+        case "string":
+          if (column.isNullable()) {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().nullable().stringType().noDefault();
+          } else {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().stringType().noDefault();
+          }
+          break;
+        case "int":
+        case "integer":
+          if (column.isNullable()) {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().nullable().intType().noDefault();
+          } else {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().intType().noDefault();
+          }
+          break;
+        case "long":
+          if (column.isNullable()) {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().nullable().longType().noDefault();
+          } else {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().longType().noDefault();
+          }
+          break;
+        case "double":
+          if (column.isNullable()) {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().nullable().doubleType().noDefault();
+          } else {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().doubleType().noDefault();
+          }
+          break;
+        case "boolean":
+          if (column.isNullable()) {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().nullable().booleanType().noDefault();
+          } else {
+            fields = fields.name(column.getName()).doc(column.getComment())
+                .type().booleanType().noDefault();
+          }
+          break;
+        default:
+          throw new IllegalArgumentException("Unsupported column type: " + column.getType()
+              + " for column: " + column.getName());
+      }
+    }
+
+    org.apache.avro.Schema schema = fields.endRecord();
+
+    // Convert data maps to GenericRecords
+    java.util.List<org.apache.avro.generic.GenericRecord> records = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> dataRecord : dataRecords) {
+      org.apache.avro.generic.GenericRecord record =
+          new org.apache.avro.generic.GenericData.Record(schema);
+      for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+        record.put(column.getName(), dataRecord.get(column.getName()));
+      }
+      records.add(record);
+    }
+
+    // Delegate to existing implementation
+    writeAvroParquet(path, schema, records, recordType);
+  }
+
+  /**
    * Writes Avro GenericRecords to a Parquet file using modern ParquetWriter API.
    * This is a consolidated method that all adapters can use for Parquet writing.
    *
