@@ -1411,8 +1411,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     File lastFile = null;
 
     for (int year = startYear; year <= endYear; year++) {
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-          "type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
+      String fullParquetPath =
+          storageProvider.resolvePath(parquetDirectory, "type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
 
       // Check if already exists
       if (storageProvider.exists(fullParquetPath)) {
@@ -1692,8 +1692,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Download bulk file from BLS
-    String url = String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_%s_singlefile.zip",
-                                year, year, frequency);
+    String url =
+                                String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_%s_singlefile.zip", year, year, frequency);
 
     LOGGER.info("Downloading QCEW bulk {} file for {} (~{}MB): {}",
                 frequency, year, "annual".equals(frequency) ? "80" : "323", url);
@@ -1737,8 +1737,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   String extractQcewBulkFile(String zipFilePath, int year, String frequency) throws IOException {
     // Build cache path for extracted CSV: source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
-    String csvRelativePath = String.format("source=econ/type=qcew_bulk/year=%d/%d.%s.singlefile.csv",
-                                            year, year, frequency);
+    String csvRelativePath =
+                                            String.format("source=econ/type=qcew_bulk/year=%d/%d.%s.singlefile.csv", year, year, frequency);
     String csvFullPath = cacheStorageProvider.resolvePath(cacheDirectory, csvRelativePath);
 
     // Check if CSV already extracted
@@ -1872,8 +1872,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     long matchedRows = 0;
 
     try (InputStream csvInputStream = cacheStorageProvider.openInputStream(csvFilePath);
-         BufferedReader reader = new BufferedReader(
-             new InputStreamReader(csvInputStream, StandardCharsets.UTF_8))) {
+         BufferedReader reader =
+             new BufferedReader(new InputStreamReader(csvInputStream, StandardCharsets.UTF_8))) {
 
       String line;
       boolean isHeader = true;
@@ -1922,8 +1922,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String metroName = getMetroName(publicationCode);
 
           if (publicationCode != null && metroName != null) {
-            MetroWageRecord record = new MetroWageRecord(
-                publicationCode, metroName, year, qtr, avgWklyWage, avgAnnualPay);
+            MetroWageRecord record =
+                new MetroWageRecord(publicationCode, metroName, year, qtr, avgWklyWage, avgAnnualPay);
             records.add(record);
           } else {
             LOGGER.warn("Could not map C-code {} to publication code/name", areaFips);
@@ -4122,7 +4122,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       record.put("state_name", countyWage.get("state_name"));
       record.put("average_weekly_wage", countyWage.get("average_weekly_wage"));
       record.put("total_employment", countyWage.get("total_employment"));
-      record.put("year", countyWage.get("year"));
+      // year comes from partition key (year=*/), not parquet file
       dataRecords.add(record);
     }
 
@@ -4139,7 +4139,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("state_fips", jolts.get("state_fips"));
       record.put("state_name", jolts.get("state_name"));
-      record.put("year", jolts.get("year"));
+      // year comes from partition key (year=*/), not parquet file
       record.put("hires_rate", jolts.get("hires_rate"));
       record.put("jobopenings_rate", jolts.get("jobopenings_rate"));
       record.put("quits_rate", jolts.get("quits_rate"));

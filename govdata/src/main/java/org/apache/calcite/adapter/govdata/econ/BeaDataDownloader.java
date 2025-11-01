@@ -18,18 +18,12 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -1127,7 +1121,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("line_number", trade.lineNumber);
       record.put("line_description", trade.lineDescription);
       record.put("series_code", trade.seriesCode);
-      record.put("year", trade.year);
+      // year comes from partition key (year=*/), not parquet file
       record.put("value", trade.value);
       record.put("units", trade.units);
       record.put("frequency", trade.frequency);
@@ -1426,7 +1420,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("indicator_description", ita.indicatorDescription);
       record.put("area_or_country", ita.areaOrCountry);
       record.put("frequency", ita.frequency);
-      record.put("year", ita.year);
+      // year comes from partition key (year=*/), not parquet file
       record.put("value", ita.value);
       record.put("units", ita.units);
       record.put("time_series_id", ita.timeSeriesId);
@@ -1787,7 +1781,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("table_id", String.valueOf(gdp.tableId));
       record.put("frequency", gdp.frequency);
-      record.put("year", gdp.year);
+      // year comes from partition key (year=*/), not parquet file
       record.put("quarter", gdp.quarter);
       record.put("industry_code", gdp.industryCode);
       record.put("industry_description", gdp.industryDescription);
@@ -1813,7 +1807,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       record.put("line_number", component.lineNumber);
       record.put("line_description", component.lineDescription);
       record.put("series_code", component.seriesCode);
-      record.put("year", component.year);
+      // year comes from partition key (year=*/), not parquet file
       record.put("value", component.value);
       record.put("units", component.units);
       record.put("frequency", component.frequency);
