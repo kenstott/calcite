@@ -23,6 +23,7 @@ import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Schema;
@@ -123,6 +124,7 @@ public class InformationSchema extends AbstractSchema {
           .add("DEFAULT_CHARACTER_SET_SCHEMA", SqlTypeName.VARCHAR)
           .add("DEFAULT_CHARACTER_SET_NAME", SqlTypeName.VARCHAR)
           .add("SQL_PATH", SqlTypeName.VARCHAR)
+          .add("REMARKS", SqlTypeName.VARCHAR)
           .build();
     }
 
@@ -130,6 +132,11 @@ public class InformationSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        Schema schema = rootSchema.subSchemas().get(schemaName);
+        String comment = null;
+        if (schema instanceof CommentableSchema) {
+          comment = ((CommentableSchema) schema).getComment();
+        }
         rows.add(new Object[]{
             catalogName,
             schemaName,
@@ -137,13 +144,14 @@ public class InformationSchema extends AbstractSchema {
             null,
             null,
             "UTF8",
-            null
+            null,
+            comment  // REMARKS
         });
       }
 
       // Also add metadata schemas
-      rows.add(new Object[]{catalogName, "information_schema", "CALCITE", null, null, "UTF8", null});
-      rows.add(new Object[]{catalogName, "pg_catalog", "CALCITE", null, null, "UTF8", null});
+      rows.add(new Object[]{catalogName, "information_schema", "CALCITE", null, null, "UTF8", null, null});
+      rows.add(new Object[]{catalogName, "pg_catalog", "CALCITE", null, null, "UTF8", null, null});
 
       return Linq4j.asEnumerable(rows);
     }
@@ -182,7 +190,11 @@ public class InformationSchema extends AbstractSchema {
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
-            Table table = schema.tables().get(tableName);
+            // IMPORTANT: Use getTable() instead of tables().get() to ensure schema's
+            // getTable() override is called (needed for wrapped tables with comment support)
+            Schema unwrappedSchema = schema.unwrap(Schema.class);
+            @SuppressWarnings("deprecation")
+            Table table = unwrappedSchema != null ? unwrappedSchema.getTable(tableName) : schema.tables().get(tableName);
             String tableComment = null;
 
             // Get table comment if available
@@ -285,7 +297,11 @@ public class InformationSchema extends AbstractSchema {
           LOGGER.info("ColumnsTable.scan: Schema '{}' contains tables: {}",
                       schemaName, schema.tables().getNames(LikePattern.any()));
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
-            Table table = schema.tables().get(tableName);
+            // IMPORTANT: Use getTable() instead of tables().get() to ensure schema's
+            // getTable() override is called (needed for wrapped tables with comment support)
+            Schema unwrappedSchema = schema.unwrap(Schema.class);
+            @SuppressWarnings("deprecation")
+            Table table = unwrappedSchema != null ? unwrappedSchema.getTable(tableName) : schema.tables().get(tableName);
             LOGGER.info("ColumnsTable.scan: Processing table '{}' in schema '{}'",
                         tableName, schemaName);
             if (table != null) {
