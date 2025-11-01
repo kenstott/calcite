@@ -46,7 +46,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * }
  * </pre>
  */
-public interface CommentableTable extends Table {
+public interface  CommentableTable extends Table {
 
   /**
    * Returns a comment describing this table's business purpose and contents.

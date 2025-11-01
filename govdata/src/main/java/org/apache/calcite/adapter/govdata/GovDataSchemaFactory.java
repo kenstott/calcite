@@ -151,7 +151,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
 
     // Get the operating cache directory from FileSchema (.aperio/<schema_name>/)
-    // This is established by FileSchema during initialization and should be passed to sub-schemas
+    // Use file schema instance to extract operating directory
     File operatingCacheDirectory = null;
     if (schema instanceof FileSchema) {
       operatingCacheDirectory = ((FileSchema) schema).getOperatingCacheDirectory();

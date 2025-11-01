@@ -3010,22 +3010,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
 
-      // Create Avro schema for SEC filings metadata
-      org.apache.avro.Schema schema = SchemaBuilder.record("SecFiling")
-          .fields()
-          .name("cik").doc("Central Index Key (unique company identifier)").type().stringType().noDefault()
-          .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
-          .name("filing_type").doc("Type of SEC filing (e.g., '10-K', '10-Q', '8-K', 'DEF 14A')").type().stringType().noDefault()
-          .name("filing_date").doc("Date the filing was submitted to SEC (ISO 8601 format)").type().stringType().noDefault()
-          .name("primary_document").doc("Primary document filename in the filing").type().nullable().stringType().noDefault()
-          .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
-          .name("period_of_report").doc("Reporting period end date (ISO 8601 format)").type().nullable().stringType().noDefault()
-          .name("acceptance_datetime").doc("Date and time the filing was accepted by SEC").type().nullable().stringType().noDefault()
-          .name("file_size").doc("Total size of filing in bytes").type().nullable().longType().noDefault()
-          .name("fiscal_year").doc("Fiscal year of the reporting period").type().intType().noDefault()
-          .endRecord();
+      // Load column metadata from sec-schema.json
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
-      List<GenericRecord> allRecords = new ArrayList<>();
+      List<Map<String, Object>> dataList = new ArrayList<>();
       ObjectMapper mapper = new ObjectMapper();
 
       // Process each CIK directory
@@ -3061,26 +3050,26 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             }
 
             for (int i = 0; i < accessionNumbers.size(); i++) {
-              GenericRecord record = new GenericData.Record(schema);
-              record.put("cik", cik);
-              record.put("accession_number", accessionNumbers.get(i).asText());
-              record.put("filing_type", forms.get(i).asText());
-              record.put("filing_date", filingDates.get(i).asText());
-              record.put("primary_document", primaryDocuments.get(i).asText(""));
-              record.put("company_name", companyName);
-              record.put("period_of_report", periodsOfReport != null && i < periodsOfReport.size()
+              Map<String, Object> data = new HashMap<>();
+              data.put("cik", cik);
+              data.put("accession_number", accessionNumbers.get(i).asText());
+              data.put("filing_type", forms.get(i).asText());
+              data.put("filing_date", filingDates.get(i).asText());
+              data.put("primary_document", primaryDocuments.get(i).asText(""));
+              data.put("company_name", companyName);
+              data.put("period_of_report", periodsOfReport != null && i < periodsOfReport.size()
                   ? periodsOfReport.get(i).asText("") : "");
-              record.put("acceptance_datetime", acceptanceDatetimes != null && i < acceptanceDatetimes.size()
+              data.put("acceptance_datetime", acceptanceDatetimes != null && i < acceptanceDatetimes.size()
                   ? acceptanceDatetimes.get(i).asText("") : "");
-              record.put("file_size", fileSizes != null && i < fileSizes.size()
+              data.put("file_size", fileSizes != null && i < fileSizes.size()
                   ? fileSizes.get(i).asLong(0L) : 0L);
 
               String filingDate = filingDates.get(i).asText();
               int fiscalYear = filingDate.length() >= 4 ?
                   Integer.parseInt(filingDate.substring(0, 4)) : 0;
-              record.put("fiscal_year", fiscalYear);
+              data.put("fiscal_year", fiscalYear);
 
-              allRecords.add(record);
+              dataList.add(data);
             }
           } catch (Exception e) {
             LOGGER.warn("Failed to process submissions for CIK " + cikDir.getName() + ": " + e.getMessage());
@@ -3091,8 +3080,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // Write consolidated SEC filings table
       String outputFilePath = storageProvider.resolvePath(secParquetDirPath, "sec_filings.parquet");
       // Use StorageProvider for parquet writing
-      storageProvider.writeAvroParquet(outputFilePath, schema, allRecords, "sec_filings");
-      LOGGER.info("Created SEC filings table with " + allRecords.size() + " records: " + outputFilePath);
+      storageProvider.writeAvroParquet(outputFilePath, columns, dataList, "SecFiling", "SecFiling");
+      LOGGER.info("Created SEC filings table with " + dataList.size() + " records: " + outputFilePath);
 
     } catch (Exception e) {
       LOGGER.warn("Failed to create SEC filings table: " + e.getMessage());

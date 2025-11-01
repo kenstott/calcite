@@ -679,28 +679,12 @@ public class XbrlToParquetConverter implements FileConverter {
     LOGGER.debug("writeFactsToParquet called for " + outputPath +
                 " (CIK: " + cik + ", Type: " + filingType + ", Date: " + filingDate + ")");
 
-    // Create Avro schema for facts
-    // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
-    // They are encoded in the directory structure for Hive-style partitioning
-    Schema schema = SchemaBuilder.record("XbrlFact")
-        .fields()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("concept").doc("XBRL concept name (e.g., 'us-gaap:Assets', 'dei:EntityRegistrantName')").type().stringType().noDefault()
-        .name("context_ref").doc("Reference to context element defining the reporting period and entity").type().nullable().stringType().noDefault()
-        .name("unit_ref").doc("Reference to unit element defining measurement units (e.g., 'USD', 'shares')").type().nullable().stringType().noDefault()
-        .name("value").doc("Text value of the fact element").type().nullable().stringType().noDefault()
-        .name("full_text").doc("Full text content for TextBlock elements (narrative disclosures)").type().nullable().stringType().noDefault()
-        .name("numeric_value").doc("Numeric value for monetary and numeric facts").type().nullable().doubleType().noDefault()
-        .name("period_start").doc("Start date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("period_end").doc("End date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("is_instant").doc("Whether this is an instant-in-time fact (true) or duration fact (false)").type().nullable().booleanType().noDefault()
-        .name("footnote_refs").doc("Comma-separated list of footnote references").type().nullable().stringType().noDefault()
-        .name("element_id").doc("Unique element identifier for linking to other elements").type().nullable().stringType().noDefault()
-        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
-        .endRecord();
+    // Load column metadata from sec-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("financial_line_items");
 
     // Extract all fact elements
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
     NodeList allElements = doc.getElementsByTagName("*");
 
     LOGGER.debug("Found " + allElements.getLength() + " total XML elements in document");
@@ -740,9 +724,9 @@ public class XbrlToParquetConverter implements FileConverter {
           elementsWithContextRef++;
         }
 
-        GenericRecord record = new GenericData.Record(schema);
+        Map<String, Object> data = new HashMap<>();
         // Partition columns (cik, filing_type) are NOT added - they're in the directory path
-        record.put("filing_date", filingDate);
+        data.put("filing_date", filingDate);
 
         // For inline XBRL, concept is in 'name' attribute; for regular XBRL, it's the element name
         String concept;
@@ -769,9 +753,9 @@ public class XbrlToParquetConverter implements FileConverter {
         if (concept == null || concept.isEmpty()) {
           continue;
         }
-        record.put("concept", concept);
-        record.put("context_ref", element.getAttribute("contextRef"));
-        record.put("unit_ref", element.getAttribute("unitRef"));
+        data.put("concept", concept);
+        data.put("context_ref", element.getAttribute("contextRef"));
+        data.put("unit_ref", element.getAttribute("unitRef"));
 
         // Get raw text content
         String rawValue = element.getTextContent().trim();
@@ -795,37 +779,39 @@ public class XbrlToParquetConverter implements FileConverter {
           cleanValue = cleanHtmlText(rawValue);
         }
 
-        record.put("value", cleanValue);
-        record.put("full_text", fullText);
+        data.put("value", cleanValue);
+        data.put("full_text", fullText);
 
         // Extract footnote references (e.g., "See Note 14")
         String footnoteRefs = extractFootnoteReferences(rawValue);
-        record.put("footnote_refs", footnoteRefs);
+        data.put("footnote_refs", footnoteRefs);
 
         // Store element ID for relationship tracking
         String elementId = element.getAttribute("id");
-        record.put("element_id", elementId.isEmpty() ? null : elementId);
+        data.put("element_id", elementId.isEmpty() ? null : elementId);
 
         // Try to parse as numeric (using cleaned value)
         try {
           double numValue =
               Double.parseDouble(cleanValue.replaceAll(",", ""));
-          record.put("numeric_value", numValue);
+          data.put("numeric_value", numValue);
         } catch (NumberFormatException e) {
-          record.put("numeric_value", null);
+          data.put("numeric_value", null);
         }
 
-        // Set type field for DuckDB table identification
-        record.put("type", "financial_line_items");
+        // Set period_start and period_end to null for now (will be populated from contexts)
+        data.put("period_start", null);
+        data.put("period_end", null);
+        data.put("is_instant", false);
 
-        records.add(record);
+        dataList.add(data);
       }
     }
 
     LOGGER.debug("Found " + elementsWithContextRef + " elements with contextRef attributes");
-    LOGGER.debug("Extracted " + records.size() + " valid fact records (including enhanced extraction for elements without contextRef)");
+    LOGGER.debug("Extracted " + dataList.size() + " valid fact records (including enhanced extraction for elements without contextRef)");
 
-    if (records.isEmpty()) {
+    if (dataList.isEmpty()) {
       LOGGER.warn("No facts extracted from XBRL document for " + filingDate + " despite enhanced extraction - document may not contain recognizable financial facts");
       LOGGER.warn("DEBUG: Document analysis - total elements: " + allElements.getLength() +
                      ", elements with contextRef: " + elementsWithContextRef);
@@ -853,16 +839,16 @@ public class XbrlToParquetConverter implements FileConverter {
     // Use consolidated StorageProvider method for Parquet writing
     try {
       LOGGER.debug("Writing facts to parquet file: " + outputPath);
-      LOGGER.debug(" About to write " + records.size() + " fact records using storageProvider.writeAvroParquet");
+      LOGGER.debug(" About to write " + dataList.size() + " fact records using storageProvider.writeAvroParquet");
 
       // Check if we have any records to write
-      if (records.isEmpty()) {
+      if (dataList.isEmpty()) {
         LOGGER.warn("DEBUG: No fact records to write - creating empty parquet file for cache validation");
         // Still need to create the file for cache validation
       }
 
-      storageProvider.writeAvroParquet(outputPath, schema, records, "facts");
-      LOGGER.info("Successfully wrote " + records.size() + " facts to " + outputPath);
+      storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlFact", "XbrlFact");
+      LOGGER.info("Successfully wrote " + dataList.size() + " facts to " + outputPath);
 
     } catch (Exception e) {
       LOGGER.error("Failed to write facts parquet file for " + filingDate + " (CIK: " + cik + "): " + e.getClass().getName() + " - " + e.getMessage());
@@ -875,84 +861,67 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeMetadataToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath) throws IOException {
 
-    // Create Avro schema for filing metadata
-    // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
-    Schema schema = SchemaBuilder.record("FilingMetadata")
-        .fields()
-        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
-        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
-        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
-        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
-        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
-        .name("phone").doc("Company phone number").type().nullable().stringType().noDefault()
-        .name("document_type").doc("Type of filing document (e.g., '10-K', '10-Q', '8-K')").type().nullable().stringType().noDefault()
-        .name("period_end_date").doc("Period end date for the reporting period").type().nullable().stringType().noDefault()
-        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().longType().noDefault()
-        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
-        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
-        .endRecord();
+    // Load column metadata from sec-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
-    List<GenericRecord> records = new ArrayList<>();
-    GenericRecord record = new GenericData.Record(schema);
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    Map<String, Object> data = new HashMap<>();
 
     // Extract accession number from filename
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     String accessionNumber = extractAccessionNumber(filename);
-    record.put("accession_number", accessionNumber != null ? accessionNumber : "");
-    record.put("filing_date", filingDate);
+    data.put("cik", cik);
+    data.put("accession_number", accessionNumber != null ? accessionNumber : "");
+    data.put("filing_type", filingType);
+    data.put("filing_date", filingDate);
 
     // Extract DEI (Document and Entity Information) elements
     // Try different namespaces and formats
     String companyName = extractDeiValue(doc, "EntityRegistrantName", "RegistrantName");
-    record.put("company_name", companyName);
+    data.put("company_name", companyName);
 
     String stateOfIncorp =
                                            extractDeiValue(doc, "EntityIncorporationStateCountryCode", "StateOrCountryOfIncorporation");
-    record.put("state_of_incorporation", stateOfIncorp);
+    data.put("state_of_incorporation", stateOfIncorp);
 
     String fiscalYearEnd = extractDeiValue(doc, "CurrentFiscalYearEndDate", "FiscalYearEnd");
-    record.put("fiscal_year_end", fiscalYearEnd);
+    data.put("fiscal_year_end", fiscalYearEnd);
 
     String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
-    record.put("business_address", businessAddress);
+    data.put("business_address", businessAddress);
 
     String mailingAddress = extractDeiValue(doc, "EntityAddressMailingAddressLine1", "MailingAddress");
-    record.put("mailing_address", mailingAddress);
+    data.put("mailing_address", mailingAddress);
 
     String phone = extractDeiValue(doc, "EntityPhoneNumber", "Phone");
-    record.put("phone", phone);
+    data.put("phone", phone);
 
     String docType = extractDeiValue(doc, "DocumentType", "FormType");
-    record.put("document_type", docType);
+    data.put("document_type", docType);
 
     String periodEnd = extractDeiValue(doc, "DocumentPeriodEndDate", "PeriodEndDate");
-    record.put("period_end_date", periodEnd);
+    data.put("period_end_date", periodEnd);
+    data.put("period_of_report", periodEnd);
+    data.put("primary_document", filename);
 
     // Try to extract SIC code
     String sicStr = extractDeiValue(doc, "EntityStandardIndustrialClassificationCode", "SicCode");
-    if (sicStr != null && !sicStr.isEmpty()) {
-      try {
-        record.put("sic_code", Long.parseLong(sicStr));
-      } catch (NumberFormatException e) {
-        record.put("sic_code", null);
-      }
-    } else {
-      record.put("sic_code", null);
-    }
+    data.put("sic_code", sicStr);
 
     String irsNumber = extractDeiValue(doc, "EntityTaxIdentificationNumber", "IrsNumber");
-    record.put("irs_number", irsNumber);
+    data.put("irs_number", irsNumber);
 
-    // Set type field for DuckDB table identification
-    record.put("type", "filing_metadata");
+    // Set remaining fields to null/defaults
+    data.put("acceptance_datetime", null);
+    data.put("file_size", null);
+    data.put("fiscal_year", null);
 
-    records.add(record);
+    dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(outputPath, schema, records, "metadata");
-    LOGGER.info("Successfully wrote " + records.size() + " metadata records to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
+    LOGGER.info("Successfully wrote " + dataList.size() + " metadata records to " + outputPath);
   }
 
   private String extractDeiValue(Document doc, String... possibleTags) {
@@ -1011,40 +980,31 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeContextsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate) throws IOException {
 
-    // Create Avro schema for contexts
-    // NOTE: Partition columns (cik, filing_type, year) are NOT included in the file
-    Schema schema = SchemaBuilder.record("XbrlContext")
-        .fields()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("context_id").doc("Unique identifier for this context element").type().stringType().noDefault()
-        .name("entity_identifier").doc("Entity identifier (typically CIK number)").type().nullable().stringType().noDefault()
-        .name("entity_scheme").doc("Entity identifier scheme (e.g., 'http://www.sec.gov/CIK')").type().nullable().stringType().noDefault()
-        .name("period_start").doc("Start date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("period_end").doc("End date of the reporting period (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("period_instant").doc("Instant date for point-in-time facts (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("segment").doc("Segment dimension information (XML fragment)").type().nullable().stringType().noDefault()
-        .name("scenario").doc("Scenario dimension information (XML fragment)").type().nullable().stringType().noDefault()
-        .name("type").doc("Table type identifier for DuckDB catalog").type().stringType().noDefault()
-        .endRecord();
+    // Load column metadata from sec-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("filing_contexts");
 
     // Extract context elements
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
     NodeList contexts = doc.getElementsByTagNameNS("*", "context");
 
     for (int i = 0; i < contexts.getLength(); i++) {
       Element context = (Element) contexts.item(i);
-      GenericRecord record = new GenericData.Record(schema);
+      Map<String, Object> data = new HashMap<>();
 
       // Partition columns (cik, filing_type) are NOT added - they're in the directory path
-      record.put("filing_date", filingDate);
-      record.put("context_id", context.getAttribute("id"));
+      data.put("filing_date", filingDate);
+      data.put("context_id", context.getAttribute("id"));
 
       // Extract entity information
       NodeList identifiers = context.getElementsByTagNameNS("*", "identifier");
       if (identifiers.getLength() > 0) {
         Element identifier = (Element) identifiers.item(0);
-        record.put("entity_identifier", identifier.getTextContent());
-        record.put("entity_scheme", identifier.getAttribute("scheme"));
+        data.put("entity_identifier", identifier.getTextContent());
+        data.put("entity_scheme", identifier.getAttribute("scheme"));
+      } else {
+        data.put("entity_identifier", null);
+        data.put("entity_scheme", null);
       }
 
       // Extract period information
@@ -1053,24 +1013,31 @@ public class XbrlToParquetConverter implements FileConverter {
       NodeList instants = context.getElementsByTagNameNS("*", "instant");
 
       if (startDates.getLength() > 0) {
-        record.put("period_start", startDates.item(0).getTextContent());
+        data.put("period_start", startDates.item(0).getTextContent());
+      } else {
+        data.put("period_start", null);
       }
       if (endDates.getLength() > 0) {
-        record.put("period_end", endDates.item(0).getTextContent());
+        data.put("period_end", endDates.item(0).getTextContent());
+      } else {
+        data.put("period_end", null);
       }
       if (instants.getLength() > 0) {
-        record.put("period_instant", instants.item(0).getTextContent());
+        data.put("period_instant", instants.item(0).getTextContent());
+      } else {
+        data.put("period_instant", null);
       }
 
-      // Set type field for DuckDB table identification
-      record.put("type", "filing_contexts");
+      // Set segment and scenario to null for now
+      data.put("segment", null);
+      data.put("scenario", null);
 
-      records.add(record);
+      dataList.add(data);
     }
 
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(outputPath, schema, records, "contexts");
-    LOGGER.info("Successfully wrote " + records.size() + " context records to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlContext", "XbrlContext");
+    LOGGER.info("Successfully wrote " + dataList.size() + " context records to " + outputPath);
   }
 
   @Override public String getSourceFormat() {
@@ -1466,24 +1433,17 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeMDAToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath) throws IOException {
 
-    // Create schema for MD&A paragraphs
-    Schema schema = SchemaBuilder.record("MDASection")
-        .fields()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("section").doc("Item section identifier (e.g., 'Item 7', 'Item 7A')").type().stringType().noDefault()
-        .name("subsection").doc("Subsection name (e.g., 'Overview', 'Results of Operations')").type().stringType().noDefault()
-        .name("paragraph_number").doc("Sequential paragraph number within the subsection").type().intType().noDefault()
-        .name("paragraph_text").doc("Full text content of the paragraph").type().stringType().noDefault()
-        .name("footnote_refs").doc("Comma-separated list of footnote references").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load column metadata from sec-schema.json
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("mda_sections");
 
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Look for MD&A content in different ways
     // 1. Look for Item 7 and Item 7A in inline XBRL
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     if (filename.endsWith(".htm") || filename.endsWith(".html")) {
-      extractMDAFromHTML(sourcePath, schema, records, filingDate);
+      extractMDAFromHTML(sourcePath, dataList, filingDate);
     }
 
     // 2. Look for MD&A-related TextBlocks in XBRL
@@ -1498,23 +1458,23 @@ public class XbrlToParquetConverter implements FileConverter {
         if (isMDAConcept(concept)) {
           String text = element.getTextContent().trim();
           if (text.length() > 50) {  // Skip if just a title
-            extractParagraphs(text, concept, schema, records, filingDate);
+            extractParagraphs(text, concept, dataList, filingDate);
           }
         }
       }
     }
 
     // Always write file, even if empty (zero rows) to ensure cache consistency
-    storageProvider.writeAvroParquet(outputPath, schema, records, "mda");
-    LOGGER.info("Successfully wrote " + records.size() + " MD&A paragraphs to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "MDASection", "MDASection");
+    LOGGER.info("Successfully wrote " + dataList.size() + " MD&A paragraphs to " + outputPath);
   }
 
   /**
    * Extract MD&A from HTML file by looking for Item 7 and Item 7A sections.
    * Enhanced to handle inline XBRL documents where Item 7 may be embedded in tags.
    */
-  private void extractMDAFromHTML(String htmlPath, Schema schema,
-      List<GenericRecord> records, String filingDate) {
+  private void extractMDAFromHTML(String htmlPath,
+      List<Map<String, Object>> dataList, String filingDate) {
     try {
       org.jsoup.nodes.Document doc;
       try (InputStream is = storageProvider.openInputStream(htmlPath)) {
@@ -1576,11 +1536,11 @@ public class XbrlToParquetConverter implements FileConverter {
         }
 
         // Extract content
-        extractMDAContent(contentStart, sectionName, schema, records, filingDate);
+        extractMDAContent(contentStart, sectionName, dataList, filingDate);
       }
 
       // If we still didn't find any MD&A, try a more aggressive approach
-      if (records.isEmpty()) {
+      if (dataList.isEmpty()) {
         // Look for large text blocks that mention key MD&A terms
         org.jsoup.select.Elements textBlocks = doc.select("div, p, td");
         boolean inMDA = false;
@@ -1611,7 +1571,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
           // Extract content if we're in MD&A
           if (inMDA && text.length() > 100) {
-            extractTextAsParagraphs(text, currentSection, schema, records, filingDate);
+            extractTextAsParagraphs(text, currentSection, dataList, filingDate);
           }
         }
       }
@@ -1625,7 +1585,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract MD&A content starting from a given element.
    */
   private void extractMDAContent(org.jsoup.nodes.Element startElement, String sectionName,
-      Schema schema, List<GenericRecord> records, String filingDate) {
+      List<Map<String, Object>> dataList, String filingDate) {
 
     String subsection = "Overview";
     int paragraphNum = 1;
@@ -1657,14 +1617,14 @@ public class XbrlToParquetConverter implements FileConverter {
 
         for (String paragraph : paragraphs) {
           if (paragraph.trim().length() > 50) {
-            GenericRecord record = new GenericData.Record(schema);
-            record.put("filing_date", filingDate);
-            record.put("section", sectionName);
-            record.put("subsection", subsection);
-            record.put("paragraph_number", paragraphNum++);
-            record.put("paragraph_text", paragraph.trim());
-            record.put("footnote_refs", extractFootnoteReferences(paragraph));
-            records.add(record);
+            Map<String, Object> data = new HashMap<>();
+            data.put("filing_date", filingDate);
+            data.put("section", sectionName);
+            data.put("subsection", subsection);
+            data.put("paragraph_number", paragraphNum++);
+            data.put("paragraph_text", paragraph.trim());
+            data.put("footnote_refs", extractFootnoteReferences(paragraph));
+            dataList.add(data);
           }
         }
       }
@@ -1677,14 +1637,14 @@ public class XbrlToParquetConverter implements FileConverter {
    * Extract text as paragraphs for aggressive MD&A extraction.
    */
   private void extractTextAsParagraphs(String text, String sectionName,
-      Schema schema, List<GenericRecord> records, String filingDate) {
+      List<Map<String, Object>> dataList, String filingDate) {
 
     // Split into sentences or natural paragraphs
     String[] paragraphs = text.split("(?<=[.!?])\\s+(?=[A-Z])");
 
     // Group sentences into reasonable paragraph sizes
     StringBuilder currentParagraph = new StringBuilder();
-    int paragraphNum = records.size() + 1;
+    int paragraphNum = dataList.size() + 1;
 
     for (String sentence : paragraphs) {
       currentParagraph.append(sentence).append(" ");
@@ -1693,14 +1653,14 @@ public class XbrlToParquetConverter implements FileConverter {
       if (currentParagraph.length() > 300 || sentence.endsWith(".")) {
         String paragraphText = currentParagraph.toString().trim();
         if (paragraphText.length() > 100) {
-          GenericRecord record = new GenericData.Record(schema);
-          record.put("filing_date", filingDate);
-          record.put("section", sectionName);
-          record.put("subsection", "General");
-          record.put("paragraph_number", paragraphNum++);
-          record.put("paragraph_text", paragraphText);
-          record.put("footnote_refs", extractFootnoteReferences(paragraphText));
-          records.add(record);
+          Map<String, Object> data = new HashMap<>();
+          data.put("filing_date", filingDate);
+          data.put("section", sectionName);
+          data.put("subsection", "General");
+          data.put("paragraph_number", paragraphNum++);
+          data.put("paragraph_text", paragraphText);
+          data.put("footnote_refs", extractFootnoteReferences(paragraphText));
+          dataList.add(data);
 
           currentParagraph = new StringBuilder();
         }
@@ -1710,14 +1670,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // Add any remaining text
     String remaining = currentParagraph.toString().trim();
     if (remaining.length() > 100) {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("filing_date", filingDate);
-      record.put("section", sectionName);
-      record.put("subsection", "General");
-      record.put("paragraph_number", paragraphNum);
-      record.put("paragraph_text", remaining);
-      record.put("footnote_refs", extractFootnoteReferences(remaining));
-      records.add(record);
+      Map<String, Object> data = new HashMap<>();
+      data.put("filing_date", filingDate);
+      data.put("section", sectionName);
+      data.put("subsection", "General");
+      data.put("paragraph_number", paragraphNum);
+      data.put("paragraph_text", remaining);
+      data.put("footnote_refs", extractFootnoteReferences(remaining));
+      dataList.add(data);
     }
   }
 
@@ -1759,8 +1719,8 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Extract paragraphs from text block.
    */
-  private void extractParagraphs(String text, String concept, Schema schema,
-      List<GenericRecord> records, String filingDate) {
+  private void extractParagraphs(String text, String concept,
+      List<Map<String, Object>> dataList, String filingDate) {
 
     // Split into paragraphs
     String[] paragraphs = text.split("\\n\\n+");
@@ -1768,14 +1728,14 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int i = 0; i < paragraphs.length; i++) {
       String paragraph = paragraphs[i].trim();
       if (paragraph.length() > 50) {  // Skip very short paragraphs
-        GenericRecord record = new GenericData.Record(schema);
-        record.put("filing_date", filingDate);
-        record.put("section", "XBRL MD&A");
-        record.put("subsection", concept);
-        record.put("paragraph_number", i + 1);
-        record.put("paragraph_text", paragraph);
-        record.put("footnote_refs", extractFootnoteReferences(paragraph));
-        records.add(record);
+        Map<String, Object> data = new HashMap<>();
+        data.put("filing_date", filingDate);
+        data.put("section", "XBRL MD&A");
+        data.put("subsection", concept);
+        data.put("paragraph_number", i + 1);
+        data.put("paragraph_text", paragraph);
+        data.put("footnote_refs", extractFootnoteReferences(paragraph));
+        dataList.add(data);
       }
     }
   }
@@ -1827,20 +1787,11 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.debug(String.format("DEBUG: Document has %d child nodes", doc.getChildNodes().getLength()));
     }
 
-    // Create schema for relationships
-    Schema schema = SchemaBuilder.record("XbrlRelationship")
-        .fields()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("linkbase_type").doc("Type of linkbase relationship (presentation, calculation, definition)").type().stringType().noDefault()
-        .name("arc_role").doc("Arc role defining relationship type (e.g., parent-child, summation-item)").type().stringType().noDefault()
-        .name("from_concept").doc("Source concept in the relationship").type().stringType().noDefault()
-        .name("to_concept").doc("Target concept in the relationship").type().stringType().noDefault()
-        .name("weight").doc("Calculation weight (+1 for addition, -1 for subtraction)").type().nullable().doubleType().noDefault()
-        .name("order").doc("Presentation order for display sequencing").type().nullable().intType().noDefault()
-        .name("preferred_label").doc("Preferred label role for presentation").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema from metadata
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("xbrl_relationships");
 
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Only extract traditional arc relationships if document was successfully parsed
     if (doc != null) {
@@ -1875,28 +1826,28 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int i = 0; i < arcs.getLength(); i++) {
       Element arc = (Element) arcs.item(i);
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("filing_date", filingDate);
+      Map<String, Object> data = new HashMap<>();
+      data.put("filing_date", filingDate);
 
       // Determine linkbase type from namespace or arc role
       String arcRole = arc.getAttribute("arcrole");
       String linkbaseType = determineLinkbaseType(arcRole);
-      record.put("linkbase_type", linkbaseType);
-      record.put("arc_role", arcRole);
+      data.put("linkbase_type", linkbaseType);
+      data.put("arc_role", arcRole);
 
       // Get from and to concepts
       String from = arc.getAttribute("from");
       String to = arc.getAttribute("to");
-      record.put("from_concept", cleanConceptName(from));
-      record.put("to_concept", cleanConceptName(to));
+      data.put("from_concept", cleanConceptName(from));
+      data.put("to_concept", cleanConceptName(to));
 
       // Get weight for calculation linkbase
       String weight = arc.getAttribute("weight");
       if (weight != null && !weight.isEmpty()) {
         try {
-          record.put("weight", Double.parseDouble(weight));
+          data.put("weight", Double.parseDouble(weight));
         } catch (NumberFormatException e) {
-          record.put("weight", null);
+          data.put("weight", null);
         }
       }
 
@@ -1904,39 +1855,39 @@ public class XbrlToParquetConverter implements FileConverter {
       String order = arc.getAttribute("order");
       if (order != null && !order.isEmpty()) {
         try {
-          record.put("order", Integer.parseInt(order));
+          data.put("order", Integer.parseInt(order));
         } catch (NumberFormatException e) {
-          record.put("order", null);
+          data.put("order", null);
         }
       }
 
       // Get preferred label
-      record.put("preferred_label", arc.getAttribute("preferredLabel"));
+      data.put("preferred_label", arc.getAttribute("preferredLabel"));
 
-      records.add(record);
+      dataList.add(data);
       LOGGER.debug(String.format("DEBUG: Added arc relationship from %s to %s", from, to));
     }
-    LOGGER.debug(String.format("DEBUG: Total arc-based relationships extracted: %d", records.size()));
+    LOGGER.debug(String.format("DEBUG: Total arc-based relationships extracted: %d", dataList.size()));
     } else {
       LOGGER.debug(" Document is null, skipping arc extraction");
     }
 
     // Also extract relationships from inline XBRL if present
-    int beforeInlineCount = records.size();
+    int beforeInlineCount = dataList.size();
     LOGGER.debug(String.format("DEBUG: Before inline extraction, have %d relationships", beforeInlineCount));
-    extractInlineXBRLRelationships(doc, schema, records, filingDate, sourcePath);
-    int inlineRelationships = records.size() - beforeInlineCount;
-    LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, records.size()));
+    extractInlineXBRLRelationships(doc, columns, dataList, filingDate, sourcePath);
+    int inlineRelationships = dataList.size() - beforeInlineCount;
+    LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, dataList.size()));
 
     // Always write the parquet file, even if empty, to satisfy cache validation
     try {
-      LOGGER.debug(" About to write " + records.size() + " relationship records to " + outputPath);
+      LOGGER.debug(" About to write " + dataList.size() + " relationship records to " + outputPath);
 
-      if (!records.isEmpty()) {
-        storageProvider.writeAvroParquet(outputPath, schema, records, "relationships");
+      if (!dataList.isEmpty()) {
+        storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlRelationship", "xbrl_relationships");
         LOGGER.info(
             String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
-            records.size(), beforeInlineCount, inlineRelationships, outputPath));
+            dataList.size(), beforeInlineCount, inlineRelationships, outputPath));
       } else {
         // Create an empty parquet file to indicate that relationship extraction was completed
         // This is important for cache validation - without this file, the system will think
@@ -1944,7 +1895,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // NOTE: Inline XBRL filings will typically have empty relationship files since
         // relationships are in separate linkbase files that we don't currently download
         LOGGER.debug(String.format("No relationships found for CIK %s filing type %s - creating empty relationships file (expected for inline XBRL)", cik, filingType));
-        storageProvider.writeAvroParquet(outputPath, schema, records, "relationships"); // Write empty records list
+        storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlRelationship", "xbrl_relationships"); // Write empty records list
         LOGGER.info(String.format("Created empty relationships file for %s (inline XBRL relationships in external linkbase files not downloaded): %s", filingType, outputPath));
       }
 
@@ -1987,8 +1938,9 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Extract relationships from inline XBRL structure.
    */
-  private void extractInlineXBRLRelationships(Document doc, Schema schema,
-      List<GenericRecord> records, String filingDate, String sourcePath) {
+  private void extractInlineXBRLRelationships(Document doc,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList, String filingDate, String sourcePath) {
 
     String fileName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     LOGGER.debug(" extractInlineXBRLRelationships START");
@@ -1998,7 +1950,7 @@ public class XbrlToParquetConverter implements FileConverter {
     // First, try to download and parse external linkbase files
     // These contain the actual relationship definitions for inline XBRL
     try {
-      downloadAndParseLinkbases(sourcePath, schema, records, filingDate);
+      downloadAndParseLinkbases(sourcePath, columns, dataList, filingDate);
     } catch (Exception e) {
       LOGGER.debug("Failed to download/parse linkbase files: " + e.getMessage());
     }
@@ -2064,16 +2016,16 @@ public class XbrlToParquetConverter implements FileConverter {
             String relationshipKey = fromRef + "->" + toRef + ":" + arcrole;
 
             if (!processedRelationships.contains(relationshipKey)) {
-              GenericRecord record = new GenericData.Record(schema);
-              record.put("filing_date", filingDate);
-              record.put("linkbase_type", determineLinkbaseType(arcrole));
-              record.put("arc_role", arcrole);
-              record.put("from_concept", cleanConceptName(fromRef));
-              record.put("to_concept", cleanConceptName(toRef));
-              record.put("weight", weight != null && !weight.isEmpty() ? Double.parseDouble(weight) : null);
-              record.put("order", order != null && !order.isEmpty() ? Integer.parseInt(order) : i);
-              record.put("preferred_label", ixRel.getAttribute("preferredLabel"));
-              records.add(record);
+              Map<String, Object> data = new HashMap<>();
+              data.put("filing_date", filingDate);
+              data.put("linkbase_type", determineLinkbaseType(arcrole));
+              data.put("arc_role", arcrole);
+              data.put("from_concept", cleanConceptName(fromRef));
+              data.put("to_concept", cleanConceptName(toRef));
+              data.put("weight", weight != null && !weight.isEmpty() ? Double.parseDouble(weight) : null);
+              data.put("order", order != null && !order.isEmpty() ? Integer.parseInt(order) : i);
+              data.put("preferred_label", ixRel.getAttribute("preferredLabel"));
+              dataList.add(data);
               processedRelationships.add(relationshipKey);
               LOGGER.debug("Added ix:relationship: " + relationshipKey);
             }
@@ -2108,16 +2060,16 @@ public class XbrlToParquetConverter implements FileConverter {
               String relationshipKey = concept + "-footnote->" + id;
 
               if (!processedRelationships.contains(relationshipKey)) {
-                GenericRecord record = new GenericData.Record(schema);
-                record.put("filing_date", filingDate);
-                record.put("linkbase_type", "reference");
-                record.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
-                record.put("from_concept", cleanConceptName(concept));
-                record.put("to_concept", "footnote_" + id);
-                record.put("weight", null);
-                record.put("order", i * 1000 + j);
-                record.put("preferred_label", footnoteRole);
-                records.add(record);
+                Map<String, Object> data = new HashMap<>();
+                data.put("filing_date", filingDate);
+                data.put("linkbase_type", "reference");
+                data.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
+                data.put("from_concept", cleanConceptName(concept));
+                data.put("to_concept", "footnote_" + id);
+                data.put("weight", null);
+                data.put("order", i * 1000 + j);
+                data.put("preferred_label", footnoteRole);
+                dataList.add(data);
                 processedRelationships.add(relationshipKey);
                 LOGGER.debug("Added fact-footnote relationship: " + relationshipKey);
               }
@@ -2154,16 +2106,16 @@ public class XbrlToParquetConverter implements FileConverter {
                 String relationshipKey = lastParentConcept + "->" + concept;
 
                 if (!processedRelationships.contains(relationshipKey)) {
-                  GenericRecord record = new GenericData.Record(schema);
-                  record.put("filing_date", filingDate);
-                  record.put("linkbase_type", "presentation");
-                  record.put("arc_role", "table-structure");
-                  record.put("from_concept", cleanConceptName(lastParentConcept));
-                  record.put("to_concept", cleanConceptName(concept));
-                  record.put("weight", null);
-                  record.put("order", r * 100 + c);  // Row-column based ordering
-                  record.put("preferred_label", cell.getAttribute("preferredLabel"));
-                  records.add(record);
+                  Map<String, Object> data = new HashMap<>();
+                  data.put("filing_date", filingDate);
+                  data.put("linkbase_type", "presentation");
+                  data.put("arc_role", "table-structure");
+                  data.put("from_concept", cleanConceptName(lastParentConcept));
+                  data.put("to_concept", cleanConceptName(concept));
+                  data.put("weight", null);
+                  data.put("order", r * 100 + c);  // Row-column based ordering
+                  data.put("preferred_label", cell.getAttribute("preferredLabel"));
+                  dataList.add(data);
                   processedRelationships.add(relationshipKey);
                 }
               }
@@ -2195,16 +2147,16 @@ public class XbrlToParquetConverter implements FileConverter {
           String relationshipKey = parentConcept + "-calc->" + concept;
 
           if (!processedRelationships.contains(relationshipKey)) {
-            GenericRecord record = new GenericData.Record(schema);
-            record.put("filing_date", filingDate);
-            record.put("linkbase_type", "calculation");
-            record.put("arc_role", "summation-item");
-            record.put("from_concept", cleanConceptName(parentConcept));
-            record.put("to_concept", cleanConceptName(concept));
-            record.put("weight", weight.isEmpty() ? 1.0 : Double.parseDouble(weight));
-            record.put("order", i);
-            record.put("preferred_label", element.getAttribute("preferredLabel"));
-            records.add(record);
+            Map<String, Object> data = new HashMap<>();
+            data.put("filing_date", filingDate);
+            data.put("linkbase_type", "calculation");
+            data.put("arc_role", "summation-item");
+            data.put("from_concept", cleanConceptName(parentConcept));
+            data.put("to_concept", cleanConceptName(concept));
+            data.put("weight", weight.isEmpty() ? 1.0 : Double.parseDouble(weight));
+            data.put("order", i);
+            data.put("preferred_label", element.getAttribute("preferredLabel"));
+            dataList.add(data);
             processedRelationships.add(relationshipKey);
           }
         }
@@ -2217,8 +2169,9 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Download and parse linkbase files referenced from inline XBRL schema.
    */
-  private void downloadAndParseLinkbases(String htmlPath, Schema schema,
-      List<GenericRecord> records, String filingDate) throws Exception {
+  private void downloadAndParseLinkbases(String htmlPath,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList, String filingDate) throws Exception {
 
     LOGGER.debug("Looking for linkbase references in inline XBRL document");
 
@@ -2351,7 +2304,7 @@ public class XbrlToParquetConverter implements FileConverter {
         linkbaseFactory.setNamespaceAware(true);
         DocumentBuilder linkbaseBuilder = linkbaseFactory.newDocumentBuilder();
         Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
-        extractLinkbaseRelationships(linkbaseDoc, schema, records, filingDate, linkbaseType);
+        extractLinkbaseRelationships(linkbaseDoc, columns, dataList, filingDate, linkbaseType);
       } catch (Exception e) {
         LOGGER.warn("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
       }
@@ -2361,8 +2314,9 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Extract relationships from a linkbase document.
    */
-  private void extractLinkbaseRelationships(Document linkbaseDoc, Schema schema,
-      List<GenericRecord> records, String filingDate, String linkbaseType) {
+  private void extractLinkbaseRelationships(Document linkbaseDoc,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList, String filingDate, String linkbaseType) {
 
     // Find arc elements in the linkbase
     NodeList arcs = linkbaseDoc.getElementsByTagName("*");
@@ -2385,50 +2339,50 @@ public class XbrlToParquetConverter implements FileConverter {
         }
 
         if (from != null && !from.isEmpty() && to != null && !to.isEmpty()) {
-          GenericRecord record = new GenericData.Record(schema);
-          record.put("filing_date", filingDate);
-          record.put("linkbase_type", linkbaseType);
+          Map<String, Object> data = new HashMap<>();
+          data.put("filing_date", filingDate);
+          data.put("linkbase_type", linkbaseType);
 
           // Get arc role
           String arcRole = element.getAttribute("xlink:arcrole");
           if (arcRole == null || arcRole.isEmpty()) {
             arcRole = element.getAttribute("arcrole");
           }
-          record.put("arc_role", arcRole);
+          data.put("arc_role", arcRole);
 
           // Clean concept names
-          record.put("from_concept", cleanConceptName(from));
-          record.put("to_concept", cleanConceptName(to));
+          data.put("from_concept", cleanConceptName(from));
+          data.put("to_concept", cleanConceptName(to));
 
           // Get weight for calculation linkbase
           String weight = element.getAttribute("weight");
           if (weight != null && !weight.isEmpty()) {
             try {
-              record.put("weight", Double.parseDouble(weight));
+              data.put("weight", Double.parseDouble(weight));
             } catch (NumberFormatException e) {
-              record.put("weight", null);
+              data.put("weight", null);
             }
           } else {
-            record.put("weight", null);
+            data.put("weight", null);
           }
 
           // Get order for presentation linkbase
           String order = element.getAttribute("order");
           if (order != null && !order.isEmpty()) {
             try {
-              record.put("order", Integer.parseInt(order));
+              data.put("order", Integer.parseInt(order));
             } catch (NumberFormatException e) {
-              record.put("order", null);
+              data.put("order", null);
             }
           } else {
-            record.put("order", null);
+            data.put("order", null);
           }
 
           // Get preferred label
           String preferredLabel = element.getAttribute("preferredLabel");
-          record.put("preferred_label", preferredLabel);
+          data.put("preferred_label", preferredLabel);
 
-          records.add(record);
+          dataList.add(data);
           relationshipCount++;
         }
       }
@@ -2662,7 +2616,7 @@ public class XbrlToParquetConverter implements FileConverter {
           String.format("cik=%s/filing_type=%s/year=%s", cik, normalizedFilingType, partitionYear);
 
       // Extract insider transactions
-      List<GenericRecord> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
+      List<Map<String, Object>> transactions = extractInsiderTransactions(doc, cik, filingType, filingDate);
       LOGGER.debug(" Extracted " + transactions.size() + " insider transactions from " + filename);
 
       // Always write insider.parquet file (even if empty) to indicate processing completed
@@ -2677,8 +2631,8 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.debug(" Creating empty insider parquet file (no transactions found): " + outputPath);
       }
 
-      Schema schema = createInsiderTransactionSchema();
-      writeParquetFile(transactions, schema, outputPath);
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadInsiderTransactionColumns();
+      storageProvider.writeAvroParquet(outputPath, columns, transactions, "InsiderTransaction", "insider_transactions");
       LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
 
       // CRITICAL: Add insider file to outputFiles so addToManifest() can detect it
@@ -2720,10 +2674,10 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Extract insider transactions from Form 3/4/5.
    */
-  private List<GenericRecord> extractInsiderTransactions(Document doc, String cik,
+  private List<Map<String, Object>> extractInsiderTransactions(Document doc, String cik,
       String filingType, String filingDate) {
-    List<GenericRecord> records = new ArrayList<>();
-    Schema schema = createInsiderTransactionSchema();
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadInsiderTransactionColumns();
 
     // Handle multiple reporting owners properly
     NodeList reportingOwners = doc.getElementsByTagName("reportingOwner");
@@ -2746,13 +2700,13 @@ public class XbrlToParquetConverter implements FileConverter {
 
         // Process all transaction and holding types for this reporting owner
         addNonDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-            isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+            isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addNonDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-            isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+            isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-            isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+            isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
         addDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-            isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+            isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       }
     } else {
       // Fallback for documents without explicit reporting owner structure
@@ -2765,16 +2719,16 @@ public class XbrlToParquetConverter implements FileConverter {
       String officerTitle = getElementText(doc, "officerTitle");
 
       addNonDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-          isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+          isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       addNonDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-          isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+          isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       addDerivativeTransactions(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-          isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+          isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
       addDerivativeHoldings(doc, cik, filingType, filingDate, reportingPersonCik, reportingPersonName,
-          isDirector, isOfficer, isTenPercentOwner, officerTitle, schema, records);
+          isDirector, isOfficer, isTenPercentOwner, officerTitle, columns, dataList);
     }
 
-    return records;
+    return dataList;
   }
 
   /**
@@ -2782,42 +2736,44 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void addNonDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
       String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
-      boolean isTenPercentOwner, String officerTitle, Schema schema, List<GenericRecord> records) {
+      boolean isTenPercentOwner, String officerTitle,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList) {
 
     NodeList nonDerivTrans = doc.getElementsByTagName("nonDerivativeTransaction");
     for (int i = 0; i < nonDerivTrans.getLength(); i++) {
       Element trans = (Element) nonDerivTrans.item(i);
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("cik", cik);
-      record.put("filing_date", filingDate);
-      record.put("filing_type", filingType);
-      record.put("reporting_person_cik", reportingPersonCik);
-      record.put("reporting_person_name", reportingPersonName);
-      record.put("is_director", isDirector);
-      record.put("is_officer", isOfficer);
-      record.put("is_ten_percent_owner", isTenPercentOwner);
-      record.put("officer_title", officerTitle);
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("filing_date", filingDate);
+      data.put("filing_type", filingType);
+      data.put("reporting_person_cik", reportingPersonCik);
+      data.put("reporting_person_name", reportingPersonName);
+      data.put("is_director", isDirector);
+      data.put("is_officer", isOfficer);
+      data.put("is_ten_percent_owner", isTenPercentOwner);
+      data.put("officer_title", officerTitle);
 
       // Transaction details
-      record.put("transaction_date", getElementText(trans, "transactionDate", "value"));
-      record.put("transaction_code", getElementText(trans, "transactionCode"));
-      record.put("security_title", getElementText(trans, "securityTitle", "value"));
+      data.put("transaction_date", getElementText(trans, "transactionDate", "value"));
+      data.put("transaction_code", getElementText(trans, "transactionCode"));
+      data.put("security_title", getElementText(trans, "securityTitle", "value"));
 
       String shares = getElementText(trans, "transactionShares", "value");
-      record.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
+      data.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
 
       String price = getElementText(trans, "transactionPricePerShare", "value");
-      record.put("price_per_share", price != null ? Double.parseDouble(price) : null);
+      data.put("price_per_share", price != null ? Double.parseDouble(price) : null);
 
       String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
-      record.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
+      data.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
 
       String acquiredDisposed = getElementText(trans, "transactionAcquiredDisposedCode", "value");
-      record.put("acquired_disposed_code", acquiredDisposed);
+      data.put("acquired_disposed_code", acquiredDisposed);
 
       String ownership = getElementText(trans, "directOrIndirectOwnership", "value");
-      record.put("ownership_type", ownership);
+      data.put("ownership_type", ownership);
 
       // Extract footnotes if any
       NodeList footnoteIds = trans.getElementsByTagName("footnoteId");
@@ -2830,9 +2786,9 @@ public class XbrlToParquetConverter implements FileConverter {
           footnotes.append(footnoteText);
         }
       }
-      record.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
+      data.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
 
-      records.add(record);
+      dataList.add(data);
     }
   }
 
@@ -2841,42 +2797,44 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void addNonDerivativeHoldings(Document doc, String cik, String filingType, String filingDate,
       String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
-      boolean isTenPercentOwner, String officerTitle, Schema schema, List<GenericRecord> records) {
+      boolean isTenPercentOwner, String officerTitle,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList) {
 
     NodeList holdings = doc.getElementsByTagName("nonDerivativeHolding");
     for (int i = 0; i < holdings.getLength(); i++) {
       Element holding = (Element) holdings.item(i);
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("cik", cik);
-      record.put("filing_date", filingDate);
-      record.put("filing_type", filingType);
-      record.put("reporting_person_cik", reportingPersonCik);
-      record.put("reporting_person_name", reportingPersonName);
-      record.put("is_director", isDirector);
-      record.put("is_officer", isOfficer);
-      record.put("is_ten_percent_owner", isTenPercentOwner);
-      record.put("officer_title", officerTitle);
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("filing_date", filingDate);
+      data.put("filing_type", filingType);
+      data.put("reporting_person_cik", reportingPersonCik);
+      data.put("reporting_person_name", reportingPersonName);
+      data.put("is_director", isDirector);
+      data.put("is_officer", isOfficer);
+      data.put("is_ten_percent_owner", isTenPercentOwner);
+      data.put("officer_title", officerTitle);
 
       // Holding details (no transaction)
-      record.put("transaction_date", null);
-      record.put("transaction_code", "H"); // H for holding
-      record.put("security_title", getElementText(holding, "securityTitle", "value"));
-      record.put("shares_transacted", null);
-      record.put("price_per_share", null);
+      data.put("transaction_date", null);
+      data.put("transaction_code", "H"); // H for holding
+      data.put("security_title", getElementText(holding, "securityTitle", "value"));
+      data.put("shares_transacted", null);
+      data.put("price_per_share", null);
 
       String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
-      record.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
+      data.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
 
-      record.put("acquired_disposed_code", null);
+      data.put("acquired_disposed_code", null);
 
       String ownership = getElementText(holding, "directOrIndirectOwnership", "value");
-      record.put("ownership_type", ownership);
+      data.put("ownership_type", ownership);
 
       String natureOfOwnership = getElementText(holding, "natureOfOwnership", "value");
-      record.put("footnotes", natureOfOwnership);
+      data.put("footnotes", natureOfOwnership);
 
-      records.add(record);
+      dataList.add(data);
     }
   }
 
@@ -2885,49 +2843,51 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void addDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
       String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
-      boolean isTenPercentOwner, String officerTitle, Schema schema, List<GenericRecord> records) {
+      boolean isTenPercentOwner, String officerTitle,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList) {
 
     NodeList derivTrans = doc.getElementsByTagName("derivativeTransaction");
     for (int i = 0; i < derivTrans.getLength(); i++) {
       Element trans = (Element) derivTrans.item(i);
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("cik", cik);
-      record.put("filing_date", filingDate);
-      record.put("filing_type", filingType);
-      record.put("reporting_person_cik", reportingPersonCik);
-      record.put("reporting_person_name", reportingPersonName);
-      record.put("is_director", isDirector);
-      record.put("is_officer", isOfficer);
-      record.put("is_ten_percent_owner", isTenPercentOwner);
-      record.put("officer_title", officerTitle);
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("filing_date", filingDate);
+      data.put("filing_type", filingType);
+      data.put("reporting_person_cik", reportingPersonCik);
+      data.put("reporting_person_name", reportingPersonName);
+      data.put("is_director", isDirector);
+      data.put("is_officer", isOfficer);
+      data.put("is_ten_percent_owner", isTenPercentOwner);
+      data.put("officer_title", officerTitle);
 
       // Transaction details for derivatives
-      record.put("transaction_date", getElementText(trans, "transactionDate", "value"));
-      record.put("transaction_code", getElementText(trans, "transactionCode"));
+      data.put("transaction_date", getElementText(trans, "transactionDate", "value"));
+      data.put("transaction_code", getElementText(trans, "transactionCode"));
 
       // For derivatives, append " (Derivative)" to distinguish from non-derivative
       String secTitle = getElementText(trans, "securityTitle", "value");
-      record.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant (Derivative)");
+      data.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant (Derivative)");
 
       String shares = getElementText(trans, "transactionShares", "value");
-      record.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
+      data.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
 
       // For derivatives, use conversion/exercise price if available
       String price = getElementText(trans, "transactionPricePerShare", "value");
       if (price == null || price.isEmpty()) {
         price = getElementText(trans, "conversionOrExercisePrice", "value");
       }
-      record.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+      data.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
 
       String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
-      record.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
+      data.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
 
       String acquiredDisposed = getElementText(trans, "transactionAcquiredDisposedCode", "value");
-      record.put("acquired_disposed_code", acquiredDisposed);
+      data.put("acquired_disposed_code", acquiredDisposed);
 
       String ownership = getElementText(trans, "directOrIndirectOwnership", "value");
-      record.put("ownership_type", ownership);
+      data.put("ownership_type", ownership);
 
       // Extract footnotes if any
       NodeList footnoteIds = trans.getElementsByTagName("footnoteId");
@@ -2953,9 +2913,9 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      record.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
+      data.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
 
-      records.add(record);
+      dataList.add(data);
     }
   }
 
@@ -2964,43 +2924,45 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void addDerivativeHoldings(Document doc, String cik, String filingType, String filingDate,
       String reportingPersonCik, String reportingPersonName, boolean isDirector, boolean isOfficer,
-      boolean isTenPercentOwner, String officerTitle, Schema schema, List<GenericRecord> records) {
+      boolean isTenPercentOwner, String officerTitle,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> dataList) {
 
     NodeList derivHoldings = doc.getElementsByTagName("derivativeHolding");
     for (int i = 0; i < derivHoldings.getLength(); i++) {
       Element holding = (Element) derivHoldings.item(i);
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("cik", cik);
-      record.put("filing_date", filingDate);
-      record.put("filing_type", filingType);
-      record.put("reporting_person_cik", reportingPersonCik);
-      record.put("reporting_person_name", reportingPersonName);
-      record.put("is_director", isDirector);
-      record.put("is_officer", isOfficer);
-      record.put("is_ten_percent_owner", isTenPercentOwner);
-      record.put("officer_title", officerTitle);
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("filing_date", filingDate);
+      data.put("filing_type", filingType);
+      data.put("reporting_person_cik", reportingPersonCik);
+      data.put("reporting_person_name", reportingPersonName);
+      data.put("is_director", isDirector);
+      data.put("is_officer", isOfficer);
+      data.put("is_ten_percent_owner", isTenPercentOwner);
+      data.put("officer_title", officerTitle);
 
       // Holding details for derivatives
-      record.put("transaction_date", null);
-      record.put("transaction_code", "H"); // H for holding
+      data.put("transaction_date", null);
+      data.put("transaction_code", "H"); // H for holding
 
       String secTitle = getElementText(holding, "securityTitle", "value");
-      record.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant Holding (Derivative)");
+      data.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant Holding (Derivative)");
 
-      record.put("shares_transacted", null);
+      data.put("shares_transacted", null);
 
       // For derivative holdings, get conversion/exercise price
       String price = getElementText(holding, "conversionOrExercisePrice", "value");
-      record.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+      data.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
 
       String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
-      record.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
+      data.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
 
-      record.put("acquired_disposed_code", null);
+      data.put("acquired_disposed_code", null);
 
       String ownership = getElementText(holding, "directOrIndirectOwnership", "value");
-      record.put("ownership_type", ownership);
+      data.put("ownership_type", ownership);
 
       // Add expiration date info to footnotes
       StringBuilder footnotes = new StringBuilder();
@@ -3013,38 +2975,17 @@ public class XbrlToParquetConverter implements FileConverter {
         if (footnotes.length() > 0) footnotes.append(" | ");
         footnotes.append(natureOfOwnership);
       }
-      record.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
+      data.put("footnotes", footnotes.length() > 0 ? footnotes.toString() : null);
 
-      records.add(record);
+      dataList.add(data);
     }
   }
 
   /**
-   * Create schema for insider transactions.
+   * Load schema for insider transactions from metadata.
    */
-  private Schema createInsiderTransactionSchema() {
-    return SchemaBuilder.record("InsiderTransaction")
-        .namespace("org.apache.calcite.adapter.sec")
-        .fields()
-        .name("cik").doc("Central Index Key of the issuer company").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the Form 3/4/5 filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("filing_type").doc("Type of insider filing (Form 3, Form 4, Form 5)").type().stringType().noDefault()
-        .name("reporting_person_cik").doc("CIK of the reporting insider").type().nullable().stringType().noDefault()
-        .name("reporting_person_name").doc("Name of the reporting insider").type().nullable().stringType().noDefault()
-        .name("is_director").doc("Whether the insider is a director").type().booleanType().noDefault()
-        .name("is_officer").doc("Whether the insider is an officer").type().booleanType().noDefault()
-        .name("is_ten_percent_owner").doc("Whether the insider owns 10% or more of the company").type().booleanType().noDefault()
-        .name("officer_title").doc("Title of the officer (if applicable)").type().nullable().stringType().noDefault()
-        .name("transaction_date").doc("Date of the transaction (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("transaction_code").doc("Transaction code (P=purchase, S=sale, A=award, etc.)").type().nullable().stringType().noDefault()
-        .name("security_title").doc("Title of the security transacted").type().nullable().stringType().noDefault()
-        .name("shares_transacted").doc("Number of shares bought or sold").type().nullable().doubleType().noDefault()
-        .name("price_per_share").doc("Price per share in the transaction").type().nullable().doubleType().noDefault()
-        .name("shares_owned_after").doc("Shares beneficially owned after the transaction").type().nullable().doubleType().noDefault()
-        .name("acquired_disposed_code").doc("Whether shares were acquired (A) or disposed (D)").type().nullable().stringType().noDefault()
-        .name("ownership_type").doc("Type of ownership (direct or indirect)").type().nullable().stringType().noDefault()
-        .name("footnotes").doc("Additional footnotes and explanations").type().nullable().stringType().noDefault()
-        .endRecord();
+  private java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> loadInsiderTransactionColumns() {
+    return AbstractSecDataDownloader.loadTableColumns("insider_transactions");
   }
 
   /**
@@ -3128,22 +3069,11 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeInsiderVectorizedBlobsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath, String accession) throws IOException {
 
-    // Create schema for vectorized blobs
-    Schema embeddingField = SchemaBuilder.array().items().floatType();
-    Schema schema = SchemaBuilder.record("VectorizedBlob")
-        .fields()
-        .name("vector_id").doc("Unique identifier for this vector").type().stringType().noDefault()
-        .name("original_blob_id").doc("Identifier of the original text blob").type().stringType().noDefault()
-        .name("blob_type").doc("Type of text blob (insider_remark, insider_footnote)").type().stringType().noDefault()
-        .name("blob_content").doc("Original text content of the blob").type().stringType().noDefault()
-        .name("embedding").doc("Vector embedding of the text (float array)").type(embeddingField).noDefault()
-        .name("cik").doc("Central Index Key of the company").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("filing_type").doc("Type of filing (Form 3, Form 4, Form 5)").type().stringType().noDefault()
-        .name("accession_number").doc("SEC accession number").type().nullable().stringType().noDefault()
-        .endRecord();
+    // Load schema from metadata
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("vectorized_blobs");
 
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Extract remarks and footnotes from insider forms
     NodeList remarks = doc.getElementsByTagName("remarks");
@@ -3153,24 +3083,24 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int i = 0; i < remarks.getLength(); i++) {
       String remarkText = remarks.item(i).getTextContent().trim();
       if (!remarkText.isEmpty() && remarkText.length() > 20) {
-        GenericRecord record = new GenericData.Record(schema);
+        Map<String, Object> data = new HashMap<>();
         String vectorId = UUID.randomUUID().toString();
-        record.put("vector_id", vectorId);
-        record.put("original_blob_id", "remark_" + i);
-        record.put("blob_type", "insider_remark");
-        record.put("blob_content", remarkText);
+        data.put("vector_id", vectorId);
+        data.put("original_blob_id", "remark_" + i);
+        data.put("blob_type", "insider_remark");
+        data.put("blob_content", remarkText);
 
         // Generate simple embedding for insider forms
         // For now, use a simple hash-based approach as these are short texts
         List<Float> embedding = generateSimpleEmbedding(remarkText, 384);
-        record.put("embedding", embedding);
+        data.put("embedding", embedding);
 
-        record.put("cik", cik);
-        record.put("filing_date", filingDate);
-        record.put("filing_type", filingType);
-        record.put("accession_number", accession);
+        data.put("cik", cik);
+        data.put("filing_date", filingDate);
+        data.put("filing_type", filingType);
+        data.put("accession_number", accession);
 
-        records.add(record);
+        dataList.add(data);
       }
     }
 
@@ -3178,30 +3108,30 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int i = 0; i < footnotes.getLength(); i++) {
       String footnoteText = footnotes.item(i).getTextContent().trim();
       if (!footnoteText.isEmpty() && footnoteText.length() > 20) {
-        GenericRecord record = new GenericData.Record(schema);
+        Map<String, Object> data = new HashMap<>();
         String vectorId = UUID.randomUUID().toString();
-        record.put("vector_id", vectorId);
-        record.put("original_blob_id", "footnote_" + i);
-        record.put("blob_type", "insider_footnote");
-        record.put("blob_content", footnoteText);
+        data.put("vector_id", vectorId);
+        data.put("original_blob_id", "footnote_" + i);
+        data.put("blob_type", "insider_footnote");
+        data.put("blob_content", footnoteText);
 
         // Generate simple embedding for insider forms
         List<Float> embedding = generateSimpleEmbedding(footnoteText, 384);
-        record.put("embedding", embedding);
+        data.put("embedding", embedding);
 
-        record.put("cik", cik);
-        record.put("filing_date", filingDate);
-        record.put("filing_type", filingType);
-        record.put("accession_number", accession);
+        data.put("cik", cik);
+        data.put("filing_date", filingDate);
+        data.put("filing_type", filingType);
+        data.put("accession_number", accession);
 
-        records.add(record);
+        dataList.add(data);
       }
     }
 
     // Always write the file, even if empty, to satisfy cache validation
-    writeRecordsToParquet(records, schema, outputPath);
-    if (!records.isEmpty()) {
-      LOGGER.info("Wrote " + records.size() + " vectorized insider blobs to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedBlob", "vectorized_blobs");
+    if (!dataList.isEmpty()) {
+      LOGGER.info("Wrote " + dataList.size() + " vectorized insider blobs to " + outputPath);
     } else {
       LOGGER.info("Created empty vectorized file (no content > 20 chars) for " + outputPath);
     }
@@ -3219,8 +3149,8 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Look for Exhibit 99.1 and 99.2 references
-      List<GenericRecord> earningsRecords = new ArrayList<>();
-      Schema earningsSchema = createEarningsTranscriptSchema();
+      List<Map<String, Object>> earningsRecords = new ArrayList<>();
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> earningsColumns = loadEarningsTranscriptColumns();
 
       // Check if this file contains exhibit content directly
       if (fileContent.contains("EX-99.1") || fileContent.contains("EX-99.2")) {
@@ -3236,18 +3166,18 @@ public class XbrlToParquetConverter implements FileConverter {
         List<String> paragraphs = extractEarningsParagraphs(fileContent);
 
         for (int i = 0; i < paragraphs.size(); i++) {
-          GenericRecord record = new GenericData.Record(earningsSchema);
-          record.put("cik", cik);
-          record.put("filing_date", filingDate);
-          record.put("filing_type", filingType);
-          record.put("exhibit_number", detectExhibitNumber(fileContent));
-          record.put("section_type", detectSectionType(paragraphs.get(i)));
-          record.put("paragraph_number", i + 1);
-          record.put("paragraph_text", paragraphs.get(i));
-          record.put("speaker_name", extractSpeaker(paragraphs.get(i)));
-          record.put("speaker_role", extractSpeakerRole(paragraphs.get(i)));
+          Map<String, Object> data = new HashMap<>();
+          data.put("cik", cik);
+          data.put("filing_date", filingDate);
+          data.put("filing_type", filingType);
+          data.put("exhibit_number", detectExhibitNumber(fileContent));
+          data.put("section_type", detectSectionType(paragraphs.get(i)));
+          data.put("paragraph_number", i + 1);
+          data.put("paragraph_text", paragraphs.get(i));
+          data.put("speaker_name", extractSpeaker(paragraphs.get(i)));
+          data.put("speaker_role", extractSpeakerRole(paragraphs.get(i)));
 
-          earningsRecords.add(record);
+          earningsRecords.add(data);
         }
       }
 
@@ -3276,7 +3206,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String outputPath =
             storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
-        writeParquetFile(earningsRecords, earningsSchema, outputPath);
+        storageProvider.writeAvroParquet(outputPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
 
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
       }
@@ -3291,10 +3221,10 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Extract earnings content from exhibit text.
    */
-  private List<GenericRecord> extractEarningsFromExhibit(String exhibitContent,
+  private List<Map<String, Object>> extractEarningsFromExhibit(String exhibitContent,
       String cik, String filingType, String filingDate) {
-    List<GenericRecord> records = new ArrayList<>();
-    Schema schema = createEarningsTranscriptSchema();
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadEarningsTranscriptColumns();
 
     // Parse as HTML to extract text content
     org.jsoup.nodes.Document doc = Jsoup.parse(exhibitContent);
@@ -3319,21 +3249,21 @@ public class XbrlToParquetConverter implements FileConverter {
 
       paragraphNum++;
 
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("cik", cik);
-      record.put("filing_date", filingDate);
-      record.put("filing_type", filingType);
-      record.put("exhibit_number", detectExhibitNumber(exhibitContent));
-      record.put("section_type", detectSectionType(text));
-      record.put("paragraph_number", paragraphNum);
-      record.put("paragraph_text", text);
-      record.put("speaker_name", extractSpeaker(text));
-      record.put("speaker_role", extractSpeakerRole(text));
+      Map<String, Object> data = new HashMap<>();
+      data.put("cik", cik);
+      data.put("filing_date", filingDate);
+      data.put("filing_type", filingType);
+      data.put("exhibit_number", detectExhibitNumber(exhibitContent));
+      data.put("section_type", detectSectionType(text));
+      data.put("paragraph_number", paragraphNum);
+      data.put("paragraph_text", text);
+      data.put("speaker_name", extractSpeaker(text));
+      data.put("speaker_role", extractSpeakerRole(text));
 
-      records.add(record);
+      dataList.add(data);
     }
 
-    return records;
+    return dataList;
   }
 
   /**
@@ -3452,20 +3382,8 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Create schema for earnings transcripts.
    */
-  private Schema createEarningsTranscriptSchema() {
-    return SchemaBuilder.record("EarningsTranscript")
-        .namespace("org.apache.calcite.adapter.sec")
-        .fields()
-        .name("cik").doc("Central Index Key of the company").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("filing_type").doc("Type of filing (typically 8-K for earnings)").type().stringType().noDefault()
-        .name("exhibit_number").doc("Exhibit number within the filing").type().nullable().stringType().noDefault()
-        .name("section_type").doc("Section type (prepared_remarks, qa_session)").type().nullable().stringType().noDefault()
-        .name("paragraph_number").doc("Sequential paragraph number").type().intType().noDefault()
-        .name("paragraph_text").doc("Full text of the paragraph").type().stringType().noDefault()
-        .name("speaker_name").doc("Name of the speaker (for Q&A sections)").type().nullable().stringType().noDefault()
-        .name("speaker_role").doc("Role/title of the speaker").type().nullable().stringType().noDefault()
-        .endRecord();
+  private java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> loadEarningsTranscriptColumns() {
+    return AbstractSecDataDownloader.loadTableColumns("earnings_transcripts");
   }
 
   /**
@@ -3475,25 +3393,11 @@ public class XbrlToParquetConverter implements FileConverter {
   private void writeVectorizedBlobsToParquet(Document doc, String outputPath,
       String cik, String filingType, String filingDate, String sourcePath) throws IOException {
 
-    // Create schema for vectorized blobs
-    Schema embeddingField = SchemaBuilder.array().items().floatType();
-    Schema schema = SchemaBuilder.record("VectorizedBlob")
-        .fields()
-        .name("vector_id").doc("Unique identifier for this vector").type().stringType().noDefault()
-        .name("original_blob_id").doc("Identifier of the original text blob").type().stringType().noDefault()
-        .name("blob_type").doc("Type of text blob (footnote, mda_paragraph, concept_group)").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("original_text").doc("Original text before enrichment").type().stringType().noDefault()
-        .name("enriched_text").doc("Text after adding financial context and relationships").type().stringType().noDefault()
-        .name("embedding").doc("Vector embedding of the enriched text (256-dimensional float array)").type(embeddingField).noDefault()
-        .name("parent_section").doc("Parent section identifier (e.g., 'Item 7', 'Note 1')").type().nullable().stringType().noDefault()
-        .name("relationships").doc("JSON string of relationships to other blobs").type().nullable().stringType().noDefault()
-        .name("financial_concepts").doc("Comma-separated list of referenced financial concepts").type().nullable().stringType().noDefault()
-        .name("tokens_used").doc("Number of tokens used for this embedding").type().nullable().intType().noDefault()
-        .name("token_budget").doc("Token budget allocated for this blob").type().nullable().intType().noDefault()
-        .endRecord();
+    // Load schema from metadata
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("vectorized_blobs");
 
-    List<GenericRecord> records = new ArrayList<>();
+    List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Extract footnotes as TextBlobs
     List<SecTextVectorizer.TextBlob> footnoteBlobs = extractFootnoteBlobs(doc);
@@ -3525,21 +3429,21 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Convert chunks to Parquet records
     for (SecTextVectorizer.ContextualChunk chunk : allChunks) {
-      GenericRecord record = new GenericData.Record(schema);
+      Map<String, Object> data = new HashMap<>();
 
-      record.put("vector_id", chunk.context);
-      record.put("original_blob_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
-      record.put("blob_type", chunk.blobType);
-      record.put("filing_date", filingDate);
+      data.put("vector_id", chunk.context);
+      data.put("original_blob_id", chunk.originalBlobId != null ? chunk.originalBlobId : chunk.context);
+      data.put("blob_type", chunk.blobType);
+      data.put("filing_date", filingDate);
 
       // Truncate texts if they're too long for Parquet
       String originalText = chunk.metadata.containsKey("original_text") ?
           (String) chunk.metadata.get("original_text") : "";
-      record.put("original_text", truncateText(originalText, 32000));
-      record.put("enriched_text", truncateText(chunk.text, 32000));
+      data.put("original_text", truncateText(originalText, 32000));
+      data.put("enriched_text", truncateText(chunk.text, 32000));
 
       // Extract metadata
-      record.put("parent_section", chunk.metadata.get("parent_section"));
+      data.put("parent_section", chunk.metadata.get("parent_section"));
 
       // Convert relationships to JSON string
       if (chunk.metadata.containsKey("referenced_by") || chunk.metadata.containsKey("references_footnotes")) {
@@ -3550,21 +3454,21 @@ public class XbrlToParquetConverter implements FileConverter {
         if (chunk.metadata.containsKey("references_footnotes")) {
           relationships.put("references", chunk.metadata.get("references_footnotes"));
         }
-        record.put("relationships", toJsonString(relationships));
+        data.put("relationships", toJsonString(relationships));
       }
 
       // Financial concepts
       if (chunk.metadata.containsKey("financial_concepts")) {
         List<String> concepts = (List<String>) chunk.metadata.get("financial_concepts");
-        record.put("financial_concepts", String.join(",", concepts));
+        data.put("financial_concepts", String.join(",", concepts));
       }
 
       // Token usage
       if (chunk.metadata.containsKey("tokens_used")) {
-        record.put("tokens_used", chunk.metadata.get("tokens_used"));
+        data.put("tokens_used", chunk.metadata.get("tokens_used"));
       }
       if (chunk.metadata.containsKey("token_budget")) {
-        record.put("token_budget", chunk.metadata.get("token_budget"));
+        data.put("token_budget", chunk.metadata.get("token_budget"));
       }
 
       // Add embedding vector (convert double[] to List<Float> for Avro)
@@ -3573,18 +3477,18 @@ public class XbrlToParquetConverter implements FileConverter {
         for (double value : chunk.embedding) {
           embeddingList.add((float) value);
         }
-        record.put("embedding", embeddingList);
+        data.put("embedding", embeddingList);
       } else {
         throw new IllegalStateException("Chunk missing embedding vector: " + chunk.context +
             " (type: " + chunk.blobType + ")");
       }
 
-      records.add(record);
+      dataList.add(data);
     }
 
     // Always write file, even if empty (zero rows) to ensure cache consistency
-    storageProvider.writeAvroParquet(outputPath, schema, records, "vectorized_blobs");
-    LOGGER.info("Successfully wrote " + records.size() + " vectorized blobs to " + outputPath);
+    storageProvider.writeAvroParquet(outputPath, columns, dataList, "VectorizedBlob", "vectorized_blobs");
+    LOGGER.info("Successfully wrote " + dataList.size() + " vectorized blobs to " + outputPath);
   }
 
   /**
@@ -4260,38 +4164,27 @@ public class XbrlToParquetConverter implements FileConverter {
     String metadataPath =
         storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
-    // Define schema for metadata
-    Schema schema = SchemaBuilder.record("FilingMetadata")
-        .fields()
-        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
-        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
-        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
-        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().stringType().noDefault()
-        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
-        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
-        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
-        .name("filing_url").doc("URL or filename of the source filing document").type().stringType().noDefault()
-        .endRecord();
+    // Load schema from metadata
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
-    List<GenericRecord> records = new ArrayList<>();
-    GenericRecord record = new GenericData.Record(schema);
-    record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
-    record.put("filing_date", filingDate);
-    record.put("company_name", companyInfo.get("company_name"));
-    record.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
-    record.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
-    record.put("sic_code", companyInfo.get("sic_code"));
-    record.put("irs_number", companyInfo.get("irs_number"));
-    record.put("business_address", companyInfo.get("business_address"));
-    record.put("mailing_address", companyInfo.get("mailing_address"));
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    Map<String, Object> data = new HashMap<>();
+    data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_date", filingDate);
+    data.put("company_name", companyInfo.get("company_name"));
+    data.put("state_of_incorporation", companyInfo.get("state_of_incorporation"));
+    data.put("fiscal_year_end", companyInfo.get("fiscal_year_end"));
+    data.put("sic_code", companyInfo.get("sic_code"));
+    data.put("irs_number", companyInfo.get("irs_number"));
+    data.put("business_address", companyInfo.get("business_address"));
+    data.put("mailing_address", companyInfo.get("mailing_address"));
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    record.put("filing_url", filename);
-    records.add(record);
+    data.put("filing_url", filename);
+    dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
+    storageProvider.writeAvroParquet(metadataPath, columns, dataList, "FilingMetadata", "filing_metadata");
   }
 
   private void createMinimalMetadata(String sourcePath, String targetDirectoryPath, String cik,
@@ -4305,39 +4198,28 @@ public class XbrlToParquetConverter implements FileConverter {
     String metadataPath =
         storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, (accession != null && !accession.isEmpty()) ? accession : filingDate));
 
-    // Define schema for minimal metadata
-    Schema schema = SchemaBuilder.record("FilingMetadata")
-        .fields()
-        .name("accession_number").doc("SEC accession number (unique filing identifier)").type().stringType().noDefault()
-        .name("filing_date").doc("Date of the SEC filing (ISO 8601 format)").type().stringType().noDefault()
-        .name("company_name").doc("Legal name of the registrant company").type().nullable().stringType().noDefault()
-        .name("state_of_incorporation").doc("State or jurisdiction of incorporation").type().nullable().stringType().noDefault()
-        .name("fiscal_year_end").doc("Fiscal year end date (MMDD format)").type().nullable().stringType().noDefault()
-        .name("sic_code").doc("Standard Industrial Classification code").type().nullable().stringType().noDefault()
-        .name("irs_number").doc("IRS Employer Identification Number (EIN)").type().nullable().stringType().noDefault()
-        .name("business_address").doc("Physical business address of the company").type().nullable().stringType().noDefault()
-        .name("mailing_address").doc("Mailing address for correspondence").type().nullable().stringType().noDefault()
-        .name("filing_url").doc("URL or filename of the source filing document").type().stringType().noDefault()
-        .endRecord();
+    // Load schema from metadata
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractSecDataDownloader.loadTableColumns("filing_metadata");
 
-    List<GenericRecord> records = new ArrayList<>();
-    GenericRecord record = new GenericData.Record(schema);
-    record.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
-    record.put("filing_date", filingDate);
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    Map<String, Object> data = new HashMap<>();
+    data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("filing_date", filingDate);
     // We don't have company info from inline XBRL that failed to parse
-    record.put("company_name", null);
-    record.put("state_of_incorporation", null);
-    record.put("fiscal_year_end", null);
-    record.put("sic_code", null);
-    record.put("irs_number", null);
-    record.put("business_address", null);
-    record.put("mailing_address", null);
+    data.put("company_name", null);
+    data.put("state_of_incorporation", null);
+    data.put("fiscal_year_end", null);
+    data.put("sic_code", null);
+    data.put("irs_number", null);
+    data.put("business_address", null);
+    data.put("mailing_address", null);
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    record.put("filing_url", filename);
-    records.add(record);
+    data.put("filing_url", filename);
+    dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(metadataPath, schema, records, "metadata");
+    storageProvider.writeAvroParquet(metadataPath, columns, dataList, "FilingMetadata", "filing_metadata");
   }
 
   /**

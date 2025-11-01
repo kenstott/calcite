@@ -3757,6 +3757,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             LOGGER.error("Both baseDirectory and sourceDirectory are null for table '{}', cannot create refreshable table", config.getName());
             continue;
           }
+          LOGGER.debug("Creating RefreshablePartitionedParquetTable for '{}' with comment: '{}', hasColumnComments: {}",
+              config.getName(),
+              config.getComment(),
+              config.getColumnComments() != null && !config.getColumnComments().isEmpty());
           RefreshablePartitionedParquetTable refreshableTable =
               new RefreshablePartitionedParquetTable(config.getName(),
                   directoryPath, config.getPattern(), config,
@@ -3770,7 +3774,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());
           table =
               new PartitionedParquetTable(matchingFiles, partitionInfo,
-                  engineConfig, columnTypes, null, null, constraintConfig, name, config.getName(), this.storageProvider);
+                  engineConfig, columnTypes, null, null, constraintConfig, name, config.getName(), this.storageProvider, config);
         }
 
         // Check if table was already processed to avoid duplicates

@@ -24,6 +24,7 @@ import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 
@@ -46,7 +47,7 @@ import java.util.concurrent.TimeoutException;
  * Refreshable partitioned Parquet table that can discover new partitions.
  */
 public class RefreshablePartitionedParquetTable extends AbstractTable
-    implements ScannableTable, RefreshableTable {
+    implements ScannableTable, RefreshableTable, CommentableTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(RefreshablePartitionedParquetTable.class);
 
   private final String tableName;
@@ -99,6 +100,8 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     this.schemaName = schemaName;
     this.storageProvider = storageProvider;
 
+    LOGGER.info("Creating RefreshablePartitionedParquetTable for table: '{}', comment: '{}'",
+        tableName, config != null ? config.getComment() : "null");
     LOGGER.debug("Creating RefreshablePartitionedParquetTable for table: {}, hasPartitionConfig: {}",
         tableName, config.getPartitions() != null);
     if (config.getPartitions() != null) {
@@ -520,7 +523,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
             // Create table instance for schema introspection
             currentTable =
                 new PartitionedParquetTable(newFiles, partitionInfo,
-                    engineConfig, columnTypes, null, null, constraintConfig, schemaName, tableName, storageProvider);
+                    engineConfig, columnTypes, null, null, constraintConfig, schemaName, tableName, storageProvider, config);
 
             // Prime HLL statistics if the table supports it
             primeHLLStatistics();
@@ -602,7 +605,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
         // Create new table instance
         currentTable =
             new PartitionedParquetTable(newFiles, partitionInfo,
-                engineConfig, columnTypes, regex, colMappings, constraintConfig, schemaName, tableName, storageProvider);
+                engineConfig, columnTypes, regex, colMappings, constraintConfig, schemaName, tableName, storageProvider, config);
         lastDiscoveredFiles = newFiles;
 
         LOGGER.info("Recreated table '{}' with {} files", tableName, newFiles.size());
@@ -811,6 +814,21 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
     }
 
     return currentTable.scan(root);
+  }
+
+  // CommentableTable implementation
+  // Return comments directly from config, not from currentTable, to support lazy initialization.
+  // During schema introspection (e.g., INFORMATION_SCHEMA queries), currentTable may be null.
+
+  @Override public @Nullable String getTableComment() {
+    return config != null ? config.getComment() : null;
+  }
+
+  @Override public @Nullable String getColumnComment(String columnName) {
+    if (config != null && config.getColumnComments() != null) {
+      return config.getColumnComments().get(columnName);
+    }
+    return null;
   }
 
   @Override public String toString() {

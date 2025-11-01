@@ -27,13 +27,31 @@ public class PartitionedTableConfig {
   private final String pattern;
   private final String type;
   private final PartitionConfig partitions;
+  private final String comment;
+  private final Map<String, String> columnComments;
+  private final List<TableColumn> columns;
 
   public PartitionedTableConfig(String name, String pattern, String type,
                                 PartitionConfig partitions) {
+    this(name, pattern, type, partitions, null, null, null);
+  }
+
+  public PartitionedTableConfig(String name, String pattern, String type,
+                                PartitionConfig partitions, String comment,
+                                Map<String, String> columnComments) {
+    this(name, pattern, type, partitions, comment, columnComments, null);
+  }
+
+  public PartitionedTableConfig(String name, String pattern, String type,
+                                PartitionConfig partitions, String comment,
+                                Map<String, String> columnComments, List<TableColumn> columns) {
     this.name = name;
     this.pattern = pattern;
     this.type = type != null ? type : "partitioned";
     this.partitions = partitions;
+    this.comment = comment;
+    this.columnComments = columnComments;
+    this.columns = columns;
   }
 
   public String getName() {
@@ -50,6 +68,18 @@ public class PartitionedTableConfig {
 
   public PartitionConfig getPartitions() {
     return partitions;
+  }
+
+  public String getComment() {
+    return comment;
+  }
+
+  public Map<String, String> getColumnComments() {
+    return columnComments;
+  }
+
+  public List<TableColumn> getColumns() {
+    return columns;
   }
 
   /**
@@ -142,6 +172,39 @@ public class PartitionedTableConfig {
   }
 
   /**
+   * Metadata for a table column including type, nullability, and comment.
+   */
+  public static class TableColumn {
+    private final String name;
+    private final String type;
+    private final boolean nullable;
+    private final String comment;
+
+    public TableColumn(String name, String type, boolean nullable, String comment) {
+      this.name = name;
+      this.type = type;
+      this.nullable = nullable;
+      this.comment = comment;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public String getType() {
+      return type;
+    }
+
+    public boolean isNullable() {
+      return nullable;
+    }
+
+    public String getComment() {
+      return comment;
+    }
+  }
+
+  /**
    * Creates a PartitionedTableConfig from a map (JSON deserialization).
    */
   @SuppressWarnings("unchecked")
@@ -149,6 +212,9 @@ public class PartitionedTableConfig {
     String name = (String) map.get("name");
     String pattern = (String) map.get("pattern");
     String type = (String) map.get("type");
+    String comment = (String) map.get("comment");
+    Map<String, String> columnComments = parseColumnComments(map.get("column_comments"));
+    List<TableColumn> columns = parseColumns(map.get("columns"));
 
     PartitionConfig partitionConfig = null;
     Map<String, Object> partitionsMap = (Map<String, Object>) map.get("partitions");
@@ -207,6 +273,57 @@ public class PartitionedTableConfig {
               columnDefinitions, regex, columnMappings);
     }
 
-    return new PartitionedTableConfig(name, pattern, type, partitionConfig);
+    return new PartitionedTableConfig(name, pattern, type, partitionConfig, comment, columnComments, columns);
+  }
+
+  /**
+   * Parses column_comments from JSON format.
+   * Expects: [{"name": "col1", "comment": "Comment 1"}, ...]
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> parseColumnComments(Object obj) {
+    if (obj instanceof List) {
+      Map<String, String> result = new java.util.LinkedHashMap<>();
+      List<?> list = (List<?>) obj;
+      for (Object item : list) {
+        if (item instanceof Map) {
+          Map<?, ?> m = (Map<?, ?>) item;
+          String name = (String) m.get("name");
+          String commentText = (String) m.get("comment");
+          if (name != null && commentText != null) {
+            result.put(name, commentText);
+          }
+        }
+      }
+      return result.isEmpty() ? null : result;
+    }
+    return null;
+  }
+
+  /**
+   * Parses columns from JSON format.
+   * Expects: [{"name": "col1", "type": "string", "nullable": false, "comment": "Comment 1"}, ...]
+   */
+  @SuppressWarnings("unchecked")
+  private static List<TableColumn> parseColumns(Object obj) {
+    if (obj instanceof List) {
+      List<TableColumn> result = new java.util.ArrayList<>();
+      List<?> list = (List<?>) obj;
+      for (Object item : list) {
+        if (item instanceof Map) {
+          Map<?, ?> m = (Map<?, ?>) item;
+          String name = (String) m.get("name");
+          String type = (String) m.get("type");
+          Boolean nullableObj = (Boolean) m.get("nullable");
+          boolean nullable = nullableObj != null ? nullableObj : false;
+          String comment = (String) m.get("comment");
+          if (name != null) {
+            result.add(new TableColumn(name, type, nullable, comment));
+          }
+        }
+      }
+      return result.isEmpty() ? null : result;
+    }
+    return null;
   }
 }

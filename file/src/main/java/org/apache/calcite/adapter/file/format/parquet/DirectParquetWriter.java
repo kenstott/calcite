@@ -39,7 +39,9 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BOOLEAN;
@@ -64,9 +66,17 @@ public class DirectParquetWriter {
   }
 
   /**
-   * Write ResultSet directly to Parquet file.
+   * Write ResultSet directly to Parquet file with comment metadata.
+   *
+   * @param rs ResultSet to write
+   * @param outputPath Output Parquet file path
+   * @param tableComment Table-level comment (can be null)
+   * @param columnComments Map of column name to comment (can be null)
+   * @throws SQLException if ResultSet operations fail
+   * @throws IOException if file write fails
    */
-  public static void writeResultSetToParquet(ResultSet rs, Path outputPath) throws SQLException, IOException {
+  public static void writeResultSetToParquet(ResultSet rs, Path outputPath,
+      String tableComment, Map<String, String> columnComments) throws SQLException, IOException {
     ResultSetMetaData rsmd = rs.getMetaData();
     int columnCount = rsmd.getColumnCount();
 
@@ -89,16 +99,38 @@ public class DirectParquetWriter {
 
     GroupWriteSupport.setSchema(schema, conf);
 
-    // Create writer
-    try (ParquetWriter<Group> writer = ExampleParquetWriter.builder(outputPath)
+    // Build metadata map
+    Map<String, String> extraMetadata = new HashMap<>();
+    if (tableComment != null && !tableComment.isEmpty()) {
+      extraMetadata.put("table_comment", tableComment);
+      LOGGER.debug("Adding table comment metadata: {}", tableComment);
+    }
+    if (columnComments != null && !columnComments.isEmpty()) {
+      for (Map.Entry<String, String> entry : columnComments.entrySet()) {
+        String columnName = entry.getKey();
+        String comment = entry.getValue();
+        if (comment != null && !comment.isEmpty()) {
+          extraMetadata.put("column_comment:" + columnName, comment);
+          LOGGER.debug("Adding column comment metadata for {}: {}", columnName, comment);
+        }
+      }
+    }
+
+    // Create writer with metadata
+    ExampleParquetWriter.Builder builder = ExampleParquetWriter.builder(outputPath)
         .withConf(conf)
         .withSchema(schema)
         .withCompressionCodec(CompressionCodecName.SNAPPY)
         .withWriterVersion(ParquetProperties.WriterVersion.PARQUET_1_0)
         .withPageSize(ParquetProperties.DEFAULT_PAGE_SIZE)
-        .withDictionaryEncoding(true)
-        .build()) {
+        .withDictionaryEncoding(true);
 
+    // Add extra metadata if present
+    if (!extraMetadata.isEmpty()) {
+      builder.withExtraMetaData(extraMetadata);
+    }
+
+    try (ParquetWriter<Group> writer = builder.build()) {
       SimpleGroupFactory groupFactory = new SimpleGroupFactory(schema);
 
       // Write all rows
@@ -123,6 +155,13 @@ public class DirectParquetWriter {
         writer.write(group);
       }
     }
+  }
+
+  /**
+   * Write ResultSet directly to Parquet file.
+   */
+  public static void writeResultSetToParquet(ResultSet rs, Path outputPath) throws SQLException, IOException {
+    writeResultSetToParquet(rs, outputPath, null, null);
   }
 
   private static Type createParquetField(String name, int sqlType, int index, ResultSetMetaData rsmd)
