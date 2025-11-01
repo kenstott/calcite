@@ -432,4 +432,128 @@ public abstract class AbstractEconDataDownloader {
     throw new IllegalArgumentException("Path does not contain year partition: " + path);
   }
 
+  /**
+   * Enriches an Avro Schema with documentation from a PartitionedTableConfig.
+   * This method takes a base schema (with types defined) and adds .doc() annotations
+   * for each field that has a corresponding entry in the config's columnComments.
+   *
+   * <p>Implementation note: Avro Schema is immutable, so this method creates a new
+   * schema by manipulating the schema's JSON representation, then parsing it back.
+   *
+   * @param baseSchema The base Avro schema with field names and types defined
+   * @param config The partitioned table config containing columnComments
+   * @return A new Schema identical to baseSchema but with doc annotations from config
+   */
+  protected static org.apache.avro.Schema enrichSchemaWithComments(
+      org.apache.avro.Schema baseSchema,
+      org.apache.calcite.adapter.file.partition.PartitionedTableConfig config) {
+    // If no column comments, return original schema unchanged
+    if (config == null || config.getColumnComments() == null
+        || config.getColumnComments().isEmpty()) {
+      return baseSchema;
+    }
+
+    try {
+      // Convert schema to JSON for manipulation
+      com.fasterxml.jackson.databind.JsonNode schemaJson =
+          MAPPER.readTree(baseSchema.toString());
+
+      // Get column comments map
+      java.util.Map<String, String> columnComments = config.getColumnComments();
+
+      // Schema JSON is an object with a "fields" array
+      if (schemaJson.has("fields") && schemaJson.get("fields").isArray()) {
+        com.fasterxml.jackson.databind.node.ArrayNode fields =
+            (com.fasterxml.jackson.databind.node.ArrayNode) schemaJson.get("fields");
+
+        // Iterate through fields and add doc if available
+        for (com.fasterxml.jackson.databind.JsonNode field : fields) {
+          if (field.has("name")) {
+            String fieldName = field.get("name").asText();
+            String comment = columnComments.get(fieldName);
+
+            if (comment != null && !comment.isEmpty()) {
+              // Add doc field to this field object
+              ((com.fasterxml.jackson.databind.node.ObjectNode) field).put("doc", comment);
+            }
+          }
+        }
+      }
+
+      // Convert back to Schema
+      return new org.apache.avro.Schema.Parser().parse(schemaJson.toString());
+    } catch (Exception e) {
+      // If enrichment fails, log warning and return original schema
+      LOGGER.warn("Failed to enrich schema with comments from config for table {}: {}",
+          config.getName(), e.getMessage());
+      return baseSchema;
+    }
+  }
+
+  /**
+   * Loads table column metadata from the econ-schema.json resource file.
+   * This enables metadata-driven schema generation, eliminating hardcoded type definitions.
+   *
+   * @param tableName The name of the table (must match "name" in econ-schema.json)
+   * @return List of TableColumn definitions with type, nullability, and comments
+   * @throws IllegalArgumentException if table not found or schema file cannot be loaded
+   */
+  protected static java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+      loadTableColumns(String tableName) {
+    try {
+      // Load econ-schema.json from resources
+      java.io.InputStream schemaStream =
+          AbstractEconDataDownloader.class.getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        throw new IllegalArgumentException(
+            "econ-schema.json not found in resources");
+      }
+
+      // Parse JSON
+      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+
+      // Find the table in the "tables" array
+      if (!root.has("tables") || !root.get("tables").isArray()) {
+        throw new IllegalArgumentException(
+            "Invalid econ-schema.json: missing 'tables' array");
+      }
+
+      for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("tables")) {
+        String name = tableNode.has("name") ? tableNode.get("name").asText() : null;
+        if (tableName.equals(name)) {
+          // Found the table - extract columns
+          if (!tableNode.has("columns") || !tableNode.get("columns").isArray()) {
+            throw new IllegalArgumentException(
+                "Table '" + tableName + "' has no 'columns' array in econ-schema.json");
+          }
+
+          java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+              columns = new java.util.ArrayList<>();
+
+          for (com.fasterxml.jackson.databind.JsonNode colNode : tableNode.get("columns")) {
+            String colName = colNode.has("name") ? colNode.get("name").asText() : null;
+            String colType = colNode.has("type") ? colNode.get("type").asText() : "string";
+            boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
+            String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
+
+            if (colName != null) {
+              columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+                  colName, colType, nullable, comment));
+            }
+          }
+
+          return columns;
+        }
+      }
+
+      // Table not found
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' not found in econ-schema.json");
+
+    } catch (java.io.IOException e) {
+      throw new IllegalArgumentException(
+          "Failed to load column metadata for table '" + tableName + "': " + e.getMessage(), e);
+    }
+  }
+
 }

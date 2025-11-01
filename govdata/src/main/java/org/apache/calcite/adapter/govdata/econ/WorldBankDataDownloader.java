@@ -494,33 +494,25 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   }
 
   private void writeWorldIndicatorsParquet(List<WorldIndicator> indicators, String targetPath) throws IOException {
-    Schema schema = SchemaBuilder.record("WorldIndicator")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("country_code").doc("ISO 3-letter country code (e.g., 'USA', 'CHN')").type().stringType().noDefault()
-        .name("country_name").doc("Full country name").type().stringType().noDefault()
-        .name("indicator_code").doc("World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)").type().stringType().noDefault()
-        .name("indicator_name").doc("Full description of the World Bank indicator").type().stringType().noDefault()
-        .name("value").doc("Indicator value for the given country and year").type().doubleType().noDefault()
-        .name("unit").doc("Unit of measurement (e.g., 'current US$', 'percent')").type().nullable().stringType().noDefault()
-        .name("scale").doc("Scale factor (e.g., 'Millions', 'Billions')").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records (keep all transformation logic)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (WorldIndicator indicator : indicators) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("country_code", indicator.countryCode);
       record.put("country_name", indicator.countryName);
       record.put("indicator_code", indicator.indicatorCode);
       record.put("indicator_name", indicator.indicatorName);
+      record.put("year", indicator.year);
       record.put("value", indicator.value);
       record.put("unit", indicator.unit);
       record.put("scale", indicator.scale);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractEconDataDownloader.loadTableColumns("world_indicators");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "WorldIndicator", "WorldIndicator");
   }
 
 
@@ -598,22 +590,10 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
   private void writeWorldIndicatorsMapParquet(List<Map<String, Object>> indicators, String targetPath)
       throws IOException {
-    Schema schema = SchemaBuilder.record("WorldIndicator")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("country_code").doc("ISO 3-letter country code (e.g., 'USA', 'CHN')").type().stringType().noDefault()
-        .name("country_name").doc("Full country name").type().stringType().noDefault()
-        .name("indicator_code").doc("World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)").type().stringType().noDefault()
-        .name("indicator_name").doc("Full description of the World Bank indicator").type().stringType().noDefault()
-        .name("year").doc("Year of observation").type().intType().noDefault()
-        .name("value").doc("Indicator value for the given country and year").type().doubleType().noDefault()
-        .name("unit").doc("Unit of measurement (e.g., 'current US$', 'percent')").type().nullable().stringType().noDefault()
-        .name("scale").doc("Scale factor (e.g., 'Millions', 'Billions')").type().nullable().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records (keep all transformation logic)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (Map<String, Object> ind : indicators) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("country_code", ind.get("country_code"));
       record.put("country_name", ind.get("country_name"));
       record.put("indicator_code", ind.get("indicator_code"));
@@ -622,11 +602,14 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       record.put("value", ind.get("value"));
       record.put("unit", ind.get("unit"));
       record.put("scale", ind.get("scale"));
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet using StorageProvider
-    storageProvider.writeAvroParquet(targetPath, schema, records, "WorldIndicator");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractEconDataDownloader.loadTableColumns("world_indicators");
+    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "WorldIndicator", "WorldIndicator");
   }
+
 
 }

@@ -984,76 +984,15 @@ public class FredCatalogDownloader {
         .replaceAll("_+", "_");         // Collapse multiple underscores
   }
 
-  /**
-   * Create Avro schema for FRED catalog data.
-   */
-  private Schema createFredCatalogSchema() {
-    return SchemaBuilder.record("FredCatalogSeries")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("series_id").doc("Unique FRED series identifier (e.g., 'UNRATE', 'GDP')").type().stringType().noDefault()
-        .name("title").doc("Full descriptive title of the economic data series").type().nullable().stringType().noDefault()
-        .name("observation_start").doc("Date of first available observation (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("observation_end").doc("Date of most recent observation (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("frequency").doc("Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')").type().nullable().stringType().noDefault()
-        .name("frequency_short").doc("Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')").type().nullable().stringType().noDefault()
-        .name("units").doc("Units of measurement (e.g., 'Percent', 'Billions of Dollars')").type().nullable().stringType().noDefault()
-        .name("units_short").doc("Abbreviated units code").type().nullable().stringType().noDefault()
-        .name("seasonal_adjustment").doc("Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')").type().nullable().stringType().noDefault()
-        .name("seasonal_adjustment_short").doc("Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')").type().nullable().stringType().noDefault()
-        .name("last_updated").doc("Timestamp of last data update (ISO 8601 format)").type().nullable().stringType().noDefault()
-        .name("popularity").doc("FRED popularity score indicating usage/interest level").type().nullable().intType().noDefault()
-        .name("group_popularity").doc("Popularity score within category group").type().nullable().intType().noDefault()
-        .name("notes").doc("Detailed description, methodology, and source information").type().nullable().stringType().noDefault()
-        .name("category_id").doc("FRED category ID for hierarchical classification").type().nullable().intType().noDefault()
-        .name("category_name").doc("Human-readable category name (e.g., 'National Accounts', 'Labor Markets')").type().nullable().stringType().noDefault()
-        .name("source_id").doc("Data source identifier").type().nullable().intType().noDefault()
-        .name("source_name").doc("Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')").type().nullable().stringType().noDefault()
-        .name("series_status").doc("Series status: 'active' (currently updated) or 'discontinued' (no longer updated)").type().nullable().stringType().noDefault()
-        .endRecord();
-  }
-
-  /**
-   * Convert list of series maps to Avro GenericRecords.
-   */
-  private List<GenericRecord> convertToGenericRecords(List<Map<String, Object>> transformedSeries, Schema schema) {
-    List<GenericRecord> records = new ArrayList<>();
-
-    for (Map<String, Object> series : transformedSeries) {
-      GenericRecord record = new GenericData.Record(schema);
-
-      record.put("series_id", series.get("series_id"));
-      record.put("title", series.get("title"));
-      record.put("observation_start", series.get("observation_start"));
-      record.put("observation_end", series.get("observation_end"));
-      record.put("frequency", series.get("frequency"));
-      record.put("frequency_short", series.get("frequency_short"));
-      record.put("units", series.get("units"));
-      record.put("units_short", series.get("units_short"));
-      record.put("seasonal_adjustment", series.get("seasonal_adjustment"));
-      record.put("seasonal_adjustment_short", series.get("seasonal_adjustment_short"));
-      record.put("last_updated", series.get("last_updated"));
-      record.put("popularity", series.get("popularity"));
-      record.put("group_popularity", series.get("group_popularity"));
-      record.put("notes", series.get("notes"));
-      record.put("category_id", series.get("category_id"));
-      record.put("category_name", series.get("category_name"));
-      record.put("source_id", series.get("source_id"));
-      record.put("source_name", series.get("source_name"));
-      record.put("series_status", series.get("series_status"));
-
-      records.add(record);
-    }
-
-    return records;
-  }
 
   /**
    * Write Parquet file using StorageProvider.
    */
   private void writeParquetWithStorageProvider(String parquetFile, List<Map<String, Object>> transformedSeries) throws IOException {
-    Schema schema = createFredCatalogSchema();
-    List<GenericRecord> records = convertToGenericRecords(transformedSeries, schema);
-    storageProvider.writeAvroParquet(parquetFile, schema, records, "FredCatalogSeries");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractEconDataDownloader.loadTableColumns("fred_data_series_catalog");
+    storageProvider.writeAvroParquet(parquetFile, columns, transformedSeries, "FredCatalogSeries", "FredCatalogSeries");
   }
+
 }

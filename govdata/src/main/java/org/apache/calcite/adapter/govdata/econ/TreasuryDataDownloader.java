@@ -320,58 +320,44 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   }
 
   private void writeTreasuryYieldsParquet(List<TreasuryYield> yields, String targetFilePath) throws IOException {
-    Schema schema = SchemaBuilder.record("TreasuryYield")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("maturity_months").doc("Maturity period in months (e.g., 1, 3, 6, 12, 60, 120, 360)").type().intType().noDefault()
-        .name("maturity_label").doc("Human-readable maturity label (e.g., '1-Month', '10-Year', '30-Year')").type().stringType().noDefault()
-        .name("yield_percent").doc("Yield rate as a percentage (e.g., 4.25 for 4.25%)").type().doubleType().noDefault()
-        .name("yield_type").doc("Type of Treasury security (e.g., 'Treasury Bill', 'Treasury Note', 'Treasury Bond')").type().stringType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records (keep all transformation logic)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (TreasuryYield yield : yields) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("date", yield.date);
       record.put("maturity_months", yield.maturityMonths);
       record.put("maturity_label", yield.maturityLabel);
       record.put("yield_percent", yield.avgInterestRate);
       record.put("yield_type", yield.securityType);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet file using StorageProvider's native parquet writer
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "TreasuryYield");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractEconDataDownloader.loadTableColumns("treasury_yields");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "TreasuryYield", "TreasuryYield");
   }
 
   private void writeFederalDebtParquet(List<FederalDebt> debtRecords, String targetFilePath) throws IOException {
-    Schema schema = SchemaBuilder.record("FederalDebt")
-        .namespace("org.apache.calcite.adapter.govdata.econ")
-        .fields()
-        .name("date").doc("Observation date (ISO 8601 format)").type().stringType().noDefault()
-        .name("debt_type").doc("Type of federal debt (e.g., 'Total Public Debt Outstanding')").type().stringType().noDefault()
-        .name("amount_billions").doc("Total debt amount in billions of dollars").type().doubleType().noDefault()
-        .name("holder_category").doc("Category of debt holder (always 'All' for total debt)").type().stringType().noDefault()
-        .name("debt_held_by_public").doc("Portion of debt held by the public in billions of dollars").type().doubleType().noDefault()
-        .name("intragovernmental_holdings").doc("Intragovernmental debt holdings in billions of dollars").type().doubleType().noDefault()
-        .endRecord();
-
-    List<GenericRecord> records = new ArrayList<>();
+    // Build data records (keep all transformation logic)
+    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
     for (FederalDebt debt : debtRecords) {
-      GenericRecord record = new GenericData.Record(schema);
+      java.util.Map<String, Object> record = new java.util.HashMap<>();
       record.put("date", debt.date);
       record.put("debt_type", debt.debtType);
       record.put("amount_billions", debt.totalDebt);
       record.put("holder_category", debt.holderCategory);
       record.put("debt_held_by_public", debt.debtHeldByPublic);
       record.put("intragovernmental_holdings", debt.intragovDebt);
-      records.add(record);
+      dataRecords.add(record);
     }
 
-    // Write parquet file using StorageProvider's native parquet writer
-    storageProvider.writeAvroParquet(targetFilePath, schema, records, "FederalDebt");
+    // Load column metadata and write parquet
+    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        AbstractEconDataDownloader.loadTableColumns("federal_debt");
+    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "FederalDebt", "FederalDebt");
   }
+
 
 
   // Data classes
