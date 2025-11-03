@@ -1143,9 +1143,9 @@ public final class TableCommentDefinitions {
 
     Map<String, String> countyQcewCols = new HashMap<>();
     countyQcewCols.put("area_fips", "5-digit county FIPS code (state + county)");
-    countyQcewCols.put("own_code", "Ownership code: 0=Total, 1-5=Private/Government breakdown");
+    countyQcewCols.put("own_code", "Ownership code: 0=Total, 1=Private, 2=Federal govt, 3=State govt, 4=Local govt, 5=International/other");
     countyQcewCols.put("industry_code", "6-character NAICS industry code");
-    countyQcewCols.put("agglvl_code", "Aggregation level code (70-78 for county data)");
+    countyQcewCols.put("agglvl_code", "Aggregation level code: 70=Total, 71=By ownership, 72=Goods/services, 73=SuperSector, 74=Sector, 75=3-digit NAICS, 76=4-digit NAICS, 77=5-digit NAICS, 78=6-digit NAICS");
     countyQcewCols.put("annual_avg_estabs", "Annual average of quarterly establishment counts");
     countyQcewCols.put("annual_avg_emplvl", "Annual average of monthly employment levels");
     countyQcewCols.put("total_annual_wages", "Sum of quarterly total wages (in dollars)");
