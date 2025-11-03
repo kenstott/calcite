@@ -32,6 +32,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.schema.Wrapper;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlNode;
 
@@ -51,9 +52,10 @@ import java.util.Set;
  * Acts as a delegating wrapper that intercepts getTable() calls.
  *
  * <p>This wrapper implements CommentableSchema to delegate comment requests
- * to the underlying schema if it supports comments.
+ * to the underlying schema if it supports comments. It also implements Wrapper
+ * to ensure proper unwrapping behavior for INFORMATION_SCHEMA views.
  */
-public class ConstraintAwareJdbcSchema implements CommentableSchema {
+public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConstraintAwareJdbcSchema.class);
 
   private final JdbcSchema delegate;
@@ -77,9 +79,61 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
   @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
     Table table = delegate.getTable(name);
-    if (table instanceof JdbcTable && constraintMetadata.containsKey(name)) {
-      LOGGER.info("Wrapping JdbcTable '{}' with constraint metadata", name);
-      return new ConstraintAwareJdbcTable((JdbcTable) table, constraintMetadata.get(name));
+
+    // If this table has constraint metadata, wrap it regardless of type
+    // This handles both direct JdbcTable instances and tables already wrapped
+    // by DuckDBJdbcSchema with CommentableJdbcTableWrapper
+    if (table != null && constraintMetadata.containsKey(name)) {
+      LOGGER.info("Wrapping table '{}' (type: {}) with constraint metadata",
+                  name, table.getClass().getSimpleName());
+
+      // Try to extract JdbcTable if this is already wrapped by DuckDBJdbcSchema
+      JdbcTable jdbcTable = null;
+      if (table instanceof JdbcTable) {
+        LOGGER.info("Table '{}' is directly a JdbcTable", name);
+        jdbcTable = (JdbcTable) table;
+      } else {
+        LOGGER.info("Table '{}' is not a JdbcTable, trying reflection. Delegate type: {}",
+                    name, delegate.getClass().getName());
+        // Check if delegate is DuckDBJdbcSchema and can provide the underlying JdbcTable
+        // First try to call parent JdbcSchema.getTable() to get the base table
+        try {
+          java.lang.reflect.Method method = JdbcSchema.class.getDeclaredMethod("getTable", String.class);
+          method.setAccessible(true);
+          Object unwrapped = method.invoke(delegate, name);
+          LOGGER.info("Reflection returned object of type: {}",
+                      unwrapped != null ? unwrapped.getClass().getName() : "null");
+
+          if (unwrapped instanceof JdbcTable) {
+            jdbcTable = (JdbcTable) unwrapped;
+            LOGGER.info("Extracted underlying JdbcTable from wrapped table");
+          } else if (unwrapped != null && unwrapped.getClass().getSimpleName().equals("CommentableJdbcTableWrapper")) {
+            // The unwrapped object is a CommentableJdbcTableWrapper, extract the jdbcTable field from it
+            try {
+              java.lang.reflect.Field jdbcTableField = unwrapped.getClass().getDeclaredField("jdbcTable");
+              jdbcTableField.setAccessible(true);
+              Object extractedJdbcTable = jdbcTableField.get(unwrapped);
+              if (extractedJdbcTable instanceof JdbcTable) {
+                jdbcTable = (JdbcTable) extractedJdbcTable;
+                LOGGER.info("Extracted JdbcTable from CommentableJdbcTableWrapper using reflection");
+              }
+            } catch (Exception e) {
+              LOGGER.warn("Could not extract jdbcTable field from CommentableJdbcTableWrapper: {}", e.getMessage());
+            }
+          } else {
+            LOGGER.warn("Reflection did not return a JdbcTable or CommentableJdbcTableWrapper for table '{}'", name);
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Could not extract JdbcTable from wrapped table: {}", e.getMessage());
+        }
+      }
+
+      if (jdbcTable != null) {
+        LOGGER.info("Successfully created ConstraintAwareJdbcTable for '{}'", name);
+        return new ConstraintAwareJdbcTable(jdbcTable, table, constraintMetadata.get(name));
+      } else {
+        LOGGER.warn("Failed to create ConstraintAwareJdbcTable for '{}' - returning unwrapped table", name);
+      }
     }
     return table;
   }
@@ -128,6 +182,22 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
   }
 
   /**
+   * Unwraps the schema to a given class.
+   * Returns this instance when unwrapping to Schema.class to ensure
+   * INFORMATION_SCHEMA views can detect and use constraint metadata.
+   *
+   * @param clazz the class to unwrap to
+   * @param <T> the type to unwrap to
+   * @return this instance if it's assignable to the class, otherwise delegates to underlying schema
+   */
+  @Override public <T> T unwrap(Class<T> clazz) {
+    if (clazz.isInstance(this)) {
+      return clazz.cast(this);
+    }
+    return delegate.unwrap(clazz);
+  }
+
+  /**
    * Returns the schema comment by delegating to the underlying schema
    * if it implements CommentableSchema.
    *
@@ -142,24 +212,32 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
 
   /**
    * Wrapper for JdbcTable that adds constraint metadata.
-   * Delegates all methods to the original table except getStatistic().
+   * Delegates all methods to the wrapped table except getStatistic().
    *
    * <p>This wrapper implements CommentableTable to delegate comment requests
    * to the underlying table if it supports comments.
+   *
+   * <p>This class handles both simple JdbcTable instances and tables that are
+   * already wrapped by DuckDBJdbcSchema with CommentableJdbcTableWrapper.
    */
   private static class ConstraintAwareJdbcTable implements CommentableTable {
-    private final JdbcTable delegate;
+    private final JdbcTable jdbcDelegate;     // For building statistic with metadata
+    private final Table wrappedDelegate;      // For delegating other Table methods
     private final Map<String, Object> constraintConfig;
     private Statistic statistic;  // Non-final to allow lazy initialization
 
-    public ConstraintAwareJdbcTable(JdbcTable delegate, Map<String, Object> constraintConfig) {
-      this.delegate = delegate;
+    public ConstraintAwareJdbcTable(JdbcTable jdbcDelegate, Table wrappedDelegate,
+                                    Map<String, Object> constraintConfig) {
+      this.jdbcDelegate = jdbcDelegate;
+      this.wrappedDelegate = wrappedDelegate;
       this.constraintConfig = constraintConfig;
       // Delay statistic creation until we have column names
       this.statistic = null;
     }
 
     @Override public Statistic getStatistic() {
+      LOGGER.info("ConstraintAwareJdbcTable.getStatistic() called - statistic is {}",
+                  statistic == null ? "null (will create)" : "cached");
       if (statistic == null) {
         // Lazily create the statistic when first requested
         try {
@@ -167,48 +245,69 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
           Map<String, Object> tableConfig = new LinkedHashMap<>();
           tableConfig.put("constraints", constraintConfig);
 
-          // Get column names from the row type
+          LOGGER.info("Constraint config for table: {}", constraintConfig);
+
+          // Get column names from the row type using jdbcDelegate
           RelDataTypeFactory typeFactory =
               new org.apache.calcite.sql.type.SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
-          RelDataType rowType = delegate.getRowType(typeFactory);
+          RelDataType rowType = jdbcDelegate.getRowType(typeFactory);
           List<String> columnNames = new ArrayList<>();
           for (org.apache.calcite.rel.type.RelDataTypeField field : rowType.getFieldList()) {
             columnNames.add(field.getName());
           }
 
-          LOGGER.debug("Creating statistic for table with {} columns: {}",
+          LOGGER.info("Creating statistic for table with {} columns: {}",
                        columnNames.size(), columnNames);
 
-          // Create statistic with actual column names
-          statistic = TableConstraints.fromConfig(tableConfig, columnNames, null);
-          LOGGER.info("Created statistic with {} keys and {} referential constraints",
+          // Get the base statistic from the wrapped table to preserve row count
+          Statistic baseStatistic = wrappedDelegate.getStatistic();
+          Double rowCount = baseStatistic != null ? baseStatistic.getRowCount() : null;
+
+          // Create statistic with actual column names and row count from base
+          statistic = TableConstraints.fromConfig(tableConfig, columnNames, rowCount);
+          LOGGER.info("Created statistic with {} keys, {} referential constraints, rowCount={}",
                       statistic.getKeys() != null ? statistic.getKeys().size() : 0,
                       statistic.getReferentialConstraints() != null ?
-                          statistic.getReferentialConstraints().size() : 0);
+                          statistic.getReferentialConstraints().size() : 0,
+                      rowCount);
+
+          // Log detailed FK information
+          if (statistic.getReferentialConstraints() != null && !statistic.getReferentialConstraints().isEmpty()) {
+            for (org.apache.calcite.rel.RelReferentialConstraint fk : statistic.getReferentialConstraints()) {
+              LOGGER.info("FK found: {} -> {}", fk.getSourceQualifiedName(),
+                          fk.getTargetQualifiedName());
+            }
+          } else {
+            LOGGER.warn("No referential constraints found in statistic!");
+          }
         } catch (Exception e) {
           LOGGER.error("Error creating statistic: {}", e.getMessage(), e);
-          // Fall back to unknown statistics if there's an error
-          statistic = org.apache.calcite.schema.Statistics.UNKNOWN;
+          // Fall back to wrapped delegate's statistics if there's an error
+          statistic = wrappedDelegate.getStatistic();
         }
       }
+
+      LOGGER.info("ConstraintAwareJdbcTable.getStatistic() returning: {} keys, {} referential constraints",
+                  statistic.getKeys() != null ? statistic.getKeys().size() : 0,
+                  statistic.getReferentialConstraints() != null ? statistic.getReferentialConstraints().size() : 0);
       return statistic;
     }
 
     @Override public Schema.TableType getJdbcTableType() {
-      return delegate.getJdbcTableType();
+      return wrappedDelegate.getJdbcTableType();
     }
 
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      return delegate.getRowType(typeFactory);
+      return wrappedDelegate.getRowType(typeFactory);
     }
 
     @Override public boolean isRolledUp(String column) {
-      return delegate.isRolledUp(column);
+      return wrappedDelegate.isRolledUp(column);
     }
 
     @Override public boolean rolledUpColumnValidInsideAgg(String column,
         SqlCall call, SqlNode parent, CalciteConnectionConfig config) {
-      return delegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
+      return wrappedDelegate.rolledUpColumnValidInsideAgg(column, call, parent, config);
     }
 
     /**
@@ -218,8 +317,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
      * @return table comment, or null if delegate doesn't support comments
      */
     @Override public @Nullable String getTableComment() {
-      if (delegate instanceof CommentableTable) {
-        return ((CommentableTable) delegate).getTableComment();
+      if (wrappedDelegate instanceof CommentableTable) {
+        return ((CommentableTable) wrappedDelegate).getTableComment();
       }
       return null;
     }
@@ -232,8 +331,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema {
      * @return column comment, or null if delegate doesn't support comments
      */
     @Override public @Nullable String getColumnComment(String columnName) {
-      if (delegate instanceof CommentableTable) {
-        return ((CommentableTable) delegate).getColumnComment(columnName);
+      if (wrappedDelegate instanceof CommentableTable) {
+        return ((CommentableTable) wrappedDelegate).getColumnComment(columnName);
       }
       return null;
     }
