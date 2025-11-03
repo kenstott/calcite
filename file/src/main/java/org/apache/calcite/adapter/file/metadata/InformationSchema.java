@@ -540,13 +540,32 @@ public class InformationSchema extends AbstractSchema {
     @Override public Enumerable<Object[]> scan(DataContext root) {
       List<Object[]> rows = new ArrayList<>();
 
+      LOGGER.info("========== KeyColumnUsageTable.scan START ==========");
+
       // Iterate through all schemas
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
+          // Get the unwrapped schema to check its actual type
+          Schema unwrappedSchema = schema.unwrap(Schema.class);
+
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
-            Table table = schema.tables().get(tableName);
+            Table table;
+
+            // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
+            // to get the ConstraintAwareJdbcTable wrapper with constraint metadata
+            if (unwrappedSchema != null &&
+                unwrappedSchema.getClass().getName().contains("ConstraintAwareJdbcSchema")) {
+              // Use the schema's getTable method to get the wrapped table
+              @SuppressWarnings("deprecation")
+              Table wrappedTable = unwrappedSchema.getTable(tableName);
+              table = wrappedTable;
+            } else {
+              // Normal path for other schema types
+              table = schema.tables().get(tableName);
+            }
+
             if (table != null) {
               // Get column names for the table
               RelDataType rowType = table.getRowType(root.getTypeFactory());
@@ -564,8 +583,8 @@ public class InformationSchema extends AbstractSchema {
                   int keyIndex = 0;
                   for (ImmutableBitSet key : keys) {
                     String constraintName = (keyIndex == 0)
-                        ? "PK_" + tableName.toUpperCase()
-                        : "UK_" + tableName.toUpperCase() + "_" + keyIndex;
+                        ? "PK_" + tableName.toUpperCase(java.util.Locale.ROOT)
+                        : "UK_" + tableName.toUpperCase(java.util.Locale.ROOT) + "_" + keyIndex;
 
                     // Add a row for each column in the key
                     int ordinalPosition = 1;
@@ -573,10 +592,10 @@ public class InformationSchema extends AbstractSchema {
                       if (columnIndex < columnNames.size()) {
                         rows.add(new Object[]{
                             catalogName,                    // CONSTRAINT_CATALOG
-                            schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                            schemaName.toUpperCase(java.util.Locale.ROOT),       // CONSTRAINT_SCHEMA
                             constraintName,                  // CONSTRAINT_NAME
                             catalogName,                    // TABLE_CATALOG
-                            schemaName.toUpperCase(),       // TABLE_SCHEMA
+                            schemaName.toUpperCase(java.util.Locale.ROOT),       // TABLE_SCHEMA
                             tableName,                       // TABLE_NAME
                             columnNames.get(columnIndex),   // COLUMN_NAME
                             ordinalPosition,                 // ORDINAL_POSITION
@@ -592,9 +611,11 @@ public class InformationSchema extends AbstractSchema {
                 // Extract foreign keys
                 List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
                 if (foreignKeys != null) {
+                  LOGGER.info("InformationSchema: KeyColumnUsageTable found {} foreign keys for table {}.{}",
+                              foreignKeys.size(), schemaName, tableName);
                   int fkIndex = 0;
                   for (RelReferentialConstraint fk : foreignKeys) {
-                    String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
+                    String constraintName = "FK_" + tableName.toUpperCase(java.util.Locale.ROOT) + "_" + fkIndex;
 
                     // Add a row for each column in the foreign key
                     int ordinalPosition = 1;
@@ -605,10 +626,10 @@ public class InformationSchema extends AbstractSchema {
 
                         rows.add(new Object[]{
                             catalogName,                    // CONSTRAINT_CATALOG
-                            schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                            schemaName.toUpperCase(java.util.Locale.ROOT),       // CONSTRAINT_SCHEMA
                             constraintName,                  // CONSTRAINT_NAME
                             catalogName,                    // TABLE_CATALOG
-                            schemaName.toUpperCase(),       // TABLE_SCHEMA
+                            schemaName.toUpperCase(java.util.Locale.ROOT),       // TABLE_SCHEMA
                             tableName,                       // TABLE_NAME
                             columnNames.get(columnIndex),   // COLUMN_NAME
                             ordinalPosition,                 // ORDINAL_POSITION
@@ -626,6 +647,7 @@ public class InformationSchema extends AbstractSchema {
         }
       }
 
+      LOGGER.info("InformationSchema: KEY_COLUMN_USAGE scan() returning {} total rows", rows.size());
       return Linq4j.asEnumerable(rows);
     }
 
@@ -656,20 +678,35 @@ public class InformationSchema extends AbstractSchema {
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
-          // Get the unwrapped schema to check its actual type
-          Schema unwrappedSchema = schema.unwrap(Schema.class);
+          // Try to unwrap to ConstraintAwareJdbcSchema specifically
+          org.apache.calcite.adapter.file.ConstraintAwareJdbcSchema constraintAwareSchema = null;
+          try {
+            constraintAwareSchema = schema.unwrap(org.apache.calcite.adapter.file.ConstraintAwareJdbcSchema.class);
+          } catch (ClassCastException e) {
+            // Not a ConstraintAwareJdbcSchema, that's fine
+          }
+
+          LOGGER.info("InformationSchema: Schema '{}' ConstraintAwareJdbcSchema detection: {}",
+                      schemaName, constraintAwareSchema != null ? "FOUND" : "not found");
 
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
             Table table;
 
-            // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
+            // If this is a ConstraintAwareJdbcSchema, use its getTable method
             // to get the ConstraintAwareJdbcTable wrapper with constraint metadata
-            if (unwrappedSchema != null &&
-                unwrappedSchema.getClass().getName().contains("ConstraintAwareJdbcSchema")) {
+            if (constraintAwareSchema != null) {
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Using ConstraintAwareJdbcSchema.getTable() for table '{}' in schema '{}'",
+                            tableName, schemaName);
+              }
               // Use the schema's getTable method to get the wrapped table
               @SuppressWarnings("deprecation")
-              Table wrappedTable = unwrappedSchema.getTable(tableName);
+              Table wrappedTable = constraintAwareSchema.getTable(tableName);
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("ConstraintAwareJdbcSchema.getTable() returned table of type: {}",
+                            wrappedTable != null ? wrappedTable.getClass().getName() : "null");
+              }
               table = wrappedTable;
             } else {
               // Normal path for other schema types
@@ -677,29 +714,43 @@ public class InformationSchema extends AbstractSchema {
             }
 
             if (table != null) {
-              LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
-                          tableName, schemaName, table.getClass().getSimpleName());
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Checking constraints for table '{}'.'{}'",
+                            schemaName, tableName);
+              }
               // Get table statistics which contain constraint information
               Statistic statistic = table.getStatistic();
               if (statistic != null) {
                 // Extract foreign keys
                 List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug("FK extraction for table '{}'.'{}: {}",
+                              schemaName, tableName,
+                              foreignKeys != null ? foreignKeys.size() + " FKs" : "null");
+                }
                 if (foreignKeys != null) {
                   int fkIndex = 0;
                   for (RelReferentialConstraint fk : foreignKeys) {
-                    String constraintName = "FK_" + tableName.toUpperCase() + "_" + fkIndex;
+                    String constraintName = "FK_" + tableName.toUpperCase(java.util.Locale.ROOT) + "_" + fkIndex;
+                    if (LOGGER.isDebugEnabled()) {
+                      LOGGER.debug("Processing FK {} for table '{}'.'{}: {} -> {}",
+                                  fkIndex, schemaName, tableName,
+                                  fk.getSourceQualifiedName(), fk.getTargetQualifiedName());
+                    }
 
                     // Get referenced table info
-                    String referencedSchema = schemaName.toUpperCase(); // Assume same schema
                     List<String> qualifiedName = fk.getTargetQualifiedName();
+                    String referencedSchema = qualifiedName.size() > 1
+                        ? qualifiedName.get(qualifiedName.size() - 2).toUpperCase(java.util.Locale.ROOT)
+                        : schemaName.toUpperCase(java.util.Locale.ROOT);
                     String referencedTable = qualifiedName.get(qualifiedName.size() - 1);
 
                     // Generate name for the referenced constraint (primary key)
-                    String uniqueConstraintName = "PK_" + referencedTable.toUpperCase();
+                    String uniqueConstraintName = "PK_" + referencedTable.toUpperCase(java.util.Locale.ROOT);
 
                     rows.add(new Object[]{
                         catalogName,                    // CONSTRAINT_CATALOG
-                        schemaName.toUpperCase(),       // CONSTRAINT_SCHEMA
+                        schemaName.toUpperCase(java.util.Locale.ROOT),       // CONSTRAINT_SCHEMA
                         constraintName,                  // CONSTRAINT_NAME
                         catalogName,                    // UNIQUE_CONSTRAINT_CATALOG
                         referencedSchema,                // UNIQUE_CONSTRAINT_SCHEMA
@@ -717,6 +768,7 @@ public class InformationSchema extends AbstractSchema {
         }
       }
 
+      LOGGER.info("InformationSchema: REFERENTIAL_CONSTRAINTS scan() returning {} total FK rows", rows.size());
       return Linq4j.asEnumerable(rows);
     }
 
