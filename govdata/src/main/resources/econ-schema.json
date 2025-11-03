@@ -2062,6 +2062,19 @@
         "type",
         "frequency",
         "year"
+      ],
+      "foreignKeys": [
+        {
+          "columns": [
+            "area_fips"
+          ],
+          "targetSchema": "geo",
+          "targetTable": "counties",
+          "targetColumns": [
+            "county_fips"
+          ],
+          "comment": "Links county QCEW employment and wage data to geographic county boundaries, enabling county name lookups and spatial analysis"
+        }
       ]
     },
     "county_wages": {

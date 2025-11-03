@@ -238,9 +238,9 @@ Foreign keys:
 | Column | Type | Description |
 |--------|------|-------------|
 | area_fips | VARCHAR | 5-digit county FIPS code (FK) |
-| own_code | VARCHAR | Ownership code (0=Total, 1-5=breakdown) |
+| own_code | VARCHAR | Ownership code: 0=Total, 1=Private, 2=Federal govt, 3=State govt, 4=Local govt, 5=International/other |
 | industry_code | VARCHAR | 6-character NAICS industry code |
-| agglvl_code | VARCHAR | Aggregation level (70-78 for county) |
+| agglvl_code | VARCHAR | Aggregation level: 70=Total, 71=By ownership, 72=Goods/services, 73=SuperSector, 74=Sector, 75=3-digit NAICS, 76=4-digit NAICS, 77=5-digit NAICS, 78=6-digit NAICS |
 | annual_avg_estabs | INTEGER | Annual average establishment count |
 | annual_avg_emplvl | INTEGER | Annual average employment level |
 | total_annual_wages | BIGINT | Total annual wages ($) |

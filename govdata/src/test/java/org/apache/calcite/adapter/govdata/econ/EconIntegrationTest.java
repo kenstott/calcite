@@ -206,6 +206,21 @@ public class EconIntegrationTest {
         "        }" +
         "      }" +
         "    }" +
+        "  }, {" +
+        "    \"name\": \"CENSUS\"," +
+        "    \"type\": \"custom\"," +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "    \"operand\": {" +
+        "      \"dataSource\": \"census\"," +
+        "      \"refreshInterval\": \"PT1H\"," +
+        "      \"executionEngine\": \"" + executionEngine + "\"," +
+        "      \"database_filename\": \"shared.duckdb\"," +
+        "      \"ephemeralCache\": false," +
+        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
+        "      \"directory\": \"" + parquetDir + "\"," +
+        "      " + s3ConfigJson +
+        "      \"autoDownload\": true" +
+        "    }" +
         "  }]" +
         "}";
 
@@ -604,6 +619,125 @@ public class EconIntegrationTest {
   }
 
   @Tag("integration")
+  @Test public void testCountyQcewForeignKeys() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" COUNTY QCEW FOREIGN KEY METADATA AND JOIN DEMONSTRATION");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test demonstrates:");
+    LOGGER.info("   - Querying FK metadata from INFORMATION_SCHEMA");
+    LOGGER.info("   - county_qcew.area_fips → geo.counties.county_fips FK relationship");
+    LOGGER.info("   - FK enables cross-schema joins for county name lookups");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      // Test 1: Query FK metadata from INFORMATION_SCHEMA
+      // In Calcite, we need to join REFERENTIAL_CONSTRAINTS with KEY_COLUMN_USAGE
+      LOGGER.info("\n1. Querying FK metadata from INFORMATION_SCHEMA:");
+
+      String fkMetadataQuery =
+          "SELECT " +
+          "  fk_kcu.\"TABLE_SCHEMA\" as fk_schema, " +
+          "  fk_kcu.\"TABLE_NAME\" as fk_table, " +
+          "  fk_kcu.\"COLUMN_NAME\" as fk_column, " +
+          "  pk_kcu.\"TABLE_SCHEMA\" as pk_schema, " +
+          "  pk_kcu.\"TABLE_NAME\" as pk_table, " +
+          "  pk_kcu.\"COLUMN_NAME\" as pk_column, " +
+          "  rc.\"CONSTRAINT_NAME\" as constraint_name " +
+          "FROM INFORMATION_SCHEMA.\"REFERENTIAL_CONSTRAINTS\" rc " +
+          "INNER JOIN INFORMATION_SCHEMA.\"KEY_COLUMN_USAGE\" fk_kcu " +
+          "  ON rc.\"CONSTRAINT_SCHEMA\" = fk_kcu.\"CONSTRAINT_SCHEMA\" " +
+          "  AND rc.\"CONSTRAINT_NAME\" = fk_kcu.\"CONSTRAINT_NAME\" " +
+          "INNER JOIN INFORMATION_SCHEMA.\"KEY_COLUMN_USAGE\" pk_kcu " +
+          "  ON rc.\"UNIQUE_CONSTRAINT_SCHEMA\" = pk_kcu.\"CONSTRAINT_SCHEMA\" " +
+          "  AND rc.\"UNIQUE_CONSTRAINT_NAME\" = pk_kcu.\"CONSTRAINT_NAME\" " +
+          "  AND fk_kcu.\"ORDINAL_POSITION\" = pk_kcu.\"ORDINAL_POSITION\" " +
+          "WHERE UPPER(fk_kcu.\"TABLE_SCHEMA\") = 'ECON' " +
+          "  AND UPPER(fk_kcu.\"TABLE_NAME\") = 'COUNTY_QCEW'";
+
+      int fkCount = 0;
+      boolean foundAreaFipsFK = false;
+
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(fkMetadataQuery)) {
+        while (rs.next()) {
+          String fkSchema = rs.getString("fk_schema");
+          String fkTable = rs.getString("fk_table");
+          String fkColumn = rs.getString("fk_column");
+          String pkSchema = rs.getString("pk_schema");
+          String pkTable = rs.getString("pk_table");
+          String pkColumn = rs.getString("pk_column");
+          String constraintName = rs.getString("constraint_name");
+
+          LOGGER.info("  FK: {}.{}.{} → {}.{}.{} (constraint: {})",
+              fkSchema, fkTable, fkColumn, pkSchema, pkTable, pkColumn, constraintName);
+          fkCount++;
+
+          // Check if this is our area_fips FK
+          if ("area_fips".equalsIgnoreCase(fkColumn)
+              && "geo".equalsIgnoreCase(pkSchema)
+              && "counties".equalsIgnoreCase(pkTable)
+              && "county_fips".equalsIgnoreCase(pkColumn)) {
+            foundAreaFipsFK = true;
+            LOGGER.info("     Found area_fips → geo.counties.county_fips FK!");
+          }
+        }
+      }
+
+      LOGGER.info("  Total FKs found for county_qcew: {}", fkCount);
+      assertTrue(foundAreaFipsFK,
+          "Should find area_fips → geo.counties.county_fips FK in metadata");
+
+      // Test 2: Use the FK to perform a join for county name lookup
+      LOGGER.info("\n2. Using FK to join county_qcew with geo.counties:");
+
+      String joinQuery =
+          "SELECT " +
+          "  q.area_fips, " +
+          "  c.county_name, " +
+          "  c.state_fips, " +
+          "  q.annual_avg_estabs " +
+          "FROM econ.county_qcew q " +
+          "INNER JOIN geo.counties c " +
+          "  ON q.area_fips = c.county_fips " +
+          "WHERE q.\"year\" = 2023 " +
+          "  AND q.agglvl_code = '70' " +
+          "  AND q.own_code = '0' " +
+          "  AND q.industry_code = '10' " +
+          "ORDER BY q.annual_avg_estabs DESC " +
+          "LIMIT 10";
+
+      int joinRowCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(joinQuery)) {
+        while (rs.next()) {
+          String areaFips = rs.getString("area_fips");
+          String countyName = rs.getString("county_name");
+          String stateFips = rs.getString("state_fips");
+          long estabs = rs.getLong("annual_avg_estabs");
+
+          LOGGER.info("  FIPS: {} → County: {}, State: {}, Establishments: {}",
+              areaFips, countyName, stateFips, estabs);
+          joinRowCount++;
+
+          assertNotNull(countyName, "County name should not be null");
+          assertFalse(countyName.trim().isEmpty(), "County name should not be empty");
+        }
+      }
+
+      assertTrue(joinRowCount > 0,
+          "FK-based join should return at least one row with county names");
+
+      LOGGER.info("\n FK-based join succeeded: {} rows with county names", joinRowCount);
+
+      LOGGER.info("\n================================================================================");
+      LOGGER.info(" FOREIGN KEY TEST COMPLETE!");
+      LOGGER.info("   - FK metadata found: {} foreign key(s)", fkCount);
+      LOGGER.info("   - Join test: {} row(s) with county names via FK", joinRowCount);
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  @Tag("integration")
   @Test public void testEconSchemaComments() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" ECON SCHEMA COMMENTS: INFORMATION_SCHEMA Validation");
@@ -701,6 +835,212 @@ public class EconIntegrationTest {
       LOGGER.info("   - Schema comment: {} schema", schemaCommentCount);
       LOGGER.info("   - Table comments: {} tables", tableCommentCount);
       LOGGER.info("   - Column comments: {} columns", columnCommentCount);
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  @Tag("integration")
+  @Test public void testIntegerPartitionComparison() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" INTEGER PARTITION COMPARISON TEST");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates that INTEGER partition columns work with numeric comparisons");
+    LOGGER.info(" Both econ and census schemas define 'year' partition as INTEGER type");
+    LOGGER.info(" This tests if INTEGER comparisons work correctly on partition keys");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      // Test 1: Simple INTEGER comparison on year partition
+      LOGGER.info("\n1. Testing simple INTEGER comparison (year >= 2020):");
+      String sql1 = "SELECT COUNT(*) FROM \"ECON\".\"treasury_yields\" WHERE \"year\" >= 2020";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql1)) {
+        assertTrue(rs.next(), "Query should return results");
+        int count = rs.getInt(1);
+        LOGGER.info("  ✅ Found {} records for years >= 2020", count);
+        assertTrue(count >= 0, "Should execute query without error (count may be 0)");
+      }
+
+      // Test 2: Range comparison (similar to census query pattern that was failing)
+      LOGGER.info("\n2. Testing range INTEGER comparison (2011 <= year <= 2023):");
+      String sql2 = "SELECT \"year\", COUNT(*) as cnt " +
+                    "FROM \"ECON\".\"treasury_yields\" " +
+                    "WHERE \"year\" >= 2011 AND \"year\" <= 2023 " +
+                    "GROUP BY \"year\" ORDER BY \"year\"";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql2)) {
+        int rowCount = 0;
+        while (rs.next()) {
+          int year = rs.getInt("year");
+          int cnt = rs.getInt("cnt");
+          LOGGER.info("  ✅ Year {} has {} records", year, cnt);
+          assertTrue(year >= 2011 && year <= 2023,
+                     "Year should be in range: " + year);
+          rowCount++;
+        }
+        LOGGER.info("  Found data for {} distinct years", rowCount);
+      }
+
+      // Test 3: Exact INTEGER comparison
+      LOGGER.info("\n3. Testing exact INTEGER comparison (year = 2023):");
+      String sql3 = "SELECT COUNT(*) FROM \"ECON\".\"treasury_yields\" WHERE \"year\" = 2023";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql3)) {
+        assertTrue(rs.next(), "Query should return results");
+        int count = rs.getInt(1);
+        LOGGER.info("  ✅ Found {} records for year = 2023", count);
+        // May be 0 if 2023 data not available, but query should succeed
+      }
+
+      // Test 4: Less than comparison
+      LOGGER.info("\n4. Testing less than INTEGER comparison (year < 2015):");
+      String sql4 = "SELECT COUNT(*) FROM \"ECON\".\"treasury_yields\" WHERE \"year\" < 2015";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql4)) {
+        assertTrue(rs.next(), "Query should return results");
+        int count = rs.getInt(1);
+        LOGGER.info("  ✅ Found {} records for years < 2015", count);
+      }
+
+      // Test 5: CENSUS schema INTEGER partition comparison
+      LOGGER.info("\n5. Testing INTEGER comparison on CENSUS schema (year >= 2011):");
+      LOGGER.info("  This tests the original failing query pattern from census.acs_employment");
+      String sql5 = "SELECT COUNT(*) FROM \"CENSUS\".\"acs_employment\" WHERE \"year\" >= 2011";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql5)) {
+        assertTrue(rs.next(), "Query should return results");
+        int count = rs.getInt(1);
+        LOGGER.info("  ✅ Found {} records for years >= 2011", count);
+        LOGGER.info("  🎯 Census INTEGER partition comparison SUCCEEDED!");
+      } catch (Exception e) {
+        LOGGER.error("  ❌ Census INTEGER partition comparison FAILED: {}", e.getMessage());
+        LOGGER.error("  This confirms the issue is census-specific!");
+        throw e;
+      }
+
+      // Test 6: CENSUS schema range comparison
+      LOGGER.info("\n6. Testing range INTEGER comparison on CENSUS (2011 <= year <= 2023):");
+      String sql6 = "SELECT \"year\", COUNT(*) as cnt " +
+                    "FROM \"CENSUS\".\"acs_employment\" " +
+                    "WHERE \"year\" >= 2011 AND \"year\" <= 2023 " +
+                    "GROUP BY \"year\" ORDER BY \"year\"";
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql6)) {
+        int rowCount = 0;
+        while (rs.next()) {
+          int year = rs.getInt("year");
+          int cnt = rs.getInt("cnt");
+          LOGGER.info("  ✅ Year {} has {} records", year, cnt);
+          assertTrue(year >= 2011 && year <= 2023,
+                     "Year should be in range: " + year);
+          rowCount++;
+        }
+        LOGGER.info("  Found data for {} distinct years in CENSUS.acs_employment", rowCount);
+      } catch (Exception e) {
+        LOGGER.error("  ❌ Census range comparison FAILED: {}", e.getMessage());
+        throw e;
+      }
+
+      LOGGER.info("\n================================================================================");
+      LOGGER.info(" ✅ INTEGER PARTITION COMPARISON TEST COMPLETE!");
+      LOGGER.info("   All INTEGER partition comparisons succeeded on BOTH schemas:");
+      LOGGER.info("   - ECON.treasury_yields: ✅");
+      LOGGER.info("   - CENSUS.acs_employment: ✅");
+      LOGGER.info("   If both schemas pass, INTEGER partition comparisons work correctly!");
+      LOGGER.info("   If CENSUS fails, the issue is census-specific (null years, dynamic schema, etc.)");
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  @Tag("integration")
+  @Test public void testComplexCensusJoinQuery() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" COMPLEX CENSUS JOIN QUERY TEST");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates the complex query that was failing:");
+    LOGGER.info(" - Joins 4 tables (3 census + 1 econ)");
+    LOGGER.info(" - Uses INTEGER partition comparisons");
+    LOGGER.info(" - Uses CAST to DOUBLE");
+    LOGGER.info(" - Uses window functions (PERCENT_RANK)");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      String sql = "WITH base_data AS (" +
+                   "  SELECT DISTINCT" +
+                   "    e.\"geoid\"," +
+                   "    e.\"year\"," +
+                   "    e.employed_population," +
+                   "    CAST(p.below_poverty_level AS DOUBLE) / NULLIF(CAST(p.total_population_poverty_determined AS DOUBLE), 0) as poverty_rate," +
+                   "    h.median_home_value," +
+                   "    q.annual_avg_estabs as establishments" +
+                   "  FROM \"CENSUS\".\"acs_employment\" e" +
+                   "  INNER JOIN \"CENSUS\".\"acs_poverty\" p" +
+                   "    ON e.\"geoid\" = p.\"geoid\" AND e.\"year\" = p.\"year\"" +
+                   "  INNER JOIN \"CENSUS\".\"acs_housing_costs\" h" +
+                   "    ON e.\"geoid\" = h.\"geoid\" AND e.\"year\" = h.\"year\"" +
+                   "  INNER JOIN \"ECON\".\"county_qcew\" q" +
+                   "    ON e.\"geoid\" = q.area_fips" +
+                   "    AND e.\"year\" = q.\"year\"" +
+                   "    AND q.agglvl_code = '70'" +
+                   "    AND q.own_code = '0'" +
+                   "    AND q.industry_code = '10'" +
+                   "  WHERE e.\"year\" = 2023" +
+                   "    AND CHAR_LENGTH(e.\"geoid\") = 5" +
+                   "    AND e.employed_population > 0" +
+                   "    AND p.below_poverty_level >= 0" +
+                   "    AND h.median_home_value > 0" +
+                   "    AND q.annual_avg_estabs > 0" +
+                   ")" +
+                   "SELECT" +
+                   "  \"geoid\"," +
+                   "  \"year\"," +
+                   "  employed_population," +
+                   "  ROUND(CAST(poverty_rate AS DECIMAL(10,4)) * 100, 2) as poverty_rate_pct," +
+                   "  median_home_value," +
+                   "  establishments," +
+                   "  ROUND(CAST(PERCENT_RANK() OVER (ORDER BY employed_population) AS DECIMAL(10,4)) * 100, 1) as employment_score," +
+                   "  ROUND(CAST((1 - PERCENT_RANK() OVER (ORDER BY poverty_rate)) AS DECIMAL(10,4)) * 100, 1) as poverty_score," +
+                   "  ROUND(CAST(PERCENT_RANK() OVER (ORDER BY median_home_value) AS DECIMAL(10,4)) * 100, 1) as housing_score," +
+                   "  ROUND(CAST(PERCENT_RANK() OVER (ORDER BY establishments) AS DECIMAL(10,4)) * 100, 1) as business_score" +
+                   " FROM base_data" +
+                   " ORDER BY employed_population DESC LIMIT 10";
+
+      LOGGER.info("\nExecuting complex query...");
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        int rowCount = 0;
+        while (rs.next()) {
+          String geoid = rs.getString("geoid");
+          int year = rs.getInt("year");
+          long employed = rs.getLong("employed_population");
+          double povertyPct = rs.getDouble("poverty_rate_pct");
+          long homeValue = rs.getLong("median_home_value");
+          long estabs = rs.getLong("establishments");
+
+          LOGGER.info("  Row {}: geoid={}, year={}, employed={}, poverty={}%, homeValue={}, estabs={}",
+                      rowCount + 1, geoid, year, employed, povertyPct, homeValue, estabs);
+          rowCount++;
+        }
+
+        LOGGER.info("\n✅ Complex query executed successfully!");
+        LOGGER.info("   Returned {} rows", rowCount);
+
+        if (rowCount == 0) {
+          LOGGER.warn("⚠️  Query returned 0 rows - this might indicate:");
+          LOGGER.warn("   - No data for year 2023 in all required tables");
+          LOGGER.warn("   - Join conditions are too restrictive");
+          LOGGER.warn("   - Some tables are empty");
+        }
+
+      } catch (Exception e) {
+        LOGGER.error("❌ Complex query FAILED: {}", e.getMessage());
+        LOGGER.error("   This confirms the original error was NOT related to INTEGER partitions");
+        LOGGER.error("   Error type: {}", e.getClass().getSimpleName());
+        throw e;
+      }
+
+      LOGGER.info("\n================================================================================");
+      LOGGER.info(" ✅ COMPLEX CENSUS JOIN QUERY TEST COMPLETE!");
       LOGGER.info("================================================================================");
     }
   }
