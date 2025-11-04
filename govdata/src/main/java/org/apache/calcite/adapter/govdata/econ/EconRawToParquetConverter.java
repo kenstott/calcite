@@ -136,7 +136,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // FRED indicators - raw files are at source=econ/type=fred_indicators/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("fred_indicators")) {
         LOGGER.info("CONVERT: Routing to FRED downloader for fred_indicators");
-        String correctRawPath = "source=econ/type=fred_indicators/frequency=monthly/year=" + year;
+        String correctRawPath = "type=fred_indicators/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         fredDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ FRED conversion completed successfully");
@@ -151,7 +151,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS employment statistics - raw files are at source=econ/type=employment_statistics/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("employment_statistics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for employment_statistics");
-        String correctRawPath = "source=econ/type=employment_statistics/frequency=monthly/year=" + year;
+        String correctRawPath = "type=employment_statistics/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS employment conversion completed");
@@ -166,7 +166,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS inflation metrics - raw files are at source=econ/type=inflation_metrics/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("inflation_metrics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for inflation_metrics");
-        String correctRawPath = "source=econ/type=inflation_metrics/frequency=monthly/year=" + year;
+        String correctRawPath = "type=inflation_metrics/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS inflation conversion completed");
@@ -181,7 +181,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS wage growth - raw files are at source=econ/type=wage_growth/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=indicators") && rawFilePath.contains("wage_growth")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for wage_growth");
-        String correctRawPath = "source=econ/type=wage_growth/frequency=monthly/year=" + year;
+        String correctRawPath = "type=wage_growth/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS wage growth conversion completed");
@@ -196,7 +196,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BLS jolts_regional - raw files at source=econ/type=jolts_regional/year=YYYY/
       if (rawFilePath.contains("type=jolts_regional")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for jolts_regional");
-        String correctRawPath = "source=econ/type=jolts_regional/year=" + year;
+        String correctRawPath = "type=jolts_regional/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS jolts_regional conversion completed");
@@ -211,7 +211,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BLS metro_cpi - raw files at source=econ/type=cpi_metro/year=YYYY/
       if (rawFilePath.contains("type=cpi_metro") || rawFilePath.contains("metro_cpi")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for metro_cpi");
-        String correctRawPath = "source=econ/type=cpi_metro/year=" + year;
+        String correctRawPath = "type=cpi_metro/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS metro_cpi conversion completed");
@@ -226,7 +226,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS metro_wages - raw files at source=econ/type=metro_wages/year=YYYY/
       if (rawFilePath.contains("type=metro_wages") || rawFilePath.contains("metro_wages")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for metro_wages");
-        String correctRawPath = "source=econ/type=metro_wages/year=" + year;
+        String correctRawPath = "type=metro_wages/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS metro_wages conversion completed");
@@ -241,7 +241,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BEA regional_income - raw files at source=econ/type=indicators/year=YYYY/regional_income.json
       if (rawFilePath.contains("regional_income")) {
         LOGGER.info("CONVERT: Routing to BEA downloader for regional_income");
-        String cacheIndicatorsYearPath = "source=econ/type=indicators/year=" + year;
+        String cacheIndicatorsYearPath = "type=indicators/year=" + year;
         String regionalIncomeParquetPath = "type=indicators/year=" + year + "/regional_income.parquet";
         LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, regionalIncomeParquetPath);
         beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
@@ -257,7 +257,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BEA state_gdp - raw files at source=econ/type=indicators/year=YYYY/state_gdp.json
       if (rawFilePath.contains("state_gdp")) {
         LOGGER.info("CONVERT: Routing to BEA downloader for state_gdp");
-        String cacheIndicatorsYearPath = "source=econ/type=indicators/year=" + year;
+        String cacheIndicatorsYearPath = "type=indicators/year=" + year;
         String stateGdpParquetPath = "type=indicators/year=" + year + "/state_gdp.parquet";
         LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, stateGdpParquetPath);
         beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);

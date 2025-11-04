@@ -41,13 +41,28 @@ import java.util.List;
 public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShapefileToParquetConverter.class);
 
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
-
   /**
    * Constructor that requires a StorageProvider for writing parquet files.
    */
   public ShapefileToParquetConverter(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this.storageProvider = storageProvider;
+    // Note: ShapefileToParquetConverter doesn't use cache or HTTP features, so we pass nulls/empty strings
+    // Only storageProvider is needed for writing parquet files
+    super("", storageProvider, storageProvider);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return 0; // No rate limit for shapefile conversion (local processing)
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 0; // No retries needed for shapefile conversion (no network calls)
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 0; // No retry delay needed
   }
 
   /**

@@ -70,9 +70,6 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   private final ObjectMapper objectMapper;
   private final Semaphore rateLimiter;
   private final AtomicLong lastRequestTime;
-  private final StorageProvider storageProvider;
-  private final GeoCacheManifest cacheManifest;
-  private final String operatingDirectory;
 
   public CensusApiClient(String apiKey, String cacheDir) {
     this(apiKey, cacheDir, new ArrayList<>(), null, null);
@@ -94,17 +91,30 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
   public CensusApiClient(String apiKey, String cacheDir, String operatingDirectory, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest);
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
-    this.operatingDirectory = operatingDirectory;
     this.censusYears = censusYears;
     this.objectMapper = new ObjectMapper();
     this.rateLimiter = new Semaphore(MAX_REQUESTS_PER_SECOND);
     this.lastRequestTime = new AtomicLong(0);
-    this.storageProvider = storageProvider;
-    this.cacheManifest = cacheManifest;
 
     LOGGER.info("Census API client initialized with cache directory: {}", cacheDir);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return RATE_LIMIT_DELAY_MS; // Census API: 500ms between requests (2 per second)
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 3; // Retry up to 3 times
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 1000; // Initial retry delay: 1 second
   }
 
   /**
@@ -944,17 +954,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     }
   }
 
-  /**
-   * Extract year from path containing year=YYYY pattern.
-   */
-  private int extractYearFromPath(String path) {
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    throw new IllegalArgumentException("Could not extract year from path: " + path);
-  }
+  // extractYearFromPath() is now provided by AbstractGeoDataDownloader
 
   /**
    * Convert population demographics JSON to Parquet.

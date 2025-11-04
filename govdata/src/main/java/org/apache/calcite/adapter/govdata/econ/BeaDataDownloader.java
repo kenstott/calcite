@@ -402,7 +402,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=gdp_components/year_range=%d_%d/gdp_components.parquet", startYear, endYear);
+        String.format("type=gdp_components/year_range=%d_%d/gdp_components.parquet", startYear, endYear);
 
     List<GdpComponent> components = new ArrayList<>();
 
@@ -715,7 +715,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=regional_income/year_range=%d_%d/regional_income.parquet", startYear, endYear);
+        String.format("type=regional_income/year_range=%d_%d/regional_income.parquet", startYear, endYear);
 
     List<RegionalIncome> incomeData = new ArrayList<>();
 
@@ -896,7 +896,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Save as JSON to cache using StorageProvider
     // Use type=indicators pattern to match where converters expect files
-    String relativePath = "source=econ/type=indicators/year=" + year + "/trade_statistics.json";
+    String relativePath = "type=indicators/year=" + year + "/trade_statistics.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> tradeList = new ArrayList<>();
 
@@ -944,7 +944,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=trade_statistics/year_range=%d_%d/trade_statistics.parquet", startYear, endYear);
+        String.format("type=trade_statistics/year_range=%d_%d/trade_statistics.parquet", startYear, endYear);
 
     List<TradeStatistic> tradeData = new ArrayList<>();
 
@@ -1266,7 +1266,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Save as JSON to cache using StorageProvider
     // Use type=indicators pattern to match where converters expect files
-    String relativePath = "source=econ/type=indicators/year=" + year + "/ita_data.json";
+    String relativePath = "type=indicators/year=" + year + "/ita_data.json";
     Map<String, Object> data = new HashMap<>();
     List<Map<String, Object>> itaList = new ArrayList<>();
 
@@ -1311,7 +1311,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=ita_data/year_range=%d_%d/ita_data.parquet", startYear, endYear);
+        String.format("type=ita_data/year_range=%d_%d/ita_data.parquet", startYear, endYear);
 
     List<ItaData> itaRecords = new ArrayList<>();
 
@@ -1469,7 +1469,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Check if JSON file exists using StorageProvider and update manifest
     // Note: Industry GDP is mostly annual, but manufacturing can be quarterly (TODO: detect from data)
     // Use type=indicators pattern to match where converters expect files
-    String relativePath = "source=econ/type=indicators/year=" + year + "/industry_gdp.json";
+    String relativePath = "type=indicators/year=" + year + "/industry_gdp.json";
     try {
       if (cacheStorageProvider.exists(relativePath)) {
         LOGGER.debug("Found existing industry GDP JSON file for year {} - updating manifest", year);
@@ -1608,7 +1608,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=industry_gdp/year_range=%d_%d/industry_gdp.parquet", startYear, endYear);
+        String.format("type=industry_gdp/year_range=%d_%d/industry_gdp.parquet", startYear, endYear);
 
     List<IndustryGdpData> industryData = new ArrayList<>();
 
@@ -2010,7 +2010,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=state_gdp/year_range=%d_%d/state_gdp.parquet", startYear, endYear);
+        String.format("type=state_gdp/year_range=%d_%d/state_gdp.parquet", startYear, endYear);
 
     List<StateGdp> gdpData = new ArrayList<>();
 

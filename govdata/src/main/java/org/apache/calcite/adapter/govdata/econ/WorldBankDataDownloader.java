@@ -298,7 +298,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=world_indicators/year_range=%d_%d/world_indicators.parquet", startYear, endYear);
+        String.format("type=world_indicators/year_range=%d_%d/world_indicators.parquet", startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
@@ -411,7 +411,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     // Build RELATIVE path (StorageProvider will add base path)
     String relativePath =
-        String.format("source=econ/type=global_gdp/year_range=%d_%d/global_gdp.parquet", startYear, endYear);
+        String.format("type=global_gdp/year_range=%d_%d/global_gdp.parquet", startYear, endYear);
 
     // Check cache manifest first
     Map<String, String> cacheParams = new HashMap<>();

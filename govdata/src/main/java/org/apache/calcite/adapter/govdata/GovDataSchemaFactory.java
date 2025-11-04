@@ -124,6 +124,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Add operating directory to operand so sub-schemas can use it
     Map<String, Object> enrichedOperand = new HashMap<>(operand);
     enrichedOperand.put("operatingDirectory", operatingDirectory);
+    enrichedOperand.put("actualSchemaName", name);
 
     // Build the unified operand for FileSchemaFactory
     Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, enrichedOperand);
@@ -493,6 +494,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Get the operand configuration from EconSchemaFactory (parent provides services)
+    // EconSchemaFactory will add source=econ prefix when reading directories from operand
     Map<String, Object> builtOperand = factory.buildOperand(operand, this);
 
     // Mark that this is ECON data so we can register the custom converter after FileSchema creation
@@ -554,7 +556,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       return;
     }
 
-    String econCacheDir = cacheDirectory + "/econ";
+    String econCacheDir = cacheStorageProvider.resolvePath(cacheDirectory, "source=econ");
 
     // Get .aperio directory for metadata (always local filesystem)
     File aperioDir = fileSchema.getOperatingCacheDirectory();
