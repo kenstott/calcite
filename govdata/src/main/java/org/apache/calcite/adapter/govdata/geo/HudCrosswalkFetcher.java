@@ -69,9 +69,6 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   private final String token;
   private final String cacheDir;
   private final ObjectMapper objectMapper;
-  private final StorageProvider storageProvider;
-  private final GeoCacheManifest cacheManifest;
-  private final String operatingDirectory;
 
   public HudCrosswalkFetcher(String username, String password, String cacheDir) {
     this(username, password, null, cacheDir, null, null);
@@ -98,16 +95,29 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
       String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest);
     this.username = username;
     this.password = password;
     this.token = token;
     this.cacheDir = cacheDir;
-    this.operatingDirectory = operatingDirectory;
     this.objectMapper = new ObjectMapper();
-    this.storageProvider = storageProvider;
-    this.cacheManifest = cacheManifest;
 
     LOGGER.info("HUD crosswalk fetcher initialized with cache directory: {}", cacheDir);
+  }
+
+  @Override
+  protected long getMinRequestIntervalMs() {
+    return 500; // HUD API rate limit: 500ms between requests
+  }
+
+  @Override
+  protected int getMaxRetries() {
+    return 3; // Retry up to 3 times
+  }
+
+  @Override
+  protected long getRetryDelayMs() {
+    return 1000; // Initial retry delay: 1 second
   }
 
   /**
@@ -614,17 +624,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     }
   }
 
-  /**
-   * Extract year from path containing year=YYYY pattern.
-   */
-  private int extractYearFromPath(String path) {
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    throw new IllegalArgumentException("Could not extract year from path: " + path);
-  }
+  // extractYearFromPath() is now provided by AbstractGeoDataDownloader
 
   /**
    * Convert ZIP to County crosswalk CSV to Parquet.

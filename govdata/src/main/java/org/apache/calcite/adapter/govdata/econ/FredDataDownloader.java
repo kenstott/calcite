@@ -485,7 +485,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     String parquetFileName =
         String.format("fred_indicators_%s_%s.parquet", startDate.substring(0, 10), endDate.substring(0, 10));
     String relativePath =
-        String.format("source=econ/type=fred_indicators/date_range=%s_%s/%s", startDate.substring(0, 10), endDate.substring(0, 10), parquetFileName);
+        String.format("type=fred_indicators/date_range=%s_%s/%s", startDate.substring(0, 10), endDate.substring(0, 10), parquetFileName);
     convertToParquet(observations, relativePath);
 
     // For compatibility, return a File representing the Parquet file
@@ -826,7 +826,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     String endDate = endYear + "-12-31";
 
     String relativePath =
-        String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, startYear, endYear);
+        String.format("type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, startYear, endYear);
 
     // Use tableName for cache key if provided, otherwise use default
     String dataType = tableName != null ? tableName : "custom_fred_series";
@@ -924,7 +924,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Load data for each year in range using known cache paths
     for (int year = startYear; year <= endYear; year++) {
       String relativePath =
-          String.format("source=econ/type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, year, year);
+          String.format("type=custom_fred/series=%s/%s_%d_%d.json", seriesId, seriesId, year, year);
       String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
 
       if (cacheStorageProvider.exists(fullPath)) {

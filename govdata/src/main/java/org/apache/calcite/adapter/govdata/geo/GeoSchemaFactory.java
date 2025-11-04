@@ -114,8 +114,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Build GEO data directories
-    String geoRawDir = govdataCacheDir + "/geo";
-    String geoParquetDir = govdataParquetDir + "/source=geo";
+    // Use storageProvider.resolvePath() for S3 compatibility (matches ECON pattern)
+    String geoRawDir = storageProvider.resolvePath(govdataCacheDir, "geo");
+    String geoParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=geo");
 
     // Make a mutable copy of the operand so we can modify it
     Map<String, Object> mutableOperand = new HashMap<>(operand);

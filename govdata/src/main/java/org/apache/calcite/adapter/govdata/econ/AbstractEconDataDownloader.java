@@ -283,8 +283,8 @@ public abstract class AbstractEconDataDownloader {
    */
   protected String buildPartitionPath(String dataType, DataFrequency frequency, int year, Integer month) {
     StringBuilder path = new StringBuilder();
-    path.append("source=econ");
-    path.append("/type=").append(dataType);
+    // Don't prepend source=econ - baseDirectory in EconSchemaFactory already includes it
+    path.append("type=").append(dataType);
     path.append("/frequency=").append(frequency.getPartitionName());
     path.append("/year=").append(year);
 

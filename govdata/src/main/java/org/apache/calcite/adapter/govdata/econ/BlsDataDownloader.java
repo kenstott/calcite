@@ -1682,7 +1682,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build cache path: source=econ/type=qcew_bulk/{year}/{frequency}_singlefile.zip
-    String relativePath = String.format("source=econ/type=qcew_bulk/year=%d/%s_singlefile.zip", year, frequency);
+    String relativePath = String.format("type=qcew_bulk/year=%d/%s_singlefile.zip", year, frequency);
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
 
     // Check if file already cached
@@ -1738,7 +1738,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   String extractQcewBulkFile(String zipFilePath, int year, String frequency) throws IOException {
     // Build cache path for extracted CSV: source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
     String csvRelativePath =
-                                            String.format("source=econ/type=qcew_bulk/year=%d/%d.%s.singlefile.csv", year, year, frequency);
+                                            String.format("type=qcew_bulk/year=%d/%d.%s.singlefile.csv", year, year, frequency);
     String csvFullPath = cacheStorageProvider.resolvePath(cacheDirectory, csvRelativePath);
 
     // Check if CSV already extracted
@@ -2162,7 +2162,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadJoltsIndustries() throws IOException, InterruptedException {
     LOGGER.info("Downloading JOLTS industry reference data from BLS FTP");
 
-    String outputDirPath = "source=econ/type=reference";
+    String outputDirPath = "type=reference";
     String jsonFilePath = outputDirPath + "/jolts_industries.json";
     Map<String, String> cacheParams = new HashMap<>();
 
@@ -2232,7 +2232,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public File downloadJoltsDataelements() throws IOException, InterruptedException {
     LOGGER.info("Downloading JOLTS data element reference data from BLS FTP");
 
-    String outputDirPath = "source=econ/type=reference";
+    String outputDirPath = "type=reference";
     String jsonFilePath = outputDirPath + "/jolts_dataelements.json";
     Map<String, String> cacheParams = new HashMap<>();
 

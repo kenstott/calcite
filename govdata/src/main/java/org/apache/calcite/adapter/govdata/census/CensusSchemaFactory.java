@@ -120,8 +120,9 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Build CENSUS data directories
-    String censusRawDir = govdataCacheDir + "/census";
-    String censusParquetDir = govdataParquetDir + "/source=census";
+    // Use storageProvider.resolvePath() for S3 compatibility (matches ECON pattern)
+    String censusRawDir = storageProvider.resolvePath(govdataCacheDir, "census");
+    String censusParquetDir = storageProvider.resolvePath(govdataParquetDir, "source=census");
 
     // Make a mutable copy of the operand so we can modify it
     Map<String, Object> mutableOperand = new HashMap<>(operand);
