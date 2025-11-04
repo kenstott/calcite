@@ -169,6 +169,118 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
+   * Load declared schema name from schema JSON resource file.
+   * This is the canonical schema name that FK definitions reference.
+   * If not present, defaults to lowercase filename stem (e.g., "econ" from "econ-schema.json").
+   *
+   * @return Declared schema name
+   */
+  default String loadDeclaredSchemaName() {
+    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+      if (is == null) {
+        LOGGER.warn("Could not find {} resource file for loading schema name", getSchemaResourceName());
+        return getDefaultSchemaName();
+      }
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      String schemaName = (String) schema.get("schemaName");
+      if (schemaName != null) {
+        LOGGER.debug("Loaded declared schema name from {}: {}", getSchemaResourceName(), schemaName);
+        return schemaName;
+      } else {
+        // Default to lowercase filename stem
+        String defaultName = getDefaultSchemaName();
+        LOGGER.debug("No schemaName in {}, using default: {}", getSchemaResourceName(), defaultName);
+        return defaultName;
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Error loading schema name from {}: {}", getSchemaResourceName(), e.getMessage());
+      return getDefaultSchemaName();
+    }
+  }
+
+  /**
+   * Get default schema name from resource filename (lowercase stem).
+   * For example, "/econ-schema.json" -> "econ"
+   */
+  default String getDefaultSchemaName() {
+    String resourceName = getSchemaResourceName();
+    // Remove leading slash and extension
+    String name = resourceName.startsWith("/") ? resourceName.substring(1) : resourceName;
+    int dotIndex = name.indexOf('.');
+    if (dotIndex > 0) {
+      name = name.substring(0, dotIndex);
+    }
+    // Remove "-schema" suffix if present
+    if (name.endsWith("-schema")) {
+      name = name.substring(0, name.length() - "-schema".length());
+    }
+    return name.toLowerCase(java.util.Locale.ROOT);
+  }
+
+  /**
+   * Rewrite foreign key schema names in table definitions.
+   * For each FK, if targetSchema matches the declared schema name, rewrite it to use the actual schema name.
+   * This allows FK definitions to use a canonical name like "econ" while the schema is instantiated as "ECON".
+   *
+   * @param tables List of table definitions with potential FK definitions
+   * @param actualSchemaName Actual schema name from model.json (e.g., "ECON")
+   */
+  default void rewriteForeignKeySchemaNames(List<Map<String, Object>> tables, String actualSchemaName) {
+    // Load the declared schema name from JSON
+    String declaredSchemaName = loadDeclaredSchemaName();
+
+    LOGGER.info("FK Rewriting: declared='{}', actual='{}'", declaredSchemaName, actualSchemaName);
+
+    if (declaredSchemaName.equals(actualSchemaName)) {
+      LOGGER.debug("FK Rewriting: Schema names match, no rewriting needed");
+      return;
+    }
+
+    int rewriteCount = 0;
+    int preserveCount = 0;
+
+    // Iterate through all tables
+    for (Map<String, Object> table : tables) {
+      String tableName = (String) table.get("name");
+
+      // Check if table has foreignKeys
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) table.get("foreignKeys");
+
+      if (foreignKeys == null || foreignKeys.isEmpty()) {
+        continue;
+      }
+
+      // Rewrite FK targetSchema values
+      for (Map<String, Object> fk : foreignKeys) {
+        String targetSchema = (String) fk.get("targetSchema");
+
+        if (targetSchema == null) {
+          continue;
+        }
+
+        if (targetSchema.equals(declaredSchemaName)) {
+          // Rewrite to actual schema name
+          fk.put("targetSchema", actualSchemaName);
+          rewriteCount++;
+          LOGGER.debug("FK Rewriting: table={}, rewritten targetSchema '{}' -> '{}'",
+              tableName, declaredSchemaName, actualSchemaName);
+        } else {
+          // Cross-schema FK - preserve as-is
+          preserveCount++;
+          LOGGER.debug("FK Rewriting: table={}, preserved cross-schema targetSchema='{}'",
+              tableName, targetSchema);
+        }
+      }
+    }
+
+    LOGGER.info("FK Rewriting complete: rewrote {} FKs, preserved {} cross-schema FKs",
+        rewriteCount, preserveCount);
+  }
+
+  /**
    * Load constraint definitions from schema JSON resource file.
    *
    * @return Map of table name to constraint definitions
@@ -191,6 +303,69 @@ public interface GovDataSubSchemaFactory {
     } catch (IOException e) {
       throw new RuntimeException("Error loading " + getSchemaResourceName(), e);
     }
+  }
+
+  /**
+   * Rewrite foreign key schema names in constraint definitions.
+   * For each FK, if targetSchema matches the declared schema name, rewrite it to use the actual schema name.
+   * This allows FK definitions to use a canonical name like "econ" while the schema is instantiated as "ECON".
+   *
+   * @param constraints Map of table name to constraint definitions
+   * @param actualSchemaName Actual schema name from model.json (e.g., "ECON")
+   */
+  default void rewriteConstraintForeignKeySchemaNames(
+      Map<String, Map<String, Object>> constraints, String actualSchemaName) {
+    // Load the declared schema name from JSON
+    String declaredSchemaName = loadDeclaredSchemaName();
+
+    LOGGER.info("FK Constraint Rewriting: declared='{}', actual='{}'", declaredSchemaName, actualSchemaName);
+
+    if (declaredSchemaName.equals(actualSchemaName)) {
+      LOGGER.debug("FK Constraint Rewriting: Schema names match, no rewriting needed");
+      return;
+    }
+
+    int rewriteCount = 0;
+    int preserveCount = 0;
+
+    // Iterate through all table constraints
+    for (Map.Entry<String, Map<String, Object>> entry : constraints.entrySet()) {
+      String tableName = entry.getKey();
+      Map<String, Object> tableConstraints = entry.getValue();
+
+      // Check if table has foreignKeys
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) tableConstraints.get("foreignKeys");
+
+      if (foreignKeys == null || foreignKeys.isEmpty()) {
+        continue;
+      }
+
+      // Rewrite FK targetSchema values
+      for (Map<String, Object> fk : foreignKeys) {
+        String targetSchema = (String) fk.get("targetSchema");
+
+        if (targetSchema == null) {
+          continue;
+        }
+
+        if (targetSchema.equals(declaredSchemaName)) {
+          // Rewrite to actual schema name
+          fk.put("targetSchema", actualSchemaName);
+          rewriteCount++;
+          LOGGER.debug("FK Constraint Rewriting: table={}, rewritten targetSchema '{}' -> '{}'",
+              tableName, declaredSchemaName, actualSchemaName);
+        } else {
+          // Cross-schema FK - preserve as-is
+          preserveCount++;
+          LOGGER.debug("FK Constraint Rewriting: table={}, preserved cross-schema targetSchema='{}'",
+              tableName, targetSchema);
+        }
+      }
+    }
+
+    LOGGER.info("FK Constraint Rewriting complete: rewrote {} FKs, preserved {} cross-schema FKs",
+        rewriteCount, preserveCount);
   }
 
   /**
