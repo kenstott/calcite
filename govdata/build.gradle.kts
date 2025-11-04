@@ -70,6 +70,10 @@ dependencies {
 tasks.test {
     workingDir = layout.buildDirectory.get().asFile
 
+    // Increase heap size for tests that process large CSV files
+    minHeapSize = "2g"
+    maxHeapSize = "8g"
+
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
