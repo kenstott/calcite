@@ -346,11 +346,12 @@ public interface StorageProvider {
         }
       }
 
-      // Use StorageProvider to move temp file to final location
-      byte[] parquetData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-      org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
-          .info("DEBUG: writeAvroParquet() - Writing " + parquetData.length + " bytes to final location: " + path);
-      writeFile(path, parquetData);
+      // Use StorageProvider to move temp file to final location via streaming to avoid large in-memory buffers
+      try (java.io.InputStream in = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+        org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
+            .info("DEBUG: writeAvroParquet() - Streaming temp parquet to final location: " + path);
+        writeFile(path, in);
+      }
       org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
           .info("DEBUG: writeAvroParquet() COMPLETED successfully - path: " + path);
 

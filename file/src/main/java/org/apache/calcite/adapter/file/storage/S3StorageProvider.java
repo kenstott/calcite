@@ -35,6 +35,12 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
+import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
+import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -459,10 +465,90 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {
-    // For input streams, we need to buffer the content to determine size
-    // This is required for S3 uploads unless using multipart upload
-    byte[] buffer = readAllBytes(content);
-    writeFile(path, buffer);
+    // Stream upload using S3 multipart upload to avoid buffering large payloads in memory
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
+
+    // Choose part size (must be >= 5 MB for multipart). Use 16 MB by default.
+    final int partSize = 16 * 1024 * 1024;
+    final byte[] buf = new byte[partSize];
+
+    // Prepare metadata; we don't know content length in advance
+    ObjectMetadata objectMetadata = new ObjectMetadata();
+    String contentType = guessContentType(path);
+    if (contentType != null) {
+      objectMetadata.setContentType(contentType);
+    }
+
+    List<PartETag> partETags = new ArrayList<>();
+    String uploadId = null;
+
+    try {
+      // Initiate multipart upload
+      InitiateMultipartUploadRequest initRequest =
+          new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
+              .withObjectMetadata(objectMetadata);
+      InitiateMultipartUploadResult initResponse = s3Client.initiateMultipartUpload(initRequest);
+      uploadId = initResponse.getUploadId();
+
+      int partNumber = 1;
+      long total = 0L;
+      while (true) {
+        int bytesRead = fillBuffer(content, buf);
+        if (bytesRead <= 0) {
+          break; // EOF
+        }
+        total += bytesRead;
+
+        UploadPartRequest uploadRequest = new UploadPartRequest()
+            .withBucketName(s3Uri.bucket)
+            .withKey(s3Uri.key)
+            .withUploadId(uploadId)
+            .withPartNumber(partNumber++)
+            .withInputStream(new java.io.ByteArrayInputStream(buf, 0, bytesRead))
+            .withPartSize(bytesRead);
+
+        partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+      }
+
+      if (partETags.isEmpty()) {
+        // Zero-byte object: put a small empty object instead of multipart
+        try (InputStream empty = new java.io.ByteArrayInputStream(new byte[0])) {
+          PutObjectRequest req = new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata);
+          s3Client.putObject(req);
+        }
+        return;
+      }
+
+      // Complete multipart upload
+      CompleteMultipartUploadRequest compRequest = new CompleteMultipartUploadRequest(
+          s3Uri.bucket, s3Uri.key, uploadId, partETags);
+      s3Client.completeMultipartUpload(compRequest);
+    } catch (AmazonServiceException e) {
+      // Abort multipart upload on failure
+      if (uploadId != null) {
+        try {
+          s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
+        } catch (Exception abortEx) {
+          // log and continue
+          LoggerFactory.getLogger(S3StorageProvider.class).warn("Failed to abort multipart upload for s3://{}/{}: {}",
+              s3Uri.bucket, s3Uri.key, abortEx.toString());
+        }
+      }
+      throw new IOException("Failed to write file to S3: " + path, e);
+    }
+  }
+
+  // Reads from 'in' into 'buffer' until either buffer is full or EOF; returns bytes read or -1 for EOF
+  private static int fillBuffer(InputStream in, byte[] buffer) throws IOException {
+    int off = 0;
+    int len = buffer.length;
+    while (off < len) {
+      int r = in.read(buffer, off, len - off);
+      if (r < 0) break;
+      off += r;
+    }
+    return off == 0 ? -1 : off;
   }
 
   @Override public void createDirectories(String path) throws IOException {
