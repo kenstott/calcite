@@ -219,11 +219,15 @@ public abstract class AbstractEconDataDownloader {
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
     try {
       if (cacheStorageProvider.exists(filePath)) {
-        LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
         long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
-        cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-        cacheManifest.save(operatingDirectory);
-        return true;
+        if (fileSize > 0) {
+          LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
+          cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
+          cacheManifest.save(operatingDirectory);
+          return true;
+        } else {
+          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", dataType, relativePath);
+        }
       }
     } catch (IOException e) {
       LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
@@ -294,11 +298,6 @@ public abstract class AbstractEconDataDownloader {
 
     return path.toString();
   }
-
-  // REMOVED: isParquetConverted() and markParquetConverted()
-  // Parquet conversion tracking is now handled by FileSchema's conversion registry.
-  // Downloaders should check file existence using storageProvider.exists() and
-  // let FileSchema's conversion metadata track the conversions centrally.
 
   /**
    * Enforces rate limiting by ensuring minimum interval between API requests.
@@ -513,12 +512,12 @@ public abstract class AbstractEconDataDownloader {
       com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
 
       // Find the table in the "tables" array
-      if (!root.has("tables") || !root.get("tables").isArray()) {
+      if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         throw new IllegalArgumentException(
             "Invalid econ-schema.json: missing 'tables' array");
       }
 
-      for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("tables")) {
+      for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("partitionedTables")) {
         String name = tableNode.has("name") ? tableNode.get("name").asText() : null;
         if (tableName.equals(name)) {
           // Found the table - extract columns
