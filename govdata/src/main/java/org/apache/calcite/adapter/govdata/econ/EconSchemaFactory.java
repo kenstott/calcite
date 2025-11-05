@@ -391,8 +391,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           }
 
           // Convert JOLTS regional
-          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/year=" + year);
-          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/year=" + year + "/jolts_regional.parquet");
+          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/frequency=monthly/year=" + year);
+          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
           String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
             blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
@@ -424,10 +424,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             blsDownloader.convertToParquet(cacheYearPath, wageParquetPath);
             cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
           }
-
-          // NOTE: regional_employment conversion removed - downloadRegionalEmployment() now creates
-          // Parquet files directly with state-level partitioning (year + state_fips).
-          // No intermediate JSON files are created, and no conversion step is needed.
         }
 
         // Convert reference tables (not partitioned by year, use 0 as sentinel)
@@ -607,8 +603,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert jolts_regional to parquet for each year
         for (int year = startYear; year <= endYear; year++) {
-          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/year=" + year);
-          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/year=" + year + "/jolts_regional.parquet");
+          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/frequency=monthly/year=" + year);
+          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
           String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
             blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
@@ -1165,13 +1161,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       return true;
     }
 
-    // 2. Defensive check: if parquet file exists but not in manifest, verify it's up-to-date
+    // 2. Defensive check: if a parquet file exists but not in manifest, verify it's up-to-date
     try {
       if (storageProvider.exists(parquetPath)) {
         // Get timestamps for both files
         long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
 
-        // Check if raw file exists and compare timestamps
+        // Check if a raw file exists and compare timestamps
         if (cacheStorageProvider.exists(rawFilePath)) {
           long rawModTime = cacheStorageProvider.getMetadata(rawFilePath).getLastModified();
 

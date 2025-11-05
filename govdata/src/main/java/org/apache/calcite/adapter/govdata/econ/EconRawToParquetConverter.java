@@ -196,7 +196,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BLS jolts_regional - raw files at source=econ/type=jolts_regional/year=YYYY/
       if (rawFilePath.contains("type=jolts_regional")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for jolts_regional");
-        String correctRawPath = "type=jolts_regional/year=" + year;
+        String correctRawPath = "type=jolts_regional/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS jolts_regional conversion completed");
