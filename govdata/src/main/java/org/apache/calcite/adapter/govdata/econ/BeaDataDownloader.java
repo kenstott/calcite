@@ -374,8 +374,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     String jsonContent = MAPPER.writeValueAsString(data);
 
-    // Write using StorageProvider - directories created automatically
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Write using StorageProvider - resolve path against cacheDirectory (which includes source=econ)
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("GDP components saved to: {} ({} records)", relativePath, components.size());
 
@@ -693,8 +694,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("Regional income data saved to: {} ({} records)", relativePath, incomeData.size());
 
@@ -921,8 +923,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("Trade statistics saved to: {} ({} records)", relativePath, tradeData.size());
 
@@ -1289,8 +1292,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("ITA data saved to: {} ({} records)", relativePath, itaRecords.size());
 
@@ -1585,8 +1589,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("Industry GDP data saved to: {} ({} records)", relativePath, industryData.size());
 
@@ -1941,8 +1946,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("no_data_reason", reason);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("Created empty GDP components file for year {}: {}", year, relativePath);
   }
@@ -2246,8 +2252,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     data.put("year", year);
 
     String jsonContent = MAPPER.writeValueAsString(data);
-    // StorageProvider automatically creates parent directories when writing
-    cacheStorageProvider.writeFile(relativePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    // Resolve path against cacheDirectory (which includes source=econ) before writing
+    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     LOGGER.debug("State GDP data saved to: {} ({} records)", relativePath, gdpData.size());
 
