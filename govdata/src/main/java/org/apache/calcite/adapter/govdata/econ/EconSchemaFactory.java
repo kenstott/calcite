@@ -1145,7 +1145,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       // Pattern: type=catalog/category=*/frequency=*/source=*/status=active/fred_data_series_catalog.json
       String catalogBasePath = cacheStorageProvider.resolvePath(cacheDir, "type=catalog");
 
-      if (!cacheStorageProvider.exists(catalogBasePath)) {
+      if (!cacheStorageProvider.isDirectory(catalogBasePath)) {
         LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
         return seriesIds;
       }
