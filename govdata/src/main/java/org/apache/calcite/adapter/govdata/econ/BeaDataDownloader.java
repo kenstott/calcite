@@ -2940,4 +2940,519 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.debug("Converted {} GDP statistics records to parquet: {}", dataRecords.size(), targetFilePath);
   }
 
+  // ===== METADATA-DRIVEN DOWNLOAD/CONVERSION METHODS =====
+  // These methods use the download configurations from econ-schema.json
+  // and the executeDownload() infrastructure from AbstractGovDataDownloader
+
+  /**
+   * Downloads GDP components data using metadata-driven pattern.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param nipaTablesList List of NIPA table IDs to download
+   * @throws IOException if download or file operations fail
+   * @throws InterruptedException if download is interrupted
+   */
+  public void downloadGdpComponentsMetadata(int startYear, int endYear, java.util.List<String> nipaTablesList)
+      throws IOException, InterruptedException {
+    if (nipaTablesList == null || nipaTablesList.isEmpty()) {
+      LOGGER.warn("No NIPA tables provided for download");
+      return;
+    }
+
+    LOGGER.info("Downloading {} NIPA tables for years {}-{}", nipaTablesList.size(), startYear, endYear);
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "gdp_components";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    for (String nipaTable : nipaTablesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("TableName", nipaTable);
+
+        // Resolve path using pattern
+        String relativePath = resolveJsonPath(pattern, variables);
+
+        // Check if already cached
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("TableName", nipaTable);
+
+        if (isCachedOrExists(tableName, year, params, relativePath)) {
+          skippedCount++;
+          continue;
+        }
+
+        // Download via metadata-driven executeDownload()
+        try {
+          String cachedPath = executeDownload(tableName, variables);
+          downloadedCount++;
+
+          if (downloadedCount % 10 == 0) {
+            LOGGER.info("Downloaded {}/{} NIPA tables (skipped {} cached)", downloadedCount,
+                nipaTablesList.size() * (endYear - startYear + 1), skippedCount);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Error downloading NIPA table {} for year {}: {}", nipaTable, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("GDP components download complete: downloaded {} table-years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts GDP components data using metadata-driven pattern.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @param nipaTablesList List of NIPA table IDs to convert
+   * @throws IOException if conversion or file operations fail
+   */
+  public void convertGdpComponentsMetadata(int startYear, int endYear, java.util.List<String> nipaTablesList)
+      throws IOException {
+    if (nipaTablesList == null || nipaTablesList.isEmpty()) {
+      LOGGER.warn("No NIPA tables provided for conversion");
+      return;
+    }
+
+    LOGGER.info("Converting {} NIPA tables to Parquet for years {}-{}", nipaTablesList.size(), startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "gdp_components";
+
+    for (String nipaTable : nipaTablesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        // Build paths for this table/year
+        String seriesPartition = "type=" + tableName + "/table=" + nipaTable + "/year=" + year;
+        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+
+        // Check if conversion needed
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("TableName", nipaTable);
+
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+          skippedCount++;
+          continue;
+        }
+
+        // Convert via metadata-driven approach
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("TableName", nipaTable);
+          convertCachedJsonToParquet(tableName, variables);
+          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          convertedCount++;
+
+          if (convertedCount % 10 == 0) {
+            LOGGER.info("Converted {}/{} tables (skipped {} up-to-date)", convertedCount,
+                nipaTablesList.size() * (endYear - startYear + 1), skippedCount);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Error converting NIPA table {} for year {}: {}", nipaTable, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("GDP components conversion complete: converted {} table-years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
+  /**
+   * Downloads regional income data using metadata-driven pattern.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param lineCodesList List of line codes to download
+   * @throws IOException if download or file operations fail
+   * @throws InterruptedException if download is interrupted
+   */
+  public void downloadRegionalIncomeMetadata(int startYear, int endYear, java.util.List<String> lineCodesList)
+      throws IOException, InterruptedException {
+    if (lineCodesList == null || lineCodesList.isEmpty()) {
+      LOGGER.warn("No line codes provided for download");
+      return;
+    }
+
+    LOGGER.info("Downloading {} line codes for years {}-{}", lineCodesList.size(), startYear, endYear);
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "regional_income";
+
+    for (String lineCode : lineCodesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        // Build relative path
+        String relativePath = buildPartitionPath(tableName, year) + "/line=" + lineCode + "/" + tableName + ".json";
+
+        // Check if already cached
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("LineCode", lineCode);
+
+        if (isCachedOrExists(tableName, year, params, relativePath)) {
+          skippedCount++;
+          continue;
+        }
+
+        // Download via metadata-driven executeDownload()
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("LineCode", lineCode);
+
+          String cachedPath = executeDownload(tableName, variables);
+          downloadedCount++;
+
+          if (downloadedCount % 10 == 0) {
+            LOGGER.info("Downloaded {}/{} line codes (skipped {} cached)", downloadedCount,
+                lineCodesList.size() * (endYear - startYear + 1), skippedCount);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Error downloading line code {} for year {}: {}", lineCode, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("Regional income download complete: downloaded {} line-years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts regional income data using metadata-driven pattern.
+   */
+  public void convertRegionalIncomeMetadata(int startYear, int endYear, java.util.List<String> lineCodesList)
+      throws IOException {
+    if (lineCodesList == null || lineCodesList.isEmpty()) {
+      LOGGER.warn("No line codes provided for conversion");
+      return;
+    }
+
+    LOGGER.info("Converting {} line codes to Parquet for years {}-{}", lineCodesList.size(), startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "regional_income";
+
+    for (String lineCode : lineCodesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        String seriesPartition = "type=" + tableName + "/line=" + lineCode + "/year=" + year;
+        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("LineCode", lineCode);
+
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("LineCode", lineCode);
+          convertCachedJsonToParquet(tableName, variables);
+          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          convertedCount++;
+        } catch (Exception e) {
+          LOGGER.error("Error converting line code {} for year {}: {}", lineCode, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("Regional income conversion complete: converted {} line-years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
+  /**
+   * Downloads trade statistics data using metadata-driven pattern.
+   * This table has no iteration (single table T40205B).
+   */
+  public void downloadTradeStatisticsMetadata(int startYear, int endYear)
+      throws IOException, InterruptedException {
+    LOGGER.info("Downloading trade statistics for years {}-{}", startYear, endYear);
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "trade_statistics";
+
+    for (int year = startYear; year <= endYear; year++) {
+      String relativePath = buildPartitionPath(tableName, year) + "/" + tableName + ".json";
+
+      if (isCachedOrExists(tableName, year, new java.util.HashMap<>(), relativePath)) {
+        skippedCount++;
+        continue;
+      }
+
+      try {
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+
+        String cachedPath = executeDownload(tableName, variables);
+        downloadedCount++;
+      } catch (Exception e) {
+        LOGGER.error("Error downloading trade statistics for year {}: {}", year, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Trade statistics download complete: downloaded {} years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts trade statistics data using metadata-driven pattern.
+   */
+  public void convertTradeStatisticsMetadata(int startYear, int endYear) throws IOException {
+    LOGGER.info("Converting trade statistics to Parquet for years {}-{}", startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "trade_statistics";
+
+    for (int year = startYear; year <= endYear; year++) {
+      String seriesPartition = "type=" + tableName + "/year=" + year;
+      String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
+      String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+
+      if (isParquetConvertedOrExists(tableName, year, new java.util.HashMap<>(), rawPath, parquetPath)) {
+        skippedCount++;
+        continue;
+      }
+
+      try {
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        convertCachedJsonToParquet(tableName, variables);
+        cacheManifest.markParquetConverted(tableName, year, new java.util.HashMap<>(), parquetPath);
+        convertedCount++;
+      } catch (Exception e) {
+        LOGGER.error("Error converting trade statistics for year {}: {}", year, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Trade statistics conversion complete: converted {} years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
+  /**
+   * Downloads ITA data using metadata-driven pattern.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param itaIndicatorsList List of ITA indicator codes to download
+   */
+  public void downloadItaDataMetadata(int startYear, int endYear, java.util.List<String> itaIndicatorsList)
+      throws IOException, InterruptedException {
+    if (itaIndicatorsList == null || itaIndicatorsList.isEmpty()) {
+      LOGGER.warn("No ITA indicators provided for download");
+      return;
+    }
+
+    LOGGER.info("Downloading {} ITA indicators for years {}-{}", itaIndicatorsList.size(), startYear, endYear);
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "ita_data";
+
+    for (String indicator : itaIndicatorsList) {
+      for (int year = startYear; year <= endYear; year++) {
+        String relativePath = buildPartitionPath(tableName, year) + "/indicator=" + indicator + "/" + tableName + ".json";
+
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("Indicator", indicator);
+
+        if (isCachedOrExists(tableName, year, params, relativePath)) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("Indicator", indicator);
+
+          String cachedPath = executeDownload(tableName, variables);
+          downloadedCount++;
+
+          if (downloadedCount % 10 == 0) {
+            LOGGER.info("Downloaded {}/{} ITA indicators (skipped {} cached)", downloadedCount,
+                itaIndicatorsList.size() * (endYear - startYear + 1), skippedCount);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Error downloading ITA indicator {} for year {}: {}", indicator, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("ITA data download complete: downloaded {} indicator-years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts ITA data using metadata-driven pattern.
+   */
+  public void convertItaDataMetadata(int startYear, int endYear, java.util.List<String> itaIndicatorsList)
+      throws IOException {
+    if (itaIndicatorsList == null || itaIndicatorsList.isEmpty()) {
+      LOGGER.warn("No ITA indicators provided for conversion");
+      return;
+    }
+
+    LOGGER.info("Converting {} ITA indicators to Parquet for years {}-{}", itaIndicatorsList.size(), startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "ita_data";
+
+    for (String indicator : itaIndicatorsList) {
+      for (int year = startYear; year <= endYear; year++) {
+        String seriesPartition = "type=" + tableName + "/indicator=" + indicator + "/year=" + year;
+        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("Indicator", indicator);
+
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("Indicator", indicator);
+          convertCachedJsonToParquet(tableName, variables);
+          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          convertedCount++;
+        } catch (Exception e) {
+          LOGGER.error("Error converting ITA indicator {} for year {}: {}", indicator, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("ITA data conversion complete: converted {} indicator-years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
+  /**
+   * Downloads industry GDP data using metadata-driven pattern.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @param keyIndustriesList List of industry codes to download
+   */
+  public void downloadIndustryGdpMetadata(int startYear, int endYear, java.util.List<String> keyIndustriesList)
+      throws IOException, InterruptedException {
+    if (keyIndustriesList == null || keyIndustriesList.isEmpty()) {
+      LOGGER.warn("No industries provided for download");
+      return;
+    }
+
+    LOGGER.info("Downloading {} industries for years {}-{}", keyIndustriesList.size(), startYear, endYear);
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "industry_gdp";
+
+    for (String industry : keyIndustriesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        String relativePath = buildPartitionPath(tableName, year) + "/industry=" + industry + "/" + tableName + ".json";
+
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("Industry", industry);
+
+        if (isCachedOrExists(tableName, year, params, relativePath)) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("Industry", industry);
+
+          String cachedPath = executeDownload(tableName, variables);
+          downloadedCount++;
+
+          if (downloadedCount % 10 == 0) {
+            LOGGER.info("Downloaded {}/{} industries (skipped {} cached)", downloadedCount,
+                keyIndustriesList.size() * (endYear - startYear + 1), skippedCount);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Error downloading industry {} for year {}: {}", industry, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("Industry GDP download complete: downloaded {} industry-years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts industry GDP data using metadata-driven pattern.
+   */
+  public void convertIndustryGdpMetadata(int startYear, int endYear, java.util.List<String> keyIndustriesList)
+      throws IOException {
+    if (keyIndustriesList == null || keyIndustriesList.isEmpty()) {
+      LOGGER.warn("No industries provided for conversion");
+      return;
+    }
+
+    LOGGER.info("Converting {} industries to Parquet for years {}-{}", keyIndustriesList.size(), startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    String tableName = "industry_gdp";
+
+    for (String industry : keyIndustriesList) {
+      for (int year = startYear; year <= endYear; year++) {
+        String seriesPartition = "type=" + tableName + "/industry=" + industry + "/year=" + year;
+        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("Industry", industry);
+
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          java.util.Map<String, String> variables = new java.util.HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("Industry", industry);
+          convertCachedJsonToParquet(tableName, variables);
+          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          convertedCount++;
+        } catch (Exception e) {
+          LOGGER.error("Error converting industry {} for year {}: {}", industry, year, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("Industry GDP conversion complete: converted {} industry-years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
 }
