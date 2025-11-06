@@ -596,18 +596,18 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null
-        ? new FredDataDownloader(econCacheDir, econOperatingDirectory, fredApiKey, cacheStorageProvider, storageProvider, cacheManifest)
+        ? new FredDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     TreasuryDataDownloader treasuryDownloader =
-        new TreasuryDataDownloader(econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
+        new TreasuryDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
     BeaDataDownloader beaDownloader = beaApiKey != null && econParquetDir != null
         ? new BeaDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     WorldBankDataDownloader worldBankDownloader =
-        new WorldBankDataDownloader(econCacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
+        new WorldBankDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
     // Create and register the ECON converter
     EconRawToParquetConverter econConverter =
