@@ -42,7 +42,7 @@ import java.util.Map;
  * Downloads and converts Bureau of Economic Analysis (BEA) data to Parquet format.
  * Provides detailed GDP components, personal income, trade statistics, and regional data.
  *
- * <p>Requires a BEA API key from https://apps.bea.gov/api/signup/
+ * <p>Requires a BEA API key from <a href="https://apps.bea.gov/api/signup/">...</a>
  */
 public class BeaDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaDataDownloader.class);
@@ -353,20 +353,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Save raw JSON data to local cache
     // jsonFile already defined above at line 274
     Map<String, Object> data = new HashMap<>();
-    List<Map<String, Object>> componentsData = new ArrayList<>();
-
-    for (GdpComponent component : components) {
-      Map<String, Object> compData = new HashMap<>();
-      compData.put("table_id", component.tableId);
-      compData.put("line_number", component.lineNumber);
-      compData.put("line_description", component.lineDescription);
-      compData.put("series_code", component.seriesCode);
-      compData.put("year", component.year);
-      compData.put("value", component.value);
-      compData.put("units", component.units);
-      compData.put("frequency", component.frequency);
-      componentsData.add(compData);
-    }
+    List<Map<String, Object>> componentsData = getMaps(components);
 
     data.put("components", componentsData);
     data.put("download_date", LocalDate.now().toString());
@@ -383,6 +370,24 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Mark as cached in manifest
     cacheManifest.markCached("gdp_components", year, cacheParams, relativePath, 0L);
     cacheManifest.save(operatingDirectory);
+  }
+
+  private static List<Map<String, Object>> getMaps(List<GdpComponent> components) {
+    List<Map<String, Object>> componentsData = new ArrayList<>();
+
+    for (GdpComponent component : components) {
+      Map<String, Object> compData = new HashMap<>();
+      compData.put("table_id", component.tableId);
+      compData.put("line_number", component.lineNumber);
+      compData.put("line_description", component.lineDescription);
+      compData.put("series_code", component.seriesCode);
+      compData.put("year", component.year);
+      compData.put("value", component.value);
+      compData.put("units", component.units);
+      compData.put("frequency", component.frequency);
+      componentsData.add(compData);
+    }
+    return componentsData;
   }
 
   /**
@@ -2006,120 +2011,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads state GDP data using BEA Regional API.
-   * Uses the SAGDP2N table for annual state GDP by NAICS industry.
-   */
-  public void downloadStateGdp(int startYear, int endYear) throws IOException, InterruptedException {
-    if (apiKey == null || apiKey.isEmpty()) {
-      throw new IllegalStateException("BEA API key is required. Set BEA_API_KEY environment variable.");
-    }
-
-    // Build RELATIVE path (StorageProvider will add base path)
-    String relativePath =
-        String.format("type=state_gdp/year_range=%d_%d/state_gdp.parquet", startYear, endYear);
-
-    List<StateGdp> gdpData = new ArrayList<>();
-
-    // Build year list
-    List<String> years = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      years.add(String.valueOf(year));
-    }
-    String yearParam = String.join(",", years);
-
-    // Download state GDP data
-    // TableName=SAGDP1 for state annual GDP summary
-    // LineCode=1 for Real GDP
-    String params =
-        String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON", apiKey, Datasets.REGIONAL, yearParam);
-
-    String url = BEA_API_BASE + "?" + params;
-
-    HttpRequest request = HttpRequest.newBuilder()
-        .uri(URI.create(url))
-        .timeout(Duration.ofSeconds(30))
-        .GET()
-        .build();
-
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-    if (response.statusCode() == 200) {
-      JsonNode root = MAPPER.readTree(response.body());
-      JsonNode results = root.get("BEAAPI").get("Results");
-      JsonNode dataArray = results.get("Data");
-      if (dataArray != null && dataArray.isArray()) {
-        // Get the statistic description from Results level
-        String statistic = results.get("Statistic").asText("Real Gross Domestic Product (GDP)");
-
-        for (JsonNode record : dataArray) {
-          StateGdp gdp = new StateGdp();
-          gdp.geoFips = record.get("GeoFips").asText();
-          gdp.geoName = record.get("GeoName").asText();
-          gdp.lineCode = record.get("Code").asText();
-          gdp.lineDescription = statistic; // Use statistic from Results level
-          gdp.year = Integer.parseInt(record.get("TimePeriod").asText());
-
-          // Handle different value formats
-          String valueStr = record.get("DataValue").asText();
-          if ("NaN".equals(valueStr) || valueStr.isEmpty()) {
-            gdp.value = 0.0;
-          } else {
-            gdp.value = Double.parseDouble(valueStr.replaceAll(",", ""));
-          }
-
-          gdp.units = record.get("CL_UNIT").asText("Millions of chained 2017 dollars");
-          gdpData.add(gdp);
-        }
-      }
-    }
-
-    // Also fetch per capita GDP (LineCode=1 with different units - skip for now since SAGDP1 only has total GDP)
-    // Per capita data requires different calculation or table
-    /* params = String.format("UserID=%s&method=GetData&datasetname=%s&TableName=SAGDP1&LineCode=1&GeoFips=STATE&Year=%s&ResultFormat=JSON",
-        apiKey, Datasets.REGIONAL, yearParam); */
-
-    url = BEA_API_BASE + "?" + params;
-    request = HttpRequest.newBuilder()
-        .uri(URI.create(url))
-        .timeout(Duration.ofSeconds(30))
-        .GET()
-        .build();
-
-    response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-    if (response.statusCode() == 200) {
-      JsonNode root = MAPPER.readTree(response.body());
-      JsonNode results = root.get("BEAAPI").get("Results");
-      JsonNode dataArray = results.get("Data");
-      if (dataArray != null && dataArray.isArray()) {
-        for (JsonNode record : dataArray) {
-          StateGdp gdp = new StateGdp();
-          gdp.geoFips = record.get("GeoFips").asText();
-          gdp.geoName = record.get("GeoName").asText();
-          gdp.lineCode = record.get("Code").asText();
-          gdp.lineDescription = "Per capita real GDP";
-          gdp.year = record.get("TimePeriod").asInt();
-
-          String valueStr = record.get("DataValue").asText();
-          if ("NaN".equals(valueStr) || valueStr.isEmpty()) {
-            gdp.value = 0.0;
-          } else {
-            gdp.value = Double.parseDouble(valueStr.replaceAll(",", ""));
-          }
-
-          gdp.units = "Dollars";
-          gdpData.add(gdp);
-        }
-      }
-    }
-
-    // Convert to Parquet
-    writeStateGdpParquet(gdpData, relativePath);
-
-    LOGGER.debug("State GDP data saved to: {} ({} records)", relativePath, gdpData.size());
-  }
-
-  /**
    * Downloads state GDP data for a single year.
    */
   public void downloadStateGdpForYear(int year) throws IOException, InterruptedException {
@@ -2286,14 +2177,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts state GDP JSON to Parquet format.
    */
-  public void convertStateGdpToParquet(String sourceDirPath, String targetFilePath) throws IOException {
-    LOGGER.debug("Converting state GDP data from {} to parquet: {}", sourceDirPath, targetFilePath);
+  public void convertStateGdpToParquet(String jsonFilePath, String targetFilePath) throws IOException {
+    LOGGER.debug("Converting state GDP data from {} to parquet: {}", jsonFilePath, targetFilePath);
 
 
     List<StateGdp> gdpData = new ArrayList<>();
 
     // Read state GDP JSON file from cache using cacheStorageProvider
-    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "state_gdp.json");
+//    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "state_gdp.json");
     if (cacheStorageProvider.exists(jsonFilePath)) {
       try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath);
            InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
@@ -2324,7 +2215,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     if (!gdpData.isEmpty()) {
-      // Write parquet file
+      // Write a parquet file
       writeStateGdpParquet(gdpData, targetFilePath);
       LOGGER.debug("Converted state GDP data to parquet: {} ({} records)", targetFilePath, gdpData.size());
 
@@ -2339,7 +2230,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         LOGGER.warn("Failed to clean up metadata files for {}: {}", targetFilePath, e.getMessage());
       }
     } else {
-      LOGGER.warn("No state GDP data found in {}", sourceDirPath);
+      LOGGER.warn("No state GDP data found in {}", jsonFilePath);
     }
   }
 
@@ -2347,7 +2238,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Converts cached BEA GDP components data to Parquet format.
    * This method is called by EconSchemaFactory after downloading data.
    *
-   * @param sourceDir Directory containing cached BEA JSON data
+   * @param sourceDirPath Directory containing cached BEA JSON data
    * @param targetFilePath Target parquet file path to create
    */
   public void convertToParquet(String sourceDirPath, String targetFilePath) throws IOException {
@@ -2495,13 +2386,87 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Detects frequency codes present in trade_statistics.json under the given year folder.
+   */
+  public java.util.Set<String> detectTradeFrequencies(String sourceDirPath) throws IOException {
+    java.util.Set<String> freqs = new java.util.LinkedHashSet<>();
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "trade_statistics.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      return freqs;
+    }
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    java.util.List<java.util.Map<String, Object>> records = parseTradeStatisticsJson(jsonContent);
+    for (java.util.Map<String, Object> rec : records) {
+      Object f = rec.get("frequency");
+      if (f != null) {
+        String v = f.toString().trim();
+        if (!v.isEmpty()) {
+          freqs.add(v);
+        }
+      }
+    }
+    return freqs;
+  }
+
+  /**
+   * Converts trade_statistics to Parquet for a specific frequency bucket while excluding
+   * the frequency column from rows (frequency is a partition key). Year stays in rows to
+   * match current schema.
+   */
+  public void convertTradeStatisticsToParquetForFrequency(String sourceDirPath, String targetFilePath, String frequency) throws IOException {
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "trade_statistics.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("Trade statistics JSON file not found for frequency {}: {}", frequency, jsonFilePath);
+      // Still create an empty Parquet to materialize the partition
+      writeTradeStatisticsMapParquet(java.util.Collections.emptyList(), targetFilePath);
+      return;
+    }
+
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    java.util.List<java.util.Map<String, Object>> all = parseTradeStatisticsJson(jsonContent);
+
+    java.util.List<java.util.Map<String, Object>> filtered = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> rec : all) {
+      Object f = rec.get("frequency");
+      String freq = f == null ? "" : f.toString();
+      if (freq.equalsIgnoreCase(frequency)) {
+        java.util.Map<String, Object> out = new java.util.HashMap<>();
+        // Copy all known non-partition fields (keep 'year' per current schema)
+        if (rec.containsKey("table_id")) out.put("table_id", rec.get("table_id"));
+        if (rec.containsKey("line_number")) out.put("line_number", rec.get("line_number"));
+        if (rec.containsKey("line_description")) out.put("line_description", rec.get("line_description"));
+        if (rec.containsKey("series_code")) out.put("series_code", rec.get("series_code"));
+        // drop 'year' (partition key)
+        if (rec.containsKey("value")) out.put("value", rec.get("value"));
+        if (rec.containsKey("units")) out.put("units", rec.get("units"));
+        if (rec.containsKey("trade_type")) out.put("trade_type", rec.get("trade_type"));
+        if (rec.containsKey("category")) out.put("category", rec.get("category"));
+        if (rec.containsKey("trade_balance")) out.put("trade_balance", rec.get("trade_balance"));
+        // drop 'frequency'
+        filtered.add(out);
+      }
+    }
+
+    LOGGER.info("Converting trade_statistics to parquet for frequency={} at {} ({} rows)", frequency, targetFilePath, filtered.size());
+    writeTradeStatisticsMapParquet(filtered, targetFilePath);
+  }
+
+  /**
    * Converts ITA data JSON files to Parquet format.
    */
   public void convertItaDataToParquet(String sourceDirPath, String targetFilePath) throws IOException {
     LOGGER.debug("Converting ITA data from {} to parquet: {}", sourceDirPath, targetFilePath);
 
+    // Backward-compat single-file conversion (legacy path without frequency partition)
+    // Reads full JSON and writes as-is (including frequency). Retained for compatibility
+    // but not used by the new frequency-partitioned conversion in EconSchemaFactory.
 
-    // Read JSON file from cache using cacheStorageProvider
     String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "ita_data.json");
     if (!cacheStorageProvider.exists(jsonFilePath)) {
       LOGGER.warn("ITA data JSON file not found: {}", jsonFilePath);
@@ -2518,8 +2483,78 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       LOGGER.warn("No ITA data records found in {}, creating empty Parquet file", jsonFilePath);
     }
 
-    // Always write the Parquet file, even if empty - this ensures the table is discoverable
     writeItaDataParquetFromMaps(records, targetFilePath);
+  }
+
+  /**
+   * Converts ITA data to Parquet for a specific frequency bucket (A/Q/M) while
+   * excluding partition columns (frequency, year) from Parquet rows.
+   * Raw JSON remains under type=indicators/year=YYYY/ita_data.json.
+   */
+  /**
+   * Detects the set of frequency codes present in the ITA JSON for a given year directory.
+   * Raw JSON path: type=indicators/year=YYYY/ita_data.json
+   */
+  public java.util.Set<String> detectItaFrequencies(String sourceDirPath) throws IOException {
+    java.util.Set<String> freqs = new java.util.LinkedHashSet<>();
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "ita_data.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      return freqs; // empty
+    }
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    List<Map<String, Object>> all = parseItaDataJson(jsonContent);
+    for (Map<String, Object> rec : all) {
+      Object f = rec.get("frequency");
+      if (f != null) {
+        String v = f.toString().trim();
+        if (!v.isEmpty()) {
+          freqs.add(v);
+        }
+      }
+    }
+    return freqs;
+  }
+
+  public void convertItaDataToParquetForFrequency(String sourceDirPath, String targetFilePath, String frequency) throws IOException {
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "ita_data.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("ITA data JSON file not found for frequency {}: {}", frequency, jsonFilePath);
+      // Still create an empty Parquet to materialize the partition
+      writeItaDataParquetFromMaps(java.util.Collections.emptyList(), targetFilePath);
+      return;
+    }
+
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    List<Map<String, Object>> all = parseItaDataJson(jsonContent);
+
+    // Filter by frequency (case-insensitive) and drop partition fields
+    List<Map<String, Object>> filtered = new java.util.ArrayList<>();
+    for (Map<String, Object> rec : all) {
+      Object f = rec.get("frequency");
+      String freq = f == null ? "" : f.toString();
+      if (freq.equalsIgnoreCase(frequency)) {
+        Map<String, Object> out = new java.util.HashMap<>();
+        // Keep only non-partition columns
+        if (rec.containsKey("indicator")) out.put("indicator", rec.get("indicator"));
+        if (rec.containsKey("indicator_description")) out.put("indicator_description", rec.get("indicator_description"));
+        if (rec.containsKey("area_or_country")) out.put("area_or_country", rec.get("area_or_country"));
+        if (rec.containsKey("value")) out.put("value", rec.get("value"));
+        if (rec.containsKey("units")) out.put("units", rec.get("units"));
+        if (rec.containsKey("time_series_id")) out.put("time_series_id", rec.get("time_series_id"));
+        if (rec.containsKey("time_series_description")) out.put("time_series_description", rec.get("time_series_description"));
+        // intentionally drop 'frequency' and 'year' (partition keys)
+        filtered.add(out);
+      }
+    }
+
+    LOGGER.info("Converting ITA data to parquet for frequency={} at {} ({} rows)", frequency, targetFilePath, filtered.size());
+    writeItaDataParquetFromMaps(filtered, targetFilePath);
   }
 
   private List<Map<String, Object>> parseItaDataJson(String jsonContent) throws IOException {
@@ -2528,7 +2563,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     List<Map<String, Object>> records = new ArrayList<>();
 
-    // First try the simplified format (what we actually have)
+    // First, try the simplified format (what we actually have)
     JsonNode itaData = rootNode.path("ita_data");
     if (itaData.isArray()) {
       for (JsonNode item : itaData) {
@@ -2661,7 +2696,74 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("industry_gdp");
     storageProvider.writeAvroParquet(outputFile, columns, records, "IndustryGdp", "IndustryGdp");
-    LOGGER.debug("Industry GDP Parquet written (Map version): {} ({} records)", outputFile, records.size());
+  }
+
+  /**
+   * Detects frequency codes present in industry_gdp.json under the given year folder.
+   */
+  public java.util.Set<String> detectIndustryGdpFrequencies(String sourceDirPath) throws IOException {
+    java.util.Set<String> freqs = new java.util.LinkedHashSet<>();
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "industry_gdp.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      return freqs;
+    }
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    java.util.List<java.util.Map<String, Object>> records = parseIndustryGdpJson(jsonContent);
+    for (java.util.Map<String, Object> rec : records) {
+      Object f = rec.get("frequency");
+      if (f != null) {
+        String v = f.toString().trim();
+        if (!v.isEmpty()) {
+          freqs.add(v);
+        }
+      }
+    }
+    return freqs;
+  }
+
+  /**
+   * Converts industry_gdp to Parquet for a specific frequency bucket while excluding
+   * the frequency and year columns from rows (both are partition keys).
+   */
+  public void convertIndustryGdpToParquetForFrequency(String sourceDirPath, String targetFilePath, String frequency) throws IOException {
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "industry_gdp.json");
+    if (!cacheStorageProvider.exists(jsonFilePath)) {
+      LOGGER.warn("Industry GDP JSON file not found for frequency {}: {}", frequency, jsonFilePath);
+      // Create empty parquet to materialize the partition
+      writeIndustryGdpParquetFromMaps(java.util.Collections.emptyList(), targetFilePath);
+      return;
+    }
+
+    String jsonContent;
+    try (InputStream inputStream = cacheStorageProvider.openInputStream(jsonFilePath)) {
+      jsonContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    java.util.List<java.util.Map<String, Object>> all = parseIndustryGdpJson(jsonContent);
+
+    java.util.List<java.util.Map<String, Object>> filtered = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> rec : all) {
+      Object f = rec.get("frequency");
+      String freq = f == null ? "" : f.toString();
+      if (freq.equalsIgnoreCase(frequency)) {
+        java.util.Map<String, Object> out = new java.util.HashMap<>();
+        // Copy non-partition fields expected by schema
+        if (rec.containsKey("table_id")) out.put("table_id", rec.get("table_id"));
+        if (rec.containsKey("quarter")) out.put("quarter", rec.get("quarter"));
+        if (rec.containsKey("industry_code")) out.put("industry_code", rec.get("industry_code"));
+        if (rec.containsKey("industry_description")) out.put("industry_description", rec.get("industry_description"));
+        if (rec.containsKey("value")) out.put("value", rec.get("value"));
+        if (rec.containsKey("units")) out.put("units", rec.get("units"));
+        if (rec.containsKey("note_ref")) out.put("note_ref", rec.get("note_ref"));
+        // drop 'frequency' and 'year'
+        filtered.add(out);
+      }
+    }
+
+    LOGGER.info("Converting industry_gdp to parquet for frequency={} at {} ({} rows)", frequency, targetFilePath, filtered.size());
+    writeIndustryGdpParquetFromMaps(filtered, targetFilePath);
   }
 
   private String parseTradeType(String description) {

@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -95,6 +94,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     CENSUS_REGIONS.put("0200", "Midwest");
     CENSUS_REGIONS.put("0300", "South");
     CENSUS_REGIONS.put("0400", "West");
+  }
+
+  // Metro CPI area codes mapping: Publication Code → CPI Area Code
+  // Format for CPI series: CUUR{area_code}SA0 where area_code is like S35E, S49G, etc.
+  private static final Map<String, String> METRO_CPI_CODES = new HashMap<>();
+  static {
+    METRO_CPI_CODES.put("A100", "S35D");  // New York-Newark-Jersey City, NY-NJ-PA
+    METRO_CPI_CODES.put("A400", "S49G");  // Los Angeles-Long Beach-Anaheim, CA
+    METRO_CPI_CODES.put("A207", "S12A");  // Chicago-Naperville-Elgin, IL-IN-WI
+    METRO_CPI_CODES.put("A425", "S37B");  // Houston-The Woodlands-Sugar Land, TX
+    METRO_CPI_CODES.put("A423", "S49B");  // Phoenix-Mesa-Scottsdale, AZ
+    METRO_CPI_CODES.put("A102", "S12B");  // Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
+    METRO_CPI_CODES.put("A426", null);    // San Antonio - No CPI data available
+    METRO_CPI_CODES.put("A421", "S49E");  // San Diego-Carlsbad, CA
+    METRO_CPI_CODES.put("A127", "S23A");  // Dallas-Fort Worth-Arlington, TX
+    METRO_CPI_CODES.put("A429", "S49A");  // San Jose-Sunnyvale-Santa Clara, CA (San Francisco-Oakland-Hayward)
+    METRO_CPI_CODES.put("A438", null);    // Austin - No CPI data available
+    METRO_CPI_CODES.put("A420", "S35C");  // Jacksonville, FL (part of Miami-Fort Lauderdale)
+    METRO_CPI_CODES.put("A103", "S35E");  // Boston-Cambridge-Newton, MA-NH
+    METRO_CPI_CODES.put("A428", "S48B");  // Seattle-Tacoma-Bellevue, WA
+    METRO_CPI_CODES.put("A427", "S48A");  // Denver-Aurora-Lakewood, CO
+    METRO_CPI_CODES.put("A101", "S35B");  // Washington-Arlington-Alexandria, DC-VA-MD-WV
+    METRO_CPI_CODES.put("A211", "S23B");  // Detroit-Warren-Dearborn, MI
+    METRO_CPI_CODES.put("A104", null);    // Cleveland - No CPI data available
+    METRO_CPI_CODES.put("A212", "S24A");  // Minneapolis-St. Paul-Bloomington, MN-WI
+    METRO_CPI_CODES.put("A422", "S35C");  // Miami-Fort Lauderdale-West Palm Beach, FL
+    METRO_CPI_CODES.put("A419", "S35A");  // Atlanta-Sandy Springs-Roswell, GA
+    METRO_CPI_CODES.put("A437", "S49C");  // Portland-Vancouver-Hillsboro, OR-WA
+    METRO_CPI_CODES.put("A424", "S49D");  // Riverside-San Bernardino-Ontario, CA
+    METRO_CPI_CODES.put("A320", "S24B");  // St. Louis, MO-IL
+    METRO_CPI_CODES.put("A319", null);    // Baltimore - No CPI data available
+    METRO_CPI_CODES.put("A433", "S35D");  // Tampa-St. Petersburg-Clearwater, FL (shares NYC code)
+    METRO_CPI_CODES.put("A440", null);    // Anchorage - No CPI data available
   }
 
   // Metro area codes for major metropolitan areas (Publication codes)
@@ -300,20 +332,27 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * Generates BLS metro area CPI series ID.
      * Format: CUUR{AREA_CODE}SA0
-     * @param metroAreaCode Metro area code (e.g., "A100" for NYC)
-     * Area code "A" indicates semi-annual publication frequency
+     * @param metroAreaCode Metro area publication code (e.g., "A100" for NYC)
+     * @return CPI series ID or null if metro doesn't have CPI data
      */
     public static String getMetroCpiSeriesId(String metroAreaCode) {
-      return "CUUR" + metroAreaCode + "SA0";
+      String cpiAreaCode = METRO_CPI_CODES.get(metroAreaCode);
+      if (cpiAreaCode == null) {
+        // Some metros don't have CPI data available
+        return null;
+      }
+      return "CUUR" + cpiAreaCode + "SA0";
     }
 
     /**
-     * Gets all metro area CPI series IDs for 27 major metros.
+     * Gets all metro area CPI series IDs for metros that have CPI data.
      */
     public static List<String> getAllMetroCpiSeriesIds() {
       List<String> seriesIds = new ArrayList<>();
-      for (String areaCode : METRO_AREA_CODES.keySet()) {
-        seriesIds.add(getMetroCpiSeriesId(areaCode));
+      for (Map.Entry<String, String> entry : METRO_CPI_CODES.entrySet()) {
+        if (entry.getValue() != null) {
+          seriesIds.add(getMetroCpiSeriesId(entry.getKey()));
+        }
       }
       return seriesIds;
     }
@@ -849,17 +888,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = buildPartitionPath("employment_statistics", DataFrequency.MONTHLY, year);
-      String jsonFilePath = outputDirPath + "/employment_statistics.json";
-      Map<String, String> cacheParams = new HashMap<>();
-
-      if (isCachedOrExists("employment_statistics", year, cacheParams, jsonFilePath)) {
-        LOGGER.info("Found cached employment statistics for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
 
     if (uncachedYears.isEmpty()) {
       LOGGER.info("All employment statistics data cached (years {}-{})", startYear, endYear);
@@ -1407,8 +1435,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 frequency, year, "annual".equals(frequency) ? "80" : "323", url);
 
     try {
-      // Download file (downloadFile() adds required User-Agent header for data.bls.gov)
-      byte[] zipData = downloadFile(url);
+      // Download file (blsDownloadFile() adds required User-Agent header for data.bls.gov)
+      byte[] zipData = blsDownloadFile(url);
 
       if (zipData == null) {
         throw new IOException("Failed to download QCEW bulk file: " + url);
@@ -2166,7 +2194,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @return File contents as a byte array
    * @throws IOException if download fails
    */
-  private byte[] downloadFile(String url) throws IOException {
+  private byte[] blsDownloadFile(String url) throws IOException {
     HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofMinutes(10)) // Large files may take time
@@ -2369,7 +2397,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_annual_singlefile.zip", year, year);
 
     LOGGER.info("Downloading QCEW CSV for year {} from {}", year, url);
-    byte[] zipData = downloadFile(url);
+    byte[] zipData = blsDownloadFile(url);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
@@ -2619,7 +2647,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     LOGGER.info("Downloading JOLTS FTP file from {}", url);
-    byte[] data = downloadFile(url);
+    byte[] data = blsDownloadFile(url);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
@@ -4014,7 +4042,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, List<Map<String, Object>>> seriesData = new HashMap<>();
 
     // Read metro CPI JSON file from cache using cacheStorageProvider
-    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "metro_cpi.json");
+    targetPath = targetPath.replace("/type=metro_cpi", "/type=metro_cpi/frequency=monthly");
+    String jsonFilePath = cacheStorageProvider.resolvePath(sourceDirPath, "metro_cpi.json").replace("/type=metro_cpi", "/type=metro_cpi/frequency=monthly");
     if (!cacheStorageProvider.exists(jsonFilePath)) {
       LOGGER.warn("No metro_cpi.json found in {}", sourceDirPath);
       return;
