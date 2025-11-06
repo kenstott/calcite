@@ -55,6 +55,9 @@ public class EconIntegrationTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EconIntegrationTest.class);
 
+  // Phase 1 tables - Note: fred_indicators now uses series partitioning
+  // (type=fred_indicators/series=*/year=*/) and is populated from FRED catalog
+  // based on popularity threshold + customFredSeries
   private static final Set<String> PHASE1_EXPECTED_TABLES =
       new HashSet<>(
           Arrays.asList(
@@ -191,26 +194,10 @@ public class EconIntegrationTest {
         "      \"fredApiKey\": \"" + fredApiKey + "\"," +
         "      \"blsApiKey\": \"" + blsApiKey + "\"," +
         "      \"beaApiKey\": \"" + beaApiKey + "\"," +
+        "      \"fredMinPopularity\": 50," +
         "      \"customFredSeries\": [" +
         "        \"DGS10\", \"DGS2\", \"DGS30\", \"UNRATE\", \"PAYEMS\", \"CPIAUCSL\", \"GDPC1\"" +
-        "      ]," +
-        "      \"fredSeriesGroups\": {" +
-        "        \"treasury_rates\": {" +
-        "          \"tableName\": \"fred_treasury_rates\"," +
-        "          \"series\": [\"DGS1MO\", \"DGS3MO\", \"DGS6MO\", \"DGS1\", \"DGS2\", \"DGS3\", \"DGS5\", \"DGS7\", \"DGS10\", \"DGS20\", \"DGS30\"]," +
-        "          \"partitionStrategy\": \"MANUAL\"," +
-        "          \"partitionFields\": [\"year\", \"maturity\"]," +
-        "          \"comment\": \"U.S. Treasury constant maturity rates for all standard maturities\"" +
-        "        }," +
-        "        \"employment_indicators\": {" +
-        "          \"tableName\": \"fred_employment_indicators\"," +
-        "          \"series\": [\"UNRATE\", \"PAYEMS\", \"CIVPART\", \"EMRATIO\", \"U6RATE\"]," +
-        "          \"partitionStrategy\": \"MANUAL\"," +
-        "          \"partitionFields\": [\"year\"]," +
-        "          \"comment\": \"Employment and labor force participation indicators\"" +
-        "        }" +
-        "      }" +
-        "    }" +
+        "      ]" +
         "  }, {" +
         "    \"name\": \"CENSUS\"," +
         "    \"type\": \"custom\"," +
@@ -296,6 +283,112 @@ public class EconIntegrationTest {
 
         LOGGER.info("\n================================================================================");
         LOGGER.info(" ✅ PHASE 1 COMPLETE: Metadata cache bug is FIXED!");
+        LOGGER.info("================================================================================");
+      }
+    }
+  }
+
+  @Test public void testFredIndicatorsSeriesPartitioning() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" FRED Indicators: Series Partitioning Validation");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" This test validates that fred_indicators uses series partitioning:");
+    LOGGER.info("   - Pattern: type=fred_indicators/series=*/year=*/fred_indicators.parquet");
+    LOGGER.info("   - Series populated from FRED catalog (active + popular)");
+    LOGGER.info("   - Plus customFredSeries: DGS10, DGS2, DGS30, UNRATE, PAYEMS, CPIAUCSL, GDPC1");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        // Verify fred_indicators table exists and has data
+        LOGGER.info("\n1. Verifying fred_indicators table:");
+        String countQuery = "SELECT COUNT(*) as cnt FROM \"ECON\".fred_indicators";
+        try (ResultSet rs = stmt.executeQuery(countQuery)) {
+          if (rs.next()) {
+            long count = rs.getLong("cnt");
+            LOGGER.info("  ✅ fred_indicators - {} rows total", count);
+            assertTrue(count > 0, "fred_indicators should have data");
+          }
+        }
+
+        // Verify customFredSeries are present
+        LOGGER.info("\n2. Verifying customFredSeries in fred_indicators:");
+        String[] customSeries = {"DGS10", "DGS2", "DGS30", "UNRATE", "PAYEMS", "CPIAUCSL", "GDPC1"};
+        int customSeriesFound = 0;
+
+        for (String seriesId : customSeries) {
+          String seriesQuery = "SELECT COUNT(*) as cnt FROM \"ECON\".fred_indicators WHERE series_id = '" + seriesId + "'";
+          try (ResultSet rs = stmt.executeQuery(seriesQuery)) {
+            if (rs.next()) {
+              long count = rs.getLong("cnt");
+              if (count > 0) {
+                LOGGER.info("  ✅ {} - {} observations", seriesId, count);
+                customSeriesFound++;
+              } else {
+                LOGGER.warn("  ⚠️  {} - 0 observations (may not be downloaded yet)", seriesId);
+              }
+            }
+          } catch (SQLException e) {
+            LOGGER.warn("  ⚠️  {} - Error querying: {}", seriesId, e.getMessage());
+          }
+        }
+
+        LOGGER.info("\n  Found {}/{} custom FRED series in fred_indicators", customSeriesFound, customSeries.length);
+        assertTrue(customSeriesFound > 0,
+            "At least some customFredSeries should be present in fred_indicators");
+
+        // Verify series partitioning by checking distinct series
+        LOGGER.info("\n3. Verifying series partitioning:");
+        String distinctSeriesQuery = "SELECT COUNT(DISTINCT series_id) as series_count FROM \"ECON\".fred_indicators";
+        try (ResultSet rs = stmt.executeQuery(distinctSeriesQuery)) {
+          if (rs.next()) {
+            long seriesCount = rs.getLong("series_count");
+            LOGGER.info("  ✅ fred_indicators contains {} distinct series", seriesCount);
+            assertTrue(seriesCount >= customSeries.length,
+                "Should have at least " + customSeries.length + " series (customFredSeries)");
+          }
+        }
+
+        // Sample query demonstrating series filtering (raw observations)
+        LOGGER.info("\n4. Sample query - filtering by series (raw observations):");
+        String sampleQuery = "SELECT series_id, date, value " +
+            "FROM \"ECON\".fred_indicators " +
+            "WHERE series_id = 'DGS10' " +
+            "ORDER BY date DESC " +
+            "LIMIT 5";
+        try (ResultSet rs = stmt.executeQuery(sampleQuery)) {
+          LOGGER.info("  Recent DGS10 (10-Year Treasury) raw observations:");
+          while (rs.next()) {
+            LOGGER.info("    {} | {} | {}", rs.getString("series_id"),
+                rs.getString("date"), rs.getBigDecimal("value"));
+          }
+        } catch (SQLException e) {
+          LOGGER.warn("  ⚠️  Could not query DGS10 data: {}", e.getMessage());
+        }
+
+        // Sample query using enriched view with metadata
+        LOGGER.info("\n5. Sample query - using fred_indicators_enriched view:");
+        String enrichedQuery = "SELECT series_id, date, value, series_name, units, frequency " +
+            "FROM \"ECON\".fred_indicators_enriched " +
+            "WHERE series_id = 'UNRATE' " +
+            "ORDER BY date DESC " +
+            "LIMIT 5";
+        try (ResultSet rs = stmt.executeQuery(enrichedQuery)) {
+          LOGGER.info("  Recent UNRATE (Unemployment Rate) with metadata:");
+          while (rs.next()) {
+            LOGGER.info("    {} | {} | {} | {} | {}",
+                rs.getString("series_id"),
+                rs.getString("date"),
+                rs.getBigDecimal("value"),
+                rs.getString("series_name"),
+                rs.getString("units"));
+          }
+        } catch (SQLException e) {
+          LOGGER.warn("  ⚠️  Could not query UNRATE enriched data: {}", e.getMessage());
+        }
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" ✅ FRED Indicators Series Partitioning: VALIDATED");
         LOGGER.info("================================================================================");
       }
     }

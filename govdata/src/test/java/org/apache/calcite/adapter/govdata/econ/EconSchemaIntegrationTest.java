@@ -33,7 +33,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -114,32 +116,11 @@ public class EconSchemaIntegrationTest {
     // Otherwise we'll skip the data query tests
 
     // Try to create minimal data using the downloaders if API keys are available
-    String fredKey = System.getenv("FRED_API_KEY");
     String beaKey = System.getenv("BEA_API_KEY");
     String blsKey = System.getenv("BLS_API_KEY");
 
-    if (fredKey != null) {
-      // Create FRED indicators file
-      StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
-      FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, fredKey, storageProvider, storageProvider);
-      // Download just one day of data for testing
-      try {
-        // Use the default series list for a minimal download
-        File fredParquet = fredDownloader.downloadEconomicIndicators();
-        if (fredParquet != null && fredParquet.exists()) {
-          // Move to expected location
-          File targetDir = new File(parquetDir, "source=econ/type=fred/year=2024");
-          targetDir.mkdirs();
-          // The file might already have the correct name, check first
-          if (!fredParquet.getName().equals("fred_indicators.parquet")) {
-            Files.copy(fredParquet.toPath(),
-                       new File(targetDir, "fred_indicators.parquet").toPath());
-          }
-        }
-      } catch (Exception e) {
-        // Ignore - we'll test what we can
-      }
-    }
+    // FRED downloads removed - now handled via metadata-driven approach
+    // TODO: Re-enable when executeDownload() is implemented in EconSchemaFactory
 
     if (beaKey != null) {
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);

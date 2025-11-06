@@ -30,6 +30,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -127,69 +129,8 @@ public class EconDataDownloadTest {
     verifyParquetReadable(parquetPath, "global_gdp");
   }
 
-  @Test public void testFredEconomicIndicators() throws Exception {
-    String apiKey = System.getenv("FRED_API_KEY");
-    assumeTrue(apiKey != null && !apiKey.isEmpty(),
-        "FRED_API_KEY not set, skipping FRED test");
-
-    StorageProvider storageProvider = createStorageProvider();
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
-
-    // Download just a few key indicators for 1 year
-    downloader.downloadEconomicIndicators(
-        Arrays.asList(FredDataDownloader.Series.FED_FUNDS_RATE,
-                     FredDataDownloader.Series.UNEMPLOYMENT_RATE,
-                     FredDataDownloader.Series.CPI_ALL_URBAN),
-        "2023-01-01", "2024-01-01");
-
-    // Verify parquet file was created
-    String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "source=econ/type=fred_indicators/fred_indicators.parquet");
-    assertTrue(storageProvider.exists(parquetPath));
-
-    verifyParquetReadable(parquetPath, "fred_indicators");
-  }
-
-  @Test public void testFredCustomSeriesPartitioning() throws Exception {
-    String apiKey = System.getenv("FRED_API_KEY");
-    assumeTrue(apiKey != null && !apiKey.isEmpty() && !"demo".equals(apiKey),
-        "FRED_API_KEY not set or is demo key, skipping FRED custom series test");
-
-    StorageProvider storageProvider = createStorageProvider();
-    FredDataDownloader downloader = new FredDataDownloader(tempDir.toString(), apiKey, storageProvider, storageProvider);
-
-    // Test individual series download
-    downloader.downloadSeries("UNRATE", 2023, 2024);
-
-    // Test series conversion to parquet
-    String targetPath = tempDir.toString() + "/test_unrate.parquet";
-    downloader.convertSeriesToParquet("UNRATE", targetPath, null, 2023, 2024);
-
-    // Verify file exists and is readable
-    assertTrue(new File(targetPath).exists(), "UNRATE parquet file should exist");
-    verifyParquetReadable(targetPath, "fred_indicators");
-
-    // Test FredSeriesGroup functionality
-    FredSeriesGroup treasuryGroup =
-        new FredSeriesGroup("treasuries", Arrays.asList("DGS10", "DGS30"),
-        FredSeriesGroup.PartitionStrategy.AUTO, null);
-
-    assertTrue(treasuryGroup.matchesSeries("DGS10"), "Should match DGS10");
-    assertTrue(treasuryGroup.matchesSeries("DGS30"), "Should match DGS30");
-    assertNotNull(treasuryGroup.getTableName(), "Should generate table name");
-
-    // Test partition analyzer
-    FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
-    FredSeriesPartitionAnalyzer.PartitionAnalysis analysis =
-        analyzer.analyzeGroup(treasuryGroup, Arrays.asList("UNRATE", "DGS10", "DGS30"));
-
-    assertNotNull(analysis, "Analysis should not be null");
-    System.out.println("Partition analysis result: " + analysis);
-
-    // Should recommend year partitioning for AUTO strategy
-    assertTrue(analysis.getPartitionFields().contains("year"),
-        "AUTO strategy should include year partitioning");
-  }
+  // FRED download tests removed - downloadSeries() method removed in favor of metadata-driven approach
+  // TODO: Add tests for executeDownload() metadata-driven downloads
 
   @Test public void testBeaGdpComponents() throws Exception {
     String apiKey = System.getenv("BEA_API_KEY");
