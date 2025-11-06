@@ -545,31 +545,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         fredDownloader.downloadAll(startYear, endYear, new java.util.ArrayList<>(allSeriesIds));
 
         // Convert downloaded JSON to Parquet for each series/year combination
-        for (String seriesId : allSeriesIds) {
-          for (int year = startYear; year <= endYear; year++) {
-            // Build paths for this series/year
-            String seriesPartition = "type=fred_indicators/series=" + seriesId + "/year=" + year;
-            String parquetPath = storageProvider.resolvePath(parquetDir, seriesPartition + "/fred_indicators.parquet");
-            String rawPath = cacheStorageProvider.resolvePath(cacheDir, seriesPartition + "/fred_indicators.json");
-
-            // Check if conversion needed
-            Map<String, String> params = new HashMap<>();
-            params.put("series", seriesId);
-
-            if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "fred_indicators", year, rawPath, parquetPath)) {
-              try {
-                Map<String, String> variables = new HashMap<>();
-                variables.put("year", String.valueOf(year));
-                variables.put("series_id", seriesId);
-                fredDownloader.convertCachedJsonToParquet("fred_indicators", variables);
-                cacheManifest.markParquetConverted("fred_indicators", year, params, parquetPath);
-              } catch (Exception e) {
-                LOGGER.error("Error converting FRED series {} for year {}: {}", seriesId, year, e.getMessage());
-                // Continue with next series
-              }
-            }
-          }
-        }
+        fredDownloader.convertAll(startYear, endYear, new java.util.ArrayList<>(allSeriesIds));
 
         LOGGER.debug("FRED indicators data download and conversion completed");
       } catch (Exception e) {
