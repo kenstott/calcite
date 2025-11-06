@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Custom raw-to-parquet converter for ECON adapter that understands economic data structures.
@@ -133,12 +135,12 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
 
     // Route based on path patterns and construct CORRECT raw file paths
     try {
-      // FRED indicators - raw files are at source=econ/type=fred_indicators/frequency=monthly/year=YYYY/
-      if (rawFilePath.contains("type=indicators") && rawFilePath.contains("fred_indicators")) {
+      // FRED indicators - raw files are at source=econ/type=fred_indicators/year=YYYY/
+      if (rawFilePath.contains("type=fred_indicators") && rawFilePath.contains("fred_indicators")) {
         LOGGER.info("CONVERT: Routing to FRED downloader for fred_indicators");
-        String correctRawPath = "type=fred_indicators/frequency=monthly/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        fredDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        fredDownloader.convertCachedJsonToParquet("fred_indicators", variables);
         LOGGER.info("CONVERT: ✅ FRED conversion completed successfully");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed to exist at storage location");
@@ -151,9 +153,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS employment statistics - raw files are at source=econ/type=employment_statistics/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=employment_statistics") && rawFilePath.contains("employment_statistics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for employment_statistics");
-        String correctRawPath = "type=employment_statistics/frequency=monthly/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "monthly");
+        blsDownloader.convertCachedJsonToParquet("employment_statistics", variables);
         LOGGER.info("CONVERT: ✅ BLS employment conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
@@ -166,9 +169,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS inflation metrics - raw files are at source=econ/type=inflation_metrics/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=inflation_metrics") && rawFilePath.contains("inflation_metrics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for inflation_metrics");
-        String correctRawPath = "type=inflation_metrics/frequency=monthly/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "monthly");
+        blsDownloader.convertCachedJsonToParquet("inflation_metrics", variables);
         LOGGER.info("CONVERT: ✅ BLS inflation conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
@@ -181,9 +185,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS wage growth - raw files are at source=econ/type=wage_growth/frequency=monthly/year=YYYY/
       if (rawFilePath.contains("type=wage_growth") && rawFilePath.contains("wage_growth")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for wage_growth");
-        String correctRawPath = "type=wage_growth/frequency=quarterly/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "quarterly");
+        blsDownloader.convertCachedJsonToParquet("wage_growth", variables);
         LOGGER.info("CONVERT: ✅ BLS wage growth conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
@@ -196,9 +201,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BLS jolts_regional - raw files at source=econ/type=jolts_regional/year=YYYY/
       if (rawFilePath.contains("type=jolts_regional")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for jolts_regional");
-        String correctRawPath = "type=jolts_regional/frequency=monthly/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "monthly");
+        blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
         LOGGER.info("CONVERT: ✅ BLS jolts_regional conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
@@ -211,9 +217,9 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BLS metro_cpi - raw files at source=econ/type=metro_cpi/year=YYYY/
       if (rawFilePath.contains("type=metro_cpi") || rawFilePath.contains("metro_cpi")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for metro_cpi");
-        String correctRawPath = "type=metro_cpi/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
         LOGGER.info("CONVERT: ✅ BLS metro_cpi conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
@@ -226,9 +232,9 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // BLS metro_wages - raw files at source=econ/type=metro_wages/year=YYYY/
       if (rawFilePath.contains("type=metro_wages") || rawFilePath.contains("metro_wages")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for metro_wages");
-        String correctRawPath = "type=metro_wages/year=" + year;
-        LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
-        blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
+        Map<String, String> variables = new HashMap<>();
+        variables.put("year", String.valueOf(year));
+        blsDownloader.convertCachedJsonToParquet("metro_wages", variables);
         LOGGER.info("CONVERT: ✅ BLS metro_wages conversion completed");
         if (storageProvider.exists(correctedParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
