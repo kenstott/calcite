@@ -321,8 +321,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String cacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
 
           // Convert employment statistics
-          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=employment_statistics/year=" + year + "/employment_statistics.parquet");
-          String employmentRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=employment_statistics/year=" + year + "/employment_statistics.json");
+          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.parquet");
+          String employmentRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "employment_statistics", year, employmentRawPath, employmentParquetPath)) {
             blsDownloader.convertToParquet(employmentRawPath, employmentParquetPath);
             cacheManifest.markParquetConverted("employment_statistics", year, null, employmentParquetPath);
