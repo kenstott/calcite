@@ -56,6 +56,7 @@ import org.apache.parquet.io.InputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,16 +82,16 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
   private final PartitionedTableConfig config;
   private RelProtoDataType protoRowType;
-  private List<String> partitionColumns;
+  private final List<String> partitionColumns;
   private List<String> addedPartitionColumns;  // Partition columns actually added to schema
-  private Map<String, String> partitionColumnTypes;
+  private final Map<String, String> partitionColumnTypes;
   private Map<String, String> columnTypes;  // Column types from Parquet file
   private List<String> parquetColumnNames;  // Column names from Parquet file
-  private String customRegex;
-  private List<PartitionedTableConfig.ColumnMapping> columnMappings;
-  private Map<String, Object> constraintConfig;
-  private String schemaName;
-  private String tableName;
+  private final String customRegex;
+  private final List<PartitionedTableConfig.ColumnMapping> columnMappings;
+  private final Map<String, Object> constraintConfig;
+  private final String schemaName;
+  private final String tableName;
   private String tableComment;
   private Map<String, String> columnComments;
 
@@ -478,7 +479,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     return TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
   }
 
-  @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+  @Override public RelDataType getRowType(@NonNull RelDataTypeFactory typeFactory) {
     if (protoRowType != null) {
       return protoRowType.apply(typeFactory);
     }
