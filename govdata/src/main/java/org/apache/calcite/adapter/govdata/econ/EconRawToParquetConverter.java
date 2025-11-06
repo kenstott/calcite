@@ -244,37 +244,8 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
         return true;
       }
 
-      // Phase 3: BEA regional_income - raw files at source=econ/type=regional_income/frequency=annual/year=YYYY/regional_income.json
-      if (rawFilePath.contains("regional_income")) {
-        LOGGER.info("CONVERT: Routing to BEA downloader for regional_income");
-        String cacheRegionalIncomeYearPath = "type=regional_income/frequency=annual/year=" + year;
-        String regionalIncomeParquetPath = "type=regional_income/frequency=annual/year=" + year + "/regional_income.parquet";
-        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheRegionalIncomeYearPath, regionalIncomeParquetPath);
-        beaDownloader.convertRegionalIncomeToParquet(cacheRegionalIncomeYearPath, regionalIncomeParquetPath);
-        LOGGER.info("CONVERT: ✅ BEA regional_income conversion completed");
-        if (storageProvider.exists(regionalIncomeParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", regionalIncomeParquetPath);
-        } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", regionalIncomeParquetPath);
-        }
-        return true;
-      }
-
-      // Phase 3: BEA state_gdp - raw files at source=econ/type=indicators/year=YYYY/state_gdp.json
-      if (rawFilePath.contains("state_gdp")) {
-        LOGGER.info("CONVERT: Routing to BEA downloader for state_gdp");
-        String stateGdpRawPath = "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.json";
-        String stateGdpParquetPath = "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.parquet";
-        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", stateGdpRawPath, stateGdpParquetPath);
-        beaDownloader.convertStateGdpToParquet(stateGdpRawPath, stateGdpParquetPath);
-        LOGGER.info("CONVERT: ✅ BEA state_gdp conversion completed");
-        if (storageProvider.exists(stateGdpParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", stateGdpParquetPath);
-        } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", stateGdpParquetPath);
-        }
-        return true;
-      }
+      // BEA conversions now handled by metadata-driven methods in BeaDataDownloader
+      // through EconSchemaFactory.downloadEconData()
 
       // TODO: Implement correct path mapping for remaining data sources
       // For now, Phase 1 and Phase 3 tables are fully implemented
