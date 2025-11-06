@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.calcite.adapter.govdata.econ;
+package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -25,15 +24,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 
 /**
- * Abstract base class for ECON data downloaders providing common infrastructure
+ * Abstract base class for GEO data downloaders providing common infrastructure
  * for cache management, rate limiting, and download/conversion flow patterns.
  *
  * <p>Implements the Template Method pattern to enforce consistent cache manifest
- * usage across all economic data sources while allowing API-specific customization.
+ * usage across all geographic data sources while allowing API-specific customization.
  *
  * <h3>Standard Flow Pattern</h3>
  * <pre>
@@ -46,7 +49,7 @@ import java.util.Map;
  *
  * Conversion Flow:
  * 1. Check storageProvider.exists(targetPath) → if true, skip conversion
- * 2. Convert JSON to Parquet via API-specific implementation
+ * 2. Convert shapefile to Parquet via API-specific implementation
  * 3. FileSchema's conversion registry automatically tracks the conversion
  * 4. No need to mark as converted - FileSchema handles this
  * </pre>
@@ -61,69 +64,47 @@ import java.util.Map;
  *   <li>API-specific conversion methods using provided helper methods</li>
  * </ul>
  *
- * @see CacheManifest
+ * @see GeoCacheManifest
  * @see StorageProvider
  */
-public abstract class AbstractEconDataDownloader extends AbstractGovDataDownloader {
-  private static final Logger LOGGER = LoggerFactory.getLogger(AbstractEconDataDownloader.class);
+public abstract class AbstractGeoDataDownloader {
+  private static final Logger LOGGER = LoggerFactory.getLogger(AbstractGeoDataDownloader.class);
 
   /** Shared ObjectMapper for JSON serialization */
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 
-  /**
-   * Data frequency for partitioning strategy (Phase 4).
-   * Enables partition pruning for time-range queries.
-   */
-  public enum DataFrequency {
-    DAILY("daily", "D"),
-    MONTHLY("monthly", "M"),
-    QUARTERLY("quarterly", "Q"),
-    ANNUAL("annual", "A");
+  /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/geo/) */
+  protected final String cacheDirectory;
 
-    private final String partitionName;
-    private final String shortCode;
+  /** Operating directory for storing operational metadata (e.g., .aperio/geo/) */
+  protected final String operatingDirectory;
 
-    DataFrequency(String partitionName, String shortCode) {
-      this.partitionName = partitionName;
-      this.shortCode = shortCode;
-    }
+  /** Parquet directory for storing converted parquet files (e.g., $GOVDATA_PARQUET_DIR or s3://govdata-parquet) */
+  protected final String parquetDirectory;
 
-    public String getPartitionName() {
-      return partitionName;
-    }
+  /** Storage provider for reading/writing raw cache files (shapefiles, JSON) */
+  protected final StorageProvider cacheStorageProvider;
 
-    public String getShortCode() {
-      return shortCode;
-    }
-
-    /**
-     * Parse frequency from short code (D, M, Q, A).
-     *
-     * @param code Short frequency code
-     * @return Corresponding DataFrequency
-     * @throws IllegalArgumentException if code is unknown
-     */
-    public static DataFrequency fromShortCode(String code) {
-      for (DataFrequency freq : values()) {
-        if (freq.shortCode.equals(code)) {
-          return freq;
-        }
-      }
-      throw new IllegalArgumentException("Unknown frequency code: " + code);
-    }
-  }
+  /** Storage provider for reading/writing parquet files (supports local and S3) */
+  protected final StorageProvider storageProvider;
 
   /** Cache manifest for tracking downloads and conversions */
-  protected final CacheManifest cacheManifest;
+  protected final GeoCacheManifest cacheManifest;
+
+  /** HTTP client for API requests */
+  protected final HttpClient httpClient;
+
+  /** Timestamp of last API request for rate limiting */
+  protected long lastRequestTime = 0;
 
   /**
    * Constructs base downloader with required infrastructure.
    *
-   * @param cacheDirectory Local directory for caching raw JSON data
+   * @param cacheDirectory Local directory for caching raw data
    * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
+  protected AbstractGeoDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
     this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null);
   }
 
@@ -131,21 +112,28 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * Constructs base downloader with separate raw cache and operating directories and shared cache manifest.
    * This constructor should be used when multiple downloaders share the same manifest to avoid stale cache issues.
    *
-   * @param cacheDirectory Local directory for caching raw JSON data
+   * @param cacheDirectory Local directory for caching raw data
    * @param operatingDirectory Directory for storing operational metadata (.aperio/<schema>/)
    * @param parquetDirectory Directory for storing parquet files (e.g., s3://govdata-parquet)
    * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider);
-    this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
+  protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest) {
+    this.cacheDirectory = cacheDirectory;
+    this.operatingDirectory = operatingDirectory;
+    this.parquetDirectory = parquetDirectory;
+    this.cacheStorageProvider = cacheStorageProvider;
+    this.storageProvider = storageProvider;
+    this.cacheManifest = sharedManifest != null ? sharedManifest : GeoCacheManifest.load(operatingDirectory);
+    this.httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
   }
 
   /**
    * Returns the minimum interval between API requests in milliseconds.
-   * Different APIs have different rate limits (e.g., FRED: 500ms, BLS: 1100ms).
+   * Different APIs have different rate limits (e.g., Census: 500ms).
    *
    * @return Minimum milliseconds between requests, or 0 if no rate limit
    */
@@ -188,15 +176,11 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
     try {
       if (cacheStorageProvider.exists(filePath)) {
+        LOGGER.info("⚡ File exists, updating cache manifest: {} (year={})", dataType, year);
         long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
-        if (fileSize > 0) {
-          LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
-          cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-          cacheManifest.save(operatingDirectory);
-          return true;
-        } else {
-          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", dataType, relativePath);
-        }
+        cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
+        cacheManifest.save(operatingDirectory);
+        return true;
       }
     } catch (IOException e) {
       LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
@@ -207,72 +191,111 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
-   * Saves downloaded JSON content to cache and updates manifest.
+   * Saves downloaded content to cache and updates manifest.
    * This is the final step in the download flow pattern.
    *
    * @param dataType Type of data being cached
    * @param year Year of data
    * @param params Additional parameters for cache key
    * @param relativePath Relative path within cache directory
-   * @param jsonContent JSON content to save
+   * @param content Content to save (raw bytes)
    * @throws IOException If file write fails
    */
   protected final void saveToCache(String dataType, int year, Map<String, String> params,
-      String relativePath, String jsonContent) throws IOException {
+      String relativePath, byte[] content) throws IOException {
 
-    // Save raw JSON data via cache storage provider
+    // Save raw data via cache storage provider
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    cacheStorageProvider.writeFile(filePath, content);
 
     // Mark as cached in manifest (operating metadata stays in .aperio via File API)
-    cacheManifest.markCached(dataType, year, params, relativePath, jsonContent.length());
+    cacheManifest.markCached(dataType, year, params, relativePath, content.length);
     cacheManifest.save(operatingDirectory);
 
-    LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
+    LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, content.length);
   }
 
   /**
-   * Build partition path with frequency dimension (Phase 4).
-   * Format: source=econ/type=X/frequency=Y/year=YYYY/
+   * Enforces rate limiting by ensuring minimum interval between API requests.
+   * Uses synchronized block to handle concurrent access safely.
    *
-   * @param dataType Data type (e.g., "state_wages", "treasury_yields")
-   * @param frequency Data frequency
-   * @param year Year
-   * @return Partition path
+   * @throws InterruptedException If thread is interrupted while waiting
    */
-  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year) {
-    return buildPartitionPath(dataType, frequency, year, null);
-  }
-
-  /**
-   * Build partition path with frequency and optional month (for daily data).
-   * Format: source=econ/type=X/frequency=Y/year=YYYY/month=MM/
-   *
-   * @param dataType Data type (e.g., "treasury_yields")
-   * @param frequency Data frequency
-   * @param year Year
-   * @param month Optional month (1-12) for daily data
-   * @return Partition path
-   */
-  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year, Integer month) {
-    StringBuilder path = new StringBuilder();
-    // Don't prepend source=econ - baseDirectory in EconSchemaFactory already includes it
-    path.append("type=").append(dataType);
-    path.append("/frequency=").append(frequency.getPartitionName());
-    path.append("/year=").append(year);
-
-    if (month != null && frequency == DataFrequency.DAILY) {
-      path.append("/month=").append(String.format("%02d", month));
+  protected final void enforceRateLimit() throws InterruptedException {
+    long minInterval = getMinRequestIntervalMs();
+    if (minInterval <= 0) {
+      return; // No rate limit
     }
 
-    return path.toString();
+    synchronized (this) {
+      long now = System.currentTimeMillis();
+      long timeSinceLastRequest = now - lastRequestTime;
+      if (timeSinceLastRequest < minInterval) {
+        long waitTime = minInterval - timeSinceLastRequest;
+        LOGGER.trace("Rate limiting: waiting {} ms", waitTime);
+        Thread.sleep(waitTime);
+      }
+      lastRequestTime = System.currentTimeMillis();
+    }
   }
 
+  /**
+   * Executes HTTP request with retry logic and exponential backoff.
+   * Handles rate limiting and transient failures automatically.
+   *
+   * @param request HTTP request to execute
+   * @return HTTP response
+   * @throws IOException If all retry attempts fail
+   * @throws InterruptedException If thread is interrupted
+   */
+  protected final HttpResponse<String> executeWithRetry(HttpRequest request)
+      throws IOException, InterruptedException {
+
+    int maxRetries = getMaxRetries();
+    long retryDelay = getRetryDelayMs();
+
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Enforce rate limiting before request
+        enforceRateLimit();
+
+        // Execute request
+        HttpResponse<String> response =
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Check for rate limit response (429) or server error (5xx)
+        if (response.statusCode() == 429 || response.statusCode() >= 500) {
+          if (attempt < maxRetries - 1) {
+            long delay = retryDelay * (long) Math.pow(2, attempt);
+            LOGGER.warn("Request failed with status {} - retrying in {} ms (attempt {}/{})",
+                response.statusCode(), delay, attempt + 1, maxRetries);
+            Thread.sleep(delay);
+            continue;
+          }
+        }
+
+        // Success or non-retryable error
+        return response;
+
+      } catch (IOException e) {
+        if (attempt < maxRetries - 1) {
+          long delay = retryDelay * (long) Math.pow(2, attempt);
+          LOGGER.warn("Request failed: {} - retrying in {} ms (attempt {}/{})",
+              e.getMessage(), delay, attempt + 1, maxRetries);
+          Thread.sleep(delay);
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    throw new IOException("Failed after " + maxRetries + " attempts");
+  }
 
   /**
    * Extracts all Hive-style partition parameters from path.
-   * For example, from "type=custom/year=2020/maturity=10Y/file.parquet"
-   * extracts {"maturity": "10Y"} (year is handled separately).
+   * For example, from "type=boundaries/year=2020/state=CA/file.parquet"
+   * extracts {"state": "CA"} (year is handled separately).
    *
    * @param path File path with Hive partitions
    * @return Map of partition key-value pairs (excluding year, type, and source)
@@ -325,89 +348,30 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
-   * Enriches an Avro Schema with documentation from a PartitionedTableConfig.
-   * This method takes a base schema (with types defined) and adds .doc() annotations
-   * for each field that has a corresponding entry in the config's columnComments.
+   * Loads column metadata for a table from geo-schema.json.
    *
-   * <p>Implementation note: Avro Schema is immutable, so this method creates a new
-   * schema by manipulating the schema's JSON representation, then parsing it back.
-   *
-   * @param baseSchema The base Avro schema with field names and types defined
-   * @param config The partitioned table config containing columnComments
-   * @return A new Schema identical to baseSchema but with doc annotations from config
-   */
-  protected static org.apache.avro.Schema enrichSchemaWithComments(
-      org.apache.avro.Schema baseSchema,
-      org.apache.calcite.adapter.file.partition.PartitionedTableConfig config) {
-    // If no column comments, return original schema unchanged
-    if (config == null || config.getColumnComments() == null
-        || config.getColumnComments().isEmpty()) {
-      return baseSchema;
-    }
-
-    try {
-      // Convert schema to JSON for manipulation
-      com.fasterxml.jackson.databind.JsonNode schemaJson =
-          MAPPER.readTree(baseSchema.toString());
-
-      // Get column comments map
-      java.util.Map<String, String> columnComments = config.getColumnComments();
-
-      // Schema JSON is an object with a "fields" array
-      if (schemaJson.has("fields") && schemaJson.get("fields").isArray()) {
-        com.fasterxml.jackson.databind.node.ArrayNode fields =
-            (com.fasterxml.jackson.databind.node.ArrayNode) schemaJson.get("fields");
-
-        // Iterate through fields and add doc if available
-        for (com.fasterxml.jackson.databind.JsonNode field : fields) {
-          if (field.has("name")) {
-            String fieldName = field.get("name").asText();
-            String comment = columnComments.get(fieldName);
-
-            if (comment != null && !comment.isEmpty()) {
-              // Add doc field to this field object
-              ((com.fasterxml.jackson.databind.node.ObjectNode) field).put("doc", comment);
-            }
-          }
-        }
-      }
-
-      // Convert back to Schema
-      return new org.apache.avro.Schema.Parser().parse(schemaJson.toString());
-    } catch (Exception e) {
-      // If enrichment fails, log warning and return original schema
-      LOGGER.warn("Failed to enrich schema with comments from config for table {}: {}",
-          config.getName(), e.getMessage());
-      return baseSchema;
-    }
-  }
-
-  /**
-   * Loads table column metadata from the econ-schema.json resource file.
-   * This enables metadata-driven schema generation, eliminating hardcoded type definitions.
-   *
-   * @param tableName The name of the table (must match "name" in econ-schema.json)
-   * @return List of TableColumn definitions with type, nullability, and comments
-   * @throws IllegalArgumentException if table not found or schema file cannot be loaded
+   * @param tableName The name of the table to load column metadata for
+   * @return List of table column definitions
+   * @throws IllegalArgumentException if the table is not found or schema is invalid
    */
   protected static java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
     try {
-      // Load econ-schema.json from resources
+      // Load geo-schema.json from resources
       java.io.InputStream schemaStream =
-          AbstractEconDataDownloader.class.getResourceAsStream("/econ-schema.json");
+          AbstractGeoDataDownloader.class.getResourceAsStream("/geo-schema.json");
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "econ-schema.json not found in resources");
+            "geo-schema.json not found in resources");
       }
 
       // Parse JSON
       com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
 
-      // Find the table in the "tables" array
+      // Find the table in the "partitionedTables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         throw new IllegalArgumentException(
-            "Invalid econ-schema.json: missing 'tables' array");
+            "Invalid geo-schema.json: missing 'partitionedTables' array");
       }
 
       for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("partitionedTables")) {
@@ -416,7 +380,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
           // Found the table - extract columns
           if (!tableNode.has("columns") || !tableNode.get("columns").isArray()) {
             throw new IllegalArgumentException(
-                "Table '" + tableName + "' has no 'columns' array in econ-schema.json");
+                "Table '" + tableName + "' has no 'columns' array in geo-schema.json");
           }
 
           java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
@@ -441,7 +405,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
       // Table not found
       throw new IllegalArgumentException(
-          "Table '" + tableName + "' not found in econ-schema.json");
+          "Table '" + tableName + "' not found in geo-schema.json");
 
     } catch (java.io.IOException e) {
       throw new IllegalArgumentException(
