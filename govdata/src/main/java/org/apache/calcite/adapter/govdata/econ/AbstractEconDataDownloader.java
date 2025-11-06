@@ -54,12 +54,16 @@ import java.util.Map;
  * <h3>Subclass Responsibilities</h3>
  * Subclasses must implement:
  * <ul>
- *   <li>{@link #getMinRequestIntervalMs()} - API-specific rate limit</li>
- *   <li>{@link #getMaxRetries()} - Retry policy for failed requests</li>
- *   <li>{@link #getRetryDelayMs()} - Initial delay for retry backoff</li>
+ *   <li>{@link #getTableName()} - Specify the primary table this downloader is associated with</li>
  *   <li>API-specific download methods using provided helper methods</li>
  *   <li>API-specific conversion methods using provided helper methods</li>
  * </ul>
+ *
+ * <p>Rate limiting is configured via schema metadata (download.rateLimit).
+ * Subclasses must override {@link #getTableName()} to specify which table this
+ * downloader is associated with. The table's download configuration contains
+ * rate limit settings. If not specified, default values are used
+ * (1000ms interval, 3 retries, 1000ms retry delay).</p>
  *
  * @see CacheManifest
  * @see StorageProvider
@@ -78,7 +82,8 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     DAILY("daily", "D"),
     MONTHLY("monthly", "M"),
     QUARTERLY("quarterly", "Q"),
-    ANNUAL("annual", "A");
+    ANNUAL("annual", "A"),
+    VARIOUS("various", "V");
 
     private final String partitionName;
     private final String shortCode;
@@ -139,31 +144,13 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
   protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider);
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ");
     this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
   }
 
-  /**
-   * Returns the minimum interval between API requests in milliseconds.
-   * Different APIs have different rate limits (e.g., FRED: 500ms, BLS: 1100ms).
-   *
-   * @return Minimum milliseconds between requests, or 0 if no rate limit
-   */
-  protected abstract long getMinRequestIntervalMs();
-
-  /**
-   * Returns the maximum number of retry attempts for failed requests.
-   *
-   * @return Maximum retry attempts
-   */
-  protected abstract int getMaxRetries();
-
-  /**
-   * Returns the initial delay for retry backoff in milliseconds.
-   *
-   * @return Initial retry delay in milliseconds
-   */
-  protected abstract long getRetryDelayMs();
+  // Rate limiting methods inherited from AbstractGovDataDownloader
+  // Subclasses override getTableName() to specify their associated table,
+  // which contains rate limit configuration in the schema
 
   /**
    * Checks if data is cached in manifest and optionally updates manifest if file exists.
@@ -244,6 +231,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     return buildPartitionPath(dataType, frequency, year, null);
   }
 
+  protected String buildPartitionPath(String dataType, int year) {
+    return buildPartitionPath(dataType, DataFrequency.VARIOUS, year, null);
+  }
+
   /**
    * Build partition path with frequency and optional month (for daily data).
    * Format: source=econ/type=X/frequency=Y/year=YYYY/month=MM/
@@ -258,7 +249,9 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     StringBuilder path = new StringBuilder();
     // Don't prepend source=econ - baseDirectory in EconSchemaFactory already includes it
     path.append("type=").append(dataType);
-    path.append("/frequency=").append(frequency.getPartitionName());
+    if (frequency != DataFrequency.VARIOUS) {
+      path.append("/frequency=").append(frequency.getPartitionName());
+    }
     path.append("/year=").append(year);
 
     if (month != null && frequency == DataFrequency.DAILY) {
@@ -385,6 +378,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   /**
    * Loads table column metadata from the econ-schema.json resource file.
    * This enables metadata-driven schema generation, eliminating hardcoded type definitions.
+   *
+   * <p>NOTE: Consider using {@link AbstractGovDataDownloader#loadTableColumnsFromMetadata(String)} instead
+   * for new code. That method is schema-agnostic and works for ECON, GEO, and SEC schemas
+   * using the schemaResourceName from the instance.
    *
    * @param tableName The name of the table (must match "name" in econ-schema.json)
    * @return List of TableColumn definitions with type, nullability, and comments

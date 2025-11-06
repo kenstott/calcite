@@ -436,16 +436,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     this.apiKey = apiKey;
   }
 
-  @Override protected long getMinRequestIntervalMs() {
-    return MIN_REQUEST_INTERVAL_MS;
-  }
-
-  @Override protected int getMaxRetries() {
-    return MAX_RETRIES;
-  }
-
-  @Override protected long getRetryDelayMs() {
-    return RETRY_DELAY_MS;
+  @Override protected String getTableName() {
+    return "employment_statistics";
   }
 
   // Table name constants for filtering
