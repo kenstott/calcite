@@ -238,7 +238,7 @@
     },
     {
       "name": "metro_cpi",
-      "pattern": "type=cpi_metro/frequency=*/year=*/metro_cpi.parquet",
+      "pattern": "type=metro_cpi/frequency=*/year=*/metro_cpi.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -862,7 +862,7 @@
     },
     {
       "name": "wage_growth",
-      "pattern": "type=indicators/frequency=*/year=*/wage_growth.parquet",
+      "pattern": "type=wage_growth/frequency=*/year=*/wage_growth.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1384,7 +1384,7 @@
     },
     {
       "name": "regional_income",
-      "pattern": "type=indicators/frequency=*/year=*/regional_income.parquet",
+      "pattern": "type=regional_income/frequency=*/year=*/regional_income.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1450,7 +1450,7 @@
     },
     {
       "name": "state_gdp",
-      "pattern": "type=indicators/frequency=*/year=*/state_gdp.parquet",
+      "pattern": "type=state_gdp/frequency=*/year=*/state_gdp.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1549,12 +1549,6 @@
           "comment": "BEA series code for this trade statistic"
         },
         {
-          "name": "year",
-          "type": "int",
-          "nullable": false,
-          "comment": "Year of the trade observation"
-        },
-        {
           "name": "value",
           "type": "double",
           "nullable": false,
@@ -1565,12 +1559,6 @@
           "type": "string",
           "nullable": false,
           "comment": "Units of measurement (e.g., 'Millions of Dollars')"
-        },
-        {
-          "name": "frequency",
-          "type": "string",
-          "nullable": false,
-          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
         },
         {
           "name": "trade_type",
@@ -1633,18 +1621,6 @@
           "comment": "Geographic area or country name for the transaction"
         },
         {
-          "name": "frequency",
-          "type": "string",
-          "nullable": false,
-          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
-        },
-        {
-          "name": "year",
-          "type": "int",
-          "nullable": false,
-          "comment": "Year of the ITA observation"
-        },
-        {
           "name": "value",
           "type": "double",
           "nullable": false,
@@ -1697,18 +1673,6 @@
           "type": "string",
           "nullable": false,
           "comment": "BEA table identifier for industry GDP data"
-        },
-        {
-          "name": "frequency",
-          "type": "string",
-          "nullable": false,
-          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
-        },
-        {
-          "name": "year",
-          "type": "int",
-          "nullable": false,
-          "comment": "Year of the observation"
         },
         {
           "name": "quarter",
