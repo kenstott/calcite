@@ -198,6 +198,7 @@ public class EconIntegrationTest {
         "      \"customFredSeries\": [" +
         "        \"DGS10\", \"DGS2\", \"DGS30\", \"UNRATE\", \"PAYEMS\", \"CPIAUCSL\", \"GDPC1\"" +
         "      ]" +
+        "    }" +
         "  }, {" +
         "    \"name\": \"CENSUS\"," +
         "    \"type\": \"custom\"," +
