@@ -321,18 +321,18 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String cacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
 
           // Convert employment statistics
-          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/employment_statistics.parquet");
-          String employmentRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "employment_statistics.json");
+          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=employment_statistics/year=" + year + "/employment_statistics.parquet");
+          String employmentRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=employment_statistics/year=" + year + "/employment_statistics.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "employment_statistics", year, employmentRawPath, employmentParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, employmentParquetPath);
             cacheManifest.markParquetConverted("employment_statistics", year, null, employmentParquetPath);
           }
 
           // Convert inflation metrics
-          String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/inflation_metrics.parquet");
-          String inflationRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "inflation_metrics.json");
+          String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.parquet");
+          String inflationRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "inflation_metrics", year, inflationRawPath, inflationParquetPath)) {
-            blsDownloader.convertToParquet(cacheYearPath, inflationParquetPath);
+            blsDownloader.convertToParquet(inflationRawPath, inflationParquetPath);
             cacheManifest.markParquetConverted("inflation_metrics", year, null, inflationParquetPath);
           }
 
@@ -418,8 +418,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           }
 
           // Convert wage growth
-          String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/wage_growth.parquet");
-          String wageRawPath = cacheStorageProvider.resolvePath(cacheYearPath, "wage_growth.json");
+          String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.parquet");
+          String wageRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "wage_growth", year, wageRawPath, wageParquetPath)) {
             blsDownloader.convertToParquet(cacheYearPath, wageParquetPath);
             cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
