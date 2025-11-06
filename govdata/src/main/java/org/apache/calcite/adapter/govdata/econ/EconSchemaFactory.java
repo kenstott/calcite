@@ -179,6 +179,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
     LOGGER.debug("  FRED minimum popularity threshold: {}", fredMinPopularity);
 
+    // Parse FRED catalog cache force refresh flag (default false)
+    Boolean fredCatalogForceRefresh = (Boolean) operand.get("fredCatalogForceRefresh");
+    if (fredCatalogForceRefresh == null) {
+      fredCatalogForceRefresh = false;
+    }
+
     // Check auto-download setting (default true like GEO)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
     if (autoDownload == null) {
@@ -194,7 +200,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         downloadEconData(mutableOperand, econRawDir, econParquetDir,
             blsApiKey, fredApiKey, beaApiKey, enabledSources, startYear, endYear, storageProvider,
-            customFredSeries, cacheStorageProvider, fredMinPopularity);
+            customFredSeries, cacheStorageProvider, fredMinPopularity, fredCatalogForceRefresh);
       } catch (Exception e) {
         LOGGER.error("Error downloading ECON data", e);
         // Continue even if download fails - existing data may be available
@@ -281,7 +287,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadEconData(Map<String, Object> operand, String cacheDir, String parquetDir,
       String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
       int startYear, int endYear, StorageProvider storageProvider,
-      List<String> customFredSeries, StorageProvider cacheStorageProvider, int fredMinPopularity) throws IOException {
+      List<String> customFredSeries, StorageProvider cacheStorageProvider, int fredMinPopularity,
+      boolean fredCatalogForceRefresh) throws IOException {
 
     // Operating directory for metadata (.aperio/econ/)
     // This is passed from GovDataSchemaFactory which establishes it centrally
@@ -298,6 +305,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Load or create cache manifest for tracking parquet conversions from operating directory
     CacheManifest cacheManifest = CacheManifest.load(econOperatingDirectory);
     LOGGER.debug("Loaded ECON cache manifest from {}", econOperatingDirectory);
+
+    // Handle catalog cache invalidation if force refresh requested
+    if (fredCatalogForceRefresh) {
+      cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
+      LOGGER.info("Force refresh enabled - invalidated catalog series cache for threshold {}", fredMinPopularity);
+    }
 
     // cacheStorageProvider is passed as parameter (created by GovDataSchemaFactory)
     LOGGER.debug("Using shared cache storage provider for cache directory: {}", cacheDir);
@@ -498,8 +511,24 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         LOGGER.info("Building FRED indicators series list from catalog (active series with popularity >= {})", fredMinPopularity);
 
-        // Extract active, popular series from catalog
-        List<String> catalogSeries = extractActivePopularSeriesFromCatalog(cacheStorageProvider, cacheDir, fredMinPopularity);
+        // Try to get from cache first (expensive catalog parsing operation)
+        List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
+
+        if (catalogSeries == null) {
+          // Cache miss or expired - extract from catalog files
+          LOGGER.info("Catalog series cache miss/expired - extracting from catalog files");
+          catalogSeries = extractActivePopularSeriesFromCatalog(cacheStorageProvider, cacheDir, fredMinPopularity);
+
+          // Cache the results with configurable TTL (default 365 days for annual refresh)
+          Integer catalogCacheTtlDays = (Integer) operand.get("fredCatalogCacheTtlDays");
+          if (catalogCacheTtlDays == null) {
+            catalogCacheTtlDays = 365;  // Default: 1 year
+          }
+          cacheManifest.cacheCatalogSeries(fredMinPopularity, catalogSeries, catalogCacheTtlDays);
+
+          LOGGER.info("Cached {} series IDs for {} days", catalogSeries.size(), catalogCacheTtlDays);
+        }
+
         LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
 
         // Merge with customFredSeries if provided
@@ -1247,8 +1276,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       String fullPath = entry.getPath();
 
       if (entry.isDirectory()) {
-        // Extract directory name from path
-        String entryName = fullPath.substring(fullPath.lastIndexOf('/') + 1);
+        // Extract directory name from path, handling trailing slash
+        String pathForParsing = fullPath.endsWith("/") ?
+            fullPath.substring(0, fullPath.length() - 1) : fullPath;
+        String entryName = pathForParsing.substring(pathForParsing.lastIndexOf('/') + 1);
 
         // If this is a status=active directory, look for catalog JSON file
         if (entryName.equals("status=active")) {
