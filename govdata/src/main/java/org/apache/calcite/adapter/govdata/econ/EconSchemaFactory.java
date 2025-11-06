@@ -63,7 +63,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
   private Map<String, Map<String, Object>> tableConstraints;
-  private List<String> customFredSeries;
   private java.util.Set<String> enabledBlsTables;
 
 /**
@@ -161,9 +160,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Parse custom FRED series configuration
     @SuppressWarnings("unchecked")
     List<String> customFredSeries = (List<String>) operand.get("customFredSeries");
-
-    // Store configuration for table definition generation
-    this.customFredSeries = customFredSeries;
 
     // Parse BLS table filtering configuration (needed for both download and schema filtering)
     this.enabledBlsTables = parseBlsTableFilter(operand);
