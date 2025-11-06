@@ -51,7 +51,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private final String parquetDir;
   private final String apiKey;
 
-  // BEA dataset names - comprehensive coverage of all available datasets
+  /**
+   * BEA dataset names - comprehensive coverage of all available datasets.
+   *
+   * @deprecated As of version 1.41.0, use metadata-driven download methods instead.
+   *             Dataset names are now configured in econ-schema.json download configs.
+   *             This class will be removed in a future version.
+   */
+  @Deprecated
   public static class Datasets {
     public static final String NIPA = "NIPA";                               // National Income and Product Accounts
     public static final String NI_UNDERLYING_DETAIL = "NIUnderlyingDetail"; // Standard NI underlying detail tables
@@ -68,7 +75,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     public static final String API_DATASET_METADATA = "APIDatasetMetaData"; // Metadata about other API datasets
   }
 
-  // Key NIPA table IDs
+  /**
+   * Key NIPA table IDs.
+   *
+   * @deprecated As of version 1.41.0, use metadata-driven download methods instead.
+   *             NIPA tables are now configured in econ-schema.json nipaTablesList.
+   *             Use {@link #downloadGdpComponentsMetadata(int, int, List)} instead.
+   *             This class will be removed in a future version.
+   */
+  @Deprecated
   public static class NipaTables {
     public static final String GDP_COMPONENTS = "T10105";     // GDP and Components (Table 1.1.5)
     public static final String PERSONAL_INCOME = "58";   // Personal Income
@@ -80,7 +95,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     public static final String SAVINGS_RATE = "58";      // Personal Saving Rate
   }
 
-  // Key ITA (International Transactions Accounts) indicators
+  /**
+   * Key ITA (International Transactions Accounts) indicators.
+   *
+   * @deprecated As of version 1.41.0, use metadata-driven download methods instead.
+   *             ITA indicators are now configured in econ-schema.json itaIndicatorsList.
+   *             Use {@link #downloadItaDataMetadata(int, int, List)} instead.
+   *             This class will be removed in a future version.
+   */
+  @Deprecated
   public static class ItaIndicators {
     public static final String BALANCE_GOODS = "BalGds";                    // Balance on goods
     public static final String BALANCE_SERVICES = "BalServ";                // Balance on services
@@ -95,7 +118,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     public static final String IMPORTS_SERVICES = "ImpServ";                // Imports of services
   }
 
-  // Key GDP by Industry table IDs
+  /**
+   * Key GDP by Industry table IDs.
+   *
+   * @deprecated As of version 1.41.0, use metadata-driven download methods instead.
+   *             Industry codes are now configured in econ-schema.json keyIndustriesList.
+   *             Use {@link #downloadIndustryGdpMetadata(int, int, List)} instead.
+   *             This class will be removed in a future version.
+   */
+  @Deprecated
   public static class GdpByIndustryTables {
     public static final String VALUE_ADDED_BY_INDUSTRY = "1";               // Gross Output and Value Added by Industry
     public static final String GDP_BY_INDUSTRY_ANNUAL = "2";                // Value Added by Industry as a Percentage of GDP
