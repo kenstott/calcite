@@ -703,9 +703,15 @@ public abstract class AbstractGovDataDownloader {
     String envVar = authConfig.get("envVar").toString();
     String authValue = System.getenv(envVar);
 
+    // Fall back to system property if environment variable not set
+    // This allows API keys to be passed via model.json operand and set as system properties
+    if (authValue == null || authValue.isEmpty()) {
+      authValue = System.getProperty(envVar);
+    }
+
     if (authValue == null || authValue.isEmpty()) {
       throw new IllegalArgumentException(
-          "Environment variable '" + envVar + "' required for authentication but not set");
+          "Environment variable or system property '" + envVar + "' required for authentication but not set");
     }
 
     return authValue;

@@ -119,12 +119,32 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.debug("  Parquet directory: {}", econParquetDir);
     LOGGER.debug("  Year range: {} - {}", startYear, endYear);
 
-    // Get API keys from operand (populated from env vars in model.json via ${ENV_VAR} syntax)
-    // The schema's authentication.envVar config is used by metadata-driven downloaders,
-    // but FredCatalogDownloader (legacy) still needs the API key passed explicitly
+    // Get API keys: try operand first (allows model.json to specify key directly),
+    // then fall back to environment variable (supports ${ENV_VAR} syntax in model.json)
+    // If key comes from operand, set it as system property so metadata-driven downloaders can access it
     String blsApiKey = (String) operand.get("blsApiKey");
+    if (blsApiKey == null) {
+      blsApiKey = System.getenv("BLS_API_KEY");
+    } else {
+      // Set as system property for metadata-driven downloaders to access
+      System.setProperty("BLS_API_KEY", blsApiKey);
+    }
+
     String fredApiKey = (String) operand.get("fredApiKey");
+    if (fredApiKey == null) {
+      fredApiKey = System.getenv("FRED_API_KEY");
+    } else {
+      // Set as system property for metadata-driven downloaders to access
+      System.setProperty("FRED_API_KEY", fredApiKey);
+    }
+
     String beaApiKey = (String) operand.get("beaApiKey");
+    if (beaApiKey == null) {
+      beaApiKey = System.getenv("BEA_API_KEY");
+    } else {
+      // Set as system property for metadata-driven downloaders to access
+      System.setProperty("BEA_API_KEY", beaApiKey);
+    }
 
     // Get enabled sources
     @SuppressWarnings("unchecked")
