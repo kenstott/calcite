@@ -961,25 +961,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Get table name for a FRED series ID based on its type/category.
-   * This is kept for potential future use but is no longer actively used
-   * since all series now go into fred_indicators table with series partitioning.
-   */
-  @SuppressWarnings("unused")
-  private String getTableNameForSeries(String seriesId) {
-    // Map series to appropriate table names based on test expectations
-    if (seriesId.startsWith("DGS") || seriesId.contains("TREASURY") || seriesId.contains("BOND")) {
-      return "fred_treasuries";
-    } else if (seriesId.equals("UNRATE") || seriesId.equals("PAYEMS") || seriesId.equals("CIVPART") ||
-               seriesId.contains("EMPLOY") || seriesId.contains("UNEMPLOYMENT")) {
-      return "fred_employment_indicators";
-    } else {
-      // Default naming pattern
-      return "fred_" + seriesId.toLowerCase();
-    }
-  }
-
-  /**
    * Override loadTableDefinitions to add custom FRED table definitions dynamically.
    * This combines static table definitions from econ-schema.json with dynamically
    * generated table definitions for custom FRED series.
