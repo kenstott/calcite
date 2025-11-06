@@ -149,7 +149,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       }
 
       // BLS employment statistics - raw files are at source=econ/type=employment_statistics/frequency=monthly/year=YYYY/
-      if (rawFilePath.contains("type=indicators") && rawFilePath.contains("employment_statistics")) {
+      if (rawFilePath.contains("type=employment_statistics") && rawFilePath.contains("employment_statistics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for employment_statistics");
         String correctRawPath = "type=employment_statistics/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
@@ -164,7 +164,7 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       }
 
       // BLS inflation metrics - raw files are at source=econ/type=inflation_metrics/frequency=monthly/year=YYYY/
-      if (rawFilePath.contains("type=indicators") && rawFilePath.contains("inflation_metrics")) {
+      if (rawFilePath.contains("type=inflation_metrics") && rawFilePath.contains("inflation_metrics")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for inflation_metrics");
         String correctRawPath = "type=inflation_metrics/frequency=monthly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
@@ -179,9 +179,9 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       }
 
       // BLS wage growth - raw files are at source=econ/type=wage_growth/frequency=monthly/year=YYYY/
-      if (rawFilePath.contains("type=indicators") && rawFilePath.contains("wage_growth")) {
+      if (rawFilePath.contains("type=wage_growth") && rawFilePath.contains("wage_growth")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for wage_growth");
-        String correctRawPath = "type=wage_growth/frequency=monthly/year=" + year;
+        String correctRawPath = "type=wage_growth/frequency=quarterly/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS wage growth conversion completed");
