@@ -47,23 +47,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
   public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
+    this(cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, cacheDir, cacheStorageProvider, storageProvider, sharedManifest);
+  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
   }
 
-  @Override protected long getMinRequestIntervalMs() {
-    return 0; // Treasury API has no rate limit
-  }
-
-  @Override protected int getMaxRetries() {
-    return 3;
-  }
-
-  @Override protected long getRetryDelayMs() {
-    return 2000; // 2 seconds
+  @Override protected String getTableName() {
+    return "treasury_yields";
   }
 
   /**

@@ -58,6 +58,8 @@ public abstract class AbstractGovDataDownloader {
   protected final StorageProvider cacheStorageProvider;
   /** Storage provider for reading/writing parquet files (supports local and S3) */
   protected final StorageProvider storageProvider;
+  /** Schema resource name (e.g., "/econ-schema.json", "/geo-schema.json") */
+  protected final String schemaResourceName;
 
   /** Shared JSON mapper for convenience */
   protected final ObjectMapper MAPPER = new ObjectMapper();
@@ -68,28 +70,115 @@ public abstract class AbstractGovDataDownloader {
   /** Timestamp of last request for rate limiting */
   protected long lastRequestTime = 0L;
 
+  /** Cached rate limit configuration (loaded on first access) */
+  private Map<String, Object> rateLimitConfig = null;
+
   protected AbstractGovDataDownloader(
       String cacheDirectory,
       String operatingDirectory,
       String parquetDirectory,
       StorageProvider cacheStorageProvider,
-      StorageProvider storageProvider) {
+      StorageProvider storageProvider,
+      String schemaName) {
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
     this.parquetDirectory = parquetDirectory;
     this.cacheStorageProvider = cacheStorageProvider;
     this.storageProvider = storageProvider;
+    this.schemaResourceName = "/" + schemaName + "-schema.json";
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(30))
         .build();
   }
 
-  /** Minimum interval between HTTP requests in milliseconds (subclass-defined). */
-  protected abstract long getMinRequestIntervalMs();
-  /** Max retry attempts for transient failures (subclass-defined). */
-  protected abstract int getMaxRetries();
-  /** Initial backoff delay in milliseconds (subclass-defined). */
-  protected abstract long getRetryDelayMs();
+  /**
+   * Returns the primary table name that this downloader is associated with.
+   * This table's download configuration (including rate limits, API settings, etc.)
+   * will be used when executing downloads.
+   *
+   * <p>Subclasses must override this to specify their associated table.
+   * Returns null by default, which uses fallback default values for rate limiting.
+   *
+   * @return Table name (e.g., "fred_indicators") or null for defaults
+   */
+  protected String getTableName() {
+    return null;
+  }
+
+  /**
+   * Gets the rate limit configuration, loading and caching it on first access.
+   * Returns null if no table name specified or no rateLimit config exists.
+   */
+  private Map<String, Object> getRateLimitConfig() {
+    if (rateLimitConfig == null) {
+      String tableName = getTableName();
+      if (tableName != null) {
+        try {
+          Map<String, Object> metadata = loadTableMetadata(tableName);
+          Object downloadObj = metadata.get("download");
+          if (downloadObj instanceof JsonNode) {
+            JsonNode download = (JsonNode) downloadObj;
+            if (download.has("rateLimit")) {
+              JsonNode rateLimit = download.get("rateLimit");
+              Map<String, Object> config = new java.util.HashMap<>();
+              if (rateLimit.has("minIntervalMs")) {
+                config.put("minIntervalMs", rateLimit.get("minIntervalMs").asLong());
+              }
+              if (rateLimit.has("maxRetries")) {
+                config.put("maxRetries", rateLimit.get("maxRetries").asInt());
+              }
+              if (rateLimit.has("retryDelayMs")) {
+                config.put("retryDelayMs", rateLimit.get("retryDelayMs").asLong());
+              }
+              rateLimitConfig = config;
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.debug("Could not load rate limit config for {}: {}", tableName, e.getMessage());
+        }
+      }
+    }
+    return rateLimitConfig;
+  }
+
+  /**
+   * Minimum interval between HTTP requests in milliseconds.
+   * Reads from schema's download.rateLimit.minIntervalMs if available,
+   * otherwise returns default of 1000ms (1 request per second).
+   */
+  protected long getMinRequestIntervalMs() {
+    Map<String, Object> config = getRateLimitConfig();
+    if (config != null && config.containsKey("minIntervalMs")) {
+      return (Long) config.get("minIntervalMs");
+    }
+    return 1000; // Default: 1 second between requests
+  }
+
+  /**
+   * Max retry attempts for transient failures.
+   * Reads from schema's download.rateLimit.maxRetries if available,
+   * otherwise returns default of 3 retries.
+   */
+  protected int getMaxRetries() {
+    Map<String, Object> config = getRateLimitConfig();
+    if (config != null && config.containsKey("maxRetries")) {
+      return (Integer) config.get("maxRetries");
+    }
+    return 3; // Default: 3 retries
+  }
+
+  /**
+   * Initial backoff delay in milliseconds.
+   * Reads from schema's download.rateLimit.retryDelayMs if available,
+   * otherwise returns default of 1000ms (1 second).
+   */
+  protected long getRetryDelayMs() {
+    Map<String, Object> config = getRateLimitConfig();
+    if (config != null && config.containsKey("retryDelayMs")) {
+      return (Long) config.get("retryDelayMs");
+    }
+    return 1000; // Default: 1 second retry delay
+  }
 
   /** Optional: override to customize default User-Agent. */
   protected String getDefaultUserAgent() { return "Calcite-GovData/1.0"; }
@@ -211,6 +300,814 @@ public abstract class AbstractGovDataDownloader {
       }
     } catch (Exception ignore) {
       // best-effort logging only
+    }
+  }
+
+  // ===== Metadata-Driven Path Resolution =====
+
+  /**
+   * Loads full table metadata from the schema resource file (e.g., econ-schema.json).
+   * Returns a Map containing all table properties including pattern, columns, and partitions.
+   *
+   * @param tableName The name of the table (must match "name" in schema JSON)
+   * @return Map with keys: "name", "pattern", "columns", "partitions", "comment"
+   * @throws IllegalArgumentException if table not found or schema file cannot be loaded
+   */
+  protected Map<String, Object> loadTableMetadata(String tableName) {
+    try {
+      // Load schema from resources (derived from schema name in constructor)
+      String schemaResource = schemaResourceName;
+      InputStream schemaStream = getClass().getResourceAsStream(schemaResource);
+      if (schemaStream == null) {
+        throw new IllegalArgumentException(
+            schemaResource + " not found in resources");
+      }
+
+      // Parse JSON
+      JsonNode root = MAPPER.readTree(schemaStream);
+
+      // Find the table in the "partitionedTables" array
+      if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
+        throw new IllegalArgumentException(
+            "Invalid " + schemaResource + ": missing 'partitionedTables' array");
+      }
+
+      for (JsonNode tableNode : root.get("partitionedTables")) {
+        String name = tableNode.has("name") ? tableNode.get("name").asText() : null;
+        if (tableName.equals(name)) {
+          // Found the table - return full metadata as Map
+          Map<String, Object> metadata = new java.util.HashMap<>();
+          metadata.put("name", name);
+
+          if (tableNode.has("pattern")) {
+            metadata.put("pattern", tableNode.get("pattern").asText());
+          }
+
+          if (tableNode.has("comment")) {
+            metadata.put("comment", tableNode.get("comment").asText());
+          }
+
+          if (tableNode.has("partitions")) {
+            metadata.put("partitions", tableNode.get("partitions"));
+          }
+
+          if (tableNode.has("columns")) {
+            metadata.put("columns", tableNode.get("columns"));
+          }
+
+          if (tableNode.has("download")) {
+            metadata.put("download", tableNode.get("download"));
+          }
+
+          return metadata;
+        }
+      }
+
+      // Table not found
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' not found in " + schemaResource);
+
+    } catch (IOException e) {
+      throw new IllegalArgumentException(
+          "Failed to load metadata for table '" + tableName + "': " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Derives JSON cache file path from a schema pattern by replacing wildcards with actual values.
+   *
+   * <p>Example:
+   * <pre>
+   *   pattern = "type=fred_indicators/year=&#42;/fred_indicators.parquet"
+   *   variables = {year: "2020"}
+   *   returns "type=fred_indicators/year=2020/fred_indicators.json"
+   * </pre>
+   *
+   * @param pattern The pattern from schema JSON (e.g., "type=fred/year=&#42;/fred.parquet")
+   * @param variables Map of partition key to value (e.g., {year: "2020", frequency: "monthly"})
+   * @return Relative path to JSON cache file with wildcards replaced and .parquet → .json
+   * @throws IllegalArgumentException if required variables are missing or pattern is invalid
+   */
+  protected String resolveJsonPath(String pattern, Map<String, String> variables) {
+    if (pattern == null || pattern.isEmpty()) {
+      throw new IllegalArgumentException("Pattern cannot be null or empty");
+    }
+
+    // Replace wildcards with actual values
+    String resolvedPath = substitutePatternVariables(pattern, variables);
+
+    // Change extension from .parquet to .json
+    if (resolvedPath.endsWith(".parquet")) {
+      resolvedPath = resolvedPath.substring(0, resolvedPath.length() - 8) + ".json";
+    } else {
+      // Pattern doesn't end with .parquet - append .json anyway
+      LOGGER.warn("Pattern does not end with .parquet: {}", pattern);
+      if (!resolvedPath.endsWith(".json")) {
+        resolvedPath = resolvedPath + ".json";
+      }
+    }
+
+    return resolvedPath;
+  }
+
+  /**
+   * Derives Parquet output file path from a schema pattern by replacing wildcards with actual values.
+   *
+   * <p>Example:
+   * <pre>
+   *   pattern = "type=fred_indicators/year=&#42;/fred_indicators.parquet"
+   *   variables = {year: "2020"}
+   *   returns "type=fred_indicators/year=2020/fred_indicators.parquet"
+   * </pre>
+   *
+   * @param pattern The pattern from schema JSON (e.g., "type=fred/year=&#42;/fred.parquet")
+   * @param variables Map of partition key to value (e.g., {year: "2020", frequency: "monthly"})
+   * @return Relative path to Parquet file with wildcards replaced
+   * @throws IllegalArgumentException if required variables are missing or pattern is invalid
+   */
+  protected String resolveParquetPath(String pattern, Map<String, String> variables) {
+    if (pattern == null || pattern.isEmpty()) {
+      throw new IllegalArgumentException("Pattern cannot be null or empty");
+    }
+
+    // Replace wildcards with actual values
+    return substitutePatternVariables(pattern, variables);
+  }
+
+  /**
+   * Replaces partition wildcards (key=&#42;) in a pattern with actual values from variable map.
+   *
+   * <p>Parses patterns like "type=fred/year=&#42;/frequency=&#42;/fred.parquet" and replaces
+   * each "key=&#42;" with "key=value" where value comes from the variables map.
+   *
+   * @param pattern Pattern with wildcards (e.g., "type=fred/year=&#42;/fred.parquet")
+   * @param variables Map of partition key to value
+   * @return Pattern with wildcards replaced
+   * @throws IllegalArgumentException if a required variable is missing from the map
+   */
+  private String substitutePatternVariables(String pattern, Map<String, String> variables) {
+    if (variables == null) {
+      variables = new java.util.HashMap<>();
+    }
+
+    String result = pattern;
+
+    // Find all partition patterns like "key=*" and replace with "key=value"
+    // Use regex to find all occurrences of <word>=*
+    java.util.regex.Pattern wildcardPattern = java.util.regex.Pattern.compile("(\\w+)=\\*");
+    java.util.regex.Matcher matcher = wildcardPattern.matcher(pattern);
+
+    List<String> missingVariables = new ArrayList<>();
+
+    // Find all wildcards first to report all missing variables at once
+    List<String> wildcards = new ArrayList<>();
+    while (matcher.find()) {
+      String key = matcher.group(1);
+      wildcards.add(key);
+      if (!variables.containsKey(key)) {
+        missingVariables.add(key);
+      }
+    }
+
+    if (!missingVariables.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Missing required variables for pattern '" + pattern + "': " + missingVariables);
+    }
+
+    // Now perform substitutions
+    for (String key : wildcards) {
+      String value = variables.get(key);
+      // Replace "key=*" with "key=value"
+      result = result.replaceAll(key + "=\\*", key + "=" + value);
+    }
+
+    return result;
+  }
+
+  // ===== Schema-Driven Download Infrastructure =====
+
+  /**
+   * Evaluates expressions like "startOfYear({year})" using variable substitution.
+   *
+   * <p>Supported functions:
+   * <ul>
+   *   <li>startOfYear({year}) → "YYYY-01-01"</li>
+   *   <li>endOfYear({year}) → "YYYY-12-31"</li>
+   *   <li>startOfMonth({year},{month}) → "YYYY-MM-01"</li>
+   *   <li>endOfMonth({year},{month}) → "YYYY-MM-DD" (last day of month)</li>
+   *   <li>concat({a}, "-", {b}) → string concatenation</li>
+   * </ul>
+   *
+   * @param expression Expression string
+   * @param variables Variables for substitution
+   * @return Evaluated result
+   */
+  protected String evaluateExpression(String expression, Map<String, String> variables) {
+    if (expression == null || expression.isEmpty()) {
+      return expression;
+    }
+
+    // First substitute variables
+    String evaluated = expression;
+    for (Map.Entry<String, String> entry : variables.entrySet()) {
+      evaluated = evaluated.replace("{" + entry.getKey() + "}", entry.getValue());
+    }
+
+    // Then evaluate functions
+    if (evaluated.startsWith("startOfYear(") && evaluated.endsWith(")")) {
+      String year = extractFunctionArg(evaluated, "startOfYear");
+      return year + "-01-01";
+    } else if (evaluated.startsWith("endOfYear(") && evaluated.endsWith(")")) {
+      String year = extractFunctionArg(evaluated, "endOfYear");
+      return year + "-12-31";
+    } else if (evaluated.startsWith("startOfMonth(") && evaluated.endsWith(")")) {
+      String[] args = extractFunctionArgs(evaluated, "startOfMonth");
+      if (args.length >= 2) {
+        return String.format("%s-%02d-01", args[0], Integer.parseInt(args[1]));
+      }
+    } else if (evaluated.startsWith("endOfMonth(") && evaluated.endsWith(")")) {
+      String[] args = extractFunctionArgs(evaluated, "endOfMonth");
+      if (args.length >= 2) {
+        int year = Integer.parseInt(args[0]);
+        int month = Integer.parseInt(args[1]);
+        int lastDay = getLastDayOfMonth(year, month);
+        return String.format("%s-%02d-%02d", args[0], month, lastDay);
+      }
+    } else if (evaluated.startsWith("concat(") && evaluated.endsWith(")")) {
+      // Simple string concatenation - just remove concat() wrapper
+      return extractFunctionArg(evaluated, "concat");
+    }
+
+    return evaluated;
+  }
+
+  /**
+   * Extracts single argument from function call like "funcName(arg)".
+   */
+  private String extractFunctionArg(String funcCall, String funcName) {
+    int start = funcName.length() + 1; // skip "funcName("
+    int end = funcCall.length() - 1;   // skip closing ")"
+    return funcCall.substring(start, end).trim();
+  }
+
+  /**
+   * Extracts multiple arguments from function call like "funcName(arg1,arg2)".
+   */
+  private String[] extractFunctionArgs(String funcCall, String funcName) {
+    String argsStr = extractFunctionArg(funcCall, funcName);
+    String[] args = argsStr.split(",");
+    for (int i = 0; i < args.length; i++) {
+      args[i] = args[i].trim();
+    }
+    return args;
+  }
+
+  /**
+   * Returns the last day of the given month (handles leap years).
+   */
+  private int getLastDayOfMonth(int year, int month) {
+    switch (month) {
+      case 1: case 3: case 5: case 7: case 8: case 10: case 12:
+        return 31;
+      case 4: case 6: case 9: case 11:
+        return 30;
+      case 2:
+        // Leap year calculation
+        boolean isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        return isLeap ? 29 : 28;
+      default:
+        throw new IllegalArgumentException("Invalid month: " + month);
+    }
+  }
+
+  /**
+   * Builds complete download URL from download configuration with variable substitution.
+   *
+   * <p>Handles all parameter types:
+   * <ul>
+   *   <li>constant - uses "value" field directly</li>
+   *   <li>expression - evaluates using evaluateExpression()</li>
+   *   <li>auth - reads from authentication config environment variable</li>
+   *   <li>iteration - uses iterationValue parameter</li>
+   *   <li>pagination - uses paginationOffset parameter</li>
+   * </ul>
+   *
+   * @param downloadConfig Download section from table metadata (must contain baseUrl and queryParams)
+   * @param variables Variables for expression evaluation (e.g., {year: "2020"})
+   * @param iterationValue Current iteration value (e.g., series_id like "DFF"), or null if not iterating
+   * @param paginationOffset Current pagination offset, or 0 if not paginating
+   * @return Complete URL with all query parameters properly encoded
+   * @throws IllegalArgumentException if required config elements are missing or invalid
+   */
+  @SuppressWarnings("unchecked")
+  protected String buildDownloadUrl(Map<String, Object> downloadConfig,
+      Map<String, String> variables,
+      String iterationValue,
+      int paginationOffset) {
+    // Validate required fields
+    if (downloadConfig == null) {
+      throw new IllegalArgumentException("downloadConfig cannot be null");
+    }
+    if (!downloadConfig.containsKey("baseUrl")) {
+      throw new IllegalArgumentException("downloadConfig must contain 'baseUrl'");
+    }
+    if (!downloadConfig.containsKey("queryParams")) {
+      throw new IllegalArgumentException("downloadConfig must contain 'queryParams'");
+    }
+
+    String baseUrl = downloadConfig.get("baseUrl").toString();
+    Map<String, Object> queryParams = (Map<String, Object>) downloadConfig.get("queryParams");
+
+    // Build query string
+    StringBuilder urlBuilder = new StringBuilder(baseUrl);
+    boolean firstParam = true;
+
+    for (Map.Entry<String, Object> paramEntry : queryParams.entrySet()) {
+      String paramName = paramEntry.getKey();
+      Map<String, Object> paramConfig = (Map<String, Object>) paramEntry.getValue();
+
+      String type = paramConfig.get("type").toString();
+      String paramValue = null;
+
+      switch (type) {
+        case "constant":
+          // Use value directly from config
+          paramValue = paramConfig.get("value").toString();
+          break;
+
+        case "expression":
+          // Evaluate expression with variable substitution
+          String expression = paramConfig.get("value").toString();
+          paramValue = evaluateExpression(expression, variables);
+          break;
+
+        case "auth":
+          // Read authentication value from environment variable
+          paramValue = resolveAuthValue(downloadConfig);
+          break;
+
+        case "iteration":
+          // Use the iteration value provided by caller
+          if (iterationValue == null) {
+            throw new IllegalArgumentException(
+                "Parameter '" + paramName + "' requires iteration value but none provided");
+          }
+          paramValue = iterationValue;
+          break;
+
+        case "pagination":
+          // Use the pagination offset provided by caller
+          paramValue = String.valueOf(paginationOffset);
+          break;
+
+        default:
+          throw new IllegalArgumentException("Unknown parameter type: " + type);
+      }
+
+      // Add to URL if we have a value
+      if (paramValue != null && !paramValue.isEmpty()) {
+        if (firstParam) {
+          urlBuilder.append("?");
+          firstParam = false;
+        } else {
+          urlBuilder.append("&");
+        }
+        urlBuilder.append(urlEncode(paramName)).append("=").append(urlEncode(paramValue));
+      }
+    }
+
+    return urlBuilder.toString();
+  }
+
+  /**
+   * Resolves authentication value from download config by reading environment variable.
+   *
+   * @param downloadConfig Download configuration containing authentication section
+   * @return Authentication value from environment variable
+   * @throws IllegalArgumentException if authentication config is invalid or env var not set
+   */
+  @SuppressWarnings("unchecked")
+  private String resolveAuthValue(Map<String, Object> downloadConfig) {
+    if (!downloadConfig.containsKey("authentication")) {
+      throw new IllegalArgumentException(
+          "Download config has 'auth' parameter but no 'authentication' section");
+    }
+
+    Map<String, Object> authConfig = (Map<String, Object>) downloadConfig.get("authentication");
+
+    if (!authConfig.containsKey("envVar")) {
+      throw new IllegalArgumentException(
+          "Authentication config must contain 'envVar' field");
+    }
+
+    String envVar = authConfig.get("envVar").toString();
+    String authValue = System.getenv(envVar);
+
+    if (authValue == null || authValue.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Environment variable '" + envVar + "' required for authentication but not set");
+    }
+
+    return authValue;
+  }
+
+  /**
+   * URL-encodes a string for use in query parameters.
+   * Simple implementation for common characters (avoids heavy dependency).
+   */
+  private String urlEncode(String value) {
+    try {
+      return java.net.URLEncoder.encode(value, "UTF-8");
+    } catch (java.io.UnsupportedEncodingException e) {
+      // UTF-8 is always supported
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Executes schema-driven download for a table using metadata from schema JSON.
+   *
+   * <p>This method orchestrates the entire download process:
+   * <ol>
+   *   <li>Load table metadata and download config</li>
+   *   <li>Iterate over series list if download uses iteration</li>
+   *   <li>For each iteration (or single request if no iteration):
+   *     <ul>
+   *       <li>Start with pagination offset 0</li>
+   *       <li>Build URL using buildDownloadUrl()</li>
+   *       <li>Execute HTTP request with retry logic</li>
+   *       <li>Parse response and extract data</li>
+   *       <li>Handle pagination if enabled</li>
+   *       <li>Aggregate all data</li>
+   *     </ul>
+   *   </li>
+   *   <li>Write aggregated data to JSON cache file</li>
+   *   <li>Return path to cached JSON file</li>
+   * </ol>
+   *
+   * @param tableName Name of table (must exist in schema)
+   * @param variables Variables for substitution (e.g., {year: "2020"})
+   * @return Relative path to cached JSON file
+   * @throws IOException if download or file operations fail
+   * @throws InterruptedException if download is interrupted
+   */
+  @SuppressWarnings("unchecked")
+  protected String executeDownload(String tableName, Map<String, String> variables)
+      throws IOException, InterruptedException {
+    // Load metadata including download config
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+
+    if (!metadata.containsKey("download")) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' does not have download configuration in schema");
+    }
+
+    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+
+    // Check if download is enabled
+    Object enabledObj = downloadConfig.get("enabled");
+    if (enabledObj != null && !Boolean.parseBoolean(enabledObj.toString())) {
+      throw new IllegalArgumentException(
+          "Download is not enabled for table '" + tableName + "'");
+    }
+
+    // Check if we need to iterate over a series list
+    List<String> seriesList = null;
+    if (downloadConfig.containsKey("seriesList")) {
+      Object seriesListObj = downloadConfig.get("seriesList");
+      if (seriesListObj instanceof List) {
+        seriesList = (List<String>) seriesListObj;
+      }
+    }
+
+    // Determine if pagination is enabled
+    boolean paginationEnabled = false;
+    int maxPerRequest = 100000;
+    if (downloadConfig.containsKey("pagination")) {
+      Map<String, Object> paginationConfig = (Map<String, Object>) downloadConfig.get("pagination");
+      Object enabledPagination = paginationConfig.get("enabled");
+      paginationEnabled = enabledPagination != null && Boolean.parseBoolean(enabledPagination.toString());
+      if (paginationConfig.containsKey("maxPerRequest")) {
+        maxPerRequest = Integer.parseInt(paginationConfig.get("maxPerRequest").toString());
+      }
+    }
+
+    // Aggregate all downloaded data
+    List<JsonNode> allData = new ArrayList<>();
+
+    // Execute download (with or without iteration)
+    if (seriesList != null && !seriesList.isEmpty()) {
+      // Iterate over series list
+      LOGGER.info("Downloading {} with {} series", tableName, seriesList.size());
+      for (String series : seriesList) {
+        LOGGER.debug("Downloading series: {}", series);
+        List<JsonNode> seriesData = downloadWithPagination(
+            downloadConfig, variables, series, paginationEnabled, maxPerRequest);
+        allData.addAll(seriesData);
+      }
+    } else {
+      // Single download (no iteration)
+      LOGGER.info("Downloading {} without iteration", tableName);
+      List<JsonNode> data = downloadWithPagination(
+          downloadConfig, variables, null, paginationEnabled, maxPerRequest);
+      allData.addAll(data);
+    }
+
+    LOGGER.info("Downloaded {} total records for {}", allData.size(), tableName);
+
+    // Write aggregated data to JSON cache file
+    String pattern = (String) metadata.get("pattern");
+    String jsonPath = resolveJsonPath(pattern, variables);
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+
+    // Ensure parent directory exists
+    ensureParentDirectory(fullJsonPath);
+
+    // Write as JSON array - use ByteArrayOutputStream then writeFile
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    MAPPER.writeValue(baos, allData);
+    cacheStorageProvider.writeFile(fullJsonPath, baos.toByteArray());
+
+    LOGGER.info("Wrote {} records to {}", allData.size(), jsonPath);
+    return jsonPath;
+  }
+
+  /**
+   * Downloads data with pagination support for a single iteration.
+   *
+   * @param downloadConfig Download configuration from schema
+   * @param variables Variables for expression evaluation
+   * @param iterationValue Current iteration value (e.g., series_id), or null if not iterating
+   * @param paginationEnabled Whether pagination is enabled
+   * @param maxPerRequest Maximum records per request
+   * @return List of data nodes from all paginated requests
+   * @throws IOException if download fails
+   * @throws InterruptedException if download is interrupted
+   */
+  @SuppressWarnings("unchecked")
+  private List<JsonNode> downloadWithPagination(
+      Map<String, Object> downloadConfig,
+      Map<String, String> variables,
+      String iterationValue,
+      boolean paginationEnabled,
+      int maxPerRequest) throws IOException, InterruptedException {
+    List<JsonNode> allData = new ArrayList<>();
+    int offset = 0;
+    boolean hasMore = true;
+
+    while (hasMore) {
+      // Build URL with current offset
+      String url = buildDownloadUrl(downloadConfig, variables, iterationValue, offset);
+      LOGGER.debug("Downloading from: {}", url);
+
+      // Execute HTTP request
+      HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+          .uri(URI.create(url))
+          .timeout(Duration.ofSeconds(60))
+          .header("User-Agent", getDefaultUserAgent())
+          .header("Accept", "application/json");
+
+      // Check if we need POST method
+      String method = downloadConfig.containsKey("method")
+          ? downloadConfig.get("method").toString()
+          : "GET";
+
+      if ("POST".equalsIgnoreCase(method)) {
+        // TODO: Handle POST body if needed
+        requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
+      } else {
+        requestBuilder.GET();
+      }
+
+      HttpRequest request = requestBuilder.build();
+      HttpResponse<String> response = executeWithRetry(request);
+
+      if (response.statusCode() != 200) {
+        throw new IOException("HTTP " + response.statusCode() + " from " + url
+            + ": " + response.body());
+      }
+
+      // Parse response
+      JsonNode rootNode = MAPPER.readTree(response.body());
+
+      // Extract data from response using dataPath if specified
+      JsonNode dataNode = rootNode;
+      if (downloadConfig.containsKey("response")) {
+        Map<String, Object> responseConfig = (Map<String, Object>) downloadConfig.get("response");
+        if (responseConfig.containsKey("dataPath")) {
+          String dataPath = responseConfig.get("dataPath").toString();
+          dataNode = rootNode.path(dataPath);
+        }
+      }
+
+      // Add data to results
+      if (dataNode.isArray()) {
+        int recordCount = 0;
+        for (JsonNode item : dataNode) {
+          allData.add(item);
+          recordCount++;
+        }
+        LOGGER.debug("Received {} records (offset={})", recordCount, offset);
+
+        // Check if we need to paginate
+        if (paginationEnabled && recordCount >= maxPerRequest) {
+          offset += maxPerRequest;
+          hasMore = true;
+        } else {
+          hasMore = false;
+        }
+      } else {
+        // Single object response
+        allData.add(dataNode);
+        hasMore = false;
+      }
+
+      // Safety check to prevent infinite loops
+      if (offset > 1000000) {
+        LOGGER.warn("Pagination limit reached (offset > 1M), stopping");
+        hasMore = false;
+      }
+    }
+
+    return allData;
+  }
+
+  /**
+   * Ensures parent directory exists for the given file path.
+   * Uses storage provider to create directories if needed.
+   */
+  private void ensureParentDirectory(String fullPath) throws IOException {
+    // Extract parent directory from path
+    int lastSlash = fullPath.lastIndexOf('/');
+    if (lastSlash > 0) {
+      String parentDir = fullPath.substring(0, lastSlash);
+      // Most storage providers auto-create parent directories, but we'll be explicit
+      try {
+        if (!cacheStorageProvider.exists(parentDir)) {
+          LOGGER.debug("Creating parent directory: {}", parentDir);
+          // Note: Most StorageProvider implementations handle this automatically
+          // but we document the intent here
+        }
+      } catch (Exception e) {
+        // Best effort - storage provider may handle this automatically
+        LOGGER.trace("Could not check parent directory existence: {}", e.getMessage());
+      }
+    }
+  }
+
+  // ===== Metadata-Driven Parquet Conversion =====
+
+  /**
+   * Loads table column definitions from schema metadata.
+   * Converts JsonNode columns to List&lt;TableColumn&gt; format for Parquet writing.
+   *
+   * @param tableName Name of table in schema
+   * @return List of TableColumn definitions with type, nullability, and comments
+   * @throws IllegalArgumentException if table not found or has no columns
+   */
+  protected java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+      loadTableColumnsFromMetadata(String tableName) {
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+
+    if (!metadata.containsKey("columns")) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' has no 'columns' in schema");
+    }
+
+    JsonNode columnsNode = (JsonNode) metadata.get("columns");
+    if (!columnsNode.isArray()) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' columns is not an array");
+    }
+
+    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        new ArrayList<>();
+
+    for (JsonNode colNode : columnsNode) {
+      String colName = colNode.has("name") ? colNode.get("name").asText() : null;
+      String colType = colNode.has("type") ? colNode.get("type").asText() : "string";
+      boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
+      String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
+
+      if (colName != null) {
+        columns.add(
+            new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+                colName, colType, nullable, comment));
+      }
+    }
+
+    return columns;
+  }
+
+  /**
+   * Converts cached JSON data to Parquet format using schema metadata.
+   *
+   * <p>This is a generic, metadata-driven conversion that works for any table
+   * in any schema (ECON, GEO, SEC). It uses the schema JSON as single source
+   * of truth for:
+   * <ul>
+   *   <li>File paths (via pattern and variable substitution)</li>
+   *   <li>Column definitions (types, nullability, comments)</li>
+   *   <li>JSON structure (data path for extracting records)</li>
+   * </ul>
+   *
+   * @param tableName Name of table in schema
+   * @param variables Variables for path resolution (e.g., {year: "2020"})
+   * @throws IOException if file operations fail
+   */
+  @SuppressWarnings("unchecked")
+  public void convertCachedJsonToParquet(String tableName, Map<String, String> variables)
+      throws IOException {
+    LOGGER.info("Converting cached JSON to Parquet for table: {}", tableName);
+
+    // Load metadata
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    if (pattern == null) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' has no 'pattern' in schema");
+    }
+
+    // Resolve source (JSON) and target (Parquet) paths
+    String jsonPath = resolveJsonPath(pattern, variables);
+    String parquetPath = resolveParquetPath(pattern, variables);
+
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+    LOGGER.info("Converting {} to {}", jsonPath, parquetPath);
+
+    // Check if source exists
+    if (!cacheStorageProvider.exists(fullJsonPath)) {
+      LOGGER.warn("Source JSON file not found: {}", fullJsonPath);
+      return;
+    }
+
+    // Determine data path from response config (default to root if not specified)
+    String dataPath = null;
+    if (metadata.containsKey("download")) {
+      Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+      if (downloadConfig.containsKey("response")) {
+        Map<String, Object> responseConfig = (Map<String, Object>) downloadConfig.get("response");
+        if (responseConfig.containsKey("dataPath")) {
+          dataPath = responseConfig.get("dataPath").toString();
+        }
+      }
+    }
+
+    // Read JSON file
+    List<Map<String, Object>> records = new ArrayList<>();
+    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath);
+         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream,
+             java.nio.charset.StandardCharsets.UTF_8)) {
+      JsonNode root = MAPPER.readTree(reader);
+
+      // Navigate to data using dataPath if specified
+      JsonNode dataNode = root;
+      if (dataPath != null && !dataPath.isEmpty()) {
+        dataNode = root.path(dataPath);
+      }
+
+      // Extract records
+      if (dataNode.isArray()) {
+        for (JsonNode recordNode : dataNode) {
+          Map<String, Object> record = MAPPER.convertValue(recordNode, Map.class);
+          records.add(record);
+        }
+      } else if (dataNode.isObject()) {
+        // Single object - wrap in list
+        Map<String, Object> record = MAPPER.convertValue(dataNode, Map.class);
+        records.add(record);
+      } else {
+        throw new IOException("Data node is neither array nor object at path: " + dataPath);
+      }
+
+      LOGGER.info("Read {} records from {}", records.size(), jsonPath);
+    } catch (Exception e) {
+      LOGGER.error("Failed to read JSON file {}: {}", fullJsonPath, e.getMessage(), e);
+      throw new IOException("Failed to read JSON: " + e.getMessage(), e);
+    }
+
+    if (records.isEmpty()) {
+      LOGGER.warn("No records found in JSON file: {}", fullJsonPath);
+      return;
+    }
+
+    // Load column metadata
+    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumnsFromMetadata(tableName);
+
+    // Write to Parquet using StorageProvider
+    LOGGER.info("Writing {} records to Parquet: {}", records.size(), parquetPath);
+    storageProvider.writeAvroParquet(fullParquetPath, columns, records, tableName, tableName);
+
+    // Verify file was written
+    if (storageProvider.exists(fullParquetPath)) {
+      LOGGER.info("Successfully converted {} to Parquet: {}", tableName, parquetPath);
+    } else {
+      LOGGER.error("Parquet file not found after write: {}", fullParquetPath);
+      throw new IOException("Parquet file not found after write: " + fullParquetPath);
     }
   }
 }

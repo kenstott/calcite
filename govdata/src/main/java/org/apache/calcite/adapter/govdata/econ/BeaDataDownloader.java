@@ -120,16 +120,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     this.apiKey = apiKey;
   }
 
-  @Override protected long getMinRequestIntervalMs() {
-    return 0; // BEA API has no strict rate limit
-  }
-
-  @Override protected int getMaxRetries() {
-    return 3;
-  }
-
-  @Override protected long getRetryDelayMs() {
-    return 2000; // 2 seconds
+  @Override protected String getTableName() {
+    return "gdp_components";
   }
 
   /**
