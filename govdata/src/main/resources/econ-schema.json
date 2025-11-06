@@ -1371,7 +1371,64 @@
           "nullable": true,
           "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "NIPA"
+          },
+          "TableName": {
+            "type": "iteration",
+            "source": "nipaTablesList"
+          },
+          "Frequency": {
+            "type": "constant",
+            "value": "A"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "nipaTablesList": [
+          "T10105",
+          "58",
+          "66",
+          "86",
+          "51",
+          "T40205B",
+          "45"
+        ],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
     },
     {
       "name": "gdp_statistics",
@@ -1497,7 +1554,64 @@
           "nullable": true,
           "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "Regional"
+          },
+          "TableName": {
+            "type": "constant",
+            "value": "SAINC1"
+          },
+          "LineCode": {
+            "type": "iteration",
+            "source": "lineCodesList"
+          },
+          "GeoFips": {
+            "type": "constant",
+            "value": "STATE"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "lineCodesList": [
+          "1",
+          "2",
+          "3"
+        ],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
     },
     {
       "name": "state_gdp",
@@ -1629,7 +1743,55 @@
           "nullable": true,
           "comment": "Calculated trade balance (exports minus imports) in millions of dollars"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "NIPA"
+          },
+          "TableName": {
+            "type": "constant",
+            "value": "T40205B"
+          },
+          "Frequency": {
+            "type": "constant",
+            "value": "A"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
     },
     {
       "name": "ita_data",
@@ -1695,7 +1857,68 @@
           "nullable": true,
           "comment": "Description of the time series"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "ITA"
+          },
+          "Indicator": {
+            "type": "iteration",
+            "source": "itaIndicatorsList"
+          },
+          "Frequency": {
+            "type": "constant",
+            "value": "A"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "itaIndicatorsList": [
+          "BalGds",
+          "BalServ",
+          "BalGdsServ",
+          "BalCurrAcct",
+          "BalCapAcct",
+          "BalPrimInc",
+          "BalSecInc",
+          "ExpGds",
+          "ImpGds",
+          "ExpServ",
+          "ImpServ"
+        ],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
     },
     {
       "name": "industry_gdp",
@@ -1761,7 +1984,62 @@
           "nullable": true,
           "comment": "Reference to footnotes or data quality notes"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "GDPbyIndustry"
+          },
+          "Industry": {
+            "type": "iteration",
+            "source": "keyIndustriesList"
+          },
+          "Frequency": {
+            "type": "constant",
+            "value": "A"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "keyIndustriesList": [
+          "31G",
+          "52",
+          "53",
+          "54",
+          "GSLG"
+        ],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
     },
     {
       "name": "reference_jolts_industries",
