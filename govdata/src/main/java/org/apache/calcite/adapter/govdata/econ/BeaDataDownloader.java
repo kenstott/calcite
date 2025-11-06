@@ -3029,30 +3029,36 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "gdp_components";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String nipaTable : nipaTablesList) {
       for (int year = startYear; year <= endYear; year++) {
-        // Build paths for this table/year
-        String seriesPartition = "type=" + tableName + "/table=" + nipaTable + "/year=" + year;
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("TableName", nipaTable);
+
+        // Resolve paths using pattern
+        String jsonPath = resolveJsonPath(pattern, variables);
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
         // Check if conversion needed
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("TableName", nipaTable);
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
           skippedCount++;
           continue;
         }
 
         // Convert via metadata-driven approach
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("TableName", nipaTable);
           convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
           convertedCount++;
 
           if (convertedCount % 10 == 0) {
@@ -3091,11 +3097,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "regional_income";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String lineCode : lineCodesList) {
       for (int year = startYear; year <= endYear; year++) {
-        // Build relative path
-        String relativePath = buildPartitionPath(tableName, year) + "/line=" + lineCode + "/" + tableName + ".json";
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("LineCode", lineCode);
+
+        // Resolve path using pattern
+        String relativePath = resolveJsonPath(pattern, variables);
 
         // Check if already cached
         java.util.Map<String, String> params = new java.util.HashMap<>();
@@ -3108,10 +3122,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
         // Download via metadata-driven executeDownload()
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("LineCode", lineCode);
-
           String cachedPath = executeDownload(tableName, variables);
           downloadedCount++;
 
@@ -3145,27 +3155,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "regional_income";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String lineCode : lineCodesList) {
       for (int year = startYear; year <= endYear; year++) {
-        String seriesPartition = "type=" + tableName + "/line=" + lineCode + "/year=" + year;
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("LineCode", lineCode);
+
+        // Resolve paths using pattern
+        String jsonPath = resolveJsonPath(pattern, variables);
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("LineCode", lineCode);
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
           skippedCount++;
           continue;
         }
 
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("LineCode", lineCode);
           convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
           convertedCount++;
         } catch (Exception e) {
           LOGGER.error("Error converting line code {} for year {}: {}", lineCode, year, e.getMessage());
@@ -3189,9 +3206,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "trade_statistics";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (int year = startYear; year <= endYear; year++) {
-      String relativePath = buildPartitionPath(tableName, year) + "/" + tableName + ".json";
+      // Build variables map
+      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "A");
+
+      // Resolve path using pattern
+      String relativePath = resolveJsonPath(pattern, variables);
 
       if (isCachedOrExists(tableName, year, new java.util.HashMap<>(), relativePath)) {
         skippedCount++;
@@ -3199,9 +3224,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
 
       try {
-        java.util.Map<String, String> variables = new java.util.HashMap<>();
-        variables.put("year", String.valueOf(year));
-
         String cachedPath = executeDownload(tableName, variables);
         downloadedCount++;
       } catch (Exception e) {
@@ -3223,22 +3245,29 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "trade_statistics";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (int year = startYear; year <= endYear; year++) {
-      String seriesPartition = "type=" + tableName + "/year=" + year;
-      String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-      String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+      // Build variables map
+      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "A");
 
-      if (isParquetConvertedOrExists(tableName, year, new java.util.HashMap<>(), rawPath, parquetPath)) {
+      // Resolve paths using pattern
+      String jsonPath = resolveJsonPath(pattern, variables);
+      String parquetPath = resolveParquetPath(pattern, variables);
+      String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+      if (isParquetConvertedOrExists(tableName, year, new java.util.HashMap<>(), rawPath, fullParquetPath)) {
         skippedCount++;
         continue;
       }
 
       try {
-        java.util.Map<String, String> variables = new java.util.HashMap<>();
-        variables.put("year", String.valueOf(year));
         convertCachedJsonToParquet(tableName, variables);
-        cacheManifest.markParquetConverted(tableName, year, new java.util.HashMap<>(), parquetPath);
+        cacheManifest.markParquetConverted(tableName, year, new java.util.HashMap<>(), fullParquetPath);
         convertedCount++;
       } catch (Exception e) {
         LOGGER.error("Error converting trade statistics for year {}: {}", year, e.getMessage());
@@ -3269,10 +3298,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "ita_data";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String indicator : itaIndicatorsList) {
       for (int year = startYear; year <= endYear; year++) {
-        String relativePath = buildPartitionPath(tableName, year) + "/indicator=" + indicator + "/" + tableName + ".json";
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("Indicator", indicator);
+
+        // Resolve path using pattern
+        String relativePath = resolveJsonPath(pattern, variables);
 
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("Indicator", indicator);
@@ -3283,10 +3321,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         }
 
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("Indicator", indicator);
-
           String cachedPath = executeDownload(tableName, variables);
           downloadedCount++;
 
@@ -3320,27 +3354,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "ita_data";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String indicator : itaIndicatorsList) {
       for (int year = startYear; year <= endYear; year++) {
-        String seriesPartition = "type=" + tableName + "/indicator=" + indicator + "/year=" + year;
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("Indicator", indicator);
+
+        // Resolve paths using pattern
+        String jsonPath = resolveJsonPath(pattern, variables);
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("Indicator", indicator);
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
           skippedCount++;
           continue;
         }
 
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("Indicator", indicator);
           convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
           convertedCount++;
         } catch (Exception e) {
           LOGGER.error("Error converting ITA indicator {} for year {}: {}", indicator, year, e.getMessage());
@@ -3372,10 +3413,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "industry_gdp";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String industry : keyIndustriesList) {
       for (int year = startYear; year <= endYear; year++) {
-        String relativePath = buildPartitionPath(tableName, year) + "/industry=" + industry + "/" + tableName + ".json";
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("Industry", industry);
+
+        // Resolve path using pattern
+        String relativePath = resolveJsonPath(pattern, variables);
 
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("Industry", industry);
@@ -3386,10 +3436,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         }
 
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("Industry", industry);
-
           String cachedPath = executeDownload(tableName, variables);
           downloadedCount++;
 
@@ -3423,27 +3469,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = "industry_gdp";
+    java.util.Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
     for (String industry : keyIndustriesList) {
       for (int year = startYear; year <= endYear; year++) {
-        String seriesPartition = "type=" + tableName + "/industry=" + industry + "/year=" + year;
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+        // Build variables map
+        java.util.Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("year", String.valueOf(year));
+        variables.put("frequency", "A");
+        variables.put("Industry", industry);
+
+        // Resolve paths using pattern
+        String jsonPath = resolveJsonPath(pattern, variables);
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("Industry", industry);
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
           skippedCount++;
           continue;
         }
 
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("Industry", industry);
           convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
           convertedCount++;
         } catch (Exception e) {
           LOGGER.error("Error converting industry {} for year {}: {}", industry, year, e.getMessage());
