@@ -24,6 +24,9 @@ package org.apache.calcite.adapter.govdata.econ;
  * <p>Requires a FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html
  */
 public class FredDataDownloader extends AbstractEconDataDownloader {
+
+  private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+      new com.fasterxml.jackson.databind.ObjectMapper();
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(FredDataDownloader.class);
 
   public FredDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
@@ -76,6 +79,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
         try {
           java.util.Map<String, String> variables = new java.util.HashMap<>();
           variables.put("year", String.valueOf(year));
+          variables.put("series", seriesId);  // Add series to variables for pattern resolution
           variables.put("series_id", seriesId);
 
           String cachedPath = executeDownload(tableName, variables);
