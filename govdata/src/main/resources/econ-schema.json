@@ -1303,7 +1303,7 @@
     },
     {
       "name": "gdp_components",
-      "pattern": "type=indicators/frequency=*/year=*/gdp_components.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/TableName=*/gdp_components.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1318,6 +1318,10 @@
           {
             "name": "year",
             "type": "INTEGER"
+          },
+          {
+            "name": "TableName",
+            "type": "VARCHAR"
           }
         ]
       },
@@ -1492,7 +1496,7 @@
     },
     {
       "name": "regional_income",
-      "pattern": "type=regional_income/frequency=*/year=*/regional_income.parquet",
+      "pattern": "type=regional_income/frequency=*/year=*/LineCode=*/regional_income.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1507,6 +1511,10 @@
           {
             "name": "year",
             "type": "INTEGER"
+          },
+          {
+            "name": "LineCode",
+            "type": "VARCHAR"
           }
         ]
       },
@@ -1795,7 +1803,7 @@
     },
     {
       "name": "ita_data",
-      "pattern": "type=indicators/frequency=*/year=*/ita_data.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/Indicator=*/ita_data.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1810,6 +1818,10 @@
           {
             "name": "year",
             "type": "INTEGER"
+          },
+          {
+            "name": "Indicator",
+            "type": "VARCHAR"
           }
         ]
       },
@@ -1922,7 +1934,7 @@
     },
     {
       "name": "industry_gdp",
-      "pattern": "type=indicators/frequency=*/year=*/industry_gdp.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/Industry=*/industry_gdp.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1937,6 +1949,10 @@
           {
             "name": "year",
             "type": "INTEGER"
+          },
+          {
+            "name": "Industry",
+            "type": "VARCHAR"
           }
         ]
       },
