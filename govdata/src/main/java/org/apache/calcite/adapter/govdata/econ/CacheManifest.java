@@ -49,6 +49,9 @@ public class CacheManifest extends AbstractCacheManifest {
   @JsonProperty("entries")
   private Map<String, CacheEntry> entries = new HashMap<>();
 
+  @JsonProperty("catalogSeriesCache")
+  private Map<String, CatalogSeriesCache> catalogSeriesCache = new HashMap<>();
+
   @JsonProperty("version")
   private String version = "2.0";  // Bumped for refreshAfter field addition
 
@@ -383,6 +386,110 @@ public class CacheManifest extends AbstractCacheManifest {
     return (entry != null) ? entry.etag : null;
   }
 
+  // ===== FRED Catalog Series Cache Methods =====
+
+  /**
+   * Get cached FRED catalog series list filtered by popularity threshold.
+   * Returns null if not cached or cache has expired.
+   *
+   * @param minPopularity Minimum popularity threshold used for filtering
+   * @return List of series IDs, or null if not cached/expired
+   */
+  public java.util.List<String> getCachedCatalogSeries(int minPopularity) {
+    String key = "catalog_series:popularity=" + minPopularity;
+    CatalogSeriesCache entry = catalogSeriesCache.get(key);
+
+    if (entry == null) {
+      return null;
+    }
+
+    // Check if cache has expired
+    long now = System.currentTimeMillis();
+    if (now >= entry.refreshAfter) {
+      long ageDays = TimeUnit.MILLISECONDS.toDays(now - entry.cachedAt);
+      LOGGER.info("Catalog series cache expired (age: {} days, threshold: {})",
+          ageDays, minPopularity);
+      catalogSeriesCache.remove(key);
+      return null;
+    }
+
+    long ageDays = TimeUnit.MILLISECONDS.toDays(now - entry.cachedAt);
+    LOGGER.debug("Using cached catalog series (count: {}, threshold: {}, age: {} days)",
+        entry.seriesIds.size(), minPopularity, ageDays);
+
+    return new java.util.ArrayList<>(entry.seriesIds);
+  }
+
+  /**
+   * Cache FRED catalog series extraction results with TTL.
+   *
+   * @param minPopularity Popularity threshold used for filtering
+   * @param seriesIds List of series IDs that met the threshold
+   * @param ttlDays Time-to-live in days (typically 365 for annual refresh)
+   */
+  public void cacheCatalogSeries(int minPopularity, java.util.List<String> seriesIds, int ttlDays) {
+    String key = "catalog_series:popularity=" + minPopularity;
+    CatalogSeriesCache entry = new CatalogSeriesCache();
+    entry.minPopularity = minPopularity;
+    entry.seriesIds = new java.util.ArrayList<>(seriesIds);
+    entry.cachedAt = System.currentTimeMillis();
+    entry.refreshAfter = entry.cachedAt + TimeUnit.DAYS.toMillis(ttlDays);
+    entry.refreshReason = "catalog_annual_refresh";
+
+    catalogSeriesCache.put(key, entry);
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.info("Cached {} catalog series (threshold: {}, TTL: {} days)",
+        seriesIds.size(), minPopularity, ttlDays);
+  }
+
+  /**
+   * Check if catalog series cache exists and is valid for the given threshold.
+   *
+   * @param minPopularity Popularity threshold
+   * @return true if cache exists and has not expired
+   */
+  public boolean isCatalogSeriesCached(int minPopularity) {
+    String key = "catalog_series:popularity=" + minPopularity;
+    CatalogSeriesCache entry = catalogSeriesCache.get(key);
+
+    if (entry == null) {
+      return false;
+    }
+
+    long now = System.currentTimeMillis();
+    return now < entry.refreshAfter;
+  }
+
+  /**
+   * Invalidate cached catalog series for a specific popularity threshold.
+   * Forces re-extraction on next access.
+   *
+   * @param minPopularity Popularity threshold to invalidate
+   */
+  public void invalidateCatalogSeriesCache(int minPopularity) {
+    String key = "catalog_series:popularity=" + minPopularity;
+    CatalogSeriesCache removed = catalogSeriesCache.remove(key);
+    if (removed != null) {
+      LOGGER.info("Invalidated catalog series cache (threshold: {}, had {} series)",
+          minPopularity, removed.seriesIds.size());
+      lastUpdated = System.currentTimeMillis();
+    }
+  }
+
+  /**
+   * Invalidate all cached catalog series for all popularity thresholds.
+   * Forces re-extraction for all thresholds on next access.
+   */
+  public void invalidateAllCatalogSeriesCache() {
+    int count = catalogSeriesCache.size();
+    catalogSeriesCache.clear();
+    if (count > 0) {
+      LOGGER.info("Invalidated all catalog series caches ({} thresholds)", count);
+      lastUpdated = System.currentTimeMillis();
+    }
+  }
+
   /**
    * Cache entry metadata with explicit refresh timestamp.
    * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add ECON-specific fields.
@@ -396,6 +503,29 @@ public class CacheManifest extends AbstractCacheManifest {
 
     @JsonProperty("parameters")
     public Map<String, String> parameters = new HashMap<>();
+  }
+
+  /**
+   * Cache entry for extracted FRED catalog series lists.
+   * Caches expensive catalog extraction results (listing/parsing JSON files)
+   * with configurable TTL since catalog changes slowly.
+   * Keyed by minPopularity threshold since different thresholds yield different results.
+   */
+  public static class CatalogSeriesCache {
+    @JsonProperty("minPopularity")
+    public int minPopularity;
+
+    @JsonProperty("seriesIds")
+    public java.util.List<String> seriesIds;
+
+    @JsonProperty("cachedAt")
+    public long cachedAt;
+
+    @JsonProperty("refreshAfter")
+    public long refreshAfter;
+
+    @JsonProperty("refreshReason")
+    public String refreshReason;
   }
 
   /**
