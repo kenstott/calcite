@@ -119,32 +119,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.debug("  Parquet directory: {}", econParquetDir);
     LOGGER.debug("  Year range: {} - {}", startYear, endYear);
 
-    // Extract API keys from environment variables or system properties
-    String blsApiKey = System.getenv("BLS_API_KEY");
-    if (blsApiKey == null) {
-      blsApiKey = System.getProperty("BLS_API_KEY");
-    }
-
-    String fredApiKey = System.getenv("FRED_API_KEY");
-    if (fredApiKey == null) {
-      fredApiKey = System.getProperty("FRED_API_KEY");
-    }
-
-    String beaApiKey = System.getenv("BEA_API_KEY");
-    if (beaApiKey == null) {
-      beaApiKey = System.getProperty("BEA_API_KEY");
-    }
-
-    // Check for operand overrides (model can override environment)
-    if (operand.get("blsApiKey") != null) {
-      blsApiKey = (String) operand.get("blsApiKey");
-    }
-    if (operand.get("fredApiKey") != null) {
-      fredApiKey = (String) operand.get("fredApiKey");
-    }
-    if (operand.get("beaApiKey") != null) {
-      beaApiKey = (String) operand.get("beaApiKey");
-    }
+    // Get API keys from operand (populated from env vars in model.json via ${ENV_VAR} syntax)
+    // The schema's authentication.envVar config is used by metadata-driven downloaders,
+    // but FredCatalogDownloader (legacy) still needs the API key passed explicitly
+    String blsApiKey = (String) operand.get("blsApiKey");
+    String fredApiKey = (String) operand.get("fredApiKey");
+    String beaApiKey = (String) operand.get("beaApiKey");
 
     // Get enabled sources
     @SuppressWarnings("unchecked")
