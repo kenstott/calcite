@@ -64,7 +64,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
   private Map<String, Map<String, Object>> tableConstraints;
   private List<String> customFredSeries;
-  private Map<String, Object> fredSeriesGroups;
   private java.util.Set<String> enabledBlsTables;
 
 /**
@@ -163,26 +162,22 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     @SuppressWarnings("unchecked")
     List<String> customFredSeries = (List<String>) operand.get("customFredSeries");
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> fredSeriesGroups = (Map<String, Object>) operand.get("fredSeriesGroups");
-
     // Store configuration for table definition generation
     this.customFredSeries = customFredSeries;
-    this.fredSeriesGroups = fredSeriesGroups;
 
     // Parse BLS table filtering configuration (needed for both download and schema filtering)
     this.enabledBlsTables = parseBlsTableFilter(operand);
 
-    String defaultPartitionStrategy = (String) operand.get("defaultPartitionStrategy");
-    if (defaultPartitionStrategy == null) {
-      defaultPartitionStrategy = "AUTO";
-    }
-
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug("  Custom FRED series: {}", customFredSeries != null ? customFredSeries.size() + " series configured" : "none");
-      LOGGER.debug("  FRED series groups: {}", fredSeriesGroups != null ? fredSeriesGroups.size() + " groups configured" : "none");
     }
-    LOGGER.debug("  Default partition strategy: {}", defaultPartitionStrategy);
+
+    // Parse FRED minimum popularity threshold for catalog-based series filtering
+    Integer fredMinPopularity = (Integer) operand.get("fredMinPopularity");
+    if (fredMinPopularity == null) {
+      fredMinPopularity = 50;  // Default: only moderately popular series
+    }
+    LOGGER.debug("  FRED minimum popularity threshold: {}", fredMinPopularity);
 
     // Check auto-download setting (default true like GEO)
     Boolean autoDownload = (Boolean) operand.get("autoDownload");
@@ -199,7 +194,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         downloadEconData(mutableOperand, econRawDir, econParquetDir,
             blsApiKey, fredApiKey, beaApiKey, enabledSources, startYear, endYear, storageProvider,
-            customFredSeries, fredSeriesGroups, defaultPartitionStrategy, cacheStorageProvider);
+            customFredSeries, cacheStorageProvider, fredMinPopularity);
       } catch (Exception e) {
         LOGGER.error("Error downloading ECON data", e);
         // Continue even if download fails - existing data may be available
@@ -286,8 +281,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadEconData(Map<String, Object> operand, String cacheDir, String parquetDir,
       String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
       int startYear, int endYear, StorageProvider storageProvider,
-      List<String> customFredSeries, Map<String, Object> fredSeriesGroups, String defaultPartitionStrategy,
-      StorageProvider cacheStorageProvider) throws IOException {
+      List<String> customFredSeries, StorageProvider cacheStorageProvider, int fredMinPopularity) throws IOException {
 
     // Operating directory for metadata (.aperio/econ/)
     // This is passed from GovDataSchemaFactory which establishes it centrally
@@ -308,6 +302,25 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // cacheStorageProvider is passed as parameter (created by GovDataSchemaFactory)
     LOGGER.debug("Using shared cache storage provider for cache directory: {}", cacheDir);
 
+    // Download FRED series catalog FIRST as a prerequisite for fred_indicators population
+    // This must happen before FRED indicators download since we need the catalog to determine series list
+    LOGGER.debug("FRED catalog download check: fredApiKey={}, isEmpty={}",
+        fredApiKey != null ? "configured" : "null",
+        fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
+    if (fredApiKey != null && !fredApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Downloading FRED catalog as prerequisite for indicators");
+        // Note: FredCatalogDownloader will be refactored in Phase 6 to use cacheStorageProvider
+        // For now it still uses storageProvider for both cache and parquet operations
+        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider, cacheManifest);
+        catalogDownloader.downloadCatalog();
+      } catch (Exception e) {
+        LOGGER.error("Error downloading FRED catalog", e);
+      }
+    } else {
+      LOGGER.warn("Skipping FRED catalog download - API key not available");
+    }
+
     // Download BLS data if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
@@ -324,7 +337,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.parquet");
           String employmentRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "employment_statistics", year, employmentRawPath, employmentParquetPath)) {
-            blsDownloader.convertToParquet(employmentRawPath, employmentParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "monthly");
+            blsDownloader.convertCachedJsonToParquet("employment_statistics", variables);
             cacheManifest.markParquetConverted("employment_statistics", year, null, employmentParquetPath);
           }
 
@@ -332,7 +348,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.parquet");
           String inflationRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "inflation_metrics", year, inflationRawPath, inflationParquetPath)) {
-            blsDownloader.convertToParquet(inflationRawPath, inflationParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "monthly");
+            blsDownloader.convertCachedJsonToParquet("inflation_metrics", variables);
             cacheManifest.markParquetConverted("inflation_metrics", year, null, inflationParquetPath);
           }
 
@@ -341,7 +360,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String regionalCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_regional/year=" + year + "/regional_cpi.parquet");
           String regionalCpiRawPath = cacheStorageProvider.resolvePath(regionalCpiCacheYearPath, "regional_cpi.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_cpi", year, regionalCpiRawPath, regionalCpiParquetPath)) {
-            blsDownloader.convertToParquet(regionalCpiCacheYearPath, regionalCpiParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("regional_cpi", variables);
             cacheManifest.markParquetConverted("regional_cpi", year, null, regionalCpiParquetPath);
           }
 
@@ -350,7 +371,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/frequency=month/year=" + year + "/metro_cpi.parquet");
           String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
-            blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "month");
+            blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
             cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
           }
 
@@ -359,7 +383,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String stateIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=state_industry/year=" + year + "/state_industry.parquet");
           String stateIndustryRawPath = cacheStorageProvider.resolvePath(stateIndustryCacheYearPath, "state_industry.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_industry", year, stateIndustryRawPath, stateIndustryParquetPath)) {
-            blsDownloader.convertToParquet(stateIndustryCacheYearPath, stateIndustryParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("state_industry", variables);
             cacheManifest.markParquetConverted("state_industry", year, null, stateIndustryParquetPath);
           }
 
@@ -368,7 +394,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String stateWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=state_wages/year=" + year + "/state_wages.parquet");
           String stateWagesRawPath = cacheStorageProvider.resolvePath(stateWagesCacheYearPath, "state_wages.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_wages", year, stateWagesRawPath, stateWagesParquetPath)) {
-            blsDownloader.convertToParquet(stateWagesCacheYearPath, stateWagesParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("state_wages", variables);
             cacheManifest.markParquetConverted("state_wages", year, null, stateWagesParquetPath);
           }
 
@@ -377,7 +405,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String metroIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_industry/year=" + year + "/metro_industry.parquet");
           String metroIndustryRawPath = cacheStorageProvider.resolvePath(metroIndustryCacheYearPath, "metro_industry.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_industry", year, metroIndustryRawPath, metroIndustryParquetPath)) {
-            blsDownloader.convertToParquet(metroIndustryCacheYearPath, metroIndustryParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("metro_industry", variables);
             cacheManifest.markParquetConverted("metro_industry", year, null, metroIndustryParquetPath);
           }
 
@@ -386,7 +416,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String metroWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_wages/year=" + year + "/metro_wages.parquet");
           String metroWagesRawPath = cacheStorageProvider.resolvePath(metroWagesCacheYearPath, "metro_wages.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_wages", year, metroWagesRawPath, metroWagesParquetPath)) {
-            blsDownloader.convertToParquet(metroWagesCacheYearPath, metroWagesParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("metro_wages", variables);
             cacheManifest.markParquetConverted("metro_wages", year, null, metroWagesParquetPath);
           }
 
@@ -395,7 +427,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
           String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
-            blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "monthly");
+            blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
             cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
           }
 
@@ -404,7 +439,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String countyWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=county_wages/year=" + year + "/county_wages.parquet");
           String countyWagesRawPath = cacheStorageProvider.resolvePath(countyWagesCacheYearPath, "county_wages.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "county_wages", year, countyWagesRawPath, countyWagesParquetPath)) {
-            blsDownloader.convertToParquet(countyWagesCacheYearPath, countyWagesParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("county_wages", variables);
             cacheManifest.markParquetConverted("county_wages", year, null, countyWagesParquetPath);
           }
 
@@ -413,7 +450,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String joltsStateParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_state/year=" + year + "/jolts_state.parquet");
           String joltsStateRawPath = cacheStorageProvider.resolvePath(joltsStateCacheYearPath, "jolts_state.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_state", year, joltsStateRawPath, joltsStateParquetPath)) {
-            blsDownloader.convertToParquet(joltsStateCacheYearPath, joltsStateParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("jolts_state", variables);
             cacheManifest.markParquetConverted("jolts_state", year, null, joltsStateParquetPath);
           }
 
@@ -421,7 +460,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.parquet");
           String wageRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "wage_growth", year, wageRawPath, wageParquetPath)) {
-            blsDownloader.convertToParquet(cacheYearPath, wageParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "quarterly");
+            blsDownloader.convertCachedJsonToParquet("wage_growth", variables);
             cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
           }
         }
@@ -431,7 +473,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         String joltsIndustriesParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_industries.parquet");
         String joltsIndustriesRawPath = cacheStorageProvider.resolvePath(joltsIndustriesCachePath, "jolts_industries.json");
         if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_industries", 0, joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
-          blsDownloader.convertToParquet(joltsIndustriesCachePath, joltsIndustriesParquetPath);
+          Map<String, String> variables = new HashMap<>();
+          blsDownloader.convertCachedJsonToParquet("jolts_industries", variables);
           cacheManifest.markParquetConverted("jolts_industries", 0, null, joltsIndustriesParquetPath);
         }
 
@@ -439,7 +482,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         String joltsDataelementsParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_dataelements.parquet");
         String joltsDataelementsRawPath = cacheStorageProvider.resolvePath(joltsDataelementsCachePath, "jolts_dataelements.json");
         if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_dataelements", 0, joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
-          blsDownloader.convertToParquet(joltsDataelementsCachePath, joltsDataelementsParquetPath);
+          Map<String, String> variables = new HashMap<>();
+          blsDownloader.convertCachedJsonToParquet("jolts_dataelements", variables);
           cacheManifest.markParquetConverted("jolts_dataelements", 0, null, joltsDataelementsParquetPath);
         }
 
@@ -449,44 +493,47 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Download FRED data if enabled
+    // Download FRED indicators data from catalog-based series list
     if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, econOperatingDirectory, fredApiKey, cacheStorageProvider, storageProvider, cacheManifest);
+        LOGGER.info("Building FRED indicators series list from catalog (active series with popularity >= {})", fredMinPopularity);
 
-        // Download all FRED data for the year range
-        fredDownloader.downloadAll(startYear, endYear);
+        // Extract active, popular series from catalog
+        List<String> catalogSeries = extractActivePopularSeriesFromCatalog(cacheStorageProvider, cacheDir, fredMinPopularity);
+        LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
 
-        // Convert to parquet files for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String fredParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/fred_indicators.parquet");
-          String cacheFredYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
-          String fredRawPath = cacheStorageProvider.resolvePath(cacheFredYearPath, "fred_indicators.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "fred_indicators", year, fredRawPath, fredParquetPath)) {
-            fredDownloader.convertToParquet(cacheFredYearPath, fredParquetPath);
-            cacheManifest.markParquetConverted("fred_indicators", year, null, fredParquetPath);
-          }
+        // Merge with customFredSeries if provided
+        java.util.Set<String> allSeriesIds = new java.util.LinkedHashSet<>(catalogSeries);
+        if (customFredSeries != null && !customFredSeries.isEmpty()) {
+          allSeriesIds.addAll(customFredSeries);
+          LOGGER.info("Added {} custom FRED series, total series count: {}", customFredSeries.size(), allSeriesIds.size());
         }
-      } catch (Exception e) {
-        LOGGER.error("Error downloading FRED data", e);
-      }
-    }
 
-    // Download custom FRED series if configured
-    if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()
-        && (customFredSeries != null || fredSeriesGroups != null)) {
-      try {
-        downloadCustomFredSeries(cacheDir, econOperatingDirectory, parquetDir, fredApiKey, storageProvider,
-            customFredSeries, fredSeriesGroups, defaultPartitionStrategy, startYear, endYear, cacheManifest, cacheStorageProvider);
+        // Download and convert each series with series partitioning
+        FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+
+        // TODO: Implement metadata-driven download using AbstractGovDataDownloader.executeDownload()
+        // The schema in econ-schema.json has complete download configuration.
+        // This replaces the custom downloadSeries() loop that was removed.
+        //
+        // For now, downloads should be triggered via:
+        //   Map<String, String> variables = new HashMap<>();
+        //   variables.put("year", String.valueOf(year));
+        //   fredDownloader.executeDownload("fred_indicators", variables);
+        //
+        // This will read the seriesList from schema and download all series for the given year.
+
+        LOGGER.warn("FRED indicators download not yet implemented with metadata-driven approach");
+        LOGGER.info("To enable: use executeDownload() with schema-based configuration");
       } catch (Exception e) {
-        LOGGER.error("Error downloading custom FRED series", e);
+        LOGGER.error("Error downloading FRED indicators data", e);
       }
     }
 
     // Download Treasury data if enabled (no API key required)
     if (enabledSources.contains("treasury")) {
       try {
-        TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
+        TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
         // Download all Treasury data for the year range
         treasuryDownloader.downloadAll(startYear, endYear);
@@ -498,7 +545,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/frequency=daily/year=" + year + "/treasury_yields.parquet");
           String yieldsRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "treasury_yields.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "treasury_yields", year, yieldsRawPath, yieldsParquetPath)) {
-            treasuryDownloader.convertToParquet(cacheTimeseriesYearPath, yieldsParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "daily");
+            treasuryDownloader.convertCachedJsonToParquet("treasury_yields", variables);
             cacheManifest.markParquetConverted("treasury_yields", year, null, yieldsParquetPath);
           }
 
@@ -533,7 +583,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String gdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/gdp_components.parquet");
           String gdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "gdp_components.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "gdp_components", year, gdpRawPath, gdpParquetPath)) {
-            beaDownloader.convertToParquet(cacheIndicatorsYearPath, gdpParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            beaDownloader.convertCachedJsonToParquet("gdp_components", variables);
             cacheManifest.markParquetConverted("gdp_components", year, null, gdpParquetPath);
           }
 
@@ -761,7 +813,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
           String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
-            blsDownloader.convertToParquet(joltsRegionalCacheYearPath, joltsRegionalParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            variables.put("frequency", "monthly");
+            blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
             cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
           }
         }
@@ -784,7 +839,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/year=" + year + "/metro_cpi.parquet");
           String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
-            blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
             cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
           }
         }
@@ -873,7 +930,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download World Bank data if enabled (no API key required)
     if (enabledSources.contains("worldbank")) {
       try {
-        WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir, econOperatingDirectory, cacheStorageProvider, storageProvider, cacheManifest);
+        WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
         // Download all World Bank data for the year range
         worldBankDownloader.downloadAll(startYear, endYear);
@@ -884,7 +941,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           String cacheWorldBankYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
           String worldRawPath = cacheStorageProvider.resolvePath(cacheWorldBankYearPath, "world_indicators.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "world_indicators", year, worldRawPath, worldParquetPath)) {
-            worldBankDownloader.convertToParquet(cacheWorldBankYearPath, worldParquetPath);
+            Map<String, String> variables = new HashMap<>();
+            variables.put("year", String.valueOf(year));
+            worldBankDownloader.convertCachedJsonToParquet("world_indicators", variables);
             cacheManifest.markParquetConverted("world_indicators", year, null, worldParquetPath);
           }
         }
@@ -895,23 +954,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Download FRED series catalog if FRED API key is available
-    LOGGER.debug("FRED catalog download check: fredApiKey={}, isEmpty={}",
-        fredApiKey != null ? "configured" : "null",
-        fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
-    if (fredApiKey != null && !fredApiKey.isEmpty()) {
-      try {
-        // Note: FredCatalogDownloader will be refactored in Phase 6 to use cacheStorageProvider
-        // For now it still uses storageProvider for both cache and parquet operations
-        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider, cacheManifest);
-        catalogDownloader.downloadCatalog();
-      } catch (Exception e) {
-        LOGGER.error("Error downloading FRED catalog", e);
-      }
-    } else {
-      LOGGER.warn("Skipping FRED catalog download - API key not available");
-    }
-
     // Save cache manifest after all downloads to operating directory
     if (cacheManifest != null) {
       cacheManifest.save(econOperatingDirectory);
@@ -919,165 +961,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Download custom FRED series with smart partitioning support.
-   */
-  private void downloadCustomFredSeries(String cacheDir, String operatingDirectory, String parquetDir, String fredApiKey,
-      StorageProvider storageProvider, List<String> customFredSeries, Map<String, Object> fredSeriesGroups,
-      String defaultPartitionStrategy, int startYear, int endYear, CacheManifest sharedManifest,
-      StorageProvider cacheStorageProvider) throws IOException {
-
-    // Initialize partition analyzer
-    FredSeriesPartitionAnalyzer analyzer = new FredSeriesPartitionAnalyzer();
-
-    // Collect all custom series for volume analysis
-    List<String> allCustomSeries = new ArrayList<>();
-    if (customFredSeries != null) {
-      allCustomSeries.addAll(customFredSeries);
-    }
-
-    // Parse series groups from configuration
-    List<FredSeriesGroup> parsedGroups = new ArrayList<>();
-    if (fredSeriesGroups != null) {
-      for (Map.Entry<String, Object> entry : fredSeriesGroups.entrySet()) {
-        String groupName = entry.getKey();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> groupConfig = (Map<String, Object>) entry.getValue();
-
-        @SuppressWarnings("unchecked")
-        List<String> seriesList = (List<String>) groupConfig.get("series");
-
-        String strategyStr = (String) groupConfig.get("partitionStrategy");
-        if (strategyStr == null) {
-          strategyStr = defaultPartitionStrategy;
-        }
-
-        FredSeriesGroup.PartitionStrategy strategy;
-        try {
-          strategy = FredSeriesGroup.PartitionStrategy.valueOf(strategyStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-          LOGGER.warn("Invalid partition strategy '{}' for group '{}'. Valid strategies are: NONE, AUTO, MANUAL. " +
-              "To partition by specific fields like year and maturity, use partitionStrategy='MANUAL' with " +
-              "partitionFields=['year','maturity']. Using default: {}",
-              strategyStr, groupName, defaultPartitionStrategy);
-          strategy = FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase());
-        }
-
-        @SuppressWarnings("unchecked")
-        List<String> partitionFields = (List<String>) groupConfig.get("partitionFields");
-
-        FredSeriesGroup group = new FredSeriesGroup(groupName, seriesList, strategy, partitionFields);
-        parsedGroups.add(group);
-
-        // Add to all series for analysis
-        if (seriesList != null) {
-          allCustomSeries.addAll(seriesList);
-        }
-
-        LOGGER.debug("Parsed FRED series group: {}", group);
-      }
-    }
-
-    // cacheStorageProvider is now passed as parameter (created by GovDataSchemaFactory)
-
-    // Download data for each series group - use shared manifest passed from caller
-    FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, operatingDirectory, fredApiKey, cacheStorageProvider, storageProvider, sharedManifest);
-
-    for (FredSeriesGroup group : parsedGroups) {
-      LOGGER.debug("Processing FRED series group: {}", group.getGroupName());
-
-      // Analyze partitioning strategy for this group
-      FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(group, allCustomSeries);
-      LOGGER.debug("Partition analysis for group '{}': {}", group.getGroupName(), analysis);
-
-      // Download series data with partitioning
-      String groupTableName = group.getTableName();
-      String groupParquetDir = parquetDir;
-
-      // Directory creation handled automatically by StorageProvider when writing files
-
-      // Download each series in the group
-      for (String seriesId : group.getSeries()) {
-        try {
-          // Download raw series data
-          fredDownloader.downloadSeries(seriesId, startYear, endYear);
-
-          // Convert to partitioned parquet using analysis results
-          if (analysis.getStrategy() == FredSeriesGroup.PartitionStrategy.NONE) {
-            // No partitioning - single file
-            String parquetPath = storageProvider.resolvePath(groupParquetDir, groupTableName + ".parquet");
-            fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null, startYear, endYear);
-          } else {
-            // Apply partitioning strategy
-            List<String> partitionFields = analysis.getPartitionFields();
-            for (int year = startYear; year <= endYear; year++) {
-              String partitionPath = buildPartitionPath(groupParquetDir, groupTableName, partitionFields, year, seriesId);
-              fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields, year, year);
-            }
-          }
-
-        } catch (Exception e) {
-          LOGGER.error("Failed to download FRED series: {} in group: {}", seriesId, group.getGroupName(), e);
-        }
-      }
-    }
-
-    // Handle ungrouped custom series
-    if (customFredSeries != null && !customFredSeries.isEmpty()) {
-      LOGGER.debug("Processing {} ungrouped custom FRED series", customFredSeries.size());
-
-      // Create default group for ungrouped series
-      FredSeriesGroup defaultGroup =
-          new FredSeriesGroup("custom_series", customFredSeries, FredSeriesGroup.PartitionStrategy.valueOf(defaultPartitionStrategy.toUpperCase()), null);
-
-      FredSeriesPartitionAnalyzer.PartitionAnalysis analysis = analyzer.analyzeGroup(defaultGroup, allCustomSeries);
-      LOGGER.debug("Partition analysis for ungrouped series: {}", analysis);
-
-      // Download ungrouped series
-      for (String seriesId : customFredSeries) {
-        // Skip if already processed as part of a group
-        boolean inGroup = false;
-        for (FredSeriesGroup group : parsedGroups) {
-          if (group.matchesSeries(seriesId)) {
-            inGroup = true;
-            break;
-          }
-        }
-
-        if (!inGroup) {
-          try {
-            // Download raw series data
-            fredDownloader.downloadSeries(seriesId, startYear, endYear);
-
-            // Determine table name based on series ID
-            String tableName = getTableNameForSeries(seriesId);
-
-            // Apply partitioning strategy
-            if (analysis.getStrategy() == FredSeriesGroup.PartitionStrategy.NONE) {
-              // No partitioning
-              String parquetPath = storageProvider.resolvePath(parquetDir, "type=custom/" + tableName + ".parquet");
-              fredDownloader.convertSeriesToParquet(seriesId, parquetPath, null, startYear, endYear);
-              LOGGER.debug("Created non-partitioned parquet for series {} at: {}", seriesId, parquetPath);
-            } else {
-              // Apply partitioning
-              List<String> partitionFields = analysis.getPartitionFields();
-              for (int year = startYear; year <= endYear; year++) {
-                String partitionPath = buildPartitionPath(parquetDir, tableName, partitionFields, year, seriesId);
-                fredDownloader.convertSeriesToParquet(seriesId, partitionPath, partitionFields, year, year);
-              }
-              LOGGER.debug("Created partitioned parquet for series {} as table: {}", seriesId, tableName);
-            }
-
-          } catch (Exception e) {
-            LOGGER.error("Failed to download ungrouped FRED series: {}", seriesId, e);
-          }
-        }
-      }
-    }
-  }
-
-  /**
    * Get table name for a FRED series ID based on its type/category.
+   * This is kept for potential future use but is no longer actively used
+   * since all series now go into fred_indicators table with series partitioning.
    */
+  @SuppressWarnings("unused")
   private String getTableNameForSeries(String seriesId) {
     // Map series to appropriate table names based on test expectations
     if (seriesId.startsWith("DGS") || seriesId.contains("TREASURY") || seriesId.contains("BOND")) {
@@ -1089,74 +977,6 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       // Default naming pattern
       return "fred_" + seriesId.toLowerCase();
     }
-  }
-
-  /**
-   * Build Hive-style partition path based on partition fields.
-   */
-  private String buildPartitionPath(String baseDir, String tableName, List<String> partitionFields,
-      int year, String seriesId) {
-    StringBuilder pathBuilder = new StringBuilder(baseDir);
-    pathBuilder.append("/type=custom");
-
-    if (partitionFields != null) {
-      for (String field : partitionFields) {
-        switch (field.toLowerCase()) {
-          case "year":
-            pathBuilder.append("/year=").append(year);
-            break;
-          case "series_id":
-            pathBuilder.append("/series_id=").append(seriesId);
-            break;
-          case "maturity":
-            // Extract maturity from treasury series ID (e.g., DGS10 = 10 year, DGS30 = 30 year)
-            String maturity = extractMaturityFromSeriesId(seriesId);
-            if (maturity != null) {
-              pathBuilder.append("/maturity=").append(maturity);
-            }
-            break;
-          case "frequency":
-            // Determine frequency from series characteristics
-            String frequency = determineSeriesFrequency(seriesId);
-            pathBuilder.append("/frequency=").append(frequency);
-            break;
-          default:
-            LOGGER.warn("Unknown partition field: {}", field);
-        }
-      }
-    }
-
-    pathBuilder.append("/").append(tableName).append(".parquet");
-    return pathBuilder.toString();
-  }
-
-  /**
-   * Determine series frequency from FRED series characteristics.
-   */
-  private String determineSeriesFrequency(String seriesId) {
-    // This would typically require API call to get series metadata
-    // For now, use pattern-based heuristics
-    if (seriesId.startsWith("DGS") || seriesId.matches(".*RATE.*")) {
-      return "D"; // Daily
-    } else if (seriesId.matches("GDP.*") || seriesId.matches(".*QUAR.*")) {
-      return "Q"; // Quarterly
-    } else {
-      return "M"; // Monthly (default)
-    }
-  }
-
-  /**
-   * Extract maturity information from Treasury series IDs.
-   */
-  private String extractMaturityFromSeriesId(String seriesId) {
-    if (seriesId.startsWith("DGS")) {
-      // Extract number after DGS (e.g., DGS10 -> 10Y)
-      String maturity = seriesId.substring(3);
-      if (maturity.matches("\\d+")) {
-        return maturity + "Y";
-      }
-    }
-    return null;
   }
 
   /**
@@ -1205,117 +1025,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Add custom FRED table definitions if operand is available
-    List<Map<String, Object>> customTables = generateCustomFredTableDefinitions();
-    if (!customTables.isEmpty()) {
-      tables.addAll(customTables);
-      LOGGER.info("[DEBUG] Added {} custom FRED table definitions", customTables.size());
-      for (Map<String, Object> table : customTables) {
-        LOGGER.info("[DEBUG] Custom FRED table added: {} with pattern: {}", table.get("name"), table.get("pattern"));
-      }
-    } else {
-      LOGGER.warn("[DEBUG] No custom FRED table definitions generated!");
-    }
-
-    LOGGER.info("[DEBUG] Total ECON table definitions: {} (base: {}, custom: {})",
-        tables.size(), tables.size() - customTables.size(), customTables.size());
+    LOGGER.info("[DEBUG] Total ECON table definitions: {}", tables.size());
     return tables;
-  }
-
-  /**
-   * Generate table definitions for custom FRED series based on configuration.
-   * This is called during schema setup to discover custom tables dynamically.
-   */
-  private List<Map<String, Object>> generateCustomFredTableDefinitions() {
-    List<Map<String, Object>> customTables = new ArrayList<>();
-
-    LOGGER.info("[DEBUG] generateCustomFredTableDefinitions called - fredSeriesGroups: {}, customFredSeries: {}",
-        fredSeriesGroups != null ? fredSeriesGroups.size() : "null",
-        customFredSeries != null ? customFredSeries.size() : "null");
-
-    // Log the actual groups if present
-    if (fredSeriesGroups != null) {
-      LOGGER.info("[DEBUG] FRED series groups present: {}", fredSeriesGroups.keySet());
-    }
-
-    if (fredSeriesGroups != null) {
-      LOGGER.info("[DEBUG] Generating table definitions from {} FRED series groups", fredSeriesGroups.size());
-
-      for (Map.Entry<String, Object> entry : fredSeriesGroups.entrySet()) {
-        String groupName = entry.getKey();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> groupConfig = (Map<String, Object>) entry.getValue();
-
-        // Get table name from group configuration
-        String tableName = (String) groupConfig.get("tableName");
-        if (tableName == null) {
-          // Generate table name from group name
-          tableName = "fred_" + groupName.toLowerCase().replaceAll("[^a-z0-9_]", "_");
-        }
-
-        Map<String, Object> tableDefinition = new HashMap<>();
-        tableDefinition.put("name", tableName);
-
-        // Build pattern based on partition fields from the group configuration
-        @SuppressWarnings("unchecked")
-        List<String> partitionFields = (List<String>) groupConfig.get("partitionFields");
-        String pattern;
-
-        if (partitionFields != null && !partitionFields.isEmpty()) {
-          // Build pattern from partition fields
-          StringBuilder patternBuilder = new StringBuilder("type=custom");
-          for (String field : partitionFields) {
-            patternBuilder.append("/").append(field).append("=*");
-          }
-          patternBuilder.append("/").append(tableName).append(".parquet");
-          pattern = patternBuilder.toString();
-        } else {
-          // Default partitioning by year only
-          pattern = "type=custom/year=*/" + tableName + ".parquet";
-        }
-        tableDefinition.put("pattern", pattern);
-
-        String comment = (String) groupConfig.get("comment");
-        if (comment == null) {
-          comment = "Custom FRED series group '" + groupName + "' with partitioned time-series data.";
-        }
-        tableDefinition.put("comment", comment);
-
-        customTables.add(tableDefinition);
-        LOGGER.info("[DEBUG] Generated table definition for FRED group '{}' -> table '{}' with pattern '{}'",
-            groupName, tableName, pattern);
-      }
-    }
-
-    // Handle ungrouped custom series
-    if (customFredSeries != null && !customFredSeries.isEmpty()) {
-      LOGGER.debug("Generating table definitions from {} ungrouped custom FRED series", customFredSeries.size());
-
-      // Group series by expected table name
-      Map<String, List<String>> seriesByTable = new HashMap<>();
-      for (String seriesId : customFredSeries) {
-        String tableName = getTableNameForSeries(seriesId);
-        seriesByTable.computeIfAbsent(tableName, k -> new ArrayList<>()).add(seriesId);
-      }
-
-      for (Map.Entry<String, List<String>> tableEntry : seriesByTable.entrySet()) {
-        String tableName = tableEntry.getKey();
-        List<String> seriesIds = tableEntry.getValue();
-
-        Map<String, Object> tableDefinition = new HashMap<>();
-        tableDefinition.put("name", tableName);
-        tableDefinition.put("pattern", "type=custom/year=*/" + tableName + ".parquet");
-        tableDefinition.put("comment", "Custom FRED series table containing " + seriesIds.size() +
-            " series: " + String.join(", ", seriesIds) + ". Partitioned by year for time-series analysis.");
-
-        customTables.add(tableDefinition);
-        LOGGER.debug("Generated table definition for ungrouped series -> table '{}' with {} series",
-            tableName, seriesIds.size());
-      }
-    }
-
-    LOGGER.debug("Generated {} custom FRED table definitions", customTables.size());
-    return customTables;
   }
 
   /**
@@ -1433,6 +1144,144 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     return null; // No filtering
+  }
+
+  /**
+   * Extract series IDs from FRED catalog JSON files filtered by active status and popularity.
+   * Reads all catalog JSON files under status=active partitions and filters by popularity threshold.
+   *
+   * @param cacheStorageProvider Storage provider for reading catalog cache files
+   * @param cacheDir Cache directory containing catalog JSON files
+   * @param minPopularity Minimum popularity threshold (series with popularity >= this value are included)
+   * @return List of series IDs that are active and meet the popularity threshold
+   */
+  private List<String> extractActivePopularSeriesFromCatalog(
+      StorageProvider cacheStorageProvider, String cacheDir, int minPopularity) {
+    List<String> seriesIds = new ArrayList<>();
+
+    try {
+      // Find all catalog JSON files under status=active partitions
+      // Pattern: type=catalog/category=*/frequency=*/source=*/status=active/fred_data_series_catalog.json
+      String catalogBasePath = cacheStorageProvider.resolvePath(cacheDir, "type=catalog");
+
+      if (!cacheStorageProvider.exists(catalogBasePath)) {
+        LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
+        return seriesIds;
+      }
+
+      // Recursively find all fred_data_series_catalog.json files under status=active directories
+      List<String> catalogFiles = findCatalogFilesInActivePartitions(cacheStorageProvider, catalogBasePath);
+
+      LOGGER.info("Found {} catalog JSON files to process", catalogFiles.size());
+
+      // Process each catalog file
+      com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      int totalSeriesProcessed = 0;
+      int seriesPassingFilter = 0;
+
+      for (String catalogFile : catalogFiles) {
+        try {
+          // Read JSON file as array of series objects using InputStream
+          List<Map<String, Object>> seriesList;
+          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
+               java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
+            com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>> typeRef =
+                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {};
+            seriesList = objectMapper.readValue(reader, typeRef);
+          }
+
+          // Filter by popularity and extract series IDs
+          for (Map<String, Object> series : seriesList) {
+            totalSeriesProcessed++;
+
+            // Extract series_id (may be under "id" or "series_id" key)
+            String seriesId = (String) series.get("id");
+            if (seriesId == null) {
+              seriesId = (String) series.get("series_id");
+            }
+
+            // Extract popularity (default to 0 if not present)
+            Object popularityObj = series.get("popularity");
+            int popularity = 0;
+            if (popularityObj != null) {
+              if (popularityObj instanceof Integer) {
+                popularity = (Integer) popularityObj;
+              } else if (popularityObj instanceof Number) {
+                popularity = ((Number) popularityObj).intValue();
+              }
+            }
+
+            // Filter by popularity threshold
+            if (seriesId != null && popularity >= minPopularity) {
+              seriesIds.add(seriesId);
+              seriesPassingFilter++;
+            }
+          }
+
+        } catch (Exception e) {
+          LOGGER.warn("Error processing catalog file {}: {}", catalogFile, e.getMessage());
+        }
+      }
+
+      LOGGER.info("Extracted {} series IDs from catalog (processed {} total series, {} passed filter with popularity >= {})",
+          seriesIds.size(), totalSeriesProcessed, seriesPassingFilter, minPopularity);
+
+    } catch (Exception e) {
+      LOGGER.error("Error extracting series from FRED catalog", e);
+    }
+
+    return seriesIds;
+  }
+
+  /**
+   * Recursively find all fred_data_series_catalog.json files under status=active partitions.
+   *
+   * @param storageProvider Storage provider for directory traversal
+   * @param basePath Base path to search from (type=catalog directory)
+   * @return List of full paths to catalog JSON files in active partitions
+   */
+  private List<String> findCatalogFilesInActivePartitions(StorageProvider storageProvider, String basePath) {
+    List<String> catalogFiles = new ArrayList<>();
+
+    try {
+      // Use a simple recursive search for directories containing "status=active"
+      // and collect all fred_data_series_catalog.json files within them
+      findCatalogFilesRecursive(storageProvider, basePath, catalogFiles);
+    } catch (Exception e) {
+      LOGGER.error("Error finding catalog files in active partitions", e);
+    }
+
+    return catalogFiles;
+  }
+
+  /**
+   * Recursive helper to find catalog JSON files under status=active directories.
+   */
+  private void findCatalogFilesRecursive(StorageProvider storageProvider, String currentPath,
+      List<String> catalogFiles) throws IOException {
+
+    List<StorageProvider.FileEntry> entries = storageProvider.listFiles(currentPath, false);
+
+    for (StorageProvider.FileEntry entry : entries) {
+      String fullPath = entry.getPath();
+
+      if (entry.isDirectory()) {
+        // Extract directory name from path
+        String entryName = fullPath.substring(fullPath.lastIndexOf('/') + 1);
+
+        // If this is a status=active directory, look for catalog JSON file
+        if (entryName.equals("status=active")) {
+          String catalogFile = storageProvider.resolvePath(fullPath, "fred_data_series_catalog.json");
+          if (storageProvider.exists(catalogFile)) {
+            catalogFiles.add(catalogFile);
+            LOGGER.debug("Found catalog file: {}", catalogFile);
+          }
+        } else {
+          // Recurse into subdirectories
+          findCatalogFilesRecursive(storageProvider, fullPath, catalogFiles);
+        }
+      }
+    }
   }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
