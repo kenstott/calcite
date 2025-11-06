@@ -768,7 +768,14 @@ public abstract class AbstractGovDataDownloader {
           "Table '" + tableName + "' does not have download configuration in schema");
     }
 
-    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+    // Convert JsonNode to Map<String, Object> for download config
+    Object downloadObj = metadata.get("download");
+    Map<String, Object> downloadConfig;
+    if (downloadObj instanceof JsonNode) {
+      downloadConfig = MAPPER.convertValue((JsonNode) downloadObj, Map.class);
+    } else {
+      downloadConfig = (Map<String, Object>) downloadObj;
+    }
 
     // Check if download is enabled
     Object enabledObj = downloadConfig.get("enabled");
@@ -790,7 +797,13 @@ public abstract class AbstractGovDataDownloader {
     boolean paginationEnabled = false;
     int maxPerRequest = 100000;
     if (downloadConfig.containsKey("pagination")) {
-      Map<String, Object> paginationConfig = (Map<String, Object>) downloadConfig.get("pagination");
+      Object paginationObj = downloadConfig.get("pagination");
+      Map<String, Object> paginationConfig;
+      if (paginationObj instanceof JsonNode) {
+        paginationConfig = MAPPER.convertValue((JsonNode) paginationObj, Map.class);
+      } else {
+        paginationConfig = (Map<String, Object>) paginationObj;
+      }
       Object enabledPagination = paginationConfig.get("enabled");
       paginationEnabled = enabledPagination != null && Boolean.parseBoolean(enabledPagination.toString());
       if (paginationConfig.containsKey("maxPerRequest")) {
@@ -899,7 +912,13 @@ public abstract class AbstractGovDataDownloader {
       // Extract data from response using dataPath if specified
       JsonNode dataNode = rootNode;
       if (downloadConfig.containsKey("response")) {
-        Map<String, Object> responseConfig = (Map<String, Object>) downloadConfig.get("response");
+        Object responseObj = downloadConfig.get("response");
+        Map<String, Object> responseConfig;
+        if (responseObj instanceof JsonNode) {
+          responseConfig = MAPPER.convertValue((JsonNode) responseObj, Map.class);
+        } else {
+          responseConfig = (Map<String, Object>) responseObj;
+        }
         if (responseConfig.containsKey("dataPath")) {
           String dataPath = responseConfig.get("dataPath").toString();
           dataNode = rootNode.path(dataPath);
