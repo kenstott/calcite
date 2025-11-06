@@ -208,10 +208,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
         return true;
       }
 
-      // Phase 3: BLS metro_cpi - raw files at source=econ/type=cpi_metro/year=YYYY/
-      if (rawFilePath.contains("type=cpi_metro") || rawFilePath.contains("metro_cpi")) {
+      // Phase 3: BLS metro_cpi - raw files at source=econ/type=metro_cpi/year=YYYY/
+      if (rawFilePath.contains("type=metro_cpi") || rawFilePath.contains("metro_cpi")) {
         LOGGER.info("CONVERT: Routing to BLS downloader for metro_cpi");
-        String correctRawPath = "type=cpi_metro/year=" + year;
+        String correctRawPath = "type=metro_cpi/year=" + year;
         LOGGER.info("CONVERT: Corrected raw path: {}", correctRawPath);
         blsDownloader.convertToParquet(correctRawPath, correctedParquetPath);
         LOGGER.info("CONVERT: ✅ BLS metro_cpi conversion completed");
@@ -238,13 +238,13 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
         return true;
       }
 
-      // Phase 3: BEA regional_income - raw files at source=econ/type=indicators/year=YYYY/regional_income.json
+      // Phase 3: BEA regional_income - raw files at source=econ/type=regional_income/frequency=annual/year=YYYY/regional_income.json
       if (rawFilePath.contains("regional_income")) {
         LOGGER.info("CONVERT: Routing to BEA downloader for regional_income");
-        String cacheIndicatorsYearPath = "type=indicators/year=" + year;
-        String regionalIncomeParquetPath = "type=indicators/year=" + year + "/regional_income.parquet";
-        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, regionalIncomeParquetPath);
-        beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
+        String cacheRegionalIncomeYearPath = "type=regional_income/frequency=annual/year=" + year;
+        String regionalIncomeParquetPath = "type=regional_income/frequency=annual/year=" + year + "/regional_income.parquet";
+        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheRegionalIncomeYearPath, regionalIncomeParquetPath);
+        beaDownloader.convertRegionalIncomeToParquet(cacheRegionalIncomeYearPath, regionalIncomeParquetPath);
         LOGGER.info("CONVERT: ✅ BEA regional_income conversion completed");
         if (storageProvider.exists(regionalIncomeParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", regionalIncomeParquetPath);
@@ -257,10 +257,10 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
       // Phase 3: BEA state_gdp - raw files at source=econ/type=indicators/year=YYYY/state_gdp.json
       if (rawFilePath.contains("state_gdp")) {
         LOGGER.info("CONVERT: Routing to BEA downloader for state_gdp");
-        String cacheIndicatorsYearPath = "type=indicators/year=" + year;
-        String stateGdpParquetPath = "type=indicators/year=" + year + "/state_gdp.parquet";
-        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", cacheIndicatorsYearPath, stateGdpParquetPath);
-        beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
+        String stateGdpRawPath = "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.json";
+        String stateGdpParquetPath = "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.parquet";
+        LOGGER.info("CONVERT: Cache path: {}, Parquet path: {}", stateGdpRawPath, stateGdpParquetPath);
+        beaDownloader.convertStateGdpToParquet(stateGdpRawPath, stateGdpParquetPath);
         LOGGER.info("CONVERT: ✅ BEA state_gdp conversion completed");
         if (storageProvider.exists(stateGdpParquetPath)) {
           LOGGER.info("CONVERT: ✅ File confirmed at: {}", stateGdpParquetPath);

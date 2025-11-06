@@ -346,8 +346,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           }
 
           // Convert metro CPI
-          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=cpi_metro/year=" + year);
-          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_metro/year=" + year + "/metro_cpi.parquet");
+          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_cpi/frequency=month/year=" + year);
+          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/frequency=month/year=" + year + "/metro_cpi.parquet");
           String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
             blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
@@ -545,44 +545,198 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             cacheManifest.markParquetConverted("gdp_statistics", year, null, gdpStatsParquetPath);
           }
 
-          // Convert regional income
-          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
-          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "regional_income.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_income", year, regionalIncomeRawPath, regionalIncomeParquetPath)) {
-            beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
-            cacheManifest.markParquetConverted("regional_income", year, null, regionalIncomeParquetPath);
+          // Convert regional_income into frequency-partitioned parquet (annual-only dataset)
+          String regionalIncomeFreq = "annual";
+          java.util.Map<String, String> riParams = new java.util.HashMap<>();
+          riParams.put("frequency", regionalIncomeFreq);
+
+          // Raw JSON and Parquet must use identical regional_income paths
+          String riSourceDir = cacheStorageProvider.resolvePath(cacheDir, "type=regional_income/frequency=" + regionalIncomeFreq + "/year=" + year);
+          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(riSourceDir, "regional_income.json");
+          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=regional_income/frequency=" + regionalIncomeFreq + "/year=" + year + "/regional_income.parquet");
+
+          boolean riConverted = cacheManifest.isParquetConverted("regional_income", year, riParams);
+          if (!riConverted) {
+            boolean upToDate = false;
+            try {
+              if (storageProvider.exists(regionalIncomeParquetPath)) {
+                long parquetMod = storageProvider.getMetadata(regionalIncomeParquetPath).getLastModified();
+                if (cacheStorageProvider.exists(regionalIncomeRawPath)) {
+                  long rawMod = cacheStorageProvider.getMetadata(regionalIncomeRawPath).getLastModified();
+                  upToDate = parquetMod > rawMod;
+                } else {
+                  upToDate = true;
+                }
+              }
+            } catch (Exception ignore) {
+              upToDate = false;
+            }
+
+            if (upToDate) {
+              cacheManifest.markParquetConverted("regional_income", year, riParams, regionalIncomeParquetPath);
+            } else {
+              beaDownloader.convertRegionalIncomeToParquet(riSourceDir, regionalIncomeParquetPath);
+              cacheManifest.markParquetConverted("regional_income", year, riParams, regionalIncomeParquetPath);
+            }
           }
 
           // Convert State GDP data
-          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
-          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "state_gdp.json");
+          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.parquet");
+          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_gdp", year, stateGdpRawPath, stateGdpParquetPath)) {
-            beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
+            beaDownloader.convertStateGdpToParquet(stateGdpRawPath, stateGdpParquetPath);
             cacheManifest.markParquetConverted("state_gdp", year, null, stateGdpParquetPath);
           }
 
-          // Convert BEA trade statistics
-          String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/trade_statistics.parquet");
+          // Convert BEA trade statistics into frequency-partitioned parquet detected from the raw JSON
           String tradeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "trade_statistics.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "trade_statistics", year, tradeRawPath, tradeParquetPath)) {
-            beaDownloader.convertTradeStatisticsToParquet(cacheIndicatorsYearPath, tradeParquetPath);
-            cacheManifest.markParquetConverted("trade_statistics", year, null, tradeParquetPath);
+          java.util.Set<String> tradeFreqs;
+          try {
+            tradeFreqs = beaDownloader.detectTradeFrequencies(cacheIndicatorsYearPath);
+          } catch (Exception e) {
+            LOGGER.warn("Unable to detect trade_statistics frequencies for year {}: {}", year, e.getMessage());
+            tradeFreqs = java.util.Collections.emptySet();
           }
 
-          // Convert ITA data
-          String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/ita_data.parquet");
+          if (tradeFreqs.isEmpty()) {
+            LOGGER.warn("No trade_statistics frequency codes found in {} — skipping trade_statistics parquet conversion for year {}", tradeRawPath, year);
+          }
+
+          for (String freqRaw : tradeFreqs) {
+            String freq = freqRaw == null ? "" : freqRaw.trim();
+            if (freq.isEmpty()) continue;
+
+            java.util.Map<String, String> tradeParams = new java.util.HashMap<>();
+            tradeParams.put("frequency", freq);
+
+            String tradeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=" + freq + "/year=" + year + "/trade_statistics.parquet");
+
+            boolean converted = cacheManifest.isParquetConverted("trade_statistics", year, tradeParams);
+            if (!converted) {
+              boolean upToDate = false;
+              try {
+                if (storageProvider.exists(tradeParquetPath)) {
+                  long parquetMod = storageProvider.getMetadata(tradeParquetPath).getLastModified();
+                  if (cacheStorageProvider.exists(tradeRawPath)) {
+                    long rawMod = cacheStorageProvider.getMetadata(tradeRawPath).getLastModified();
+                    upToDate = parquetMod > rawMod;
+                  } else {
+                    upToDate = true;
+                  }
+                }
+              } catch (Exception ignore) {
+                upToDate = false;
+              }
+
+              if (upToDate) {
+                cacheManifest.markParquetConverted("trade_statistics", year, tradeParams, tradeParquetPath);
+              } else {
+                beaDownloader.convertTradeStatisticsToParquetForFrequency(cacheIndicatorsYearPath, tradeParquetPath, freq);
+                cacheManifest.markParquetConverted("trade_statistics", year, tradeParams, tradeParquetPath);
+              }
+            }
+          }
+
+          // Convert ITA data into frequency-partitioned parquet detected from the raw JSON
           String itaRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "ita_data.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "ita_data", year, itaRawPath, itaParquetPath)) {
-            beaDownloader.convertItaDataToParquet(cacheIndicatorsYearPath, itaParquetPath);
-            cacheManifest.markParquetConverted("ita_data", year, null, itaParquetPath);
+          java.util.Set<String> detectedFreqs;
+          try {
+            detectedFreqs = beaDownloader.detectItaFrequencies(cacheIndicatorsYearPath);
+          } catch (Exception e) {
+            LOGGER.warn("Unable to detect ITA frequencies for year {}: {}", year, e.getMessage());
+            detectedFreqs = java.util.Collections.emptySet();
           }
 
-          // Convert industry GDP data
-          String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/industry_gdp.parquet");
+          if (detectedFreqs.isEmpty()) {
+            LOGGER.warn("No ITA frequency codes found in {} — skipping ITA parquet conversion for year {}", itaRawPath, year);
+          }
+
+          for (String freqRaw : detectedFreqs) {
+            String freq = freqRaw == null ? "" : freqRaw.trim();
+            if (freq.isEmpty()) {
+              continue;
+            }
+
+            java.util.Map<String, String> itaParams = new java.util.HashMap<>();
+            itaParams.put("frequency", freq);
+
+            String itaParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=" + freq + "/year=" + year + "/ita_data.parquet");
+
+            // Check manifest first with params; if not present, defensively check file timestamps
+            boolean converted = cacheManifest.isParquetConverted("ita_data", year, itaParams);
+            if (!converted) {
+              boolean upToDate = false;
+              try {
+                if (storageProvider.exists(itaParquetPath)) {
+                  long parquetMod = storageProvider.getMetadata(itaParquetPath).getLastModified();
+                  if (cacheStorageProvider.exists(itaRawPath)) {
+                    long rawMod = cacheStorageProvider.getMetadata(itaRawPath).getLastModified();
+                    upToDate = parquetMod > rawMod;
+                  } else {
+                    // Raw missing but parquet exists: consider up-to-date
+                    upToDate = true;
+                  }
+                }
+              } catch (Exception ignore) {
+                upToDate = false;
+              }
+
+              if (upToDate) {
+                cacheManifest.markParquetConverted("ita_data", year, itaParams, itaParquetPath);
+              } else {
+                beaDownloader.convertItaDataToParquetForFrequency(cacheIndicatorsYearPath, itaParquetPath, freq);
+                cacheManifest.markParquetConverted("ita_data", year, itaParams, itaParquetPath);
+              }
+            }
+          }
+
+          // Convert industry_gdp into frequency-partitioned parquet detected from the raw JSON
           String industryGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "industry_gdp.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "industry_gdp", year, industryGdpRawPath, industryGdpParquetPath)) {
-            beaDownloader.convertIndustryGdpToParquet(cacheIndicatorsYearPath, industryGdpParquetPath);
-            cacheManifest.markParquetConverted("industry_gdp", year, null, industryGdpParquetPath);
+          java.util.Set<String> industryFreqs;
+          try {
+            industryFreqs = beaDownloader.detectIndustryGdpFrequencies(cacheIndicatorsYearPath);
+          } catch (Exception e) {
+            LOGGER.warn("Unable to detect industry_gdp frequencies for year {}: {}", year, e.getMessage());
+            industryFreqs = java.util.Collections.emptySet();
+          }
+
+          if (industryFreqs.isEmpty()) {
+            LOGGER.warn("No industry_gdp frequency codes found in {} — skipping industry_gdp parquet conversion for year {}", industryGdpRawPath, year);
+          }
+
+          for (String freqRaw : industryFreqs) {
+            String freq = freqRaw == null ? "" : freqRaw.trim();
+            if (freq.isEmpty()) continue;
+
+            java.util.Map<String, String> params = new java.util.HashMap<>();
+            params.put("frequency", freq);
+
+            String industryGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=" + freq + "/year=" + year + "/industry_gdp.parquet");
+
+            boolean converted = cacheManifest.isParquetConverted("industry_gdp", year, params);
+            if (!converted) {
+              boolean upToDate = false;
+              try {
+                if (storageProvider.exists(industryGdpParquetPath)) {
+                  long parquetMod = storageProvider.getMetadata(industryGdpParquetPath).getLastModified();
+                  if (cacheStorageProvider.exists(industryGdpRawPath)) {
+                    long rawMod = cacheStorageProvider.getMetadata(industryGdpRawPath).getLastModified();
+                    upToDate = parquetMod > rawMod;
+                  } else {
+                    upToDate = true;
+                  }
+                }
+              } catch (Exception ignore) {
+                upToDate = false;
+              }
+
+              if (upToDate) {
+                cacheManifest.markParquetConverted("industry_gdp", year, params, industryGdpParquetPath);
+              } else {
+                beaDownloader.convertIndustryGdpToParquetForFrequency(cacheIndicatorsYearPath, industryGdpParquetPath, freq);
+                cacheManifest.markParquetConverted("industry_gdp", year, params, industryGdpParquetPath);
+              }
+            }
           }
         }
 
@@ -626,8 +780,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert metro CPI to parquet for each year
         for (int year = startYear; year <= endYear; year++) {
-          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=cpi_metro/year=" + year);
-          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_metro/year=" + year + "/metro_cpi.parquet");
+          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_cpi/year=" + year);
+          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/year=" + year + "/metro_cpi.parquet");
           String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
             blsDownloader.convertToParquet(metroCpiCacheYearPath, metroCpiParquetPath);
@@ -650,14 +804,40 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         }
         LOGGER.debug("Phase 3: regional_income download completed");
 
-        // Convert regional income to parquet for each year
+        // Convert regional_income to parquet for each year under frequency=annual partition
         for (int year = startYear; year <= endYear; year++) {
-          String cacheIndicatorsYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
-          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/regional_income.parquet");
-          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "regional_income.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_income", year, regionalIncomeRawPath, regionalIncomeParquetPath)) {
-            beaDownloader.convertRegionalIncomeToParquet(cacheIndicatorsYearPath, regionalIncomeParquetPath);
-            cacheManifest.markParquetConverted("regional_income", year, null, regionalIncomeParquetPath);
+          String freq = "annual";
+          java.util.Map<String, String> riParams = new java.util.HashMap<>();
+          riParams.put("frequency", freq);
+
+          // Source dir for raw JSON and target parquet must share the same regional_income path
+          String riSourceDir = cacheStorageProvider.resolvePath(cacheDir, "type=regional_income/frequency=" + freq + "/year=" + year);
+          String regionalIncomeRawPath = cacheStorageProvider.resolvePath(riSourceDir, "regional_income.json");
+          String regionalIncomeParquetPath = storageProvider.resolvePath(parquetDir, "type=regional_income/frequency=" + freq + "/year=" + year + "/regional_income.parquet");
+
+          boolean converted = cacheManifest.isParquetConverted("regional_income", year, riParams);
+          if (!converted) {
+            boolean upToDate = false;
+            try {
+              if (storageProvider.exists(regionalIncomeParquetPath)) {
+                long parquetMod = storageProvider.getMetadata(regionalIncomeParquetPath).getLastModified();
+                if (cacheStorageProvider.exists(regionalIncomeRawPath)) {
+                  long rawMod = cacheStorageProvider.getMetadata(regionalIncomeRawPath).getLastModified();
+                  upToDate = parquetMod > rawMod;
+                } else {
+                  upToDate = true;
+                }
+              }
+            } catch (Exception ignore) {
+              upToDate = false;
+            }
+
+            if (upToDate) {
+              cacheManifest.markParquetConverted("regional_income", year, riParams, regionalIncomeParquetPath);
+            } else {
+              beaDownloader.convertRegionalIncomeToParquet(riSourceDir, regionalIncomeParquetPath);
+              cacheManifest.markParquetConverted("regional_income", year, riParams, regionalIncomeParquetPath);
+            }
           }
         }
         LOGGER.debug("Phase 3: regional_income conversion completed");
@@ -677,11 +857,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // Convert State GDP data to parquet for each year
         for (int year = startYear; year <= endYear; year++) {
-          String cacheIndicatorsYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
-          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/state_gdp.parquet");
-          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheIndicatorsYearPath, "state_gdp.json");
+          String stateGdpParquetPath = storageProvider.resolvePath(parquetDir, "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.parquet");
+          String stateGdpRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=state_gdp/frequency=annual/year=" + year + "/state_gdp.json");
           if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_gdp", year, stateGdpRawPath, stateGdpParquetPath)) {
-            beaDownloader.convertStateGdpToParquet(cacheIndicatorsYearPath, stateGdpParquetPath);
+            beaDownloader.convertStateGdpToParquet(stateGdpRawPath, stateGdpParquetPath);
             cacheManifest.markParquetConverted("state_gdp", year, null, stateGdpParquetPath);
           }
         }
