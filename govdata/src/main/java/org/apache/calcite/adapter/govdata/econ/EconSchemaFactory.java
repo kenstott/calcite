@@ -591,8 +591,27 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest);
 
-        // Download all BEA data for the year range
-        beaDownloader.downloadAll(startYear, endYear);
+        // Extract iteration lists from schema metadata
+        java.util.List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
+        java.util.List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
+        java.util.List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
+        java.util.List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+
+        // Download all BEA data using metadata-driven methods
+        LOGGER.info("Downloading BEA data for years {}-{}", startYear, endYear);
+        beaDownloader.downloadGdpComponentsMetadata(startYear, endYear, nipaTablesList);
+        beaDownloader.downloadRegionalIncomeMetadata(startYear, endYear, lineCodesList);
+        beaDownloader.downloadTradeStatisticsMetadata(startYear, endYear);
+        beaDownloader.downloadItaDataMetadata(startYear, endYear, itaIndicatorsList);
+        beaDownloader.downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
+
+        // Convert all BEA data to Parquet using metadata-driven methods
+        LOGGER.info("Converting BEA data to Parquet for years {}-{}", startYear, endYear);
+        beaDownloader.convertGdpComponentsMetadata(startYear, endYear, nipaTablesList);
+        beaDownloader.convertRegionalIncomeMetadata(startYear, endYear, lineCodesList);
+        beaDownloader.convertTradeStatisticsMetadata(startYear, endYear);
+        beaDownloader.convertItaDataMetadata(startYear, endYear, itaIndicatorsList);
+        beaDownloader.convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
 
         // Convert to parquet files for each year using StorageProvider
         for (int year = startYear; year <= endYear; year++) {
@@ -1292,5 +1311,54 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // EconSchemaFactory doesn't use tableDefinitions
     LOGGER.debug("Received constraint metadata for {} tables",
         tableConstraints != null ? tableConstraints.size() : 0);
+  }
+
+  /**
+   * Extracts an iteration list from schema metadata for a given table.
+   *
+   * @param tableName Name of the table in econ-schema.json
+   * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList")
+   * @return List of iteration values, or empty list if not found
+   */
+  @SuppressWarnings("unchecked")
+  private java.util.List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        LOGGER.warn("econ-schema.json not found, returning empty iteration list");
+        return java.util.Collections.emptyList();
+      }
+
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(schemaStream);
+
+      // Find the table in the tables array
+      com.fasterxml.jackson.databind.JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode table : tables) {
+          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
+          if (nameNode != null && tableName.equals(nameNode.asText())) {
+            // Found the table, extract the download config
+            com.fasterxml.jackson.databind.JsonNode download = table.get("download");
+            if (download != null) {
+              com.fasterxml.jackson.databind.JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                java.util.List<String> result = new java.util.ArrayList<>();
+                for (com.fasterxml.jackson.databind.JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+
+      LOGGER.warn("Iteration list '{}' not found for table '{}', returning empty list", listKey, tableName);
+      return java.util.Collections.emptyList();
+    } catch (Exception e) {
+      LOGGER.error("Error extracting iteration list '{}' for table '{}': {}", listKey, tableName, e.getMessage());
+      return java.util.Collections.emptyList();
+    }
   }
 }
