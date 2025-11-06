@@ -4,7 +4,7 @@
   "partitionedTables": [
     {
       "name": "employment_statistics",
-      "pattern": "type=indicators/frequency=*/year=*/employment_statistics.parquet",
+      "pattern": "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
