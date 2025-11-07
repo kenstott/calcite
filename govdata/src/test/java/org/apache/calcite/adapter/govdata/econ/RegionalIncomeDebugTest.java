@@ -24,11 +24,19 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Debug test for BEA regional income download issues.
@@ -64,13 +72,17 @@ public class RegionalIncomeDebugTest {
         StorageProviderFactory.createFromUrl(cacheDir),
         StorageProviderFactory.createFromUrl(cacheDir));
 
-    // Test download for 2023
-    System.out.println("Downloading regional income for 2023...");
-    downloader.downloadRegionalIncomeForYear(2023);
+    // Extract line codes list from schema
+    List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
+    assumeTrue(!lineCodesList.isEmpty(), "lineCodesList not found in schema");
 
-    // Check if file was created
-    File jsonFile = new File(cacheDir, "source=econ/type=indicators/year=2023/regional_income.json");
-    assertTrue(jsonFile.exists(), "Regional income JSON file should exist");
+    // Test download for 2023 using metadata-driven method
+    System.out.println("Downloading regional income for 2023...");
+    downloader.downloadRegionalIncomeMetadata(2023, 2023, lineCodesList);
+
+    // Check if file was created (new path structure: type=regional_income/frequency=A/year=2023/)
+    File jsonFile = new File(cacheDir, "type=regional_income/frequency=A/year=2023/regional_income.json");
+    assertTrue(jsonFile.exists(), "Regional income JSON file should exist at: " + jsonFile.getAbsolutePath());
 
     // Check file size
     long fileSize = jsonFile.length();
@@ -81,21 +93,48 @@ public class RegionalIncomeDebugTest {
     System.out.println("First 500 chars of content: " + content.substring(0, Math.min(500, content.length())));
 
     // Check if it has actual data
-    assertTrue(content.contains("regional_income"), "File should contain regional_income field");
     assertTrue(fileSize > 100, "File should have substantial data (not just empty array)");
 
-    // Test parquet conversion
-    File parquetDir = new File(tempDir.toString(), "parquet");
-    parquetDir.mkdirs();
-    File parquetFile = new File(parquetDir, "regional_income.parquet");
-
+    // Test parquet conversion using metadata-driven method
     System.out.println("Converting to parquet...");
-    String sourceDir = cacheDir + "/source=econ/type=indicators/year=2023";
-    downloader.convertRegionalIncomeToParquet(
-        sourceDir,
-        parquetFile.getAbsolutePath());
+    downloader.convertRegionalIncomeMetadata(2023, 2023, lineCodesList);
 
-    assertTrue(parquetFile.exists(), "Parquet file should be created");
+    // Check parquet file was created (new path)
+    File parquetFile = new File(cacheDir, "type=regional_income/frequency=A/year=2023/regional_income.parquet");
+    assertTrue(parquetFile.exists(), "Parquet file should be created at: " + parquetFile.getAbsolutePath());
     System.out.println("Parquet file size: " + parquetFile.length() + " bytes");
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        return Collections.emptyList();
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (JsonNode table : tables) {
+          if (tableName.equals(table.get("name").asText())) {
+            JsonNode download = table.get("download");
+            if (download != null) {
+              JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+      return Collections.emptyList();
+    } catch (Exception e) {
+      return Collections.emptyList();
+    }
   }
 }

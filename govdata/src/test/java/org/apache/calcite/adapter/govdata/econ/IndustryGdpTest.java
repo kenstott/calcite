@@ -21,11 +21,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,12 +56,20 @@ public class IndustryGdpTest {
 
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
 
-    // Test industry GDP data for a 2-year period
-    String parquetPath = downloader.downloadIndustryGdp(2022, 2023);
+    // Extract industries list from schema
+    List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+    assumeTrue(!keyIndustriesList.isEmpty(), "keyIndustriesList not found in schema");
+
+    // Test industry GDP data for a 2-year period using metadata-driven methods
+    downloader.downloadIndustryGdpMetadata(2022, 2023, keyIndustriesList);
+    downloader.convertIndustryGdpMetadata(2022, 2023, keyIndustriesList);
+
+    // Build expected parquet path (frequency=A for annual)
+    String parquetPath = tempDir.toString() + "/type=indicators/frequency=A/year=2022/industry_gdp.parquet";
+    File parquetFile = new File(parquetPath);
 
     assertNotNull(parquetPath);
-    File parquetFile = new File(parquetPath);
-    assertTrue(parquetFile.exists());
+    assertTrue(parquetFile.exists(), "Parquet file should exist at: " + parquetPath);
     assertTrue(parquetFile.length() > 0);
 
     System.out.println("Industry GDP Parquet file: " + parquetFile.getAbsolutePath());
@@ -62,6 +77,39 @@ public class IndustryGdpTest {
 
     // Verify the Parquet file contains industry GDP data
     verifyIndustryGdpParquet(parquetFile);
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        return Collections.emptyList();
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (JsonNode table : tables) {
+          if (tableName.equals(table.get("name").asText())) {
+            JsonNode download = table.get("download");
+            if (download != null) {
+              JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+      return Collections.emptyList();
+    } catch (Exception e) {
+      return Collections.emptyList();
+    }
   }
 
   /**

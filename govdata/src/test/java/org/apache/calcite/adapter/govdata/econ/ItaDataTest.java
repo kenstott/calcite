@@ -21,11 +21,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,12 +55,20 @@ public class ItaDataTest {
 
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
 
-    // Test ITA data for a 2-year period for faster testing
-    String parquetPath = downloader.downloadItaData(2022, 2023);
+    // Extract ITA indicators list from schema
+    List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
+    assumeTrue(!itaIndicatorsList.isEmpty(), "itaIndicatorsList not found in schema");
+
+    // Test ITA data for a 2-year period for faster testing using metadata-driven methods
+    downloader.downloadItaDataMetadata(2022, 2023, itaIndicatorsList);
+    downloader.convertItaDataMetadata(2022, 2023, itaIndicatorsList);
+
+    // Build expected parquet path (frequency=A for annual)
+    String parquetPath = tempDir.toString() + "/type=indicators/frequency=A/year=2022/ita_data.parquet";
+    File parquetFile = new File(parquetPath);
 
     assertNotNull(parquetPath);
-    File parquetFile = new File(parquetPath);
-    assertTrue(parquetFile.exists());
+    assertTrue(parquetFile.exists(), "Parquet file should exist at: " + parquetPath);
     assertTrue(parquetFile.length() > 0);
 
     System.out.println("ITA data Parquet file: " + parquetFile.getAbsolutePath());
@@ -61,6 +76,46 @@ public class ItaDataTest {
 
     // Verify the Parquet file contains ITA data
     verifyItaDataParquet(parquetFile);
+  }
+
+  /**
+   * Extracts iteration list from econ-schema.json.
+   * Helper method to get indicator/line code lists for metadata-driven downloads.
+   */
+  @SuppressWarnings("unchecked")
+  private List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        System.err.println("Could not load econ-schema.json");
+        return Collections.emptyList();
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode root = mapper.readTree(schemaStream);
+
+      JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (JsonNode table : tables) {
+          if (tableName.equals(table.get("name").asText())) {
+            JsonNode download = table.get("download");
+            if (download != null) {
+              JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+      return Collections.emptyList();
+    } catch (Exception e) {
+      System.err.println("Error extracting iteration list: " + e.getMessage());
+      return Collections.emptyList();
+    }
   }
 
   /**
