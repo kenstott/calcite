@@ -174,6 +174,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         // Download via metadata-driven executeDownload()
         try {
           String cachedPath = executeDownload(tableName, variables);
+
+          // Mark as downloaded in cache manifest
+          try {
+            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+          } catch (Exception ex) {
+            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+          }
+
           downloadedCount++;
 
           if (downloadedCount % 10 == 0) {
@@ -184,6 +194,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           LOGGER.error("Error downloading NIPA table {} for year {}: {}", nipaTable, year, e.getMessage());
         }
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("GDP components download complete: downloaded {} table-years, skipped {} (cached)",
@@ -305,6 +322,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         // Download via metadata-driven executeDownload()
         try {
           String cachedPath = executeDownload(tableName, variables);
+
+          // Mark as downloaded in cache manifest
+          try {
+            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+          } catch (Exception ex) {
+            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+          }
+
           downloadedCount++;
 
           if (downloadedCount % 10 == 0) {
@@ -315,6 +342,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           LOGGER.error("Error downloading line code {} for year {}: {}", lineCode, year, e.getMessage());
         }
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("Regional income download complete: downloaded {} line-years, skipped {} (cached)",
@@ -407,10 +441,27 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       try {
         String cachedPath = executeDownload(tableName, variables);
+
+        // Mark as downloaded in cache manifest
+        try {
+          String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+          long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+          cacheManifest.markCached(tableName, year, new java.util.HashMap<>(), relativePath, fileSize);
+        } catch (Exception ex) {
+          LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+        }
+
         downloadedCount++;
       } catch (Exception e) {
         LOGGER.error("Error downloading trade statistics for year {}: {}", year, e.getMessage());
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("Trade statistics download complete: downloaded {} years, skipped {} (cached)",
@@ -504,6 +555,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
         try {
           String cachedPath = executeDownload(tableName, variables);
+
+          // Mark as downloaded in cache manifest
+          try {
+            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+          } catch (Exception ex) {
+            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+          }
+
           downloadedCount++;
 
           if (downloadedCount % 10 == 0) {
@@ -514,6 +575,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           LOGGER.error("Error downloading ITA indicator {} for year {}: {}", indicator, year, e.getMessage());
         }
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("ITA data download complete: downloaded {} indicator-years, skipped {} (cached)",
@@ -619,6 +687,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
         try {
           String cachedPath = executeDownload(tableName, variables);
+
+          // Mark as downloaded in cache manifest
+          try {
+            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+          } catch (Exception ex) {
+            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+          }
+
           downloadedCount++;
 
           if (downloadedCount % 10 == 0) {
@@ -629,6 +707,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           LOGGER.error("Error downloading industry {} for year {}: {}", industry, year, e.getMessage());
         }
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("Industry GDP download complete: downloaded {} industry-years, skipped {} (cached)",

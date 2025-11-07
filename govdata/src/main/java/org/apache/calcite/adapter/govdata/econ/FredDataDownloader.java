@@ -83,6 +83,16 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           variables.put("series_id", seriesId);
 
           String cachedPath = executeDownload(tableName, variables);
+
+          // Mark as downloaded in cache manifest
+          try {
+            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+          } catch (Exception ex) {
+            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+          }
+
           downloadedCount++;
 
           if (downloadedCount % 100 == 0) {
@@ -93,6 +103,13 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           // Continue with next series
         }
       }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
     LOGGER.info("FRED download complete: downloaded {} series-years, skipped {} (cached)", downloadedCount, skippedCount);
