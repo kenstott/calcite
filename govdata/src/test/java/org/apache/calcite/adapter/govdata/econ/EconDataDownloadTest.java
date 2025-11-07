@@ -24,14 +24,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -140,13 +147,18 @@ public class EconDataDownloadTest {
     StorageProvider storageProvider = createStorageProvider();
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
 
-    // Download just 1 year of GDP components
-    downloader.downloadGdpComponents(2023, 2023);
+    // Extract NIPA tables list from schema
+    List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
+    assumeTrue(!nipaTablesList.isEmpty(), "nipaTablesList not found in schema");
 
-    // Verify parquet file was created
+    // Download just 1 year of GDP components using metadata-driven methods
+    downloader.downloadGdpComponentsMetadata(2023, 2023, nipaTablesList);
+    downloader.convertGdpComponentsMetadata(2023, 2023, nipaTablesList);
+
+    // Verify parquet file was created (new path structure: type=gdp_components/frequency=A/year=2023/)
     String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "source=econ/type=gdp_components/year_range=2023_2023/gdp_components.parquet");
-    assertTrue(storageProvider.exists(parquetPath));
+        storageProvider.resolvePath(tempDir.toString(), "type=gdp_components/frequency=A/year=2023/gdp_components.parquet");
+    assertTrue(storageProvider.exists(parquetPath), "Parquet file should exist at: " + parquetPath);
 
     verifyParquetReadable(parquetPath, "gdp_components");
   }
@@ -159,15 +171,53 @@ public class EconDataDownloadTest {
     StorageProvider storageProvider = createStorageProvider();
     BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
 
-    // Download just 1 year of regional income data
-    downloader.downloadRegionalIncome(2023, 2023);
+    // Extract line codes list from schema
+    List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
+    assumeTrue(!lineCodesList.isEmpty(), "lineCodesList not found in schema");
 
-    // Verify parquet file was created
+    // Download just 1 year of regional income data using metadata-driven methods
+    downloader.downloadRegionalIncomeMetadata(2023, 2023, lineCodesList);
+    downloader.convertRegionalIncomeMetadata(2023, 2023, lineCodesList);
+
+    // Verify parquet file was created (new path structure: type=regional_income/frequency=A/year=2023/)
     String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "source=econ/type=regional_income/year_range=2023_2023/regional_income.parquet");
-    assertTrue(storageProvider.exists(parquetPath));
+        storageProvider.resolvePath(tempDir.toString(), "type=regional_income/frequency=A/year=2023/regional_income.parquet");
+    assertTrue(storageProvider.exists(parquetPath), "Parquet file should exist at: " + parquetPath);
 
     verifyParquetReadable(parquetPath, "regional_income");
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        return Collections.emptyList();
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (JsonNode table : tables) {
+          if (tableName.equals(table.get("name").asText())) {
+            JsonNode download = table.get("download");
+            if (download != null) {
+              JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+      return Collections.emptyList();
+    } catch (Exception e) {
+      return Collections.emptyList();
+    }
   }
 
   /**

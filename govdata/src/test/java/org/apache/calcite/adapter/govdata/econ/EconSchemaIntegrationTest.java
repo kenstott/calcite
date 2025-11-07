@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -33,6 +34,12 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -126,59 +133,39 @@ public class EconSchemaIntegrationTest {
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
       BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, cacheDir, beaKey, storageProvider, storageProvider);
 
-      // Try to download each BEA dataset
+      // Try to download each BEA dataset using metadata-driven methods
       try {
-        String gdpPath = beaDownloader.downloadGdpComponents(2024, 2024);
-        if (gdpPath != null) {
-          File gdpFile = new File(gdpPath);
-          if (gdpFile.exists()) {
-            File targetDir = new File(parquetDir, "source=econ/type=gdp/year=2024");
-            targetDir.mkdirs();
-            Files.copy(gdpFile.toPath(),
-                       new File(targetDir, "gdp_components.parquet").toPath());
-          }
+        List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
+        if (!nipaTablesList.isEmpty()) {
+          beaDownloader.downloadGdpComponentsMetadata(2024, 2024, nipaTablesList);
+          beaDownloader.convertGdpComponentsMetadata(2024, 2024, nipaTablesList);
         }
       } catch (Exception e) {
         // Ignore
       }
 
       try {
-        beaDownloader.downloadTradeStatistics(2022, 2023);
-        // Check if the file was created in the storage provider directory
-        File targetDir = new File(parquetDir, "source=econ/type=trade/year_range=2022_2023");
-        File tradeFile = new File(targetDir, "trade_statistics.parquet");
-        if (tradeFile.exists()) {
-          // File already created in the correct location
+        beaDownloader.downloadTradeStatisticsMetadata(2022, 2023);
+        beaDownloader.convertTradeStatisticsMetadata(2022, 2023);
+      } catch (Exception e) {
+        // Ignore
+      }
+
+      try {
+        List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
+        if (!itaIndicatorsList.isEmpty()) {
+          beaDownloader.downloadItaDataMetadata(2022, 2023, itaIndicatorsList);
+          beaDownloader.convertItaDataMetadata(2022, 2023, itaIndicatorsList);
         }
       } catch (Exception e) {
         // Ignore
       }
 
       try {
-        String itaPath = beaDownloader.downloadItaData(2022, 2023);
-        if (itaPath != null) {
-          File itaFile = new File(itaPath);
-          if (itaFile.exists()) {
-            File targetDir = new File(parquetDir, "source=econ/type=ita/year_range=2022_2023");
-            targetDir.mkdirs();
-            Files.copy(itaFile.toPath(),
-                       new File(targetDir, "ita_data.parquet").toPath());
-          }
-        }
-      } catch (Exception e) {
-        // Ignore
-      }
-
-      try {
-        String industryPath = beaDownloader.downloadIndustryGdp(2022, 2023);
-        if (industryPath != null) {
-          File industryFile = new File(industryPath);
-          if (industryFile.exists()) {
-            File targetDir = new File(parquetDir, "source=econ/type=industry_gdp/year_range=2022_2023");
-            targetDir.mkdirs();
-            Files.copy(industryFile.toPath(),
-                       new File(targetDir, "industry_gdp.parquet").toPath());
-          }
+        List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+        if (!keyIndustriesList.isEmpty()) {
+          beaDownloader.downloadIndustryGdpMetadata(2022, 2023, keyIndustriesList);
+          beaDownloader.convertIndustryGdpMetadata(2022, 2023, keyIndustriesList);
         }
       } catch (Exception e) {
         // Ignore
@@ -466,5 +453,38 @@ public class EconSchemaIntegrationTest {
     Path modelFile = Files.createTempFile("econ-test-model", ".json");
     Files.write(modelFile, modelJson.getBytes());
     return modelFile;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      InputStream schemaStream = EconSchemaIntegrationTest.class.getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        return Collections.emptyList();
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode tables = root.get("tables");
+      if (tables != null && tables.isArray()) {
+        for (JsonNode table : tables) {
+          if (tableName.equals(table.get("name").asText())) {
+            JsonNode download = table.get("download");
+            if (download != null) {
+              JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                return result;
+              }
+            }
+          }
+        }
+      }
+      return Collections.emptyList();
+    } catch (Exception e) {
+      return Collections.emptyList();
+    }
   }
 }
