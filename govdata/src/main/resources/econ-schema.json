@@ -4,7 +4,7 @@
   "partitionedTables": [
     {
       "name": "employment_statistics",
-      "pattern": "type=employment_statistics/year=*/employment_statistics.parquet",
+      "pattern": "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -84,7 +84,41 @@
           "nullable": true,
           "comment": "Employment subcategory for detailed classification"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        },
+        "requestBody": {
+          "seriesid": {
+            "type": "iteration",
+            "source": "seriesList"
+          },
+          "startyear": "{year}",
+          "endyear": "{year}",
+          "registrationkey": {
+            "type": "auth"
+          }
+        },
+        "seriesList": [
+          "LNS14000000",
+          "CES0000000001",
+          "LNS11300000"
+        ],
+        "rateLimit": {
+          "minIntervalMs": 1100,
+          "maxRetries": 3
+        },
+        "response": {
+          "format": "json",
+          "dataPath": "Results.series"
+        }
+      }
     },
     {
       "name": "inflation_metrics",
@@ -1563,7 +1597,7 @@
           "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"
         }
       ],
-      "download": {
+      "download": con{
         "enabled": true,
         "method": "GET",
         "baseUrl": "https://apps.bea.gov/api/data",

@@ -4665,4 +4665,120 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     writeJoltsDataelementsParquet(dataelements, targetPath);
     LOGGER.info("Converted JOLTS data elements reference to parquet: {}", targetPath);
   }
+
+  // ===== Metadata-Driven Employment Statistics Methods =====
+
+  /**
+   * Downloads employment statistics data using metadata-driven pattern.
+   * This is a pilot implementation for testing BLS POST infrastructure.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws IOException if download fails
+   * @throws InterruptedException if download is interrupted
+   */
+  public void downloadEmploymentStatisticsMetadata(int startYear, int endYear)
+      throws IOException, InterruptedException {
+    String tableName = "employment_statistics";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    int downloadedCount = 0;
+    int skippedCount = 0;
+
+    for (int year = startYear; year <= endYear; year++) {
+      // Build variables map
+      Map<String, String> variables = new HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "monthly");
+
+      // Resolve path using pattern
+      String relativePath = resolveJsonPath(pattern, variables);
+
+      // Check if already cached
+      Map<String, String> params = new HashMap<>();
+      params.put("frequency", "monthly");
+
+      if (isCachedOrExists(tableName, year, params, relativePath)) {
+        skippedCount++;
+        continue;
+      }
+
+      // Download via metadata-driven executeDownload()
+      try {
+        String cachedPath = executeDownload(tableName, variables);
+
+        // Mark as downloaded in cache manifest
+        try {
+          String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+          long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+          cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+        } catch (Exception ex) {
+          LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
+        }
+
+        downloadedCount++;
+      } catch (Exception e) {
+        LOGGER.error("Error downloading employment statistics for year {}: {}", year, e.getMessage());
+      }
+    }
+
+    // Save manifest after all downloads complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
+    }
+
+    LOGGER.info("Employment statistics download complete: downloaded {} years, skipped {} (cached)",
+        downloadedCount, skippedCount);
+  }
+
+  /**
+   * Converts employment statistics data using metadata-driven pattern.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws IOException if conversion fails
+   */
+  public void convertEmploymentStatisticsMetadata(int startYear, int endYear)
+      throws IOException {
+    String tableName = "employment_statistics";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    for (int year = startYear; year <= endYear; year++) {
+      // Build paths for this year
+      Map<String, String> variables = new HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "monthly");
+
+      String rawPath = resolveJsonPath(pattern, variables);
+      String parquetPath = resolveParquetPath(pattern, variables);
+
+      // Check if conversion needed
+      Map<String, String> params = new HashMap<>();
+      params.put("frequency", "monthly");
+
+      if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        skippedCount++;
+        continue;
+      }
+
+      // Convert via metadata-driven approach
+      try {
+        convertCachedJsonToParquet(tableName, variables);
+        cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+        convertedCount++;
+      } catch (Exception e) {
+        LOGGER.error("Error converting employment statistics for year {}: {}", year, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Employment statistics conversion complete: converted {} years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
 }
