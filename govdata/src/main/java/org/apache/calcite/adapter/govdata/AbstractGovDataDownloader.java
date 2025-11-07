@@ -718,6 +718,90 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Builds JSON request body for POST requests using requestBody configuration.
+   *
+   * @param downloadConfig Download configuration containing requestBody section
+   * @param variables Variables for expression evaluation
+   * @param iterationValue Current iteration value (e.g., series_id), or null if not iterating
+   * @return JSON string for POST request body
+   * @throws IllegalArgumentException if requestBody config is invalid
+   */
+  @SuppressWarnings("unchecked")
+  protected String buildRequestBody(Map<String, Object> downloadConfig,
+      Map<String, String> variables,
+      String iterationValue) {
+    if (!downloadConfig.containsKey("requestBody")) {
+      throw new IllegalArgumentException("downloadConfig must contain 'requestBody' for POST requests");
+    }
+
+    Map<String, Object> requestBodyConfig = (Map<String, Object>) downloadConfig.get("requestBody");
+    Map<String, Object> bodyData = new java.util.LinkedHashMap<>();
+
+    for (Map.Entry<String, Object> fieldEntry : requestBodyConfig.entrySet()) {
+      String fieldName = fieldEntry.getKey();
+      Object fieldValue = null;
+
+      // Handle both simple string values and structured config objects
+      if (fieldEntry.getValue() instanceof Map) {
+        Map<String, Object> fieldConfig = (Map<String, Object>) fieldEntry.getValue();
+        String type = fieldConfig.get("type").toString();
+
+        switch (type) {
+          case "constant":
+            fieldValue = fieldConfig.get("value");
+            break;
+
+          case "expression":
+            String expression = fieldConfig.get("value").toString();
+            fieldValue = evaluateExpression(expression, variables);
+            break;
+
+          case "auth":
+            fieldValue = resolveAuthValue(downloadConfig);
+            break;
+
+          case "iteration":
+            if (iterationValue == null) {
+              // Check if there's a source field for series list iteration
+              if (fieldConfig.containsKey("source")) {
+                // This means we should include the full seriesList from config
+                String source = fieldConfig.get("source").toString();
+                if ("seriesList".equals(source) && downloadConfig.containsKey("seriesList")) {
+                  fieldValue = downloadConfig.get("seriesList");
+                }
+              } else {
+                throw new IllegalArgumentException(
+                    "Field '" + fieldName + "' requires iteration value but none provided");
+              }
+            } else {
+              fieldValue = iterationValue;
+            }
+            break;
+
+          default:
+            throw new IllegalArgumentException("Unknown field type: " + type);
+        }
+      } else {
+        // Simple string value - treat as expression
+        String expression = fieldEntry.getValue().toString();
+        fieldValue = evaluateExpression(expression, variables);
+      }
+
+      // Add to body data if we have a value
+      if (fieldValue != null) {
+        bodyData.put(fieldName, fieldValue);
+      }
+    }
+
+    // Convert to JSON string
+    try {
+      return MAPPER.writeValueAsString(bodyData);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to serialize request body to JSON", e);
+    }
+  }
+
+  /**
    * URL-encodes a string for use in query parameters.
    * Simple implementation for common characters (avoids heavy dependency).
    */
@@ -875,27 +959,42 @@ public abstract class AbstractGovDataDownloader {
     boolean hasMore = true;
 
     while (hasMore) {
-      // Build URL with current offset
-      String url = buildDownloadUrl(downloadConfig, variables, iterationValue, offset);
-      LOGGER.debug("Downloading from: {}", url);
-
-      // Execute HTTP request
-      HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(60))
-          .header("User-Agent", getDefaultUserAgent())
-          .header("Accept", "application/json");
-
       // Check if we need POST method
       String method = downloadConfig.containsKey("method")
           ? downloadConfig.get("method").toString()
           : "GET";
 
+      String url;
+      HttpRequest.Builder requestBuilder;
+
       if ("POST".equalsIgnoreCase(method)) {
-        // TODO: Handle POST body if needed
-        requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
+        // For POST requests, use baseUrl only (no query params)
+        url = downloadConfig.get("baseUrl").toString();
+        LOGGER.debug("POST to: {}", url);
+
+        // Build JSON request body
+        String requestBody = buildRequestBody(downloadConfig, variables, iterationValue);
+        LOGGER.debug("POST body: {}", requestBody);
+
+        // Build POST request with JSON body
+        requestBuilder = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .timeout(Duration.ofSeconds(60))
+            .header("User-Agent", getDefaultUserAgent())
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody));
       } else {
-        requestBuilder.GET();
+        // For GET requests, build URL with query params
+        url = buildDownloadUrl(downloadConfig, variables, iterationValue, offset);
+        LOGGER.debug("GET from: {}", url);
+
+        requestBuilder = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .timeout(Duration.ofSeconds(60))
+            .header("User-Agent", getDefaultUserAgent())
+            .header("Accept", "application/json")
+            .GET();
       }
 
       HttpRequest request = requestBuilder.build();
