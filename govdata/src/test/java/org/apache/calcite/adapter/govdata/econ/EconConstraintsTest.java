@@ -53,7 +53,7 @@ public class EconConstraintsTest {
     expectedPrimaryKeys.put("federal_debt", Arrays.asList("date", "debt_type"));
     expectedPrimaryKeys.put("world_indicators", Arrays.asList("country_code", "indicator_code", "year"));
     expectedPrimaryKeys.put("fred_indicators", Arrays.asList("series_id", "date"));
-    expectedPrimaryKeys.put("gdp_components", Arrays.asList("table_id", "line_number", "year"));
+    expectedPrimaryKeys.put("national_accounts", Arrays.asList("table_id", "line_number", "year"));
     expectedPrimaryKeys.put("regional_income", Arrays.asList("geo_fips", "metric", "year"));
 
     // Verify each table has the expected primary key
@@ -110,7 +110,7 @@ public class EconConstraintsTest {
         "federal_debt",
         "world_indicators",
         "fred_indicators",
-        "gdp_components",
+        "national_accounts",
         "regional_income"
     };
 

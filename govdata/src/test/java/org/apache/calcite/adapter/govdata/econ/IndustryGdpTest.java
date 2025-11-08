@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,9 +33,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,7 +54,7 @@ public class IndustryGdpTest {
     assumeTrue(apiKey != null && !apiKey.isEmpty(),
         "BEA_API_KEY not set, skipping industry GDP test");
 
-    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), apiKey);
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString());
 
     // Extract industries list from schema
     List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");

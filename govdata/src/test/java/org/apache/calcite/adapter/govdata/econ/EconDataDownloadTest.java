@@ -19,11 +19,13 @@ package org.apache.calcite.adapter.govdata.econ;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -31,16 +33,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -145,22 +140,30 @@ public class EconDataDownloadTest {
         "BEA_API_KEY not set, skipping BEA test");
 
     StorageProvider storageProvider = createStorageProvider();
-    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), storageProvider, storageProvider);
 
     // Extract NIPA tables list from schema
-    List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
+    List<String> nipaTablesList = extractIterationList("national_accounts", "nipaTablesList");
     assumeTrue(!nipaTablesList.isEmpty(), "nipaTablesList not found in schema");
 
     // Download just 1 year of GDP components using metadata-driven methods
-    downloader.downloadGdpComponentsMetadata(2023, 2023, nipaTablesList);
-    downloader.convertGdpComponentsMetadata(2023, 2023, nipaTablesList);
+    downloader.downloadNationalAccountsMetadata(2023, 2023, nipaTablesList, java.util.Collections.emptyMap());
+    downloader.convertNationalAccountsMetadata(2023, 2023, nipaTablesList, java.util.Collections.emptyMap());
 
-    // Verify parquet file was created (new path structure: type=gdp_components/frequency=A/year=2023/)
-    String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "type=gdp_components/frequency=A/year=2023/gdp_components.parquet");
-    assertTrue(storageProvider.exists(parquetPath), "Parquet file should exist at: " + parquetPath);
-
-    verifyParquetReadable(parquetPath, "gdp_components");
+    // Verify parquet file was created (new path structure: type=national_accounts/section=*/frequency=A/year=2023/tablename=*/national_accounts.parquet)
+    // Note: Section will be determined dynamically based on the table, so we search for any section
+    String tableName = nipaTablesList.get(0);
+    boolean found = false;
+    for (String section : new String[]{"1", "2", "3", "4", "5", "6", "7", "8"}) {
+      String parquetPath =
+          storageProvider.resolvePath(tempDir.toString(), "type=national_accounts/section=" + section + "/frequency=A/year=2023/tablename=" + tableName + "/national_accounts.parquet");
+      if (storageProvider.exists(parquetPath)) {
+        verifyParquetReadable(parquetPath, "national_accounts");
+        found = true;
+        break;
+      }
+    }
+    assertTrue(found, "Parquet file should exist for table " + tableName + " in some section");
   }
 
   @Test public void testBeaRegionalIncome() throws Exception {
@@ -169,7 +172,7 @@ public class EconDataDownloadTest {
         "BEA_API_KEY not set, skipping BEA regional test");
 
     StorageProvider storageProvider = createStorageProvider();
-    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), apiKey, storageProvider, storageProvider);
+    BeaDataDownloader downloader = new BeaDataDownloader(tempDir.toString(), tempDir.toString(), storageProvider, storageProvider);
 
     // Extract line codes list from schema
     List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
@@ -263,7 +266,7 @@ public class EconDataDownloadTest {
               foundExpectedColumns = true;
             } else if ("fred_indicators".equals(expectedTable) && "series_id".equals(columnName)) {
               foundExpectedColumns = true;
-            } else if ("gdp_components".equals(expectedTable) && "line_description".equals(columnName)) {
+            } else if ("national_accounts".equals(expectedTable) && "line_description".equals(columnName)) {
               foundExpectedColumns = true;
             } else if ("regional_income".equals(expectedTable) && "geo_fips".equals(columnName)) {
               foundExpectedColumns = true;

@@ -86,7 +86,7 @@ public class EconSchemaTableExposureTest {
     expectedTables.add("federal_debt");
     expectedTables.add("world_indicators");
     expectedTables.add("fred_indicators");
-    expectedTables.add("gdp_components");
+    expectedTables.add("national_accounts");
     expectedTables.add("regional_income");
     expectedTables.add("state_gdp");
     expectedTables.add("trade_statistics");

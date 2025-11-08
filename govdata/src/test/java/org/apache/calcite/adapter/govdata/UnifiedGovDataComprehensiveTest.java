@@ -87,9 +87,6 @@ public class UnifiedGovDataComprehensiveTest {
       "trade_statistics",
       "ita_data",
       "industry_gdp",
-      // Custom FRED series tables
-      "fred_treasuries",
-      "fred_employment_indicators",
       // FRED catalog table
       "fred_data_series_catalog"));
 
@@ -168,20 +165,7 @@ public class UnifiedGovDataComprehensiveTest {
         "      \"operand\": {" +
         "        \"dataSource\": \"econ\"," +
         "        \"executionEngine\": \"DUCKDB\"," +
-        "        \"autoDownload\": true," +
-        "        \"defaultPartitionStrategy\": \"AUTO\"," +
-        "        \"customFredSeries\": [\"UNRATE\", \"PAYEMS\"]," +
-        "        \"fredSeriesGroups\": {" +
-        "          \"treasuries\": {" +
-        "            \"series\": [\"DGS10\", \"DGS30\", \"DGS2\"]," +
-        "            \"partitionStrategy\": \"MANUAL\"," +
-        "            \"partitionFields\": [\"year\", \"maturity\"]" +
-        "          }," +
-        "          \"employment_indicators\": {" +
-        "            \"series\": [\"UNRATE\", \"PAYEMS\", \"CIVPART\"]," +
-        "            \"partitionStrategy\": \"AUTO\"" +
-        "          }" +
-        "        }" +
+        "        \"autoDownload\": true" +
         "      }" +
         "    }," +
         "    {" +
@@ -401,31 +385,6 @@ public class UnifiedGovDataComprehensiveTest {
   private void validateEconFredPartitioning(Statement stmt, TestResult result) throws SQLException {
     LOGGER.info("\n📊 ECON FRED Custom Series Validation:");
 
-    // Check for custom FRED series tables
-    if (result.queryableTables.contains("fred_treasuries")) {
-      String query = "SELECT COUNT(*) as count FROM econ.fred_treasuries LIMIT 1";
-      try (ResultSet rs = stmt.executeQuery(query)) {
-        if (rs.next()) {
-          long count = rs.getLong("count");
-          LOGGER.info("  ✅ Treasury FRED series table: {} rows found", count);
-        }
-      } catch (SQLException e) {
-        LOGGER.warn("  ⚠️ Treasury FRED series table query failed: {}", e.getMessage());
-      }
-    }
-
-    if (result.queryableTables.contains("fred_employment_indicators")) {
-      String query = "SELECT COUNT(*) as count FROM econ.fred_employment_indicators LIMIT 1";
-      try (ResultSet rs = stmt.executeQuery(query)) {
-        if (rs.next()) {
-          long count = rs.getLong("count");
-          LOGGER.info("  ✅ Employment indicators FRED series table: {} rows found", count);
-        }
-      } catch (SQLException e) {
-        LOGGER.warn("  ⚠️ Employment indicators FRED series table query failed: {}", e.getMessage());
-      }
-    }
-
     // Validate that partitioning is working by checking for expected FRED series
     if (result.queryableTables.contains("fred_indicators")) {
       try {
@@ -448,8 +407,6 @@ public class UnifiedGovDataComprehensiveTest {
         LOGGER.warn("  ⚠️ Custom FRED series validation failed: {}", e.getMessage());
       }
     }
-
-    LOGGER.info("  🎯 FRED Custom Series Partitioning: Configured with AUTO strategy for Treasury and Employment groups");
   }
 
   private String getSeriesDescription(String seriesId) {

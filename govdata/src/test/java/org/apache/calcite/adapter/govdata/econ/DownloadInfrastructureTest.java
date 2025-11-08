@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -54,29 +53,24 @@ class DownloadInfrastructureTest {
           null); // no manifest needed for these tests
     }
 
-    @Override
-    protected long getMinRequestIntervalMs() {
+    @Override protected long getMinRequestIntervalMs() {
       return 0; // No rate limit for tests
     }
 
-    @Override
-    protected int getMaxRetries() {
+    @Override protected int getMaxRetries() {
       return 1;
     }
 
-    @Override
-    protected long getRetryDelayMs() {
+    @Override protected long getRetryDelayMs() {
       return 0;
     }
 
     // Public wrappers for testing protected methods
-    @Override
-    public String evaluateExpression(String expression, Map<String, String> variables) {
+    @Override public String evaluateExpression(String expression, Map<String, String> variables) {
       return super.evaluateExpression(expression, variables);
     }
 
-    @Override
-    public String buildDownloadUrl(Map<String, Object> downloadConfig,
+    @Override public String buildDownloadUrl(Map<String, Object> downloadConfig,
         Map<String, String> variables,
         String iterationValue,
         int paginationOffset) {
@@ -91,8 +85,7 @@ class DownloadInfrastructureTest {
 
   // ===== Expression Evaluation Tests =====
 
-  @Test
-  void testEvaluateExpression_StartOfYear() {
+  @Test void testEvaluateExpression_StartOfYear() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
 
@@ -101,8 +94,7 @@ class DownloadInfrastructureTest {
     assertEquals("2020-01-01", result, "startOfYear should return first day of year");
   }
 
-  @Test
-  void testEvaluateExpression_EndOfYear() {
+  @Test void testEvaluateExpression_EndOfYear() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
 
@@ -111,8 +103,7 @@ class DownloadInfrastructureTest {
     assertEquals("2020-12-31", result, "endOfYear should return last day of year");
   }
 
-  @Test
-  void testEvaluateExpression_StartOfMonth() {
+  @Test void testEvaluateExpression_StartOfMonth() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
     variables.put("month", "3");
@@ -122,8 +113,7 @@ class DownloadInfrastructureTest {
     assertEquals("2020-03-01", result, "startOfMonth should return first day of month");
   }
 
-  @Test
-  void testEvaluateExpression_EndOfMonth_Regular() {
+  @Test void testEvaluateExpression_EndOfMonth_Regular() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
     variables.put("month", "4");
@@ -133,8 +123,7 @@ class DownloadInfrastructureTest {
     assertEquals("2020-04-30", result, "endOfMonth should return last day (30) for April");
   }
 
-  @Test
-  void testEvaluateExpression_EndOfMonth_LeapYear() {
+  @Test void testEvaluateExpression_EndOfMonth_LeapYear() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
     variables.put("month", "2");
@@ -144,8 +133,7 @@ class DownloadInfrastructureTest {
     assertEquals("2020-02-29", result, "endOfMonth should return 29 for Feb in leap year");
   }
 
-  @Test
-  void testEvaluateExpression_EndOfMonth_NonLeapYear() {
+  @Test void testEvaluateExpression_EndOfMonth_NonLeapYear() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2021");
     variables.put("month", "2");
@@ -155,8 +143,7 @@ class DownloadInfrastructureTest {
     assertEquals("2021-02-28", result, "endOfMonth should return 28 for Feb in non-leap year");
   }
 
-  @Test
-  void testEvaluateExpression_NoFunction() {
+  @Test void testEvaluateExpression_NoFunction() {
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2020");
 
@@ -167,8 +154,7 @@ class DownloadInfrastructureTest {
 
   // ===== buildDownloadUrl Tests =====
 
-  @Test
-  void testBuildDownloadUrl_ConstantParams() {
+  @Test void testBuildDownloadUrl_ConstantParams() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 
@@ -194,8 +180,7 @@ class DownloadInfrastructureTest {
     assertTrue(url.startsWith("https://api.example.com/data?"), "URL should have correct base");
   }
 
-  @Test
-  void testBuildDownloadUrl_ExpressionParams() {
+  @Test void testBuildDownloadUrl_ExpressionParams() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 
@@ -221,8 +206,7 @@ class DownloadInfrastructureTest {
     assertTrue(url.contains("end_date=2020-12-31"), "URL should contain evaluated end date");
   }
 
-  @Test
-  void testBuildDownloadUrl_IterationParam() {
+  @Test void testBuildDownloadUrl_IterationParam() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 
@@ -241,8 +225,7 @@ class DownloadInfrastructureTest {
     assertTrue(url.contains("series_id=DFF"), "URL should contain iteration value");
   }
 
-  @Test
-  void testBuildDownloadUrl_PaginationParam() {
+  @Test void testBuildDownloadUrl_PaginationParam() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 
@@ -260,8 +243,7 @@ class DownloadInfrastructureTest {
     assertTrue(url.contains("offset=5000"), "URL should contain pagination offset");
   }
 
-  @Test
-  void testBuildDownloadUrl_MissingIterationValue() {
+  @Test void testBuildDownloadUrl_MissingIterationValue() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 
@@ -283,8 +265,7 @@ class DownloadInfrastructureTest {
         "Exception should indicate missing iteration value");
   }
 
-  @Test
-  void testBuildDownloadUrl_AuthParam_EnvVarSet() {
+  @Test void testBuildDownloadUrl_AuthParam_EnvVarSet() {
     // Set test environment variable
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
@@ -319,8 +300,7 @@ class DownloadInfrastructureTest {
     }
   }
 
-  @Test
-  void testBuildDownloadUrl_MissingBaseUrl() {
+  @Test void testBuildDownloadUrl_MissingBaseUrl() {
     Map<String, Object> downloadConfig = new HashMap<>();
     // Missing baseUrl
     downloadConfig.put("queryParams", new HashMap<>());
@@ -335,8 +315,7 @@ class DownloadInfrastructureTest {
         "Exception should indicate missing baseUrl");
   }
 
-  @Test
-  void testBuildDownloadUrl_MixedParams() {
+  @Test void testBuildDownloadUrl_MixedParams() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/observations");
 
@@ -381,8 +360,7 @@ class DownloadInfrastructureTest {
     assertTrue(url.contains("offset=1000"), "URL should contain pagination offset");
   }
 
-  @Test
-  void testBuildDownloadUrl_UrlEncoding() {
+  @Test void testBuildDownloadUrl_UrlEncoding() {
     Map<String, Object> downloadConfig = new HashMap<>();
     downloadConfig.put("baseUrl", "https://api.example.com/data");
 

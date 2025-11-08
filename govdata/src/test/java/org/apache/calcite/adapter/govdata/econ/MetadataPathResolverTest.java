@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -54,34 +53,28 @@ class MetadataPathResolverTest {
           new LocalFileStorageProvider());
     }
 
-    @Override
-    protected long getMinRequestIntervalMs() {
+    @Override protected long getMinRequestIntervalMs() {
       return 0; // No rate limit for tests
     }
 
-    @Override
-    protected int getMaxRetries() {
+    @Override protected int getMaxRetries() {
       return 1;
     }
 
-    @Override
-    protected long getRetryDelayMs() {
+    @Override protected long getRetryDelayMs() {
       return 0;
     }
 
     // Public wrappers for testing protected methods
-    @Override
-    public Map<String, Object> loadTableMetadata(String tableName) {
+    @Override public Map<String, Object> loadTableMetadata(String tableName) {
       return super.loadTableMetadata(tableName);
     }
 
-    @Override
-    public String resolveJsonPath(String pattern, Map<String, String> variables) {
+    @Override public String resolveJsonPath(String pattern, Map<String, String> variables) {
       return super.resolveJsonPath(pattern, variables);
     }
 
-    @Override
-    public String resolveParquetPath(String pattern, Map<String, String> variables) {
+    @Override public String resolveParquetPath(String pattern, Map<String, String> variables) {
       return super.resolveParquetPath(pattern, variables);
     }
   }
@@ -92,8 +85,7 @@ class MetadataPathResolverTest {
     downloader = new TestEconDownloader();
   }
 
-  @Test
-  void testLoadTableMetadata_FredIndicators() {
+  @Test void testLoadTableMetadata_FredIndicators() {
     // Load metadata for fred_indicators table
     Map<String, Object> metadata = downloader.loadTableMetadata("fred_indicators");
 
@@ -105,8 +97,7 @@ class MetadataPathResolverTest {
     assertNotNull(metadata.get("columns"), "Columns should be present");
   }
 
-  @Test
-  void testResolveJsonPath_SingleWildcard() {
+  @Test void testResolveJsonPath_SingleWildcard() {
     // Test with single year wildcard (fred_indicators pattern)
     String pattern = "type=fred_indicators/year=*/fred_indicators.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -118,8 +109,7 @@ class MetadataPathResolverTest {
         "JSON path should have year substituted and .json extension");
   }
 
-  @Test
-  void testResolveParquetPath_SingleWildcard() {
+  @Test void testResolveParquetPath_SingleWildcard() {
     // Test with single year wildcard
     String pattern = "type=fred_indicators/year=*/fred_indicators.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -131,8 +121,7 @@ class MetadataPathResolverTest {
         "Parquet path should have year substituted with .parquet extension");
   }
 
-  @Test
-  void testResolveJsonPath_MultipleWildcards() {
+  @Test void testResolveJsonPath_MultipleWildcards() {
     // Test with multiple wildcards (frequency + year)
     String pattern = "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -145,8 +134,7 @@ class MetadataPathResolverTest {
         jsonPath, "JSON path should have both wildcards substituted");
   }
 
-  @Test
-  void testResolveParquetPath_MultipleWildcards() {
+  @Test void testResolveParquetPath_MultipleWildcards() {
     // Test with multiple wildcards
     String pattern = "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -159,8 +147,7 @@ class MetadataPathResolverTest {
         parquetPath, "Parquet path should have both wildcards substituted");
   }
 
-  @Test
-  void testResolveJsonPath_MissingVariable() {
+  @Test void testResolveJsonPath_MissingVariable() {
     // Test error handling when required variable is missing
     String pattern = "type=fred_indicators/year=*/fred_indicators.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -176,8 +163,7 @@ class MetadataPathResolverTest {
         "Exception message should list the missing 'year' variable");
   }
 
-  @Test
-  void testResolveJsonPath_WithConstantPartition() {
+  @Test void testResolveJsonPath_WithConstantPartition() {
     // Test pattern with constant partition value (no wildcard)
     String pattern = "type=treasury_yields/frequency=daily/year=*/treasury_yields.parquet";
     Map<String, String> variables = new HashMap<>();
@@ -190,8 +176,7 @@ class MetadataPathResolverTest {
         jsonPath, "JSON path should preserve constant partition values");
   }
 
-  @Test
-  void testEndToEnd_FredIndicators() {
+  @Test void testEndToEnd_FredIndicators() {
     // End-to-end test: load metadata and resolve paths
     Map<String, Object> metadata = downloader.loadTableMetadata("fred_indicators");
     String pattern = (String) metadata.get("pattern");
@@ -211,8 +196,7 @@ class MetadataPathResolverTest {
     assertTrue(parquetPath.endsWith(".parquet"), "Parquet path should end with .parquet");
   }
 
-  @Test
-  void testLoadTableMetadata_NonExistentTable() {
+  @Test void testLoadTableMetadata_NonExistentTable() {
     // Test error handling for non-existent table
     assertThrows(IllegalArgumentException.class, () -> {
       downloader.loadTableMetadata("non_existent_table");

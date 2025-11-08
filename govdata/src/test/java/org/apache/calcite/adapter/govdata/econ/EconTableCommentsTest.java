@@ -44,7 +44,7 @@ public class EconTableCommentsTest {
         "federal_debt",
         "world_indicators",
         "fred_indicators",
-        "gdp_components",
+        "national_accounts",
         "regional_income"
     };
 
@@ -91,7 +91,7 @@ public class EconTableCommentsTest {
           assertTrue(columnComments.containsKey("date"), "Missing date column comment");
           assertTrue(columnComments.containsKey("value"), "Missing value column comment");
           break;
-        case "gdp_components":
+        case "national_accounts":
           assertTrue(columnComments.containsKey("table_id"), "Missing table_id column comment");
           assertTrue(columnComments.containsKey("line_number"), "Missing line_number column comment");
           assertTrue(columnComments.containsKey("value"), "Missing value column comment");
