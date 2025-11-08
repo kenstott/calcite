@@ -4781,4 +4781,48 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Employment statistics conversion complete: converted {} years, skipped {} (up-to-date)",
         convertedCount, skippedCount);
   }
+
+  /**
+   * Downloads BLS reference tables (JOLTS industries and dataelements).
+   * Uses year=0 sentinel value for reference tables without year dimension.
+   */
+  @Override public void downloadReferenceData() throws IOException {
+    LOGGER.info("Downloading BLS JOLTS reference tables");
+
+    // Download and convert reference_jolts_industries
+    String joltsIndustriesParquetPath =
+        storageProvider.resolvePath(parquetDirectory, "type=reference/jolts_industries.parquet");
+    String joltsIndustriesRawPath =
+        cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_industries.json");
+
+    if (!isParquetConvertedOrExists("jolts_industries", 0, new java.util.HashMap<>(),
+        joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
+      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      convertCachedJsonToParquet("jolts_industries", variables);
+      cacheManifest.markParquetConverted("jolts_industries", 0, null,
+          joltsIndustriesParquetPath);
+      LOGGER.info("Converted reference_jolts_industries to parquet");
+    } else {
+      LOGGER.info("reference_jolts_industries already converted, skipping");
+    }
+
+    // Download and convert reference_jolts_dataelements
+    String joltsDataelementsParquetPath =
+        storageProvider.resolvePath(parquetDirectory, "type=reference/jolts_dataelements.parquet");
+    String joltsDataelementsRawPath =
+        cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_dataelements.json");
+
+    if (!isParquetConvertedOrExists("jolts_dataelements", 0, new java.util.HashMap<>(),
+        joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
+      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      convertCachedJsonToParquet("jolts_dataelements", variables);
+      cacheManifest.markParquetConverted("jolts_dataelements", 0, null,
+          joltsDataelementsParquetPath);
+      LOGGER.info("Converted reference_jolts_dataelements to parquet");
+    } else {
+      LOGGER.info("reference_jolts_dataelements already converted, skipping");
+    }
+
+    LOGGER.info("Completed BLS JOLTS reference tables download");
+  }
 }

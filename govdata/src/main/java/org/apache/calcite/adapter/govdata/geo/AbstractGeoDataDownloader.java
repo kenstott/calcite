@@ -95,6 +95,18 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
     super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest);
   }
 
+  /**
+   * Default implementation does nothing.
+   * Concrete downloaders should override if they have reference tables to download
+   * (e.g., TIGER/Line metadata, Census geography hierarchies).
+   *
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadReferenceData() throws IOException, InterruptedException {
+    // Default: no reference data to download
+  }
+
   // Rate limiting methods - subclasses can override to provide API-specific limits
   // If not overridden, defaults from AbstractGovDataDownloader are used
 

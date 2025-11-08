@@ -71,6 +71,48 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return "national_accounts";
   }
 
+  /**
+   * Downloads BEA reference tables (NIPA tables catalog and regional line codes).
+   *
+   * <p>Downloads and converts:
+   * <ul>
+   *   <li>reference_nipa_tables - Catalog of available NIPA tables with frequencies</li>
+   *   <li>reference_regional_linecodes - Line code catalogs for all BEA Regional tables</li>
+   * </ul>
+   *
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadReferenceData() throws IOException, InterruptedException {
+    LOGGER.info("Downloading BEA reference tables");
+
+    // Download and convert reference_nipa_tables
+    try {
+      String refTablePath = downloadReferenceNipaTables();
+      LOGGER.info("Downloaded reference_nipa_tables to: {}", refTablePath);
+
+      convertReferenceNipaTablesWithFrequencies();
+      LOGGER.info("Converted reference_nipa_tables to parquet with frequency columns");
+    } catch (Exception e) {
+      LOGGER.warn("Could not download reference_nipa_tables catalog: {}. "
+          + "Will use default nipaTablesList.", e.getMessage());
+    }
+
+    // Download and convert reference_regional_linecodes
+    try {
+      downloadRegionalLineCodeCatalog();
+      LOGGER.info("Downloaded reference_regional_linecodes catalog for all BEA Regional tables");
+
+      convertRegionalLineCodeCatalog();
+      LOGGER.info("Converted reference_regional_linecodes to parquet with enrichment");
+    } catch (Exception e) {
+      LOGGER.warn("Could not download reference_regional_linecodes catalog: {}. "
+          + "Regional income downloads may fail.", e.getMessage());
+    }
+
+    LOGGER.info("Completed BEA reference tables download");
+  }
+
   // ===== METADATA-DRIVEN DOWNLOAD/CONVERSION METHODS =====
   // These methods use the download configurations from econ-schema.json
   // and the executeDownload() infrastructure from AbstractGovDataDownloader

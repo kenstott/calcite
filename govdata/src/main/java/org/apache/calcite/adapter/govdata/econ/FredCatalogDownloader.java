@@ -111,6 +111,33 @@ public class FredCatalogDownloader {
   }
 
   /**
+   * Download FRED catalog with cache checking.
+   *
+   * @param fredMinPopularity Minimum popularity threshold
+   * @param fredCatalogForceRefresh Force refresh flag
+   */
+  public void downloadCatalogIfNeeded(int fredMinPopularity, boolean fredCatalogForceRefresh)
+      throws IOException, InterruptedException {
+    // Check if catalog already downloaded via cache manifest
+    List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
+    boolean catalogCached = (catalogSeries != null && !catalogSeries.isEmpty());
+
+    if (fredCatalogForceRefresh) {
+      cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
+      LOGGER.info("Force refresh enabled - invalidated catalog series cache and redownloading");
+      catalogCached = false;
+    }
+
+    if (!catalogCached) {
+      LOGGER.info("Downloading FRED reference_fred_series catalog");
+      downloadCatalog();
+      LOGGER.info("Completed FRED reference_fred_series catalog download");
+    } else {
+      LOGGER.info("FRED catalog already cached ({} series), skipping download", catalogSeries.size());
+    }
+  }
+
+  /**
    * Download comprehensive FRED series catalog directly into partitioned files.
    * Creates individual JSON/Parquet files for each category/frequency/source combination.
    */
