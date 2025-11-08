@@ -1155,16 +1155,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           continue;
         }
 
-        // Read JSON for this table
-        com.fasterxml.jackson.databind.JsonNode root;
+        // Read JSON array (pre-extracted by dataPath during download)
+        com.fasterxml.jackson.databind.JsonNode dataNode;
         try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
-          root = MAPPER.readTree(is);
+          dataNode = MAPPER.readTree(is);
         }
 
-        // Extract LineCode data from BEAAPI.Results.ParamValue
-        com.fasterxml.jackson.databind.JsonNode dataNode = root.path("BEAAPI").path("Results").path("ParamValue");
-        if (!dataNode.isArray()) {
-          LOGGER.warn("No ParamValue array found for table {}", regionalTableName);
+        if (!dataNode.isArray() || dataNode.size() == 0) {
+          LOGGER.warn("Invalid or empty LineCode array for table {} in {}", regionalTableName, fullJsonPath);
           continue;
         }
 
