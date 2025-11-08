@@ -80,20 +80,53 @@ public class EmbeddingProviderFactory {
 
     Map<String, Object> safeConfig = config != null ? config : new HashMap<>();
 
+    // Extract cache configuration
+    String cachePath = (String) safeConfig.get("cachePath");
+    Object storageProviderObj = safeConfig.get("storageProvider");
+
+    // Create base provider
+    TextEmbeddingProvider baseProvider;
     switch (providerType.toLowerCase()) {
+      case "onnx":
+        baseProvider = new ONNXEmbeddingProvider(safeConfig);
+        break;
+
       case "openai":
-        return createOpenAIProvider(safeConfig);
+        baseProvider = createOpenAIProvider(safeConfig);
+        break;
 
       case "local":
-        return new LocalEmbeddingProvider(safeConfig);
+        baseProvider = new LocalEmbeddingProvider(safeConfig);
+        break;
 
       case "placeholder":
-        return new PlaceholderEmbeddingProvider(safeConfig);
+        baseProvider = new PlaceholderEmbeddingProvider(safeConfig);
+        break;
 
       default:
         throw new EmbeddingException("Unknown embedding provider type: " + providerType +
-                                     ". Supported types: openai, local, placeholder");
+                                     ". Supported types: onnx, openai, local, placeholder");
     }
+
+    // Wrap with cache if configured
+    if (cachePath != null && storageProviderObj != null) {
+      try {
+        org.apache.calcite.adapter.file.storage.StorageProvider storageProvider =
+            (org.apache.calcite.adapter.file.storage.StorageProvider) storageProviderObj;
+
+        String providerModel = providerType + "-" + baseProvider.getModelId();
+        PersistentEmbeddingCache cache =
+            new PersistentEmbeddingCache(storageProvider, cachePath, providerModel);
+
+        LOGGER.info("Enabled persistent embedding cache at: {}", cachePath);
+        return new CachedEmbeddingProvider(baseProvider, cache);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to create embedding cache, using uncached provider: {}", e.getMessage());
+        return baseProvider;
+      }
+    }
+
+    return baseProvider;
   }
 
   private static TextEmbeddingProvider createOpenAIProvider(Map<String, Object> config) throws EmbeddingException {
