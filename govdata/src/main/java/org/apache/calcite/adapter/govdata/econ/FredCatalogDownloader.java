@@ -632,8 +632,8 @@ public class FredCatalogDownloader {
     int offset = 0;
     boolean hasMoreResults = true;
 
-    // Get updates from last 14 days (FRED API max for series/updates endpoint)
-    LocalDate startDate = LocalDate.now().minusDays(14);
+    // Get updates from last 13 days (FRED API allows "within last two weeks" = < 14 days)
+    LocalDate startDate = LocalDate.now().minusDays(13);
     String startDateStr = startDate.atStartOfDay().format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
 
     while (hasMoreResults) {
