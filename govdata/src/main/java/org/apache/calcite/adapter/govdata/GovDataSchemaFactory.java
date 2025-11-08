@@ -596,7 +596,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null
-        ? new FredDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest)
+        ? new FredDataDownloader(fredApiKey, econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest, 50, false)
         : null;
 
     TreasuryDataDownloader treasuryDownloader =
