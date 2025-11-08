@@ -120,13 +120,7 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={})",
                 directoryPath, schemaName, recursive, fileSchema != null);
 
-    // Extract database_filename from operand if provided
-    String databaseFilename = operand != null ? (String) operand.get("database_filename") : null;
-    if (databaseFilename != null) {
-      LOGGER.info("Using shared database filename from operand: {}", databaseFilename);
-    }
-
-    return createInternal(parentSchema, schemaName, directoryPath, recursive, fileSchema, databaseFilename);
+    return createInternal(parentSchema, schemaName, directoryPath, recursive, fileSchema, operand);
   }
 
   /**
@@ -142,13 +136,17 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
-   * Internal implementation of create() with database_filename support.
+   * Internal implementation of create() with full operand support.
    */
   private static JdbcSchema createInternal(SchemaPlus parentSchema, String schemaName,
                                  String directoryPath, boolean recursive,
                                  org.apache.calcite.adapter.file.FileSchema fileSchema,
-                                 String databaseFilename) {
+                                 Map<String, Object> operand) {
     LOGGER.debug("[DuckDBJdbcSchemaFactory] createInternal() called for schema: {}", schemaName);
+
+    // Extract database_filename from operand if provided
+    String databaseFilename = operand != null ? (String) operand.get("database_filename") : null;
+
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={}, databaseFilename={})",
                 directoryPath, schemaName, recursive, fileSchema != null, databaseFilename);
 
@@ -347,6 +345,10 @@ public class DuckDBJdbcSchemaFactory {
       // FileSchemaFactory has already run conversions via FileSchema
       // Pass the FileSchema to use its unique instance ID for cache lookup
       registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName, fileSchema);
+
+      // Register SQL views from schema JSON definitions
+      // These views may reference the Parquet views created above
+      registerSqlViewsInDuckDB(setupConn, duckdbSchema, operand);
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
@@ -1328,6 +1330,139 @@ public class DuckDBJdbcSchemaFactory {
         return rs.next() && rs.getInt(1) > 0;
       }
     }
+  }
+
+  /**
+   * Rewrites schema references in SQL view definitions from declared schema name to actual schema name.
+   * This allows views defined with canonical schema names (e.g., "econ") to work when instantiated
+   * with different names (e.g., "ECON", "ECONOMIC").
+   *
+   * Similar to FK schema name rewriting, this only rewrites references to the declared schema name.
+   * Cross-schema references to other schemas are preserved as-is.
+   *
+   * @param viewDef Original SQL view definition
+   * @param declaredSchemaName Canonical schema name from JSON (e.g., "econ")
+   * @param actualSchemaName User-provided schema name from model.json (e.g., "ECON")
+   * @return Rewritten SQL with schema names updated
+   */
+  private static String rewriteSchemaReferencesInSql(String viewDef, String declaredSchemaName,
+                                                     String actualSchemaName) {
+    if (viewDef == null || declaredSchemaName == null || actualSchemaName == null) {
+      return viewDef;
+    }
+
+    // If schema names match (case-insensitive), no rewriting needed
+    if (declaredSchemaName.equalsIgnoreCase(actualSchemaName)) {
+      LOGGER.debug("Schema names match (case-insensitive), no SQL rewriting needed: {} = {}",
+                  declaredSchemaName, actualSchemaName);
+      return viewDef;
+    }
+
+    LOGGER.debug("Rewriting SQL view definition: '{}' -> '{}'", declaredSchemaName, actualSchemaName);
+
+    // Pattern matches:
+    // - "schemaName"."tableName" (quoted identifiers)
+    // - schemaName.tableName (unquoted identifiers)
+    // Word boundaries ensure we don't match partial schema names
+    // Case-insensitive matching for flexibility
+    String pattern = "(?i)\\b" + java.util.regex.Pattern.quote(declaredSchemaName) + "\\.";
+    String replacement = actualSchemaName + ".";
+
+    String rewritten = viewDef.replaceAll(pattern, replacement);
+
+    if (!rewritten.equals(viewDef)) {
+      LOGGER.debug("SQL rewriting applied successfully");
+      LOGGER.debug("Original:  {}", viewDef.length() > 200 ? viewDef.substring(0, 200) + "..." : viewDef);
+      LOGGER.debug("Rewritten: {}", rewritten.length() > 200 ? rewritten.substring(0, 200) + "..." : rewritten);
+    }
+
+    return rewritten;
+  }
+
+  /**
+   * Registers SQL views from schema JSON definitions in DuckDB.
+   * Extracts view definitions from the "tables" array in the operand and creates them in DuckDB.
+   *
+   * @param conn DuckDB connection
+   * @param duckdbSchema DuckDB schema name where views will be created
+   * @param operand Schema operand containing "tables" array and "declaredSchemaName"
+   */
+  private static void registerSqlViewsInDuckDB(Connection conn, String duckdbSchema,
+                                               Map<String, Object> operand) {
+    if (operand == null) {
+      LOGGER.debug("No operand provided, skipping SQL view registration");
+      return;
+    }
+
+    // Extract tables array
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> tables = (List<Map<String, Object>>) operand.get("tables");
+
+    if (tables == null || tables.isEmpty()) {
+      LOGGER.debug("No tables in operand, skipping SQL view registration");
+      return;
+    }
+
+    // Extract declared schema name for rewriting
+    String declaredSchemaName = (String) operand.get("declaredSchemaName");
+
+    LOGGER.info("Registering SQL views in DuckDB schema '{}' (declaredSchemaName='{}')",
+                duckdbSchema, declaredSchemaName);
+
+    int viewCount = 0;
+    int skippedCount = 0;
+
+    for (Map<String, Object> table : tables) {
+      String tableType = (String) table.get("type");
+
+      // Only process view definitions
+      if (!"view".equals(tableType)) {
+        continue;
+      }
+
+      String viewName = (String) table.get("name");
+      // Try "sql" first (used by econ-schema.json), then "viewDef" as fallback
+      String viewDef = (String) table.get("sql");
+      if (viewDef == null) {
+        viewDef = (String) table.get("viewDef");
+      }
+
+      if (viewName == null || viewDef == null) {
+        LOGGER.warn("View definition missing name or sql/viewDef, skipping: {}", table);
+        skippedCount++;
+        continue;
+      }
+
+      try {
+        // Rewrite schema references if needed
+        String rewrittenViewDef = viewDef;
+        if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(duckdbSchema)) {
+          rewrittenViewDef = rewriteSchemaReferencesInSql(viewDef, declaredSchemaName, duckdbSchema);
+        }
+
+        // Create the view in DuckDB
+        String createViewSql =
+                                            String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s", duckdbSchema, viewName, rewrittenViewDef);
+
+        LOGGER.info("Creating SQL view: {}.{}", duckdbSchema, viewName);
+        LOGGER.debug("View SQL: {}", rewrittenViewDef.length() > 200 ?
+                    rewrittenViewDef.substring(0, 200) + "..." : rewrittenViewDef);
+
+        conn.createStatement().execute(createViewSql);
+        viewCount++;
+
+        LOGGER.info("✅ Created SQL view: {}.{}", duckdbSchema, viewName);
+
+      } catch (SQLException e) {
+        LOGGER.error("Failed to create SQL view '{}': {}", viewName, e.getMessage());
+        LOGGER.error("View definition was: {}", viewDef);
+        LOGGER.error("SQL State: {}, Error Code: {}", e.getSQLState(), e.getErrorCode());
+        skippedCount++;
+      }
+    }
+
+    LOGGER.info("SQL view registration complete: {} views created, {} skipped/failed",
+                viewCount, skippedCount);
   }
 
 }

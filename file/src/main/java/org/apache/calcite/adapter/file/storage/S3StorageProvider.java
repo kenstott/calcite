@@ -26,21 +26,21 @@ import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
 import com.amazonaws.services.s3.model.UploadPartRequest;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -521,8 +521,8 @@ public class S3StorageProvider implements StorageProvider {
       }
 
       // Complete multipart upload
-      CompleteMultipartUploadRequest compRequest = new CompleteMultipartUploadRequest(
-          s3Uri.bucket, s3Uri.key, uploadId, partETags);
+      CompleteMultipartUploadRequest compRequest =
+          new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags);
       s3Client.completeMultipartUpload(compRequest);
     } catch (AmazonServiceException e) {
       // Abort multipart upload on failure

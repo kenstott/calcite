@@ -2168,8 +2168,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private boolean addTable(ImmutableMap.Builder<String, Table> builder,
       Map<String, Object> tableDef) {
     final String tableName = (String) tableDef.get("name");
+    final String tableType = (String) tableDef.get("type");
     final String url = (String) tableDef.get("url");
-    LOGGER.debug("addTable from tableDef: name='{}', url='{}'", tableName, url);
+    LOGGER.debug("addTable from tableDef: name='{}', type='{}', url='{}'", tableName, tableType, url);
+
+    // SQL views are handled by FileSchemaFactory or execution engine wrapper (e.g., DuckDB)
+    // Skip them here as they don't have file URLs
+    if ("view".equals(tableType)) {
+      LOGGER.debug("Skipping SQL view '{}' - will be registered separately", tableName);
+      return false;
+    }
 
     // Check if URL contains glob patterns
     if (isGlobPattern(url)) {

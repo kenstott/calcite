@@ -595,6 +595,15 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       parentSchema.add("metadata", metadataSchema.unwrap(Schema.class));
     }
 
+    // Register the FileSchema so we can add views to it
+    // This is similar to what DuckDB does at line 453
+    parentSchema.add(name, fileSchema);
+    LOGGER.info("FileSchemaFactory: Registered FileSchema '{}' with parent for PARQUET engine", name);
+
+    // Now register SQL views from table definitions for PARQUET engine
+    // (DuckDB engine handles views separately as native DuckDB views)
+    registerSqlViews(parentSchema, name, tables, operand);
+
     return fileSchema;
   }
 
@@ -679,5 +688,119 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     this.tableDefinitions = tableDefinitions;
     LOGGER.debug("Received constraint metadata for {} tables",
         tableConstraints != null ? tableConstraints.size() : 0);
+  }
+
+  /**
+   * Registers SQL views as Calcite ViewTableMacro objects in the schema.
+   * This enables views to work with the PARQUET execution engine.
+   *
+   * @param parentSchema Parent schema containing the file schema
+   * @param schemaName Name of the file schema
+   * @param tables List of table definitions (may include views)
+   * @param operand Schema operand containing declaredSchemaName for rewriting
+   */
+  private static void registerSqlViews(SchemaPlus parentSchema, String schemaName,
+                                      List<Map<String, Object>> tables,
+                                      Map<String, Object> operand) {
+    if (tables == null || tables.isEmpty()) {
+      LOGGER.debug("No tables provided, skipping SQL view registration");
+      return;
+    }
+
+    // Get the registered schema
+    SchemaPlus schema = parentSchema.subSchemas().get(schemaName);
+    if (schema == null) {
+      LOGGER.warn("Could not find registered schema '{}' to add views", schemaName);
+      return;
+    }
+
+    // Extract declared schema name for rewriting
+    String declaredSchemaName = (String) operand.get("declaredSchemaName");
+
+    int viewCount = 0;
+    for (Map<String, Object> table : tables) {
+      String tableType = (String) table.get("type");
+      if (!"view".equals(tableType)) {
+        continue;
+      }
+
+      String viewName = (String) table.get("name");
+      // Try "sql" first (used by econ-schema.json), then "viewDef" as fallback
+      String viewSql = (String) table.get("sql");
+      if (viewSql == null) {
+        viewSql = (String) table.get("viewDef");
+      }
+
+      if (viewName == null || viewSql == null) {
+        LOGGER.warn("View definition missing name or sql/viewDef, skipping: {}", table);
+        continue;
+      }
+
+      try {
+        // Rewrite schema references if needed (same logic as DuckDB)
+        String rewrittenViewSql = viewSql;
+        if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(schemaName)) {
+          rewrittenViewSql = rewriteSchemaReferencesInSql(viewSql, declaredSchemaName, schemaName);
+        }
+
+        // Create ViewTableMacro and add to schema
+        // Use schema path = [schemaName] and viewPath = [schemaName, viewName]
+        java.util.List<String> schemaPath = java.util.Collections.singletonList(schemaName);
+        java.util.List<String> viewPath = java.util.Arrays.asList(schemaName, viewName);
+
+        org.apache.calcite.schema.impl.ViewTableMacro viewMacro =
+            org.apache.calcite.schema.impl.ViewTable.viewMacro(schema, rewrittenViewSql,
+                schemaPath, viewPath, null);
+
+        schema.add(viewName, viewMacro);
+        viewCount++;
+
+        LOGGER.info("✅ Registered Calcite view: {}.{}", schemaName, viewName);
+
+      } catch (Exception e) {
+        LOGGER.error("Failed to register Calcite view '{}': {}", viewName, e.getMessage());
+        LOGGER.error("View definition was: {}", viewSql);
+      }
+    }
+
+    LOGGER.info("Calcite view registration complete: {} views registered", viewCount);
+  }
+
+  /**
+   * Rewrites schema references in SQL view definitions from declared schema name to actual schema name.
+   * Same logic as DuckDBJdbcSchemaFactory.rewriteSchemaReferencesInSql().
+   *
+   * @param viewSql Original SQL view definition
+   * @param declaredSchemaName Canonical schema name from JSON (e.g., "econ")
+   * @param actualSchemaName User-provided schema name from model.json (e.g., "ECON")
+   * @return Rewritten SQL with schema names updated
+   */
+  private static String rewriteSchemaReferencesInSql(String viewSql, String declaredSchemaName,
+                                                     String actualSchemaName) {
+    if (viewSql == null || declaredSchemaName == null || actualSchemaName == null) {
+      return viewSql;
+    }
+
+    // If schema names match (case-insensitive), no rewriting needed
+    if (declaredSchemaName.equalsIgnoreCase(actualSchemaName)) {
+      LOGGER.debug("Schema names match (case-insensitive), no SQL rewriting needed: {} = {}",
+                  declaredSchemaName, actualSchemaName);
+      return viewSql;
+    }
+
+    LOGGER.debug("Rewriting SQL view definition: '{}' -> '{}'", declaredSchemaName, actualSchemaName);
+
+    // Pattern matches: schemaName. (word boundaries ensure we don't match partial names)
+    // Case-insensitive matching for flexibility
+    String pattern = "(?i)\\b" + java.util.regex.Pattern.quote(declaredSchemaName) + "\\.";
+    String replacement = actualSchemaName + ".";
+
+    String rewritten = viewSql.replaceAll(pattern, replacement);
+
+    if (!rewritten.equals(viewSql)) {
+      LOGGER.debug("SQL rewriting applied successfully");
+    }
+
+    return rewritten;
   }
 }
