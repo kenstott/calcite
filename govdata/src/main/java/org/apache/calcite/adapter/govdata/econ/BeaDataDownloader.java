@@ -25,7 +25,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -95,7 +101,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     for (String nipaTable : nipaTablesList) {
       // Get frequencies for this table (default to Annual if not found)
-      Set<String> frequencies = tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
+      Set<String> frequencies =
+          tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
 
       for (String frequency : frequencies) {
         for (int year = startYear; year <= endYear; year++) {
@@ -103,7 +110,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           Map<String, String> variables =
               ImmutableMap.of(
                   "year", String.valueOf(year),
-                  "TableName", nipaTable,
+                  "tablename", nipaTable,
                   "frequency", frequency);
 
           if (isCachedOrExists(tableName, year, variables)) {
@@ -114,15 +121,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Download via metadata-driven executeDownload()
           try {
             String cachedPath =
-                cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
+                cacheStorageProvider.resolvePath(
+                    cacheDirectory, executeDownload(tableName,
+                    variables));
 
             // Mark as downloaded in cache manifest
             try {
               long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
               cacheManifest.markCached(tableName, year, variables, cachedPath, fileSize);
             } catch (Exception ex) {
-              LOGGER.warn("Failed to mark NIPA data set {} as cached in manifest: {}", cachedPath
-                  , ex.getMessage());
+              LOGGER.warn("Failed to mark NIPA data set {} as cached in manifest: {}",
+                  cachedPath, ex.getMessage());
             }
 
             downloadedCount++;
@@ -148,8 +157,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
-    LOGGER.info("National accounts download complete: downloaded {} table-frequency-years, skipped " +
-            "{} (cached)",
+    LOGGER.info("National accounts download complete: downloaded {} table-frequency-years, "
+            + "skipped "
+            + "{} (cached)",
         downloadedCount, skippedCount);
   }
 
@@ -181,7 +191,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     for (String nipaTable : nipaTablesList) {
       // Get frequencies for this table (default to Annual if not found)
-      Set<String> frequencies = tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
+      Set<String> frequencies =
+          tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
 
       for (String frequency : frequencies) {
         for (int year = startYear; year <= endYear; year++) {
@@ -226,78 +237,103 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("National accounts conversion complete: converted {} table-frequency-years, skipped " +
+    LOGGER.info("National accounts conversion complete: converted {} table-frequency-years, " +
+            "skipped " +
             "{} (up-to-date)",
         convertedCount, skippedCount);
   }
 
   /**
    * Downloads regional income data using metadata-driven pattern.
+   * Loads valid LineCodes from the reference_regional_linecodes catalog.
    *
    * @param startYear     First year to download
    * @param endYear       Last year to download
-   * @param lineCodesList List of line codes to download
    */
-  public void downloadRegionalIncomeMetadata(int startYear, int endYear,
-      List<String> lineCodesList) {
-    if (lineCodesList == null || lineCodesList.isEmpty()) {
-      LOGGER.warn("No line codes provided for download");
+  public void downloadRegionalIncomeMetadata(int startYear, int endYear) {
+
+    String tableName = "regional_income";
+
+    // Load LineCodes from reference_regional_linecodes catalog
+    Map<String, Set<String>> lineCodeCatalog;
+    try {
+      lineCodeCatalog = loadRegionalLineCodeCatalog();
+      if (lineCodeCatalog.isEmpty()) {
+        LOGGER.error("Regional LineCode catalog is empty. Cannot download regional_income data. " +
+            "Ensure reference_regional_linecodes has been downloaded and converted first.");
+        return;
+      }
+    } catch (IOException e) {
+      LOGGER.error("Failed to load Regional LineCode catalog: {}. Cannot download regional_income data.",
+          e.getMessage());
       return;
     }
 
-    LOGGER.info("Downloading {} line codes for years {}-{}", lineCodesList.size(), startYear,
-        endYear);
-
+    Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
+    Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
     int downloadedCount = 0;
     int skippedCount = 0;
 
-    String tableName = "regional_income";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
+    int totalOperations = 0;
+    for (String tablename : tablenames.keySet()) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
+      if (lineCodesForTable != null) {
+        totalOperations += lineCodesForTable.size() * geoFips.size() * (endYear - startYear + 1);
+      }
+    }
 
-    for (String lineCode : lineCodesList) {
-      for (int year = startYear; year <= endYear; year++) {
-        // Build variables map
-        Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
-        variables.put("frequency", "A");
-        variables.put("LineCode", lineCode);
+    LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo-year combinations)",
+        startYear, endYear, totalOperations);
 
-        // Resolve path using pattern
-        String relativePath = resolveJsonPath(pattern, variables);
+    for (String tablename : tablenames.keySet()) {
+      // Get valid LineCodes for this table from catalog
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
 
-        // Check if already cached
-        Map<String, String> params = new HashMap<>();
-        params.put("LineCode", lineCode);
+      if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
+        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
+        continue;
+      }
 
-        if (isCachedOrExists(tableName, year, params)) {
-          skippedCount++;
-          continue;
-        }
+      LOGGER.debug("Processing table {} with {} LineCodes", tablename, lineCodesForTable.size());
 
-        // Download via metadata-driven executeDownload()
-        try {
-          String cachedPath = executeDownload(tableName, variables);
+      for (String line_code : lineCodesForTable) {
+        for (String geo_fips : geoFips.keySet()) {
+          for (int year = startYear; year <= endYear; year++) {
+            // Build variables map
+            Map<String, String> variables =
+                ImmutableMap.of("year", String.valueOf(year), "line_code", line_code, "tablename", tablename, "geo_fips_set", geo_fips);
 
-          // Mark as downloaded in cache manifest
-          try {
-            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
-            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
-          } catch (Exception ex) {
-            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath,
-                ex.getMessage());
+            if (isCachedOrExists(tableName, year, variables)) {
+              skippedCount++;
+              continue;
+            }
+
+            // Download via metadata-driven executeDownload()
+            try {
+              String cachedPath =
+                  cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
+
+              // Mark as downloaded in cache manifest
+              try {
+                long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
+                cacheManifest.markCached(tableName, year, variables, cachedPath, fileSize);
+              } catch (Exception ex) {
+                LOGGER.warn("Failed to mark regional income dataset {} as cached in manifest: {}",
+                    cachedPath,
+                    ex.getMessage());
+              }
+
+              downloadedCount++;
+
+              if (downloadedCount % 10 == 0) {
+                LOGGER.info("Downloaded {}/{} table-linecode-geo-years (skipped {} cached)",
+                    downloadedCount, totalOperations, skippedCount);
+              }
+            } catch (Exception e) {
+              LOGGER.error("Error downloading table {} line code {} geo {} for year {}: {}",
+                  tablename, line_code, geo_fips, year, e.getMessage());
+            }
           }
-
-          downloadedCount++;
-
-          if (downloadedCount % 10 == 0) {
-            LOGGER.info("Downloaded {}/{} line codes (skipped {} cached)", downloadedCount,
-                lineCodesList.size() * (endYear - startYear + 1), skippedCount);
-          }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading line code {} for year {}: {}", lineCode, year,
-              e.getMessage());
         }
       }
     }
@@ -306,67 +342,99 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     try {
       cacheManifest.save(operatingDirectory);
     } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
+      LOGGER.error("Failed to save regional income cache manifest: {}", e.getMessage());
     }
 
-    LOGGER.info("Regional income download complete: downloaded {} line-years, skipped {} (cached)",
+    LOGGER.info("Regional income download complete: downloaded {} table-linecode-geo-years, skipped {} " +
+            "(cached)",
         downloadedCount, skippedCount);
   }
 
   /**
    * Converts regional income data using metadata-driven pattern.
+   * Loads valid LineCodes from the reference_regional_linecodes catalog.
    */
-  public void convertRegionalIncomeMetadata(int startYear, int endYear,
-      List<String> lineCodesList) {
-    if (lineCodesList == null || lineCodesList.isEmpty()) {
-      LOGGER.warn("No line codes provided for conversion");
+  public void convertRegionalIncomeMetadata(int startYear, int endYear) {
+    String tableName = "regional_income";
+
+    // Load LineCodes from reference_regional_linecodes catalog
+    Map<String, Set<String>> lineCodeCatalog;
+    try {
+      lineCodeCatalog = loadRegionalLineCodeCatalog();
+      if (lineCodeCatalog.isEmpty()) {
+        LOGGER.error("Regional LineCode catalog is empty. Cannot convert regional_income data. " +
+            "Ensure reference_regional_linecodes has been downloaded and converted first.");
+        return;
+      }
+    } catch (IOException e) {
+      LOGGER.error("Failed to load Regional LineCode catalog: {}. Cannot convert regional_income data.",
+          e.getMessage());
       return;
     }
 
-    LOGGER.info("Converting {} line codes to Parquet for years {}-{}", lineCodesList.size(),
-        startYear, endYear);
-
+    Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
+    Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
     int convertedCount = 0;
     int skippedCount = 0;
 
-    String tableName = "regional_income";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
+    int totalOperations = 0;
+    for (String tablename : tablenames.keySet()) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
+      if (lineCodesForTable != null) {
+        totalOperations += lineCodesForTable.size() * geoFips.size() * (endYear - startYear + 1);
+      }
+    }
 
-    for (String lineCode : lineCodesList) {
-      for (int year = startYear; year <= endYear; year++) {
-        // Build variables map
-        Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
-        variables.put("frequency", "A");
-        variables.put("LineCode", lineCode);
+    LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo-year combinations)",
+        startYear, endYear, totalOperations);
 
-        // Resolve paths using pattern
-        String jsonPath = resolveJsonPath(pattern, variables);
-        String parquetPath = resolveParquetPath(pattern, variables);
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    for (String tablename : tablenames.keySet()) {
+      // Get valid LineCodes for this table from catalog
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
 
-        Map<String, String> params = new HashMap<>();
-        params.put("LineCode", lineCode);
+      if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
+        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
+        continue;
+      }
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
-          skippedCount++;
-          continue;
-        }
+      LOGGER.debug("Converting table {} with {} LineCodes", tablename, lineCodesForTable.size());
 
-        try {
-          convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
-          convertedCount++;
-        } catch (Exception e) {
-          LOGGER.error("Error converting line code {} for year {}: {}", lineCode, year,
-              e.getMessage());
+      for (String line_code : lineCodesForTable) {
+        for (String geo_fips_set : geoFips.keySet()) {
+          for (int year = startYear; year <= endYear; year++) {
+
+            Map<String, String> variables =
+                ImmutableMap.of("year", String.valueOf(year), "line_code", line_code, "tablename", tablename, "geo_fips_set", geo_fips_set);
+
+            String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+            String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+
+            if (isParquetConvertedOrExists(tableName, year, variables, rawPath, fullParquetPath)) {
+              skippedCount++;
+              continue;
+            }
+
+            try {
+              convertCachedJsonToParquet(tableName, variables, null);
+              cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
+              convertedCount++;
+
+              if (convertedCount % 10 == 0) {
+                LOGGER.info("Converted {}/{} table-linecode-geo-years (skipped {} up-to-date)",
+                    convertedCount, totalOperations, skippedCount);
+              }
+            } catch (Exception e) {
+              LOGGER.error("Error converting table {} line code {} geo {} for year {}: {}",
+                  tablename, line_code, geo_fips_set, year, e.getMessage());
+            }
+          }
         }
       }
     }
 
-    LOGGER.info("Regional income conversion complete: converted {} line-years, skipped {} " +
+    LOGGER.info("Regional income conversion complete: converted {} table-linecode-geo-years, skipped {} " +
             "(up-to-date)",
         convertedCount, skippedCount);
   }
@@ -394,7 +462,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       try {
         String cachedPath =
-            cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
+            cacheStorageProvider.resolvePath(
+                cacheDirectory, executeDownload(tableName,
+                variables));
 
         // Mark as downloaded in cache manifest
         try {
@@ -457,7 +527,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("Trade statistics conversion complete: converted {} years, skipped {} (up-to-date)",
+    LOGGER.info("Trade statistics conversion complete: converted {} years, skipped {} " +
+            "(up-to-date)",
         convertedCount, skippedCount);
   }
 
@@ -466,14 +537,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    *
    * @param startYear         First year to download
    * @param endYear           Last year to download
-   * @param itaIndicatorsList List of ITA indicator codes to download
    */
-  public void downloadItaDataMetadata(int startYear, int endYear, List<String> itaIndicatorsList) {
+  public void downloadItaDataMetadata(int startYear, int endYear) {
+
+    List<String> itaIndicatorsList = extractApiList("ita_data", "itaIndicatorsList");
     if (itaIndicatorsList == null || itaIndicatorsList.isEmpty()) {
       LOGGER.warn("No ITA indicators provided for download");
       return;
     }
-
+    List<String> frequencies = extractApiList("ita_data", "frequencyList");
     LOGGER.info("Downloading {} ITA indicators for years {}-{}", itaIndicatorsList.size(),
         startYear, endYear);
 
@@ -484,36 +556,41 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     for (String indicator : itaIndicatorsList) {
       for (int year = startYear; year <= endYear; year++) {
+        for (String frequency : frequencies) {
 
-        Map<String, String> params = Map.of("year", String.valueOf(year), "indicator", indicator);
+          Map<String, String> params =
+              ImmutableMap.of("year", String.valueOf(year), "indicator", indicator, "frequency", frequency);
 
-        if (isCachedOrExists(tableName, year, params)) {
-          skippedCount++;
-          continue;
-        }
+          if (isCachedOrExists(tableName, year, params)) {
+            skippedCount++;
+            continue;
+          }
 
-        try {
-          String cachedPath =
-              cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, params));
-
-          // Mark as downloaded in cache manifest
           try {
-            long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-            cacheManifest.markCached(tableName, year, params, cachedPath, fileSize);
-          } catch (Exception ex) {
-            LOGGER.warn("Failed to mark ITA data set {} as cached in manifest: {}", cachedPath,
-                ex.getMessage());
-          }
+            String cachedPath =
+                cacheStorageProvider.resolvePath(
+                    cacheDirectory, executeDownload(tableName,
+                    params));
 
-          downloadedCount++;
+            // Mark as downloaded in cache manifest
+            try {
+              long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
+              cacheManifest.markCached(tableName, year, params, cachedPath, fileSize);
+            } catch (Exception ex) {
+              LOGGER.warn("Failed to mark ITA data set {} as cached in manifest: {}", cachedPath,
+                  ex.getMessage());
+            }
 
-          if (downloadedCount % 10 == 0) {
-            LOGGER.info("Downloaded {}/{} ITA indicators (skipped {} cached)", downloadedCount,
-                itaIndicatorsList.size() * (endYear - startYear + 1), skippedCount);
+            downloadedCount++;
+
+            if (downloadedCount % 10 == 0) {
+              LOGGER.info("Downloaded {}/{} ITA indicators (skipped {} cached)", downloadedCount,
+                  itaIndicatorsList.size() * (endYear - startYear + 1), skippedCount);
+            }
+          } catch (Exception e) {
+            LOGGER.error("Error downloading ITA indicator {} for year {}: {}", indicator, year,
+                e.getMessage());
           }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading ITA indicator {} for year {}: {}", indicator, year,
-              e.getMessage());
         }
       }
     }
@@ -532,11 +609,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts ITA data using metadata-driven pattern.
    */
-  public void convertItaDataMetadata(int startYear, int endYear, List<String> itaIndicatorsList) {
+  public void convertItaDataMetadata(int startYear, int endYear) {
+    List<String> itaIndicatorsList = extractApiList("ita_data", "itaIndicatorsList");
     if (itaIndicatorsList == null || itaIndicatorsList.isEmpty()) {
       LOGGER.warn("No ITA indicators provided for conversion");
       return;
     }
+    List<String> frequencies = extractApiList("ita_data", "frequencyList");
 
     LOGGER.info("Converting {} ITA indicators to Parquet for years {}-{}",
         itaIndicatorsList.size(), startYear, endYear);
@@ -550,29 +629,31 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     for (String indicator : itaIndicatorsList) {
       for (int year = startYear; year <= endYear; year++) {
-        Map<String, String> variables =
-            Map.of("year", String.valueOf(year), "indicator", indicator);
+        for (String frequency : frequencies) {
+          Map<String, String> variables =
+              ImmutableMap.of("year", String.valueOf(year), "indicator", indicator, "frequency", frequency);
 
-        // Resolve paths using pattern
-        String rawPath =
-            cacheStorageProvider.resolvePath(
-                cacheDirectory, resolveJsonPath(pattern
-            , variables));
-        String fullParquetPath =
-            storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+          // Resolve paths using pattern
+          String rawPath =
+              cacheStorageProvider.resolvePath(
+                  cacheDirectory, resolveJsonPath(pattern
+                      , variables));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
-        if (isParquetConvertedOrExists(tableName, year, variables, rawPath, fullParquetPath)) {
-          skippedCount++;
-          continue;
-        }
+          if (isParquetConvertedOrExists(tableName, year, variables, rawPath, fullParquetPath)) {
+            skippedCount++;
+            continue;
+          }
 
-        try {
-          convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
-          convertedCount++;
-        } catch (Exception e) {
-          LOGGER.error("Error converting ITA indicator {} for year {}: {}", indicator, year,
-              e.getMessage());
+          try {
+            convertCachedJsonToParquet(tableName, variables);
+            cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
+            convertedCount++;
+          } catch (Exception e) {
+            LOGGER.error("Error converting ITA indicator {} for year {}: {}", indicator, year,
+                e.getMessage());
+          }
         }
       }
     }
@@ -658,7 +739,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
     }
 
-    LOGGER.info("Industry GDP download complete: downloaded {} industry-years, skipped {} (cached)",
+    LOGGER.info("Industry GDP download complete: downloaded {} industry-years, skipped {} " +
+            "(cached)",
         downloadedCount, skippedCount);
   }
 
@@ -735,7 +817,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Loads NIPA tables from reference_nipa_tables catalog and extracts frequency information.
    *
-   * <p>Parses the Description field using regex to determine which frequencies (Annual, Quarterly)
+   * <p>Parses the Description field using regex to determine which frequencies (Annual,
+   * Quarterly)
    * are available for each table based on (A) and (Q) indicators.</p>
    *
    * @return Map of table name to Set of available frequency codes ("A", "Q")
@@ -749,7 +832,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
     if (!cacheStorageProvider.exists(fullJsonPath)) {
-      LOGGER.warn("reference_nipa_tables.json not found at {}, returning empty map", fullJsonPath);
+      LOGGER.warn("reference_nipa_tables.json not found at {}, returning empty map",
+          fullJsonPath);
       return new HashMap<>();
     }
 
@@ -770,7 +854,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       Map<String, Set<String>> tableFrequencies = new HashMap<>();
 
       // Regex pattern to match frequency indicators: (A) or (Q)
-      Pattern frequencyPattern = Pattern.compile("\\((A|Q)\\)");
+      Pattern frequencyPattern = Pattern.compile("\\(([AQ])\\)");
 
       for (JsonNode item : root) {
         JsonNode keyNode = item.get("TableName");
@@ -839,29 +923,30 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    */
   private static String getSectionName(String section) {
     switch (section) {
-      case "1":
-        return "domestic_product_income";
-      case "2":
-        return "personal_income_outlays";
-      case "3":
-        return "government";
-      case "4":
-        return "foreign_transactions";
-      case "5":
-        return "saving_investment";
-      case "6":
-        return "industry";
-      case "7":
-        return "supplemental";
-      case "8":
-        return "not_seasonally_adjusted";
-      default:
-        return "unknown";
+    case "1":
+      return "domestic_product_income";
+    case "2":
+      return "personal_income_outlays";
+    case "3":
+      return "government";
+    case "4":
+      return "foreign_transactions";
+    case "5":
+      return "saving_investment";
+    case "6":
+      return "industry";
+    case "7":
+      return "supplemental";
+    case "8":
+      return "not_seasonally_adjusted";
+    default:
+      return "unknown";
     }
   }
 
   /**
-   * Converts reference_nipa_tables JSON to Parquet with dynamic frequency columns and section categorization.
+   * Converts reference_nipa_tables JSON to Parquet with dynamic frequency columns and section
+   * categorization.
    * Parses Description field to add annual and quarterly boolean flags.
    * Parses TableName to extract section, family, metric, and table_number.
    *
@@ -884,12 +969,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Regex pattern to match frequency indicators
-    Pattern frequencyPattern = Pattern.compile("\\((A|Q)\\)");
+    Pattern frequencyPattern = Pattern.compile("\\(([AQ])\\)");
 
     List<Map<String, Object>> enrichedRecords = new ArrayList<>();
     for (com.fasterxml.jackson.databind.JsonNode item : root) {
-      com.fasterxml.jackson.databind.JsonNode keyNode = item.get("Key");
-      com.fasterxml.jackson.databind.JsonNode descNode = item.get("Desc");
+      com.fasterxml.jackson.databind.JsonNode keyNode = item.get("TableName");
+      com.fasterxml.jackson.databind.JsonNode descNode = item.get("Description");
 
       if (keyNode != null && descNode != null) {
         String tableName = keyNode.asText();
@@ -910,7 +995,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           try {
             section = tableName.substring(1, 2);           // Character at position 1
             family = tableName.substring(2, 4);            // Characters at positions 2-3
-            metric = tableName.substring(4);               // Remaining characters (may include letters like 'B')
+            metric = tableName.substring(4);               // Remaining characters (may include
+            // letters like 'B')
             sectionName = getSectionName(section);
             tableNumber = section + "." + family + "." + metric;  // e.g., "1.01.05" or "4.02.05B"
           } catch (Exception e) {
@@ -933,7 +1019,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("Enriched {} NIPA tables with frequency and section columns", enrichedRecords.size());
+    LOGGER.info("Enriched {} NIPA tables with frequency and section columns",
+        enrichedRecords.size());
 
     // Group records by section for partitioned writing
     Map<String, List<Map<String, Object>>> recordsBySection = new HashMap<>();
@@ -959,11 +1046,282 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       storageProvider.writeAvroParquet(fullParquetPath, columns, sectionRecords,
           "reference_nipa_tables", "reference_nipa_tables");
 
-      LOGGER.info("Wrote {} tables for section {} to {}", sectionRecords.size(), section, parquetPath);
+      LOGGER.info("Wrote {} tables for section {} to {}", sectionRecords.size(), section,
+          parquetPath);
     }
 
-    LOGGER.info("Converted reference_nipa_tables to parquet with frequency and section columns across {} sections",
+    LOGGER.info("Converted reference_nipa_tables to parquet with frequency and section columns " +
+            "across {} sections",
         recordsBySection.size());
+  }
+
+  /**
+   * Download BEA Regional LineCode catalog using GetParameterValuesFiltered API.
+   * Downloads valid LineCodes for all 54 BEA Regional tables listed in the schema.
+   */
+  public void downloadRegionalLineCodeCatalog() throws IOException, InterruptedException {
+    LOGGER.info("Downloading BEA Regional LineCode catalog");
+
+    String tableName = "reference_regional_linecodes";
+    List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
+
+    if (tableNamesList == null || tableNamesList.isEmpty()) {
+      LOGGER.error("No tableNamesList found in schema for reference_regional_linecodes");
+      return;
+    }
+
+    LOGGER.info("Downloading LineCodes for {} BEA Regional tables", tableNamesList.size());
+
+    int downloadedCount = 0;
+    for (String regionalTableName : tableNamesList) {
+      Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
+
+      try {
+        String cachedPath = executeDownload(tableName, variables);
+        downloadedCount++;
+
+        if (downloadedCount % 10 == 0) {
+          LOGGER.info("Downloaded LineCodes for {}/{} tables", downloadedCount, tableNamesList.size());
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error downloading LineCodes for table {}: {}", regionalTableName, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Regional LineCode catalog download complete: downloaded {} tables", downloadedCount);
+  }
+
+  /**
+   * Convert BEA Regional LineCode catalog JSON to Parquet with enrichment.
+   * Enriches data with parsed metadata (table_prefix, data_category, geography_level, frequency).
+   */
+  public void convertRegionalLineCodeCatalog() throws IOException {
+    LOGGER.info("Converting BEA Regional LineCode catalog to Parquet");
+
+    String tableName = "reference_regional_linecodes";
+    List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
+
+    if (tableNamesList == null || tableNamesList.isEmpty()) {
+      LOGGER.error("No tableNamesList found in schema for reference_regional_linecodes");
+      return;
+    }
+
+    // Load metadata to get the pattern
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    int convertedCount = 0;
+    for (String regionalTableName : tableNamesList) {
+      Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
+
+      try {
+        // Read JSON for this table
+        String jsonPath = resolveJsonPath(pattern, variables);
+        String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+
+        com.fasterxml.jackson.databind.JsonNode root;
+        try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
+          root = MAPPER.readTree(is);
+        }
+
+        // Extract LineCode data from BEAAPI.Results.ParamValue
+        com.fasterxml.jackson.databind.JsonNode dataNode = root.path("BEAAPI").path("Results").path("ParamValue");
+        if (!dataNode.isArray()) {
+          LOGGER.warn("No ParamValue array found for table {}", regionalTableName);
+          continue;
+        }
+
+        // Parse table structure for enrichment
+        String tablePrefix = parseTablePrefix(regionalTableName);  // SA, SQ, CA, etc.
+        String dataCategory = parseDataCategory(regionalTableName);  // INC, GDP, etc.
+        String geographyLevel = parseGeographyLevel(regionalTableName);  // state, county, msa
+        String frequency = parseFrequency(regionalTableName);  // annual, quarterly
+
+        List<Map<String, Object>> enrichedRecords = new ArrayList<>();
+        for (com.fasterxml.jackson.databind.JsonNode item : dataNode) {
+          String lineCode = item.get("Key").asText();
+          String description = item.get("Desc").asText();
+
+          Map<String, Object> record = new HashMap<>();
+          record.put("TableName", regionalTableName);
+          record.put("LineCode", lineCode);
+          record.put("Description", description);
+          record.put("table_prefix", tablePrefix);
+          record.put("data_category", dataCategory);
+          record.put("geography_level", geographyLevel);
+          record.put("frequency", frequency);
+
+          enrichedRecords.add(record);
+        }
+
+        // Write parquet partition
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+        List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+            loadTableColumns(tableName);
+        storageProvider.writeAvroParquet(fullParquetPath, columns, enrichedRecords,
+            "RegionalLineCodes", "RegionalLineCodes");
+
+        convertedCount++;
+        LOGGER.debug("Converted LineCodes for table {} ({} line codes)", regionalTableName, enrichedRecords.size());
+
+      } catch (Exception e) {
+        LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables", convertedCount);
+  }
+
+  /**
+   * Parse table prefix from BEA Regional table name.
+   * SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc.
+   */
+  private String parseTablePrefix(String tableName) {
+    if (tableName.length() >= 2) {
+      return tableName.substring(0, 2);
+    }
+    return null;
+  }
+
+  /**
+   * Parse data category from BEA Regional table name.
+   * INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc.
+   */
+  private String parseDataCategory(String tableName) {
+    if (tableName.startsWith("S") && tableName.contains("INC")) {
+      return "INC";
+    }
+    if (tableName.startsWith("C") && tableName.contains("INC")) {
+      return "INC";
+    }
+    if (tableName.startsWith("S") && tableName.contains("GDP")) {
+      return "GDP";
+    }
+    if (tableName.startsWith("C") && tableName.contains("GDP")) {
+      return "GDP";
+    }
+    if (tableName.contains("ACE") || tableName.contains("SAAC")) {
+      return "ACE";
+    }
+    if (tableName.contains("RP")) {
+      return "RPP";  // Regional Price Parities
+    }
+    if (tableName.contains("PCE")) {
+      return "PCE";  // Personal Consumption Expenditures
+    }
+    return null;
+  }
+
+  /**
+   * Parse geography level from BEA Regional table name.
+   */
+  private String parseGeographyLevel(String tableName) {
+    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
+      return "state";
+    }
+    if (tableName.startsWith("CA")) {
+      return "county";
+    }
+    if (tableName.startsWith("MA")) {
+      return "msa";
+    }
+    if (tableName.startsWith("MI")) {
+      return "micropolitan";
+    }
+    return null;
+  }
+
+  /**
+   * Parse frequency from BEA Regional table name.
+   */
+  private String parseFrequency(String tableName) {
+    if (tableName.startsWith("SA") || tableName.startsWith("CA")
+        || tableName.startsWith("MA")) {
+      return "annual";
+    }
+    if (tableName.startsWith("SQ")) {
+      return "quarterly";
+    }
+    return null;
+  }
+
+  /**
+   * Load BEA Regional LineCode catalog from Parquet files.
+   * Reads all reference_regional_linecodes partitions and builds a map of TableName to
+   * valid LineCodes.
+   *
+   * @return Map where key=TableName (e.g., "SQINC4") and value=Set of valid LineCodes
+   * for that table
+   * @throws IOException if catalog files cannot be read
+   */
+  public Map<String, Set<String>> loadRegionalLineCodeCatalog() throws IOException {
+    LOGGER.info("Loading Regional LineCode catalog from Parquet");
+
+    String tableName = "reference_regional_linecodes";
+    List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
+
+    if (tableNamesList == null || tableNamesList.isEmpty()) {
+      LOGGER.warn("No tableNamesList found in schema for reference_regional_linecodes, "
+          + "returning empty map");
+      return new HashMap<>();
+    }
+
+    // Load metadata to get the pattern
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    Map<String, Set<String>> catalogMap = new HashMap<>();
+    int loadedTables = 0;
+    int totalLineCodes = 0;
+
+    for (String regionalTableName : tableNamesList) {
+      Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
+
+      try {
+        // Resolve parquet path for this table
+        String parquetPath = resolveParquetPath(pattern, variables);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+        if (!storageProvider.exists(fullParquetPath)) {
+          LOGGER.debug("Parquet file not found for table {}: {}",
+              regionalTableName, fullParquetPath);
+          continue;
+        }
+
+        // Read parquet file
+        List<Map<String, Object>> records =
+            storageProvider.readParquet(fullParquetPath);
+
+        // Extract LineCodes for this table
+        Set<String> lineCodes = new HashSet<>();
+        for (Map<String, Object> record : records) {
+          Object tableNameObj = record.get("TableName");
+          Object lineCodeObj = record.get("LineCode");
+
+          if (lineCodeObj != null) {
+            String lineCode = lineCodeObj.toString();
+            lineCodes.add(lineCode);
+          }
+        }
+
+        if (!lineCodes.isEmpty()) {
+          catalogMap.put(regionalTableName, lineCodes);
+          loadedTables++;
+          totalLineCodes += lineCodes.size();
+          LOGGER.debug("Loaded {} LineCodes for table {}", lineCodes.size(), regionalTableName);
+        }
+
+      } catch (Exception e) {
+        LOGGER.warn("Failed to load LineCodes for table {}: {}",
+            regionalTableName, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Loaded Regional LineCode catalog: {} tables, {} total LineCodes",
+        loadedTables, totalLineCodes);
+    return catalogMap;
   }
 
 }
