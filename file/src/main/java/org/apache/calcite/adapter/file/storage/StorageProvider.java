@@ -289,13 +289,57 @@ public interface StorageProvider {
 
     // Convert data maps to GenericRecords
     java.util.List<org.apache.avro.generic.GenericRecord> records = new java.util.ArrayList<>();
+
+    // Track schema mismatches for debug logging (sample first record only for performance)
+    java.util.Set<String> extraFieldsInData = null;
+    java.util.Set<String> missingFieldsInData = null;
+    boolean firstRecord = true;
+
     for (java.util.Map<String, Object> dataRecord : dataRecords) {
       org.apache.avro.generic.GenericRecord record =
           new org.apache.avro.generic.GenericData.Record(schema);
+
+      // Sample first record to detect schema mismatches
+      if (firstRecord && !dataRecords.isEmpty()) {
+        firstRecord = false;
+
+        // Build set of schema column names
+        java.util.Set<String> schemaFields = new java.util.HashSet<>();
+        for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+          schemaFields.add(column.getName());
+        }
+
+        // Find JSON fields NOT in schema (would be dropped)
+        extraFieldsInData = new java.util.HashSet<>(dataRecord.keySet());
+        extraFieldsInData.removeAll(schemaFields);
+
+        // Find schema columns NOT in JSON (would be null/defaulted)
+        missingFieldsInData = new java.util.HashSet<>();
+        for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+          if (!dataRecord.containsKey(column.getName())) {
+            missingFieldsInData.add(column.getName());
+          }
+        }
+      }
+
       for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
         record.put(column.getName(), dataRecord.get(column.getName()));
       }
       records.add(record);
+    }
+
+    // Log schema mismatches if detected
+    if ((extraFieldsInData != null && !extraFieldsInData.isEmpty())
+        || (missingFieldsInData != null && !missingFieldsInData.isEmpty())) {
+      org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StorageProvider.class);
+      logger.debug("Schema mismatch detected for '{}' ({} records):", path, dataRecords.size());
+      if (extraFieldsInData != null && !extraFieldsInData.isEmpty()) {
+        logger.debug("  - JSON fields NOT in schema (will be DROPPED): {}", extraFieldsInData);
+      }
+      if (missingFieldsInData != null && !missingFieldsInData.isEmpty()) {
+        logger.debug("  - Schema columns NOT in JSON (will be NULL/defaulted): {}",
+            missingFieldsInData);
+      }
     }
 
     // Delegate to existing implementation
@@ -366,6 +410,170 @@ public interface StorageProvider {
     // Clean up macOS metadata files after writing
     String parentDir = java.nio.file.Paths.get(path).getParent().toString();
     cleanupMacosMetadata(parentDir);
+  }
+
+  /**
+   * Reads data from a Parquet file and returns as List of Maps.
+   * This method reads the parquet file using Parquet reader API and converts
+   * GenericRecords to Maps for easy processing.
+   *
+   * @param path The file path to read from
+   * @return List of records as Maps (field name → value)
+   * @throws IOException If an I/O error occurs
+   */
+  default java.util.List<java.util.Map<String, Object>> readParquet(String path) throws IOException {
+    java.util.List<java.util.Map<String, Object>> records = new java.util.ArrayList<>();
+
+    // Download to temp file first if remote storage
+    java.io.File tempFile = java.io.File.createTempFile("read_parquet_", ".parquet");
+    try {
+      // Copy file content to temp location
+      try (java.io.InputStream in = openInputStream(path);
+           java.io.OutputStream out = java.nio.file.Files.newOutputStream(tempFile.toPath())) {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+          out.write(buffer, 0, bytesRead);
+        }
+      }
+
+      // Read parquet file
+      org.apache.parquet.io.InputFile inputFile =
+          org.apache.parquet.hadoop.util.HadoopInputFile.fromPath(
+              new org.apache.hadoop.fs.Path(tempFile.toURI()),
+              new org.apache.hadoop.conf.Configuration());
+
+      try (org.apache.parquet.hadoop.ParquetReader<org.apache.avro.generic.GenericRecord> reader =
+           org.apache.parquet.avro.AvroParquetReader
+               .<org.apache.avro.generic.GenericRecord>builder(inputFile)
+               .build()) {
+
+        org.apache.avro.generic.GenericRecord record;
+        while ((record = reader.read()) != null) {
+          java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+          for (org.apache.avro.Schema.Field field : record.getSchema().getFields()) {
+            Object value = record.get(field.name());
+            // Convert Avro arrays to Java arrays if needed
+            if (value instanceof org.apache.avro.generic.GenericData.Array) {
+              org.apache.avro.generic.GenericData.Array<?> array =
+                  (org.apache.avro.generic.GenericData.Array<?>) value;
+              // Check if it's a double array
+              if (!array.isEmpty() && array.get(0) instanceof Double) {
+                double[] doubleArray = new double[array.size()];
+                for (int i = 0; i < array.size(); i++) {
+                  doubleArray[i] = ((Number) array.get(i)).doubleValue();
+                }
+                value = doubleArray;
+              }
+            }
+            map.put(field.name(), value);
+          }
+          records.add(map);
+        }
+      }
+
+      return records;
+
+    } finally {
+      if (tempFile.exists() && !tempFile.delete()) {
+        System.err.println("Warning: Could not delete temporary file: " + tempFile.getAbsolutePath());
+      }
+    }
+  }
+
+  /**
+   * Appends data to an existing Parquet file or creates a new one if it doesn't exist.
+   * This method reads existing data, merges with new records, and rewrites the file.
+   *
+   * @param path The file path where the Parquet file should be written
+   * @param newRecords The list of new data records to append as Maps (field name → value)
+   * @param schema Schema definition as list of column maps
+   * @throws IOException If an I/O error occurs
+   */
+  default void appendParquet(String path, java.util.List<java.util.Map<String, Object>> newRecords,
+                            java.util.List<java.util.Map<String, Object>> schema) throws IOException {
+    java.util.List<java.util.Map<String, Object>> allRecords = new java.util.ArrayList<>();
+
+    // Read existing records if file exists
+    if (exists(path)) {
+      try {
+        allRecords.addAll(readParquet(path));
+      } catch (Exception e) {
+        org.slf4j.LoggerFactory.getLogger(StorageProvider.class)
+            .warn("Failed to read existing parquet file {}: {}, will overwrite", path, e.getMessage());
+      }
+    }
+
+    // Add new records
+    allRecords.addAll(newRecords);
+
+    // Build Avro schema from column schema
+    org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fields =
+        org.apache.avro.SchemaBuilder.record("CacheRecord").fields();
+
+    for (java.util.Map<String, Object> columnDef : schema) {
+      String colName = (String) columnDef.get("name");
+      String colType = (String) columnDef.get("type");
+
+      if (colType.startsWith("array<")) {
+        // Array type
+        String elementType = colType.substring(6, colType.length() - 1);
+        if (elementType.equals("double")) {
+          fields = fields.name(colName).type().nullable()
+              .array().items().doubleType().noDefault();
+        } else {
+          throw new IllegalArgumentException("Unsupported array element type: " + elementType);
+        }
+      } else {
+        // Scalar types
+        switch (colType.toLowerCase()) {
+          case "string":
+            fields = fields.name(colName).type().nullable().stringType().noDefault();
+            break;
+          case "long":
+            fields = fields.name(colName).type().nullable().longType().noDefault();
+            break;
+          case "int":
+          case "integer":
+            fields = fields.name(colName).type().nullable().intType().noDefault();
+            break;
+          case "double":
+            fields = fields.name(colName).type().nullable().doubleType().noDefault();
+            break;
+          default:
+            throw new IllegalArgumentException("Unsupported column type: " + colType);
+        }
+      }
+    }
+
+    org.apache.avro.Schema avroSchema = fields.endRecord();
+
+    // Convert maps to GenericRecords
+    java.util.List<org.apache.avro.generic.GenericRecord> genericRecords = new java.util.ArrayList<>();
+    for (java.util.Map<String, Object> record : allRecords) {
+      org.apache.avro.generic.GenericRecord genericRecord =
+          new org.apache.avro.generic.GenericData.Record(avroSchema);
+
+      for (org.apache.avro.Schema.Field field : avroSchema.getFields()) {
+        Object value = record.get(field.name());
+
+        // Convert double[] to Avro array
+        if (value instanceof double[]) {
+          double[] array = (double[]) value;
+          java.util.List<Double> avroArray = new java.util.ArrayList<>(array.length);
+          for (double d : array) {
+            avroArray.add(d);
+          }
+          value = avroArray;
+        }
+
+        genericRecord.put(field.name(), value);
+      }
+      genericRecords.add(genericRecord);
+    }
+
+    // Write to parquet
+    writeAvroParquet(path, avroSchema, genericRecords, "cache");
   }
 
   /**
