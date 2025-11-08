@@ -19,6 +19,9 @@ package org.apache.calcite.adapter.govdata.econ;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,9 +33,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -68,8 +68,7 @@ public class RegionalIncomeDebugTest {
     BeaDataDownloader downloader =
         new BeaDataDownloader(cacheDir,
         cacheDir,
-        apiKey,
-        StorageProviderFactory.createFromUrl(cacheDir),
+            StorageProviderFactory.createFromUrl(cacheDir),
         StorageProviderFactory.createFromUrl(cacheDir));
 
     // Extract line codes list from schema

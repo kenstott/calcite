@@ -19,6 +19,9 @@ package org.apache.calcite.adapter.govdata.econ;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -36,13 +39,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
@@ -85,7 +83,7 @@ public class EconSchemaIntegrationTest {
     EXPECTED_TABLES.add("fred_indicators");
 
     // BEA tables
-    EXPECTED_TABLES.add("gdp_components");
+    EXPECTED_TABLES.add("national_accounts");
     EXPECTED_TABLES.add("regional_income");
     EXPECTED_TABLES.add("trade_statistics");
     EXPECTED_TABLES.add("ita_data");
@@ -131,14 +129,14 @@ public class EconSchemaIntegrationTest {
 
     if (beaKey != null) {
       StorageProvider storageProvider = StorageProviderFactory.createFromUrl("file://" + cacheDir);
-      BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, cacheDir, beaKey, storageProvider, storageProvider);
+      BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, cacheDir, storageProvider, storageProvider);
 
       // Try to download each BEA dataset using metadata-driven methods
       try {
-        List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
+        List<String> nipaTablesList = extractIterationList("national_accounts", "nipaTablesList");
         if (!nipaTablesList.isEmpty()) {
-          beaDownloader.downloadGdpComponentsMetadata(2024, 2024, nipaTablesList);
-          beaDownloader.convertGdpComponentsMetadata(2024, 2024, nipaTablesList);
+          beaDownloader.downloadNationalAccountsMetadata(2024, 2024, nipaTablesList, java.util.Collections.emptyMap());
+          beaDownloader.convertNationalAccountsMetadata(2024, 2024, nipaTablesList, java.util.Collections.emptyMap());
         }
       } catch (Exception e) {
         // Ignore

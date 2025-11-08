@@ -66,16 +66,13 @@ public class EconComprehensiveTest {
       "federal_debt",
       "world_indicators",
       "fred_indicators",
-      "gdp_components",
+      "national_accounts",
       "gdp_statistics",
       "regional_income",
       "state_gdp",
       "trade_statistics",
       "ita_data",
       "industry_gdp",
-      // Custom FRED series tables
-      "fred_treasuries",
-      "fred_employment_indicators",
       // FRED catalog table
       "fred_data_series_catalog"));
 
@@ -99,19 +96,7 @@ public class EconComprehensiveTest {
         "        \"dataSource\": \"econ\"," +
         "        \"executionEngine\": \"DUCKDB\"," +
         "        \"autoDownload\": true," +
-        "        \"defaultPartitionStrategy\": \"AUTO\"," +
-        "        \"customFredSeries\": [\"UNRATE\", \"PAYEMS\"]," +
-        "        \"fredSeriesGroups\": {" +
-        "          \"treasuries\": {" +
-        "            \"series\": [\"DGS10\", \"DGS30\", \"DGS2\"]," +
-        "            \"partitionStrategy\": \"MANUAL\"," +
-        "            \"partitionFields\": [\"year\", \"maturity\"]" +
-        "          }," +
-        "          \"employment_indicators\": {" +
-        "            \"series\": [\"UNRATE\", \"PAYEMS\", \"CIVPART\"]," +
-        "            \"partitionStrategy\": \"AUTO\"" +
-        "          }" +
-        "        }" +
+        "        \"customFredSeries\": [\"UNRATE\", \"PAYEMS\"]" +
         "      }" +
         "    }" +
         "  ]" +
@@ -257,35 +242,6 @@ public class EconComprehensiveTest {
   private void validateFredPartitioning(Statement stmt, TestResult result) throws SQLException {
     LOGGER.info("\n📊 FRED Custom Series Validation:");
 
-    // Check for custom FRED series tables
-    if (result.queryableTables.contains("fred_treasuries")) {
-      String query = "SELECT COUNT(*) as count FROM econ.fred_treasuries LIMIT 1";
-      try (ResultSet rs = stmt.executeQuery(query)) {
-        if (rs.next()) {
-          long count = rs.getLong("count");
-          LOGGER.info("  ✅ Treasury FRED series table: {} rows found", count);
-        }
-      } catch (SQLException e) {
-        LOGGER.warn("  ⚠️ Treasury FRED series table query failed: {}", e.getMessage());
-      }
-    } else {
-      LOGGER.warn("  ⚠️ Treasury FRED series table: NOT DISCOVERED");
-    }
-
-    if (result.queryableTables.contains("fred_employment_indicators")) {
-      String query = "SELECT COUNT(*) as count FROM econ.fred_employment_indicators LIMIT 1";
-      try (ResultSet rs = stmt.executeQuery(query)) {
-        if (rs.next()) {
-          long count = rs.getLong("count");
-          LOGGER.info("  ✅ Employment indicators FRED series table: {} rows found", count);
-        }
-      } catch (SQLException e) {
-        LOGGER.warn("  ⚠️ Employment indicators FRED series table query failed: {}", e.getMessage());
-      }
-    } else {
-      LOGGER.warn("  ⚠️ Employment indicators FRED series table: NOT DISCOVERED");
-    }
-
     // Validate that partitioning is working by checking for expected FRED series
     if (result.queryableTables.contains("fred_indicators")) {
       try {
@@ -325,18 +281,16 @@ public class EconComprehensiveTest {
     } else {
       LOGGER.warn("  ⚠️ FRED Data Series Catalog: NOT DISCOVERED");
     }
-
-    LOGGER.info("  🎯 FRED Custom Series Partitioning: Configured with AUTO strategy for Treasury and Employment groups");
   }
 
   private void validateBeaData(Statement stmt, TestResult result) throws SQLException {
     LOGGER.info("\n📊 BEA (Bureau of Economic Analysis) Data Validation:");
 
     // Test GDP components
-    if (result.queryableTables.contains("gdp_components")) {
+    if (result.queryableTables.contains("national_accounts")) {
       try {
         String query = "SELECT COUNT(DISTINCT line_description) as component_count " +
-                      "FROM econ.gdp_components";
+                      "FROM econ.national_accounts";
         try (ResultSet rs = stmt.executeQuery(query)) {
           if (rs.next()) {
             long count = rs.getLong("component_count");

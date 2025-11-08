@@ -86,6 +86,7 @@ public class EconIntegrationTest {
           Arrays.asList(
           "regional_income",
           "state_gdp",
+          "national_accounts",
           "trade_statistics",
           "ita_data",
           "industry_gdp"));
@@ -318,7 +319,7 @@ public class EconIntegrationTest {
         int customSeriesFound = 0;
 
         for (String seriesId : customSeries) {
-          String seriesQuery = "SELECT COUNT(*) as cnt FROM \"ECON\".fred_indicators WHERE series_id = '" + seriesId + "'";
+          String seriesQuery = "SELECT COUNT(*) as cnt FROM \"ECON\".fred_indicators WHERE series = '" + seriesId + "'";
           try (ResultSet rs = stmt.executeQuery(seriesQuery)) {
             if (rs.next()) {
               long count = rs.getLong("cnt");
@@ -340,7 +341,7 @@ public class EconIntegrationTest {
 
         // Verify series partitioning by checking distinct series
         LOGGER.info("\n3. Verifying series partitioning:");
-        String distinctSeriesQuery = "SELECT COUNT(DISTINCT series_id) as series_count FROM \"ECON\".fred_indicators";
+        String distinctSeriesQuery = "SELECT COUNT(DISTINCT series) as series_count FROM \"ECON\".fred_indicators";
         try (ResultSet rs = stmt.executeQuery(distinctSeriesQuery)) {
           if (rs.next()) {
             long seriesCount = rs.getLong("series_count");
@@ -352,15 +353,15 @@ public class EconIntegrationTest {
 
         // Sample query demonstrating series filtering (raw observations)
         LOGGER.info("\n4. Sample query - filtering by series (raw observations):");
-        String sampleQuery = "SELECT series_id, date, value " +
+        String sampleQuery = "SELECT series, date, value " +
             "FROM \"ECON\".fred_indicators " +
-            "WHERE series_id = 'DGS10' " +
+            "WHERE series = 'DGS10' " +
             "ORDER BY date DESC " +
             "LIMIT 5";
         try (ResultSet rs = stmt.executeQuery(sampleQuery)) {
           LOGGER.info("  Recent DGS10 (10-Year Treasury) raw observations:");
           while (rs.next()) {
-            LOGGER.info("    {} | {} | {}", rs.getString("series_id"),
+            LOGGER.info("    {} | {} | {}", rs.getString("series"),
                 rs.getString("date"), rs.getBigDecimal("value"));
           }
         } catch (SQLException e) {
@@ -369,16 +370,16 @@ public class EconIntegrationTest {
 
         // Sample query using enriched view with metadata
         LOGGER.info("\n5. Sample query - using fred_indicators_enriched view:");
-        String enrichedQuery = "SELECT series_id, date, value, series_name, units, frequency " +
+        String enrichedQuery = "SELECT series, date, value, series_name, units, frequency " +
             "FROM \"ECON\".fred_indicators_enriched " +
-            "WHERE series_id = 'UNRATE' " +
+            "WHERE series = 'UNRATE' " +
             "ORDER BY date DESC " +
             "LIMIT 5";
         try (ResultSet rs = stmt.executeQuery(enrichedQuery)) {
           LOGGER.info("  Recent UNRATE (Unemployment Rate) with metadata:");
           while (rs.next()) {
             LOGGER.info("    {} | {} | {} | {} | {}",
-                rs.getString("series_id"),
+                rs.getString("series"),
                 rs.getString("date"),
                 rs.getBigDecimal("value"),
                 rs.getString("series_name"),
@@ -564,9 +565,10 @@ public class EconIntegrationTest {
    *
    * <p>This test validates Phase 4 objectives from problem_resolution_plan.md:
    * <ul>
+   *   <li>national_accounts: Comprehensive BEA NIPA data (all 8 sections)</li>
    *   <li>Objective 4.2: industry_gdp implementation (BEA GDP by Industry)</li>
    *   <li>Objective 4.3: ita_data implementation (BEA International Transactions)</li>
-   *   <li>Objective 4.4: trade_statistics implementation (BEA trade statistics)</li>
+   *   <li>Objective 4.4: trade_statistics (VIEW on national_accounts filtering table T40205B)</li>
    * </ul>
    *
    * <p><b>NOTE:</b> regional_income and state_gdp were implemented in Phase 3
@@ -577,9 +579,10 @@ public class EconIntegrationTest {
     LOGGER.info(" PHASE 4: Implement Missing BEA Tables Test");
     LOGGER.info("================================================================================");
     LOGGER.info("\nPhase 4 validates implementation of additional BEA tables:");
+    LOGGER.info("  - national_accounts: Comprehensive BEA NIPA data (all 8 sections)");
     LOGGER.info("  - Objective 4.2: industry_gdp (BEA GDP by Industry)");
     LOGGER.info("  - Objective 4.3: ita_data (BEA International Transactions)");
-    LOGGER.info("  - Objective 4.4: trade_statistics (BEA trade statistics)");
+    LOGGER.info("  - Objective 4.4: trade_statistics (VIEW on national_accounts, table T40205B)");
     LOGGER.info("\nNote: regional_income and state_gdp were implemented in Phase 3");
 
     try (Connection conn = createConnection()) {
@@ -896,8 +899,8 @@ public class EconIntegrationTest {
       LOGGER.info("   JOIN: econ.inflation_metrics.{} = econ.{}.{}",
           discoveredFkColumn, discoveredPkTable, discoveredPkColumn);
 
-      String joinQuery = String.format(
-          "SELECT " +
+      String joinQuery =
+          String.format("SELECT " +
           "  i.type as inflation_type, " +
           "  i.year as inflation_year, " +
           "  i.area_code, " +
