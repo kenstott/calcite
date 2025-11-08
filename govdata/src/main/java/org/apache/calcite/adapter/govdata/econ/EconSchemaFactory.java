@@ -312,10 +312,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // 1. FRED reference_fred_series catalog
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        FredCatalogDownloader catalogDownloader =
-            new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
-                storageProvider, cacheManifest);
-        catalogDownloader.downloadCatalogIfNeeded(fredMinPopularity, fredCatalogForceRefresh);
+        FredDataDownloader fredDownloader =
+            new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir,
+                cacheStorageProvider, storageProvider, cacheManifest,
+                fredMinPopularity, fredCatalogForceRefresh);
+        fredDownloader.downloadReferenceData();
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED catalog", e);
       }
@@ -576,7 +577,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         }
 
         // Download and convert each series with series partitioning using metadata-driven approach
-        FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+        FredDataDownloader fredDownloader = new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, fredMinPopularity, fredCatalogForceRefresh);
 
         // Download all series for the year range using metadata-driven executeDownload()
         fredDownloader.downloadAll(startYear, endYear, new ArrayList<>(allSeriesIds));

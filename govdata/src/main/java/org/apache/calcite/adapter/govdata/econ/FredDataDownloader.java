@@ -35,12 +35,40 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       new com.fasterxml.jackson.databind.ObjectMapper();
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(FredDataDownloader.class);
 
-  public FredDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+  private final String fredApiKey;
+  private final int fredMinPopularity;
+  private final boolean fredCatalogForceRefresh;
+
+  public FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest, int fredMinPopularity, boolean fredCatalogForceRefresh) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
+    this.fredApiKey = fredApiKey;
+    this.fredMinPopularity = fredMinPopularity;
+    this.fredCatalogForceRefresh = fredCatalogForceRefresh;
   }
 
   @Override protected String getTableName() {
     return "fred_indicators";
+  }
+
+  /**
+   * Downloads FRED reference data (catalog of popular series).
+   *
+   * <p>Instantiates FredCatalogDownloader to download the reference_fred_series
+   * catalog with cache checking and force refresh support.
+   *
+   * @throws java.io.IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadReferenceData() throws java.io.IOException, InterruptedException {
+    if (fredApiKey == null || fredApiKey.isEmpty()) {
+      LOGGER.warn("Skipping FRED catalog download - API key not available");
+      return;
+    }
+
+    FredCatalogDownloader catalogDownloader =
+        new FredCatalogDownloader(fredApiKey, cacheDirectory, parquetDirectory,
+            storageProvider, (CacheManifest) cacheManifest);
+    catalogDownloader.downloadCatalogIfNeeded(fredMinPopularity, fredCatalogForceRefresh);
   }
 
   /**
