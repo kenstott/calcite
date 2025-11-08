@@ -312,26 +312,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // 1. FRED reference_fred_series catalog
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        // Check if catalog already downloaded via cache manifest
-        List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
-        boolean catalogCached = (catalogSeries != null && !catalogSeries.isEmpty());
-
-        if (fredCatalogForceRefresh) {
-          cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
-          LOGGER.info("Force refresh enabled - invalidated catalog series cache and redownloading");
-          catalogCached = false;
-        }
-
-        if (!catalogCached) {
-          LOGGER.info("Downloading FRED reference_fred_series catalog");
-          FredCatalogDownloader catalogDownloader =
-              new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
-                  storageProvider, cacheManifest);
-          catalogDownloader.downloadCatalog();
-          LOGGER.info("Completed FRED reference_fred_series catalog download");
-        } else {
-          LOGGER.info("FRED catalog already cached ({} series), skipping download", catalogSeries.size());
-        }
+        FredCatalogDownloader catalogDownloader =
+            new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
+                storageProvider, cacheManifest);
+        catalogDownloader.downloadCatalogIfNeeded(fredMinPopularity, fredCatalogForceRefresh);
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED catalog", e);
       }
@@ -342,45 +326,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // 2. BLS JOLTS reference tables
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading BLS JOLTS reference tables");
         BlsDataDownloader blsDownloader =
             new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir,
                 cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Download and convert reference_jolts_industries
-        String joltsIndustriesCachePath =
-            cacheStorageProvider.resolvePath(cacheDir, "type=reference");
-        String joltsIndustriesParquetPath =
-            storageProvider.resolvePath(parquetDir, "type=reference/jolts_industries.parquet");
-        String joltsIndustriesRawPath =
-            cacheStorageProvider.resolvePath(joltsIndustriesCachePath, "jolts_industries.json");
-        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider,
-            "jolts_industries", 0, joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
-          Map<String, String> variables = new HashMap<>();
-          blsDownloader.convertCachedJsonToParquet("jolts_industries", variables);
-          cacheManifest.markParquetConverted("jolts_industries", 0, null,
-              joltsIndustriesParquetPath);
-          LOGGER.info("Converted reference_jolts_industries to parquet");
-        }
-
-        // Download and convert reference_jolts_dataelements
-        String joltsDataelementsCachePath =
-            cacheStorageProvider.resolvePath(cacheDir, "type=reference");
-        String joltsDataelementsParquetPath =
-            storageProvider.resolvePath(parquetDir, "type=reference/jolts_dataelements.parquet");
-        String joltsDataelementsRawPath =
-            cacheStorageProvider.resolvePath(joltsDataelementsCachePath,
-                "jolts_dataelements.json");
-        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider,
-            "jolts_dataelements", 0, joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
-          Map<String, String> variables = new HashMap<>();
-          blsDownloader.convertCachedJsonToParquet("jolts_dataelements", variables);
-          cacheManifest.markParquetConverted("jolts_dataelements", 0, null,
-              joltsDataelementsParquetPath);
-          LOGGER.info("Converted reference_jolts_dataelements to parquet");
-        }
-
-        LOGGER.info("Completed BLS JOLTS reference tables download");
+        blsDownloader.downloadReferenceData();
       } catch (Exception e) {
         LOGGER.error("Error downloading BLS JOLTS reference tables", e);
       }
@@ -391,37 +340,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // 3. BEA reference tables
     if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
       try {
-        LOGGER.info("Downloading BEA reference tables");
         BeaDataDownloader beaDownloader =
             new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir,
                 cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Download and convert reference_nipa_tables
-        try {
-          String refTablePath = beaDownloader.downloadReferenceNipaTables();
-          LOGGER.info("Downloaded reference_nipa_tables to: {}", refTablePath);
-
-          beaDownloader.convertReferenceNipaTablesWithFrequencies();
-          LOGGER.info("Converted reference_nipa_tables to parquet with frequency columns");
-        } catch (Exception e) {
-          LOGGER.warn("Could not download reference_nipa_tables catalog: {}. "
-              + "Will use default nipaTablesList.", e.getMessage());
-        }
-
-        // Download and convert reference_regional_linecodes
-        try {
-          beaDownloader.downloadRegionalLineCodeCatalog();
-          LOGGER.info("Downloaded reference_regional_linecodes catalog for all BEA Regional "
-              + "tables");
-
-          beaDownloader.convertRegionalLineCodeCatalog();
-          LOGGER.info("Converted reference_regional_linecodes to parquet with enrichment");
-        } catch (Exception e) {
-          LOGGER.warn("Could not download reference_regional_linecodes catalog: {}. "
-              + "Regional income downloads may fail.", e.getMessage());
-        }
-
-        LOGGER.info("Completed BEA reference tables download");
+        beaDownloader.downloadReferenceData();
       } catch (Exception e) {
         LOGGER.error("Error downloading BEA reference tables", e);
       }

@@ -145,6 +145,18 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
+   * Default implementation does nothing.
+   * Concrete downloaders should override if they have reference tables to download
+   * (e.g., BLS JOLTS reference tables, BEA regional line codes, FRED catalog).
+   *
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadReferenceData() throws IOException, InterruptedException {
+    // Default: no reference data to download
+  }
+
+  /**
    * Saves downloaded JSON content to cache and updates manifest.
    * This is the final step in the download flow pattern.
    *

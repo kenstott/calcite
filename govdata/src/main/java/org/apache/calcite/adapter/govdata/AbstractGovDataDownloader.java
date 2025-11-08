@@ -34,6 +34,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +48,27 @@ import java.util.Map;
  */
 public abstract class AbstractGovDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(AbstractGovDataDownloader.class);
+
+  /**
+   * Functional interface for transforming records during JSON to Parquet conversion.
+   *
+   * <p>Allows per-record transformations such as:
+   * <ul>
+   *   <li>Adding calculated/derived fields</li>
+   *   <li>Modifying field values</li>
+   *   <li>Field name mapping</li>
+   * </ul>
+   */
+  @FunctionalInterface
+  public interface RecordTransformer {
+    /**
+     * Transforms a record.
+     *
+     * @param record Input record from JSON
+     * @return Transformed record (can be same instance if modified in-place, or new instance)
+     */
+    Map<String, Object> transform(Map<String, Object> record);
+  }
 
   /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/...) */
   protected final String cacheDirectory;
@@ -108,6 +131,30 @@ public abstract class AbstractGovDataDownloader {
   protected String getTableName() {
     return null;
   }
+
+  /**
+   * Downloads all reference tables specific to this data source.
+   *
+   * <p>Reference tables are catalog/lookup/metadata tables that are not year-specific
+   * and typically have low update frequency. Examples include:
+   * <ul>
+   *   <li>FRED: reference_fred_series catalog</li>
+   *   <li>BLS: JOLTS industries/states reference tables</li>
+   *   <li>BEA: Regional line codes for various tables</li>
+   * </ul>
+   *
+   * <p>Implementations should:
+   * <ul>
+   *   <li>Check cache manifest before downloading (respect TTL/refreshAfter)</li>
+   *   <li>Use year=0 as sentinel value for reference tables</li>
+   *   <li>Mark downloaded and converted in cache manifest</li>
+   *   <li>Handle API-specific logic (rate limiting, pagination, etc.)</li>
+   * </ul>
+   *
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  public abstract void downloadReferenceData() throws IOException, InterruptedException;
 
   /**
    * Returns the cache manifest for this downloader.
@@ -387,6 +434,87 @@ public abstract class AbstractGovDataDownloader {
     } catch (IOException e) {
       throw new IllegalArgumentException(
           "Failed to load metadata for table '" + tableName + "': " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Extracts an API parameter list from table metadata.
+   *
+   * <p>Looks for a JSON array in the download configuration at the specified key.
+   *
+   * @param tableName Name of the table in schema
+   * @param listKey Key of the list in download config (e.g., "lineCodesList", "nipaTablesList")
+   * @return List of string values, or empty list if not found
+   */
+  protected List<String> extractApiList(String tableName, String listKey) {
+    try {
+      Map<String, Object> metadata = loadTableMetadata(tableName);
+      Object downloadObj = metadata.get("download");
+
+      if (downloadObj instanceof JsonNode) {
+        JsonNode download = (JsonNode) downloadObj;
+        if (download.has(listKey)) {
+          JsonNode listNode = download.get(listKey);
+          if (listNode != null && listNode.isArray()) {
+            List<String> result = new ArrayList<>();
+            for (JsonNode item : listNode) {
+              result.add(item.asText());
+            }
+            LOGGER.debug("Extracted {} items from {} for table {}", result.size(), listKey,
+                tableName);
+            return result;
+          }
+        }
+      }
+
+      LOGGER.warn("API list '{}' not found for table '{}', returning empty list", listKey,
+          tableName);
+      return Collections.emptyList();
+    } catch (Exception e) {
+      LOGGER.error("Error extracting API list '{}' for table '{}': {}", listKey, tableName,
+          e.getMessage());
+      return Collections.emptyList();
+    }
+  }
+
+  /**
+   * Extracts an API parameter set (object) from table metadata.
+   *
+   * <p>Looks for a JSON object in the download configuration at the specified key
+   * and returns it as a Map with string keys and object values.
+   *
+   * @param tableName Name of the table in schema
+   * @param objectKey Key of the object in download config (e.g., "tableNamesSet", "geoFipsSet")
+   * @return Map of key-value pairs, or empty map if not found
+   */
+  protected Map<String, Object> extractApiSet(String tableName, String objectKey) {
+    try {
+      Map<String, Object> metadata = loadTableMetadata(tableName);
+      Object downloadObj = metadata.get("download");
+
+      if (downloadObj instanceof JsonNode) {
+        JsonNode download = (JsonNode) downloadObj;
+        if (download.has(objectKey)) {
+          JsonNode objectNode = download.get(objectKey);
+          if (objectNode != null && objectNode.isObject()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            objectNode.fields().forEachRemaining(entry -> {
+              result.put(entry.getKey(), entry.getValue());
+            });
+            LOGGER.debug("Extracted {} entries from {} for table {}", result.size(), objectKey,
+                tableName);
+            return result;
+          }
+        }
+      }
+
+      LOGGER.warn("API set '{}' not found for table '{}', returning empty map", objectKey,
+          tableName);
+      return Collections.emptyMap();
+    } catch (Exception e) {
+      LOGGER.error("Error extracting API set '{}' for table '{}': {}", objectKey, tableName,
+          e.getMessage());
+      return Collections.emptyMap();
     }
   }
 
@@ -1226,8 +1354,9 @@ public abstract class AbstractGovDataDownloader {
             convertJsonValueToType(fieldValue, fieldName, columnType, missingValueIndicator);
         record.put(fieldName, convertedValue);
       } else {
-        // Field not in schema - use Jackson's default conversion
-        LOGGER.debug("Field '{}' not found in column metadata, using default conversion", fieldName);
+        // Field not in schema - use Jackson's default conversion but it will be DROPPED later
+        LOGGER.debug("Field '{}' not found in column metadata - will be DROPPED in Parquet output",
+            fieldName);
         Object defaultValue = MAPPER.convertValue(fieldValue, Object.class);
         record.put(fieldName, defaultValue);
       }
@@ -1343,6 +1472,36 @@ public abstract class AbstractGovDataDownloader {
    */
   public void convertCachedJsonToParquet(String tableName, Map<String, String> variables)
       throws IOException {
+    convertCachedJsonToParquet(tableName, variables, null);
+  }
+
+  /**
+   * Converts cached JSON data to Parquet format using schema metadata with optional record
+   * transformation.
+   *
+   * <p>This is a generic, metadata-driven conversion that works for any table
+   * in any schema (ECON, GEO, SEC). It uses the schema JSON as single source
+   * of truth for:
+   * <ul>
+   *   <li>File paths (via pattern and variable substitution)</li>
+   *   <li>Column definitions (types, nullability, comments)</li>
+   *   <li>JSON structure (data path for extracting records)</li>
+   * </ul>
+   *
+   * <p>The optional transformer allows per-record transformations such as:
+   * <ul>
+   *   <li>Adding calculated/derived fields (e.g., quarter from TimePeriod)</li>
+   *   <li>Field value modifications</li>
+   *   <li>Field filtering or enrichment</li>
+   * </ul>
+   *
+   * @param tableName Name of table in schema
+   * @param variables Variables for path resolution (e.g., {year: "2020"})
+   * @param transformer Optional function to transform each record (null for no transformation)
+   * @throws IOException if file operations fail
+   */
+  public void convertCachedJsonToParquet(String tableName, Map<String, String> variables,
+      RecordTransformer transformer) throws IOException {
     LOGGER.info("Converting cached JSON to Parquet for table: {}", tableName);
 
     // Load metadata
@@ -1403,12 +1562,20 @@ public abstract class AbstractGovDataDownloader {
         for (JsonNode recordNode : root) {
           Map<String, Object> record =
               convertJsonRecordToTypedMap(recordNode, columnTypeMap, missingValueIndicator);
+          // Apply optional transformer
+          if (transformer != null) {
+            record = transformer.transform(record);
+          }
           records.add(record);
         }
       } else if (root.isObject()) {
         // Single object - wrap in list
         Map<String, Object> record =
             convertJsonRecordToTypedMap(root, columnTypeMap, missingValueIndicator);
+        // Apply optional transformer
+        if (transformer != null) {
+          record = transformer.transform(record);
+        }
         records.add(record);
       } else {
         throw new IOException("Data node is neither array nor object.");
