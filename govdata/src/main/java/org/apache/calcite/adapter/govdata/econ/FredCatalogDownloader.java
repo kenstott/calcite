@@ -117,14 +117,6 @@ public class FredCatalogDownloader {
   public void downloadCatalog() throws IOException, InterruptedException {
     LOGGER.info("Starting FRED catalog download with direct partitioning");
 
-    // Check if we already have partitioned cache (look for any partition files)
-    String catalogCachePattern = cacheDir + "/type=catalog/category=*/frequency=*/source=*/fred_data_series_catalog.json";
-    if (hasExistingPartitions()) {
-      LOGGER.info("Using existing partitioned FRED catalog cache");
-      convertExistingPartitionsToParquet();
-      return;
-    }
-
     // Use category-based approach with direct partitioning
     LOGGER.info("Downloading FRED series catalog via category browsing with direct partitioning...");
     LOGGER.info("This creates individual files per category/frequency/source combination");
@@ -642,7 +634,7 @@ public class FredCatalogDownloader {
 
     // Get updates from last 30 days
     LocalDate startDate = LocalDate.now().minusDays(30);
-    String startDateStr = startDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+    String startDateStr = startDate.atStartOfDay().format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
 
     while (hasMoreResults) {
       String url =
@@ -733,12 +725,12 @@ public class FredCatalogDownloader {
       List<Map<String, Object>> partitionData = entry.getValue();
 
       // Build cache file path using StorageProvider
-      String relativePath = "type=catalog" +
+      String relativePath = "type=reference" +
           "/category=" + categoryName +
           "/frequency=" + frequency +
           "/source=" + sourceName +
           "/status=" + seriesStatus +
-          "/fred_data_series_catalog.json";
+          "/reference_fred_series.json";
       String jsonFile = storageProvider.resolvePath(cacheDir, relativePath);
 
       // If file already exists, merge with existing data
@@ -764,39 +756,13 @@ public class FredCatalogDownloader {
   }
 
   /**
-   * Check if we already have existing partition cache files.
-   * Uses StorageProvider for S3 compatibility.
-   */
-  private boolean hasExistingPartitions() {
-    // Check for any JSON partition files using StorageProvider
-    String catalogPath = storageProvider.resolvePath(cacheDir, "type=catalog");
-    try {
-      // List files under the catalog prefix to see if any exist
-      // For S3, this checks if any objects with this prefix exist (directories are virtual)
-      // For local filesystem, this checks if directory exists and contains files
-      List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> files =
-          storageProvider.listFiles(catalogPath, true);
-
-      if (files != null && !files.isEmpty()) {
-        LOGGER.debug("Found {} existing partition files under {}", files.size(), catalogPath);
-        return true;
-      }
-
-      return false;
-    } catch (Exception e) {
-      LOGGER.debug("Could not check for existing partitions: {}", e.getMessage());
-      return false;
-    }
-  }
-
-  /**
    * Convert existing partition cache files to Parquet format.
    * Uses StorageProvider for S3 compatibility.
    */
   private void convertExistingPartitionsToParquet() throws IOException {
     LOGGER.info("Converting existing partition cache files to Parquet format");
 
-    String catalogPath = storageProvider.resolvePath(cacheDir, "type=catalog");
+    String catalogPath = storageProvider.resolvePath(cacheDir, "type=reference");
 
     try {
       List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> files =
@@ -810,7 +776,7 @@ public class FredCatalogDownloader {
       // Filter for JSON catalog files and skip macOS metadata
       for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry file : files) {
         if (!file.isDirectory() &&
-            file.getName().equals("fred_data_series_catalog.json") &&
+            file.getName().equals("reference_fred_series.json") &&
             !file.getName().startsWith(".")) {
           try {
             convertSinglePartitionToParquet(file.getPath());
@@ -838,12 +804,12 @@ public class FredCatalogDownloader {
       String seriesStatus = parts[3];
 
       // Create corresponding cache file path
-      String catalogCacheDir = cacheDir + "/type=catalog" +
+      String catalogCacheDir = cacheDir + "/type=reference" +
           "/category=" + categoryName +
           "/frequency=" + frequency +
           "/source=" + sourceName +
           "/status=" + seriesStatus;
-      String jsonFile = catalogCacheDir + "/fred_data_series_catalog.json";
+      String jsonFile = catalogCacheDir + "/reference_fred_series.json";
 
       convertSinglePartitionToParquet(jsonFile);
     }
@@ -871,7 +837,7 @@ public class FredCatalogDownloader {
       }
     }
 
-    // Parse partition keys from path: type=catalog/category=X/frequency=Y/source=Z/status=W/
+    // Parse partition keys from path: type=reference/category=X/frequency=Y/source=Z/status=W/
     String[] pathParts = relativePath.split("/");
     if (pathParts.length < 5) {
       LOGGER.warn("Invalid partition path structure: {}", jsonFile);
@@ -899,12 +865,12 @@ public class FredCatalogDownloader {
     }
 
     // Build parquet path
-    String parquetFile = parquetDir + "/type=catalog" +
+    String parquetFile = parquetDir + "/type=reference" +
         "/category=" + categoryName +
         "/frequency=" + frequency +
         "/source=" + sourceName +
         "/status=" + seriesStatus +
-        "/fred_data_series_catalog.parquet";
+        "/reference_fred_series.parquet";
 
     // Check if parquet file already converted using manifest (avoids expensive S3 exists check)
     Map<String, String> partitionParams = new HashMap<>();
@@ -986,7 +952,7 @@ public class FredCatalogDownloader {
   private void writeParquetWithStorageProvider(String parquetFile, List<Map<String, Object>> transformedSeries) throws IOException {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        AbstractEconDataDownloader.loadTableColumns("fred_data_series_catalog");
+        AbstractEconDataDownloader.loadTableColumns("reference_fred_series");
     storageProvider.writeAvroParquet(parquetFile, columns, transformedSeries, "FredCatalogSeries", "FredCatalogSeries");
   }
 
