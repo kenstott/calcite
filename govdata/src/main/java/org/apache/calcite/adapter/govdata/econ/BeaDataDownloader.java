@@ -1073,22 +1073,47 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading LineCodes for {} BEA Regional tables", tableNamesList.size());
 
     int downloadedCount = 0;
+    int skippedCount = 0;
+    int year = 0;  // Sentinel value for reference tables without year dimension
+
     for (String regionalTableName : tableNamesList) {
       Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
 
+      // Check cache manifest before downloading
+      if (isCachedOrExists(tableName, year, variables)) {
+        skippedCount++;
+        continue;
+      }
+
       try {
         String cachedPath = executeDownload(tableName, variables);
+
+        // Mark as cached in manifest
+        try {
+          String fullCachedPath = cacheStorageProvider.resolvePath(cacheDirectory, cachedPath);
+          long fileSize = cacheStorageProvider.getMetadata(fullCachedPath).getSize();
+          cacheManifest.markCached(tableName, year, variables, fullCachedPath, fileSize);
+        } catch (Exception ex) {
+          LOGGER.warn("Failed to mark LineCodes for {} as cached in manifest: {}",
+              regionalTableName, ex.getMessage());
+        }
+
         downloadedCount++;
 
         if (downloadedCount % 10 == 0) {
-          LOGGER.info("Downloaded LineCodes for {}/{} tables", downloadedCount, tableNamesList.size());
+          LOGGER.info("Downloaded LineCodes for {}/{} tables (skipped {} cached)",
+              downloadedCount, tableNamesList.size(), skippedCount);
         }
       } catch (Exception e) {
         LOGGER.error("Error downloading LineCodes for table {}: {}", regionalTableName, e.getMessage());
       }
     }
 
-    LOGGER.info("Regional LineCode catalog download complete: downloaded {} tables", downloadedCount);
+    // Save manifest after downloads complete
+    cacheManifest.save(operatingDirectory);
+
+    LOGGER.info("Regional LineCode catalog download complete: downloaded {} tables, skipped {} cached",
+        downloadedCount, skippedCount);
   }
 
   /**
@@ -1111,14 +1136,26 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     int convertedCount = 0;
+    int skippedCount = 0;
+    int year = 0;  // Sentinel value for reference tables without year dimension
+
     for (String regionalTableName : tableNamesList) {
       Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
 
       try {
-        // Read JSON for this table
+        // Resolve paths
         String jsonPath = resolveJsonPath(pattern, variables);
+        String parquetPath = resolveParquetPath(pattern, variables);
         String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
+        // Check if already converted
+        if (isParquetConvertedOrExists(tableName, year, variables, fullJsonPath, fullParquetPath)) {
+          skippedCount++;
+          continue;
+        }
+
+        // Read JSON for this table
         com.fasterxml.jackson.databind.JsonNode root;
         try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
           root = MAPPER.readTree(is);
@@ -1155,13 +1192,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         }
 
         // Write parquet partition
-        String parquetPath = resolveParquetPath(pattern, variables);
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
-
         List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
             loadTableColumns(tableName);
         storageProvider.writeAvroParquet(fullParquetPath, columns, enrichedRecords,
             "RegionalLineCodes", "RegionalLineCodes");
+
+        // Mark as converted in manifest
+        cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
 
         convertedCount++;
         LOGGER.debug("Converted LineCodes for table {} ({} line codes)", regionalTableName, enrichedRecords.size());
@@ -1171,7 +1208,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables", convertedCount);
+    // Save manifest after conversions complete
+    cacheManifest.save(operatingDirectory);
+
+    LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables, skipped {} up-to-date",
+        convertedCount, skippedCount);
   }
 
   /**
