@@ -16,6 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
+import com.google.common.collect.ImmutableMap;
+
+import java.util.Map;
+
 /**
  * Downloads and converts Federal Reserve Economic Data (FRED) to Parquet format.
  * Provides access to thousands of economic time series including interest rates,
@@ -54,6 +60,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     }
 
     LOGGER.info("Downloading {} FRED series for years {}-{}", seriesIds.size(), startYear, endYear);
+    assert cacheManifest != null;
 
     // Download each series for each year using metadata-driven approach
     int downloadedCount = 0;
@@ -63,35 +70,24 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     for (String seriesId : seriesIds) {
       for (int year = startYear; year <= endYear; year++) {
-        // Build relative path for this series/year combination
-        String relativePath = buildPartitionPath(tableName, year) + "/series=" + seriesId + "/" + tableName + ".json";
 
-        // Check if already cached
-        java.util.Map<String, String> params = new java.util.HashMap<>();
-        params.put("series", seriesId);
+        Map<String, String> variables =
+            ImmutableMap.of("year", String.valueOf(year),
+            "series", seriesId);
 
-        if (isCachedOrExists(tableName, year, params, relativePath)) {
+        if (isCachedOrExists("fred_indicators", year, variables)) {
           skippedCount++;
           continue;
         }
 
         // Download via metadata-driven executeDownload()
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("series", seriesId);  // Add series to variables for pattern resolution
-          variables.put("series_id", seriesId);
+          String cachedPath = cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
+          StorageProvider.FileMetadata metadata = cacheStorageProvider.getMetadata(cachedPath);
 
-          String cachedPath = executeDownload(tableName, variables);
-
-          // Mark as downloaded in cache manifest
-          try {
-            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
-            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
-          } catch (Exception ex) {
-            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath, ex.getMessage());
-          }
+          // Mark as downloaded in cache manifest using the actual path returned
+          cacheManifest.markCached("fred_indicators", year, variables, cachedPath, metadata.getSize());
+          cacheManifest.save(operatingDirectory);
 
           downloadedCount++;
 
@@ -136,30 +132,28 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     int skippedCount = 0;
 
     String tableName = getTableName();
+    Map<String, Object> metadata = loadTableMetadata();
+    String pattern = (String) metadata.get("pattern");
 
     for (String seriesId : seriesIds) {
       for (int year = startYear; year <= endYear; year++) {
         // Build paths for this series/year
-        String seriesPartition = "type=" + tableName + "/series=" + seriesId + "/year=" + year;
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, seriesPartition + "/" + tableName + ".parquet");
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, seriesPartition + "/" + tableName + ".json");
+        Map<String, String> variables =
+            ImmutableMap.of("year", String.valueOf(year),
+            "series", seriesId);
+        String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
-        // Check if conversion needed
-        java.util.Map<String, String> params = new java.util.HashMap<>();
-        params.put("series", seriesId);
-
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, parquetPath)) {
+        if (isParquetConvertedOrExists(tableName, year, variables, rawPath, parquetPath)) {
           skippedCount++;
           continue;
         }
 
         // Convert via metadata-driven approach
         try {
-          java.util.Map<String, String> variables = new java.util.HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("series_id", seriesId);
           convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, params, parquetPath);
+          cacheManifest.markParquetConverted(tableName, year, variables, parquetPath);
+          cacheManifest.save(operatingDirectory);
           convertedCount++;
 
           if (convertedCount % 100 == 0) {

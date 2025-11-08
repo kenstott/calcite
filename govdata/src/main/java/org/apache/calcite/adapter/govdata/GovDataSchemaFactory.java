@@ -603,7 +603,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         new TreasuryDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
     BeaDataDownloader beaDownloader = beaApiKey != null && econParquetDir != null
-        ? new BeaDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest)
+        ? new BeaDataDownloader(econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest)
         : null;
 
     WorldBankDataDownloader worldBankDownloader =

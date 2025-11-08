@@ -118,9 +118,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     }
   }
 
-  /** Cache manifest for tracking downloads and conversions */
-  protected final CacheManifest cacheManifest;
-
   /**
    * Constructs base downloader with required infrastructure.
    *
@@ -144,53 +141,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
   protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ");
-    this.cacheManifest = sharedManifest != null ? sharedManifest : CacheManifest.load(operatingDirectory);
-  }
-
-  // Rate limiting methods inherited from AbstractGovDataDownloader
-  // Subclasses override getTableName() to specify their associated table,
-  // which contains rate limit configuration in the schema
-
-  /**
-   * Checks if data is cached in manifest and optionally updates manifest if file exists.
-   * This is the first step in the download flow pattern.
-   *
-   * @param dataType Type of data being checked
-   * @param year Year of data
-   * @param params Additional parameters for cache key
-   * @param relativePath Relative path to check (for defensive file existence check)
-   * @return true if cached (skip download), false if needs download
-   */
-  protected final boolean isCachedOrExists(String dataType, int year,
-      Map<String, String> params, String relativePath) {
-
-    // 1. Check cache manifest first - trust it as source of truth
-    if (cacheManifest.isCached(dataType, year, params)) {
-      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {} (year={})", dataType, year);
-      return true;
-    }
-
-    // 2. Defensive check: if file exists but not in manifest, update manifest
-    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-    try {
-      if (cacheStorageProvider.exists(filePath)) {
-        long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
-        if (fileSize > 0) {
-          LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
-          cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-          cacheManifest.save(operatingDirectory);
-          return true;
-        } else {
-          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", dataType, relativePath);
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
-      // If we can't check, assume it doesn't exist
-    }
-
-    return false;
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ", sharedManifest);
   }
 
   /**

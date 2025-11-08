@@ -24,10 +24,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Schema factory for U.S. economic data sources.
@@ -102,7 +110,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Add source=econ prefix ONCE here when reading from operand
     // All downstream code uses these variables with relative paths (e.g., "type=indicators/year=2020")
     // Final paths: baseDirectory/source=econ + type=indicators/year=2020 = baseDirectory/source=econ/type=indicators/year=2020
-    String econRawDir = storageProvider.resolvePath(cacheDirectory, "source=econ");
+    String econRawDir = cacheStorageProvider.resolvePath(cacheDirectory, "source=econ");
     String econParquetDir = storageProvider.resolvePath(baseDirectory, "source=econ");
 
     // Use unified govdata directory structure (matching GEO pattern)
@@ -188,7 +196,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Create mutable operand for modifications
-    Map<String, Object> mutableOperand = new java.util.HashMap<>(operand);
+    Map<String, Object> mutableOperand = new HashMap<>(operand);
 
     // Download data if auto-download is enabled
     if (autoDownload) {
@@ -215,6 +223,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       rewriteForeignKeySchemaNames(allTables, actualSchemaName);
     }
 
+    // Add declared schema name to operand for view SQL rewriting in DuckDB
+    // This allows DuckDB to rewrite view definitions from "econ.table" to "ECON.table"
+    String declaredSchemaName = loadDeclaredSchemaName();
+    mutableOperand.put("declaredSchemaName", declaredSchemaName);
+    LOGGER.debug("Added declaredSchemaName='{}' to operand for view rewriting", declaredSchemaName);
+
     List<Map<String, Object>> partitionedTables = new ArrayList<>();
     List<Map<String, Object>> regularTables = new ArrayList<>();
 
@@ -232,8 +246,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     mutableOperand.put("partitionedTables", partitionedTables);
     if (!regularTables.isEmpty()) {
-      mutableOperand.put("views", regularTables);
-      LOGGER.info("Added {} views to 'views' operand for FileSchema", regularTables.size());
+      mutableOperand.put("tables", regularTables);
+      LOGGER.info("Added {} views to 'tables' operand for FileSchema", regularTables.size());
     }
 
     // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
@@ -284,7 +298,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
       int startYear, int endYear, StorageProvider storageProvider,
       List<String> customFredSeries, StorageProvider cacheStorageProvider, int fredMinPopularity,
-      boolean fredCatalogForceRefresh) throws IOException {
+      boolean fredCatalogForceRefresh) {
 
     // Operating directory for metadata (.aperio/econ/)
     // This is passed from GovDataSchemaFactory which establishes it centrally
@@ -528,7 +542,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
 
         // Merge with customFredSeries if provided
-        java.util.Set<String> allSeriesIds = new java.util.LinkedHashSet<>(catalogSeries);
+        Set<String> allSeriesIds = new LinkedHashSet<>(catalogSeries);
         if (customFredSeries != null && !customFredSeries.isEmpty()) {
           allSeriesIds.addAll(customFredSeries);
           LOGGER.info("Added {} custom FRED series, total series count: {}", customFredSeries.size(), allSeriesIds.size());
@@ -538,10 +552,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         FredDataDownloader fredDownloader = new FredDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
         // Download all series for the year range using metadata-driven executeDownload()
-        fredDownloader.downloadAll(startYear, endYear, new java.util.ArrayList<>(allSeriesIds));
+        fredDownloader.downloadAll(startYear, endYear, new ArrayList<>(allSeriesIds));
 
         // Convert downloaded JSON to Parquet for each series/year combination
-        fredDownloader.convertAll(startYear, endYear, new java.util.ArrayList<>(allSeriesIds));
+        fredDownloader.convertAll(startYear, endYear, new ArrayList<>(allSeriesIds));
 
         LOGGER.debug("FRED indicators data download and conversion completed");
       } catch (Exception e) {
@@ -589,27 +603,58 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Download BEA data if enabled
     if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
       try {
-        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, beaApiKey, cacheStorageProvider, storageProvider, cacheManifest);
+        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+
+        // EARLY DOWNLOAD: Download reference_nipa_tables first
+        // This catalog is needed to discover all active NIPA tables
+        LOGGER.info("Phase 1: Downloading reference_nipa_tables catalog (early download)");
+        try {
+          String refTablePath = beaDownloader.downloadReferenceNipaTables();
+          LOGGER.info("Downloaded reference_nipa_tables to: {}", refTablePath);
+
+          // Convert to parquet with frequency columns
+          beaDownloader.convertReferenceNipaTablesWithFrequencies();
+          LOGGER.info("Converted reference_nipa_tables to parquet with frequency columns");
+        } catch (Exception e) {
+          LOGGER.warn("Could not download reference_nipa_tables catalog: {}. Will use default nipaTablesList.", e.getMessage());
+        }
 
         // Extract iteration lists from schema metadata
-        java.util.List<String> nipaTablesList = extractIterationList("gdp_components", "nipaTablesList");
-        java.util.List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
-        java.util.List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
-        java.util.List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+        List<String> nipaTablesList = extractIterationList("national_accounts", "nipaTablesList");
+        List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
+        List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
+        List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+
+        // PATCH: Load active NIPA tables from catalog and use for downloads
+        Map<String, Set<String>> tableFrequencies = Collections.emptyMap();
+        try {
+          tableFrequencies = beaDownloader.loadNipaTableFrequencies();
+          if (!tableFrequencies.isEmpty()) {
+            // Extract just the table names
+            List<String> activeNipaTables = new ArrayList<>(tableFrequencies.keySet());
+            LOGGER.info("Patching nipaTablesList with {} active tables from catalog (was: {})",
+                activeNipaTables.size(), nipaTablesList.size());
+            nipaTablesList = activeNipaTables;
+          } else {
+            LOGGER.warn("No active NIPA tables found in catalog, using default nipaTablesList");
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Could not load active NIPA tables from catalog: {}. Using default nipaTablesList.", e.getMessage());
+        }
 
         // Download all BEA data using metadata-driven methods
-        LOGGER.info("Downloading BEA data for years {}-{}", startYear, endYear);
-        beaDownloader.downloadGdpComponentsMetadata(startYear, endYear, nipaTablesList);
+        LOGGER.info("Phase 2: Downloading BEA data for years {}-{}", startYear, endYear);
+        beaDownloader.downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
         beaDownloader.downloadRegionalIncomeMetadata(startYear, endYear, lineCodesList);
-        beaDownloader.downloadTradeStatisticsMetadata(startYear, endYear);
+        // Note: trade_statistics is now a VIEW on national_accounts, no separate download needed
         beaDownloader.downloadItaDataMetadata(startYear, endYear, itaIndicatorsList);
         beaDownloader.downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
 
         // Convert all BEA data to Parquet using metadata-driven methods
         LOGGER.info("Converting BEA data to Parquet for years {}-{}", startYear, endYear);
-        beaDownloader.convertGdpComponentsMetadata(startYear, endYear, nipaTablesList);
+        beaDownloader.convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
         beaDownloader.convertRegionalIncomeMetadata(startYear, endYear, lineCodesList);
-        beaDownloader.convertTradeStatisticsMetadata(startYear, endYear);
+        // Note: trade_statistics is now a VIEW on national_accounts, no separate conversion needed
         beaDownloader.convertItaDataMetadata(startYear, endYear, itaIndicatorsList);
         beaDownloader.convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
 
@@ -704,9 +749,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Save cache manifest after all downloads to operating directory
-    if (cacheManifest != null) {
-      cacheManifest.save(econOperatingDirectory);
-    }
+    cacheManifest.save(econOperatingDirectory);
   }
 
   /**
@@ -828,7 +871,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * @param operand Schema configuration operand
    * @return Set of enabled table names, or null to download all tables
    */
-  private java.util.Set<String> parseBlsTableFilter(Map<String, Object> operand) {
+  private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
     @SuppressWarnings("unchecked")
     Map<String, Object> blsConfig = (Map<String, Object>) operand.get("blsConfig");
     if (blsConfig == null) {
@@ -849,14 +892,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     if (includeTables != null) {
       LOGGER.info("BLS table filter: including {} tables: {}", includeTables.size(), includeTables);
-      return new java.util.HashSet<>(includeTables);
+      return new HashSet<>(includeTables);
     }
 
     if (excludeTables != null) {
       // Return all tables except excluded ones
-      java.util.Set<String> allTables =
-          new java.util.HashSet<>(
-              java.util.Arrays.asList(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
+      Set<String> allTables =
+          new HashSet<>(
+              Arrays.asList(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
           BlsDataDownloader.TABLE_INFLATION_METRICS,
           BlsDataDownloader.TABLE_REGIONAL_CPI,
           BlsDataDownloader.TABLE_METRO_CPI,
@@ -913,8 +956,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         try {
           // Read JSON file as array of series objects using InputStream
           List<Map<String, Object>> seriesList;
-          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
-               java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
+          try (InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
+               InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
             com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>> typeRef =
                 new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {};
             seriesList = objectMapper.readValue(reader, typeRef);
@@ -1031,22 +1074,21 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList")
    * @return List of iteration values, or empty list if not found
    */
-  @SuppressWarnings("unchecked")
-  private java.util.List<String> extractIterationList(String tableName, String listKey) {
+  private List<String> extractIterationList(String tableName, String listKey) {
     try {
-      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
       if (schemaStream == null) {
         LOGGER.warn("econ-schema.json not found, returning empty iteration list");
-        return java.util.Collections.emptyList();
+        return Collections.emptyList();
       }
 
       com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
       com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(schemaStream);
 
-      // Find the table in the tables array
-      com.fasterxml.jackson.databind.JsonNode tables = root.get("tables");
-      if (tables != null && tables.isArray()) {
-        for (com.fasterxml.jackson.databind.JsonNode table : tables) {
+      // Find the table in the partitionedTables array (not tables array which contains views)
+      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
+      if (partitionedTables != null && partitionedTables.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
           com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
           if (nameNode != null && tableName.equals(nameNode.asText())) {
             // Found the table, extract the download config
@@ -1054,10 +1096,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             if (download != null) {
               com.fasterxml.jackson.databind.JsonNode listNode = download.get(listKey);
               if (listNode != null && listNode.isArray()) {
-                java.util.List<String> result = new java.util.ArrayList<>();
+                List<String> result = new ArrayList<>();
                 for (com.fasterxml.jackson.databind.JsonNode item : listNode) {
                   result.add(item.asText());
                 }
+                LOGGER.debug("Extracted {} items from {} for table {}", result.size(), listKey, tableName);
                 return result;
               }
             }
@@ -1066,10 +1109,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       LOGGER.warn("Iteration list '{}' not found for table '{}', returning empty list", listKey, tableName);
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     } catch (Exception e) {
       LOGGER.error("Error extracting iteration list '{}' for table '{}': {}", listKey, tableName, e.getMessage());
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     }
   }
 }

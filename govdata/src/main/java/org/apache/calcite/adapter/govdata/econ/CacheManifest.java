@@ -73,10 +73,6 @@ public class CacheManifest extends AbstractCacheManifest {
       return false;
     }
 
-    // NOTE: File existence check removed - AbstractEconDataDownloader.isCachedOrExists()
-    // handles this using StorageProvider which supports both local and S3 storage.
-    // Using File API here would fail for S3 URIs and create invalid paths.
-
     // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
     if (entry.etag != null && !entry.etag.isEmpty()) {
       LOGGER.debug("Using cached {} data for year {} (ETag: {})", dataType, year, entry.etag);
@@ -331,10 +327,10 @@ public class CacheManifest extends AbstractCacheManifest {
       manifestFile.getParentFile().mkdirs();
 
       // Clean up expired entries before saving
-      cleanupExpiredEntries();
+      int removed = cleanupExpiredEntries();
 
       MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
-      LOGGER.debug("Saved cache manifest with {} entries", entries.size());
+      LOGGER.debug("Removed {} entries from manifest. Saved cache manifest with {} entries", removed, entries.size());
     } catch (IOException e) {
       LOGGER.warn("Failed to save cache manifest: {}", e.getMessage());
     }

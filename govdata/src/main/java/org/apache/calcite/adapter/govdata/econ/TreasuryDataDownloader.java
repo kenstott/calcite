@@ -172,7 +172,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check cache using base class helper
-      if (isCachedOrExists("treasury_yields", year, cacheParams, relativePath)) {
+      if (isCachedOrExists("treasury_yields", year, cacheParams)) {
         LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
         lastPath = relativePath;
         continue;
@@ -229,7 +229,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check cache using base class helper
-      if (isCachedOrExists("federal_debt", year, cacheParams, relativePath)) {
+      if (isCachedOrExists("federal_debt", year, cacheParams)) {
         LOGGER.info("Found cached federal debt for year {} - skipping download", year);
         lastPath = relativePath;
         continue;

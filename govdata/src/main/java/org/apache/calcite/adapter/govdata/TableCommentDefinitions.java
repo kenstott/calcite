@@ -1278,22 +1278,24 @@ public final class TableCommentDefinitions {
     fredIndicatorsCols.put("last_updated", "Timestamp when series was last updated");
     ECON_COLUMN_COMMENTS.put("fred_indicators", fredIndicatorsCols);
 
-    // gdp_components table
-    ECON_TABLE_COMMENTS.put("gdp_components",
-        "Detailed GDP components from Bureau of Economic Analysis (BEA) NIPA tables. Breaks down "
-        + "GDP into personal consumption, investment, government spending, and net exports. Provides "
-        + "granular view of economic activity drivers and sectoral contributions to growth.");
+    // national_accounts table
+    ECON_TABLE_COMMENTS.put("national_accounts",
+        "National Income and Product Accounts (NIPA) from Bureau of Economic Analysis (BEA). "
+        + "Comprehensive economic statistics covering all 8 NIPA sections: Domestic Product & Income, "
+        + "Personal Income & Outlays, Government, Foreign Transactions, Saving & Investment, Industry, "
+        + "Supplemental, and Not Seasonally Adjusted. Includes GDP components, personal consumption, "
+        + "investment, government spending, net exports, and detailed sectoral breakdowns.");
 
-    Map<String, String> gdpComponentsCols = new HashMap<>();
-    gdpComponentsCols.put("table_id", "BEA NIPA table identifier");
-    gdpComponentsCols.put("line_number", "Line number within NIPA table");
-    gdpComponentsCols.put("line_description", "Component description (e.g., Personal Consumption, Fixed Investment)");
-    gdpComponentsCols.put("series_code", "BEA series code");
-    gdpComponentsCols.put("year", "Observation year");
-    gdpComponentsCols.put("value", "Component value in billions of dollars");
-    gdpComponentsCols.put("units", "Unit of measurement (typically billions of dollars)");
-    gdpComponentsCols.put("frequency", "Data frequency (A=Annual, Q=Quarterly, M=Monthly)");
-    ECON_COLUMN_COMMENTS.put("gdp_components", gdpComponentsCols);
+    Map<String, String> nationalAccountsCols = new HashMap<>();
+    nationalAccountsCols.put("table_id", "BEA NIPA table identifier");
+    nationalAccountsCols.put("line_number", "Line number within NIPA table");
+    nationalAccountsCols.put("line_description", "Economic measure description (e.g., GDP, Personal Consumption, Government Spending)");
+    nationalAccountsCols.put("series_code", "BEA series code");
+    nationalAccountsCols.put("year", "Observation year");
+    nationalAccountsCols.put("value", "Economic measure value in billions of dollars");
+    nationalAccountsCols.put("units", "Unit of measurement (typically billions of dollars)");
+    nationalAccountsCols.put("frequency", "Data frequency (A=Annual, Q=Quarterly, M=Monthly)");
+    ECON_COLUMN_COMMENTS.put("national_accounts", nationalAccountsCols);
 
     // regional_income table
     ECON_TABLE_COMMENTS.put("regional_income",

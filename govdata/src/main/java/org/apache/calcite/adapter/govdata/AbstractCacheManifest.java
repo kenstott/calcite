@@ -98,4 +98,56 @@ public abstract class AbstractCacheManifest {
   protected static Map<String, String> copyParameters(Map<String, String> parameters) {
     return new HashMap<>(parameters != null ? parameters : new HashMap<>());
   }
+
+  // ===== Abstract methods that all cache manifests must implement =====
+
+  /**
+   * Check if data is cached and fresh for the given parameters.
+   *
+   * @param dataType Type of data
+   * @param year Year of data
+   * @param parameters Additional parameters
+   * @return true if cached and fresh, false otherwise
+   */
+  public abstract boolean isCached(String dataType, int year, Map<String, String> parameters);
+
+  /**
+   * Mark data as cached in the manifest.
+   *
+   * @param dataType Type of data
+   * @param year Year of data
+   * @param params Additional parameters
+   * @param relativePath Relative path to cached file
+   * @param fileSize Size of cached file in bytes
+   */
+  public abstract void markCached(String dataType, int year, Map<String, String> params,
+      String relativePath, long fileSize);
+
+  /**
+   * Save manifest to disk.
+   *
+   * @param directory Directory to save manifest in
+   */
+  public abstract void save(String directory);
+
+  /**
+   * Check if parquet conversion has been completed for the given parameters.
+   *
+   * @param dataType Type of data
+   * @param year Year of data
+   * @param params Additional parameters
+   * @return true if parquet exists and is current, false otherwise
+   */
+  public abstract boolean isParquetConverted(String dataType, int year, Map<String, String> params);
+
+  /**
+   * Mark parquet file as converted in the manifest.
+   *
+   * @param dataType Type of data
+   * @param year Year of data
+   * @param params Additional parameters
+   * @param parquetPath Path to parquet file
+   */
+  public abstract void markParquetConverted(String dataType, int year, Map<String, String> params,
+      String parquetPath);
 }

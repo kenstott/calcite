@@ -50,18 +50,15 @@ public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
     super("", storageProvider, storageProvider);
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return 0; // No rate limit for shapefile conversion (local processing)
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 0; // No retries needed for shapefile conversion (no network calls)
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 0; // No retry delay needed
   }
 

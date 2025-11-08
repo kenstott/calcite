@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -61,6 +60,9 @@ public abstract class AbstractGovDataDownloader {
   /** Schema resource name (e.g., "/econ-schema.json", "/geo-schema.json") */
   protected final String schemaResourceName;
 
+  /** Cache manifest for tracking downloads and conversions */
+  protected AbstractCacheManifest cacheManifest;
+
   /** Shared JSON mapper for convenience */
   protected final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -79,7 +81,9 @@ public abstract class AbstractGovDataDownloader {
       String parquetDirectory,
       StorageProvider cacheStorageProvider,
       StorageProvider storageProvider,
-      String schemaName) {
+      String schemaName,
+      AbstractCacheManifest sharedManifest) {
+    this.cacheManifest = sharedManifest;
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
     this.parquetDirectory = parquetDirectory;
@@ -103,6 +107,15 @@ public abstract class AbstractGovDataDownloader {
    */
   protected String getTableName() {
     return null;
+  }
+
+  /**
+   * Returns the cache manifest for this downloader.
+   *
+   * @return Cache manifest instance
+   */
+  protected AbstractCacheManifest getCacheManifest() {
+    return cacheManifest;
   }
 
   /**
@@ -304,6 +317,10 @@ public abstract class AbstractGovDataDownloader {
   }
 
   // ===== Metadata-Driven Path Resolution =====
+
+  protected Map<String, Object> loadTableMetadata() {
+    return loadTableMetadata(getTableName());
+  }
 
   /**
    * Loads full table metadata from the schema resource file (e.g., econ-schema.json).
@@ -904,15 +921,15 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.info("Downloading {} with {} series", tableName, seriesList.size());
       for (String series : seriesList) {
         LOGGER.debug("Downloading series: {}", series);
-        List<JsonNode> seriesData = downloadWithPagination(
-            downloadConfig, variables, series, paginationEnabled, maxPerRequest);
+        List<JsonNode> seriesData =
+            downloadWithPagination(downloadConfig, variables, series, paginationEnabled, maxPerRequest);
         allData.addAll(seriesData);
       }
     } else {
       // Single download (no iteration)
       LOGGER.info("Downloading {} without iteration", tableName);
-      List<JsonNode> data = downloadWithPagination(
-          downloadConfig, variables, null, paginationEnabled, maxPerRequest);
+      List<JsonNode> data =
+          downloadWithPagination(downloadConfig, variables, null, paginationEnabled, maxPerRequest);
       allData.addAll(data);
     }
 
@@ -1020,7 +1037,15 @@ public abstract class AbstractGovDataDownloader {
         }
         if (responseConfig.containsKey("dataPath")) {
           String dataPath = responseConfig.get("dataPath").toString();
-          dataNode = rootNode.path(dataPath);
+          // Navigate nested path (e.g., "BEAAPI.Results.ParamValue")
+          dataNode = rootNode;
+          for (String pathSegment : dataPath.split("\\.")) {
+            dataNode = dataNode.path(pathSegment);
+            if (dataNode.isMissingNode()) {
+              LOGGER.warn("Data path segment '{}' not found in response", pathSegment);
+              break;
+            }
+          }
         }
       }
 
@@ -1079,6 +1104,56 @@ public abstract class AbstractGovDataDownloader {
     }
   }
 
+  // ===== Cache Management =====
+
+  /**
+   * Checks if data is cached in manifest and optionally updates manifest if file exists.
+   * This is the first step in the download flow pattern.
+   *
+   * <p>Implementation follows a 2-step pattern:
+   * <ol>
+   *   <li>Check cache manifest first - trust it as source of truth</li>
+   *   <li>Defensive check: if file exists but not in manifest, update manifest</li>
+   * </ol>
+   *
+   * <p>Subclasses implement schema-specific caching logic including zero-byte file detection.
+   *
+   * @param dataType Type of data being checked
+   * @param year Year of data
+   * @param params Additional parameters for cache key
+   * @return true if cached (skip download), false if needs download
+   */
+  protected boolean isCachedOrExists(String dataType, int year, Map<String, String> params) {
+
+    // 1. Check cache manifest first - trust it as source of truth
+    if (cacheManifest.isCached(dataType, year, params)) {
+      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {} (year={})", dataType, year);
+      return true;
+    }
+
+    // 2. Defensive check: if file exists but not in manifest, update manifest
+    Map<String, Object> metadata = loadTableMetadata(dataType);
+    String filePath = storageProvider.resolvePath(cacheDirectory, resolveJsonPath(metadata.get("pattern").toString(), params));
+    try {
+      if (cacheStorageProvider.exists(filePath)) {
+        long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
+        if (fileSize > 0) {
+          LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
+          cacheManifest.markCached(dataType, year, params, filePath, fileSize);
+          cacheManifest.save(operatingDirectory);
+          return true;
+        } else {
+          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", dataType, filePath);
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
+      // If we can't check, assume it doesn't exist
+    }
+
+    return false;
+  }
+
   // ===== Metadata-Driven Parquet Conversion =====
 
   /**
@@ -1124,6 +1199,133 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Converts a JSON record (object) to a typed Map based on column metadata.
+   *
+   * @param recordNode The JSON record node
+   * @param columnTypeMap Map of column names to their types
+   * @param missingValueIndicator String value that indicates null (e.g., ".", "-", "N/A")
+   * @return Map with properly typed values
+   */
+  protected Map<String, Object> convertJsonRecordToTypedMap(JsonNode recordNode,
+      Map<String, String> columnTypeMap, String missingValueIndicator) {
+    Map<String, Object> record = new java.util.HashMap<>();
+
+    // Iterate through all fields in the JSON record
+    java.util.Iterator<Map.Entry<String, JsonNode>> fields = recordNode.fields();
+    while (fields.hasNext()) {
+      Map.Entry<String, JsonNode> field = fields.next();
+      String fieldName = field.getKey();
+      JsonNode fieldValue = field.getValue();
+
+      // Get the column type from metadata (if available)
+      String columnType = columnTypeMap.get(fieldName);
+
+      if (columnType != null) {
+        // Convert using type metadata
+        Object convertedValue =
+            convertJsonValueToType(fieldValue, fieldName, columnType, missingValueIndicator);
+        record.put(fieldName, convertedValue);
+      } else {
+        // Field not in schema - use Jackson's default conversion
+        LOGGER.debug("Field '{}' not found in column metadata, using default conversion", fieldName);
+        Object defaultValue = MAPPER.convertValue(fieldValue, Object.class);
+        record.put(fieldName, defaultValue);
+      }
+    }
+
+    return record;
+  }
+
+  /**
+   * Converts a JSON value to the appropriate Java type based on column metadata.
+   *
+   * @param jsonValue The JSON value (may be null)
+   * @param columnName Column name (for error reporting)
+   * @param columnType Column type from schema (e.g., "string", "int", "double", "boolean")
+   * @param missingValueIndicator String value that indicates null (e.g., ".", "-", "N/A")
+   * @return Converted value as appropriate Java type, or null
+   */
+  protected Object convertJsonValueToType(JsonNode jsonValue, String columnName, String columnType,
+      String missingValueIndicator) {
+    // Handle null/missing values
+    if (jsonValue == null || jsonValue.isNull() || jsonValue.isMissingNode()) {
+      return null;
+    }
+
+    // Handle empty strings as null for numeric types
+    if (jsonValue.isTextual()) {
+      String textValue = jsonValue.asText();
+      if (textValue == null || textValue.trim().isEmpty() || "null".equalsIgnoreCase(textValue)) {
+        return null;
+      }
+
+      // Check if value matches the missing value indicator
+      if (missingValueIndicator != null && missingValueIndicator.equals(textValue)) {
+        return null;
+      }
+    }
+
+    try {
+      // Normalize type names (handle both lowercase and SQL types)
+      String normalizedType = columnType.toLowerCase();
+
+      switch (normalizedType) {
+        case "string":
+        case "varchar":
+        case "char":
+          return jsonValue.isTextual() ? jsonValue.asText() : jsonValue.toString();
+
+        case "int":
+        case "integer":
+          if (jsonValue.isIntegralNumber()) {
+            return jsonValue.asInt();
+          } else if (jsonValue.isTextual()) {
+            return Integer.parseInt(jsonValue.asText().trim());
+          }
+          throw new NumberFormatException("Cannot convert to integer: " + jsonValue);
+
+        case "long":
+        case "bigint":
+          if (jsonValue.isIntegralNumber()) {
+            return jsonValue.asLong();
+          } else if (jsonValue.isTextual()) {
+            return Long.parseLong(jsonValue.asText().trim());
+          }
+          throw new NumberFormatException("Cannot convert to long: " + jsonValue);
+
+        case "double":
+        case "float":
+          if (jsonValue.isNumber()) {
+            return jsonValue.asDouble();
+          } else if (jsonValue.isTextual()) {
+            return Double.parseDouble(jsonValue.asText().trim());
+          }
+          throw new NumberFormatException("Cannot convert to double: " + jsonValue);
+
+        case "boolean":
+          if (jsonValue.isBoolean()) {
+            return jsonValue.asBoolean();
+          } else if (jsonValue.isTextual()) {
+            String text = jsonValue.asText().trim().toLowerCase();
+            return "true".equals(text) || "1".equals(text) || "yes".equals(text);
+          }
+          return false;
+
+        default:
+          // Default to string for unknown types
+          LOGGER.warn("Unknown column type '{}' for column '{}', treating as string",
+              columnType, columnName);
+          return jsonValue.isTextual() ? jsonValue.asText() : jsonValue.toString();
+      }
+
+    } catch (NumberFormatException e) {
+      LOGGER.warn("Failed to convert value for column '{}' (type: {}): {}. Value: {}",
+          columnName, columnType, e.getMessage(), jsonValue);
+      return null;
+    }
+  }
+
+  /**
    * Converts cached JSON data to Parquet format using schema metadata.
    *
    * <p>This is a generic, metadata-driven conversion that works for any table
@@ -1139,7 +1341,6 @@ public abstract class AbstractGovDataDownloader {
    * @param variables Variables for path resolution (e.g., {year: "2020"})
    * @throws IOException if file operations fail
    */
-  @SuppressWarnings("unchecked")
   public void convertCachedJsonToParquet(String tableName, Map<String, String> variables)
       throws IOException {
     LOGGER.info("Converting cached JSON to Parquet for table: {}", tableName);
@@ -1168,43 +1369,49 @@ public abstract class AbstractGovDataDownloader {
       return;
     }
 
-    // Determine data path from response config (default to root if not specified)
-    String dataPath = null;
+    // Load column metadata first to enable type-aware conversion
+    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumnsFromMetadata(tableName);
+
+    // Build column type map for efficient lookup
+    Map<String, String> columnTypeMap = new java.util.HashMap<>();
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      columnTypeMap.put(column.getName(), column.getType());
+    }
+
+    // Extract missingValueIndicator from metadata (download.response.missingValueIndicator)
+    // Use JsonNode.at() with JSON Pointer notation for clean path traversal
+    String missingValueIndicator = null;
     if (metadata.containsKey("download")) {
-      Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
-      if (downloadConfig.containsKey("response")) {
-        Map<String, Object> responseConfig = (Map<String, Object>) downloadConfig.get("response");
-        if (responseConfig.containsKey("dataPath")) {
-          dataPath = responseConfig.get("dataPath").toString();
-        }
+      JsonNode downloadNode = (JsonNode) metadata.get("download");
+      JsonNode missingValueNode = downloadNode.at("/response/missingValueIndicator");
+      if (!missingValueNode.isMissingNode()) {
+        missingValueIndicator = missingValueNode.asText();
+        LOGGER.info("Using missingValueIndicator: '{}'", missingValueIndicator);
       }
     }
 
-    // Read JSON file
+    // Read JSON file with type-aware conversion
     List<Map<String, Object>> records = new ArrayList<>();
     try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath);
-         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream,
-             java.nio.charset.StandardCharsets.UTF_8)) {
+         java.io.InputStreamReader reader =
+             new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
       JsonNode root = MAPPER.readTree(reader);
 
-      // Navigate to data using dataPath if specified
-      JsonNode dataNode = root;
-      if (dataPath != null && !dataPath.isEmpty()) {
-        dataNode = root.path(dataPath);
-      }
-
-      // Extract records
-      if (dataNode.isArray()) {
-        for (JsonNode recordNode : dataNode) {
-          Map<String, Object> record = MAPPER.convertValue(recordNode, Map.class);
+      // Extract records with proper type conversion
+      if (root.isArray()) {
+        for (JsonNode recordNode : root) {
+          Map<String, Object> record =
+              convertJsonRecordToTypedMap(recordNode, columnTypeMap, missingValueIndicator);
           records.add(record);
         }
-      } else if (dataNode.isObject()) {
+      } else if (root.isObject()) {
         // Single object - wrap in list
-        Map<String, Object> record = MAPPER.convertValue(dataNode, Map.class);
+        Map<String, Object> record =
+            convertJsonRecordToTypedMap(root, columnTypeMap, missingValueIndicator);
         records.add(record);
       } else {
-        throw new IOException("Data node is neither array nor object at path: " + dataPath);
+        throw new IOException("Data node is neither array nor object.");
       }
 
       LOGGER.info("Read {} records from {}", records.size(), jsonPath);
@@ -1218,10 +1425,6 @@ public abstract class AbstractGovDataDownloader {
       return;
     }
 
-    // Load column metadata
-    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        loadTableColumnsFromMetadata(tableName);
-
     // Write to Parquet using StorageProvider
     LOGGER.info("Writing {} records to Parquet: {}", records.size(), parquetPath);
     storageProvider.writeAvroParquet(fullParquetPath, columns, records, tableName, tableName);
@@ -1232,6 +1435,39 @@ public abstract class AbstractGovDataDownloader {
     } else {
       LOGGER.error("Parquet file not found after write: {}", fullParquetPath);
       throw new IOException("Parquet file not found after write: " + fullParquetPath);
+    }
+  }
+
+  /**
+   * Checks if a table has earlyDownload flag set to true in its download configuration.
+   *
+   * <p>Tables with earlyDownload=true should be downloaded before regular partitioned tables,
+   * typically used for reference/catalog tables that other tables depend on.</p>
+   *
+   * @param tableName Name of table to check
+   * @return true if table has earlyDownload=true in download config
+   */
+  @SuppressWarnings("unchecked")
+  protected boolean isEarlyDownload(String tableName) {
+    try {
+      Map<String, Object> metadata = loadTableMetadata(tableName);
+      if (!metadata.containsKey("download")) {
+        return false;
+      }
+
+      Object downloadObj = metadata.get("download");
+      Map<String, Object> downloadConfig;
+      if (downloadObj instanceof JsonNode) {
+        downloadConfig = MAPPER.convertValue((JsonNode) downloadObj, Map.class);
+      } else {
+        downloadConfig = (Map<String, Object>) downloadObj;
+      }
+
+      Object earlyDownloadObj = downloadConfig.get("earlyDownload");
+      return earlyDownloadObj != null && Boolean.parseBoolean(earlyDownloadObj.toString());
+    } catch (Exception e) {
+      LOGGER.debug("Could not check earlyDownload for table {}: {}", tableName, e.getMessage());
+      return false;
     }
   }
 }
