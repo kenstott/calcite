@@ -323,6 +323,36 @@ public class SecCacheManifest extends AbstractCacheManifest {
     }
   }
 
+  // ===== Abstract method implementations from AbstractCacheManifest =====
+  // SEC schema uses CIK-based caching (different paradigm than ECON/GEO)
+  // These methods are not used by SEC downloaders
+
+  @Override public boolean isCached(String dataType, int year, Map<String, String> parameters) {
+    // SEC uses CIK-based caching via isCached(String cik)
+    throw new UnsupportedOperationException(
+        "SEC schema uses CIK-based caching. Use isCached(String cik) instead.");
+  }
+
+  @Override public void markCached(String dataType, int year, Map<String, String> params,
+      String relativePath, long fileSize) {
+    // SEC uses CIK-based caching via markCached(String cik, ...)
+    throw new UnsupportedOperationException(
+        "SEC schema uses CIK-based caching. Use markCached(String cik, ...) instead.");
+  }
+
+  @Override public boolean isParquetConverted(String dataType, int year, Map<String, String> params) {
+    // SEC tracks parquet conversion differently via filing-level state
+    throw new UnsupportedOperationException(
+        "SEC schema tracks parquet conversion via filing-level state.");
+  }
+
+  @Override public void markParquetConverted(String dataType, int year, Map<String, String> params,
+      String parquetPath) {
+    // SEC tracks parquet conversion differently via filing-level state
+    throw new UnsupportedOperationException(
+        "SEC schema tracks parquet conversion via filing-level state.");
+  }
+
   /**
    * Get cache statistics.
    *

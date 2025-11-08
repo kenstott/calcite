@@ -105,18 +105,15 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     LOGGER.info("HUD crosswalk fetcher initialized with cache directory: {}", cacheDir);
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return 500; // HUD API rate limit: 500ms between requests
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 3; // Retry up to 3 times
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 1000; // Initial retry delay: 1 second
   }
 

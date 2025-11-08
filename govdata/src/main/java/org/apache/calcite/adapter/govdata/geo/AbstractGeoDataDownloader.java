@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -24,11 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -67,35 +63,11 @@ import java.util.Map;
  * @see GeoCacheManifest
  * @see StorageProvider
  */
-public abstract class AbstractGeoDataDownloader {
+public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(AbstractGeoDataDownloader.class);
 
-  /** Shared ObjectMapper for JSON serialization */
+  /** Shared ObjectMapper for JSON serialization in static methods */
   protected static final ObjectMapper MAPPER = new ObjectMapper();
-
-  /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/geo/) */
-  protected final String cacheDirectory;
-
-  /** Operating directory for storing operational metadata (e.g., .aperio/geo/) */
-  protected final String operatingDirectory;
-
-  /** Parquet directory for storing converted parquet files (e.g., $GOVDATA_PARQUET_DIR or s3://govdata-parquet) */
-  protected final String parquetDirectory;
-
-  /** Storage provider for reading/writing raw cache files (shapefiles, JSON) */
-  protected final StorageProvider cacheStorageProvider;
-
-  /** Storage provider for reading/writing parquet files (supports local and S3) */
-  protected final StorageProvider storageProvider;
-
-  /** Cache manifest for tracking downloads and conversions */
-  protected final GeoCacheManifest cacheManifest;
-
-  /** HTTP client for API requests */
-  protected final HttpClient httpClient;
-
-  /** Timestamp of last API request for rate limiting */
-  protected long lastRequestTime = 0;
 
   /**
    * Constructs base downloader with required infrastructure.
@@ -120,74 +92,22 @@ public abstract class AbstractGeoDataDownloader {
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
   protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest) {
-    this.cacheDirectory = cacheDirectory;
-    this.operatingDirectory = operatingDirectory;
-    this.parquetDirectory = parquetDirectory;
-    this.cacheStorageProvider = cacheStorageProvider;
-    this.storageProvider = storageProvider;
-    this.cacheManifest = sharedManifest != null ? sharedManifest : GeoCacheManifest.load(operatingDirectory);
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest);
   }
 
-  /**
-   * Returns the minimum interval between API requests in milliseconds.
-   * Different APIs have different rate limits (e.g., Census: 500ms).
-   *
-   * @return Minimum milliseconds between requests, or 0 if no rate limit
-   */
-  protected abstract long getMinRequestIntervalMs();
+  // Rate limiting methods - subclasses can override to provide API-specific limits
+  // If not overridden, defaults from AbstractGovDataDownloader are used
 
-  /**
-   * Returns the maximum number of retry attempts for failed requests.
-   *
-   * @return Maximum retry attempts
-   */
-  protected abstract int getMaxRetries();
+  @Override protected long getMinRequestIntervalMs() {
+    return 500; // Default for GEO APIs: 500ms between requests
+  }
 
-  /**
-   * Returns the initial delay for retry backoff in milliseconds.
-   *
-   * @return Initial retry delay in milliseconds
-   */
-  protected abstract long getRetryDelayMs();
+  @Override protected int getMaxRetries() {
+    return 3; // Default: 3 retry attempts
+  }
 
-  /**
-   * Checks if data is cached in manifest and optionally updates manifest if file exists.
-   * This is the first step in the download flow pattern.
-   *
-   * @param dataType Type of data being checked
-   * @param year Year of data
-   * @param params Additional parameters for cache key
-   * @param relativePath Relative path to check (for defensive file existence check)
-   * @return true if cached (skip download), false if needs download
-   */
-  protected final boolean isCachedOrExists(String dataType, int year,
-      Map<String, String> params, String relativePath) {
-
-    // 1. Check cache manifest first - trust it as source of truth
-    if (cacheManifest.isCached(dataType, year, params)) {
-      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {} (year={})", dataType, year);
-      return true;
-    }
-
-    // 2. Defensive check: if file exists but not in manifest, update manifest
-    String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-    try {
-      if (cacheStorageProvider.exists(filePath)) {
-        LOGGER.info("⚡ File exists, updating cache manifest: {} (year={})", dataType, year);
-        long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
-        cacheManifest.markCached(dataType, year, params, relativePath, fileSize);
-        cacheManifest.save(operatingDirectory);
-        return true;
-      }
-    } catch (IOException e) {
-      LOGGER.debug("Error checking cache file existence: {}", e.getMessage());
-      // If we can't check, assume it doesn't exist
-    }
-
-    return false;
+  @Override protected long getRetryDelayMs() {
+    return 1000; // Default: 1 second initial retry delay
   }
 
   /**
@@ -213,83 +133,6 @@ public abstract class AbstractGeoDataDownloader {
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, content.length);
-  }
-
-  /**
-   * Enforces rate limiting by ensuring minimum interval between API requests.
-   * Uses synchronized block to handle concurrent access safely.
-   *
-   * @throws InterruptedException If thread is interrupted while waiting
-   */
-  protected final void enforceRateLimit() throws InterruptedException {
-    long minInterval = getMinRequestIntervalMs();
-    if (minInterval <= 0) {
-      return; // No rate limit
-    }
-
-    synchronized (this) {
-      long now = System.currentTimeMillis();
-      long timeSinceLastRequest = now - lastRequestTime;
-      if (timeSinceLastRequest < minInterval) {
-        long waitTime = minInterval - timeSinceLastRequest;
-        LOGGER.trace("Rate limiting: waiting {} ms", waitTime);
-        Thread.sleep(waitTime);
-      }
-      lastRequestTime = System.currentTimeMillis();
-    }
-  }
-
-  /**
-   * Executes HTTP request with retry logic and exponential backoff.
-   * Handles rate limiting and transient failures automatically.
-   *
-   * @param request HTTP request to execute
-   * @return HTTP response
-   * @throws IOException If all retry attempts fail
-   * @throws InterruptedException If thread is interrupted
-   */
-  protected final HttpResponse<String> executeWithRetry(HttpRequest request)
-      throws IOException, InterruptedException {
-
-    int maxRetries = getMaxRetries();
-    long retryDelay = getRetryDelayMs();
-
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        // Enforce rate limiting before request
-        enforceRateLimit();
-
-        // Execute request
-        HttpResponse<String> response =
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-        // Check for rate limit response (429) or server error (5xx)
-        if (response.statusCode() == 429 || response.statusCode() >= 500) {
-          if (attempt < maxRetries - 1) {
-            long delay = retryDelay * (long) Math.pow(2, attempt);
-            LOGGER.warn("Request failed with status {} - retrying in {} ms (attempt {}/{})",
-                response.statusCode(), delay, attempt + 1, maxRetries);
-            Thread.sleep(delay);
-            continue;
-          }
-        }
-
-        // Success or non-retryable error
-        return response;
-
-      } catch (IOException e) {
-        if (attempt < maxRetries - 1) {
-          long delay = retryDelay * (long) Math.pow(2, attempt);
-          LOGGER.warn("Request failed: {} - retrying in {} ms (attempt {}/{})",
-              e.getMessage(), delay, attempt + 1, maxRetries);
-          Thread.sleep(delay);
-        } else {
-          throw e;
-        }
-      }
-    }
-
-    throw new IOException("Failed after " + maxRetries + " attempts");
   }
 
   /**

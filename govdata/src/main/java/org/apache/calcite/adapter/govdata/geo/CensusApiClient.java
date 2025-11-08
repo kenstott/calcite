@@ -102,18 +102,15 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     LOGGER.info("Census API client initialized with cache directory: {}", cacheDir);
   }
 
-  @Override
-  protected long getMinRequestIntervalMs() {
+  @Override protected long getMinRequestIntervalMs() {
     return RATE_LIMIT_DELAY_MS; // Census API: 500ms between requests (2 per second)
   }
 
-  @Override
-  protected int getMaxRetries() {
+  @Override protected int getMaxRetries() {
     return 3; // Retry up to 3 times
   }
 
-  @Override
-  protected long getRetryDelayMs() {
+  @Override protected long getRetryDelayMs() {
     return 1000; // Initial retry delay: 1 second
   }
 

@@ -919,7 +919,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/regional_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("regional_cpi", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("regional_cpi", year, cacheParams)) {
         LOGGER.info("Found cached regional CPI for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -969,7 +969,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/metro_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("metro_cpi", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("metro_cpi", year, cacheParams)) {
         LOGGER.info("Found cached metro CPI for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1026,7 +1026,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = buildPartitionPath("state_industry", DataFrequency.QUARTERLY, year) + "/state_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("state_industry", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("state_industry", year, cacheParams)) {
         LOGGER.info("Found cached state industry employment for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1079,7 +1079,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/state_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("state_wages", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("state_wages", year, cacheParams)) {
         LOGGER.info("Found cached state wages for year {} - skipping", year);
         continue;
       }
@@ -1118,7 +1118,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check if a file is already in the cache and up to date
-      if (isCachedOrExists("county_wages", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("county_wages", year, cacheParams)) {
         LOGGER.info("County wages data for year {} is already cached", year);
         continue;
       }
@@ -1209,7 +1209,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = buildPartitionPath("metro_industry", DataFrequency.QUARTERLY, year) + "/metro_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("metro_industry", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("metro_industry", year, cacheParams)) {
         LOGGER.info("Found cached metro industry employment for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1293,7 +1293,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = buildPartitionPath("metro_wages", DataFrequency.MONTHLY, year) + "/metro_wages.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("metro_wages", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("metro_wages", year, cacheParams)) {
         LOGGER.info("Found cached metro wages for year {} - skipping", year);
         continue;
       }
@@ -1685,7 +1685,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = buildPartitionPath("jolts_regional", DataFrequency.MONTHLY, year) + "/jolts_regional.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("jolts_regional", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("jolts_regional", year, cacheParams)) {
         LOGGER.info("Found cached JOLTS regional for year {} - skipping", year);
         continue;
       }
@@ -1722,7 +1722,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> cacheParams = new HashMap<>();
 
       // Check if a file is already in the cache and up to date
-      if (isCachedOrExists("jolts_state", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("jolts_state", year, cacheParams)) {
         LOGGER.info("JOLTS state data for year {} is already cached", year);
         continue;
       }
@@ -1752,7 +1752,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = new HashMap<>();
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("jolts_industries", -1, cacheParams, jsonFilePath)) {
+    if (isCachedOrExists("jolts_industries", -1, cacheParams)) {
       LOGGER.info("JOLTS industry reference data already cached");
       return;
     }
@@ -1824,7 +1824,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = new HashMap<>();
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("jolts_dataelements", -1, cacheParams, jsonFilePath)) {
+    if (isCachedOrExists("jolts_dataelements", -1, cacheParams)) {
       LOGGER.info("JOLTS data element reference data already cached");
       return;
     }
@@ -1874,7 +1874,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String jsonFilePath = outputDirPath + "/inflation_metrics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("inflation_metrics", year, cacheParams, jsonFilePath)) {
+      if (isCachedOrExists("inflation_metrics", year, cacheParams)) {
         LOGGER.info("Found cached inflation metrics for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1919,7 +1919,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String relativePath = buildPartitionPath("wage_growth", DataFrequency.QUARTERLY, year) + "/wage_growth.json";
       Map<String, String> cacheParams = new HashMap<>();
 
-      if (isCachedOrExists("wage_growth", year, cacheParams, relativePath)) {
+      if (isCachedOrExists("wage_growth", year, cacheParams)) {
         LOGGER.info("Found cached wage growth data for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -2397,7 +2397,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Mark in cache manifest - QCEW data is immutable (historical), never refresh
     long refreshAfter = Long.MAX_VALUE;
-    cacheManifest.markCached("qcew_zip", year, cacheParams, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
+    ((CacheManifest) cacheManifest).markCached("qcew_zip", year, cacheParams, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached QCEW CSV for year {} ({} MB)", year, zipData.length / (1024 * 1024));
@@ -2647,7 +2647,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Mark in cache manifest - refresh monthly (JOLTS data updates monthly with ~2-month lag)
     long refreshAfter = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000); // 30 days in milliseconds
-    cacheManifest.markCached(dataType, 0, cacheParams, ftpPath, data.length, refreshAfter, "monthly_refresh");
+    ((CacheManifest) cacheManifest).markCached(dataType, 0, cacheParams, ftpPath, data.length, refreshAfter, "monthly_refresh");
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached JOLTS FTP file ({} KB)", data.length / 1024);
@@ -4699,7 +4699,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> params = new HashMap<>();
       params.put("frequency", "monthly");
 
-      if (isCachedOrExists(tableName, year, params, relativePath)) {
+      if (isCachedOrExists(tableName, year, params)) {
         skippedCount++;
         continue;
       }
