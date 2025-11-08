@@ -290,6 +290,140 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     return "/econ-schema.json";
   }
 
+  /**
+   * Download and convert ALL reference/catalog tables FIRST before any transactional data.
+   * This ensures that reference data is available for enrichment and validation.
+   *
+   * <p>Reference tables downloaded (in order):
+   * <ul>
+   *   <li>FRED: reference_fred_series catalog</li>
+   *   <li>BLS: reference_jolts_industries and reference_jolts_dataelements</li>
+   *   <li>BEA: reference_nipa_tables and reference_regional_linecodes</li>
+   * </ul>
+   */
+  private void downloadAllReferenceData(String cacheDir, String parquetDir,
+      String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
+      StorageProvider storageProvider, StorageProvider cacheStorageProvider,
+      CacheManifest cacheManifest, String econOperatingDirectory,
+      int fredMinPopularity, boolean fredCatalogForceRefresh) {
+
+    LOGGER.info("=== Downloading ALL Reference Tables ===");
+
+    // 1. FRED reference_fred_series catalog
+    if (fredApiKey != null && !fredApiKey.isEmpty()) {
+      try {
+        // Handle catalog cache invalidation if force refresh requested
+        if (fredCatalogForceRefresh) {
+          cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
+          LOGGER.info("Force refresh enabled - invalidated catalog series cache for threshold {}",
+              fredMinPopularity);
+        }
+
+        LOGGER.info("Downloading FRED reference_fred_series catalog");
+        FredCatalogDownloader catalogDownloader =
+            new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
+                storageProvider, cacheManifest);
+        catalogDownloader.downloadCatalog();
+        LOGGER.info("Completed FRED reference_fred_series catalog download");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading FRED catalog", e);
+      }
+    } else {
+      LOGGER.warn("Skipping FRED catalog download - API key not available");
+    }
+
+    // 2. BLS JOLTS reference tables
+    if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Downloading BLS JOLTS reference tables");
+        BlsDataDownloader blsDownloader =
+            new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir,
+                cacheStorageProvider, storageProvider, cacheManifest);
+
+        // Download and convert reference_jolts_industries
+        String joltsIndustriesCachePath =
+            cacheStorageProvider.resolvePath(cacheDir, "type=reference");
+        String joltsIndustriesParquetPath =
+            storageProvider.resolvePath(parquetDir, "type=reference/jolts_industries.parquet");
+        String joltsIndustriesRawPath =
+            cacheStorageProvider.resolvePath(joltsIndustriesCachePath, "jolts_industries.json");
+        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider,
+            "jolts_industries", 0, joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
+          Map<String, String> variables = new HashMap<>();
+          blsDownloader.convertCachedJsonToParquet("jolts_industries", variables);
+          cacheManifest.markParquetConverted("jolts_industries", 0, null,
+              joltsIndustriesParquetPath);
+          LOGGER.info("Converted reference_jolts_industries to parquet");
+        }
+
+        // Download and convert reference_jolts_dataelements
+        String joltsDataelementsCachePath =
+            cacheStorageProvider.resolvePath(cacheDir, "type=reference");
+        String joltsDataelementsParquetPath =
+            storageProvider.resolvePath(parquetDir, "type=reference/jolts_dataelements.parquet");
+        String joltsDataelementsRawPath =
+            cacheStorageProvider.resolvePath(joltsDataelementsCachePath,
+                "jolts_dataelements.json");
+        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider,
+            "jolts_dataelements", 0, joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
+          Map<String, String> variables = new HashMap<>();
+          blsDownloader.convertCachedJsonToParquet("jolts_dataelements", variables);
+          cacheManifest.markParquetConverted("jolts_dataelements", 0, null,
+              joltsDataelementsParquetPath);
+          LOGGER.info("Converted reference_jolts_dataelements to parquet");
+        }
+
+        LOGGER.info("Completed BLS JOLTS reference tables download");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading BLS JOLTS reference tables", e);
+      }
+    } else {
+      LOGGER.warn("Skipping BLS JOLTS reference tables - BLS not enabled or API key not available");
+    }
+
+    // 3. BEA reference tables
+    if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
+      try {
+        LOGGER.info("Downloading BEA reference tables");
+        BeaDataDownloader beaDownloader =
+            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir,
+                cacheStorageProvider, storageProvider, cacheManifest);
+
+        // Download and convert reference_nipa_tables
+        try {
+          String refTablePath = beaDownloader.downloadReferenceNipaTables();
+          LOGGER.info("Downloaded reference_nipa_tables to: {}", refTablePath);
+
+          beaDownloader.convertReferenceNipaTablesWithFrequencies();
+          LOGGER.info("Converted reference_nipa_tables to parquet with frequency columns");
+        } catch (Exception e) {
+          LOGGER.warn("Could not download reference_nipa_tables catalog: {}. "
+              + "Will use default nipaTablesList.", e.getMessage());
+        }
+
+        // Download and convert reference_regional_linecodes
+        try {
+          beaDownloader.downloadRegionalLineCodeCatalog();
+          LOGGER.info("Downloaded reference_regional_linecodes catalog for all BEA Regional "
+              + "tables");
+
+          beaDownloader.convertRegionalLineCodeCatalog();
+          LOGGER.info("Converted reference_regional_linecodes to parquet with enrichment");
+        } catch (Exception e) {
+          LOGGER.warn("Could not download reference_regional_linecodes catalog: {}. "
+              + "Regional income downloads may fail.", e.getMessage());
+        }
+
+        LOGGER.info("Completed BEA reference tables download");
+      } catch (Exception e) {
+        LOGGER.error("Error downloading BEA reference tables", e);
+      }
+    } else {
+      LOGGER.warn("Skipping BEA reference tables - BEA not enabled or API key not available");
+    }
+
+    LOGGER.info("=== PHASE 0 Complete: All Reference Tables Downloaded ===");
+  }
 
   /**
    * Download economic data from various sources following GEO pattern.
@@ -316,33 +450,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     CacheManifest cacheManifest = CacheManifest.load(econOperatingDirectory);
     LOGGER.debug("Loaded ECON cache manifest from {}", econOperatingDirectory);
 
-    // Handle catalog cache invalidation if force refresh requested
-    if (fredCatalogForceRefresh) {
-      cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
-      LOGGER.info("Force refresh enabled - invalidated catalog series cache for threshold {}", fredMinPopularity);
-    }
-
     // cacheStorageProvider is passed as parameter (created by GovDataSchemaFactory)
     LOGGER.debug("Using shared cache storage provider for cache directory: {}", cacheDir);
 
-    // Download FRED series catalog FIRST as a prerequisite for fred_indicators population
-    // This must happen before FRED indicators download since we need the catalog to determine series list
-    LOGGER.debug("FRED catalog download check: fredApiKey={}, isEmpty={}",
-        fredApiKey != null ? "configured" : "null",
-        fredApiKey != null ? fredApiKey.isEmpty() : "N/A");
-    if (fredApiKey != null && !fredApiKey.isEmpty()) {
-      try {
-        LOGGER.info("Downloading FRED catalog as prerequisite for indicators");
-        // Note: FredCatalogDownloader will be refactored in Phase 6 to use cacheStorageProvider
-        // For now it still uses storageProvider for both cache and parquet operations
-        FredCatalogDownloader catalogDownloader = new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir, storageProvider, cacheManifest);
-        catalogDownloader.downloadCatalog();
-      } catch (Exception e) {
-        LOGGER.error("Error downloading FRED catalog", e);
-      }
-    } else {
-      LOGGER.warn("Skipping FRED catalog download - API key not available");
-    }
+    // Download ALL reference tables FIRST before any transactional data
+    downloadAllReferenceData(cacheDir, parquetDir, blsApiKey, fredApiKey, beaApiKey,
+        enabledSources, storageProvider, cacheStorageProvider, cacheManifest,
+        econOperatingDirectory, fredMinPopularity, fredCatalogForceRefresh);
 
     // Download BLS data if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
@@ -491,24 +605,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
           }
         }
 
-        // Convert reference tables (not partitioned by year, use 0 as sentinel)
-        String joltsIndustriesCachePath = cacheStorageProvider.resolvePath(cacheDir, "type=reference");
-        String joltsIndustriesParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_industries.parquet");
-        String joltsIndustriesRawPath = cacheStorageProvider.resolvePath(joltsIndustriesCachePath, "jolts_industries.json");
-        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_industries", 0, joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
-          Map<String, String> variables = new HashMap<>();
-          blsDownloader.convertCachedJsonToParquet("jolts_industries", variables);
-          cacheManifest.markParquetConverted("jolts_industries", 0, null, joltsIndustriesParquetPath);
-        }
-
-        String joltsDataelementsCachePath = cacheStorageProvider.resolvePath(cacheDir, "type=reference");
-        String joltsDataelementsParquetPath = storageProvider.resolvePath(parquetDir, "type=reference/jolts_dataelements.parquet");
-        String joltsDataelementsRawPath = cacheStorageProvider.resolvePath(joltsDataelementsCachePath, "jolts_dataelements.json");
-        if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_dataelements", 0, joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
-          Map<String, String> variables = new HashMap<>();
-          blsDownloader.convertCachedJsonToParquet("jolts_dataelements", variables);
-          cacheManifest.markParquetConverted("jolts_dataelements", 0, null, joltsDataelementsParquetPath);
-        }
+        // Note: JOLTS reference tables (jolts_industries, jolts_dataelements) are now
+        // downloaded and converted in Phase 0 via downloadAllReferenceData()
 
         LOGGER.debug("BLS data download completed");
       } catch (Exception e) {
@@ -605,25 +703,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
 
-        // EARLY DOWNLOAD: Download reference_nipa_tables first
-        // This catalog is needed to discover all active NIPA tables
-        LOGGER.info("Phase 1: Downloading reference_nipa_tables catalog (early download)");
-        try {
-          String refTablePath = beaDownloader.downloadReferenceNipaTables();
-          LOGGER.info("Downloaded reference_nipa_tables to: {}", refTablePath);
-
-          // Convert to parquet with frequency columns
-          beaDownloader.convertReferenceNipaTablesWithFrequencies();
-          LOGGER.info("Converted reference_nipa_tables to parquet with frequency columns");
-        } catch (Exception e) {
-          LOGGER.warn("Could not download reference_nipa_tables catalog: {}. Will use default nipaTablesList.", e.getMessage());
-        }
+        // Note: BEA reference tables (reference_nipa_tables, reference_regional_linecodes) are now
+        // downloaded and converted in Phase 0 via downloadAllReferenceData()
 
         // Extract iteration lists from schema metadata
         List<String> nipaTablesList = extractIterationList("national_accounts", "nipaTablesList");
         List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
-        List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
         List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
+
 
         // PATCH: Load active NIPA tables from catalog and use for downloads
         Map<String, Set<String>> tableFrequencies = Collections.emptyMap();
@@ -645,17 +732,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Download all BEA data using metadata-driven methods
         LOGGER.info("Phase 2: Downloading BEA data for years {}-{}", startYear, endYear);
         beaDownloader.downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
-        beaDownloader.downloadRegionalIncomeMetadata(startYear, endYear, lineCodesList);
+        beaDownloader.downloadRegionalIncomeMetadata(startYear, endYear);
         // Note: trade_statistics is now a VIEW on national_accounts, no separate download needed
-        beaDownloader.downloadItaDataMetadata(startYear, endYear, itaIndicatorsList);
+        beaDownloader.downloadItaDataMetadata(startYear, endYear);
         beaDownloader.downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
 
         // Convert all BEA data to Parquet using metadata-driven methods
         LOGGER.info("Converting BEA data to Parquet for years {}-{}", startYear, endYear);
         beaDownloader.convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
-        beaDownloader.convertRegionalIncomeMetadata(startYear, endYear, lineCodesList);
+        beaDownloader.convertRegionalIncomeMetadata(startYear, endYear);
         // Note: trade_statistics is now a VIEW on national_accounts, no separate conversion needed
-        beaDownloader.convertItaDataMetadata(startYear, endYear, itaIndicatorsList);
+        beaDownloader.convertItaDataMetadata(startYear, endYear);
         beaDownloader.convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
 
         LOGGER.debug("BEA data download completed");
@@ -664,7 +751,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Phase 3: Optional BLS data sources (jolts_regional, metro_cpi)
+    // Optional BLS data sources (jolts_regional, metro_cpi)
     // These are downloaded separately to allow fine-grained control
     if (enabledSources.contains("bls_jolts_regional") && blsApiKey != null && !blsApiKey.isEmpty()) {
       try {
@@ -934,15 +1021,15 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     try {
       // Find all catalog JSON files under status=active partitions
-      // Pattern: type=catalog/category=*/frequency=*/source=*/status=active/fred_data_series_catalog.json
-      String catalogBasePath = cacheStorageProvider.resolvePath(cacheDir, "type=catalog");
+      // Pattern: type=reference/category=*/frequency=*/source=*/status=active/reference_fred_series.json
+      String catalogBasePath = cacheStorageProvider.resolvePath(cacheDir, "type=reference");
 
       if (!cacheStorageProvider.isDirectory(catalogBasePath)) {
         LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
         return seriesIds;
       }
 
-      // Recursively find all fred_data_series_catalog.json files under status=active directories
+      // Recursively find all reference_fred_series.json files under status=active directories
       List<String> catalogFiles = findCatalogFilesInActivePartitions(cacheStorageProvider, catalogBasePath);
 
       LOGGER.info("Found {} catalog JSON files to process", catalogFiles.size());
@@ -1046,7 +1133,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
         // If this is a status=active directory, look for catalog JSON file
         if (entryName.equals("status=active")) {
-          String catalogFile = storageProvider.resolvePath(fullPath, "fred_data_series_catalog.json");
+          String catalogFile = storageProvider.resolvePath(fullPath, "reference_fred_series.json");
           if (storageProvider.exists(catalogFile)) {
             catalogFiles.add(catalogFile);
             LOGGER.debug("Found catalog file: {}", catalogFile);
