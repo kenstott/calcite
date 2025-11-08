@@ -312,19 +312,26 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // 1. FRED reference_fred_series catalog
     if (fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        // Handle catalog cache invalidation if force refresh requested
+        // Check if catalog already downloaded via cache manifest
+        List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
+        boolean catalogCached = (catalogSeries != null && !catalogSeries.isEmpty());
+
         if (fredCatalogForceRefresh) {
           cacheManifest.invalidateCatalogSeriesCache(fredMinPopularity);
-          LOGGER.info("Force refresh enabled - invalidated catalog series cache for threshold {}",
-              fredMinPopularity);
+          LOGGER.info("Force refresh enabled - invalidated catalog series cache and redownloading");
+          catalogCached = false;
         }
 
-        LOGGER.info("Downloading FRED reference_fred_series catalog");
-        FredCatalogDownloader catalogDownloader =
-            new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
-                storageProvider, cacheManifest);
-        catalogDownloader.downloadCatalog();
-        LOGGER.info("Completed FRED reference_fred_series catalog download");
+        if (!catalogCached) {
+          LOGGER.info("Downloading FRED reference_fred_series catalog");
+          FredCatalogDownloader catalogDownloader =
+              new FredCatalogDownloader(fredApiKey, cacheDir, parquetDir,
+                  storageProvider, cacheManifest);
+          catalogDownloader.downloadCatalog();
+          LOGGER.info("Completed FRED reference_fred_series catalog download");
+        } else {
+          LOGGER.info("FRED catalog already cached ({} series), skipping download", catalogSeries.size());
+        }
       } catch (Exception e) {
         LOGGER.error("Error downloading FRED catalog", e);
       }
