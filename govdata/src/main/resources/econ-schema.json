@@ -1244,13 +1244,13 @@
           }
         ]
       },
-      "comment": "Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with fred_data_series_catalog or use fred_indicators_enriched view.",
+      "comment": "Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with reference_fred_series or use fred_indicators_enriched view.",
       "columns": [
         {
           "name": "series",
           "type": "string",
           "nullable": true,
-          "comment": "FRED series identifier (foreign key to fred_data_series_catalog)"
+          "comment": "FRED series identifier (foreign key to reference_fred_series)"
         },
         {
           "name": "date",
@@ -1275,10 +1275,6 @@
           "envVar": "FRED_API_KEY"
         },
         "queryParams": {
-          "series": {
-            "type": "iteration",
-            "source": "seriesList"
-          },
           "api_key": {
             "type": "auth"
           },
@@ -1300,6 +1296,10 @@
           },
           "offset": {
             "type": "pagination"
+          },
+          "series_id": {
+            "type": "iteration",
+            "source": "seriesList"
           }
         },
         "seriesList": [
@@ -1337,16 +1337,12 @@
     },
     {
       "name": "national_accounts",
-      "pattern": "type=national_accounts/section=*/frequency=*/year=*/tablename=*/national_accounts.parquet",
+      "pattern": "type=national_accounts/frequency=*/year=*/tablename=*/national_accounts.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {
             "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "section",
             "type": "VARCHAR"
           },
           {
@@ -1396,6 +1392,12 @@
           "comment": "Year of the observation"
         },
         {
+          "name": "time_period",
+          "type": "string",
+          "nullable": true,
+          "comment": "BEA time period from API (e.g., '2023' for annual, '2023Q1' for quarterly data)"
+        },
+        {
           "name": "value",
           "type": "double",
           "nullable": true,
@@ -1437,7 +1439,7 @@
           },
           "TableName": {
             "type": "expression",
-            "value": "{TableName}"
+            "value": "{tablename}"
           },
           "Frequency": {
             "type": "expression",
@@ -1453,6 +1455,376 @@
           }
         },
         "nipaTablesList": [],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
+    },
+    {
+      "name": "regional_income",
+      "pattern": "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          },
+          {
+            "name": "geo_fips_set",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "tablename",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "line_code",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.",
+      "columns": [
+        {
+          "name": "GeoName",
+          "type": "string",
+          "nullable": true,
+          "comment": "Name of the geographic area"
+        },
+        {
+          "name": "TimePeriod",
+          "type": "string",
+          "nullable": true,
+          "comment": "Year or Quarter - e.g. 2020 or 2023Q1"
+        },
+        {
+          "name": "CL_UNIT",
+          "type": "string",
+          "nullable": true,
+          "comment": "Income metric type (e.g., 'Personal Income', 'Per Capita Income')"
+        },
+        {
+          "name": "UNIT_MULT",
+          "type": "string",
+          "nullable": true,
+          "comment": "Unit multiplier (e.g., thousands, millions)"
+        },
+        {
+          "name": "DataValue",
+          "type": "double",
+          "nullable": true,
+          "comment": "Income value in thousands of dollars or dollars (depending on metric)"
+        }
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "Regional"
+          },
+          "TableName": {
+            "type": "expression",
+            "value": "{tablename}"
+          },
+          "LineCode": {
+            "type": "expression",
+            "value": "{line_code}"
+          },
+          "GeoFips": {
+            "type": "expression",
+            "value": "{geo_fips_set}"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "tableNamesSet": {
+          "SAINC1": "State annual personal income summary: personal income, population, per capita personal income",
+          "SAINC30": "State annual economic profile",
+          "SAINC35": "State annual personal current transfer receipts",
+          "SAINC4": "State annual personal income and employment by major component",
+          "SAINC40": "State annual property income",
+          "SAINC50": "State annual personal current taxes",
+          "SAINC51": "State annual disposable personal income",
+          "SAINC5H": "State annual personal income by major component and earnings by industry (historical)",
+          "SAINC5N": "State annual personal income by major component and earnings by NAICS industry",
+          "SAINC5S": "State annual personal income by major component and earnings by SIC industry",
+          "SAINC6N": "State annual compensation of employees by NAICS industry",
+          "SAINC6S": "State annual compensation of employees by SIC industry",
+          "SAINC70": "State annual wage and salary disbursements",
+          "SAINC7H": "State annual wages and salaries by industry (historical)",
+          "SAINC7N": "State annual wages and salaries by NAICS industry",
+          "SAINC7S": "State annual wages and salaries by SIC industry",
+          "SAINC91": "State annual gross flow of earnings",
+          "SQINC1": "State quarterly personal income summary: personal income, population, per capita personal income",
+          "SQINC35": "State quarterly personal current transfer receipts",
+          "SQINC4": "State quarterly personal income and employment by major component",
+          "SQINC5H": "State quarterly personal income by major component and earnings by industry (historical)",
+          "SQINC5N": "State quarterly personal income by major component and earnings by NAICS industry",
+          "SQINC5S": "State quarterly personal income by major component and earnings by SIC industry",
+          "SQINC6N": "State quarterly compensation of employees by NAICS industry",
+          "SQINC6S": "State quarterly compensation of employees by SIC industry",
+          "SQINC7H": "State quarterly wages and salaries by industry (historical)",
+          "SQINC7N": "State quarterly wages and salaries by NAICS industry",
+          "SQINC7S": "State quarterly wages and salaries by SIC industry",
+          "CAINC1": "County and MSA annual personal income summary: personal income, population, per capita personal income",
+          "CAINC30": "County and MSA annual economic profile",
+          "CAINC4": "County and MSA annual personal income and employment by major component",
+          "CAINC5N": "County and MSA annual personal income by major component and earnings by NAICS industry",
+          "CAINC5S": "County and MSA annual personal income by major component and earnings by SIC industry",
+          "CAINC6N": "County and MSA annual compensation of employees by NAICS industry",
+          "CAINC6S": "County and MSA annual compensation of employees by SIC industry",
+          "CAINC91": "County and MSA annual gross flow of earnings",
+          "SAGDP1": "State annual GDP summary",
+          "SAGDP2": "State annual GDP by industry",
+          "SAGDP3": "State annual GDP contributions by industry",
+          "SAGDP4": "State annual components of GDP by industry",
+          "SAGDP5": "State annual GDP by industry (chain-type quantity indexes)",
+          "SAGDP6": "State annual GDP by industry (chain-type price indexes)",
+          "SAGDP7": "State annual chain-type quantity indexes for real GDP by industry",
+          "SAGDP8": "State annual chain-type price indexes for GDP by industry",
+          "SAGDP9": "State annual real GDP by industry",
+          "SAGDP11": "State annual real GDP contributions by industry",
+          "SQGDP1": "State quarterly GDP by state",
+          "SQGDP2": "State quarterly GDP by industry",
+          "SQGDP8": "State quarterly chain-type price indexes for GDP",
+          "SQGDP9": "State quarterly real GDP by state",
+          "SQGDP11": "State quarterly industry contributions to percent change in real GDP",
+          "CAGDP1": "County and MSA annual GDP summary",
+          "CAGDP2": "County and MSA annual GDP by industry",
+          "CAGDP8": "County and MSA annual chain-type price indexes for GDP",
+          "CAGDP9": "County and MSA annual real GDP",
+          "CAGDP11": "County and MSA annual real GDP contributions by industry",
+          "PRGDP1-1": "Prototype regional GDP table 1-1",
+          "PRGDP1-2": "Prototype regional GDP table 1-2",
+          "PRGDP1-3": "Prototype regional GDP table 1-3",
+          "PRGDP1-4": "Prototype regional GDP table 1-4",
+          "PRGDP2-1": "Prototype regional GDP table 2-1",
+          "PRGDP2-2": "Prototype regional GDP table 2-2",
+          "PRGDP2-3": "Prototype regional GDP table 2-3",
+          "PRGDP2-4": "Prototype regional GDP table 2-4",
+          "PRGDP3-1": "Prototype regional GDP table 3-1",
+          "PRGDP3-2": "Prototype regional GDP table 3-2",
+          "PRGDP3-3": "Prototype regional GDP table 3-3",
+          "PRGDP3-4": "Prototype regional GDP table 3-4",
+          "PRGDP4-1-1": "Prototype regional GDP table 4-1-1",
+          "PRGDP4-1-2": "Prototype regional GDP table 4-1-2",
+          "PRGDP4-1-3": "Prototype regional GDP table 4-1-3",
+          "PRGDP4-2-1": "Prototype regional GDP table 4-2-1",
+          "PRGDP4-2-2": "Prototype regional GDP table 4-2-2",
+          "PRGDP4-2-3": "Prototype regional GDP table 4-2-3",
+          "PRGDP4-2-4": "Prototype regional GDP table 4-2-4",
+          "SAACArtsComp": "State arts and culture compensation",
+          "SAACArtsEmp": "State arts and culture employment",
+          "SAACArtsVA": "State arts and culture value added",
+          "SAACCompLQ": "State arts and culture compensation location quotient",
+          "SAACCompRatio": "State arts and culture compensation ratio",
+          "SAACLVALQ": "State arts and culture value added location quotient",
+          "SAACVARatio": "State arts and culture value added ratio",
+          "SAOACTVA": "State outdoor activities value added",
+          "SAOCOMP": "State outdoor recreation compensation",
+          "SAOEMP": "State outdoor recreation employment",
+          "SAOVA": "State outdoor recreation value added",
+          "SAPCE1": "State annual personal consumption expenditures (PCE) by state - level 1",
+          "SAPCE2": "State annual personal consumption expenditures (PCE) by state - level 2",
+          "SAPCE3": "State annual personal consumption expenditures (PCE) by state - level 3",
+          "SAPCE4": "State annual personal consumption expenditures (PCE) by state - level 4",
+          "SARPP": "State annual real personal income",
+          "MARPP": "Metropolitan area annual real personal income",
+          "PARPP": "Port area annual real personal income",
+          "SASUMMARY": "State summary statistics",
+          "TASUMMARY1": "Territory summary statistics - table 1",
+          "TASUMMARY2": "Territory summary statistics - table 2"
+        },
+        "geoFipsSet": {
+          "STATE": "All states (50 states + District of Columbia)",
+          "COUNTY": "All counties nationwide",
+          "MSA": "All Metropolitan Statistical Areas",
+          "MIC": "All Micropolitan Areas",
+          "PORT": "All state metropolitan/nonmetropolitan portions",
+          "DIV": "All Metropolitan Divisions",
+          "CSA": "All Combined Statistical Areas"
+        },
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.Data"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 5,
+          "retryDelayMs": 5000
+        }
+      }
+    },
+    {
+      "name": "ita_data",
+      "pattern": "type=indicators/year=*/indicator=*/ita_data.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "year",
+            "type": "INTEGER"
+          },
+          {
+            "name": "indicator",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.",
+      "columns": [
+        {
+          "name": "DataValue",
+          "type": "double",
+          "nullable": true,
+          "comment": "Transaction value"
+        },
+        {
+          "name": "AreaOrCountry",
+          "type": "string",
+          "nullable": true,
+          "comment": "Geographic area or country name for the transaction"
+        },
+        {
+          "name": "TimeSeriesDescription",
+          "type": "string",
+          "nullable": true,
+          "comment": "Description of the time series"
+        },
+        {
+          "name": "SeriesCode",
+          "type": "string",
+          "nullable": true,
+          "comment": "Unique identifier for the time series"
+        },
+        {
+          "name": "TimePeriod",
+          "type": "string",
+          "nullable": true,
+          "comment": "Time period for the data point (e.g., '2022', '2022Q1')"
+        },
+        {
+          "name": "CL_UNIT",
+          "type": "string",
+          "nullable": true,
+          "comment": "Classification unit (e.g., 'USD')"
+        },
+        {
+          "name": "UNIT_MULT",
+          "type": "string",
+          "nullable": true,
+          "comment": "Unit multiplier (e.g., '6' for millions)"
+        },
+        {
+          "name": "METRIC_NAME",
+          "type": "string",
+          "nullable": true,
+          "comment": "Type of metric (e.g., 'Current Dollars')"
+        },
+        {
+          "name": "Frequency",
+          "type": "string",
+          "nullable": true,
+          "comment": "Data frequency ('A' for Annual, 'Q' for Quarterly)"
+        },
+        {
+          "name": "NoteRef",
+          "type": "string",
+          "nullable": true,
+          "comment": "Reference to explanatory notes"
+        }
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetData"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "ITA"
+          },
+          "Indicator": {
+            "type": "expression",
+            "value": "{indicator}"
+          },
+          "Frequency": {
+            "type": "expression",
+            "value": "{frequency}"
+          },
+          "Year": {
+            "type": "expression",
+            "value": "{year}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "itaIndicatorsList": [
+          "BalGds",
+          "BalServ",
+          "BalGdsServ",
+          "BalCurrAcct",
+          "BalCapAcct",
+          "BalPrimInc",
+          "BalSecInc",
+          "ExpGds",
+          "ImpGds",
+          "ExpServ",
+          "ImpServ"
+        ],
+        "frequencyList": [
+          "A",
+          "Q"
+        ],
         "response": {
           "format": "json",
           "dataPath": "BEAAPI.Results.Data"
@@ -1525,133 +1897,6 @@
       ]
     },
     {
-      "name": "regional_income",
-      "pattern": "type=regional_income/frequency=*/year=*/LineCode=*/regional_income.parquet",
-      "partitions": {
-        "style": "hive",
-        "columnDefinitions": [
-          {
-            "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "frequency",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "year",
-            "type": "INTEGER"
-          },
-          {
-            "name": "LineCode",
-            "type": "VARCHAR"
-          }
-        ]
-      },
-      "comment": "State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.",
-      "columns": [
-        {
-          "name": "geo_fips",
-          "type": "string",
-          "nullable": true,
-          "comment": "FIPS code for the geographic area (state or county)"
-        },
-        {
-          "name": "geo_name",
-          "type": "string",
-          "nullable": true,
-          "comment": "Name of the geographic area"
-        },
-        {
-          "name": "metric",
-          "type": "string",
-          "nullable": true,
-          "comment": "Income metric type (e.g., 'Personal Income', 'Per Capita Income')"
-        },
-        {
-          "name": "line_code",
-          "type": "string",
-          "nullable": true,
-          "comment": "BEA line code for the income statistic"
-        },
-        {
-          "name": "line_description",
-          "type": "string",
-          "nullable": true,
-          "comment": "Description of the income line item"
-        },
-        {
-          "name": "value",
-          "type": "double",
-          "nullable": true,
-          "comment": "Income value in thousands of dollars or dollars (depending on metric)"
-        },
-        {
-          "name": "units",
-          "type": "string",
-          "nullable": true,
-          "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"
-        }
-      ],
-      "download": {
-        "enabled": true,
-        "method": "GET",
-        "baseUrl": "https://apps.bea.gov/api/data",
-        "authentication": {
-          "type": "query_param",
-          "paramName": "UserID",
-          "envVar": "BEA_API_KEY"
-        },
-        "queryParams": {
-          "UserID": {
-            "type": "auth"
-          },
-          "method": {
-            "type": "constant",
-            "value": "GetData"
-          },
-          "datasetname": {
-            "type": "constant",
-            "value": "Regional"
-          },
-          "TableName": {
-            "type": "constant",
-            "value": "SAINC1"
-          },
-          "LineCode": {
-            "type": "iteration",
-            "source": "lineCodesList"
-          },
-          "GeoFips": {
-            "type": "constant",
-            "value": "STATE"
-          },
-          "Year": {
-            "type": "expression",
-            "value": "{year}"
-          },
-          "ResultFormat": {
-            "type": "constant",
-            "value": "JSON"
-          }
-        },
-        "lineCodesList": [
-          "1",
-          "2",
-          "3"
-        ],
-        "response": {
-          "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
-        },
-        "rateLimit": {
-          "minIntervalMs": 500,
-          "maxRetries": 5,
-          "retryDelayMs": 5000
-        }
-      }
-    },
-    {
       "name": "state_gdp",
       "pattern": "type=state_gdp/frequency=*/year=*/state_gdp.parquet",
       "partitions": {
@@ -1704,145 +1949,6 @@
           "comment": "Units of measurement (e.g., 'Millions of Dollars')"
         }
       ]
-    },
-    {
-      "name": "trade_statistics",
-      "type": "view",
-      "sql": "SELECT table_id, line_number, line_description, series_code, year, value, units, frequency FROM econ.national_accounts WHERE table_id = 'T40205B'",
-      "comment": "U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services. This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'."
-    },
-    {
-      "name": "ita_data",
-      "pattern": "type=indicators/frequency=*/year=*/indicator=*/ita_data.parquet",
-      "partitions": {
-        "style": "hive",
-        "columnDefinitions": [
-          {
-            "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "year",
-            "type": "INTEGER"
-          },
-          {
-            "name": "indicator",
-            "type": "VARCHAR"
-          }
-        ]
-      },
-      "comment": "International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.",
-      "columns": [
-        {
-          "name": "indicator",
-          "type": "string",
-          "nullable": true,
-          "comment": "BEA indicator code for international transactions"
-        },
-        {
-          "name": "frequency",
-          "type": "string",
-          "nullable": true,
-          "comment": "A = Annual, Q = Quarterly, M = Monthly"
-        },
-        {
-          "name": "indicator_description",
-          "type": "string",
-          "nullable": true,
-          "comment": "Full description of the ITA indicator"
-        },
-        {
-          "name": "area_or_country",
-          "type": "string",
-          "nullable": true,
-          "comment": "Geographic area or country name for the transaction"
-        },
-        {
-          "name": "value",
-          "type": "double",
-          "nullable": true,
-          "comment": "Transaction value in millions of dollars"
-        },
-        {
-          "name": "units",
-          "type": "string",
-          "nullable": true,
-          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
-        },
-        {
-          "name": "time_series",
-          "type": "string",
-          "nullable": true,
-          "comment": "Unique identifier for the time series"
-        },
-        {
-          "name": "time_series_description",
-          "type": "string",
-          "nullable": true,
-          "comment": "Description of the time series"
-        }
-      ],
-      "download": {
-        "enabled": true,
-        "method": "GET",
-        "baseUrl": "https://apps.bea.gov/api/data",
-        "authentication": {
-          "type": "query_param",
-          "paramName": "UserID",
-          "envVar": "BEA_API_KEY"
-        },
-        "queryParams": {
-          "UserID": {
-            "type": "auth"
-          },
-          "method": {
-            "type": "constant",
-            "value": "GetData"
-          },
-          "datasetname": {
-            "type": "constant",
-            "value": "ITA"
-          },
-          "Indicator": {
-            "type": "iteration",
-            "source": "itaIndicatorsList"
-          },
-          "Frequency": {
-            "type": "constant",
-            "value": "A"
-          },
-          "Year": {
-            "type": "expression",
-            "value": "{year}"
-          },
-          "ResultFormat": {
-            "type": "constant",
-            "value": "JSON"
-          }
-        },
-        "itaIndicatorsList": [
-          "BalGds",
-          "BalServ",
-          "BalGdsServ",
-          "BalCurrAcct",
-          "BalCapAcct",
-          "BalPrimInc",
-          "BalSecInc",
-          "ExpGds",
-          "ImpGds",
-          "ExpServ",
-          "ImpServ"
-        ],
-        "response": {
-          "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
-        },
-        "rateLimit": {
-          "minIntervalMs": 500,
-          "maxRetries": 5,
-          "retryDelayMs": 5000
-        }
-      }
     },
     {
       "name": "industry_gdp",
@@ -2027,16 +2133,12 @@
     },
     {
       "name": "reference_nipa_tables",
-      "pattern": "type=reference/section=*/nipa_tables.parquet",
+      "pattern": "type=reference/nipa_tables.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {
             "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "section",
             "type": "VARCHAR"
           }
         ]
@@ -2141,8 +2243,173 @@
       }
     },
     {
-      "name": "fred_data_series_catalog",
-      "pattern": "type=catalog/category=*/frequency=*/source=*/status=*/fred_data_series_catalog.parquet",
+      "name": "reference_regional_linecodes",
+      "pattern": "type=reference/tablename=*/reference_regional_linecodes.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "tablename",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "BEA Regional dataset LineCode catalog. Maps table-specific line codes to their descriptions for all 67 Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP*, etc.). Each BEA Regional table has its own set of valid LineCodes - this catalog is downloaded first to enable complete regional data collection without hardcoded limitations.",
+      "columns": [
+        {
+          "name": "TableName",
+          "type": "string",
+          "nullable": false,
+          "comment": "BEA Regional table code (e.g., 'SQINC4', 'SAGDP2', 'CAINC1')"
+        },
+        {
+          "name": "LineCode",
+          "type": "string",
+          "nullable": false,
+          "comment": "Line code identifier for this table (e.g., '10', '20', '30'). Different tables use different LineCode numbering schemes."
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "nullable": false,
+          "comment": "Full line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')"
+        },
+        {
+          "name": "table_prefix",
+          "type": "string",
+          "nullable": true,
+          "comment": "Parsed table prefix indicating geography and frequency: SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc."
+        },
+        {
+          "name": "data_category",
+          "type": "string",
+          "nullable": true,
+          "comment": "Parsed data category from table name: INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc."
+        },
+        {
+          "name": "geography_level",
+          "type": "string",
+          "nullable": true,
+          "comment": "Geographic aggregation level: state, county, msa, micropolitan, etc."
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": true,
+          "comment": "Data frequency: annual, quarterly"
+        }
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetParameterValuesFiltered"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "Regional"
+          },
+          "TargetParameter": {
+            "type": "constant",
+            "value": "LineCode"
+          },
+          "TableName": {
+            "type": "expression",
+            "value": "{tablename}"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "tableNamesList": [
+          "SAINC1",
+          "SAINC30",
+          "SAINC35",
+          "SAINC4",
+          "SAINC40",
+          "SAINC50",
+          "SAINC51",
+          "SAINC5H",
+          "SAINC5N",
+          "SAINC5S",
+          "SAINC6N",
+          "SAINC6S",
+          "SAINC70",
+          "SAINC7H",
+          "SAINC7N",
+          "SAINC7S",
+          "SAINC91",
+          "SQINC1",
+          "SQINC35",
+          "SQINC4",
+          "SQINC5H",
+          "SQINC5N",
+          "SQINC5S",
+          "SQINC6N",
+          "SQINC6S",
+          "SQINC7H",
+          "SQINC7N",
+          "SQINC7S",
+          "CAINC1",
+          "CAINC30",
+          "CAINC4",
+          "CAINC5N",
+          "CAINC5S",
+          "CAINC6N",
+          "CAINC6S",
+          "CAINC91",
+          "SAGDP1",
+          "SAGDP2",
+          "SAGDP3",
+          "SAGDP4",
+          "SAGDP5",
+          "SAGDP6",
+          "SAGDP7",
+          "SAGDP8",
+          "SAGDP9",
+          "SAGDP11",
+          "SQGDP1",
+          "SQGDP2",
+          "SQGDP8",
+          "SQGDP9",
+          "SQGDP11",
+          "CAGDP1",
+          "CAGDP2",
+          "CAGDP8",
+          "CAGDP9",
+          "CAGDP11"
+        ],
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.ParamValue"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 3,
+          "retryDelayMs": 5000
+        },
+        "earlyDownload": true
+      }
+    },
+    {
+      "name": "reference_fred_series",
+      "pattern": "type=reference/category=*/frequency=*/source=*/status=*/reference_fred_series.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -2532,7 +2799,7 @@
             "series"
           ],
           "targetSchema": "econ",
-          "targetTable": "fred_data_series_catalog",
+          "targetTable": "reference_fred_series",
           "targetColumns": [
             "series"
           ]
@@ -2584,6 +2851,19 @@
             "state_fips"
           ],
           "comment": "Links regional income to state geography for spatial analysis and demographic correlation (when geo_fips is state-level)"
+        },
+        {
+          "columns": [
+            "tablename",
+            "line_code"
+          ],
+          "targetSchema": "econ",
+          "targetTable": "reference_regional_linecodes",
+          "targetColumns": [
+            "TableName",
+            "LineCode"
+          ],
+          "comment": "Links regional income data to LineCode metadata catalog for semantic descriptions and table categorization"
         }
       ]
     },
@@ -2646,7 +2926,16 @@
       ],
       "comment": "Reference dimension table for NIPA table classifications and descriptions"
     },
-    "fred_data_series_catalog": {
+    "reference_regional_linecodes": {
+      "primaryKey": [
+        "type",
+        "tablename",
+        "TableName",
+        "LineCode"
+      ],
+      "comment": "Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and data columns (TableName, LineCode)."
+    },
+    "reference_fred_series": {
       "primaryKey": [
         "type",
         "category",
@@ -2680,7 +2969,7 @@
     {
       "name": "fred_indicators_enriched",
       "type": "view",
-      "sql": "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM econ.fred_indicators i JOIN econ.fred_data_series_catalog c ON i.series = c.series",
+      "sql": "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM econ.fred_indicators i JOIN econ.reference_fred_series c ON i.series = c.series",
       "comment": "Enriched fred_indicator observations with metadata such as series names, units, frequency, or others."
     },
     {
@@ -2688,6 +2977,12 @@
       "type": "view",
       "sql": "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.Description AS table_description, r.section, r.section_name, r.family, r.metric, r.table_number FROM econ.national_accounts na LEFT JOIN econ.reference_nipa_tables r ON na.table_id = r.TableName",
       "comment": "National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8), section_name (e.g., 'domestic_product_income', 'foreign_transactions'), family (table family within section), metric (metric type code), table_number (standard BEA format like '1.1.5'). Enables semantic queries by economic category without manual joins."
+    },
+    {
+      "name": "regional_income_enriched",
+      "type": "view",
+      "sql": "SELECT ri.*, rlc.Description AS line_code_description, rlc.table_prefix, rlc.data_category, rlc.geography_level, rlc.frequency AS table_frequency FROM econ.regional_income ri LEFT JOIN econ.reference_regional_linecodes rlc ON ri.tablename = rlc.TableName AND ri.line_code = rlc.LineCode",
+      "comment": "Regional income data enriched with LineCode descriptions and table metadata from the reference catalog. Columns include all regional_income fields plus line_code_description (what the line code represents), table_prefix (SA/SQ/CA for State Annual/Quarterly, County/MSA Annual), data_category (INC/GDP/etc), geography_level (state/county/msa), table_frequency (annual/quarterly). Enables semantic queries without needing to know specific LineCode values."
     },
     {
       "name": "interest_rate_spreads",
@@ -2717,7 +3012,13 @@
       "name": "trade_balance_summary",
       "type": "view",
       "sql": "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM econ.trade_statistics GROUP BY year, quarter, line_description",
-      "comment": "U.S. international trade balance aggregated by category from BEA. Columns: year (calendar year), quarter (Q1-Q4), line_description (trade category such as 'Goods', 'Services', 'Foods feeds and beverages', etc.), total_exports (sum of exports in millions USD), total_imports (sum of imports in millions USD), net_trade_balance (exports minus imports, negative indicates trade deficit). Derived from BEA international transactions accounts (Table 1.2), enables analysis of trade composition, bilateral balances, and sectoral trade patterns. Critical for understanding U.S. competitiveness, currency impacts, and GDP contribution from net exports."
+      "comment": "U.S. international trade balance aggregated by category from BEA. Columns: year (calendar year), quarter (Q1-Q4 for quarterly data, NULL for annual), line_description (trade category such as 'Goods', 'Services', 'Foods feeds and beverages', etc.), total_exports (sum of exports in millions USD), total_imports (sum of imports in millions USD), net_trade_balance (exports minus imports, negative indicates trade deficit). Derived from BEA NIPA Table 4.2.5B (Foreign Transactions section), enables analysis of trade composition, bilateral balances, and sectoral trade patterns. Critical for understanding U.S. competitiveness, currency impacts, and GDP contribution from net exports."
+    },
+    {
+      "name": "trade_statistics",
+      "type": "view",
+      "sql": "SELECT table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM econ.national_accounts WHERE table_id = 'T40205B'",
+      "comment": "U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services with computed columns: quarter (1-4 extracted from time_period for quarterly data, NULL for annual), trade_type (exports/imports/trade_balance derived from line_description). This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'."
     }
   ]
 }
