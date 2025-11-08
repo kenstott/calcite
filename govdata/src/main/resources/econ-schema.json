@@ -31,7 +31,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier (e.g., 'LNS14000000' for unemployment rate)"
@@ -233,7 +233,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -299,7 +299,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -365,7 +365,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -443,7 +443,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -503,7 +503,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -581,7 +581,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -779,7 +779,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -923,7 +923,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier for wage/earnings data"
@@ -1007,7 +1007,7 @@
           "comment": "Observation date (ISO 8601 format)"
         },
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "BLS series identifier"
@@ -1247,7 +1247,7 @@
       "comment": "Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with fred_data_series_catalog or use fred_indicators_enriched view.",
       "columns": [
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "FRED series identifier (foreign key to fred_data_series_catalog)"
@@ -1275,7 +1275,7 @@
           "envVar": "FRED_API_KEY"
         },
         "queryParams": {
-          "series_id": {
+          "series": {
             "type": "iteration",
             "source": "seriesList"
           },
@@ -1336,13 +1336,17 @@
       }
     },
     {
-      "name": "gdp_components",
-      "pattern": "type=indicators/frequency=*/year=*/TableName=*/gdp_components.parquet",
+      "name": "national_accounts",
+      "pattern": "type=national_accounts/section=*/frequency=*/year=*/tablename=*/national_accounts.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {
             "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "section",
             "type": "VARCHAR"
           },
           {
@@ -1354,12 +1358,12 @@
             "type": "INTEGER"
           },
           {
-            "name": "TableName",
+            "name": "tablename",
             "type": "VARCHAR"
           }
         ]
       },
-      "comment": "Detailed GDP components from BEA including consumption, investment, government spending, and net exports broken down by subcategories.",
+      "comment": "National Income and Product Accounts (NIPA) data from BEA covering comprehensive economic statistics. Includes ALL NIPA tables across 8 sections: 1=Domestic Product & Income (GDP, national income), 2=Personal Income & Outlays (wages, consumer spending), 3=Government (receipts, expenditures), 4=Foreign Transactions (exports, imports), 5=Saving & Investment (capital formation), 6=Industry (sectoral data), 7=Supplemental (per capita, additional details), 8=Not Seasonally Adjusted. Tables dynamically discovered from BEA reference catalog.",
       "columns": [
         {
           "name": "table_id",
@@ -1407,7 +1411,7 @@
           "name": "frequency",
           "type": "string",
           "nullable": true,
-          "comment": "Data frequency (e.g., 'Annual', 'Quarterly')"
+          "comment": "Data frequency ('A' = Annual)"
         }
       ],
       "download": {
@@ -1432,12 +1436,12 @@
             "value": "NIPA"
           },
           "TableName": {
-            "type": "iteration",
-            "source": "nipaTablesList"
+            "type": "expression",
+            "value": "{TableName}"
           },
           "Frequency": {
-            "type": "constant",
-            "value": "A"
+            "type": "expression",
+            "value": "{frequency}"
           },
           "Year": {
             "type": "expression",
@@ -1448,15 +1452,7 @@
             "value": "JSON"
           }
         },
-        "nipaTablesList": [
-          "T10105",
-          "58",
-          "66",
-          "86",
-          "51",
-          "T40205B",
-          "45"
-        ],
+        "nipaTablesList": [],
         "response": {
           "format": "json",
           "dataPath": "BEAAPI.Results.Data"
@@ -1597,7 +1593,7 @@
           "comment": "Units of measurement (e.g., 'Thousands of dollars', 'Dollars')"
         }
       ],
-      "download": con{
+      "download": {
         "enabled": true,
         "method": "GET",
         "baseUrl": "https://apps.bea.gov/api/data",
@@ -1711,133 +1707,13 @@
     },
     {
       "name": "trade_statistics",
-      "pattern": "type=indicators/frequency=*/year=*/trade_statistics.parquet",
-      "partitions": {
-        "style": "hive",
-        "columnDefinitions": [
-          {
-            "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "frequency",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "year",
-            "type": "INTEGER"
-          }
-        ]
-      },
-      "comment": "Detailed U.S. export and import statistics from BEA NIPA Table T40205B. Comprehensive breakdown of goods and services trade by category with calculated trade balances.",
-      "columns": [
-        {
-          "name": "table_id",
-          "type": "string",
-          "nullable": true,
-          "comment": "BEA table identifier for trade statistics"
-        },
-        {
-          "name": "line_number",
-          "type": "int",
-          "nullable": true,
-          "comment": "Line number within the BEA table"
-        },
-        {
-          "name": "line_description",
-          "type": "string",
-          "nullable": true,
-          "comment": "Description of the trade statistic line item"
-        },
-        {
-          "name": "series_code",
-          "type": "string",
-          "nullable": true,
-          "comment": "BEA series code for this trade statistic"
-        },
-        {
-          "name": "value",
-          "type": "double",
-          "nullable": true,
-          "comment": "Trade value in millions of dollars"
-        },
-        {
-          "name": "units",
-          "type": "string",
-          "nullable": true,
-          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
-        },
-        {
-          "name": "trade_type",
-          "type": "string",
-          "nullable": true,
-          "comment": "Type of trade: 'Exports', 'Imports', or 'Other'"
-        },
-        {
-          "name": "category",
-          "type": "string",
-          "nullable": true,
-          "comment": "Trade category: 'Goods', 'Services', or 'Total'"
-        },
-        {
-          "name": "trade_balance",
-          "type": "double",
-          "nullable": true,
-          "comment": "Calculated trade balance (exports minus imports) in millions of dollars"
-        }
-      ],
-      "download": {
-        "enabled": true,
-        "method": "GET",
-        "baseUrl": "https://apps.bea.gov/api/data",
-        "authentication": {
-          "type": "query_param",
-          "paramName": "UserID",
-          "envVar": "BEA_API_KEY"
-        },
-        "queryParams": {
-          "UserID": {
-            "type": "auth"
-          },
-          "method": {
-            "type": "constant",
-            "value": "GetData"
-          },
-          "datasetname": {
-            "type": "constant",
-            "value": "NIPA"
-          },
-          "TableName": {
-            "type": "constant",
-            "value": "T40205B"
-          },
-          "Frequency": {
-            "type": "constant",
-            "value": "A"
-          },
-          "Year": {
-            "type": "expression",
-            "value": "{year}"
-          },
-          "ResultFormat": {
-            "type": "constant",
-            "value": "JSON"
-          }
-        },
-        "response": {
-          "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
-        },
-        "rateLimit": {
-          "minIntervalMs": 500,
-          "maxRetries": 5,
-          "retryDelayMs": 5000
-        }
-      }
+      "type": "view",
+      "sql": "SELECT table_id, line_number, line_description, series_code, year, value, units, frequency FROM econ.national_accounts WHERE table_id = 'T40205B'",
+      "comment": "U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services. This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'."
     },
     {
       "name": "ita_data",
-      "pattern": "type=indicators/frequency=*/year=*/Indicator=*/ita_data.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/indicator=*/ita_data.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -1846,15 +1722,11 @@
             "type": "VARCHAR"
           },
           {
-            "name": "frequency",
-            "type": "VARCHAR"
-          },
-          {
             "name": "year",
             "type": "INTEGER"
           },
           {
-            "name": "Indicator",
+            "name": "indicator",
             "type": "VARCHAR"
           }
         ]
@@ -1866,6 +1738,12 @@
           "type": "string",
           "nullable": true,
           "comment": "BEA indicator code for international transactions"
+        },
+        {
+          "name": "frequency",
+          "type": "string",
+          "nullable": true,
+          "comment": "A = Annual, Q = Quarterly, M = Monthly"
         },
         {
           "name": "indicator_description",
@@ -1892,7 +1770,7 @@
           "comment": "Units of measurement (e.g., 'Millions of Dollars')"
         },
         {
-          "name": "time_series_id",
+          "name": "time_series",
           "type": "string",
           "nullable": true,
           "comment": "Unique identifier for the time series"
@@ -2148,6 +2026,121 @@
       ]
     },
     {
+      "name": "reference_nipa_tables",
+      "pattern": "type=reference/section=*/nipa_tables.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "section",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.",
+      "columns": [
+        {
+          "name": "TableName",
+          "type": "string",
+          "nullable": true,
+          "comment": "NIPA table code (e.g., 'T10105', 'T20100')"
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "nullable": true,
+          "comment": "Full table description from BEA including frequency indicators"
+        },
+        {
+          "name": "section",
+          "type": "string",
+          "nullable": true,
+          "comment": "Section number (1-8) extracted from TableName. Indicates major category of economic data."
+        },
+        {
+          "name": "section_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Descriptive section name (e.g., 'domestic_product_income', 'foreign_transactions')"
+        },
+        {
+          "name": "family",
+          "type": "string",
+          "nullable": true,
+          "comment": "Table family code within section (e.g., '01' for section 1.1.x series)"
+        },
+        {
+          "name": "metric",
+          "type": "string",
+          "nullable": true,
+          "comment": "Metric code (e.g., '05' for current dollars, '06' for chained dollars)"
+        },
+        {
+          "name": "table_number",
+          "type": "string",
+          "nullable": true,
+          "comment": "Standard BEA table number format (e.g., '1.1.5', '4.2.5B')"
+        },
+        {
+          "name": "annual",
+          "type": "boolean",
+          "nullable": true,
+          "comment": "True if table has annual (A) frequency data available. Parsed from Description field during conversion."
+        },
+        {
+          "name": "quarterly",
+          "type": "boolean",
+          "nullable": true,
+          "comment": "True if table has quarterly (Q) frequency data available. Parsed from Description field during conversion."
+        }
+      ],
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://apps.bea.gov/api/data",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "UserID",
+          "envVar": "BEA_API_KEY"
+        },
+        "queryParams": {
+          "UserID": {
+            "type": "auth"
+          },
+          "method": {
+            "type": "constant",
+            "value": "GetParameterValues"
+          },
+          "datasetname": {
+            "type": "constant",
+            "value": "NIPA"
+          },
+          "ParameterName": {
+            "type": "constant",
+            "value": "TableName"
+          },
+          "ResultFormat": {
+            "type": "constant",
+            "value": "JSON"
+          }
+        },
+        "response": {
+          "format": "json",
+          "dataPath": "BEAAPI.Results.ParamValue"
+        },
+        "rateLimit": {
+          "minIntervalMs": 500,
+          "maxRetries": 3,
+          "retryDelayMs": 5000
+        },
+        "earlyDownload": true
+      }
+    },
+    {
       "name": "fred_data_series_catalog",
       "pattern": "type=catalog/category=*/frequency=*/source=*/status=*/fred_data_series_catalog.parquet",
       "partitions": {
@@ -2178,7 +2171,7 @@
       "comment": "Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.",
       "columns": [
         {
-          "name": "series_id",
+          "name": "series",
           "type": "string",
           "nullable": true,
           "comment": "Unique FRED series identifier (e.g., 'UNRATE', 'GDP')"
@@ -2304,12 +2297,12 @@
       "foreignKeys": [
         {
           "columns": [
-            "series_id"
+            "series"
           ],
           "targetSchema": "econ",
           "targetTable": "fred_indicators",
           "targetColumns": [
-            "series_id"
+            "series"
           ]
         }
       ]
@@ -2536,21 +2529,22 @@
       "foreignKeys": [
         {
           "columns": [
-            "series_id"
+            "series"
           ],
           "targetSchema": "econ",
           "targetTable": "fred_data_series_catalog",
           "targetColumns": [
-            "series_id"
+            "series"
           ]
         }
       ]
     },
-    "gdp_components": {
+    "national_accounts": {
       "primaryKey": [
-        "type",
-        "frequency",
-        "year"
+        "table_id",
+        "line_number",
+        "year",
+        "frequency"
       ],
       "foreignKeys": [
         {
@@ -2558,10 +2552,11 @@
             "table_id"
           ],
           "targetSchema": "econ",
-          "targetTable": "fred_indicators",
+          "targetTable": "reference_nipa_tables",
           "targetColumns": [
-            "series_id"
-          ]
+            "TableName"
+          ],
+          "comment": "Links national accounts data to NIPA table metadata catalog for section categorization and descriptions"
         }
       ]
     },
@@ -2645,6 +2640,12 @@
       ],
       "comment": "Reference dimension table for JOLTS metric codes and descriptions"
     },
+    "reference_nipa_tables": {
+      "primaryKey": [
+        "type"
+      ],
+      "comment": "Reference dimension table for NIPA table classifications and descriptions"
+    },
     "fred_data_series_catalog": {
       "primaryKey": [
         "type",
@@ -2679,37 +2680,43 @@
     {
       "name": "fred_indicators_enriched",
       "type": "view",
-      "sql": "SELECT i.series_id, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM fred_indicators i JOIN fred_data_series_catalog c ON i.series_id = c.series_id",
-      "comment": "Enriched FRED indicators view with metadata from catalog. Provides convenient access to observations with full series metadata via automatic JOIN. Use this view for queries that need series names, units, frequency, or other metadata fields. For raw observations only, query fred_indicators directly."
+      "sql": "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM econ.fred_indicators i JOIN econ.fred_data_series_catalog c ON i.series = c.series",
+      "comment": "Enriched fred_indicator observations with metadata such as series names, units, frequency, or others."
+    },
+    {
+      "name": "national_accounts_enriched",
+      "type": "view",
+      "sql": "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.Description AS table_description, r.section, r.section_name, r.family, r.metric, r.table_number FROM econ.national_accounts na LEFT JOIN econ.reference_nipa_tables r ON na.table_id = r.TableName",
+      "comment": "National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8), section_name (e.g., 'domestic_product_income', 'foreign_transactions'), family (table family within section), metric (metric type code), table_number (standard BEA format like '1.1.5'). Enables semantic queries by economic category without manual joins."
     },
     {
       "name": "interest_rate_spreads",
       "type": "view",
-      "sql": "SELECT date, MAX(CASE WHEN series_id = 'DGS10' THEN value END) AS ten_year_yield, MAX(CASE WHEN series_id = 'DGS3MO' THEN value END) AS three_month_yield, MAX(CASE WHEN series_id = 'DGS10' THEN value END) - MAX(CASE WHEN series_id = 'DGS3MO' THEN value END) AS term_spread_10y_3m, MAX(CASE WHEN series_id = 'DFF' THEN value END) AS fed_funds_rate, MAX(CASE WHEN series_id = 'BAMLC0A0CM' THEN value END) AS corporate_spread_bps FROM fred_indicators WHERE series_id IN ('DGS10', 'DGS3MO', 'DFF', 'BAMLC0A0CM') GROUP BY date",
+      "sql": "SELECT date, MAX(CASE WHEN series = 'DGS10' THEN value END) AS ten_year_yield, MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS three_month_yield, MAX(CASE WHEN series = 'DGS10' THEN value END) - MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS term_spread_10y_3m, MAX(CASE WHEN series = 'DFF' THEN value END) AS fed_funds_rate, MAX(CASE WHEN series = 'BAMLC0A0CM' THEN value END) AS corporate_spread_bps FROM econ.fred_indicators WHERE series IN ('DGS10', 'DGS3MO', 'DFF', 'BAMLC0A0CM') GROUP BY date",
       "comment": "Interest rate spreads and yield curve analytics. Columns: date (observation date), ten_year_yield (10Y Treasury constant maturity rate %), three_month_yield (3M T-Bill rate %), term_spread_10y_3m (yield curve spread, negative values historically precede recessions), fed_funds_rate (Federal Reserve policy rate %), corporate_spread_bps (investment grade corporate bond spread over Treasuries in basis points, widening indicates credit stress). Critical for recession forecasting, monetary policy analysis, and credit market health assessment."
     },
     {
       "name": "housing_indicators",
       "type": "view",
-      "sql": "SELECT date, MAX(CASE WHEN series_id = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series_id = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series_id = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series_id = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series_id = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series_id = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series_id = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series_id = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM fred_indicators WHERE series_id IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date",
+      "sql": "SELECT date, MAX(CASE WHEN series = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM econ.fred_indicators WHERE series IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date",
       "comment": "Comprehensive housing market health dashboard. Columns: date, housing_starts (total new housing units started in thousands, annualized), single_family_starts (single-family housing starts subset in thousands), building_permits (authorized building permits in thousands, leading indicator), existing_sales (existing home sales in millions annualized), case_shiller_index (S&P CoreLogic Case-Shiller U.S. National Home Price Index), median_sale_price (median sales price of houses sold in USD), mortgage_rate_30y (30-year fixed rate mortgage average %), rental_vacancy_rate (percentage of rental units vacant). Essential for real estate analysis, construction sector tracking, and housing affordability assessment."
     },
     {
       "name": "monetary_aggregates",
       "type": "view",
-      "sql": "SELECT date, MAX(CASE WHEN series_id = 'M1SL' THEN value END) AS m1_money_supply, MAX(CASE WHEN series_id = 'M2SL' THEN value END) AS m2_money_supply, MAX(CASE WHEN series_id = 'BOGMBASE' THEN value END) AS monetary_base, MAX(CASE WHEN series_id = 'GDP' THEN value END) AS nominal_gdp, MAX(CASE WHEN series_id = 'GDP' THEN value END) / NULLIF(MAX(CASE WHEN series_id = 'M2SL' THEN value END), 0) AS m2_velocity FROM fred_indicators WHERE series_id IN ('M1SL', 'M2SL', 'BOGMBASE', 'GDP') GROUP BY date",
+      "sql": "SELECT date, MAX(CASE WHEN series = 'M1SL' THEN value END) AS m1_money_supply, MAX(CASE WHEN series = 'M2SL' THEN value END) AS m2_money_supply, MAX(CASE WHEN series = 'BOGMBASE' THEN value END) AS monetary_base, MAX(CASE WHEN series = 'GDP' THEN value END) AS nominal_gdp, MAX(CASE WHEN series = 'GDP' THEN value END) / NULLIF(MAX(CASE WHEN series = 'M2SL' THEN value END), 0) AS m2_velocity FROM econ.fred_indicators WHERE series IN ('M1SL', 'M2SL', 'BOGMBASE', 'GDP') GROUP BY date",
       "comment": "Federal Reserve monetary aggregates and velocity analysis. Columns: date, m1_money_supply (narrow money supply including currency and demand deposits in billions), m2_money_supply (broad money supply including M1 plus savings deposits and money market funds in billions), monetary_base (currency in circulation plus bank reserves in billions), nominal_gdp (gross domestic product in billions), m2_velocity (calculated as GDP/M2, measures money turnover rate, declining velocity may indicate liquidity hoarding). Critical for Federal Reserve policy analysis, inflation expectations, and monetary transmission mechanism assessment."
     },
     {
       "name": "business_indicators",
       "type": "view",
-      "sql": "SELECT date, MAX(CASE WHEN series_id = 'INDPRO' THEN value END) AS industrial_production_index, MAX(CASE WHEN series_id = 'TCU' THEN value END) AS capacity_utilization_pct, MAX(CASE WHEN series_id = 'RSXFS' THEN value END) AS retail_sales_millions, MAX(CASE WHEN series_id = 'TOTBKCR' THEN value END) AS bank_credit_billions, MAX(CASE WHEN series_id = 'DRTSCILM' THEN value END) AS lending_standards_net_pct FROM fred_indicators WHERE series_id IN ('INDPRO', 'TCU', 'RSXFS', 'TOTBKCR', 'DRTSCILM') GROUP BY date",
+      "sql": "SELECT date, MAX(CASE WHEN series = 'INDPRO' THEN value END) AS industrial_production_index, MAX(CASE WHEN series = 'TCU' THEN value END) AS capacity_utilization_pct, MAX(CASE WHEN series = 'RSXFS' THEN value END) AS retail_sales_millions, MAX(CASE WHEN series = 'TOTBKCR' THEN value END) AS bank_credit_billions, MAX(CASE WHEN series = 'DRTSCILM' THEN value END) AS lending_standards_net_pct FROM econ.fred_indicators WHERE series IN ('INDPRO', 'TCU', 'RSXFS', 'TOTBKCR', 'DRTSCILM') GROUP BY date",
       "comment": "Business cycle and economic activity dashboard. Columns: date, industrial_production_index (index of manufacturing and industrial output, 2017=100), capacity_utilization_pct (percentage of total industrial capacity in use, high values indicate potential inflation pressure), retail_sales_millions (advance retail sales in millions USD, excludes services, leading consumer spending indicator), bank_credit_billions (total credit extended by banks in billions, measure of lending activity), lending_standards_net_pct (net percentage of banks tightening lending standards, positive values indicate credit tightening). Essential for business cycle analysis, recession/expansion identification, and credit conditions monitoring."
     },
     {
       "name": "trade_balance_summary",
       "type": "view",
-      "sql": "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM trade_statistics GROUP BY year, quarter, line_description",
+      "sql": "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM econ.trade_statistics GROUP BY year, quarter, line_description",
       "comment": "U.S. international trade balance aggregated by category from BEA. Columns: year (calendar year), quarter (Q1-Q4), line_description (trade category such as 'Goods', 'Services', 'Foods feeds and beverages', etc.), total_exports (sum of exports in millions USD), total_imports (sum of imports in millions USD), net_trade_balance (exports minus imports, negative indicates trade deficit). Derived from BEA international transactions accounts (Table 1.2), enables analysis of trade composition, bilateral balances, and sectoral trade patterns. Critical for understanding U.S. competitiveness, currency impacts, and GDP contribution from net exports."
     }
   ]
