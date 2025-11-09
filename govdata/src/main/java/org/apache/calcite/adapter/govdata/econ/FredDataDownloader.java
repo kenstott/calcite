@@ -302,7 +302,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
       if (!cacheStorageProvider.isDirectory(catalogBasePath)) {
         LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
-        return seriesIds;
+        return new java.util.ArrayList<>(seriesIds);
       }
 
       // Recursively find all reference_fred_series.json files under status=active directories
