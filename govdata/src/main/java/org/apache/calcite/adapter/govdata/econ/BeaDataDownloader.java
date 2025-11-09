@@ -45,18 +45,69 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaDataDownloader.class);
 
   private final String parquetDir;
+  private final List<String> nipaTablesList;
+  private final Map<String, java.util.Set<String>> tableFrequencies;
+  private final List<String> keyIndustriesList;
 
+  /**
+   * Simple constructor without shared manifest (creates one from operatingDirectory).
+   */
   public BeaDataDownloader(String cacheDir, String parquetDir,
       StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
     this(cacheDir, cacheDir, parquetDir, cacheStorageProvider, storageProvider, null);
   }
 
+  /**
+   * Main constructor for BEA downloader.
+   * Handles all BEA-specific initialization including loading catalogs and patching table lists.
+   */
   public BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
       CacheManifest sharedManifest) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
         sharedManifest);
     this.parquetDir = parquetDir;
+
+    // Extract iteration lists from schema metadata
+    List<String> nipaTablesListFromSchema = extractIterationList("national_accounts", "nipaTablesList");
+    List<String> keyIndustriesListFromSchema = extractIterationList("industry_gdp", "keyIndustriesList");
+
+    // PATCH: Load active NIPA tables from catalog and use for downloads
+    Map<String, java.util.Set<String>> loadedTableFrequencies = java.util.Collections.emptyMap();
+    List<String> finalNipaTablesList = nipaTablesListFromSchema;
+
+    try {
+      loadedTableFrequencies = loadNipaTableFrequencies();
+      if (!loadedTableFrequencies.isEmpty()) {
+        // Extract just the table names
+        finalNipaTablesList = new java.util.ArrayList<>(loadedTableFrequencies.keySet());
+        LOGGER.info("Patching nipaTablesList with {} active tables from catalog (was: {})",
+            finalNipaTablesList.size(), nipaTablesListFromSchema.size());
+      } else {
+        LOGGER.warn("No active NIPA tables found in catalog, using default nipaTablesList");
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Could not load active NIPA tables from catalog: {}. Using default nipaTablesList.", e.getMessage());
+    }
+
+    this.nipaTablesList = finalNipaTablesList;
+    this.tableFrequencies = loadedTableFrequencies;
+    this.keyIndustriesList = keyIndustriesListFromSchema;
+  }
+
+  /**
+   * Internal constructor for passing pre-computed configuration (used by legacy code and tests).
+   */
+  private BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
+      StorageProvider cacheStorageProvider, StorageProvider storageProvider,
+      CacheManifest sharedManifest, List<String> nipaTablesList,
+      Map<String, java.util.Set<String>> tableFrequencies, List<String> keyIndustriesList) {
+    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+        sharedManifest);
+    this.parquetDir = parquetDir;
+    this.nipaTablesList = nipaTablesList;
+    this.tableFrequencies = tableFrequencies;
+    this.keyIndustriesList = keyIndustriesList;
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
@@ -65,6 +116,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir),
         org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir));
     this.parquetDir = cacheDir; // For compatibility, use same dir
+    this.nipaTablesList = null;
+    this.tableFrequencies = null;
+    this.keyIndustriesList = null;
   }
 
   @Override protected String getTableName() {
@@ -111,6 +165,57 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     LOGGER.info("Completed BEA reference tables download");
+  }
+
+  /**
+   * Downloads all BEA data for the specified year range.
+   * Consolidates all download*Metadata() calls using configuration passed to constructor.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override
+  public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading all BEA data for years {}-{}", startYear, endYear);
+
+    if (nipaTablesList != null) {
+      downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
+    }
+    downloadRegionalIncomeMetadata(startYear, endYear);
+    downloadTradeStatisticsMetadata(startYear, endYear);
+    downloadItaDataMetadata(startYear, endYear);
+    if (keyIndustriesList != null) {
+      downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
+    }
+
+    LOGGER.info("Completed BEA data download");
+  }
+
+  /**
+   * Converts all downloaded BEA data to Parquet format for the specified year range.
+   * Consolidates all convert*Metadata() calls using configuration passed to constructor.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws IOException If conversion or file I/O fails
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Converting all BEA data for years {}-{}", startYear, endYear);
+
+    if (nipaTablesList != null) {
+      convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
+    }
+    convertRegionalIncomeMetadata(startYear, endYear);
+    convertTradeStatisticsMetadata(startYear, endYear);
+    convertItaDataMetadata(startYear, endYear);
+    if (keyIndustriesList != null) {
+      convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
+    }
+
+    LOGGER.info("Completed BEA data conversion");
   }
 
   // ===== METADATA-DRIVEN DOWNLOAD/CONVERSION METHODS =====

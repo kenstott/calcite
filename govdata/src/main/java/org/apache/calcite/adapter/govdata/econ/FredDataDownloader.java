@@ -36,12 +36,53 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(FredDataDownloader.class);
 
   private final String fredApiKey;
+  private final java.util.List<String> seriesIds;
   private final int fredMinPopularity;
   private final boolean fredCatalogForceRefresh;
 
-  public FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest, int fredMinPopularity, boolean fredCatalogForceRefresh) {
+  /**
+   * Main constructor for FRED downloader.
+   * Handles all FRED-specific initialization including loading catalog and building series list.
+   *
+   * @param fredApiKey FRED API key
+   * @param cacheDir Cache directory for raw data
+   * @param operatingDirectory Operating directory for metadata
+   * @param parquetDir Parquet directory
+   * @param cacheStorageProvider Cache storage provider
+   * @param storageProvider Parquet storage provider
+   * @param sharedManifest Shared cache manifest
+   * @param customFredSeries Optional list of custom FRED series to add
+   * @param fredMinPopularity Minimum popularity threshold for catalog-based series
+   * @param fredCatalogForceRefresh Whether to force refresh of catalog
+   * @param catalogCacheTtlDays Cache TTL for catalog series list (null for default 365 days)
+   */
+  public FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory,
+      String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+      CacheManifest sharedManifest, java.util.List<String> customFredSeries,
+      int fredMinPopularity, boolean fredCatalogForceRefresh, Integer catalogCacheTtlDays) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
     this.fredApiKey = fredApiKey;
+    this.fredMinPopularity = fredMinPopularity;
+    this.fredCatalogForceRefresh = fredCatalogForceRefresh;
+
+    // Build series list from catalog + custom series
+    java.util.List<String> allSeriesIds = buildSeriesList(customFredSeries, fredMinPopularity,
+        catalogCacheTtlDays != null ? catalogCacheTtlDays : 365);
+    this.seriesIds = allSeriesIds;
+  }
+
+  /**
+   * Internal constructor for passing pre-computed series list (used by legacy code and tests).
+   */
+  private FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory,
+      String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+      CacheManifest sharedManifest, java.util.List<String> seriesIds,
+      int fredMinPopularity, boolean fredCatalogForceRefresh) {
+    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
+    this.fredApiKey = fredApiKey;
+    this.seriesIds = seriesIds;
     this.fredMinPopularity = fredMinPopularity;
     this.fredCatalogForceRefresh = fredCatalogForceRefresh;
   }
@@ -72,6 +113,21 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Downloads all FRED indicators data for the specified year range.
+   * Uses the seriesIds list passed to the constructor.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws java.io.IOException if download or file operations fail
+   * @throws InterruptedException if download is interrupted
+   */
+  @Override
+  public void downloadAll(int startYear, int endYear)
+      throws java.io.IOException, InterruptedException {
+    downloadAllSeries(startYear, endYear, this.seriesIds);
+  }
+
+  /**
    * Downloads FRED indicators data for the specified year range and series list.
    *
    * @param startYear First year to download
@@ -80,7 +136,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @throws java.io.IOException if download or file operations fail
    * @throws InterruptedException if download is interrupted
    */
-  public void downloadAll(int startYear, int endYear, java.util.List<String> seriesIds)
+  private void downloadAllSeries(int startYear, int endYear, java.util.List<String> seriesIds)
       throws java.io.IOException, InterruptedException {
     if (seriesIds == null || seriesIds.isEmpty()) {
       LOGGER.warn("No FRED series IDs provided for download");
@@ -141,13 +197,26 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Converts all downloaded FRED indicator JSON files to Parquet format.
+   * Uses the seriesIds list passed to the constructor.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws java.io.IOException if conversion or file operations fail
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws java.io.IOException {
+    convertAllSeries(startYear, endYear, this.seriesIds);
+  }
+
+  /**
+   * Converts all downloaded FRED indicator JSON files to Parquet format.
    *
    * @param startYear First year to convert
    * @param endYear Last year to convert
    * @param seriesIds List of FRED series IDs to convert
    * @throws java.io.IOException if conversion or file operations fail
    */
-  public void convertAll(int startYear, int endYear, java.util.List<String> seriesIds)
+  private void convertAllSeries(int startYear, int endYear, java.util.List<String> seriesIds)
       throws java.io.IOException {
     if (seriesIds == null || seriesIds.isEmpty()) {
       LOGGER.warn("No FRED series IDs provided for conversion");
@@ -195,6 +264,184 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     }
 
     LOGGER.info("FRED conversion complete: converted {} series-years, skipped {} (up-to-date)", convertedCount, skippedCount);
+  }
+
+  /**
+   * Builds the complete FRED series list from catalog + custom series.
+   * Handles catalog loading, caching, and merging with custom series.
+   *
+   * @param customFredSeries Optional list of custom series to add
+   * @param minPopularity Minimum popularity threshold for catalog-based series
+   * @param catalogCacheTtlDays Cache TTL in days
+   * @return Complete list of series IDs to download
+   */
+  private java.util.List<String> buildSeriesList(java.util.List<String> customFredSeries,
+      int minPopularity, int catalogCacheTtlDays) {
+    LOGGER.info("Building FRED indicators series list from catalog (active series with popularity >= {})",
+        minPopularity);
+
+    // Try to get from cache first (expensive catalog parsing operation)
+    CacheManifest econManifest = (CacheManifest) cacheManifest;
+    java.util.List<String> catalogSeries = econManifest.getCachedCatalogSeries(minPopularity);
+
+    if (catalogSeries == null) {
+      // Cache miss or expired - extract from catalog files
+      LOGGER.info("Catalog series cache miss/expired - extracting from catalog files");
+      catalogSeries = extractActivePopularSeriesFromCatalog(minPopularity);
+
+      // Cache the results
+      econManifest.cacheCatalogSeries(minPopularity, catalogSeries, catalogCacheTtlDays);
+      LOGGER.info("Cached {} series IDs for {} days", catalogSeries.size(), catalogCacheTtlDays);
+    }
+
+    LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
+
+    // Merge with customFredSeries if provided
+    java.util.Set<String> allSeriesIds = new java.util.LinkedHashSet<>(catalogSeries);
+    if (customFredSeries != null && !customFredSeries.isEmpty()) {
+      allSeriesIds.addAll(customFredSeries);
+      LOGGER.info("Added {} custom FRED series, total series count: {}",
+          customFredSeries.size(), allSeriesIds.size());
+    }
+
+    return new java.util.ArrayList<>(allSeriesIds);
+  }
+
+  /**
+   * Extract series IDs from FRED catalog JSON files filtered by active status and popularity.
+   * Reads all catalog JSON files under status=active partitions and filters by popularity threshold.
+   *
+   * @param minPopularity Minimum popularity threshold (series with popularity >= this value are included)
+   * @return List of series IDs that are active and meet the popularity threshold
+   */
+  private java.util.List<String> extractActivePopularSeriesFromCatalog(int minPopularity) {
+    java.util.List<String> seriesIds = new java.util.ArrayList<>();
+
+    try {
+      // Find all catalog JSON files under status=active partitions
+      // Pattern: type=reference/category=*/frequency=*/source=*/status=active/reference_fred_series.json
+      String catalogBasePath = cacheStorageProvider.resolvePath(cacheDirectory, "type=reference");
+
+      if (!cacheStorageProvider.isDirectory(catalogBasePath)) {
+        LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
+        return seriesIds;
+      }
+
+      // Recursively find all reference_fred_series.json files under status=active directories
+      java.util.List<String> catalogFiles = findCatalogFilesInActivePartitions(catalogBasePath);
+
+      LOGGER.info("Found {} catalog JSON files to process", catalogFiles.size());
+
+      // Process each catalog file
+      int totalSeriesProcessed = 0;
+      int seriesPassingFilter = 0;
+
+      for (String catalogFile : catalogFiles) {
+        try {
+          // Read JSON file as array of series objects using InputStream
+          java.util.List<java.util.Map<String, Object>> seriesList;
+          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
+               java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream,
+                   java.nio.charset.StandardCharsets.UTF_8)) {
+            com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>> typeRef =
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {};
+            seriesList = objectMapper.readValue(reader, typeRef);
+          }
+
+          // Filter by popularity and extract series IDs
+          for (java.util.Map<String, Object> series : seriesList) {
+            totalSeriesProcessed++;
+
+            // Extract series_id (may be under "id" or "series_id" key)
+            String seriesId = (String) series.get("id");
+            if (seriesId == null) {
+              seriesId = (String) series.get("series_id");
+            }
+
+            // Extract popularity (default to 0 if not present)
+            Object popularityObj = series.get("popularity");
+            int popularity = 0;
+            if (popularityObj != null) {
+              if (popularityObj instanceof Integer) {
+                popularity = (Integer) popularityObj;
+              } else if (popularityObj instanceof Number) {
+                popularity = ((Number) popularityObj).intValue();
+              }
+            }
+
+            // Filter by popularity threshold
+            if (seriesId != null && popularity >= minPopularity) {
+              seriesIds.add(seriesId);
+              seriesPassingFilter++;
+            }
+          }
+
+        } catch (Exception e) {
+          LOGGER.warn("Error processing catalog file {}: {}", catalogFile, e.getMessage());
+        }
+      }
+
+      LOGGER.info("Extracted {} series IDs from catalog (processed {} total series, {} passed filter with popularity >= {})",
+          seriesIds.size(), totalSeriesProcessed, seriesPassingFilter, minPopularity);
+
+    } catch (Exception e) {
+      LOGGER.error("Error extracting series from FRED catalog", e);
+    }
+
+    return seriesIds;
+  }
+
+  /**
+   * Recursively find all reference_fred_series.json files under status=active partitions.
+   *
+   * @param basePath Base path to search from (type=reference directory)
+   * @return List of full paths to catalog JSON files in active partitions
+   */
+  private java.util.List<String> findCatalogFilesInActivePartitions(String basePath) {
+    java.util.List<String> catalogFiles = new java.util.ArrayList<>();
+
+    try {
+      // Use a simple recursive search for directories containing "status=active"
+      // and collect all reference_fred_series.json files within them
+      findCatalogFilesRecursive(basePath, catalogFiles);
+    } catch (Exception e) {
+      LOGGER.error("Error finding catalog files in active partitions", e);
+    }
+
+    return catalogFiles;
+  }
+
+  /**
+   * Recursive helper to find catalog JSON files under status=active directories.
+   */
+  private void findCatalogFilesRecursive(String currentPath, java.util.List<String> catalogFiles)
+      throws java.io.IOException {
+
+    java.util.List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> entries =
+        cacheStorageProvider.listFiles(currentPath, false);
+
+    for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry entry : entries) {
+      String fullPath = entry.getPath();
+
+      if (entry.isDirectory()) {
+        // Extract directory name from path, handling trailing slash
+        String pathForParsing = fullPath.endsWith("/") ?
+            fullPath.substring(0, fullPath.length() - 1) : fullPath;
+        String entryName = pathForParsing.substring(pathForParsing.lastIndexOf('/') + 1);
+
+        // If this is a status=active directory, look for catalog JSON file
+        if (entryName.equals("status=active")) {
+          String catalogFile = cacheStorageProvider.resolvePath(fullPath, "reference_fred_series.json");
+          if (cacheStorageProvider.exists(catalogFile)) {
+            catalogFiles.add(catalogFile);
+            LOGGER.debug("Found catalog file: {}", catalogFile);
+          }
+        } else {
+          // Recurse into subdirectories
+          findCatalogFilesRecursive(fullPath, catalogFiles);
+        }
+      }
+    }
   }
 
 }
