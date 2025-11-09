@@ -157,6 +157,51 @@ public abstract class AbstractGovDataDownloader {
   public abstract void downloadReferenceData() throws IOException, InterruptedException;
 
   /**
+   * Downloads all data for this source for the specified year range.
+   *
+   * <p>This is the main entry point for downloading time-series data. Implementations
+   * should download all configured tables/series/indicators for the given time period.
+   *
+   * <p>Configuration (which tables to download, which series, etc.) should be passed to
+   * the downloader via constructor parameters. This method focuses solely on the time range.
+   *
+   * <p>Implementations should:
+   * <ul>
+   *   <li>Check cache manifest before downloading (skip if already cached)</li>
+   *   <li>Handle API-specific logic (rate limiting, pagination, authentication)</li>
+   *   <li>Mark successfully downloaded data in cache manifest</li>
+   *   <li>Log progress (downloaded/skipped counts)</li>
+   * </ul>
+   *
+   * @param startYear First year to download (inclusive)
+   * @param endYear Last year to download (inclusive)
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  public abstract void downloadAll(int startYear, int endYear)
+      throws IOException, InterruptedException;
+
+  /**
+   * Converts all downloaded data to Parquet format for the specified year range.
+   *
+   * <p>This method should convert all raw data (JSON, CSV, XML, etc.) that was downloaded
+   * via {@link #downloadAll(int, int)} into Parquet format.
+   *
+   * <p>Implementations should:
+   * <ul>
+   *   <li>Check if conversion already done (skip if parquet files exist and are up-to-date)</li>
+   *   <li>Apply any transformations, enrichments, or schema mappings</li>
+   *   <li>Mark successfully converted data in cache manifest</li>
+   *   <li>Log progress (converted/skipped counts)</li>
+   * </ul>
+   *
+   * @param startYear First year to convert (inclusive)
+   * @param endYear Last year to convert (inclusive)
+   * @throws IOException If conversion or file I/O fails
+   */
+  public abstract void convertAll(int startYear, int endYear) throws IOException;
+
+  /**
    * Returns the cache manifest for this downloader.
    *
    * @return Cache manifest instance

@@ -107,6 +107,32 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
     // Default: no reference data to download
   }
 
+  /**
+   * Default implementation does nothing.
+   * Concrete GEO downloaders should override if they need to download time-series data.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadAll(int startYear, int endYear)
+      throws IOException, InterruptedException {
+    // Default: no time-series data to download
+  }
+
+  /**
+   * Default implementation does nothing.
+   * Concrete GEO downloaders should override if they need to convert time-series data.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws IOException If conversion or file I/O fails
+   */
+  @Override public void convertAll(int startYear, int endYear) throws IOException {
+    // Default: no time-series data to convert
+  }
+
   // Rate limiting methods - subclasses can override to provide API-specific limits
   // If not overridden, defaults from AbstractGovDataDownloader are used
 

@@ -157,6 +157,32 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
+   * Default implementation does nothing.
+   * Concrete downloaders must override to download their time-series data.
+   *
+   * @param startYear First year to download (inclusive)
+   * @param endYear Last year to download (inclusive)
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
+   */
+  @Override public void downloadAll(int startYear, int endYear)
+      throws IOException, InterruptedException {
+    // Default: no data to download
+  }
+
+  /**
+   * Default implementation does nothing.
+   * Concrete downloaders must override to convert their data to Parquet.
+   *
+   * @param startYear First year to convert (inclusive)
+   * @param endYear Last year to convert (inclusive)
+   * @throws IOException If conversion or file I/O fails
+   */
+  @Override public void convertAll(int startYear, int endYear) throws IOException {
+    // Default: no data to convert
+  }
+
+  /**
    * Saves downloaded JSON content to cache and updates manifest.
    * This is the final step in the download flow pattern.
    *
@@ -468,6 +494,99 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     }
 
     return false;
+  }
+
+  /**
+   * Filters a collection of items using include/exclude lists.
+   * Supports whitelist (include) or blacklist (exclude) patterns, but not both.
+   *
+   * @param allItems Complete set of all available items
+   * @param includeItems Whitelist - if not null, only these items are included (null means no whitelist)
+   * @param excludeItems Blacklist - if not null, all items except these are included (null means no blacklist)
+   * @param itemTypeName Human-readable name for logging (e.g., "tables", "series", "datasets")
+   * @param downloaderName Downloader name for logging (e.g., "BLS", "FRED")
+   * @return Filtered set of items, or null if no filtering requested
+   * @throws IllegalArgumentException if both includeItems and excludeItems are non-null
+   */
+  protected java.util.Set<String> applyIncludeExcludeFilter(
+      java.util.Set<String> allItems,
+      java.util.List<String> includeItems,
+      java.util.List<String> excludeItems,
+      String itemTypeName,
+      String downloaderName) {
+
+    // Validate mutual exclusivity
+    if (includeItems != null && excludeItems != null) {
+      throw new IllegalArgumentException(
+          String.format("Cannot specify both 'include%s' and 'exclude%s' for %s. " +
+              "Use include for whitelist or exclude for blacklist, but not both.",
+              itemTypeName, itemTypeName, downloaderName));
+    }
+
+    if (includeItems != null) {
+      java.util.Set<String> filtered = new java.util.HashSet<>(includeItems);
+      LOGGER.info("{} filter: including {} {}: {}", downloaderName, filtered.size(), itemTypeName, includeItems);
+      return filtered;
+    }
+
+    if (excludeItems != null) {
+      java.util.Set<String> filtered = new java.util.HashSet<>(allItems);
+      filtered.removeAll(excludeItems);
+      LOGGER.info("{} filter: excluding {} {}, downloading {} {}",
+          downloaderName, excludeItems.size(), itemTypeName, filtered.size(), itemTypeName);
+      return filtered;
+    }
+
+    return null; // No filtering
+  }
+
+  /**
+   * Extracts an iteration list from econ-schema.json metadata for a given table.
+   * This allows downloaders to configure themselves based on schema metadata.
+   *
+   * @param tableName Name of the table in econ-schema.json
+   * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList", "keyIndustriesList")
+   * @return List of iteration values, or empty list if not found
+   */
+  protected java.util.List<String> extractIterationList(String tableName, String listKey) {
+    try {
+      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        LOGGER.warn("econ-schema.json not found, returning empty iteration list");
+        return java.util.Collections.emptyList();
+      }
+
+      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+
+      // Find the table in the partitionedTables array (not tables array which contains views)
+      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
+      if (partitionedTables != null && partitionedTables.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
+          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
+          if (nameNode != null && tableName.equals(nameNode.asText())) {
+            // Found the table, extract the download config
+            com.fasterxml.jackson.databind.JsonNode download = table.get("download");
+            if (download != null) {
+              com.fasterxml.jackson.databind.JsonNode listNode = download.get(listKey);
+              if (listNode != null && listNode.isArray()) {
+                java.util.List<String> result = new java.util.ArrayList<>();
+                for (com.fasterxml.jackson.databind.JsonNode item : listNode) {
+                  result.add(item.asText());
+                }
+                LOGGER.debug("Extracted {} items from {} for table {}", result.size(), listKey, tableName);
+                return result;
+              }
+            }
+          }
+        }
+      }
+
+      LOGGER.warn("Iteration list '{}' not found for table '{}', returning empty list", listKey, tableName);
+      return java.util.Collections.emptyList();
+    } catch (Exception e) {
+      LOGGER.error("Error extracting iteration list '{}' for table '{}': {}", listKey, tableName, e.getMessage());
+      return java.util.Collections.emptyList();
+    }
   }
 
 }
