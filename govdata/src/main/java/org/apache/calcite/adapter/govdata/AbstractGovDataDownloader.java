@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -32,6 +33,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1500,6 +1504,170 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Builds a DuckDB SQL query for converting JSON to Parquet with type casting and null handling.
+   *
+   * <p>Generates a SELECT statement that:
+   * <ul>
+   *   <li>Casts each column to the appropriate SQL type</li>
+   *   <li>Handles missing value indicators (e.g., "." → NULL)</li>
+   *   <li>Preserves column order from schema</li>
+   * </ul>
+   *
+   * @param columns Column definitions from schema
+   * @param missingValueIndicator String that represents NULL (e.g., ".", "-", or null if none)
+   * @param jsonPath Input JSON file path
+   * @param parquetPath Output Parquet file path
+   * @return Complete DuckDB SQL statement ready for execution
+   */
+  protected String buildConversionSql(
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      String missingValueIndicator,
+      String jsonPath,
+      String parquetPath) {
+    StringBuilder sql = new StringBuilder();
+
+    // Start COPY statement
+    sql.append("COPY (\n  SELECT\n");
+
+    // Build column expressions
+    boolean firstColumn = true;
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      if (!firstColumn) {
+        sql.append(",\n");
+      }
+      firstColumn = false;
+
+      String columnName = column.getName();
+      String sqlType = javaToDuckDbType(column.getType());
+
+      sql.append("    ");
+
+      // Handle missing value indicator with CASE expression
+      if (missingValueIndicator != null && !missingValueIndicator.isEmpty()) {
+        sql.append("CAST(CASE WHEN ");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" = ");
+        sql.append(quoteLiteral(missingValueIndicator));
+        sql.append(" THEN NULL ELSE ");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" END AS ");
+        sql.append(sqlType);
+        sql.append(") AS ");
+        sql.append(quoteIdentifier(columnName));
+      } else {
+        // Simple CAST without null handling
+        sql.append("CAST(");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" AS ");
+        sql.append(sqlType);
+        sql.append(") AS ");
+        sql.append(quoteIdentifier(columnName));
+      }
+    }
+
+    // FROM clause with JSON reader
+    sql.append("\n  FROM read_json_auto(");
+    sql.append(quoteLiteral(jsonPath));
+    sql.append(")\n) TO ");
+    sql.append(quoteLiteral(parquetPath));
+    sql.append(" (FORMAT PARQUET);");
+
+    return sql.toString();
+  }
+
+  /**
+   * Maps Java/Calcite type names to DuckDB SQL types.
+   */
+  private String javaToDuckDbType(String javaType) {
+    String normalized = javaType.toLowerCase();
+    switch (normalized) {
+      case "string":
+      case "varchar":
+      case "char":
+        return "VARCHAR";
+      case "int":
+      case "integer":
+        return "INTEGER";
+      case "long":
+      case "bigint":
+        return "BIGINT";
+      case "double":
+      case "float":
+        return "DOUBLE";
+      case "boolean":
+        return "BOOLEAN";
+      case "date":
+        return "DATE";
+      case "timestamp":
+        return "TIMESTAMP";
+      default:
+        LOGGER.warn("Unknown type '{}', defaulting to VARCHAR", javaType);
+        return "VARCHAR";
+    }
+  }
+
+  /**
+   * Quotes a SQL identifier (column/table name) for DuckDB.
+   */
+  private String quoteIdentifier(String identifier) {
+    // DuckDB uses double quotes for identifiers
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
+  }
+
+  /**
+   * Quotes a SQL string literal for DuckDB.
+   */
+  private String quoteLiteral(String literal) {
+    // DuckDB uses single quotes for string literals
+    return "'" + literal.replace("'", "''") + "'";
+  }
+
+  /**
+   * Converts cached JSON to Parquet using DuckDB's native SQL pipeline.
+   *
+   * <p>This method uses DuckDB to perform the entire conversion in a single SQL statement,
+   * which is significantly faster and more memory-efficient than Java-based conversion.
+   *
+   * @param tableName Name of table in schema
+   * @param columns Column definitions from schema
+   * @param missingValueIndicator String that represents NULL (e.g., ".")
+   * @param fullJsonPath Absolute path to input JSON file
+   * @param fullParquetPath Absolute path to output Parquet file
+   * @throws IOException if conversion fails
+   */
+  protected void convertCachedJsonToParquetViaDuckDB(
+      String tableName,
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      String missingValueIndicator,
+      String fullJsonPath,
+      String fullParquetPath) throws IOException {
+
+    // Build the SQL statement
+    String sql = buildConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath);
+
+    LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
+
+    // Execute using in-memory DuckDB connection
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement stmt = conn.createStatement()) {
+
+      // Execute the COPY statement
+      stmt.execute(sql);
+
+      LOGGER.info("Successfully converted {} to Parquet using DuckDB", tableName);
+
+    } catch (java.sql.SQLException e) {
+      // Wrap SQLException as IOException for consistent error handling
+      String errorMsg = String.format(
+          "DuckDB conversion failed for table '%s': %s",
+          tableName,
+          e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
    * Converts cached JSON data to Parquet format using schema metadata.
    *
    * <p>This is a generic, metadata-driven conversion that works for any table
@@ -1562,10 +1730,10 @@ public abstract class AbstractGovDataDownloader {
     String jsonPath = resolveJsonPath(pattern, variables);
     String parquetPath = resolveParquetPath(pattern, variables);
 
-    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
-    LOGGER.info("Converting {} to {}", jsonPath, parquetPath);
+    LOGGER.info("Converting {} to {}", fullJsonPath, fullParquetPath);
 
     // Check if source exists
     if (!cacheStorageProvider.exists(fullJsonPath)) {
@@ -1574,14 +1742,8 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Load column metadata first to enable type-aware conversion
-    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+    List<PartitionedTableConfig.TableColumn> columns =
         loadTableColumnsFromMetadata(tableName);
-
-    // Build column type map for efficient lookup
-    Map<String, String> columnTypeMap = new java.util.HashMap<>();
-    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
-      columnTypeMap.put(column.getName(), column.getType());
-    }
 
     // Extract missingValueIndicator from metadata (download.response.missingValueIndicator)
     // Use JsonNode.at() with JSON Pointer notation for clean path traversal
@@ -1593,6 +1755,32 @@ public abstract class AbstractGovDataDownloader {
         missingValueIndicator = missingValueNode.asText();
         LOGGER.info("Using missingValueIndicator: '{}'", missingValueIndicator);
       }
+    }
+
+    // Choose conversion path based on whether transformation is needed
+    if (transformer == null) {
+      // Fast path: Use DuckDB for direct JSON→Parquet conversion
+      LOGGER.info("Using DuckDB for JSON to Parquet conversion (no transformations)");
+      convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
+          fullJsonPath, fullParquetPath);
+
+      // Verify file was written
+      if (storageProvider.exists(fullParquetPath)) {
+        LOGGER.info("Successfully converted {} to Parquet: {}", tableName, parquetPath);
+      } else {
+        LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
+        throw new IOException("Parquet file not found after write: " + fullParquetPath);
+      }
+      return;
+    }
+
+    // Slow path: Use Java-based conversion when transformations are needed
+    LOGGER.info("Using Java-based conversion (transformations required)");
+
+    // Build column type map for efficient lookup
+    Map<String, String> columnTypeMap = new java.util.HashMap<>();
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      columnTypeMap.put(column.getName(), column.getType());
     }
 
     // Read JSON file with type-aware conversion
