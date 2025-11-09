@@ -152,8 +152,8 @@ public class EconSchemaIntegrationTest {
       try {
         List<String> itaIndicatorsList = extractIterationList("ita_data", "itaIndicatorsList");
         if (!itaIndicatorsList.isEmpty()) {
-          beaDownloader.downloadItaDataMetadata(2022, 2023, itaIndicatorsList);
-          beaDownloader.convertItaDataMetadata(2022, 2023, itaIndicatorsList);
+          beaDownloader.downloadItaDataMetadata(2022, 2023);
+          beaDownloader.convertItaDataMetadata(2022, 2023);
         }
       } catch (Exception e) {
         // Ignore

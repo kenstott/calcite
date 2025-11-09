@@ -179,8 +179,8 @@ public class EconDataDownloadTest {
     assumeTrue(!lineCodesList.isEmpty(), "lineCodesList not found in schema");
 
     // Download just 1 year of regional income data using metadata-driven methods
-    downloader.downloadRegionalIncomeMetadata(2023, 2023, lineCodesList);
-    downloader.convertRegionalIncomeMetadata(2023, 2023, lineCodesList);
+    downloader.downloadRegionalIncomeMetadata(2023, 2023);
+    downloader.convertRegionalIncomeMetadata(2023, 2023);
 
     // Verify parquet file was created (new path structure: type=regional_income/frequency=A/year=2023/)
     String parquetPath =
@@ -190,7 +190,6 @@ public class EconDataDownloadTest {
     verifyParquetReadable(parquetPath, "regional_income");
   }
 
-  @SuppressWarnings("unchecked")
   private List<String> extractIterationList(String tableName, String listKey) {
     try {
       InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");

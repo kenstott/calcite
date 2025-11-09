@@ -117,6 +117,8 @@ public class EconIntegrationTest {
         "GOVDATA_PARQUET_DIR must be set");
     assertNotNull(TestEnvironmentLoader.getEnv("BLS_API_KEY"),
         "BLS_API_KEY must be set for integration tests");
+    assertNotNull(TestEnvironmentLoader.getEnv("BEA_API_KEY"),
+        "BEA_API_KEY must be set for integration tests");
     assertNotNull(TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE"),
         "CALCITE_EXECUTION_ENGINE must be set for integration tests");
   }
