@@ -27,7 +27,7 @@ import java.util.Map;
  * Provides access to thousands of economic time series including interest rates,
  * GDP, monetary aggregates, and economic indicators.
  *
- * <p>Requires a FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html
+ * <p>Requires a FRED API key from <a href="https://fred.stlouisfed.org/docs/api/api_key.html">...</a>
  */
 public class FredDataDownloader extends AbstractEconDataDownloader {
 
@@ -67,24 +67,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     this.fredCatalogForceRefresh = fredCatalogForceRefresh;
 
     // Build series list from catalog + custom series
-    java.util.List<String> allSeriesIds = buildSeriesList(customFredSeries, fredMinPopularity,
+    this.seriesIds = buildSeriesList(customFredSeries, fredMinPopularity,
         catalogCacheTtlDays != null ? catalogCacheTtlDays : 365);
-    this.seriesIds = allSeriesIds;
-  }
-
-  /**
-   * Internal constructor for passing pre-computed series list (used by legacy code and tests).
-   */
-  private FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory,
-      String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider,
-      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
-      CacheManifest sharedManifest, java.util.List<String> seriesIds,
-      int fredMinPopularity, boolean fredCatalogForceRefresh) {
-    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
-    this.fredApiKey = fredApiKey;
-    this.seriesIds = seriesIds;
-    this.fredMinPopularity = fredMinPopularity;
-    this.fredCatalogForceRefresh = fredCatalogForceRefresh;
   }
 
   @Override protected String getTableName() {
@@ -133,11 +117,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to download
    * @param endYear Last year to download
    * @param seriesIds List of FRED series IDs to download
-   * @throws java.io.IOException if download or file operations fail
-   * @throws InterruptedException if download is interrupted
    */
-  private void downloadAllSeries(int startYear, int endYear, java.util.List<String> seriesIds)
-      throws java.io.IOException, InterruptedException {
+  private void downloadAllSeries(int startYear, int endYear, java.util.List<String> seriesIds) {
     if (seriesIds == null || seriesIds.isEmpty()) {
       LOGGER.warn("No FRED series IDs provided for download");
       return;
@@ -201,10 +182,9 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    *
    * @param startYear First year to convert
    * @param endYear Last year to convert
-   * @throws java.io.IOException if conversion or file operations fail
    */
   @Override
-  public void convertAll(int startYear, int endYear) throws java.io.IOException {
+  public void convertAll(int startYear, int endYear) {
     convertAllSeries(startYear, endYear, this.seriesIds);
   }
 
@@ -214,10 +194,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to convert
    * @param endYear Last year to convert
    * @param seriesIds List of FRED series IDs to convert
-   * @throws java.io.IOException if conversion or file operations fail
    */
-  private void convertAllSeries(int startYear, int endYear, java.util.List<String> seriesIds)
-      throws java.io.IOException {
+  private void convertAllSeries(int startYear, int endYear, java.util.List<String> seriesIds) {
     if (seriesIds == null || seriesIds.isEmpty()) {
       LOGGER.warn("No FRED series IDs provided for conversion");
       return;
@@ -315,7 +293,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @return List of series IDs that are active and meet the popularity threshold
    */
   private java.util.List<String> extractActivePopularSeriesFromCatalog(int minPopularity) {
-    java.util.List<String> seriesIds = new java.util.ArrayList<>();
+    java.util.Set<String> seriesIds = new java.util.LinkedHashSet<>();
 
     try {
       // Find all catalog JSON files under status=active partitions
@@ -352,7 +330,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           for (java.util.Map<String, Object> series : seriesList) {
             totalSeriesProcessed++;
 
-            // Extract series_id (may be under "id" or "series_id" key)
+            // Extract series_id (maybe under "id" or "series_id" key)
             String seriesId = (String) series.get("id");
             if (seriesId == null) {
               seriesId = (String) series.get("series_id");
@@ -388,7 +366,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       LOGGER.error("Error extracting series from FRED catalog", e);
     }
 
-    return seriesIds;
+    return new java.util.ArrayList<>(seriesIds);
   }
 
   /**
