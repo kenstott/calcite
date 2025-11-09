@@ -278,7 +278,7 @@ public enum UnsignedType {
   private static ULong toULongNonNull(Number n, RoundingMode mode) {
     if (n instanceof BigDecimal) {
       BigDecimal d = ((BigDecimal) n).setScale(0, mode);
-      return Unsigned.ulong(d.longValueExact());
+      return Unsigned.ulong(d.toBigIntegerExact());
     } else if (n instanceof Byte || n instanceof Short || n instanceof Integer
         || n instanceof Long || n instanceof Float || n instanceof Double
         || n instanceof UByte || n instanceof UShort || n instanceof UInteger) {
@@ -306,4 +306,38 @@ public enum UnsignedType {
     }
     return Unsigned.ulong(s);
   }
+  public static @Nullable UShort toUShort(Object o) {
+    if (o == null) {
+      return null;
+    }
+    if (o instanceof Number) {
+      return UShort.valueOf(((Number) o).intValue());
+    }
+    throw new IllegalArgumentException("Cannot cast to UShort: " + o.getClass());
+  }
+
+  public static @Nullable UByte toUByte(Object o) {
+    if (o == null) {
+      return null;
+    }
+    if (o instanceof Number) {
+      return UByte.valueOf(((Number) o).shortValue());
+    }
+    throw new IllegalArgumentException("Cannot cast to UByte: " + o.getClass());
+  }
+
+  public static @Nullable UInteger toUInteger(Object o) {
+    if (o instanceof Number) {
+      return UInteger.valueOf(((Number) o).longValue());
+    }
+    throw new IllegalArgumentException("Cannot cast to UInteger: " + o.getClass());
+  }
+
+  public static @Nullable ULong toULong(Object o) {
+    if (o instanceof Number) {
+      return ULong.valueOf(((Number) o).longValue());
+    }
+    throw new IllegalArgumentException("Cannot cast to ULong: " + o.getClass());
+  }
+
 }

@@ -24,6 +24,7 @@ import org.apache.calcite.rel.metadata.NullSentinel;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeImpl;
+import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.sql.SqlBasicFunction;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
@@ -74,6 +75,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasToString;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -521,10 +523,10 @@ class RexProgramTest extends RexProgramTestBase {
     try {
       final RexNode node = coalesce(vVarchar(1), vInt(2));
       fail("expected exception, got " + node);
-    } catch (IllegalArgumentException e) {
+    } catch (CalciteException e) {
       final String expected = "Cannot infer return type for COALESCE;"
           + " operand types: [VARCHAR, INTEGER]";
-      assertThat(e.getMessage(), is(expected));
+      assertThat(e.getMessage(), containsString(expected));
     }
   }
 
@@ -2038,6 +2040,22 @@ class RexProgramTest extends RexProgramTestBase {
     checkSimplify(expr, simplified);
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7194">[CALCITE-7194]
+   * Simplify comparisons between function calls and literals to SEARCH</a>. */
+  @Test void testSimplifyComparisonsOfCallsWithLiteralsToSearch() {
+    RexNode v1 = input(tInt(), 1);
+    RexNode v2 = input(tInt(), 2);
+    RexNode plus = plus(v1, v2);
+    checkSimplify(and(gt(plus, literal(100000)), lt(plus, literal(200000))),
+        "SEARCH(+($1, $2), Sarg[(100000..200000)])");
+    checkSimplify(or(eq(plus, literal(100000)), eq(plus, literal(200000))),
+        "SEARCH(+($1, $2), Sarg[100000, 200000])");
+    RexNode ndc = rexBuilder.makeCall(getNoDeterministicOperator(), v1, v2);
+    checkSimplifyUnchanged(or(eq(ndc, literal(100000)), eq(ndc, literal(200000))));
+    checkSimplifyUnchanged(and(gt(ndc, literal(100000)), lt(ndc, literal(200000))));
+  }
+
   @Test void testSimplifySearchWithSinglePointSargToEquals() {
     Range<BigDecimal> r100 = Range.singleton(BigDecimal.valueOf(100));
     RangeSet<BigDecimal> rangeSet = ImmutableRangeSet.<BigDecimal>builder().add(r100).build();
@@ -2111,6 +2129,35 @@ class RexProgramTest extends RexProgramTestBase {
         rexBuilder.makeCall(SqlStdOperatorTable.SEARCH, intLiteral,
             rexBuilder.makeSearchArgumentLiteral(sarg, intLiteral.getType()));
     checkSimplify(rexNode, "false");
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7160">[CALCITE-7160]
+   * Simplify AND/OR with DISTINCT predicates to SEARCH</a>. */
+  @Test void testSimplifyAndIsDistinctFrom() {
+    RexNode aRef = input(tInt(true), 0);
+    RexLiteral l10 = literal(10);
+    RexLiteral l20 = literal(20);
+    RexLiteral l30 = literal(30);
+
+    checkSimplify(and(isDistinctFrom(aRef, l10), isDistinctFrom(aRef, l20)),
+        "SEARCH($0, Sarg[(-\u221e..10), (10..20), (20..+\u221e); NULL AS TRUE])");
+    checkSimplify(and(isDistinctFrom(aRef, l10), isDistinctFrom(aRef, l20), ne(aRef, l30)),
+        "SEARCH($0, Sarg[(-\u221e..10), (10..20), (20..30), (30..+\u221e)])");
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7160">[CALCITE-7160]
+   * Simplify AND/OR with DISTINCT predicates to SEARCH</a>. */
+  @Test void testSimplifyAndIsNotDistinctFrom() {
+    RexNode aRef = input(tInt(true), 0);
+    RexLiteral l10 = literal(10);
+    RexLiteral l20 = literal(20);
+    RexLiteral l30 = literal(30);
+
+    checkSimplify(and(isNotDistinctFrom(aRef, l10), isNotDistinctFrom(aRef, l20)), "false");
+    checkSimplify(and(isNotDistinctFrom(aRef, l10), isNotDistinctFrom(aRef, l20), eq(aRef, l30)),
+        "false");
   }
 
   /** Unit test for
@@ -3559,6 +3606,34 @@ class RexProgramTest extends RexProgramTestBase {
     checkSimplify(or(eq(literal(10), vInt(0)), isNull(vInt(0))), expected);
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7160">[CALCITE-7160]
+   * Simplify AND/OR with DISTINCT predicates to SEARCH</a>. */
+  @Test void testSimplifyOrIsNotDistinctFrom() {
+    RexNode aRef = input(tInt(true), 0);
+    RexLiteral l10 = literal(10);
+    RexLiteral l20 = literal(20);
+    RexLiteral l30 = literal(30);
+
+    checkSimplify(or(isNotDistinctFrom(aRef, l10), isNotDistinctFrom(aRef, l20)),
+        "SEARCH($0, Sarg[10, 20; NULL AS FALSE])");
+    checkSimplify(or(isNotDistinctFrom(aRef, l10), isNotDistinctFrom(aRef, l20), eq(aRef, l30)),
+        "SEARCH($0, Sarg[10, 20, 30])");
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7160">[CALCITE-7160]
+   * Simplify AND/OR with DISTINCT predicates to SEARCH</a>. */
+  @Test void testSimplifyOrIsDistinctFrom() {
+    RexNode aRef = input(tInt(true), 0);
+    RexLiteral l10 = literal(10);
+    RexLiteral l20 = literal(20);
+    RexLiteral l30 = literal(30);
+
+    checkSimplify(or(isDistinctFrom(aRef, l10), isDistinctFrom(aRef, l20)), "true");
+    checkSimplify(or(isDistinctFrom(aRef, l10), isDistinctFrom(aRef, l20), ne(aRef, l30)), "true");
+  }
+
   @Test void testSimplifyOrNot() {
     // "x > 1 OR NOT (y > 2)" -> "x > 1 OR y <= 2"
     checkSimplify(or(gt(vInt(1), literal(1)), not(gt(vInt(2), literal(2)))),
@@ -3938,10 +4013,17 @@ class RexProgramTest extends RexProgramTestBase {
 
   /** Tests
    * <a href="https://issues.apache.org/jira/browse/CALCITE-4094">[CALCITE-4094]
-   * RexSimplify should simplify more always true OR expressions</a>. */
+   * RexSimplify should simplify more always true OR expressions</a>,
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7088">[CALCITE-7088]
+   * Multiple consecutive '%' in the string matched by LIKE should simplify to a single '%'</a>,
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7153">[CALCITE-7153]
+   * Mixed wildcards of _ and % need to be simplified in LIKE operator</a>.
+   * */
   @Test void testSimplifyLike() {
     final RexNode ref = input(tVarchar(true, 10), 0);
     checkSimplify3(like(ref, literal("%")),
+        "OR(null, IS NOT NULL($0))", "IS NOT NULL($0)", "true");
+    checkSimplify3(like(ref, literal("%%%")),
         "OR(null, IS NOT NULL($0))", "IS NOT NULL($0)", "true");
     checkSimplify3(like(ref, literal("%"), literal("#")),
         "OR(null, IS NOT NULL($0))", "IS NOT NULL($0)", "true");
@@ -3952,9 +4034,45 @@ class RexProgramTest extends RexProgramTestBase {
         "OR(IS NOT NULL($0), LIKE($0, '% %'))", "true");
     checkSimplify(or(isNull(ref), like(ref, literal("%"))),
         "true");
+    checkSimplify(or(isNull(ref), like(ref, literal("%%"))),
+        "true");
     checkSimplify(or(isNull(ref), like(ref, literal("%"), literal("#"))),
         "true");
     checkSimplifyUnchanged(like(ref, literal("%A")));
+    checkSimplify(like(ref, literal("%%A")), "LIKE($0, '%A')");
+    checkSimplify(like(ref, literal("%%%_A%%B%%")), "LIKE($0, '_%A%B%')");
+    checkSimplify(like(ref, literal("%%A%%%")), "LIKE($0, '%A%')");
+    checkSimplify(like(ref, literal("%%\\%%A\\%%%%%")), "LIKE($0, '%\\%%A\\%%')");
+    checkSimplify(like(ref, literal("%%A"), literal("#")), "LIKE($0, '%A', '#')");
+    checkSimplify(like(ref, literal("%%#%%A%%"), literal("#")),
+        "LIKE($0, '%#%%A%', '#')");
+    checkSimplify(like(ref, literal("AA%__%BB%_CC")),
+        "LIKE($0, 'AA__%BB_%CC')");
+    checkSimplify(like(ref, literal("%%__%AA%_BB")),
+        "LIKE($0, '__%AA_%BB')");
+    checkSimplify(like(ref, literal("AA\\%%___%BB%%%___%CC")),
+        "LIKE($0, 'AA\\%___%BB___%CC')");
+    checkSimplify(like(ref, literal("AA#%%___%BB%%%___%CC")),
+        "LIKE($0, 'AA#___%BB___%CC')");
+    checkSimplify(like(ref, literal("AA#%%___%BB%%%___%CC"), literal("#")),
+        "LIKE($0, 'AA#%___%BB___%CC', '#')");
+    // odd number of '#', the next % would not be simplified
+    checkSimplify(like(ref, literal("AA###%%___%BB%%%___%CC"), literal("#")),
+        "LIKE($0, 'AA###%___%BB___%CC', '#')");
+    checkSimplify(like(ref, literal("AA\\\\\\%%___%BB%%%___%CC")),
+        "LIKE($0, 'AA\\\\\\%___%BB___%CC')");
+    // even number of '#', the next % would be simplified
+    checkSimplify(like(ref, literal("AA##%%___%BB%%%___%CC"), literal("#")),
+        "LIKE($0, 'AA##___%BB___%CC', '#')");
+    checkSimplify(like(ref, literal("AA\\\\\\\\%%___%BB%%%___%CC")),
+        "LIKE($0, 'AA\\\\\\\\___%BB___%CC')");
+    checkSimplify(like(ref, literal("%%#%#%A%%"), literal("#")),
+        "LIKE($0, '%#%#%A%', '#')");
+    checkSimplify(like(ref, literal("###%%#%#%A%%##%%%"), literal("#")),
+        "LIKE($0, '###%%#%#%A%##%', '#')");
+    checkSimplify(like(ref, literal("###%%#%#%A#%%%#%A%%###%%%"), literal("#")),
+        "LIKE($0, '###%%#%#%A#%%#%A%###%%', '#')");
+    checkSimplifyUnchanged(like(ref, literal("A"), literal("#")));
     checkSimplifyUnchanged(like(ref, literal("%A"), literal("#")));
 
     // As above, but ref is NOT NULL
@@ -4143,5 +4261,19 @@ class RexProgramTest extends RexProgramTestBase {
         typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.DATE), true);
     RexNode cast = rexBuilder.makeCast(nullableDateType, dateStr);
     checkSimplify(cast, "2020-10-30");
+  }
+
+  /** Unit test for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7215">[CALCITE-7215]
+   * RexSimplify should simplify SEARCH with complex operand</a>. */
+  @Test void testSimplifySearch() {
+    final RexNode ref = input(tInt(), 0);
+    RexNode operand =
+        div(ref, case_(case_(eq(ref, literal(1)), trueLiteral, trueLiteral), literal(5), nullInt));
+
+    // SEARCH(/($0, CASE(CASE(=($0, 1), true, true), 5, null:INTEGER)), Sarg[1, 2, 3])
+    RexNode search = in(operand, literal(1), literal(2), literal(3));
+
+    checkSimplify(search, "SEARCH(/($0, 5), Sarg[1, 2, 3])");
   }
 }

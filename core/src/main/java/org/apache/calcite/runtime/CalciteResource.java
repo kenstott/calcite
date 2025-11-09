@@ -645,6 +645,9 @@ public interface CalciteResource {
   @BaseMessage("''{0}'' is not a valid time frame")
   ExInst<SqlValidatorException> invalidTimeFrame(String a0);
 
+  @BaseMessage("''{0}'' is not a valid time frame in ''{1}''")
+  ExInst<SqlValidatorException> invalidTimeFrameInOperation(String a0, String a1);
+
   @BaseMessage("Cannot INSERT into generated column ''{0}''")
   ExInst<SqlValidatorException> insertIntoAlwaysGenerated(String a0);
 
@@ -1153,4 +1156,10 @@ public interface CalciteResource {
 
   @BaseMessage("Index in ROW type does not have a constant integer or string value")
   ExInst<SqlValidatorException> illegalRowIndex();
+
+  @BaseMessage("Unequal number of entries in ROW expressions")
+  ExInst<SqlValidatorException> unequalRowSizes();
+
+  @BaseMessage("Cannot infer return type for {0}; operand types: {1}")
+  ExInst<SqlValidatorException> cannotInferReturnType(String operator, String types);
 }

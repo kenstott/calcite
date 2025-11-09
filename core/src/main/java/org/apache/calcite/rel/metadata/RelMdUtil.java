@@ -602,6 +602,9 @@ public class RelMdUtil {
       final RexNode e = projExprs.get(bit);
       if (e instanceof RexInputRef) {
         baseCols.set(((RexInputRef) e).getIndex());
+      } else if (RexUtil.isLosslessCast(e)
+          && ((RexCall) e).getOperands().get(0).isA(SqlKind.INPUT_REF)) {
+        baseCols.set(((RexInputRef) ((RexCall) e).getOperands().get(0)).getIndex());
       } else {
         projCols.set(bit);
       }
@@ -1016,8 +1019,8 @@ public class RelMdUtil {
       // Cannot be determined
       return false;
     }
-    final int offsetVal = offset == null ? 0 : RexLiteral.intValue(offset);
-    final int limit = RexLiteral.intValue(fetch);
+    final long offsetVal = offset == null ? 0 : RexLiteral.longValue(offset);
+    final long limit = RexLiteral.longValue(fetch);
     return (double) offsetVal + (double) limit >= rowCount;
   }
 
