@@ -551,4 +551,78 @@ public interface GovDataSubSchemaFactory {
       List<JsonTable> tableDefinitions) {
     // Default implementation - do nothing
   }
+
+  /**
+   * Expands trend_patterns from table definitions into standalone table definitions.
+   *
+   * <p>For each table with a "trend_patterns" array, creates additional table definitions
+   * for the consolidated trend tables. These trend tables consolidate year-partitioned data
+   * into single files for faster time-series queries.
+   *
+   * <p>Example: employment_statistics with pattern
+   * "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet"
+   * and trend_pattern "type=employment_statistics/frequency={frequency}/employment_statistics.parquet"
+   * will create a new table definition for the consolidated table.
+   *
+   * @param tables List of table definitions (will be modified in-place to add trend tables)
+   */
+  default void expandTrendPatterns(List<Map<String, Object>> tables) {
+    java.util.List<Map<String, Object>> trendTables = new ArrayList<>();
+
+    for (Map<String, Object> table : tables) {
+      // Check if table has trend_patterns
+      @SuppressWarnings("unchecked")
+      java.util.List<Map<String, Object>> trendPatterns =
+          (java.util.List<Map<String, Object>>) table.get("trend_patterns");
+
+      if (trendPatterns == null || trendPatterns.isEmpty()) {
+        continue;
+      }
+
+      // For each trend pattern, create a new table definition
+      for (Map<String, Object> trendPattern : trendPatterns) {
+        String trendName = (String) trendPattern.get("name");
+        String trendPatternStr = (String) trendPattern.get("pattern");
+
+        if (trendName == null || trendPatternStr == null) {
+          LOGGER.warn("Skipping trend pattern with missing name or pattern in table '{}'",
+              table.get("name"));
+          continue;
+        }
+
+        // Create new table definition for the trend
+        Map<String, Object> trendTable = new java.util.HashMap<>();
+        trendTable.put("name", trendName);
+        trendTable.put("pattern", trendPatternStr);
+
+        // Copy column definitions from source table (same schema)
+        if (table.containsKey("columns")) {
+          trendTable.put("columns", table.get("columns"));
+        }
+
+        // Copy comment if present, or create descriptive comment
+        String comment = (String) trendPattern.get("comment");
+        if (comment == null) {
+          comment = "Consolidated trend data from " + table.get("name");
+        }
+        trendTable.put("comment", comment);
+
+        // Copy partitions configuration (minus year dimension)
+        // Note: Trend tables don't have year partitions, but may have other dimensions like frequency
+        if (table.containsKey("partitions")) {
+          trendTable.put("partitions", table.get("partitions"));
+        }
+
+        // Add to trend tables list
+        trendTables.add(trendTable);
+        LOGGER.debug("Expanded trend pattern '{}' from table '{}'", trendName, table.get("name"));
+      }
+    }
+
+    // Add all trend tables to the main tables list
+    if (!trendTables.isEmpty()) {
+      tables.addAll(trendTables);
+      LOGGER.info("Expanded {} trend patterns into table definitions", trendTables.size());
+    }
+  }
 }
