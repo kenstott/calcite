@@ -23,16 +23,10 @@ import org.apache.calcite.model.JsonTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -291,72 +285,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Download and convert ALL reference/catalog tables FIRST before any transactional data.
-   * This ensures that reference data is available for enrichment and validation.
-   *
-   * <p>Reference tables downloaded (in order):
-   * <ul>
-   *   <li>FRED: reference_fred_series catalog</li>
-   *   <li>BLS: reference_jolts_industries and reference_jolts_dataelements</li>
-   *   <li>BEA: reference_nipa_tables and reference_regional_linecodes</li>
-   * </ul>
-   */
-  private void downloadAllReferenceData(String cacheDir, String parquetDir,
-      String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
-      StorageProvider storageProvider, StorageProvider cacheStorageProvider,
-      CacheManifest cacheManifest, String econOperatingDirectory,
-      int fredMinPopularity, boolean fredCatalogForceRefresh) {
-
-    LOGGER.info("=== Downloading ALL Reference Tables ===");
-
-    // 1. FRED reference_fred_series catalog
-    if (fredApiKey != null && !fredApiKey.isEmpty()) {
-      try {
-        FredDataDownloader fredDownloader =
-            new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir,
-                cacheStorageProvider, storageProvider, cacheManifest,
-                fredMinPopularity, fredCatalogForceRefresh);
-        fredDownloader.downloadReferenceData();
-      } catch (Exception e) {
-        LOGGER.error("Error downloading FRED catalog", e);
-      }
-    } else {
-      LOGGER.warn("Skipping FRED catalog download - API key not available");
-    }
-
-    // 2. BLS JOLTS reference tables
-    if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      try {
-        BlsDataDownloader blsDownloader =
-            new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir,
-                cacheStorageProvider, storageProvider, cacheManifest);
-        blsDownloader.downloadReferenceData();
-      } catch (Exception e) {
-        LOGGER.error("Error downloading BLS JOLTS reference tables", e);
-      }
-    } else {
-      LOGGER.warn("Skipping BLS JOLTS reference tables - BLS not enabled or API key not available");
-    }
-
-    // 3. BEA reference tables
-    if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
-      try {
-        BeaDataDownloader beaDownloader =
-            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir,
-                cacheStorageProvider, storageProvider, cacheManifest);
-        beaDownloader.downloadReferenceData();
-      } catch (Exception e) {
-        LOGGER.error("Error downloading BEA reference tables", e);
-      }
-    } else {
-      LOGGER.warn("Skipping BEA reference tables - BEA not enabled or API key not available");
-    }
-
-    LOGGER.info("=== PHASE 0 Complete: All Reference Tables Downloaded ===");
-  }
-
-  /**
-   * Download economic data from various sources following GEO pattern.
+   * Download economic data from various sources using unified downloader pattern.
+   * This method creates all downloaders and orchestrates the standard 3-phase download pattern:
+   * Phase 0: Download reference data
+   * Phase 1: Download all time-series data
+   * Phase 2: Convert all data to Parquet
    */
   private void downloadEconData(Map<String, Object> operand, String cacheDir, String parquetDir,
       String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
@@ -383,390 +316,107 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // cacheStorageProvider is passed as parameter (created by GovDataSchemaFactory)
     LOGGER.debug("Using shared cache storage provider for cache directory: {}", cacheDir);
 
-    // Download ALL reference tables FIRST before any transactional data
-    downloadAllReferenceData(cacheDir, parquetDir, blsApiKey, fredApiKey, beaApiKey,
-        enabledSources, storageProvider, cacheStorageProvider, cacheManifest,
-        econOperatingDirectory, fredMinPopularity, fredCatalogForceRefresh);
+    // Create list of all downloaders (only for enabled sources)
+    List<AbstractEconDataDownloader> downloaders = new ArrayList<>();
 
-    // Download BLS data if enabled
+    // Create BLS downloader if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      try {
-        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Download all BLS data for the year range (using enabledBlsTables parsed in buildOperand)
-        blsDownloader.downloadAll(startYear, endYear, enabledBlsTables);
-
-        // Convert to parquet files for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String cacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
-
-          // Convert employment statistics
-          String employmentParquetPath = storageProvider.resolvePath(parquetDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.parquet");
-          String employmentRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=employment_statistics/frequency=monthly/year=" + year + "/employment_statistics.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "employment_statistics", year, employmentRawPath, employmentParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "monthly");
-            blsDownloader.convertCachedJsonToParquet("employment_statistics", variables);
-            cacheManifest.markParquetConverted("employment_statistics", year, null, employmentParquetPath);
-          }
-
-          // Convert inflation metrics
-          String inflationParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.parquet");
-          String inflationRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/frequency=monthly/year=" + year + "/inflation_metrics.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "inflation_metrics", year, inflationRawPath, inflationParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "monthly");
-            blsDownloader.convertCachedJsonToParquet("inflation_metrics", variables);
-            cacheManifest.markParquetConverted("inflation_metrics", year, null, inflationParquetPath);
-          }
-
-          // Convert regional CPI
-          String regionalCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=cpi_regional/year=" + year);
-          String regionalCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=cpi_regional/year=" + year + "/regional_cpi.parquet");
-          String regionalCpiRawPath = cacheStorageProvider.resolvePath(regionalCpiCacheYearPath, "regional_cpi.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "regional_cpi", year, regionalCpiRawPath, regionalCpiParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("regional_cpi", variables);
-            cacheManifest.markParquetConverted("regional_cpi", year, null, regionalCpiParquetPath);
-          }
-
-          // Convert metro CPI
-          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_cpi/frequency=month/year=" + year);
-          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/frequency=month/year=" + year + "/metro_cpi.parquet");
-          String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "month");
-            blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
-            cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
-          }
-
-          // Convert state industry employment
-          String stateIndustryCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=state_industry/year=" + year);
-          String stateIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=state_industry/year=" + year + "/state_industry.parquet");
-          String stateIndustryRawPath = cacheStorageProvider.resolvePath(stateIndustryCacheYearPath, "state_industry.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_industry", year, stateIndustryRawPath, stateIndustryParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("state_industry", variables);
-            cacheManifest.markParquetConverted("state_industry", year, null, stateIndustryParquetPath);
-          }
-
-          // Convert state wages
-          String stateWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=state_wages/year=" + year);
-          String stateWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=state_wages/year=" + year + "/state_wages.parquet");
-          String stateWagesRawPath = cacheStorageProvider.resolvePath(stateWagesCacheYearPath, "state_wages.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "state_wages", year, stateWagesRawPath, stateWagesParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("state_wages", variables);
-            cacheManifest.markParquetConverted("state_wages", year, null, stateWagesParquetPath);
-          }
-
-          // Convert metro industry employment
-          String metroIndustryCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_industry/year=" + year);
-          String metroIndustryParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_industry/year=" + year + "/metro_industry.parquet");
-          String metroIndustryRawPath = cacheStorageProvider.resolvePath(metroIndustryCacheYearPath, "metro_industry.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_industry", year, metroIndustryRawPath, metroIndustryParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("metro_industry", variables);
-            cacheManifest.markParquetConverted("metro_industry", year, null, metroIndustryParquetPath);
-          }
-
-          // Convert metro wages
-          String metroWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_wages/year=" + year);
-          String metroWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_wages/year=" + year + "/metro_wages.parquet");
-          String metroWagesRawPath = cacheStorageProvider.resolvePath(metroWagesCacheYearPath, "metro_wages.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_wages", year, metroWagesRawPath, metroWagesParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("metro_wages", variables);
-            cacheManifest.markParquetConverted("metro_wages", year, null, metroWagesParquetPath);
-          }
-
-          // Convert JOLTS regional
-          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/frequency=monthly/year=" + year);
-          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
-          String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "monthly");
-            blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
-            cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
-          }
-
-          // Convert county wages
-          String countyWagesCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=county_wages/year=" + year);
-          String countyWagesParquetPath = storageProvider.resolvePath(parquetDir, "type=county_wages/year=" + year + "/county_wages.parquet");
-          String countyWagesRawPath = cacheStorageProvider.resolvePath(countyWagesCacheYearPath, "county_wages.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "county_wages", year, countyWagesRawPath, countyWagesParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("county_wages", variables);
-            cacheManifest.markParquetConverted("county_wages", year, null, countyWagesParquetPath);
-          }
-
-          // Convert JOLTS state
-          String joltsStateCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_state/year=" + year);
-          String joltsStateParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_state/year=" + year + "/jolts_state.parquet");
-          String joltsStateRawPath = cacheStorageProvider.resolvePath(joltsStateCacheYearPath, "jolts_state.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_state", year, joltsStateRawPath, joltsStateParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("jolts_state", variables);
-            cacheManifest.markParquetConverted("jolts_state", year, null, joltsStateParquetPath);
-          }
-
-          // Convert wage growth
-          String wageParquetPath = storageProvider.resolvePath(parquetDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.parquet");
-          String wageRawPath = cacheStorageProvider.resolvePath(cacheDir, "type=wage_growth/frequency=quarterly/year=" + year + "/wage_growth.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "wage_growth", year, wageRawPath, wageParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "quarterly");
-            blsDownloader.convertCachedJsonToParquet("wage_growth", variables);
-            cacheManifest.markParquetConverted("wage_growth", year, null, wageParquetPath);
-          }
-        }
-
-        // Note: JOLTS reference tables (jolts_industries, jolts_dataelements) are now
-        // downloaded and converted in Phase 0 via downloadAllReferenceData()
-
-        LOGGER.debug("BLS data download completed");
-      } catch (Exception e) {
-        LOGGER.error("Error downloading BLS data", e);
-      }
+      BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir,
+          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+          cacheManifest, enabledBlsTables);
+      downloaders.add(blsDownloader);
+      LOGGER.debug("Added BLS downloader to orchestration list");
     }
 
-    // Download FRED indicators data from catalog-based series list
+    // Create FRED downloader if enabled
     if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()) {
       try {
-        LOGGER.info("Building FRED indicators series list from catalog (active series with popularity >= {})", fredMinPopularity);
+        // Get catalog cache TTL from operand (default 365 days)
+        Integer catalogCacheTtlDays = (Integer) operand.get("fredCatalogCacheTtlDays");
 
-        // Try to get from cache first (expensive catalog parsing operation)
-        List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
-
-        if (catalogSeries == null) {
-          // Cache miss or expired - extract from catalog files
-          LOGGER.info("Catalog series cache miss/expired - extracting from catalog files");
-          catalogSeries = extractActivePopularSeriesFromCatalog(cacheStorageProvider, cacheDir, fredMinPopularity);
-
-          // Cache the results with configurable TTL (default 365 days for annual refresh)
-          Integer catalogCacheTtlDays = (Integer) operand.get("fredCatalogCacheTtlDays");
-          if (catalogCacheTtlDays == null) {
-            catalogCacheTtlDays = 365;  // Default: 1 year
-          }
-          cacheManifest.cacheCatalogSeries(fredMinPopularity, catalogSeries, catalogCacheTtlDays);
-
-          LOGGER.info("Cached {} series IDs for {} days", catalogSeries.size(), catalogCacheTtlDays);
-        }
-
-        LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
-
-        // Merge with customFredSeries if provided
-        Set<String> allSeriesIds = new LinkedHashSet<>(catalogSeries);
-        if (customFredSeries != null && !customFredSeries.isEmpty()) {
-          allSeriesIds.addAll(customFredSeries);
-          LOGGER.info("Added {} custom FRED series, total series count: {}", customFredSeries.size(), allSeriesIds.size());
-        }
-
-        // Download and convert each series with series partitioning using metadata-driven approach
-        FredDataDownloader fredDownloader = new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, fredMinPopularity, fredCatalogForceRefresh);
-
-        // Download all series for the year range using metadata-driven executeDownload()
-        fredDownloader.downloadAll(startYear, endYear, new ArrayList<>(allSeriesIds));
-
-        // Convert downloaded JSON to Parquet for each series/year combination
-        fredDownloader.convertAll(startYear, endYear, new ArrayList<>(allSeriesIds));
-
-        LOGGER.debug("FRED indicators data download and conversion completed");
+        // FredDataDownloader handles all FRED-specific initialization internally
+        FredDataDownloader fredDownloader = new FredDataDownloader(fredApiKey, cacheDir,
+            econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+            cacheManifest, customFredSeries, fredMinPopularity, fredCatalogForceRefresh,
+            catalogCacheTtlDays);
+        downloaders.add(fredDownloader);
+        LOGGER.debug("Added FRED downloader to orchestration list");
       } catch (Exception e) {
-        LOGGER.error("Error downloading FRED indicators data", e);
+        LOGGER.error("Error creating FRED downloader", e);
       }
     }
 
-    // Download Treasury data if enabled (no API key required)
+    // Create Treasury downloader if enabled (no API key required)
     if (enabledSources.contains("treasury")) {
-      try {
-        TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Download all Treasury data for the year range
-        treasuryDownloader.downloadAll(startYear, endYear);
-
-        // Convert to parquet files for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String cacheTimeseriesYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=timeseries/year=" + year);
-
-          String yieldsParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/frequency=daily/year=" + year + "/treasury_yields.parquet");
-          String yieldsRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "treasury_yields.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "treasury_yields", year, yieldsRawPath, yieldsParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "daily");
-            treasuryDownloader.convertCachedJsonToParquet("treasury_yields", variables);
-            cacheManifest.markParquetConverted("treasury_yields", year, null, yieldsParquetPath);
-          }
-
-          // Convert federal debt data to parquet
-          String debtParquetPath = storageProvider.resolvePath(parquetDir, "type=timeseries/frequency=daily/year=" + year + "/federal_debt.parquet");
-          String debtRawPath = cacheStorageProvider.resolvePath(cacheTimeseriesYearPath, "federal_debt.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "federal_debt", year, debtRawPath, debtParquetPath)) {
-            treasuryDownloader.convertFederalDebtToParquet(cacheTimeseriesYearPath, debtParquetPath);
-            cacheManifest.markParquetConverted("federal_debt", year, null, debtParquetPath);
-          }
-        }
-
-        LOGGER.debug("Treasury data download completed");
-      } catch (Exception e) {
-        LOGGER.error("Error downloading Treasury data", e);
-      }
+      TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir,
+          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+      downloaders.add(treasuryDownloader);
+      LOGGER.debug("Added Treasury downloader to orchestration list");
     }
 
-    // Download BEA data if enabled
+    // Create BEA downloader if enabled
     if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
       try {
-        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Note: BEA reference tables (reference_nipa_tables, reference_regional_linecodes) are now
-        // downloaded and converted in Phase 0 via downloadAllReferenceData()
-
-        // Extract iteration lists from schema metadata
-        List<String> nipaTablesList = extractIterationList("national_accounts", "nipaTablesList");
-        List<String> lineCodesList = extractIterationList("regional_income", "lineCodesList");
-        List<String> keyIndustriesList = extractIterationList("industry_gdp", "keyIndustriesList");
-
-
-        // PATCH: Load active NIPA tables from catalog and use for downloads
-        Map<String, Set<String>> tableFrequencies = Collections.emptyMap();
-        try {
-          tableFrequencies = beaDownloader.loadNipaTableFrequencies();
-          if (!tableFrequencies.isEmpty()) {
-            // Extract just the table names
-            List<String> activeNipaTables = new ArrayList<>(tableFrequencies.keySet());
-            LOGGER.info("Patching nipaTablesList with {} active tables from catalog (was: {})",
-                activeNipaTables.size(), nipaTablesList.size());
-            nipaTablesList = activeNipaTables;
-          } else {
-            LOGGER.warn("No active NIPA tables found in catalog, using default nipaTablesList");
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Could not load active NIPA tables from catalog: {}. Using default nipaTablesList.", e.getMessage());
-        }
-
-        // Download all BEA data using metadata-driven methods
-        LOGGER.info("Phase 2: Downloading BEA data for years {}-{}", startYear, endYear);
-        beaDownloader.downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
-        beaDownloader.downloadRegionalIncomeMetadata(startYear, endYear);
-        // Note: trade_statistics is now a VIEW on national_accounts, no separate download needed
-        beaDownloader.downloadItaDataMetadata(startYear, endYear);
-        beaDownloader.downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
-
-        // Convert all BEA data to Parquet using metadata-driven methods
-        LOGGER.info("Converting BEA data to Parquet for years {}-{}", startYear, endYear);
-        beaDownloader.convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
-        beaDownloader.convertRegionalIncomeMetadata(startYear, endYear);
-        // Note: trade_statistics is now a VIEW on national_accounts, no separate conversion needed
-        beaDownloader.convertItaDataMetadata(startYear, endYear);
-        beaDownloader.convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
-
-        LOGGER.debug("BEA data download completed");
+        // BeaDataDownloader handles all BEA-specific initialization internally
+        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory,
+            parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+        downloaders.add(beaDownloader);
+        LOGGER.debug("Added BEA downloader to orchestration list");
       } catch (Exception e) {
-        LOGGER.error("Error downloading BEA data", e);
+        LOGGER.error("Error creating BEA downloader", e);
       }
     }
 
-    // Optional BLS data sources (jolts_regional, metro_cpi)
-    // These are downloaded separately to allow fine-grained control
-    if (enabledSources.contains("bls_jolts_regional") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      try {
-        LOGGER.info("Phase 3: Downloading optional BLS jolts_regional data");
-        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-        blsDownloader.downloadJoltsRegional(startYear, endYear);
-        LOGGER.debug("Phase 3: jolts_regional download completed");
-
-        // Convert jolts_regional to parquet for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String joltsRegionalCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=jolts_regional/frequency=monthly/year=" + year);
-          String joltsRegionalParquetPath = storageProvider.resolvePath(parquetDir, "type=jolts_regional/frequency=monthly/year=" + year + "/jolts_regional.parquet");
-          String joltsRegionalRawPath = cacheStorageProvider.resolvePath(joltsRegionalCacheYearPath, "jolts_regional.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "jolts_regional", year, joltsRegionalRawPath, joltsRegionalParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            variables.put("frequency", "monthly");
-            blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
-            cacheManifest.markParquetConverted("jolts_regional", year, null, joltsRegionalParquetPath);
-          }
-        }
-        LOGGER.debug("Phase 3: jolts_regional conversion completed");
-      } catch (Exception e) {
-        LOGGER.error("Error downloading Phase 3 jolts_regional data", e);
-      }
-    }
-
-    if (enabledSources.contains("bls_metro_cpi") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      try {
-        LOGGER.info("Phase 3: Downloading optional BLS metro_cpi data");
-        BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-        blsDownloader.downloadMetroCpi(startYear, endYear);
-        LOGGER.debug("Phase 3: metro_cpi download completed");
-
-        // Convert metro CPI to parquet for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String metroCpiCacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=metro_cpi/year=" + year);
-          String metroCpiParquetPath = storageProvider.resolvePath(parquetDir, "type=metro_cpi/year=" + year + "/metro_cpi.parquet");
-          String metroCpiRawPath = cacheStorageProvider.resolvePath(metroCpiCacheYearPath, "metro_cpi.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "metro_cpi", year, metroCpiRawPath, metroCpiParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
-            cacheManifest.markParquetConverted("metro_cpi", year, null, metroCpiParquetPath);
-          }
-        }
-        LOGGER.debug("Phase 3: metro_cpi conversion completed");
-      } catch (Exception e) {
-        LOGGER.error("Error downloading Phase 3 metro_cpi data", e);
-      }
-    }
-
-    // Note: BEA regional_income and state_gdp are now handled by metadata-driven methods
-    // in Phase 2 (BeaDataDownloader.downloadRegionalIncomeMetadata/convertRegionalIncomeMetadata).
-    // The bea_regional_income and bea_state_gdp enabled source flags are no longer used.
-
-    // Download World Bank data if enabled (no API key required)
+    // Create WorldBank downloader if enabled (no API key required)
     if (enabledSources.contains("worldbank")) {
+      WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir,
+          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+      downloaders.add(worldBankDownloader);
+      LOGGER.debug("Added WorldBank downloader to orchestration list");
+    }
+
+    // PHASE 0: Download all reference data
+    LOGGER.info("=== PHASE 0: Downloading all reference data ===");
+    for (AbstractEconDataDownloader downloader : downloaders) {
       try {
-        WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
-
-        // Download all World Bank data for the year range
-        worldBankDownloader.downloadAll(startYear, endYear);
-
-        // Convert to parquet files for each year
-        for (int year = startYear; year <= endYear; year++) {
-          String worldParquetPath = storageProvider.resolvePath(parquetDir, "type=indicators/year=" + year + "/world_indicators.parquet");
-          String cacheWorldBankYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
-          String worldRawPath = cacheStorageProvider.resolvePath(cacheWorldBankYearPath, "world_indicators.json");
-          if (!isParquetConvertedOrExists(cacheManifest, storageProvider, cacheStorageProvider, "world_indicators", year, worldRawPath, worldParquetPath)) {
-            Map<String, String> variables = new HashMap<>();
-            variables.put("year", String.valueOf(year));
-            worldBankDownloader.convertCachedJsonToParquet("world_indicators", variables);
-            cacheManifest.markParquetConverted("world_indicators", year, null, worldParquetPath);
-          }
-        }
-
-        LOGGER.debug("World Bank data download completed");
+        String downloaderName = downloader.getClass().getSimpleName();
+        LOGGER.info("Downloading reference data using {}", downloaderName);
+        downloader.downloadReferenceData();
       } catch (Exception e) {
-        LOGGER.error("Error downloading World Bank data", e);
+        LOGGER.error("Error during reference data download for {}: {}",
+            downloader.getClass().getSimpleName(), e.getMessage(), e);
+      }
+    }
+
+    // PHASE 1: Download all time-series data
+    LOGGER.info("=== PHASE 1: Downloading all time-series data ===");
+    for (AbstractEconDataDownloader downloader : downloaders) {
+      try {
+        String downloaderName = downloader.getClass().getSimpleName();
+        LOGGER.info("Downloading data using {}", downloaderName);
+        downloader.downloadAll(startYear, endYear);
+      } catch (Exception e) {
+        LOGGER.error("Error during download phase for {}: {}",
+            downloader.getClass().getSimpleName(), e.getMessage(), e);
+      }
+    }
+
+    // PHASE 2: Convert all data to Parquet
+    LOGGER.info("=== PHASE 2: Converting all data to Parquet ===");
+    for (AbstractEconDataDownloader downloader : downloaders) {
+      try {
+        String downloaderName = downloader.getClass().getSimpleName();
+        LOGGER.info("Converting data using {}", downloaderName);
+        downloader.convertAll(startYear, endYear);
+      } catch (Exception e) {
+        LOGGER.error("Error during conversion phase for {}: {}",
+            downloader.getClass().getSimpleName(), e.getMessage(), e);
       }
     }
 
     // Save cache manifest after all downloads to operating directory
     cacheManifest.save(econOperatingDirectory);
+    LOGGER.info("=== All ECON data download and conversion complete ===");
   }
 
   /**
@@ -820,260 +470,77 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Check if parquet file has been converted, with defensive fallback to file existence and timestamp check.
-   * This prevents unnecessary reconversion when the manifest is deleted but parquet files still exist.
+   * Generalized include/exclude filter parser for any data source.
+   * Supports whitelist (include) or blacklist (exclude) patterns, but not both.
    *
-   * @param cacheManifest Cache manifest to check
-   * @param storageProvider Storage provider for file existence checks
-   * @param cacheStorageProvider Storage provider for raw file checks
-   * @param dataType Type of data (e.g., "gdp_components")
-   * @param year Year of data
-   * @param rawFilePath Full path to raw source file (JSON/CSV)
-   * @param parquetPath Full path to parquet file
-   * @return true if parquet exists and is newer than raw file, false if conversion needed
+   * @param operand  Schema configuration operand
+   * @param allItems Complete set of all available items
+   * @return Filtered set of items, or null for no filtering
    */
-  private boolean isParquetConvertedOrExists(CacheManifest cacheManifest,
-      StorageProvider storageProvider, StorageProvider cacheStorageProvider,
-      String dataType, int year, String rawFilePath, String parquetPath) {
+  private Set<String> parseIncludeExcludeFilter(
+      Map<String, Object> operand,
+      Set<String> allItems) {
 
-    // 1. Check manifest first - trust it as source of truth
-    if (cacheManifest.isParquetConverted(dataType, year, null)) {
-      return true;
-    }
-
-    // 2. Defensive check: if a parquet file exists but not in manifest, verify it's up-to-date
-    try {
-      if (storageProvider.exists(parquetPath)) {
-        // Get timestamps for both files
-        long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
-
-        // Check if a raw file exists and compare timestamps
-        if (cacheStorageProvider.exists(rawFilePath)) {
-          long rawModTime = cacheStorageProvider.getMetadata(rawFilePath).getLastModified();
-
-          if (parquetModTime > rawModTime) {
-            // Parquet is newer than raw file - update manifest and skip conversion
-            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
-                dataType, year);
-            cacheManifest.markParquetConverted(dataType, year, null, parquetPath);
-            return true;
-          } else {
-            // Raw file is newer - needs reconversion
-            LOGGER.info("Raw file is newer than parquet, reconversion needed: {} (year={})",
-                dataType, year);
-            return false;
-          }
-        } else {
-          // Raw file doesn't exist but parquet does - consider it up-to-date
-          LOGGER.info("⚡ Parquet exists (raw file not found), updating cache manifest: {} (year={})",
-              dataType, year);
-          cacheManifest.markParquetConverted(dataType, year, null, parquetPath);
-          return true;
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.warn("Failed to check parquet/raw file timestamps for {} year {}: {}",
-          dataType, year, e.getMessage());
-      // Fall through to return false - reconvert to be safe
-    }
-
-    // 3. Parquet doesn't exist or check failed - needs conversion
-    return false;
-  }
-
-  /**
-   * Parse BLS table filtering configuration from operand.
-   * Supports either includeTables (whitelist) or excludeTables (blacklist), but not both.
-   *
-   * @param operand Schema configuration operand
-   * @return Set of enabled table names, or null to download all tables
-   */
-  private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
     @SuppressWarnings("unchecked")
-    Map<String, Object> blsConfig = (Map<String, Object>) operand.get("blsConfig");
-    if (blsConfig == null) {
-      return null; // No filtering, download all tables
+    Map<String, Object> config = (Map<String, Object>) operand.get("blsConfig");
+    if (config == null) {
+      return null; // No filtering
     }
 
     @SuppressWarnings("unchecked")
-    List<String> includeTables = (List<String>) blsConfig.get("includeTables");
+    List<String> includeItems = (List<String>) config.get("includeTables");
     @SuppressWarnings("unchecked")
-    List<String> excludeTables = (List<String>) blsConfig.get("excludeTables");
+    List<String> excludeItems = (List<String>) config.get("excludeTables");
 
     // Validate mutual exclusivity
-    if (includeTables != null && excludeTables != null) {
+    if (includeItems != null && excludeItems != null) {
       throw new IllegalArgumentException(
-          "Cannot specify both 'includeTables' and 'excludeTables' in blsConfig. " +
-          "Use includeTables for whitelist or excludeTables for blacklist, but not both.");
+          String.format("Cannot specify both '%s' and '%s' in %s. " +
+              "Use %s for whitelist or %s for blacklist, but not both.",
+              "includeTables", "excludeTables", "blsConfig", "includeTables", "excludeTables"));
     }
 
-    if (includeTables != null) {
-      LOGGER.info("BLS table filter: including {} tables: {}", includeTables.size(), includeTables);
-      return new HashSet<>(includeTables);
+    if (includeItems != null) {
+      Set<String> filtered = new HashSet<>(includeItems);
+      LOGGER.info("{} filter: including {} {}: {}", "BLS", filtered.size(), "tables", includeItems);
+      return filtered;
     }
 
-    if (excludeTables != null) {
-      // Return all tables except excluded ones
-      Set<String> allTables =
-          new HashSet<>(
-              Arrays.asList(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
-          BlsDataDownloader.TABLE_INFLATION_METRICS,
-          BlsDataDownloader.TABLE_REGIONAL_CPI,
-          BlsDataDownloader.TABLE_METRO_CPI,
-          BlsDataDownloader.TABLE_STATE_INDUSTRY,
-          BlsDataDownloader.TABLE_STATE_WAGES,
-          BlsDataDownloader.TABLE_METRO_INDUSTRY,
-          BlsDataDownloader.TABLE_METRO_WAGES,
-          BlsDataDownloader.TABLE_JOLTS_REGIONAL,
-          BlsDataDownloader.TABLE_WAGE_GROWTH,
-          BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT));
-      allTables.removeAll(excludeTables);
-      LOGGER.info("BLS table filter: excluding {} tables, downloading {} tables",
-          excludeTables.size(), allTables.size());
-      return allTables;
+    if (excludeItems != null) {
+      Set<String> filtered = new HashSet<>(allItems);
+      excludeItems.forEach(filtered::remove);
+      LOGGER.info("{} filter: excluding {} {}, downloading {} {}",
+          "BLS", excludeItems.size(), "tables", filtered.size(), "tables");
+      return filtered;
     }
 
     return null; // No filtering
   }
 
   /**
-   * Extract series IDs from FRED catalog JSON files filtered by active status and popularity.
-   * Reads all catalog JSON files under status=active partitions and filters by popularity threshold.
+   * Parse BLS table filtering configuration from operand.
+   * Delegates to generalized parseIncludeExcludeFilter method.
    *
-   * @param cacheStorageProvider Storage provider for reading catalog cache files
-   * @param cacheDir Cache directory containing catalog JSON files
-   * @param minPopularity Minimum popularity threshold (series with popularity >= this value are included)
-   * @return List of series IDs that are active and meet the popularity threshold
+   * @param operand Schema configuration operand
+   * @return Set of enabled table names, or null to download all tables
    */
-  private List<String> extractActivePopularSeriesFromCatalog(
-      StorageProvider cacheStorageProvider, String cacheDir, int minPopularity) {
-    List<String> seriesIds = new ArrayList<>();
+  private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
+    Set<String> allBlsTables = new HashSet<>(
+        Arrays.asList(
+            BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
+            BlsDataDownloader.TABLE_INFLATION_METRICS,
+            BlsDataDownloader.TABLE_REGIONAL_CPI,
+            BlsDataDownloader.TABLE_METRO_CPI,
+            BlsDataDownloader.TABLE_STATE_INDUSTRY,
+            BlsDataDownloader.TABLE_STATE_WAGES,
+            BlsDataDownloader.TABLE_METRO_INDUSTRY,
+            BlsDataDownloader.TABLE_METRO_WAGES,
+            BlsDataDownloader.TABLE_JOLTS_REGIONAL,
+            BlsDataDownloader.TABLE_WAGE_GROWTH,
+            BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT));
 
-    try {
-      // Find all catalog JSON files under status=active partitions
-      // Pattern: type=reference/category=*/frequency=*/source=*/status=active/reference_fred_series.json
-      String catalogBasePath = cacheStorageProvider.resolvePath(cacheDir, "type=reference");
-
-      if (!cacheStorageProvider.isDirectory(catalogBasePath)) {
-        LOGGER.warn("FRED catalog cache not found at: {}", catalogBasePath);
-        return seriesIds;
-      }
-
-      // Recursively find all reference_fred_series.json files under status=active directories
-      List<String> catalogFiles = findCatalogFilesInActivePartitions(cacheStorageProvider, catalogBasePath);
-
-      LOGGER.info("Found {} catalog JSON files to process", catalogFiles.size());
-
-      // Process each catalog file
-      com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-      int totalSeriesProcessed = 0;
-      int seriesPassingFilter = 0;
-
-      for (String catalogFile : catalogFiles) {
-        try {
-          // Read JSON file as array of series objects using InputStream
-          List<Map<String, Object>> seriesList;
-          try (InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
-               InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
-            com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>> typeRef =
-                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {};
-            seriesList = objectMapper.readValue(reader, typeRef);
-          }
-
-          // Filter by popularity and extract series IDs
-          for (Map<String, Object> series : seriesList) {
-            totalSeriesProcessed++;
-
-            // Extract series_id (may be under "id" or "series_id" key)
-            String seriesId = (String) series.get("id");
-            if (seriesId == null) {
-              seriesId = (String) series.get("series_id");
-            }
-
-            // Extract popularity (default to 0 if not present)
-            Object popularityObj = series.get("popularity");
-            int popularity = 0;
-            if (popularityObj != null) {
-              if (popularityObj instanceof Integer) {
-                popularity = (Integer) popularityObj;
-              } else if (popularityObj instanceof Number) {
-                popularity = ((Number) popularityObj).intValue();
-              }
-            }
-
-            // Filter by popularity threshold
-            if (seriesId != null && popularity >= minPopularity) {
-              seriesIds.add(seriesId);
-              seriesPassingFilter++;
-            }
-          }
-
-        } catch (Exception e) {
-          LOGGER.warn("Error processing catalog file {}: {}", catalogFile, e.getMessage());
-        }
-      }
-
-      LOGGER.info("Extracted {} series IDs from catalog (processed {} total series, {} passed filter with popularity >= {})",
-          seriesIds.size(), totalSeriesProcessed, seriesPassingFilter, minPopularity);
-
-    } catch (Exception e) {
-      LOGGER.error("Error extracting series from FRED catalog", e);
-    }
-
-    return seriesIds;
-  }
-
-  /**
-   * Recursively find all fred_data_series_catalog.json files under status=active partitions.
-   *
-   * @param storageProvider Storage provider for directory traversal
-   * @param basePath Base path to search from (type=catalog directory)
-   * @return List of full paths to catalog JSON files in active partitions
-   */
-  private List<String> findCatalogFilesInActivePartitions(StorageProvider storageProvider, String basePath) {
-    List<String> catalogFiles = new ArrayList<>();
-
-    try {
-      // Use a simple recursive search for directories containing "status=active"
-      // and collect all fred_data_series_catalog.json files within them
-      findCatalogFilesRecursive(storageProvider, basePath, catalogFiles);
-    } catch (Exception e) {
-      LOGGER.error("Error finding catalog files in active partitions", e);
-    }
-
-    return catalogFiles;
-  }
-
-  /**
-   * Recursive helper to find catalog JSON files under status=active directories.
-   */
-  private void findCatalogFilesRecursive(StorageProvider storageProvider, String currentPath,
-      List<String> catalogFiles) throws IOException {
-
-    List<StorageProvider.FileEntry> entries = storageProvider.listFiles(currentPath, false);
-
-    for (StorageProvider.FileEntry entry : entries) {
-      String fullPath = entry.getPath();
-
-      if (entry.isDirectory()) {
-        // Extract directory name from path, handling trailing slash
-        String pathForParsing = fullPath.endsWith("/") ?
-            fullPath.substring(0, fullPath.length() - 1) : fullPath;
-        String entryName = pathForParsing.substring(pathForParsing.lastIndexOf('/') + 1);
-
-        // If this is a status=active directory, look for catalog JSON file
-        if (entryName.equals("status=active")) {
-          String catalogFile = storageProvider.resolvePath(fullPath, "reference_fred_series.json");
-          if (storageProvider.exists(catalogFile)) {
-            catalogFiles.add(catalogFile);
-            LOGGER.debug("Found catalog file: {}", catalogFile);
-          }
-        } else {
-          // Recurse into subdirectories
-          findCatalogFilesRecursive(storageProvider, fullPath, catalogFiles);
-        }
-      }
-    }
+    return parseIncludeExcludeFilter(operand,
+        allBlsTables);
   }
 
   @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
@@ -1084,52 +551,4 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         tableConstraints != null ? tableConstraints.size() : 0);
   }
 
-  /**
-   * Extracts an iteration list from schema metadata for a given table.
-   *
-   * @param tableName Name of the table in econ-schema.json
-   * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList")
-   * @return List of iteration values, or empty list if not found
-   */
-  private List<String> extractIterationList(String tableName, String listKey) {
-    try {
-      InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
-      if (schemaStream == null) {
-        LOGGER.warn("econ-schema.json not found, returning empty iteration list");
-        return Collections.emptyList();
-      }
-
-      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(schemaStream);
-
-      // Find the table in the partitionedTables array (not tables array which contains views)
-      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
-      if (partitionedTables != null && partitionedTables.isArray()) {
-        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
-          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
-          if (nameNode != null && tableName.equals(nameNode.asText())) {
-            // Found the table, extract the download config
-            com.fasterxml.jackson.databind.JsonNode download = table.get("download");
-            if (download != null) {
-              com.fasterxml.jackson.databind.JsonNode listNode = download.get(listKey);
-              if (listNode != null && listNode.isArray()) {
-                List<String> result = new ArrayList<>();
-                for (com.fasterxml.jackson.databind.JsonNode item : listNode) {
-                  result.add(item.asText());
-                }
-                LOGGER.debug("Extracted {} items from {} for table {}", result.size(), listKey, tableName);
-                return result;
-              }
-            }
-          }
-        }
-      }
-
-      LOGGER.warn("Iteration list '{}' not found for table '{}', returning empty list", listKey, tableName);
-      return Collections.emptyList();
-    } catch (Exception e) {
-      LOGGER.error("Error extracting iteration list '{}' for table '{}': {}", listKey, tableName, e.getMessage());
-      return Collections.emptyList();
-    }
-  }
 }
