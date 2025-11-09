@@ -60,8 +60,8 @@ public class ItaDataTest {
     assumeTrue(!itaIndicatorsList.isEmpty(), "itaIndicatorsList not found in schema");
 
     // Test ITA data for a 2-year period for faster testing using metadata-driven methods
-    downloader.downloadItaDataMetadata(2022, 2023, itaIndicatorsList);
-    downloader.convertItaDataMetadata(2022, 2023, itaIndicatorsList);
+    downloader.downloadItaDataMetadata(2022, 2023);
+    downloader.convertItaDataMetadata(2022, 2023);
 
     // Build expected parquet path (frequency=A for annual)
     String parquetPath = tempDir.toString() + "/type=indicators/frequency=A/year=2022/ita_data.parquet";

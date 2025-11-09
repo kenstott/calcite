@@ -77,7 +77,7 @@ public class RegionalIncomeDebugTest {
 
     // Test download for 2023 using metadata-driven method
     System.out.println("Downloading regional income for 2023...");
-    downloader.downloadRegionalIncomeMetadata(2023, 2023, lineCodesList);
+    downloader.downloadRegionalIncomeMetadata(2023, 2023);
 
     // Check if file was created (new path structure: type=regional_income/frequency=A/year=2023/)
     File jsonFile = new File(cacheDir, "type=regional_income/frequency=A/year=2023/regional_income.json");
@@ -96,7 +96,7 @@ public class RegionalIncomeDebugTest {
 
     // Test parquet conversion using metadata-driven method
     System.out.println("Converting to parquet...");
-    downloader.convertRegionalIncomeMetadata(2023, 2023, lineCodesList);
+    downloader.convertRegionalIncomeMetadata(2023, 2023);
 
     // Check parquet file was created (new path)
     File parquetFile = new File(cacheDir, "type=regional_income/frequency=A/year=2023/regional_income.parquet");
