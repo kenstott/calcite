@@ -367,11 +367,14 @@ import static org.apache.calcite.sql.fun.SqlStdOperatorTable.ASIN;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.ATAN;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.ATAN2;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITAND;
+import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITAND_OPERATOR;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITCOUNT;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITNOT;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITOR;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITXOR;
+import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BITXOR_OPERATOR;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BIT_AND;
+import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BIT_LEFT_SHIFT;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BIT_OR;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.BIT_XOR;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.CARDINALITY;
@@ -457,6 +460,7 @@ import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LAST;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LAST_DAY;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LAST_VALUE;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LEAD;
+import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LEFTSHIFT;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LESS_THAN;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LESS_THAN_OR_EQUAL;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.LIKE;
@@ -739,6 +743,10 @@ public class RexImpTable {
           NullPolicy.STRICT);
       defineMethod(BITXOR, BuiltInMethod.BIT_XOR.method,
           NullPolicy.STRICT);
+      defineMethod(BITXOR_OPERATOR, BuiltInMethod.BIT_XOR.method,
+          NullPolicy.STRICT);
+      defineMethod(BITAND_OPERATOR, BuiltInMethod.BIT_AND.method,
+          NullPolicy.STRICT);
       defineMethod(BITNOT, BuiltInMethod.BIT_NOT.method,
           NullPolicy.STRICT);
       define(CONCAT, new ConcatImplementor());
@@ -891,6 +899,17 @@ public class RexImpTable {
       defineMethod(LOG1P, BuiltInMethod.LOG1P.method, NullPolicy.STRICT);
       defineMethod(TYPEOF, BuiltInMethod.TYPEOF.method, NullPolicy.STRICT);
       defineMethod(VARIANTNULL, BuiltInMethod.VARIANTNULL.method, NullPolicy.STRICT);
+
+      // Left shift operations: shift bits to the left by specified amount.
+      // Supports integer, unsigned integer, and binary data types.
+      // Shift amount is normalized using modulo arithmetic based on data type bit width.
+
+      // LEFTSHIFT: Function call syntax for bitwise left shift operation (e.g., LEFTSHIFT(x, y))
+      defineMethod(LEFTSHIFT, BuiltInMethod.LEFT_SHIFT.method, NullPolicy.STRICT);
+
+      // BIT_LEFT_SHIFT: Operator syntax for bitwise left shift in SQL expressions
+      // (e.g., x << y)
+      defineMethod(BIT_LEFT_SHIFT, BuiltInMethod.LEFT_SHIFT.method, NullPolicy.STRICT);
 
       define(SAFE_ADD,
           new SafeArithmeticImplementor(BuiltInMethod.SAFE_ADD.method));
@@ -4045,8 +4064,8 @@ public class RexImpTable {
         }
         break;
       case TIME:
-        trop1 = normalize(typeName, trop1);
-        trop1 = Expressions.convert_(trop1, int.class);
+        // trop1 may be wider (e.g., TIMESTAMP); we should do the arithmetic
+        // using the wider type.
         break;
       default:
         break;

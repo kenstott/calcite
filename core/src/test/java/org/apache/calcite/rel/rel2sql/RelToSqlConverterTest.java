@@ -17,6 +17,7 @@
 package org.apache.calcite.rel.rel2sql;
 
 import org.apache.calcite.config.NullCollation;
+import org.apache.calcite.plan.Contexts;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelTraitDef;
@@ -33,6 +34,7 @@ import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalFilter;
+import org.apache.calcite.rel.rules.AggregateGroupingSetsToUnionRule;
 import org.apache.calcite.rel.rules.AggregateJoinTransposeRule;
 import org.apache.calcite.rel.rules.AggregateProjectMergeRule;
 import org.apache.calcite.rel.rules.CoreRules;
@@ -45,6 +47,7 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
+import org.apache.calcite.rex.RexCorrelVariable;
 import org.apache.calcite.runtime.FlatLists;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.SchemaPlus;
@@ -90,6 +93,7 @@ import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RuleSet;
 import org.apache.calcite.tools.RuleSets;
 import org.apache.calcite.util.ConversionUtil;
+import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.TestUtil;
 import org.apache.calcite.util.Util;
@@ -551,6 +555,85 @@ class RelToSqlConverterTest {
     sql(query).ok(expected);
   }
 
+  /**
+   * Tests that an identity project is pruned over scan during SQL conversion,
+   * and that the correct table alias is propagated to the final projection.
+   */
+  @Test void testPruneIdentityProjectOverScan() {
+    final RelBuilder relBuilder =
+        RelBuilder.create(
+        // Disable merge-project optimization by RelBuilder to generate a plan
+        // containing multiple LogicalProject nodes like:
+        // LogicalProject(product_id=[$0])
+        //  LogicalProject(product_id=[$0], product_name=[$2])
+        RelBuilderTest.config().context(
+            Contexts.of(RelBuilder.Config.DEFAULT.withBloat(-1)))
+        .build());
+    final RelNode root = relBuilder
+        .scan("EMP")
+        // This identity project (which would be aliased 't') should not be used in SQL
+        .project(relBuilder.fields(),
+            ImmutableList.of(), true)
+        // This identity project (which would be aliased 't0') should not be used in SQL
+        .project(relBuilder.fields(),
+            ImmutableList.of(), true)
+        // this project should use `EMP` as table alias for fields instead of `t` or `t0`
+        .project(ImmutableList.of(relBuilder.field("EMPNO")),
+            ImmutableList.of(), true)
+        .build();
+    final String expected = "SELECT \"EMP\".\"EMPNO\"\n"
+        + "FROM \"scott\".\"EMP\" AS \"EMP\"";
+    final SqlDialect sqlDialect = new CalciteSqlDialect(CalciteSqlDialect.DEFAULT_CONTEXT) {
+      // Force use of explicit table aliases everywhere
+      @Override public boolean hasImplicitTableAlias() {
+        return false;
+      }
+    };
+    relFn(b -> root).dialect(sqlDialect).ok(expected);
+  }
+
+  /**
+   * Tests that an identity projection over a join is pruned during SQL conversion,
+   * and that the correct table alias is propagated to the final projection.
+   */
+  @Test void testPruneIdentityProjectOverJoin() {
+    final RelBuilder relBuilder =
+        RelBuilder.create(
+        // Disable merge-project optimization by RelBuilder to generate a plan
+        // containing multiple LogicalProject nodes like:
+        // LogicalProject(product_id=[$0])
+        //  LogicalProject(product_id=[$0], product_name=[$2])
+        RelBuilderTest.config().context(
+            Contexts.of(RelBuilder.Config.DEFAULT.withBloat(-1)))
+        .build());
+    final RelNode root = relBuilder
+        .scan("EMP")
+        .project(relBuilder.field("EMPNO"), relBuilder.field("DEPTNO"))
+        .scan("DEPT")
+        .project(relBuilder.field("DEPTNO"))
+        // join alias is `t`
+        .join(JoinRelType.INNER, relBuilder.literal(false))
+        // This identity project (which would be aliased 't1') should not be used in SQL
+        .project(relBuilder.fields(), ImmutableList.of(), true)
+        // The final SQL must use the join's alias ('t') because the
+        // project above is not used in SQL.
+        .project(ImmutableList.of(relBuilder.field("EMPNO")),
+            ImmutableList.of(), true)
+        .build();
+    final String expected = "SELECT \"t\".\"EMPNO\"\n"
+        + "FROM (SELECT \"EMP\".\"EMPNO\", \"EMP\".\"DEPTNO\"\n"
+        + "FROM \"scott\".\"EMP\" AS \"EMP\") AS \"t\"\n"
+        + "INNER JOIN (SELECT \"DEPT\".\"DEPTNO\"\n"
+        + "FROM \"scott\".\"DEPT\" AS \"DEPT\") AS \"t0\" ON FALSE";
+    final SqlDialect sqlDialect = new CalciteSqlDialect(CalciteSqlDialect.DEFAULT_CONTEXT) {
+      // Force use of explicit table aliases everywhere
+      @Override public boolean hasImplicitTableAlias() {
+        return false;
+      }
+    };
+    relFn(b -> root).dialect(sqlDialect).ok(expected);
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-5906">[CALCITE-5906]
    * JDBC adapter should generate TABLESAMPLE</a>. */
@@ -670,6 +753,22 @@ class RelToSqlConverterTest {
         + "ORDER BY \"JOB\", 2) AS \"t0\"";
 
     relFn(relFn).ok(expected);
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7147">[CALCITE-7147]
+   * Comparison of INTEGER and BOOLEAN produces strange results</a>. */
+  @Test void testIntBool() {
+    String query = "select FALSE = 256";
+    String expected = "SELECT *\nFROM (VALUES (FALSE)) AS \"t\" (\"EXPR$0\")";
+    sql(query).ok(expected);
+
+    query = "select FALSE = 0.0001e0";
+    expected = "SELECT *\nFROM (VALUES (FALSE)) AS \"t\" (\"EXPR$0\")";
+    sql(query).ok(expected);
+
+    query = "select FALSE = 0.0e0";
+    expected = "SELECT *\nFROM (VALUES (TRUE)) AS \"t\" (\"EXPR$0\")";
+    sql(query).ok(expected);
   }
 
   @Test void testSelectQueryWithWhereClauseOfBasicOperators() {
@@ -2603,6 +2702,27 @@ class RelToSqlConverterTest {
   }
 
   /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7114">[CALCITE-7114]
+   * Invalid unparse for cast to array type in Spark</a>.
+   */
+  @Test void testCastArraySpark() {
+    final String query = "select cast(array['a','b','c']"
+        + " as varchar array)";
+    final String expectedSpark = "SELECT CAST(ARRAY ('a', 'b', 'c') AS ARRAY< STRING >)\n"
+        + "FROM (VALUES (0)) `t` (`ZERO`)";
+    sql(query)
+        .withSpark().ok(expectedSpark);
+
+    final String query1 = "select cast(array[array['a'], array['b'], array['c']]"
+        + " as varchar array array)";
+    final String expectedSpark1 =
+        "SELECT CAST(ARRAY (ARRAY ('a'), ARRAY ('b'), ARRAY ('c')) AS ARRAY< ARRAY< STRING > >)\n"
+            + "FROM (VALUES (0)) `t` (`ZERO`)";
+    sql(query1)
+        .withSpark().ok(expectedSpark1);
+  }
+
+  /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-7055">[CALCITE-7055]
    * Invalid unparse for cast to array type in StarRocks</a>.
    */
@@ -3657,6 +3777,26 @@ class RelToSqlConverterTest {
   }
 
   /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7069">[CALCITE-7069]
+   * Invalid unparse for INT UNSIGNED and BIGINT UNSIGNED in MysqlSqlDialect</a>. */
+  @Test void testCastToUnsignedInMySQL() {
+    final String query1 = "select cast(\"product_id\" as bigint unsigned) from \"product\"";
+    // MySQL does not allow cast to BIGINT UNSIGNED; instead cast to UNSIGNED.
+    final String expectedMysql1 = "SELECT CAST(`product_id` AS UNSIGNED)\n"
+        + "FROM `foodmart`.`product`";
+    final String query2 = "select cast(\"product_id\" as integer unsigned) from \"product\"";
+    sql(query1)
+        .withMysql().ok(expectedMysql1)
+        .withStarRocks().ok(expectedMysql1)
+        .withDoris().throws_("Doris doesn't support UNSIGNED TINYINT/SMALLINT/INTEGER/BIGINT!");
+    sql(query2)
+        // MySQL does not allow cast to INTEGER UNSIGNED, and we shouldn't use the next level
+        .withMysql().throws_("MySQL doesn't support UNSIGNED TINYINT/SMALLINT/INTEGER!")
+        .withStarRocks().throws_("StarRocks doesn't support UNSIGNED TINYINT/SMALLINT/INTEGER!")
+        .withDoris().throws_("Doris doesn't support UNSIGNED TINYINT/SMALLINT/INTEGER/BIGINT!");
+  }
+
+  /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-2719">[CALCITE-2719]
    * MySQL does not support cast to BIGINT type</a>
    * and
@@ -4228,7 +4368,7 @@ class RelToSqlConverterTest {
    * Maximum precision of unsigned bigint type in MysqlSqlDialect should be 20</a>. */
   @Test void testCastToUBigInt() {
     String query = "select cast(18446744073709551615 as bigint unsigned) from \"product\"";
-    final String expectedMysql = "SELECT CAST(18446744073709551615 AS BIGINT UNSIGNED)\n"
+    final String expectedMysql = "SELECT CAST(18446744073709551615 AS UNSIGNED)\n"
         + "FROM `foodmart`.`product`";
     final String errMsg = "org.apache.calcite.runtime.CalciteContextException: "
         + "From line 1, column 13 to line 1, column 32: "
@@ -5069,15 +5209,16 @@ class RelToSqlConverterTest {
    */
   @Test void testCastAsMapType() {
     sql("SELECT CAST(MAP['A', 1.0] AS MAP<VARCHAR, DOUBLE>)")
-        .ok("SELECT CAST(MAP['A', 1.0] AS MAP< VARCHAR CHARACTER SET \"ISO-8859-1\", DOUBLE >)\n"
+        .ok("SELECT CAST(MAP['A', 1.0] AS "
+            + "MAP< VARCHAR CHARACTER SET \"ISO-8859-1\", DOUBLE NULL >)\n"
             + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")");
     sql("SELECT CAST(MAP['A', ARRAY[1, 2, 3]] AS MAP<VARCHAR, INT ARRAY>)")
         .ok("SELECT CAST(MAP['A', ARRAY[1, 2, 3]] AS "
-            + "MAP< VARCHAR CHARACTER SET \"ISO-8859-1\", INTEGER ARRAY >)\n"
+            + "MAP< VARCHAR CHARACTER SET \"ISO-8859-1\", INTEGER ARRAY NULL >)\n"
             + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")");
     sql("SELECT CAST(MAP[ARRAY['A'], MAP[1, 2]] AS MAP<VARCHAR ARRAY, MAP<INT, INT>>)")
         .ok("SELECT CAST(MAP[ARRAY['A'], MAP[1, 2]] AS "
-            + "MAP< VARCHAR CHARACTER SET \"ISO-8859-1\" ARRAY, MAP< INTEGER, INTEGER > >)\n"
+            + "MAP< VARCHAR CHARACTER SET \"ISO-8859-1\" ARRAY, MAP< INTEGER, INTEGER NULL > NULL >)\n"
             + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")");
   }
 
@@ -9354,6 +9495,169 @@ class RelToSqlConverterTest {
     sql(sql6).ok(expected6);
   }
 
+  /** Test cases for <a href="https://issues.apache.org/jira/browse/CALCITE-7131">[CALCITE-7131]
+   * SqlImplementor.toSql does not handle GEOMETRY literals</a>. */
+  @Test void testGeometry() {
+    final String sql = "SELECT ST_AsWKB('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))')";
+    final String expected = "SELECT \"ST_ASWKB\"('POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0))')\n"
+        + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected);
+
+    final String sql1 = "SELECT ST_MakePoint(1, 2, 3)";
+    final String expected1 = "SELECT \"ST_MAKEPOINT\"(1, 2, 3)\n"
+        + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql1)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected1);
+
+    final String sql2 =
+        "SELECT ST_MakePolygon('LINESTRING(100 250, 100 350, 200 350, 200 250, 100 250)')";
+    final String expected2 =
+        "SELECT \"ST_MAKEPOLYGON\"('LINESTRING (100 250, 100 350, 200 350, 200 250, 100 250)')\n"
+        + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql2)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected2);
+
+    final String sql3 = "SELECT ST_MakeLine(ST_Point(1, 2), ST_Point(3, 4))";
+    final String expected3 =
+        "SELECT \"ST_MAKELINE\"(\"ST_POINT\"(1, 2), \"ST_POINT\"(3, 4))\n"
+            + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql3)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected3);
+
+    final String sql4 = "SELECT ST_AsBinary('LINESTRING (1 2, 3 4)')";
+    final String expected4 =
+        "SELECT \"ST_ASBINARY\"('LINESTRING (1 2, 3 4)')\n"
+            + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql4)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected4);
+
+    final String sql5 = "SELECT ST_AsEWKT(ST_PointFromText('POINT(-71.064544 42.28787)', 4326))";
+    final String expected5 =
+        "SELECT \"ST_ASEWKT\"(\"ST_POINTFROMTEXT\"('POINT(-71.064544 42.28787)', 4326))\n"
+            + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql5)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected5);
+
+    final String sql6 = "SELECT ST_MakePoint(NULL, 2)";
+    final String expected6 = "SELECT \"ST_MAKEPOINT\"(NULL, 2)\n"
+        + "FROM (VALUES (0)) AS \"t\" (\"ZERO\")";
+    sql(sql6)
+        .withLibrary(SqlLibrary.SPATIAL)
+        .ok(expected6);
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7128">[CALCITE-7128]
+   * SqlImplementor.toSql does not handle UUID literals</a>. */
+  @Test void testUuid() {
+    final String sql = "SELECT UUID '123e4567-e89b-12d3-a456-426655440000' AS x";
+    final String expected = "SELECT *\n"
+        + "FROM (VALUES (UUID '123e4567-e89b-12d3-a456-426655440000')) AS \"t\" (\"X\")";
+    sql(sql).ok(expected);
+  }
+
+  @Test void testUpdate() {
+    final String sql0 = "update \"foodmart\".\"product\"\n"
+        + "set \"product_name\" = 'calcite'";
+    final String expected0 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = "
+        + "'calcite'";
+    sql(sql0).ok(expected0);
+
+    final String sql1 = "update \"foodmart\".\"product\"\n"
+        + "set \"product_name\" = 'calcite'\n"
+        + "where \"product_id\" = 1";
+    final String expected1 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = "
+        + "'calcite'\nWHERE \"product_id\" = 1";
+    sql(sql1).ok(expected1);
+
+    final String sql2 = "update \"foodmart\".\"product\"\n"
+        + "set \"product_name\" = 'calcite', \"product_id\" = 10\n"
+        + "where \"product_id\" = 1";
+    final String expected2 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = 'calcite', "
+        + "\"product_id\" = 10\nWHERE \"product_id\" = 1";
+    sql(sql2).ok(expected2);
+  }
+
+  /**
+   * Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7220">[CALCITE-7220]
+   * RelToSqlConverter throws exception for UPDATE with self-referencing column in SET</a>.
+   */
+  @Test void testUpdateSetWithColumnReference() {
+    final String sql0 = "update \"foodmart\".\"product\" "
+        + "set \"product_name\" = \"product_name\" || '_'\n"
+        + "where \"product_id\" > 10";
+    final String expected0 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = CAST"
+        + "(\"product_name\" || '_' AS VARCHAR(60) CHARACTER SET \"ISO-8859-1\")\nWHERE "
+        + "\"product_id\" > 10";
+    sql(sql0).ok(expected0);
+
+    final String sql1 = "update \"foodmart\".\"product\""
+        + "set \"product_id\" = \"product_id\" + char_length(\"product_name\")"
+        + "where \"product_id\" > 10";
+    final String expected1 = "UPDATE \"foodmart\".\"product\" SET \"product_id\" = \"product_id\""
+        + " + CHAR_LENGTH(\"product_name\")\nWHERE \"product_id\" > 10";
+    sql(sql1).ok(expected1);
+
+    final String sql2 = "update \"foodmart\".\"product\""
+        + "set\n"
+        + "   \"product_id\" = \"product_id\" + char_length(\"product_name\"),\n"
+        + "   \"product_name\" = \"product_name\" || '_' \n"
+        + "where \"product_id\" > 10";
+    final String expected2 = "UPDATE \"foodmart\".\"product\" SET \"product_id\" = \"product_id\""
+        + " + CHAR_LENGTH(\"product_name\"), \"product_name\" = CAST(\"product_name\" || '_' AS "
+        + "VARCHAR(60) CHARACTER SET \"ISO-8859-1\")\nWHERE \"product_id\" > 10";
+    sql(sql2).ok(expected2);
+
+    final String sql3 = "update \"foodmart\".\"product\"\n"
+        + "set \"product_name\" = 'calcite'\n"
+        + "where \"product_id\" in (\n"
+        + "   select \"product_id\" from \"foodmart\".\"product\" where \"product_id\" < 10"
+        + ")";
+    final String expected3 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = "
+        + "'calcite'\nWHERE \"product_id\" IN (SELECT \"product_id\"\nFROM \"foodmart\""
+        + ".\"product\"\nWHERE \"product_id\" < 10)";
+    sql(sql3).ok(expected3);
+  }
+
+  /**
+   * Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5122">[CALCITE-5122]
+   * Update query with correlated throws AssertionError "field ordinal 0 out of range"</a>.
+   */
+  @Test void testUpdateWithCorrelatedInSet() {
+    final String sql0 = "update \"foodmart\".\"product\" a set \"product_id\" = "
+        + "(select \"product_class_id\" from \"foodmart\".\"product_class\" b "
+        + "where a.\"product_class_id\" = b.\"product_class_id\")";
+    final String expected0 = "UPDATE \"foodmart\".\"product\" SET \"product_id\" = (((SELECT "
+        + "\"product_class_id\"\nFROM \"foodmart\".\"product_class\"\nWHERE \"product\""
+        + ".\"product_class_id\" = \"product_class_id\")))";
+    sql(sql0).ok(expected0);
+
+    final String sql1 = "update \"foodmart\".\"product\" a set \"brand_name\" = "
+        + "(select cast(\"product_category\" as varchar(60)) from \"foodmart\".\"product_class\" b "
+        + "where a.\"product_class_id\" = b.\"product_class_id\")";
+    final String expected1 = "UPDATE \"foodmart\".\"product\" SET \"brand_name\" = (((SELECT CAST"
+        + "(\"product_category\" AS VARCHAR(60) CHARACTER SET \"ISO-8859-1\")\nFROM \"foodmart\""
+        + ".\"product_class\"\nWHERE \"product\".\"product_class_id\" = \"product_class_id\")))";
+    sql(sql1).ok(expected1);
+
+    final String sql2 = "update \"foodmart\".\"product\"\n"
+        + "set \"product_name\" = 'calcite'\n"
+        + "where \"product_id\" in (\n"
+        + "   select \"product_id\" from \"foodmart\".\"product\" where \"product_id\" < 10"
+        + ")";
+    final String expected2 = "UPDATE \"foodmart\".\"product\" SET \"product_name\" = "
+        + "'calcite'\nWHERE \"product_id\" IN (SELECT \"product_id\"\nFROM \"foodmart\""
+        + ".\"product\"\nWHERE \"product_id\" < 10)";
+    sql(sql2).ok(expected2);
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-6116">[CALCITE-6116]
    * Add EXISTS function (enabled in Spark library)</a>. */
@@ -10294,6 +10598,7 @@ class RelToSqlConverterTest {
         .withPhoenix().throws_("Phoenix dialect does not support cast to MULTISET")
         .withStarRocks().throws_("StarRocks dialect does not support cast to MULTISET")
         .withClickHouse().throws_("ClickHouse dialect does not support cast to MULTISET")
+        .withSpark().throws_("Spark dialect does not support cast to MULTISET")
         .withHive().throws_("Hive dialect does not support cast to MULTISET");
 
     String query3 = "SELECT CAST(MAP[1.0,2.0,3.0,4.0] AS MAP<FLOAT, REAL>) FROM \"employee\"";
@@ -10342,6 +10647,30 @@ class RelToSqlConverterTest {
             + "SELECT *\nFROM \"foodmart\".\"product\"\n"
             + "WHERE \"product_id\" = \"t\".\"product_id\" AND \"product_id\" > 10"
             + ")";
+    sql(sql).ok(expected);
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7127">[CALCITE-7127]
+   * RelToSqlConverter corrupts condition inside an anti-join with WHERE NOT EXISTS.</a>. */
+  @Test void testAntiJoinWithComplexInput3() {
+    final String sql = "select e3.\"product_id\", e3.\"product_name\" "
+        + "from ("
+        + "select 1 AS \"additional_column\", e1.\"product_id\", e1.\"product_name\" from \"foodmart\".\"product\" e1 "
+        + "left join \"foodmart\".\"product\" e2 on e1.\"product_id\" = e2.\"product_id\""
+        + ") as e3 "
+        + "where e3.\"product_name\" IS NOT NULL AND NOT EXISTS("
+        + "select 1 from \"foodmart\".\"employee\" e4 "
+        + "where e4.\"employee_id\" = e3.\"additional_column\""
+        + ")";
+    final String expected =
+        "SELECT \"product_id\", \"product_name\"\n"
+            + "FROM (SELECT 1 AS \"additional_column\", \"product\".\"product_id\", \"product\".\"product_name\"\n"
+            + "FROM \"foodmart\".\"product\"\n"
+            + "LEFT JOIN \"foodmart\".\"product\" AS \"product0\" ON \"product\".\"product_id\" = \"product0\".\"product_id\") AS \"t\"\n"
+            + "WHERE NOT EXISTS (SELECT *\n"
+            + "FROM \"foodmart\".\"employee\"\n"
+            + "WHERE \"employee_id\" = \"t\".\"additional_column\")";
     sql(sql).ok(expected);
   }
 
@@ -10446,6 +10775,99 @@ class RelToSqlConverterTest {
         .schema(CalciteAssert.SchemaSpec.JDBC_SCOTT)
         .withCalcite()
         .optimize(RuleSets.ofList(CoreRules.AGGREGATE_FILTER_TO_CASE), null)
+        .ok(expected);
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7112">[CALCITE-7112] Correlation
+   * variable in HAVING clause causes UnsupportedOperationException in RelToSql conversion</a>. */
+  @Test void testCorrelationVariableInHavingClause() {
+    final Holder<RexCorrelVariable> v = Holder.empty();
+    final Function<RelBuilder, RelNode> relFn = b -> b
+        .scan("DEPT")
+        .variable(v::set)
+        .project(
+            ImmutableList.of(
+                b.field("DEPTNO"),
+                b.field("DNAME"),
+                b.scalarQuery(unused ->
+                    b.scan("EMP")
+                        .aggregate(b.groupKey("DEPTNO"), b.countStar("COUNT"))
+                        .filter(b.equals(b.field("DEPTNO"), b.field(v.get(), "DEPTNO")))
+                        .project(b.field("COUNT"))
+                        .build())),
+            ImmutableList.of(),
+            false,
+            ImmutableList.of(v.get().id))
+        .build();
+
+    final String expected = "SELECT "
+        + "\"DEPTNO\", "
+        + "\"DNAME\", "
+        + "(((SELECT COUNT(*) AS \"COUNT\"\n"
+        + "FROM \"scott\".\"EMP\"\n"
+        + "GROUP BY \"DEPTNO\"\n"
+        + "HAVING \"DEPTNO\" = \"DEPT\".\"DEPTNO\"))) AS \"$f2\"\n"
+        + "FROM \"scott\".\"DEPT\"";
+
+    relFn(relFn).ok(expected);
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7116">[CALCITE-7116]
+   * Optimize queries with GROUPING SETS by converting them
+   * into equivalent UNION ALL of GROUP BY operations</a>. */
+  @Test void testAggregateGroupingSetsToUnionRule() {
+    final String query = "SELECT deptno, job, sal, SUM(comm),\n"
+        + "       GROUPING(deptno) AS deptno_flag,\n"
+        + "       GROUPING(job) AS job_flag,\n"
+        + "       GROUPING(sal) AS sal_flag,\n"
+        + "       GROUP_ID() AS group_id\n"
+        + "FROM emp\n"
+        + "GROUP BY GROUPING SETS ((deptno, job), (deptno, sal), (deptno, job))";
+    final String expected = "SELECT \"DEPTNO\", \"JOB\", \"SAL\", \"EXPR$3\", \"DEPTNO_FLAG\","
+        + " \"JOB_FLAG\", \"SAL_FLAG\", 0 AS \"GROUP_ID\"\nFROM (SELECT \"DEPTNO\", \"JOB\","
+        + " CAST(NULL AS DECIMAL(7, 2)) AS \"SAL\", SUM(\"COMM\") AS \"EXPR$3\","
+        + " 0 AS \"DEPTNO_FLAG\", 0 AS \"JOB_FLAG\", 1 AS \"SAL_FLAG\"\n"
+        + "FROM \"SCOTT\".\"EMP\"\n"
+        + "GROUP BY \"DEPTNO\", \"JOB\"\n"
+        + "UNION ALL\n"
+        + "SELECT \"DEPTNO\", CAST(NULL AS VARCHAR(9) CHARACTER SET \"ISO-8859-1\") AS \"JOB\","
+        + " \"SAL\", SUM(\"COMM\") AS \"EXPR$3\", 0 AS \"DEPTNO_FLAG\", 1 AS \"JOB_FLAG\","
+        + " 0 AS \"SAL_FLAG\"\n"
+        + "FROM \"SCOTT\".\"EMP\"\nGROUP BY \"DEPTNO\", \"SAL\") AS \"t5\"\n"
+        + "UNION ALL\nSELECT \"DEPTNO\", \"JOB\", CAST(NULL AS DECIMAL(7, 2)) AS \"SAL\","
+        + " SUM(\"COMM\"), GROUPING(\"DEPTNO\") AS \"DEPTNO_FLAG\","
+        + " GROUPING(\"JOB\") AS \"JOB_FLAG\", 1 AS \"SAL_FLAG\", 1 AS \"GROUP_ID\"\n"
+        + "FROM \"SCOTT\".\"EMP\"\n"
+        + "GROUP BY \"DEPTNO\", \"JOB\"";
+
+    HepProgramBuilder builder = new HepProgramBuilder();
+    builder.addRuleClass(AggregateGroupingSetsToUnionRule.class);
+    HepPlanner hepPlanner = new HepPlanner(builder.build());
+    RuleSet rules =
+        RuleSets.ofList(CoreRules.AGGREGATE_GROUPING_SETS_TO_UNION);
+
+    sql(query)
+        .schema(CalciteAssert.SchemaSpec.JDBC_SCOTT)
+        .withCalcite()
+        .optimize(rules, hepPlanner)
+        .ok(expected);
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7157">[CALCITE-7157]
+   * PostgreSQL does not support string literal in ORDER BY clause</a>. */
+  @Test void testSqlDialectOrdreByLiteralSimple() {
+    final String query = "SELECT deptno, job\n"
+        + "FROM emp\n"
+        + "ORDER BY empno, 'abc'";
+    final String expected = "SELECT \"DEPTNO\", \"JOB\"\n"
+        + "FROM \"SCOTT\".\"EMP\"\n"
+        + "ORDER BY \"EMPNO\"";
+    sql(query)
+        .schema(CalciteAssert.SchemaSpec.JDBC_SCOTT)
+        .withPostgresql()
         .ok(expected);
   }
 

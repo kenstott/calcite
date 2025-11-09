@@ -287,6 +287,10 @@ public class PostgresqlSqlDialect extends SqlDialect {
     return false;
   }
 
+  @Override public boolean supportsOrderByLiteral() {
+    return false;
+  }
+
   @Override public void unparseSqlSetOption(SqlWriter writer,
       int leftPrec, int rightPrec, SqlSetOption option) {
     String scope = option.getScope();

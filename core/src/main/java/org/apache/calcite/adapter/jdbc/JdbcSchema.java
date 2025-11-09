@@ -449,7 +449,9 @@ public class JdbcSchema implements Schema, Wrapper {
       int precision, int scale, @Nullable String typeString) {
     // Fall back to ANY if type is unknown
     final SqlTypeName sqlTypeName =
-        Util.first(SqlTypeName.getNameForJdbcType(dataType), SqlTypeName.ANY);
+        Util.first(typeString != null && typeString.toUpperCase(Locale.ROOT).contains("UNSIGNED")
+            ? SqlTypeName.getNameForUnsignedJdbcType(dataType)
+            : SqlTypeName.getNameForJdbcType(dataType), SqlTypeName.ANY);
     switch (sqlTypeName) {
     case ARRAY:
       RelDataType component = null;
