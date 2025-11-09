@@ -165,12 +165,46 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads all World Bank data for the specified year range.
    */
+  @Override
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading World Bank data for years {} to {}", startYear, endYear);
 
     for (int year = startYear; year <= endYear; year++) {
       downloadWorldIndicatorsForYear(year);
     }
+  }
+
+  /**
+   * Converts all downloaded World Bank data to Parquet format for the specified year range.
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Converting World Bank data for years {}-{}", startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    for (int year = startYear; year <= endYear; year++) {
+      Map<String, String> variables = new HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "annual");
+
+      Map<String, Object> metadata = loadTableMetadata("world_indicators");
+      String pattern = (String) metadata.get("pattern");
+      String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+      String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+
+      if (!isParquetConvertedOrExists("world_indicators", year, variables, rawPath, parquetPath)) {
+        convertCachedJsonToParquet("world_indicators", variables);
+        cacheManifest.markParquetConverted("world_indicators", year, null, parquetPath);
+        convertedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+
+    LOGGER.info("World Bank conversion complete: converted {} years, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
   }
 
   /**

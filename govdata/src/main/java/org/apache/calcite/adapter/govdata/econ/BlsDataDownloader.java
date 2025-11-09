@@ -50,6 +50,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private static final String BLS_API_BASE = "https://api.bls.gov/publicAPI/v2/";
 
   private final String apiKey;
+  private final java.util.Set<String> enabledTables;
 
   // Rate limiting: BLS enforces requests per second limit
   private static final long MIN_REQUEST_INTERVAL_MS = 1100; // 1.1 seconds between requests (safe margin)
@@ -428,12 +429,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
-    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
+    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null);
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest, java.util.Set<String> enabledTables) {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
+    this.enabledTables = enabledTables;
   }
 
   @Override protected String getTableName() {
@@ -748,9 +750,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads all BLS data for the specified year range.
+   * Uses the enabledTables set passed to the constructor to filter which tables to download.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws IOException If download or file I/O fails
+   * @throws InterruptedException If download is interrupted
    */
+  @Override
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
-    downloadAll(startYear, endYear, null);
+    downloadAllTables(startYear, endYear, enabledTables);
   }
 
   /**
@@ -761,7 +770,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param enabledTables Set of table names to download, or null to download all tables.
    *                      If provided, only tables in this set will be downloaded.
    */
-  public void downloadAll(int startYear, int endYear, java.util.Set<String> enabledTables) throws IOException, InterruptedException {
+  private void downloadAllTables(int startYear, int endYear, java.util.Set<String> enabledTables) throws IOException, InterruptedException {
     // Download employment statistics
     if (enabledTables == null || enabledTables.contains(TABLE_EMPLOYMENT_STATISTICS)) {
       downloadEmploymentStatistics(startYear, endYear);
@@ -865,6 +874,148 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     downloadJoltsIndustries();
     downloadJoltsDataelements();
     LOGGER.info("BLS data download completed");
+  }
+
+  /**
+   * Converts all downloaded BLS data to Parquet format for the specified year range.
+   * Uses the enabledTables set passed to the constructor to filter which tables to convert.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws IOException If conversion or file I/O fails
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Converting BLS data for years {}-{}", startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    for (int year = startYear; year <= endYear; year++) {
+      Map<String, String> variables = new HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "monthly");
+
+      // Convert each enabled table
+      if (enabledTables == null || enabledTables.contains(TABLE_EMPLOYMENT_STATISTICS)) {
+        if (convertTableIfNeeded("employment_statistics", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_INFLATION_METRICS)) {
+        if (convertTableIfNeeded("inflation_metrics", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_REGIONAL_CPI)) {
+        if (convertTableIfNeeded("regional_cpi", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_METRO_CPI)) {
+        if (convertTableIfNeeded("metro_cpi", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_STATE_INDUSTRY)) {
+        if (convertTableIfNeeded("state_industry", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_STATE_WAGES)) {
+        if (convertTableIfNeeded("state_wages", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_METRO_INDUSTRY)) {
+        if (convertTableIfNeeded("metro_industry", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_METRO_WAGES)) {
+        if (convertTableIfNeeded("metro_wages", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_REGIONAL)) {
+        if (convertTableIfNeeded("jolts_regional", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_COUNTY_WAGES)) {
+        if (convertTableIfNeeded("county_wages", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_STATE)) {
+        if (convertTableIfNeeded("jolts_state", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (enabledTables == null || enabledTables.contains(TABLE_WAGE_GROWTH)) {
+        if (convertTableIfNeeded("wage_growth", year, variables)) {
+          convertedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+    }
+
+    LOGGER.info("BLS conversion complete: converted {} tables, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
+  }
+
+  /**
+   * Helper method to convert a table if needed (checks cache manifest first).
+   * Returns true if converted, false if skipped.
+   */
+  private boolean convertTableIfNeeded(String tableName, int year, Map<String, String> variables)
+      throws IOException {
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+    String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+    String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+
+    if (isParquetConvertedOrExists(tableName, year, variables, rawPath, parquetPath)) {
+      return false; // Already converted, skip
+    }
+
+    convertCachedJsonToParquet(tableName, variables);
+    cacheManifest.markParquetConverted(tableName, year, null, parquetPath);
+    return true; // Converted
   }
 
   /**

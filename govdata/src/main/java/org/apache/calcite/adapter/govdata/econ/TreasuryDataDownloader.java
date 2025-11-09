@@ -88,12 +88,61 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads all Treasury data for the specified year range.
    */
+  @Override
   public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     // Download treasury yields data
     downloadTreasuryYields(startYear, endYear);
 
     // Download federal debt data
     downloadFederalDebt(startYear, endYear);
+  }
+
+  /**
+   * Converts all downloaded Treasury data to Parquet format for the specified year range.
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("Converting Treasury data for years {}-{}", startYear, endYear);
+
+    int convertedCount = 0;
+    int skippedCount = 0;
+
+    for (int year = startYear; year <= endYear; year++) {
+      Map<String, String> variables = new HashMap<>();
+      variables.put("year", String.valueOf(year));
+      variables.put("frequency", "monthly");
+
+      // Convert treasury yields
+      Map<String, Object> yieldsMetadata = loadTableMetadata("treasury_yields");
+      String yieldsPattern = (String) yieldsMetadata.get("pattern");
+      String yieldsParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(yieldsPattern, variables));
+      String yieldsRawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(yieldsPattern, variables));
+
+      if (!isParquetConvertedOrExists("treasury_yields", year, variables, yieldsRawPath, yieldsParquetPath)) {
+        convertCachedJsonToParquet("treasury_yields", variables);
+        cacheManifest.markParquetConverted("treasury_yields", year, null, yieldsParquetPath);
+        convertedCount++;
+      } else {
+        skippedCount++;
+      }
+
+      // Convert federal debt
+      Map<String, Object> debtMetadata = loadTableMetadata("federal_debt");
+      String debtPattern = (String) debtMetadata.get("pattern");
+      String debtParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(debtPattern, variables));
+      String debtRawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(debtPattern, variables));
+
+      if (!isParquetConvertedOrExists("federal_debt", year, variables, debtRawPath, debtParquetPath)) {
+        convertCachedJsonToParquet("federal_debt", variables);
+        cacheManifest.markParquetConverted("federal_debt", year, null, debtParquetPath);
+        convertedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+
+    LOGGER.info("Treasury conversion complete: converted {} tables, skipped {} (up-to-date)",
+        convertedCount, skippedCount);
   }
 
   /**
