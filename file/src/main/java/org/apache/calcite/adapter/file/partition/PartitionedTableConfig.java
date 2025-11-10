@@ -179,12 +179,21 @@ public class PartitionedTableConfig {
     private final String type;
     private final boolean nullable;
     private final String comment;
+    private final boolean computed;
+    private final java.util.Map<String, Object> embeddingConfig;
 
     public TableColumn(String name, String type, boolean nullable, String comment) {
+      this(name, type, nullable, comment, false, null);
+    }
+
+    public TableColumn(String name, String type, boolean nullable, String comment,
+        boolean computed, java.util.Map<String, Object> embeddingConfig) {
       this.name = name;
       this.type = type;
       this.nullable = nullable;
       this.comment = comment;
+      this.computed = computed;
+      this.embeddingConfig = embeddingConfig;
     }
 
     public String getName() {
@@ -201,6 +210,71 @@ public class PartitionedTableConfig {
 
     public String getComment() {
       return comment;
+    }
+
+    public boolean isComputed() {
+      return computed;
+    }
+
+    public boolean hasEmbeddingConfig() {
+      return embeddingConfig != null && !embeddingConfig.isEmpty();
+    }
+
+    /**
+     * Get embedding source columns (supports both single and multi-column).
+     * Returns array with single element for sourceColumn, or full array for sourceColumns.
+     */
+    @SuppressWarnings("unchecked")
+    public String[] getEmbeddingSourceColumns() {
+      if (embeddingConfig == null) {
+        return null;
+      }
+
+      // Check for multi-column (sourceColumns array)
+      if (embeddingConfig.containsKey("sourceColumns")) {
+        java.util.List<String> cols = (java.util.List<String>) embeddingConfig.get("sourceColumns");
+        return cols != null ? cols.toArray(new String[0]) : null;
+      }
+
+      // Check for single-column (sourceColumn string)
+      if (embeddingConfig.containsKey("sourceColumn")) {
+        return new String[]{(String) embeddingConfig.get("sourceColumn")};
+      }
+
+      return null;
+    }
+
+    /**
+     * @deprecated Use getEmbeddingSourceColumns() instead
+     */
+    @Deprecated
+    public String getEmbeddingSourceColumn() {
+      String[] cols = getEmbeddingSourceColumns();
+      return (cols != null && cols.length > 0) ? cols[0] : null;
+    }
+
+    public String getEmbeddingTemplate() {
+      return embeddingConfig != null
+          ? (String) embeddingConfig.getOrDefault("template", "natural") : "natural";
+    }
+
+    public String getEmbeddingSeparator() {
+      return embeddingConfig != null
+          ? (String) embeddingConfig.getOrDefault("separator", ", ") : ", ";
+    }
+
+    public boolean getEmbeddingExcludeNull() {
+      return embeddingConfig != null
+          ? (Boolean) embeddingConfig.getOrDefault("excludeNull", true) : true;
+    }
+
+    public String getEmbeddingProvider() {
+      return embeddingConfig != null
+          ? (String) embeddingConfig.getOrDefault("provider", "onnx") : "onnx";
+    }
+
+    public boolean isVectorType() {
+      return type != null && type.startsWith("array<");
     }
   }
 
@@ -330,8 +404,11 @@ public class PartitionedTableConfig {
           Boolean nullableObj = (Boolean) m.get("nullable");
           boolean nullable = nullableObj != null ? nullableObj : false;
           String comment = (String) m.get("comment");
+          Boolean computedObj = (Boolean) m.get("computed");
+          boolean computed = computedObj != null ? computedObj : false;
+          Map<String, Object> embeddingConfig = (Map<String, Object>) m.get("embeddingConfig");
           if (name != null) {
-            result.add(new TableColumn(name, type, nullable, comment));
+            result.add(new TableColumn(name, type, nullable, comment, computed, embeddingConfig));
           }
         }
       }
