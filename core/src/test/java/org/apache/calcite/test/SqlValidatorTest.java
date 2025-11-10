@@ -43,6 +43,7 @@ import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlLibrary;
 import org.apache.calcite.sql.fun.SqlLibraryOperatorTableFactory;
+import org.apache.calcite.sql.fun.SqlLibraryOperators;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -851,6 +852,9 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     expr("CAST(CAST('123e4567-e89b-12d3-a456-426655440000' AS VARCHAR) AS UUID)").ok();
     expr("CAST(x'123e4567e89b12d3a456426655440000' AS UUID)").ok();
     expr("CAST(CAST(x'123e4567e89b12d3a456426655440000' AS VARBINARY) AS UUID)").ok();
+    expr("CAST(NULL AS UUID)").ok();
+    // Test case for [CALCITE-7158] NULL cannot be cast to UUID
+    sql("SELECT UUID '123e4567-e89b-12d3-a456-426655440000' UNION SELECT NULL").ok();
   }
 
   @Test void testConcatWithCharset() {
@@ -1896,6 +1900,16 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql("select foo()")
         .withTypeCoercion(false)
         .fails("No match found for function signature FOO..");
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7149">[CALCITE-7149]
+   * Constant TIMESTAMPADD expression causes assertion failure in validator</a>. */
+  @Test void testTimestampAdd() {
+    sql("SELECT TIMESTAMPADD(^DOY^, 2, TIMESTAMP '2020-06-21 14:23:44.123')")
+        .fails("'DOY' is not a valid time frame in 'TIMESTAMPADD'");
+    sql("SELECT TIMESTAMPDIFF(^EPOCH^, TIMESTAMP '2020-06-21 14:23:44.123', "
+        + "TIMESTAMP '2022-06-21 14:23:44.123')")
+        .fails("'EPOCH' is not a valid time frame in 'TIMESTAMPDIFF'");
   }
 
   @Test void testInvalidTableFunction() {
@@ -3480,6 +3494,14 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql(query3).type(type);
   }
 
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7230">[CALCITE-7230]
+   * Compiler rejects comparisons between NULL and a ROW value</a>. */
+  @Test void coalesceRowNull() {
+    sql("SELECT COALESCE(NULL, ROW(1))")
+        .withValidatorConfig(c -> c.withCallRewrite(false))
+        .type("RecordType(RecordType(INTEGER EXPR$0) NOT NULL EXPR$0) NOT NULL");
+  }
+
   @Test void testAsOfJoin() {
     final String type0 = "RecordType(INTEGER NOT NULL EMPNO, INTEGER NOT NULL DEPTNO) NOT NULL";
     final String sql0 = "select emp.empno, dept.deptno from emp asof join dept\n"
@@ -3582,6 +3604,23 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "match_condition T0.b0 < T1.b0\n"
         + "on ^T0.b1 = CAST(T1.b1 + 1 AS BOOLEAN)^")
         .fails("ASOF JOIN condition must be a conjunction of equality comparisons");
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7189">[CALCITE-7189]
+   * Support MySQL-style non-standard GROUP BY</a>. */
+  @Test void testNonStrictGroupByAnyValue() {
+    sql("select deptno, ename from emp group by deptno")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .ok();
+    sql("select deptno, ename, job from emp group by deptno")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .ok();
+    sql("select deptno, max(sal) from emp group by deptno")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .ok();
+    sql("select deptno, ^ename^ from emp group by deptno")
+        .fails("Expression 'ENAME' is not being grouped");
   }
 
   @Test void testInvalidWindowFunctionWithGroupBy() {
@@ -5345,6 +5384,38 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "select deptno, name, deptno from dept").ok();
   }
 
+  @Test void testUnionNullableTypeDerivation() {
+    sql("SELECT CAST(NULL AS DATE) UNION ALL SELECT TIMESTAMP '2025-07-04 10:00:00'")
+        .columnType("TIMESTAMP(0)");
+
+    sql("SELECT DATE '2025-07-05' UNION ALL SELECT TIMESTAMP '2025-07-04 10:00:00'")
+        .columnType("TIMESTAMP(0) NOT NULL");
+
+    sql("SELECT ARRAY[1, 2, cast(null as integer)] UNION ALL SELECT NULL")
+        .columnType("INTEGER ARRAY");
+
+    sql("SELECT ARRAY[1, 2, 3] UNION ALL SELECT NULL")
+        .columnType("INTEGER NOT NULL ARRAY");
+
+    sql("SELECT ARRAY[1, 2] UNION ALL SELECT ARRAY[3, cast(null as integer)]")
+        .columnType("INTEGER ARRAY NOT NULL");
+
+    sql("SELECT ARRAY[1, 2, 3] UNION ALL SELECT ARRAY[4, 5]")
+        .columnType("INTEGER NOT NULL ARRAY NOT NULL");
+
+    sql("SELECT MAP[1, 2, 3, 4] UNION ALL SELECT NULL")
+        .columnType("(INTEGER NOT NULL, INTEGER NOT NULL) MAP");
+
+    sql("SELECT MAP[1, 2, 3, cast(null as integer)] UNION ALL SELECT NULL")
+        .columnType("(INTEGER NOT NULL, INTEGER) MAP");
+
+    sql("SELECT MAP[1, 2, 3, cast(null as integer)] UNION ALL SELECT MAP[5, 6]")
+        .columnType("(INTEGER NOT NULL, INTEGER) MAP NOT NULL");
+
+    sql("SELECT MAP[1, 2, 3, 4] UNION ALL SELECT MAP[5, 6]")
+        .columnType("(INTEGER NOT NULL, INTEGER NOT NULL) MAP NOT NULL");
+  }
+
   @Test void testValuesTypeMismatchFails() {
     sql("^values (1), ('a')^")
         .fails("Values passed to VALUES operator must have compatible types");
@@ -5707,6 +5778,12 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .fails("Cannot specify NATURAL keyword with ON or USING clause");
   }
 
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7225">[CALCITE-7225]
+   * Comparing ROW values with different lengths causes an IndexOutOfBoudsException</a>. */
+  @Test void testUnequalRows() {
+    sql("select ROW(1) = ROW^(1, 2)^").fails("Unequal number of entries in ROW expressions");
+  }
+
   @Test void testNaturalJoinCaseSensitive() {
     // With case-insensitive match, more columns are recognized as join columns
     // and therefore "*" expands to fewer columns.
@@ -5724,6 +5801,15 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .type(type0)
         .withCaseSensitive(false)
         .type(type1);
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7216">[CALCITE-7216]
+   * SqlOperator.inferReturnType throws the wrong exception on error</a>. */
+  @Test void testWrongException() {
+    sql("select ^least(DATE '2020-01-01', 'x')^")
+        .withConformance(SqlConformanceEnum.BIG_QUERY)
+        .withOperatorTable(operatorTableFor(SqlLibrary.BIG_QUERY))
+        .fails("Cannot infer return type for LEAST; operand types: \\[DATE, CHAR\\(1\\)\\]");
   }
 
   @Test void testNaturalJoinIncompatibleDatatype() {
@@ -7252,7 +7338,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "from emp\n"
         + "group by rollup(deptno)")
         .ok()
-        .type("RecordType(INTEGER DEPTNO, BIGINT NOT NULL C, INTEGER NOT NULL S) NOT NULL");
+        .type("RecordType(INTEGER DEPTNO, BIGINT NOT NULL C, INTEGER S) NOT NULL");
 
     // EMPNO stays NOT NULL because it is not rolled up
     sql("select deptno, empno\n"
@@ -7784,6 +7870,21 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     s.withSql("select HIGHER_ORDER_FUNCTION(1, (x, y) -> x + 1 + ^deptno^) from emp")
         .fails("Param 'DEPTNO' not found in lambda expression "
             + "'\\(`X`, `Y`\\) -> `X` \\+ 1 \\+ `DEPTNO`'");
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7193">[CALCITE-7193]
+   * In an aggregation validator treats lambda variable names as column names</a>. */
+  @Test void testGroupByLambda() {
+    SqlOperatorTable chain =
+        SqlOperatorTables.chain(
+            SqlOperatorTables.of(
+                SqlLibraryOperators.ARRAY_AGG,
+                SqlLibraryOperators.EXISTS),
+            SqlStdOperatorTable.instance());
+    final String sql = "SELECT \"EXISTS\"(ARRAY_AGG(empno), x -> x > 1) FROM emp GROUP BY deptno";
+    sql(sql)
+        .withOperatorTable(chain)
+        .ok();
   }
 
   @Test void testPercentileFunctionsBigQuery() {
@@ -9020,6 +9121,57 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .fails("Duplicate relation name 'EMP' in FROM clause");
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7217">[CALCITE-7217]
+   * LATERAL is lost after validation</a>. */
+  @Test void testCollectionTableWithLateralRewrite() {
+    sql("select * from emp, lateral table(ramp(emp.deptno)), dept")
+        .rewritesTo("SELECT *\n"
+            + "FROM `EMP`,\n"
+            + "LATERAL TABLE(RAMP(`EMP`.`DEPTNO`)),\n"
+            + "`DEPT`");
+    // As above, with alias
+    sql("select * from emp, lateral table(ramp(emp.deptno)) as t(a), dept")
+        .rewritesTo("SELECT *\n"
+            +  "FROM `EMP`,\n"
+            +  "LATERAL TABLE(RAMP(`EMP`.`DEPTNO`)) AS `T` (`A`),\n"
+            +  "`DEPT`");
+    sql("select *\n"
+        + "from dept,\n"
+        + "  lateral table(ramp(deptno))\n"
+        + "  cross join (values ('A'), ('B'))")
+        .rewritesTo("SELECT *\n"
+            +  "FROM `DEPT`,\n"
+            +  "LATERAL TABLE(RAMP(`DEPTNO`))\n"
+            +  "CROSS JOIN (VALUES ROW('A'),\n"
+            +  "ROW('B'))");
+    // As above, using NATURAL JOIN
+    sql("select *\n"
+        + "from dept,\n"
+        + "  lateral table(ramp(deptno))\n"
+        + "  natural join emp")
+        .rewritesTo("SELECT *\n"
+            +  "FROM `DEPT`,\n"
+            +  "LATERAL TABLE(RAMP(`DEPTNO`))\n"
+            +  "NATURAL INNER JOIN `EMP`");
+    // As above, using comma
+    sql("select *\n"
+        + "from emp,\n"
+        + "  lateral (select * from dept where dept.deptno = emp.deptno),\n"
+        + "  emp as e2")
+        .rewritesTo("SELECT *\n"
+            +  "FROM `EMP`,\n"
+            +  "LATERAL (SELECT *\n"
+            +  "FROM `DEPT`\n"
+            +  "WHERE `DEPT`.`DEPTNO` = `EMP`.`DEPTNO`),\n"
+            +  "`EMP` AS `E2`");
+    // LATERAL in left part of join
+    sql("select * from lateral table(ramp(1234)), emp")
+        .rewritesTo("SELECT *\n"
+            +  "FROM LATERAL TABLE(RAMP(1234)),\n"
+            +  "`EMP`");
+  }
+
   @Test void testCollectionTableWithCursorParam() {
     sql("select * from table(dedup(cursor(select * from emp),'ename'))")
         .type("RecordType(VARCHAR(1024) NOT NULL NAME) NOT NULL");
@@ -9406,6 +9558,12 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .rewritesTo(expected1)
         .withValidatorIdentifierExpansion(false)
         .rewritesTo(expected2);
+
+    // Test case for [CALCITE-7195] COALESCE type inference rejects legal arguments
+    final String sql2 = "select coalesce(NULL, ARRAY[1])";
+    sql(sql2)
+        .withValidatorCallRewrite(false)
+        .ok();
   }
 
   @Test void testCoalesceWithRewrite() {
@@ -9979,6 +10137,8 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "/INT left\n" // checked
         + "|| left\n"
         + "\n"
+        + "& left\n"
+        + "\n"
         + "+ left\n"
         + "+ left\n" // checked
         + "+ -\n"
@@ -9987,9 +10147,11 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "- -\n"
         + "EXISTS pre\n"
         + "UNIQUE pre\n"
+        + "^ left\n"
         + "\n"
         + "< ALL left\n"
         + "< SOME left\n"
+        + "<< left\n"
         + "<= ALL left\n"
         + "<= SOME left\n"
         + "<> ALL left\n"
@@ -13476,6 +13638,47 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql("select * FROM TABLE(ROW_FUNC()) AS T(a, b)")
         .withOperatorTable(operatorTable)
         .type("RecordType(BIGINT NOT NULL A, BIGINT B) NOT NULL");
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7134">[CALCITE-7134]
+   * Incorrect type inference for some aggregate functions when groupSets contains '{}'</a>. */
+  @Test void testInferAggregateFunctionType() {
+    // empty grouping sets, SUM is nullable
+    sql("select sum(sal) as s from emp")
+        .ok()
+        .type("RecordType(INTEGER S) NOT NULL");
+
+    // non empty grouping sets, SUM isn't nullable
+    sql("select sum(sal) as s from emp group by deptno")
+        .ok()
+        .type("RecordType(INTEGER NOT NULL S) NOT NULL");
+
+    // ROLLUP contains empty group, SUM is nullable
+    sql("select sum(sal) as s from emp group by rollup(deptno)")
+        .ok()
+        .type("RecordType(INTEGER S) NOT NULL");
+
+    // CUBE contains empty group, SUM is nullable
+    sql("select sum(sal) as s from emp group by cube(deptno)")
+        .ok()
+        .type("RecordType(INTEGER S) NOT NULL");
+
+    // GROUPING SETS that contains empty group, SUM is nullable
+    sql("select sum(sal) as s from emp group by grouping sets(deptno, ())")
+        .ok()
+        .type("RecordType(INTEGER S) NOT NULL");
+
+    // cartesian product of ROLLUP and empno that does not contain empty group, SUM isn't nullable
+    sql("select sum(sal) as s from emp group by rollup(deptno), empno")
+        .ok()
+        .type("RecordType(INTEGER NOT NULL S) NOT NULL");
+
+    // cartesian product of ROLLUP and GROUPING SETS that contains empty group,
+    // SUM is nullable
+    sql("select sum(sal) as s from emp group by rollup(deptno), grouping sets(empno, ())")
+        .ok()
+        .type("RecordType(INTEGER S) NOT NULL");
   }
 
   /** Validator that rewrites columnar sql identifiers 'UNEXPANDED'.'Something'

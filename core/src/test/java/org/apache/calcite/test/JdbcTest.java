@@ -116,6 +116,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -990,7 +991,7 @@ public class JdbcTest {
     final int driverMajor = metaData.getDriverMajorVersion();
     final int driverMinor = metaData.getDriverMinorVersion();
     assertThat(driverMajor, is(1));
-    assertThat(driverMinor, is(41));
+    assertThat(driverMinor, is(42));
 
     assertThat(metaData.getDatabaseProductName(), is("Calcite"));
     final String databaseVersion =
@@ -4141,33 +4142,6 @@ public class JdbcTest {
             })
         .explainContains("")
         .returnsUnordered("empid=150; name=Sebastian");
-  }
-
-  /**
-   * Test case of
-   * <a href="https://issues.apache.org/jira/browse/CALCITE-6893">[CALCITE-6893]
-   * Remove agg from Union children in IntersectToDistinctRule</a>. */
-  @Test void testIntersectToDistinct() {
-    final String sql = ""
-        + "select \"empid\", \"name\" from \"hr\".\"emps\" where \"deptno\"=10\n"
-        + "intersect\n"
-        + "select \"empid\", \"name\" from \"hr\".\"emps\" where \"empid\">=150";
-    final String[] returns = new String[] {
-        "empid=150; name=Sebastian"};
-
-    CalciteAssert.hr()
-        .query(sql)
-        .explainContains("EnumerableIntersect")
-        .returnsUnordered(returns);
-
-    CalciteAssert.hr()
-        .query(sql)
-        .withHook(Hook.PLANNER, (Consumer<RelOptPlanner>)
-            p -> {
-              p.removeRule(EnumerableRules.ENUMERABLE_INTERSECT_RULE);
-            })
-        .explainContains("EnumerableUnion(all=[true])")
-        .returnsUnordered(returns);
   }
 
   /** Test case for
@@ -9103,6 +9077,39 @@ public class JdbcTest {
         });
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5094">[CALCITE-5094]
+   * Calcite JDBC Adapter and Avatica should support
+   * MySQL UNSIGNED types of TINYINT, SMALLINT, INT, BIGINT</a>. */
+  @Test void testMySQLUnsignedType() {
+    CalciteAssert.that()
+        .with(CalciteAssert.SchemaSpec.UNSIGNED_TYPE)
+        .with(Lex.MYSQL)
+        .query("SELECT * FROM test_unsigned WHERE utiny_value = ? "
+            + "AND usmall_value = ? AND uint_value = ? AND ubig_value = ?")
+        .consumesPreparedStatement(p -> {
+          p.setInt(1, 255);
+          p.setInt(2, 65535);
+          p.setLong(3, 4294967295L);
+          p.setBigDecimal(4, new BigDecimal("18446744073709551615"));
+        })
+        .returns(resultSet -> {
+          try {
+            assertTrue(resultSet.next());
+            final Integer uTinyInt = resultSet.getInt(1);
+            final Integer uSmallInt = resultSet.getInt(2);
+            final Long uInteger = resultSet.getLong(3);
+            final BigDecimal uBigInt = resultSet.getBigDecimal(4);
+            assertThat(uTinyInt, is(255));
+            assertThat(uSmallInt, is(65535));
+            assertThat(uInteger, is(4294967295L));
+            assertThat(uBigInt, is(new BigDecimal("18446744073709551615")));
+          } catch (SQLException e) {
+            throw TestUtil.rethrow(e);
+          }
+        });
+  }
+
   @Test void bindByteParameter() {
     for (SqlTypeName tpe : SqlTypeName.INT_TYPES) {
       final String sql =
@@ -9220,6 +9227,34 @@ public class JdbcTest {
           p.setLong(1, 100);
         })
         .returnsUnordered("EMPID=100");
+  }
+
+  @ValueSource(strings = {"a", "a ", "a a"})
+  @ParameterizedTest void bindCharParameter(String value) {
+    final String sql =
+        "with cte as (select cast('a' as char(2)) as empid)"
+            + "select * from cte where empid = ?";
+
+    CalciteAssert.hr()
+        .query(sql)
+        .consumesPreparedStatement(p -> {
+          p.setString(1, value);
+        })
+        .returnsUnordered("EMPID=a ");
+  }
+
+  @ValueSource(strings = {"aa", "aaa"})
+  @ParameterizedTest void bindVarcharParameter(String value) {
+    final String sql =
+        "with cte as (select cast('aa' as varchar(2)) as empid)"
+            + "select * from cte where empid = ?";
+
+    CalciteAssert.hr()
+        .query(sql)
+        .consumesPreparedStatement(p -> {
+          p.setString(1, value);
+        })
+        .returnsUnordered("EMPID=aa");
   }
 
   private static String sums(int n, boolean c) {

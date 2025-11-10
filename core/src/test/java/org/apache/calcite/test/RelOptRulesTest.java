@@ -277,6 +277,67 @@ class RelOptRulesTest extends RelOptTestBase {
         .check();
   }
 
+  private HepProgram createHypergraphProgram() {
+    return new HepProgramBuilder().addMatchOrder(HepMatchOrder.BOTTOM_UP)
+        .addRuleInstance(CoreRules.JOIN_PROJECT_RIGHT_TRANSPOSE)
+        .addRuleInstance(CoreRules.JOIN_PROJECT_LEFT_TRANSPOSE)
+        .addRuleInstance(CoreRules.PROJECT_MERGE)
+        .addRuleInstance(CoreRules.PROJECT_REMOVE)
+        .addRuleInstance(CoreRules.JOIN_TO_HYPER_GRAPH)
+        .build();
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7191">[CALCITE-7191]
+   * Hypergraph creation with incorrect hyperedges</a>. */
+  @Test void testHypergraph0() {
+    HepProgram program = createHypergraphProgram();
+    String innerJoinSql = "select a.ename, bc.name from bonus a inner join "
+        + "(select b.empno, b.ename, c.name from emp b inner join dept c on b.deptno = c.deptno) bc "
+        + "on a.ename = bc.ename";
+
+    sql(innerJoinSql).withPre(program)
+        .withRule(CoreRules.HYPER_GRAPH_OPTIMIZE, CoreRules.PROJECT_MERGE)
+        .check();
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7191">[CALCITE-7191]
+   * Hypergraph creation with incorrect hyperedges</a>. */
+  @Test void testHypergraph1() {
+    HepProgram program = createHypergraphProgram();
+    String innerJoinSql = "select a.ename, bcde.name "
+        + "from bonus a "
+        + "inner join ("
+        + "  select b.empno, b.ename, c.name "
+        + "  from emp b "
+        + "  inner join dept c on b.deptno = c.deptno "
+        + "  inner join emp_address d on d.empno = b.empno "
+        + "  inner join salgrade e on b.sal = e.hisal"
+        + ") bcde on a.ename = bcde.ename";
+
+    sql(innerJoinSql).withPre(program)
+        .withRule(CoreRules.HYPER_GRAPH_OPTIMIZE, CoreRules.PROJECT_MERGE)
+        .check();
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7191">[CALCITE-7191]
+   * Hypergraph creation with incorrect hyperedges</a>. */
+  @Test void testHypergraph2() {
+    HepProgram program = createHypergraphProgram();
+    String innerJoinSql = "select ab.ename, cdef.name "
+        + "from (select a.ename from bonus a inner join emp b on a.ename = b.ename) ab "
+        + "inner join ("
+        + "  select c.empno, c.ename, d.name "
+        + "  from emp c "
+        + "  inner join dept d on c.deptno = d.deptno "
+        + "  inner join emp_address e on e.empno = c.empno "
+        + "  inner join salgrade f on c.sal = f.hisal"
+        + ") cdef on ab.ename = cdef.ename";
+
+    sql(innerJoinSql).withPre(program)
+        .withRule(CoreRules.HYPER_GRAPH_OPTIMIZE, CoreRules.PROJECT_MERGE)
+        .check();
+  }
+
   /**
    * Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-5989">[CALCITE-5989]
@@ -1632,6 +1693,18 @@ class RelOptRulesTest extends RelOptTestBase {
   }
 
   /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7181">[CALCITE-7181]
+   * FETCH in SortRemoveRedundantRule do not support BIGINT</a>. */
+  @Test void testSortRemoveWhenInputValuesMaxRowCntLessOrEqualLimitFetch2() {
+    final String sql = "select * from\n"
+        // The maximum value of BIGINT is   9223372036854775807.
+        + "(VALUES 1,2,3,4,5,6) as t1 limit 9823372036854775807";
+    sql(sql)
+        .withRule(CoreRules.SORT_REMOVE_REDUNDANT)
+        .check();
+  }
+
+  /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-6009">[CALCITE-6009]
    * Add optimization to remove redundant LIMIT that is more than input
    * row count</a>. */
@@ -1832,6 +1905,19 @@ class RelOptRulesTest extends RelOptTestBase {
         .withPreRule(CoreRules.SORT_PROJECT_TRANSPOSE)
         .withRule(CoreRules.LIMIT_MERGE)
         .checkUnchanged();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7176">[CALCITE-7176]
+   * FETCH and OFFSET in SortMergeRule do not support BIGINT</a>. */
+  @Test void testLimitMergeBigint() {
+    final String sql = "select deptno from\n"
+        + "(select deptno from emp where sal > 100 limit 3100000000)\n"
+        + "limit 3000000000";
+    sql(sql)
+        .withPreRule(CoreRules.SORT_PROJECT_TRANSPOSE)
+        .withRule(CoreRules.LIMIT_MERGE, CoreRules.PROJECT_MERGE)
+        .check();
   }
 
   @Test void testSemiJoinRuleExists() {
@@ -2119,6 +2205,30 @@ class RelOptRulesTest extends RelOptTestBase {
         + "from sales.dept group by name";
     sql(sql)
         .withRule(CoreRules.AGGREGATE_REDUCE_FUNCTIONS)
+        .check();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7192">[CALCITE-7192]
+   * AggregateReduceFunctionsRule lost FILTER condition in STDDEV/VAR function decomposition</a>. */
+  @Test void testVarianceStddevWithFilter() {
+    // Test to ensure FILTER conditions are correctly propagated to decomposed aggregates
+    // for all functions that use the `reduceStddev` method
+    final RelOptRule rule = AggregateReduceFunctionsRule.Config.DEFAULT
+        .withOperandFor(LogicalAggregate.class)
+        .withFunctionsToReduce(
+            EnumSet.of(SqlKind.STDDEV_POP, SqlKind.STDDEV_SAMP,
+                      SqlKind.VAR_POP, SqlKind.VAR_SAMP, SqlKind.AVG))
+        .toRule();
+    final String sql = "select name, "
+        + "stddev_pop(deptno) filter (where deptno > 10), "
+        + "stddev_samp(deptno) filter (where deptno > 20), "
+        + "var_pop(deptno) filter (where deptno > 30), "
+        + "var_samp(deptno) filter (where deptno > 40), "
+        + "avg(deptno) filter (where deptno > 50)\n"
+        + "from sales.dept group by name";
+    sql(sql)
+        .withRule(rule)
         .check();
   }
 
@@ -3281,6 +3391,19 @@ class RelOptRulesTest extends RelOptTestBase {
         .checkUnchanged();
   }
 
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7273">[CALCITE-7273]
+   *  CoreRules.JOIN_REDUCE_EXPRESSIONS throws when applied to an ASOF JOIN</a>. */
+  @Test void testAsofOptJoin() {
+    // Had to use ROW values to cause the optimization rule to match
+    final String sql = "SELECT *\n"
+        + "FROM (VALUES (NULL, ROW(0, 1)), (1, ROW(0, 2))) AS t1(k, t)\n"
+        + "ASOF JOIN (VALUES (2, ROW(0, 3))) AS t2(k, t)\n"
+        + "MATCH_CONDITION t2.t < t1.t\n"
+        + "ON t1.k = t2.k\n";
+    sql(sql).withRule(CoreRules.JOIN_REDUCE_EXPRESSIONS)
+        .checkUnchanged();
+  }
+
   /** Tests to see if the final branch of union is missed. */
   @Test void testUnionMergeRule() {
     final String sql = "select * from (\n"
@@ -3686,6 +3809,22 @@ class RelOptRulesTest extends RelOptTestBase {
         .check();
   }
 
+  /** Tests {@link org.apache.calcite.rel.rules.IntersectToDistinctRule} with
+   * the option to not perform aggregation pushdown (see
+   * {@link CoreRules#INTERSECT_TO_DISTINCT_NO_AGGREGATE_PUSHDOWN}).
+   * which rewrites an {@link Intersect} operator with 3 inputs. */
+  @Test void testIntersectToDistinctNoAggregatePushdown() {
+    final String sql = "select * from emp where deptno = 10\n"
+        + "intersect\n"
+        + "select * from emp where deptno = 20\n"
+        + "intersect\n"
+        + "select * from emp where deptno = 30\n";
+    sql(sql)
+        .withRule(CoreRules.INTERSECT_MERGE,
+            CoreRules.INTERSECT_TO_DISTINCT_NO_AGGREGATE_PUSHDOWN)
+        .check();
+  }
+
   /** Tests that {@link org.apache.calcite.rel.rules.IntersectToDistinctRule}
    * correctly ignores an {@code INTERSECT ALL}. It can only handle
    * {@code INTERSECT DISTINCT}. */
@@ -3698,6 +3837,23 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql)
         .withRule(CoreRules.INTERSECT_MERGE,
             CoreRules.INTERSECT_TO_DISTINCT)
+        .check();
+  }
+
+  /** Tests {@link org.apache.calcite.rel.rules.IntersectToDistinctRule} with
+   * the option to not perform aggregation pushdown (see
+   * {@link CoreRules#INTERSECT_TO_DISTINCT_NO_AGGREGATE_PUSHDOWN}).
+   * correctly ignores an {@code INTERSECT ALL}. It can only handle
+   * {@code INTERSECT DISTINCT}. */
+  @Test void testIntersectToDistinctAllNoAggregatePushdown() {
+    final String sql = "select * from emp where deptno = 10\n"
+        + "intersect\n"
+        + "select * from emp where deptno = 20\n"
+        + "intersect all\n"
+        + "select * from emp where deptno = 30\n";
+    sql(sql)
+        .withRule(CoreRules.INTERSECT_MERGE,
+            CoreRules.INTERSECT_TO_DISTINCT_NO_AGGREGATE_PUSHDOWN)
         .check();
   }
 
@@ -4159,6 +4315,23 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql)
         .withRule(CoreRules.FILTER_REDUCE_EXPRESSIONS)
         .check();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7140">[CALCITE-7140]
+   * Improve constant reduction of expressions containing SqlRowOperator</a>. */
+  @Test void testReduceConstantsWithRow() {
+    final String sql = "SELECT 1+1, ARRAY[1+1, 2+2], ROW('a', 3+3), MAP['a'||'b', 6+6],\n"
+        + "ROW(1+2, ARRAY[1+2, 2+3], ROW('a', 3+4), MAP['ab'||'cd', 6+7]),\n"
+        + "ARRAY[2*3, 2, 1],\n"
+        + "ARRAY[ROW(4*2, 'a'), ROW(4+4, 'b')],\n"
+        + "ARRAY[MAP['abc'||'def', 8+8], MAP['ghi'||'jkl', 9+9]],\n"
+        + "ARRAY[ROW(1+2, ARRAY[1+1, 2+2], ROW('a', 3+3), MAP['x'||'y', 8+8])],\n"
+        + "CARDINALITY(ARRAY[2*3, 2*2, 1*4]),\n"
+        + "CARDINALITY(ARRAY[ROW(4*3, 'm'), ROW(4+6, 'b')]),\n"
+        + "CARDINALITY(ARRAY[MAP['ac'||'bd', 1+8], MAP['gi'||'jl', 1+9]]),\n"
+        + "CARDINALITY(ARRAY[ROW(1+7, ARRAY[1+4, 4+2], ROW('t', 5+5), MAP['y'||'z', 9+9])])";
+    sql(sql).withRule(CoreRules.PROJECT_REDUCE_EXPRESSIONS).check();
   }
 
   @Test void testPullNull() {
@@ -4672,7 +4845,7 @@ class RelOptRulesTest extends RelOptTestBase {
         + "where empno=10 and empno is not null";
     sql(sql)
         .withRule(CoreRules.FILTER_REDUCE_EXPRESSIONS)
-        .check();
+        .checkUnchanged();
   }
 
   @Test void testReduceConstantsNegated() {
@@ -7520,6 +7693,26 @@ class RelOptRulesTest extends RelOptTestBase {
         .check();
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7162">[CALCITE-7162]
+   * AggregateMergeRule throws 'type mismatch' AssertionError</a>. The scenario
+   * has the same aggregate functions (MIN and MAX) at multiple levels; the
+   * lower level is NOT NULL (because of GROUP BY) and the upper level is
+   * nullable. */
+  @Test void testAggregateMerge10() {
+    final String sql = "SELECT min(mn), max(mx)\n"
+        + "FROM (\n"
+        + "    SELECT min(deptno) mn, max(deptno) mx\n"
+        + "    FROM dept\n"
+        + "    GROUP BY name)";
+    sql(sql)
+        .withPreRule(CoreRules.AGGREGATE_PROJECT_MERGE,
+            CoreRules.PROJECT_MERGE)
+        .withRule(CoreRules.AGGREGATE_PROJECT_MERGE,
+            CoreRules.AGGREGATE_MERGE)
+        .check();
+  }
+
   /**
    * Test case for AggregateRemoveRule, should remove aggregates since
    * empno is unique and all aggregate functions are splittable.
@@ -7915,6 +8108,18 @@ class RelOptRulesTest extends RelOptTestBase {
   }
 
   /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7089">[CALCITE-7089]
+   * Implement a rule for converting a RIGHT JOIN to a LEFT JOIN</a>. */
+  @Test void testSwapRightToLeftOnly() {
+    final HepProgram program = new HepProgramBuilder()
+        .addRuleInstance(CoreRules.JOIN_COMMUTE_RIGHT_TO_LEFT)
+        .build();
+    final String sql = "select 1 from sales.dept d right outer join sales.emp e\n"
+        + " on d.deptno = e.deptno";
+    sql(sql).withProgram(program).check();
+  }
+
+  /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-4042">[CALCITE-4042]
    * JoinCommuteRule must not match SEMI / ANTI join</a>. */
   @Test void testSwapSemiJoin() {
@@ -8132,7 +8337,7 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql)
         .withPreRule(CoreRules.SORT_PROJECT_TRANSPOSE)
         .withRule(CoreRules.SORT_JOIN_TRANSPOSE)
-        .checkUnchanged();
+        .check();
   }
 
   /** Test case for
@@ -8165,6 +8370,16 @@ class RelOptRulesTest extends RelOptTestBase {
             CoreRules.SORT_PROJECT_TRANSPOSE)
         .withRule(CoreRules.SORT_JOIN_TRANSPOSE)
         .checkUnchanged();
+  }
+
+  @Test void testSortJoinTranspose10() {
+    final String sql = "select * from sales.emp e left join (\n"
+        + "  select * from sales.dept d) d on e.deptno = d.deptno\n"
+        + "limit 3000000000 offset 2500000000";
+    sql(sql)
+        .withPreRule(CoreRules.SORT_PROJECT_TRANSPOSE)
+        .withRule(CoreRules.SORT_JOIN_TRANSPOSE)
+        .check();
   }
 
   @Test void testSortProjectTranspose1() {
@@ -8950,10 +9165,7 @@ class RelOptRulesTest extends RelOptTestBase {
         .check();
   }
 
-  /**
-   * Test case that SubQueryRemoveRule works with correlated Filter without varibles.
-   */
-  @Test void testCorrelatedFilterWithoutVariable() {
+  @Test void testCorrelatedFilterWithVariable() {
     // select *
     // from dept
     // where exists (select deptno
@@ -8965,6 +9177,7 @@ class RelOptRulesTest extends RelOptTestBase {
         .scan("DEPT")
         .variable(v::set)
         .filter(
+            ImmutableSet.of(v.get().id),
             b.exists(b1 -> b1
             .scan("EMP")
             .filter(
@@ -11108,6 +11321,109 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql)
         .withPre(program)
         .withRule(CoreRules.AGGREGATE_FILTER_TO_CASE)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7104">[CALCITE-7104]
+   * Remove duplicate sort keys</a>. */
+  @Test void testSortRemoveDuplicateKeys() {
+    final String query = "select d1\n"
+        + " from (select deptno as d1, deptno as d2 from dept) as tmp\n"
+        + " order by d1, d2, d1 desc\n";
+    sql(query)
+        .withRule(CoreRules.SORT_REMOVE_DUPLICATE_KEYS)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7104">[CALCITE-7104]
+   * Remove duplicate sort keys</a>. */
+  @Test void testSortRemoveDuplicateKeysJoin() {
+    final String query = "select * from (select deptno as d1, deptno as d2 from emp) as t1\n"
+        + " join emp t2 on t1.d1 = t2.deptno order by t1.d1, t1.d2, t1.d1 DESC NULLS FIRST";
+    sql(query)
+        .withRule(CoreRules.SORT_REMOVE_DUPLICATE_KEYS)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7222">[CALCITE-7222]
+   * SortRemoveDuplicateKeysRule miss fetch and offset infomation</a>. */
+  @Test void testSortRemoveDuplicateKeysWithPK() {
+    final String query = "select * from (select empno as a, deptno as b from emp) t"
+        + " order by a, b limit 1 offset 2";
+    sql(query)
+        .withRule(CoreRules.SORT_REMOVE_DUPLICATE_KEYS)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7222">[CALCITE-7222]
+   * SortRemoveDuplicateKeysRule miss fetch and offset infomation</a>. */
+  @Test void testSortRemoveDuplicateKeysWithLimit() {
+    final String query = "select * from (select empno as a, empno as b from emp) t"
+        + " order by a, b limit 1 offset 2";
+    sql(query)
+        .withRule(CoreRules.SORT_REMOVE_DUPLICATE_KEYS)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7116">[CALCITE-7116]
+   * Optimize queries with GROUPING SETS by converting them
+   * into equivalent UNION ALL of GROUP BY operations</a>. */
+  @Test void testAggregateGroupingSetsToUnionRule() {
+    final String sql = "SELECT deptno, job, sal, SUM(comm)\n"
+        + "FROM emp\n"
+        + "GROUP BY GROUPING SETS ((deptno, job), (deptno, sal))";
+    sql(sql)
+        .withRule(CoreRules.AGGREGATE_GROUPING_SETS_TO_UNION)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7116">[CALCITE-7116]
+   * Optimize queries with GROUPING SETS by converting them
+   * into equivalent UNION ALL of GROUP BY operations</a>. */
+  @Test void testAggregateGroupingSetsToUnionRuleGroupingGrouId() {
+    final String sql = "SELECT deptno, job, sal, SUM(comm),\n"
+        + " GROUPING(deptno) AS deptno_flag,\n"
+        + " GROUPING(job) AS job_flag,\n"
+        + " GROUPING(sal) AS sal_flag,\n"
+        + " GROUPING(deptno, sal) AS deptno_sal_flag,\n"
+        + " GROUP_ID() AS group_id\n"
+        + "FROM emp\n"
+        + "GROUP BY GROUPING SETS ((deptno, job),(deptno, job, sal),(deptno, sal))";
+
+    HepProgram program = new HepProgramBuilder()
+        .addRuleInstance(CoreRules.AGGREGATE_GROUPING_SETS_TO_UNION)
+        .build();
+
+    sql(sql)
+        .withProgram(program)
+        .check();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7178">[CALCITE-7178]
+   * FETCH and OFFSET in EnumerableMergeUnionRule do not support BIGINT</a>. */
+  @Test void testEnumerableMergeUnionRule() {
+    final String sql = "SELECT deptno, job, sal\n"
+        + "FROM emp\n"
+        + "UNION ALL\n"
+        + "SELECT deptno, job, sal\n"
+        + "FROM emp order by deptno limit 3000000000 offset 2500000000";
+    sql(sql)
+        .withPreRule(CoreRules.SORT_PROJECT_TRANSPOSE)
+        .withVolcanoPlanner(false, p -> {
+          p.addRelTraitDef(RelCollationTraitDef.INSTANCE);
+          p.addRule(EnumerableRules.ENUMERABLE_MERGE_UNION_RULE);
+          p.addRule(EnumerableRules.ENUMERABLE_SORT_RULE);
+          p.addRule(EnumerableRules.ENUMERABLE_LIMIT_RULE);
+          p.addRule(EnumerableRules.ENUMERABLE_PROJECT_RULE);
+          p.addRule(EnumerableRules.ENUMERABLE_TABLE_SCAN_RULE);
+        })
         .check();
   }
 }

@@ -414,9 +414,22 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
+    // PHASE 3: Consolidate trend tables
+    LOGGER.info("=== PHASE 3: Consolidating trend tables ===");
+    for (AbstractEconDataDownloader downloader : downloaders) {
+      try {
+        String downloaderName = downloader.getClass().getSimpleName();
+        LOGGER.info("Consolidating trends using {}", downloaderName);
+        downloader.consolidateAll();
+      } catch (Exception e) {
+        LOGGER.error("Error during trend consolidation for {}: {}",
+            downloader.getClass().getSimpleName(), e.getMessage(), e);
+      }
+    }
+
     // Save cache manifest after all downloads to operating directory
     cacheManifest.save(econOperatingDirectory);
-    LOGGER.info("=== All ECON data download and conversion complete ===");
+    LOGGER.info("=== All ECON data download, conversion, and consolidation complete ===");
   }
 
   /**
@@ -464,6 +477,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("[DEBUG] Including non-BLS table: {} with pattern: {}", tableName, table.get("pattern"));
       }
     }
+
+    // Expand trend_patterns into additional table definitions
+    expandTrendPatterns(tables);
 
     LOGGER.info("[DEBUG] Total ECON table definitions: {}", tables.size());
     return tables;

@@ -12,6 +12,12 @@
     {
       "name": "employment_statistics",
       "pattern": "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet",
+      "trend_patterns": [
+        {
+          "name": "employment_statistics_trend",
+          "pattern": "type=employment_statistics/frequency={frequency}/employment_statistics.parquet"
+        }
+      ],
       "partitions": {
         "style": "hive",
         "columnDefinitions": [

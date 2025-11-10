@@ -63,6 +63,7 @@ import org.apache.calcite.rel.metadata.BuiltInMetadata.DistinctRowCount;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.Distribution;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.ExplainVisibility;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.ExpressionLineage;
+import org.apache.calcite.rel.metadata.BuiltInMetadata.FunctionalDependency;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.LowerBoundCost;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.MaxRowCount;
 import org.apache.calcite.rel.metadata.BuiltInMetadata.Measure;
@@ -676,6 +677,7 @@ public enum BuiltInMethod {
   BIT_OR(SqlFunctions.class, "bitOr", long.class, long.class),
   BIT_XOR(SqlFunctions.class, "bitXor", long.class, long.class),
   BIT_NOT(SqlFunctions.class, "bitNot", long.class),
+  LEFT_SHIFT(SqlFunctions.class, "leftShift", int.class, int.class),
   MODIFIABLE_TABLE_GET_MODIFIABLE_COLLECTION(ModifiableTable.class,
       "getModifiableCollection"),
   SCANNABLE_TABLE_SCAN(ScannableTable.class, "scan", DataContext.class),
@@ -967,7 +969,16 @@ public enum BuiltInMethod {
   VARIANT_CAST(VariantValue.class, "cast", RuntimeTypeInformation.class),
   TYPEOF(VariantValue.class, "getTypeString", VariantValue.class),
   VARIANT_ITEM(SqlFunctions.class, "item", VariantValue.class, Object.class),
-  VARIANTNULL(VariantNull.class, "getInstance");
+  VARIANTNULL(VariantNull.class, "getInstance"),
+  FUNCTIONAL_DEPENDENCY(FunctionalDependency.class, "determines",
+      int.class, int.class),
+  FUNCTIONAL_DEPENDENCY_SET(FunctionalDependency.class, "determinesSet",
+      ImmutableBitSet.class, ImmutableBitSet.class),
+  FUNCTIONAL_DEPENDENCY_DEPENDENTS(FunctionalDependency.class, "dependents",
+      ImmutableBitSet.class),
+  FUNCTIONAL_DEPENDENCY_DETERMINANTS(FunctionalDependency.class, "determinants",
+      ImmutableBitSet.class),
+  FUNCTIONAL_DEPENDENCY_GET_FDS(FunctionalDependency.class, "getFDs");
 
   @SuppressWarnings("ImmutableEnumChecker")
   public final Method method;

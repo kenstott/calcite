@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,6 +49,167 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private final List<String> nipaTablesList;
   private final Map<String, java.util.Set<String>> tableFrequencies;
   private final List<String> keyIndustriesList;
+
+  /**
+   * Functional interface for table operations (download or convert).
+   * Executes an operation given a map of variables.
+   */
+  @FunctionalInterface
+  interface TableOperation {
+    void execute(int year, Map<String, String> variables) throws Exception;
+  }
+
+  /**
+   * Functional interface for checking if an operation is cached.
+   */
+  @FunctionalInterface
+  interface CacheChecker {
+    boolean isCached(int year, Map<String, String> variables);
+  }
+
+  /**
+   * Represents a single dimension of iteration with variable name and values.
+   */
+  static class IterationDimension {
+    final String variableName;
+    final List<String> values;
+
+    IterationDimension(String variableName, Collection<String> values) {
+      this.variableName = variableName;
+      this.values = new ArrayList<>(values);
+    }
+
+    static IterationDimension fromYearRange(int startYear, int endYear) {
+      List<String> years = new ArrayList<>();
+      for (int year = startYear; year <= endYear; year++) {
+        years.add(String.valueOf(year));
+      }
+      return new IterationDimension("year", years);
+    }
+  }
+
+  /**
+   * Generic method to iterate over table operations with arbitrary nesting levels (1-4 loops).
+   * Handles variable map generation, cache checking, operation execution, progress tracking,
+   * and manifest saving.
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensions List of iteration dimensions (1-4 dimensions supported)
+   * @param cacheChecker Lambda to check if operation is cached
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   */
+  private void iterateTableOperations(
+      String tableName,
+      List<IterationDimension> dimensions,
+      CacheChecker cacheChecker,
+      TableOperation operation,
+      String operationDescription) {
+
+    if (dimensions == null || dimensions.isEmpty()) {
+      LOGGER.warn("No dimensions provided for {} operations on {}", operationDescription, tableName);
+      return;
+    }
+
+    // Calculate total operations for progress tracking
+    int totalOperations = 1;
+    for (IterationDimension dim : dimensions) {
+      totalOperations *= dim.values.size();
+    }
+
+    LOGGER.info("Starting {} operations for {} ({} total combinations)",
+        operationDescription, tableName, totalOperations);
+
+    // Track progress
+    int[] counters = new int[2]; // [0]=executed, [1]=skipped
+
+    // Generate and execute all combinations using recursive iteration
+    iterateDimensionsRecursive(dimensions, 0, new HashMap<String, String>(),
+        tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
+
+    // Save manifest after all operations complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
+    }
+
+    LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
+        tableName, operationDescription, counters[0], counters[1]);
+  }
+
+  /**
+   * Recursive helper to iterate over all combinations of dimension values.
+   * Builds up the variables map as it recurses through dimensions.
+   *
+   * @param dimensions All iteration dimensions
+   * @param dimensionIndex Current dimension being iterated
+   * @param variables Variables map built so far
+   * @param tableName Table name for logging
+   * @param cacheChecker Cache checking lambda
+   * @param operation Operation execution lambda
+   * @param operationDescription Description for logging
+   * @param counters Progress counters [executed, skipped]
+   * @param totalOperations Total operations for progress logging
+   */
+  private void iterateDimensionsRecursive(
+      List<IterationDimension> dimensions,
+      int dimensionIndex,
+      Map<String, String> variables,
+      String tableName,
+      CacheChecker cacheChecker,
+      TableOperation operation,
+      String operationDescription,
+      int[] counters,
+      int totalOperations) {
+
+    // Base case: all dimensions iterated, execute operation
+    if (dimensionIndex >= dimensions.size()) {
+      // Extract year from variables (default to 0 if not present)
+      int year = 0;
+      if (variables.containsKey("year")) {
+        try {
+          year = Integer.parseInt(variables.get("year"));
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
+        }
+      }
+
+      // Check cache
+      if (cacheChecker.isCached(year, variables)) {
+        counters[1]++; // skipped
+        return;
+      }
+
+      // Execute operation
+      try {
+        operation.execute(year, variables);
+        counters[0]++; // executed
+
+        // Log progress every 10 operations
+        if (counters[0] % 10 == 0) {
+          LOGGER.info("{} {}/{} operations (skipped {} cached)",
+              operationDescription, counters[0], totalOperations, counters[1]);
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error during {} for {} with variables {}: {}",
+            operationDescription, tableName, variables, e.getMessage());
+      }
+      return;
+    }
+
+    // Recursive case: iterate over current dimension
+    IterationDimension currentDim = dimensions.get(dimensionIndex);
+    for (String value : currentDim.values) {
+      // Add current dimension's variable to map
+      Map<String, String> nextVariables = new HashMap<>(variables);
+      nextVariables.put(currentDim.variableName, value);
+
+      // Recurse to next dimension
+      iterateDimensionsRecursive(dimensions, dimensionIndex + 1, nextVariables,
+          tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
+    }
+  }
 
   /**
    * Simple constructor without shared manifest (creates one from operatingDirectory).
@@ -241,73 +403,51 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading {} NIPA tables for years {}-{}", nipaTablesList.size(), startYear,
         endYear);
 
-    int downloadedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "national_accounts";
 
+    // Build flat list of all table-frequency combinations
+    List<String> tableFreqCombos = new ArrayList<>();
     for (String nipaTable : nipaTablesList) {
-      // Get frequencies for this table (default to Annual if not found)
       Set<String> frequencies =
           tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
-
-      for (String frequency : frequencies) {
-        for (int year = startYear; year <= endYear; year++) {
-          // Build variables map with frequency
-          Map<String, String> variables =
-              ImmutableMap.of(
-                  "year", String.valueOf(year),
-                  "tablename", nipaTable,
-                  "frequency", frequency);
-
-          if (isCachedOrExists(tableName, year, variables)) {
-            skippedCount++;
-            continue;
-          }
-
-          // Download via metadata-driven executeDownload()
-          try {
-            String cachedPath =
-                cacheStorageProvider.resolvePath(
-                    cacheDirectory, executeDownload(tableName,
-                    variables));
-
-            // Mark as downloaded in cache manifest
-            try {
-              long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-              cacheManifest.markCached(tableName, year, variables, cachedPath, fileSize);
-            } catch (Exception ex) {
-              LOGGER.warn("Failed to mark NIPA data set {} as cached in manifest: {}",
-                  cachedPath, ex.getMessage());
-            }
-
-            downloadedCount++;
-
-            if (downloadedCount % 10 == 0) {
-              LOGGER.info("Downloaded {}/{} NIPA table-frequency-years (skipped {} cached)",
-                  downloadedCount,
-                  nipaTablesList.size() * frequencies.size() * (endYear - startYear + 1),
-                  skippedCount);
-            }
-          } catch (Exception e) {
-            LOGGER.error("Error downloading NIPA table {} frequency {} for year {}: {}",
-                nipaTable, frequency, year, e.getMessage());
-          }
-        }
+      for (String freq : frequencies) {
+        tableFreqCombos.add(nipaTable + ":" + freq);
       }
     }
 
-    // Save manifest after all downloads complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
-    }
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("table_freq", tableFreqCombos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    LOGGER.info("National accounts download complete: downloaded {} table-frequency-years, "
-            + "skipped "
-            + "{} (cached)",
-        downloadedCount, skippedCount);
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse table_freq back into separate variables
+          String[] parts = vars.get("table_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>(vars);
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("frequency", parts[1]);
+          return isCachedOrExists(tableName, year, fullVars);
+        },
+        (year, vars) -> {
+          // Parse table_freq and execute download
+          String[] parts = vars.get("table_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("frequency", parts[1]);
+
+          String cachedPath =
+              cacheStorageProvider.resolvePath(
+                  cacheDirectory, executeDownload(tableName, fullVars));
+
+          long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
+          cacheManifest.markCached(tableName, year, fullVars, cachedPath, fileSize);
+        },
+        "download");
   }
 
   /**
@@ -329,65 +469,73 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converting {} NIPA tables to Parquet for years {}-{}", nipaTablesList.size(),
         startYear, endYear);
 
-    int convertedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "national_accounts";
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
+    // Build flat list of all table-frequency combinations
+    List<String> tableFreqCombos = new ArrayList<>();
     for (String nipaTable : nipaTablesList) {
-      // Get frequencies for this table (default to Annual if not found)
       Set<String> frequencies =
           tableFrequencies.getOrDefault(nipaTable, Collections.singleton("A"));
-
-      for (String frequency : frequencies) {
-        for (int year = startYear; year <= endYear; year++) {
-          // Build variables map
-          Map<String, String> variables = new HashMap<>();
-          variables.put("year", String.valueOf(year));
-          variables.put("frequency", frequency);
-          variables.put("TableName", nipaTable);
-
-          // Resolve paths using pattern
-          String jsonPath = resolveJsonPath(pattern, variables);
-          String parquetPath = resolveParquetPath(pattern, variables);
-          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
-
-          // Check if conversion needed
-          Map<String, String> params = new HashMap<>();
-          params.put("TableName", nipaTable);
-
-          if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
-            skippedCount++;
-            continue;
-          }
-
-          // Convert via metadata-driven approach
-          try {
-            convertCachedJsonToParquet(tableName, variables);
-            cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
-            convertedCount++;
-
-            if (convertedCount % 10 == 0) {
-              LOGGER.info("Converted {}/{} table-frequency-years (skipped {} up-to-date)",
-                  convertedCount,
-                  nipaTablesList.size() * frequencies.size() * (endYear - startYear + 1),
-                  skippedCount);
-            }
-          } catch (Exception e) {
-            LOGGER.error("Error converting NIPA table {} frequency {} for year {}: {}", nipaTable
-                , frequency, year, e.getMessage());
-          }
-        }
+      for (String freq : frequencies) {
+        tableFreqCombos.add(nipaTable + ":" + freq);
       }
     }
 
-    LOGGER.info("National accounts conversion complete: converted {} table-frequency-years, " +
-            "skipped " +
-            "{} (up-to-date)",
-        convertedCount, skippedCount);
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("table_freq", tableFreqCombos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
+
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse table_freq back into separate variables
+          String[] parts = vars.get("table_freq").split(":", 2);
+
+          // Build variables for path resolution
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("frequency", parts[1]);
+          fullVars.put("TableName", parts[0]);
+
+          // Resolve paths
+          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
+              resolveJsonPath(pattern, fullVars));
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          // Check using params with TableName only
+          Map<String, String> params = new HashMap<>();
+          params.put("TableName", parts[0]);
+
+          return isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath);
+        },
+        (year, vars) -> {
+          // Parse table_freq and execute conversion
+          String[] parts = vars.get("table_freq").split(":", 2);
+
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("frequency", parts[1]);
+          fullVars.put("TableName", parts[0]);
+
+          // Resolve parquet path for manifest
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          // Convert
+          convertCachedJsonToParquet(tableName, fullVars);
+
+          // Mark as converted with params containing TableName
+          Map<String, String> params = new HashMap<>();
+          params.put("TableName", parts[0]);
+          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
+        },
+        "conversion");
   }
 
   /**
@@ -418,83 +566,60 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
     Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
-    int downloadedCount = 0;
-    int skippedCount = 0;
 
-    int totalOperations = 0;
+    // Build flat list of all (tablename, line_code, geo_fips) combinations
+    List<String> combos = new ArrayList<>();
     for (String tablename : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
-      if (lineCodesForTable != null) {
-        totalOperations += lineCodesForTable.size() * geoFips.size() * (endYear - startYear + 1);
-      }
-    }
-
-    LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo-year combinations)",
-        startYear, endYear, totalOperations);
-
-    for (String tablename : tablenames.keySet()) {
-      // Get valid LineCodes for this table from catalog
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
-
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
         LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
         continue;
       }
-
-      LOGGER.debug("Processing table {} with {} LineCodes", tablename, lineCodesForTable.size());
-
-      for (String line_code : lineCodesForTable) {
-        for (String geo_fips : geoFips.keySet()) {
-          for (int year = startYear; year <= endYear; year++) {
-            // Build variables map
-            Map<String, String> variables =
-                ImmutableMap.of("year", String.valueOf(year), "line_code", line_code, "tablename", tablename, "geo_fips_set", geo_fips);
-
-            if (isCachedOrExists(tableName, year, variables)) {
-              skippedCount++;
-              continue;
-            }
-
-            // Download via metadata-driven executeDownload()
-            try {
-              String cachedPath =
-                  cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
-
-              // Mark as downloaded in cache manifest
-              try {
-                long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-                cacheManifest.markCached(tableName, year, variables, cachedPath, fileSize);
-              } catch (Exception ex) {
-                LOGGER.warn("Failed to mark regional income dataset {} as cached in manifest: {}",
-                    cachedPath,
-                    ex.getMessage());
-              }
-
-              downloadedCount++;
-
-              if (downloadedCount % 10 == 0) {
-                LOGGER.info("Downloaded {}/{} table-linecode-geo-years (skipped {} cached)",
-                    downloadedCount, totalOperations, skippedCount);
-              }
-            } catch (Exception e) {
-              LOGGER.error("Error downloading table {} line code {} geo {} for year {}: {}",
-                  tablename, line_code, geo_fips, year, e.getMessage());
-            }
-          }
+      for (String lineCode : lineCodesForTable) {
+        for (String geoFipsCode : geoFips.keySet()) {
+          combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
         }
       }
     }
 
-    // Save manifest after all downloads complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save regional income cache manifest: {}", e.getMessage());
-    }
+    LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo-year combinations)",
+        startYear, endYear, combos.size() * (endYear - startYear + 1));
 
-    LOGGER.info("Regional income download complete: downloaded {} table-linecode-geo-years, skipped {} " +
-            "(cached)",
-        downloadedCount, skippedCount);
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("combo", combos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
+
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse combo back into separate variables
+          String[] parts = vars.get("combo").split(":", 3);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("line_code", parts[1]);
+          fullVars.put("geo_fips_set", parts[2]);
+          return isCachedOrExists(tableName, year, fullVars);
+        },
+        (year, vars) -> {
+          // Parse combo and execute download
+          String[] parts = vars.get("combo").split(":", 3);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("line_code", parts[1]);
+          fullVars.put("geo_fips_set", parts[2]);
+
+          String cachedPath =
+              cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, fullVars));
+
+          long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
+          cacheManifest.markCached(tableName, year, fullVars, cachedPath, fileSize);
+        },
+        "download");
   }
 
   /**
@@ -523,67 +648,71 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
-    int convertedCount = 0;
-    int skippedCount = 0;
 
-    int totalOperations = 0;
+    // Build flat list of all (tablename, line_code, geo_fips_set) combinations
+    List<String> combos = new ArrayList<>();
     for (String tablename : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
-      if (lineCodesForTable != null) {
-        totalOperations += lineCodesForTable.size() * geoFips.size() * (endYear - startYear + 1);
-      }
-    }
-
-    LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo-year combinations)",
-        startYear, endYear, totalOperations);
-
-    for (String tablename : tablenames.keySet()) {
-      // Get valid LineCodes for this table from catalog
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
-
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
         LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
         continue;
       }
-
-      LOGGER.debug("Converting table {} with {} LineCodes", tablename, lineCodesForTable.size());
-
-      for (String line_code : lineCodesForTable) {
-        for (String geo_fips_set : geoFips.keySet()) {
-          for (int year = startYear; year <= endYear; year++) {
-
-            Map<String, String> variables =
-                ImmutableMap.of("year", String.valueOf(year), "line_code", line_code, "tablename", tablename, "geo_fips_set", geo_fips_set);
-
-            String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
-            String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
-
-            if (isParquetConvertedOrExists(tableName, year, variables, rawPath, fullParquetPath)) {
-              skippedCount++;
-              continue;
-            }
-
-            try {
-              convertCachedJsonToParquet(tableName, variables, null);
-              cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
-              convertedCount++;
-
-              if (convertedCount % 10 == 0) {
-                LOGGER.info("Converted {}/{} table-linecode-geo-years (skipped {} up-to-date)",
-                    convertedCount, totalOperations, skippedCount);
-              }
-            } catch (Exception e) {
-              LOGGER.error("Error converting table {} line code {} geo {} for year {}: {}",
-                  tablename, line_code, geo_fips_set, year, e.getMessage());
-            }
-          }
+      for (String lineCode : lineCodesForTable) {
+        for (String geoFipsCode : geoFips.keySet()) {
+          combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
         }
       }
     }
 
-    LOGGER.info("Regional income conversion complete: converted {} table-linecode-geo-years, skipped {} " +
-            "(up-to-date)",
-        convertedCount, skippedCount);
+    LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo-year combinations)",
+        startYear, endYear, combos.size() * (endYear - startYear + 1));
+
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("combo", combos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
+
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse combo back into separate variables
+          String[] parts = vars.get("combo").split(":", 3);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("line_code", parts[1]);
+          fullVars.put("geo_fips_set", parts[2]);
+
+          // Resolve paths
+          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
+              resolveJsonPath(pattern, fullVars));
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, fullParquetPath);
+        },
+        (year, vars) -> {
+          // Parse combo and execute conversion
+          String[] parts = vars.get("combo").split(":", 3);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("tablename", parts[0]);
+          fullVars.put("line_code", parts[1]);
+          fullVars.put("geo_fips_set", parts[2]);
+
+          // Resolve parquet path for manifest
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          // Convert
+          convertCachedJsonToParquet(tableName, fullVars);
+
+          // Mark as converted
+          cacheManifest.markParquetConverted(tableName, year, fullVars, fullParquetPath);
+        },
+        "conversion");
   }
 
   /**
@@ -696,61 +825,50 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading {} ITA indicators for years {}-{}", itaIndicatorsList.size(),
         startYear, endYear);
 
-    int downloadedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "ita_data";
 
+    // Build flat list of all indicator-frequency combinations
+    List<String> combos = new ArrayList<>();
     for (String indicator : itaIndicatorsList) {
-      for (int year = startYear; year <= endYear; year++) {
-        for (String frequency : frequencies) {
-
-          Map<String, String> params =
-              ImmutableMap.of("year", String.valueOf(year), "indicator", indicator, "frequency", frequency);
-
-          if (isCachedOrExists(tableName, year, params)) {
-            skippedCount++;
-            continue;
-          }
-
-          try {
-            String cachedPath =
-                cacheStorageProvider.resolvePath(
-                    cacheDirectory, executeDownload(tableName,
-                    params));
-
-            // Mark as downloaded in cache manifest
-            try {
-              long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-              cacheManifest.markCached(tableName, year, params, cachedPath, fileSize);
-            } catch (Exception ex) {
-              LOGGER.warn("Failed to mark ITA data set {} as cached in manifest: {}", cachedPath,
-                  ex.getMessage());
-            }
-
-            downloadedCount++;
-
-            if (downloadedCount % 10 == 0) {
-              LOGGER.info("Downloaded {}/{} ITA indicators (skipped {} cached)", downloadedCount,
-                  itaIndicatorsList.size() * (endYear - startYear + 1), skippedCount);
-            }
-          } catch (Exception e) {
-            LOGGER.error("Error downloading ITA indicator {} for year {}: {}", indicator, year,
-                e.getMessage());
-          }
-        }
+      for (String frequency : frequencies) {
+        combos.add(indicator + ":" + frequency);
       }
     }
 
-    // Save manifest after all downloads complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save ITA data cache manifest: {}", e.getMessage());
-    }
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("indicator_freq", combos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    LOGGER.info("ITA data download complete: downloaded {} indicator-years, skipped {} (cached)",
-        downloadedCount, skippedCount);
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse combo back into separate variables
+          String[] parts = vars.get("indicator_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("indicator", parts[0]);
+          fullVars.put("frequency", parts[1]);
+          return isCachedOrExists(tableName, year, fullVars);
+        },
+        (year, vars) -> {
+          // Parse combo and execute download
+          String[] parts = vars.get("indicator_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("indicator", parts[0]);
+          fullVars.put("frequency", parts[1]);
+
+          String cachedPath =
+              cacheStorageProvider.resolvePath(
+                  cacheDirectory, executeDownload(tableName, fullVars));
+
+          long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
+          cacheManifest.markCached(tableName, year, fullVars, cachedPath, fileSize);
+        },
+        "download");
   }
 
   /**
@@ -767,47 +885,62 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converting {} ITA indicators to Parquet for years {}-{}",
         itaIndicatorsList.size(), startYear, endYear);
 
-    int convertedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "ita_data";
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
+    // Build flat list of all indicator-frequency combinations
+    List<String> combos = new ArrayList<>();
     for (String indicator : itaIndicatorsList) {
-      for (int year = startYear; year <= endYear; year++) {
-        for (String frequency : frequencies) {
-          Map<String, String> variables =
-              ImmutableMap.of("year", String.valueOf(year), "indicator", indicator, "frequency", frequency);
-
-          // Resolve paths using pattern
-          String rawPath =
-              cacheStorageProvider.resolvePath(
-                  cacheDirectory, resolveJsonPath(pattern
-                      , variables));
-          String fullParquetPath =
-              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
-
-          if (isParquetConvertedOrExists(tableName, year, variables, rawPath, fullParquetPath)) {
-            skippedCount++;
-            continue;
-          }
-
-          try {
-            convertCachedJsonToParquet(tableName, variables);
-            cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
-            convertedCount++;
-          } catch (Exception e) {
-            LOGGER.error("Error converting ITA indicator {} for year {}: {}", indicator, year,
-                e.getMessage());
-          }
-        }
+      for (String frequency : frequencies) {
+        combos.add(indicator + ":" + frequency);
       }
     }
 
-    LOGGER.info("ITA data conversion complete: converted {} indicator-years, skipped {} " +
-            "(up-to-date)",
-        convertedCount, skippedCount);
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("indicator_freq", combos));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
+
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Parse combo back into separate variables
+          String[] parts = vars.get("indicator_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("indicator", parts[0]);
+          fullVars.put("frequency", parts[1]);
+
+          // Resolve paths
+          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
+              resolveJsonPath(pattern, fullVars));
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, fullParquetPath);
+        },
+        (year, vars) -> {
+          // Parse combo and execute conversion
+          String[] parts = vars.get("indicator_freq").split(":", 2);
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("indicator", parts[0]);
+          fullVars.put("frequency", parts[1]);
+
+          // Resolve parquet path for manifest
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          // Convert
+          convertCachedJsonToParquet(tableName, fullVars);
+
+          // Mark as converted
+          cacheManifest.markParquetConverted(tableName, year, fullVars, fullParquetPath);
+        },
+        "conversion");
   }
 
   /**
@@ -827,68 +960,46 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading {} industries for years {}-{}", keyIndustriesList.size(), startYear,
         endYear);
 
-    int downloadedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "industry_gdp";
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
-    for (String industry : keyIndustriesList) {
-      for (int year = startYear; year <= endYear; year++) {
-        // Build variables map
-        Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
-        variables.put("frequency", "A");
-        variables.put("Industry", industry);
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("Industry", keyIndustriesList));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-        // Resolve path using pattern
-        String relativePath = resolveJsonPath(pattern, variables);
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Cache checking uses params with only Industry
+          Map<String, String> params = new HashMap<>();
+          params.put("Industry", vars.get("Industry"));
+          return isCachedOrExists(tableName, year, params);
+        },
+        (year, vars) -> {
+          // Build full variables with frequency
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("frequency", "A");
+          fullVars.put("Industry", vars.get("Industry"));
 
-        Map<String, String> params = new HashMap<>();
-        params.put("Industry", industry);
+          // Download
+          String cachedPath = executeDownload(tableName, fullVars);
 
-        if (isCachedOrExists(tableName, year, params)) {
-          skippedCount++;
-          continue;
-        }
+          // Resolve relative path for manifest
+          String relativePath = resolveJsonPath(pattern, fullVars);
+          String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
+          long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
 
-        try {
-          String cachedPath = executeDownload(tableName, variables);
-
-          // Mark as downloaded in cache manifest
-          try {
-            String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-            long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
-            cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
-          } catch (Exception ex) {
-            LOGGER.warn("Failed to mark {} as cached in manifest: {}", relativePath,
-                ex.getMessage());
-          }
-
-          downloadedCount++;
-
-          if (downloadedCount % 10 == 0) {
-            LOGGER.info("Downloaded {}/{} industries (skipped {} cached)", downloadedCount,
-                keyIndustriesList.size() * (endYear - startYear + 1), skippedCount);
-          }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading industry {} for year {}: {}", industry, year,
-              e.getMessage());
-        }
-      }
-    }
-
-    // Save manifest after all downloads complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
-    }
-
-    LOGGER.info("Industry GDP download complete: downloaded {} industry-years, skipped {} " +
-            "(cached)",
-        downloadedCount, skippedCount);
+          // Mark as cached with params (not fullVars)
+          Map<String, String> params = new HashMap<>();
+          params.put("Industry", vars.get("Industry"));
+          cacheManifest.markCached(tableName, year, params, relativePath, fileSize);
+        },
+        "download");
   }
 
   /**
@@ -904,49 +1015,58 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converting {} industries to Parquet for years {}-{}", keyIndustriesList.size(),
         startYear, endYear);
 
-    int convertedCount = 0;
-    int skippedCount = 0;
-
     String tableName = "industry_gdp";
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
-    for (String industry : keyIndustriesList) {
-      for (int year = startYear; year <= endYear; year++) {
-        // Build variables map
-        Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
-        variables.put("frequency", "A");
-        variables.put("Industry", industry);
+    // Create dimensions for iteration
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("Industry", keyIndustriesList));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-        // Resolve paths using pattern
-        String jsonPath = resolveJsonPath(pattern, variables);
-        String parquetPath = resolveParquetPath(pattern, variables);
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    // Execute using generic framework
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          // Build full variables with frequency
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("frequency", "A");
+          fullVars.put("Industry", vars.get("Industry"));
 
-        Map<String, String> params = new HashMap<>();
-        params.put("Industry", industry);
+          // Resolve paths
+          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
+              resolveJsonPath(pattern, fullVars));
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
 
-        if (isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath)) {
-          skippedCount++;
-          continue;
-        }
+          // Cache checking uses params with only Industry
+          Map<String, String> params = new HashMap<>();
+          params.put("Industry", vars.get("Industry"));
 
-        try {
-          convertCachedJsonToParquet(tableName, variables);
+          return isParquetConvertedOrExists(tableName, year, params, rawPath, fullParquetPath);
+        },
+        (year, vars) -> {
+          // Build full variables with frequency
+          Map<String, String> fullVars = new HashMap<>();
+          fullVars.put("year", vars.get("year"));
+          fullVars.put("frequency", "A");
+          fullVars.put("Industry", vars.get("Industry"));
+
+          // Resolve parquet path for manifest
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
+              resolveParquetPath(pattern, fullVars));
+
+          // Convert
+          convertCachedJsonToParquet(tableName, fullVars);
+
+          // Mark as converted with params (not fullVars)
+          Map<String, String> params = new HashMap<>();
+          params.put("Industry", vars.get("Industry"));
           cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
-          convertedCount++;
-        } catch (Exception e) {
-          LOGGER.error("Error converting industry {} for year {}: {}", industry, year,
-              e.getMessage());
-        }
-      }
-    }
-
-    LOGGER.info("Industry GDP conversion complete: converted {} industry-years, skipped {} " +
-            "(up-to-date)",
-        convertedCount, skippedCount);
+        },
+        "conversion");
   }
 
   /**
