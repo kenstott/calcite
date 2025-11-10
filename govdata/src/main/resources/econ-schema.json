@@ -1,6 +1,13 @@
 {
   "schemaName": "econ",
   "comment": "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, and cross-domain correlation with geographic and demographic data.",
+  "embeddingCache": {
+    "enabled": true,
+    "path": "{cacheDir}/embeddings_cache",
+    "provider": "onnx",
+    "model": "all-MiniLM-L6-v2",
+    "dimension": 384
+  },
   "partitionedTables": [
     {
       "name": "employment_statistics",
@@ -83,6 +90,17 @@
           "type": "string",
           "nullable": true,
           "comment": "Employment subcategory for detailed classification"
+        },
+        {
+          "name": "series_name_embedding",
+          "type": "array<double>",
+          "nullable": true,
+          "computed": true,
+          "embeddingConfig": {
+            "sourceColumn": "series_name",
+            "provider": "onnx"
+          },
+          "comment": "384-dim vector embedding for semantic search on series_name"
         }
       ],
       "download": {
@@ -2550,6 +2568,17 @@
           "type": "string",
           "nullable": true,
           "comment": "Series status: 'active' (currently updated) or 'discontinued' (no longer updated)"
+        },
+        {
+          "name": "title_embedding",
+          "type": "array<double>",
+          "nullable": true,
+          "computed": true,
+          "embeddingConfig": {
+            "sourceColumn": "title",
+            "provider": "onnx"
+          },
+          "comment": "384-dim vector embedding for semantic search on title"
         }
       ]
     }
