@@ -338,7 +338,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Resolve environment variable placeholders (${VAR:default} syntax)
     // This uses the same logic as GovDataSubSchemaFactory.resolveEnvVar()
     if (directory != null && directory.contains("${")) {
-      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
+      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?}");
       java.util.regex.Matcher matcher = pattern.matcher(directory);
       if (matcher.find()) {
         String varName = matcher.group(1);
@@ -397,7 +397,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (cacheDirectory != null) {
       // Resolve environment variable placeholders in cache directory
       if (cacheDirectory.contains("${")) {
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?}");
         java.util.regex.Matcher matcher = pattern.matcher(cacheDirectory);
         if (matcher.find()) {
           String varName = matcher.group(1);

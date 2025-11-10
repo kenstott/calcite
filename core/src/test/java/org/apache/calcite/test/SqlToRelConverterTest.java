@@ -144,6 +144,19 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
   }
 
   /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7268">[CALCITE-7268]
+   * SqlToRelConverter throws exception if lambda contains IN</a>. */
+  @Test void testLambdaExpressionContainsIn() {
+    final String sql = "select \"EXISTS\"(ARRAY[1,2,3,4], (n) -> n IN (1,3))";
+    fixture()
+        .withFactory(c ->
+            c.withOperatorTable(t -> SqlValidatorTest.operatorTableFor(SqlLibrary.SPARK)))
+        .withSql(sql)
+        .ok();
+
+  }
+
+  /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-3679">[CALCITE-3679]
    * Allow lambda expressions in SQL queries</a>. */
   @Test void testLambdaExpression3() {
@@ -3352,6 +3365,14 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).ok();
   }
 
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7132">[CALCITE-7132]
+   * Inconsistency with type coercion and character types</a>. */
+  @Test void testCoercion() {
+    sql("WITH c AS (SELECT CAST('x' as VARCHAR(2)) AS X, CAST('y' AS CHAR(2)) AS Y)"
+        + "SELECT X = Y AND Y = X FROM c")
+        .ok();
+  }
+
   @Test void testDeleteWhere() {
     final String sql = "delete from emp where deptno = 10";
     sql(sql).ok();
@@ -3382,6 +3403,23 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     final String sql = "update emp set empno = empno + 1";
     sql(sql).ok();
   }
+
+  /**
+   * Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7276">[CALCITE-7276]
+   * SqlToRelConverter throws exception for UPDATE if identifier expansion disabled</a>.
+   */
+  @Test void testUpdateWithIdentifierExpansionDisabled() {
+    final String sql = "update emp set empno = empno + 1";
+    sql(sql)
+        .withFactory(f ->
+            f.withValidator((opTab, catalogReader, typeFactory, config)
+                -> SqlValidatorUtil.newValidator(opTab, catalogReader,
+                typeFactory, config.withIdentifierExpansion(false))))
+        .withTrim(false)
+        .ok();
+  }
+
 
   @Test void testUpdateSubQuery() {
     final String sql = "update emp\n"
@@ -4334,6 +4372,37 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
         + "select dn.employees[0]['detail']['skills'][0]['others']\n"
         + "from sales.dept_nested dn";
     sql(sql).ok();
+  }
+
+  @Test void testArraySubquery() {
+    final String sql = "SELECT ARRAY(SELECT empno FROM emp)";
+    sql(sql).ok();
+  }
+
+  @Test void testArraySubqueryOrderByProjectedField() {
+    final String sql = "SELECT ARRAY(SELECT empno FROM emp ORDER BY empno)";
+    sql(sql).ok();
+  }
+
+  @Test void testArraySubqueryOrderByProjectedFieldWithoutExpand() {
+    final String sql = "SELECT ARRAY(SELECT empno FROM emp ORDER BY empno)";
+    fixture().withFactory(f -> f.withSqlToRelConfig(c -> c.withExpand(false))).withSql(sql).ok();
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7135">[CALCITE-7135]
+   * SqlToRelConverter throws AssertionError on ARRAY subquery order by a field that
+   * is not present on the final projection</a>. */
+  @Test void testArraySubqueryOrderByNonProjectedField() {
+    final String sql = "SELECT ARRAY(SELECT empno FROM emp ORDER BY ename)";
+    sql(sql).ok();
+  }
+
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7135">[CALCITE-7135]
+   * SqlToRelConverter throws AssertionError on ARRAY subquery order by a field that
+   * is not present on the final projection</a>. */
+  @Test void testArraySubqueryOrderByNonProjectedFieldWithoutExpand() {
+    final String sql = "SELECT ARRAY(SELECT empno FROM emp ORDER BY ename)";
+    fixture().withFactory(f -> f.withSqlToRelConfig(c -> c.withExpand(false))).withSql(sql).ok();
   }
 
   /**
@@ -5404,6 +5473,13 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).ok();
   }
 
+  /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7238">[CALCITE-7238]
+   * Query that creates a ROW value triggers an assertion failure in SqlToRelConverter</a>. */
+  @Test void testArrayRow() {
+    sql("WITH tbl(r) AS (VALUES(1)) SELECT\n"
+        + "ARRAY(SELECT r, r FROM tbl)").ok();
+  }
+
   /**
    * Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-4145">[CALCITE-4145]
@@ -5855,5 +5931,49 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
   @Test void testDynamicParameterDoubleCast() {
     String sql = "SELECT CAST(CAST(? AS INTEGER) AS CHAR)";
     sql(sql).ok();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-6028">[CALCITE-6028]
+   * Join on with more than 20 in conditions will report a null pointer error</a>. */
+  @Test void testJoinOnConditionWithInMoreThan20() {
+    final String sql = "select t1.x from (values (1, 'a'), (2, 'b')) as t1(x, y)"
+        + " left join (values (1, 'a'), (2, 'b')) as t2(x, y)"
+        + " on t1.x = t2.x"
+        + " and t1.x in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)";
+    sql(sql)
+        .withExpand(true)
+        .ok();
+  }
+
+  /** Test case of
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-6028">[CALCITE-6028]
+   * Join on with more than 20 in conditions will report a null pointer error</a>. */
+  @Test void testJoinOnConditionWithInMoreThan20ExpandFalse() {
+    final String sql = "select t1.x from (values (1, 'a'), (2, 'b')) as t1(x, y)"
+        + " left join (values (1, 'a'), (2, 'b')) as t2(x, y)"
+        + " on t1.x = t2.x"
+        + " and t1.x in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)";
+    sql(sql)
+        .withExpand(false)
+        .ok();
+  }
+
+  /**
+   * Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5421">[CALCITE-5421]
+   * SqlToRelConverter should populate correlateId for join with correlated query
+   * in HAVING condition</a>.
+   */
+  @Test void testInCorrelatedSubQueryInHavingRex() {
+    final String sql = "select sum(sal) as s\n"
+        + "from emp e1\n"
+        + "group by deptno\n"
+        + "having count(*) > 2\n"
+        + "and exists(\n"
+        + "  select true\n"
+        + "  from emp e2\n"
+        + "  where e1.deptno = e2.deptno)";
+    sql(sql).withExpand(false).ok();
   }
 }

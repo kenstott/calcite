@@ -36,6 +36,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1620,6 +1623,170 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Builds a DuckDB SQL query for converting JSON to Parquet with type casting and null handling.
+   *
+   * <p>Generates a SELECT statement that:
+   * <ul>
+   *   <li>Casts each column to the appropriate SQL type</li>
+   *   <li>Handles missing value indicators (e.g., "." → NULL)</li>
+   *   <li>Preserves column order from schema</li>
+   * </ul>
+   *
+   * @param columns Column definitions from schema
+   * @param missingValueIndicator String that represents NULL (e.g., ".", "-", or null if none)
+   * @param jsonPath Input JSON file path
+   * @param parquetPath Output Parquet file path
+   * @return Complete DuckDB SQL statement ready for execution
+   */
+  protected String buildConversionSql(
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      String missingValueIndicator,
+      String jsonPath,
+      String parquetPath) {
+    StringBuilder sql = new StringBuilder();
+
+    // Start COPY statement
+    sql.append("COPY (\n  SELECT\n");
+
+    // Build column expressions
+    boolean firstColumn = true;
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      if (!firstColumn) {
+        sql.append(",\n");
+      }
+      firstColumn = false;
+
+      String columnName = column.getName();
+      String sqlType = javaToDuckDbType(column.getType());
+
+      sql.append("    ");
+
+      // Handle missing value indicator with CASE expression
+      if (missingValueIndicator != null && !missingValueIndicator.isEmpty()) {
+        sql.append("CAST(CASE WHEN ");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" = ");
+        sql.append(quoteLiteral(missingValueIndicator));
+        sql.append(" THEN NULL ELSE ");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" END AS ");
+        sql.append(sqlType);
+        sql.append(") AS ");
+        sql.append(quoteIdentifier(columnName));
+      } else {
+        // Simple CAST without null handling
+        sql.append("CAST(");
+        sql.append(quoteIdentifier(columnName));
+        sql.append(" AS ");
+        sql.append(sqlType);
+        sql.append(") AS ");
+        sql.append(quoteIdentifier(columnName));
+      }
+    }
+
+    // FROM clause with JSON reader
+    sql.append("\n  FROM read_json_auto(");
+    sql.append(quoteLiteral(jsonPath));
+    sql.append(")\n) TO ");
+    sql.append(quoteLiteral(parquetPath));
+    sql.append(" (FORMAT PARQUET);");
+
+    return sql.toString();
+  }
+
+  /**
+   * Maps Java/Calcite type names to DuckDB SQL types.
+   */
+  private String javaToDuckDbType(String javaType) {
+    String normalized = javaType.toLowerCase();
+    switch (normalized) {
+      case "string":
+      case "varchar":
+      case "char":
+        return "VARCHAR";
+      case "int":
+      case "integer":
+        return "INTEGER";
+      case "long":
+      case "bigint":
+        return "BIGINT";
+      case "double":
+      case "float":
+        return "DOUBLE";
+      case "boolean":
+        return "BOOLEAN";
+      case "date":
+        return "DATE";
+      case "timestamp":
+        return "TIMESTAMP";
+      default:
+        LOGGER.warn("Unknown type '{}', defaulting to VARCHAR", javaType);
+        return "VARCHAR";
+    }
+  }
+
+  /**
+   * Quotes a SQL identifier (column/table name) for DuckDB.
+   */
+  private String quoteIdentifier(String identifier) {
+    // DuckDB uses double quotes for identifiers
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
+  }
+
+  /**
+   * Quotes a SQL string literal for DuckDB.
+   */
+  private String quoteLiteral(String literal) {
+    // DuckDB uses single quotes for string literals
+    return "'" + literal.replace("'", "''") + "'";
+  }
+
+  /**
+   * Converts cached JSON to Parquet using DuckDB's native SQL pipeline.
+   *
+   * <p>This method uses DuckDB to perform the entire conversion in a single SQL statement,
+   * which is significantly faster and more memory-efficient than Java-based conversion.
+   *
+   * @param tableName Name of table in schema
+   * @param columns Column definitions from schema
+   * @param missingValueIndicator String that represents NULL (e.g., ".")
+   * @param fullJsonPath Absolute path to input JSON file
+   * @param fullParquetPath Absolute path to output Parquet file
+   * @throws IOException if conversion fails
+   */
+  protected void convertCachedJsonToParquetViaDuckDB(
+      String tableName,
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      String missingValueIndicator,
+      String fullJsonPath,
+      String fullParquetPath) throws IOException {
+
+    // Build the SQL statement
+    String sql = buildConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath);
+
+    LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
+
+    // Execute using in-memory DuckDB connection
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement stmt = conn.createStatement()) {
+
+      // Execute the COPY statement
+      stmt.execute(sql);
+
+      LOGGER.info("Successfully converted {} to Parquet using DuckDB", tableName);
+
+    } catch (java.sql.SQLException e) {
+      // Wrap SQLException as IOException for consistent error handling
+      String errorMsg = String.format(
+          "DuckDB conversion failed for table '%s': %s",
+          tableName,
+          e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
    * Converts cached JSON data to Parquet format using schema metadata.
    *
    * <p>This is a generic, metadata-driven conversion that works for any table
@@ -1682,10 +1849,10 @@ public abstract class AbstractGovDataDownloader {
     String jsonPath = resolveJsonPath(pattern, variables);
     String parquetPath = resolveParquetPath(pattern, variables);
 
-    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
-    LOGGER.info("Converting {} to {}", jsonPath, parquetPath);
+    LOGGER.info("Converting {} to {}", fullJsonPath, fullParquetPath);
 
     // Check if source exists
     if (!cacheStorageProvider.exists(fullJsonPath)) {
@@ -1694,14 +1861,8 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Load column metadata first to enable type-aware conversion
-    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+    List<PartitionedTableConfig.TableColumn> columns =
         loadTableColumnsFromMetadata(tableName);
-
-    // Build column type map for efficient lookup
-    Map<String, String> columnTypeMap = new java.util.HashMap<>();
-    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
-      columnTypeMap.put(column.getName(), column.getType());
-    }
 
     // Extract missingValueIndicator from metadata (download.response.missingValueIndicator)
     // Use JsonNode.at() with JSON Pointer notation for clean path traversal
@@ -1713,6 +1874,32 @@ public abstract class AbstractGovDataDownloader {
         missingValueIndicator = missingValueNode.asText();
         LOGGER.info("Using missingValueIndicator: '{}'", missingValueIndicator);
       }
+    }
+
+    // Choose conversion path based on whether transformation is needed
+    if (transformer == null) {
+      // Fast path: Use DuckDB for direct JSON→Parquet conversion
+      LOGGER.info("Using DuckDB for JSON to Parquet conversion (no transformations)");
+      convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
+          fullJsonPath, fullParquetPath);
+
+      // Verify file was written
+      if (storageProvider.exists(fullParquetPath)) {
+        LOGGER.info("Successfully converted {} to Parquet: {}", tableName, parquetPath);
+      } else {
+        LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
+        throw new IOException("Parquet file not found after write: " + fullParquetPath);
+      }
+      return;
+    }
+
+    // Slow path: Use Java-based conversion when transformations are needed
+    LOGGER.info("Using Java-based conversion (transformations required)");
+
+    // Build column type map for efficient lookup
+    Map<String, String> columnTypeMap = new java.util.HashMap<>();
+    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
+      columnTypeMap.put(column.getName(), column.getType());
     }
 
     // Read JSON file with type-aware conversion
@@ -1802,6 +1989,7 @@ public abstract class AbstractGovDataDownloader {
       return false;
     }
   }
+
 
   /**
    * Generates embedding columns for all computed columns with embeddingConfig.
@@ -1984,5 +2172,311 @@ public abstract class AbstractGovDataDownloader {
       String columnName) {
     return columns.stream()
         .anyMatch(c -> c.getName().equals(columnName) && c.isComputed());
+  }
+
+  // ===== Trend Consolidation =====
+
+  /**
+   * Represents a trend pattern configuration from schema.
+   * Trend patterns consolidate year-partitioned data into single files for faster querying.
+   */
+  protected static class TrendPattern {
+    final String sourceTableName;
+    final String sourcePattern;
+    final String trendName;
+    final String trendPattern;
+
+    TrendPattern(String sourceTableName, String sourcePattern, String trendName, String trendPattern) {
+      this.sourceTableName = sourceTableName;
+      this.sourcePattern = sourcePattern;
+      this.trendName = trendName;
+      this.trendPattern = trendPattern;
+    }
+  }
+
+  /**
+   * Consolidates all tables with trend_patterns into consolidated parquet files.
+   *
+   * <p>This method:
+   * <ul>
+   *   <li>Scans schema for tables with trend_patterns</li>
+   *   <li>For each trend pattern, uses DuckDB to consolidate all year partitions</li>
+   *   <li>Writes consolidated files to parquet directory</li>
+   * </ul>
+   *
+   * <p>Example: Consolidates employment_statistics from:
+   * <pre>
+   *   type=employment_statistics/frequency=A/year=2020/employment_statistics.parquet
+   *   type=employment_statistics/frequency=A/year=2021/employment_statistics.parquet
+   *   ...
+   * </pre>
+   * into:
+   * <pre>
+   *   type=employment_statistics/frequency=A/employment_statistics.parquet
+   * </pre>
+   *
+   * @throws IOException if consolidation fails
+   */
+  public void consolidateAll() throws IOException {
+    LOGGER.info("Starting trend consolidation for all tables");
+
+    List<TrendPattern> trendPatterns = getTrendPatterns();
+
+    if (trendPatterns.isEmpty()) {
+      LOGGER.info("No tables with trend_patterns found in schema");
+      return;
+    }
+
+    LOGGER.info("Found {} trend patterns to consolidate", trendPatterns.size());
+
+    int consolidatedCount = 0;
+    int skippedCount = 0;
+
+    for (TrendPattern trend : trendPatterns) {
+      try {
+        consolidateTrendTable(trend);
+        consolidatedCount++;
+      } catch (Exception e) {
+        LOGGER.error("Failed to consolidate trend '{}': {}", trend.trendName, e.getMessage(), e);
+        skippedCount++;
+      }
+    }
+
+    LOGGER.info("Trend consolidation complete: {} consolidated, {} failed",
+        consolidatedCount, skippedCount);
+  }
+
+  /**
+   * Extracts all trend patterns from schema JSON.
+   *
+   * @return List of trend patterns from all tables
+   */
+  protected List<TrendPattern> getTrendPatterns() {
+    List<TrendPattern> trendPatterns = new ArrayList<>();
+
+    try {
+      // Load schema from resources
+      InputStream schemaStream = getClass().getResourceAsStream(schemaResourceName);
+      if (schemaStream == null) {
+        LOGGER.warn("Schema resource not found: {}", schemaResourceName);
+        return trendPatterns;
+      }
+
+      JsonNode root = MAPPER.readTree(schemaStream);
+
+      if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
+        LOGGER.warn("Schema has no partitionedTables array");
+        return trendPatterns;
+      }
+
+      // Scan all tables for trend_patterns
+      for (JsonNode tableNode : root.get("partitionedTables")) {
+        String tableName = tableNode.has("name") ? tableNode.get("name").asText() : null;
+        String sourcePattern = tableNode.has("pattern") ? tableNode.get("pattern").asText() : null;
+
+        if (tableName == null || sourcePattern == null) {
+          continue;
+        }
+
+        // Check if table has trend_patterns
+        if (tableNode.has("trend_patterns") && tableNode.get("trend_patterns").isArray()) {
+          for (JsonNode trendNode : tableNode.get("trend_patterns")) {
+            String trendName = trendNode.has("name") ? trendNode.get("name").asText() : null;
+            String trendPattern = trendNode.has("pattern") ? trendNode.get("pattern").asText() : null;
+
+            if (trendName != null && trendPattern != null) {
+              trendPatterns.add(new TrendPattern(tableName, sourcePattern, trendName, trendPattern));
+              LOGGER.debug("Found trend pattern: {} -> {}", tableName, trendName);
+            }
+          }
+        }
+      }
+
+    } catch (IOException e) {
+      LOGGER.error("Failed to load trend patterns from schema: {}", e.getMessage());
+    }
+
+    return trendPatterns;
+  }
+
+  /**
+   * Consolidates a single trend table using DuckDB.
+   *
+   * <p>Generates iteration over all non-year variables in the source pattern,
+   * then for each combination, consolidates all years into a single file.
+   *
+   * @param trend Trend pattern configuration
+   * @throws IOException if consolidation fails
+   */
+  protected void consolidateTrendTable(TrendPattern trend) throws IOException {
+    LOGGER.info("Consolidating trend: {} from {}", trend.trendName, trend.sourceTableName);
+
+    // Extract variables from both patterns
+    // Source: type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet
+    // Trend:  type=employment_statistics/frequency={frequency}/employment_statistics.parquet
+
+    // Find variables in source pattern (e.g., {frequency}, {year})
+    java.util.regex.Pattern varPattern = java.util.regex.Pattern.compile("\\{(\\w+)\\}");
+    java.util.regex.Matcher sourceMatcher = varPattern.matcher(trend.sourcePattern);
+
+    List<String> sourceVars = new ArrayList<>();
+    while (sourceMatcher.find()) {
+      sourceVars.add(sourceMatcher.group(1));
+    }
+
+    // Find variables in trend pattern (e.g., {frequency})
+    java.util.regex.Matcher trendMatcher = varPattern.matcher(trend.trendPattern);
+    List<String> trendVars = new ArrayList<>();
+    while (trendMatcher.find()) {
+      trendVars.add(trendMatcher.group(1));
+    }
+
+    // Variables to iterate over = trendVars (non-year dimensions)
+    // For employment_statistics: just {frequency}
+    LOGGER.debug("Trend variables to iterate: {}", trendVars);
+
+    // For now, handle simple case: single non-year variable (frequency)
+    // TODO: Extend to handle multiple non-year variables with Cartesian product
+
+    if (trendVars.size() == 1) {
+      String varName = trendVars.get(0);
+
+      // Extract possible values from table metadata if available
+      // For frequency: typically ["A", "M", "Q"]
+      // For now, use hardcoded common values - subclasses can override
+
+      List<String> values = getVariableValues(trend.sourceTableName, varName);
+
+      LOGGER.info("Consolidating {} with {} values for {}: {}",
+          trend.trendName, values.size(), varName, values);
+
+      for (String value : values) {
+        Map<String, String> variables = new HashMap<>();
+        variables.put(varName, value);
+
+        consolidateTrendForVariables(trend, variables);
+      }
+
+    } else if (trendVars.isEmpty()) {
+      // No variables - consolidate everything
+      consolidateTrendForVariables(trend, new HashMap<>());
+
+    } else {
+      LOGGER.warn("Multi-variable trend patterns not yet implemented: {}", trendVars);
+      // TODO: Implement Cartesian product for multiple variables
+    }
+  }
+
+  /**
+   * Gets possible values for a variable (like frequency).
+   * Subclasses can override to provide schema-specific values.
+   *
+   * @param tableName Table name
+   * @param varName Variable name (e.g., "frequency")
+   * @return List of possible values
+   */
+  protected List<String> getVariableValues(String tableName, String varName) {
+    // Default values for common variables
+    if ("frequency".equalsIgnoreCase(varName)) {
+      return java.util.Arrays.asList("A", "M", "Q");
+    }
+    return Collections.emptyList();
+  }
+
+  /**
+   * Consolidates trend data for a specific set of variables using DuckDB.
+   *
+   * @param trend Trend pattern
+   * @param variables Variables to substitute (e.g., {frequency: "A"})
+   * @throws IOException if consolidation fails
+   */
+  protected void consolidateTrendForVariables(TrendPattern trend, Map<String, String> variables)
+      throws IOException {
+
+    // Build source glob pattern (replaces year=* and other vars)
+    String sourceGlob = buildSourceGlob(trend.sourcePattern, variables);
+
+    // Build target path (substitutes variables, no year)
+    String targetPath = substituteVariables(trend.trendPattern, variables);
+
+    // Resolve full paths
+    String fullSourceGlob = storageProvider.resolvePath(parquetDirectory, sourceGlob);
+    String fullTargetPath = storageProvider.resolvePath(parquetDirectory, targetPath);
+
+    LOGGER.info("Consolidating:\n  FROM: {}\n  TO:   {}", fullSourceGlob, fullTargetPath);
+
+    // Build DuckDB SQL
+    String sql = buildTrendConsolidationSql(fullSourceGlob, fullTargetPath);
+
+    LOGGER.debug("Consolidation SQL:\n{}", sql);
+
+    // Execute using DuckDB
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement stmt = conn.createStatement()) {
+
+      stmt.execute(sql);
+      LOGGER.info("Successfully consolidated trend: {}", trend.trendName);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg = String.format(
+          "DuckDB consolidation failed for trend '%s': %s",
+          trend.trendName,
+          e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Builds source glob pattern by replacing variables and using * for year.
+   *
+   * @param sourcePattern Source pattern from schema
+   * @param variables Variables to substitute
+   * @return Glob pattern for reading source files
+   */
+  private String buildSourceGlob(String sourcePattern, Map<String, String> variables) {
+    String result = sourcePattern;
+
+    // Replace all {var} with values from variables map
+    for (Map.Entry<String, String> entry : variables.entrySet()) {
+      result = result.replace("{" + entry.getKey() + "}", entry.getValue());
+    }
+
+    // Replace {year} with * (wildcard)
+    result = result.replace("{year}", "*");
+
+    // Also handle year= patterns
+    result = result.replaceAll("year=\\{year\\}", "year=*");
+
+    return result;
+  }
+
+  /**
+   * Substitutes variables in a pattern (no wildcards).
+   *
+   * @param pattern Pattern with {var} placeholders
+   * @param variables Variable values
+   * @return Pattern with variables substituted
+   */
+  private String substituteVariables(String pattern, Map<String, String> variables) {
+    String result = pattern;
+    for (Map.Entry<String, String> entry : variables.entrySet()) {
+      result = result.replace("{" + entry.getKey() + "}", entry.getValue());
+    }
+    return result;
+  }
+
+  /**
+   * Builds DuckDB SQL for consolidating year partitions into a single file.
+   *
+   * @param sourceGlob Glob pattern for source files (with year=*)
+   * @param targetPath Target consolidated file path
+   * @return SQL COPY statement
+   */
+  private String buildTrendConsolidationSql(String sourceGlob, String targetPath) {
+    return "COPY (\n" +
+        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ")\n" +
+        "  ORDER BY year\n" +
+        ") TO " + quoteLiteral(targetPath) + " (FORMAT PARQUET);";
   }
 }

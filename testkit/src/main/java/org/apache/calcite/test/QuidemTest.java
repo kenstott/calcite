@@ -23,10 +23,9 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.plan.Contexts;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
-import org.apache.calcite.plan.RelRule.Config;
 import org.apache.calcite.prepare.Prepare;
+import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
-import org.apache.calcite.rel.rules.RuleConfig;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.runtime.Hook;
@@ -43,8 +42,12 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.test.schemata.catchall.CatchallSchema;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
+import org.apache.calcite.tools.Program;
+import org.apache.calcite.tools.Programs;
+import org.apache.calcite.tools.RuleSets;
 import org.apache.calcite.util.Bug;
 import org.apache.calcite.util.Closer;
+import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.Sources;
 import org.apache.calcite.util.Util;
 
@@ -67,7 +70,6 @@ import java.io.Writer;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.Connection;
@@ -252,7 +254,7 @@ public abstract class QuidemTest {
             // - Reset defaults: "original"
             if (propertyName.equals("planner-rules")) {
               if (value.equals("original")) {
-                closer.add(Hook.PLANNER.addThread(this::resetPlanner));
+                closer.add(Hook.PLANNER.addThread(QuidemTest::resetPlanner));
               } else {
                 closer.add(
                     Hook.PLANNER.addThread((Consumer<RelOptPlanner>)
@@ -261,6 +263,41 @@ public abstract class QuidemTest {
                             originalRules = planner.getRules();
                           }
                           updatePlanner(planner, (String) value);
+                        }));
+              }
+            }
+
+            if (propertyName.equals("hep-rules")) {
+              if (value.equals("original")) {
+                closer.add(
+                    Hook.PROGRAM.addThread((Consumer<Holder<Program>>)
+                        holder -> holder.set(null)));
+              } else {
+                closer.add(
+                    Hook.PROGRAM.addThread((Consumer<Holder<Program>>)
+                        holder -> {
+                          List<RelOptRule> hepRules = new ArrayList<>();
+                          List<RelOptRule> volcanoRules =
+                              new ArrayList<>(EnumerableRules.ENUMERABLE_RULES);
+
+                          applyRulesInOrder((String) value, hepRules, volcanoRules);
+
+                          Program subQueryProgram =
+                              Programs.subQuery(DefaultRelMetadataProvider.INSTANCE);
+                          Program decorrelateProgram = Programs.decorrelate();
+                          Program trimProgram = Programs.trim();
+                          Program hepProgram =
+                              Programs.hep(RuleSets.ofList(hepRules), false,
+                                  DefaultRelMetadataProvider.INSTANCE);
+                          Program calcProgram =
+                              Programs.calc(DefaultRelMetadataProvider.INSTANCE);
+                          Program volcanoProgram =
+                              Programs.of(RuleSets.ofList(volcanoRules));
+
+                          Program combinedProgram =
+                              Programs.sequence(subQueryProgram, decorrelateProgram, trimProgram,
+                                  hepProgram, volcanoProgram, calcProgram);
+                          holder.set(combinedProgram);
                         }));
               }
             }
@@ -275,12 +312,12 @@ public abstract class QuidemTest {
     }
     final String diff = DiffTestCase.diff(inFile, outFile);
     if (!diff.isEmpty()) {
-      fail("Files differ: " + outFile + " " + inFile + "\n"
+      fail("Files differ:\ndiff " + inFile + " " + outFile + "\n"
           + diff);
     }
   }
 
-  private void updatePlanner(RelOptPlanner planner, String value) {
+  private static void updatePlanner(RelOptPlanner planner, String value) {
     List<RelOptRule> rulesAdd = new ArrayList<>();
     List<RelOptRule> rulesRemove = new ArrayList<>();
     parseRules(value, rulesAdd, rulesRemove);
@@ -288,14 +325,15 @@ public abstract class QuidemTest {
     rulesAdd.forEach(planner::addRule);
   }
 
-  private void resetPlanner(RelOptPlanner planner) {
+  private static void resetPlanner(RelOptPlanner planner) {
     if (originalRules != null) {
       planner.getRules().forEach(planner::removeRule);
       originalRules.forEach(planner::addRule);
     }
   }
 
-  private void parseRules(String value, List<RelOptRule> rulesAdd, List<RelOptRule> rulesRemove) {
+  private static void parseRules(String value, List<RelOptRule> rulesAdd,
+      List<RelOptRule> rulesRemove) {
     Pattern pattern = Pattern.compile("([+-])((CoreRules|EnumerableRules)\\.)?(\\w+)");
     Matcher matcher = pattern.matcher(value);
 
@@ -319,61 +357,77 @@ public abstract class QuidemTest {
     }
   }
 
-  public static RelOptRule getCoreRule(String ruleName) {
-    RelOptRule rule = null;
-    try {
-      // Get rule class and config annotation
-      Field ruleField = CoreRules.class.getField(ruleName);
-      Class<?> ruleClass = ruleField.getType();
+  /**
+   * Parse the rules string and apply operations in textual order to the
+   * provided hepRules and volcanoRules lists.
+   */
+  private static void applyRulesInOrder(String value,
+      List<RelOptRule> hepRules, List<RelOptRule> volcanoRules) {
+    Pattern pattern = Pattern.compile("([+-])((CoreRules|EnumerableRules)\\.)?(\\w+)");
+    Matcher matcher = pattern.matcher(value);
 
-      // Find Config inner class
-      Class<?> configClass = null;
-      for (Class<?> innerClass : ruleClass.getDeclaredClasses()) {
-        if (innerClass.getSimpleName().endsWith("Config")) {
-          configClass = innerClass;
-          break;
+    while (matcher.find()) {
+      char operation = matcher.group(1).charAt(0);
+      String ruleSource = matcher.group(3);
+      String ruleName = matcher.group(4);
+
+      try {
+        RelOptRule rule;
+        boolean targetVolcano = false;
+        if (ruleSource == null || ruleSource.equals("CoreRules")) {
+          rule = getCoreRule(ruleName);
+        } else if (ruleSource.equals("EnumerableRules")) {
+          Object ruleObj = EnumerableRules.class.getField(ruleName).get(null);
+          rule = (RelOptRule) ruleObj;
+          targetVolcano = true;
+        } else {
+          throw new RuntimeException("Unknown rule: " + ruleName);
         }
-      }
-      if (configClass == null) {
-        // Should not enter
-        throw new RuntimeException("Config not found in " + ruleClass.getName());
-      }
 
-      // Determine config field name
-      RuleConfig ruleConfig = ruleField.getAnnotation(RuleConfig.class);
-      String configValue = (ruleConfig == null || ruleConfig.value().isEmpty())
-          ? "DEFAULT"
-          : ruleConfig.value();
-
-      // Find and process the target config field
-      for (Field field : configClass.getDeclaredFields()) {
-        if (field.getType() == configClass
-            && Modifier.isStatic(field.getModifiers())
-            && field.getName().equals(configValue)) {
-          field.setAccessible(true);
-          Config config = (Config) field.get(null);
-          rule = config.toRule();
-          break;
+        List<RelOptRule> target = targetVolcano ? volcanoRules : hepRules;
+        if (operation == '+') {
+          if (!target.contains(rule)) {
+            target.add(rule);
+          }
+        } else if (operation == '-') {
+          target.remove(rule);
+        } else {
+          throw new RuntimeException("unknown operation '" + operation + "'");
         }
+      } catch (NoSuchFieldException | IllegalAccessException e) {
+        throw new RuntimeException("set rules failed: " + e.getMessage(), e);
       }
-
-      if (rule == null) {
-        throw new RuntimeException("No matching config value '" + configValue
-            + "' found in " + configClass.getName());
-      }
-    } catch (NoSuchFieldException | IllegalAccessException
-         | RuntimeException e) {
-      throw new RuntimeException("Failed to get rule '" + ruleName + "': " + e.getMessage());
     }
-    return rule;
   }
 
-  private void setRules(char operation, RelOptRule rule,
+  public static RelOptRule getCoreRule(String ruleName) {
+    try {
+      Field ruleField = CoreRules.class.getField(ruleName);
+      Object o = ruleField.get(null);
+
+      if (o instanceof RelOptRule) {
+        return (RelOptRule) o;
+      }
+      throw new IllegalArgumentException(ruleName + " is not of type RelOptRule");
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException("Failed to get rule '" + ruleName + "': " + e.getMessage());
+    }
+  }
+
+  private static void setRules(char operation, RelOptRule rule,
       List<RelOptRule> rulesAdd, List<RelOptRule> rulesRemove) {
     if (operation == '+') {
-      rulesAdd.add(rule);
+      // Remove from remove list if present, then add to add list
+      rulesRemove.remove(rule);
+      if (!rulesAdd.contains(rule)) {
+        rulesAdd.add(rule);
+      }
     } else if (operation == '-') {
-      rulesRemove.add(rule);
+      // Remove from add list if present, then add to remove list
+      rulesAdd.remove(rule);
+      if (!rulesRemove.contains(rule)) {
+        rulesRemove.add(rule);
+      }
     } else {
       throw new RuntimeException("unknown operation '" + operation + "'");
     }

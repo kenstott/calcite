@@ -3277,6 +3277,125 @@ public class SqlFunctions {
     return binaryOperator(b0, b1, (x, y) -> (byte) (x & y));
   }
 
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UByte} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UByte bitAnd(UByte b0, UByte b1) {
+    return UByte.valueOf((short) (b0.shortValue() & b1.shortValue()));
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UShort} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UShort bitAnd(UShort b0, UShort b1) {
+    return UShort.valueOf(b0.intValue() & b1.intValue());
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UInteger} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UInteger bitAnd(UInteger b0, UInteger b1) {
+    return UInteger.valueOf(b0.longValue() & b1.longValue());
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.ULong} values. Returns
+   * {@code null} if any operand is null.
+   */
+  public static ULong bitAnd(ULong b0, ULong b1) {
+    return ULong.valueOf(b0.longValue() & b1.longValue());
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UInteger} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(UInteger b0, long b1) {
+    return b0.intValue() & b1;
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.ULong} and {@link long}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(ULong b0, long b1) {
+    return b0.longValue() & b1;
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link long} and {@link org.joou.UInteger}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(long b1, ULong b2) {
+    return b1 & b2.longValue();
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link long} and {@link org.joou.UInteger}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(long b1, UInteger b2) {
+    return b1 & b2.longValue();
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UShort} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(UShort b0, long b1) {
+    return b0.intValue() & b1;
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UShort} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static long bitAnd(long b0, UShort b1) {
+    return b0 & b1.intValue();
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UInteger} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static UInteger bitAnd(UInteger b0, int b1) {
+    return UInteger.valueOf(b0.intValue() & b1);
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UInteger} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static ULong bitAnd(ULong b0, int b1) {
+    return ULong.valueOf(b0.longValue() & b1);
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link Integer} and {@link org.joou.UInteger}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static ULong bitAnd(int b1, ULong b2) {
+    return ULong.valueOf(b1 & b2.longValue());
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UShort} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static Integer bitAnd(int b0, UShort b1) {
+    return b0 & b1.intValue();
+  }
+
+  /**
+   * Bitwise function <code>BITAND</code> applied to {@link org.joou.UShort} and {@link Integer}
+   * values. Returns {@code null} if any operand is null.
+   */
+  public static Integer bitAnd(UShort b0, int b1) {
+    return b0.intValue() & b1;
+  }
   /** Helper function for implementing <code>BITCOUNT</code>. Counts the number
    * of bits set in an integer value. */
   public static long bitCount(long b) {
@@ -3383,15 +3502,17 @@ public class SqlFunctions {
     return b0 ^ b1;
   }
 
-  /** Bitwise function <code>BITXOR</code> applied to a Long and int value.
-   *  Needed for handling NULL for the first argument.
+  /**
+   * Bitwise function <code>BITXOR</code> applied to a Long and int value. Overload to support type
+   * coercion between boxed Long and primitive int.
    */
   public static long bitXor(Long b0, int b1) {
     return b0 ^ b1;
   }
 
-  /** Bitwise function <code>BITXOR</code> applied to a Long and int value.
-   *  Needed for handling NULL for the second argument.
+  /**
+   * Bitwise function <code>BITXOR</code> applied to a Long and int value. Overload to support type
+   * coercion between boxed Long and primitive int.
    */
   public static long bitXor(int b0, Long b1) {
     return b0 ^ b1;
@@ -3415,6 +3536,63 @@ public class SqlFunctions {
     }
 
     return new ByteString(result);
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link Long} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static long bitXor(Long b0, Long b1) {
+    return b0 ^ b1;
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link Integer} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static long bitXor(Integer b0, Integer b1) {
+    return b0 ^ b1;
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link org.joou.UByte} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UByte bitXor(UByte b0, UByte b1) {
+    return  UByte.valueOf(b0.shortValue() ^ b1.shortValue());
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link org.joou.UShort} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UShort bitXor(UShort b0, UShort b1) {
+    return  UShort.valueOf(b0.intValue() ^ b1.intValue());
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link org.joou.UInteger} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static UInteger bitXor(UInteger b0, UInteger b1) {
+    return UInteger.valueOf(b0.longValue() ^ b1.longValue());
+  }
+
+  /**
+   * Bitwise function <code>BITXOR</code> applied to {@link org.joou.ULong} values.
+   * Returns {@code null} if any operand is null.
+   */
+  public static ULong bitXor(ULong b0, ULong b1) {
+    return ULong.valueOf(b0.longValue() ^ b1.longValue());
+  }
+
+  public static @Nullable Object bitXor(@Nullable Object b0, @Nullable Object b1) {
+    if (b0 == null || b1 == null) {
+      return null;
+    }
+    throw new IllegalArgumentException(
+        "Invalid arguments for BITXOR: "
+            + "" + b0.getClass() + ", " + b1.getClass());
   }
 
   /**
@@ -3445,6 +3623,148 @@ public class SqlFunctions {
     }
 
     return new ByteString(result);
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on a 32-bit integer.
+   *
+   * @param x the integer value to shift
+   * @param y the shift amount (positive: left shift, negative: right shift)
+   * @return the shifted integer
+   */
+  public static int leftShift(int x, int y) {
+    int shift = ((y % 32) + 32) % 32; // normalize to 0~31
+    return y >= 0 ? x << shift : x >> shift; // arithmetic right shift
+  }
+
+
+  // ----------------- long -----------------
+  /**
+   * Performs PostgresSQL-style bitwise shift on a 64-bit long value.
+   *
+   * @param x the long value to shift
+   * @param y the shift amount
+   * @return the shifted long value
+   */
+  public static long leftShift(long x, int y) {
+    int shift = ((y % 64) + 64) % 64; // normalize to 0~63
+    return y >= 0 ? x << shift : x >> shift;
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on an int value with a long shift amount.
+   *
+   * @param x the int value to shift
+   * @param y the long shift amount
+   * @return the shifted value as long
+   */
+  public static long leftShift(int x, long y) {
+    int shift = (int) (((y % 32) + 32) % 32); // normalize to 0~31
+    return y >= 0 ? (long) x << shift : (long) x >> shift;
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on a byte array.
+   * Positive shift: left shift.
+   * Negative shift: treated as positive shift with modulo arithmetic.
+   *
+   * @param bytes the input byte array
+   * @param y the shift amount in bits
+   * @return the shifted byte array
+   */
+  public static byte[] leftShift(byte[] bytes, int y) {
+    if (bytes.length == 0) {
+      return new byte[0];
+    }
+
+    int bitLen = bytes.length * 8;
+
+    // PostgreSQL behavior: always treat as left shift with modulo arithmetic
+    // Negative y becomes equivalent positive shift
+    int shift = ((y % bitLen) + bitLen) % bitLen;
+
+    if (shift == 0) {
+      return bytes.clone();
+    }
+
+    byte[] result = new byte[bytes.length];
+
+    // Always perform left shift (even for originally negative y)
+    int byteShift = shift / 8;
+    int bitShift = shift % 8;
+
+    for (int i = 0; i < bytes.length; i++) {
+      int srcIndex = i - byteShift;
+      int val = 0;
+
+      // Get the main byte
+      if (srcIndex >= 0) {
+        val = (bytes[srcIndex] & 0xFF) << bitShift;
+      }
+
+      // Get carry bits from previous byte
+      if (srcIndex - 1 >= 0 && bitShift != 0) {
+        val |= (bytes[srcIndex - 1] & 0xFF) >>> (8 - bitShift);
+      }
+
+      result[i] = (byte) val;
+    }
+    return result;
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on ByteString.
+   *
+   * @param bytes the ByteString to shift
+   * @param y the shift amount in bits
+   * @return shifted ByteString
+   */
+  public static ByteString leftShift(ByteString bytes, int y) {
+    return new ByteString(leftShift(bytes.getBytes(), y));
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on UByte.
+   * Overflow bits are masked to 8 bits.
+   */
+  public static UByte leftShift(UByte x, int y) {
+    int shift = ((y % 8) + 8) % 8;
+    int val = x.byteValue() & 0xFF;
+    val = (y >= 0) ? (val << shift) & 0xFF : (val >> shift) & 0xFF;
+    return UByte.valueOf((byte) val);
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on UShort.
+   * Overflow bits are masked to 16 bits.
+   */
+  public static UShort leftShift(UShort x, int y) {
+    int shift = ((y % 16) + 16) % 16;
+    int val = x.shortValue() & 0xFFFF;
+    val = (y >= 0) ? (val << shift) & 0xFFFF : (val >> shift) & 0xFFFF;
+    return UShort.valueOf((short) val);
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on UInteger.
+   * Overflow bits are masked to 32 bits.
+   */
+  public static UInteger leftShift(UInteger x, int y) {
+    int shift = ((y % 32) + 32) % 32;
+    long val = x.longValue() & 0xFFFFFFFFL;
+    val = (y >= 0) ? (val << shift) & 0xFFFFFFFFL : (val >> shift) & 0xFFFFFFFFL;
+    return UInteger.valueOf(val);
+  }
+
+  /**
+   * Performs PostgresSQL-style bitwise shift on ULong.
+   * Overflow bits are masked to 64 bits (long shifts naturally truncate).
+   */
+  public static ULong leftShift(ULong x, int y) {
+    int shift = ((y % 64) + 64) % 64;
+    long val = x.longValue();
+    val = (y >= 0) ? val << shift : val >> shift;
+    return ULong.valueOf(val);
   }
 
   // EXP
