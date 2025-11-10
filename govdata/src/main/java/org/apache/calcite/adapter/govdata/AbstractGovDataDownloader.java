@@ -16,6 +16,10 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.similarity.EmbeddingException;
+import org.apache.calcite.adapter.file.similarity.EmbeddingProviderFactory;
+import org.apache.calcite.adapter.file.similarity.TextEmbeddingProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,10 +38,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Cross-schema base class for government data downloaders (ECON, GEO, SEC).
@@ -97,6 +105,9 @@ public abstract class AbstractGovDataDownloader {
 
   /** Cached rate limit configuration (loaded on first access) */
   private Map<String, Object> rateLimitConfig = null;
+
+  /** Embedding provider for generating vector embeddings (lazy-initialized) */
+  private TextEmbeddingProvider embeddingProvider = null;
 
   protected AbstractGovDataDownloader(
       String cacheDirectory,
@@ -244,6 +255,55 @@ public abstract class AbstractGovDataDownloader {
       }
     }
     return rateLimitConfig;
+  }
+
+  /**
+   * Lazily initializes the embedding provider from schema configuration.
+   * Returns null if embeddings are disabled in schema.
+   */
+  private TextEmbeddingProvider getEmbeddingProvider() throws EmbeddingException {
+    if (embeddingProvider == null) {
+      // Load schema root config from resources
+      try (InputStream schemaStream = getClass().getResourceAsStream(schemaResourceName)) {
+        if (schemaStream == null) {
+          LOGGER.warn("Schema resource not found: {}", schemaResourceName);
+          return null;
+        }
+
+        JsonNode root = MAPPER.readTree(schemaStream);
+
+        // Read embedding config from schema root
+        if (!root.has("embeddingCache")) {
+          return null; // Embeddings disabled
+        }
+
+        JsonNode embeddingCacheNode = root.get("embeddingCache");
+        if (!embeddingCacheNode.get("enabled").asBoolean(false)) {
+          return null; // Embeddings disabled
+        }
+
+        // Build provider config
+        String provider = embeddingCacheNode.get("provider").asText("onnx");
+        String cachePath = embeddingCacheNode.get("path").asText();
+
+        // Resolve {cacheDir} placeholder
+        cachePath = cachePath.replace("{cacheDir}", cacheDirectory);
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("cachePath", cachePath);
+        config.put("storageProvider", this.storageProvider);
+        config.put("dimensions", embeddingCacheNode.get("dimension").asInt(384));
+        config.put("model", embeddingCacheNode.get("model").asText());
+
+        embeddingProvider = EmbeddingProviderFactory.createProvider(provider, config);
+        LOGGER.info("Initialized embedding provider: {}", embeddingProvider.getProviderName());
+
+      } catch (IOException e) {
+        throw new EmbeddingException("Failed to load schema config: " + e.getMessage(), e);
+      }
+    }
+
+    return embeddingProvider;
   }
 
   /**
@@ -1373,6 +1433,66 @@ public abstract class AbstractGovDataDownloader {
 
   /**
    * Converts a JSON record (object) to a typed Map based on column metadata.
+   * This version supports embedding generation for computed columns.
+   *
+   * @param recordNode The JSON record node
+   * @param columns Full column metadata including embedding config
+   * @param missingValueIndicator String value that indicates null (e.g., ".", "-", "N/A")
+   * @return Map with properly typed values and generated embeddings
+   */
+  protected Map<String, Object> convertJsonRecordToTypedMap(
+      JsonNode recordNode,
+      List<PartitionedTableConfig.TableColumn> columns,
+      String missingValueIndicator) {
+
+    Map<String, Object> typedRecord = new LinkedHashMap<>();
+
+    // Build type map for conversion
+    Map<String, String> columnTypeMap = new HashMap<>();
+    for (PartitionedTableConfig.TableColumn col : columns) {
+      columnTypeMap.put(col.getName(), col.getType());
+    }
+
+    // Existing type conversion for all fields
+    Iterator<Map.Entry<String, JsonNode>> fields = recordNode.fields();
+    while (fields.hasNext()) {
+      Map.Entry<String, JsonNode> field = fields.next();
+      String fieldName = field.getKey();
+
+      // Skip computed columns in source data
+      if (isComputedColumn(columns, fieldName)) {
+        continue;
+      }
+
+      String columnType = columnTypeMap.get(fieldName);
+      if (columnType != null) {
+        Object convertedValue = convertJsonValueToType(
+            field.getValue(), fieldName, columnType, missingValueIndicator);
+        typedRecord.put(fieldName, convertedValue);
+      } else {
+        // Field not in schema - use Jackson's default conversion but it will be DROPPED later
+        LOGGER.debug("Field '{}' not found in column metadata - will be DROPPED in Parquet output",
+            fieldName);
+        Object defaultValue = MAPPER.convertValue(field.getValue(), Object.class);
+        typedRecord.put(fieldName, defaultValue);
+      }
+    }
+
+    // Generate computed columns (embeddings)
+    try {
+      TextEmbeddingProvider provider = getEmbeddingProvider();
+      if (provider != null) {
+        generateEmbeddingColumns(typedRecord, columns, provider);
+      }
+    } catch (EmbeddingException e) {
+      LOGGER.warn("Failed to initialize embedding provider: {}", e.getMessage());
+    }
+
+    return typedRecord;
+  }
+
+  /**
+   * Converts a JSON record (object) to a typed Map based on column metadata.
    *
    * @param recordNode The JSON record node
    * @param columnTypeMap Map of column names to their types
@@ -1681,5 +1801,188 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.debug("Could not check earlyDownload for table {}: {}", tableName, e.getMessage());
       return false;
     }
+  }
+
+  /**
+   * Generates embedding columns for all computed columns with embeddingConfig.
+   * Supports both single-column and multi-column (row-level) embeddings.
+   */
+  private void generateEmbeddingColumns(Map<String, Object> record,
+      List<PartitionedTableConfig.TableColumn> columns, TextEmbeddingProvider provider) {
+
+    for (PartitionedTableConfig.TableColumn column : columns) {
+      if (!column.isComputed() || !column.hasEmbeddingConfig()) {
+        continue;
+      }
+
+      String[] sourceColumns = column.getEmbeddingSourceColumns();
+      if (sourceColumns == null || sourceColumns.length == 0) {
+        continue;
+      }
+
+      // Build text to embed
+      String text;
+      if (sourceColumns.length == 1) {
+        // Single column (existing behavior)
+        Object value = record.get(sourceColumns[0]);
+        text = (value instanceof String) ? (String) value : null;
+      } else {
+        // Multi-column concatenation (NEW: row-level embeddings)
+        text = concatenateFieldsNatural(record, sourceColumns, column);
+      }
+
+      if (text != null && !text.isEmpty()) {
+        try {
+          double[] embedding = provider.generateEmbedding(text);
+          record.put(column.getName(), embedding);
+
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Generated embedding for column {} from {}: {} dimensions",
+                column.getName(), String.join(",", sourceColumns), embedding.length);
+          }
+        } catch (EmbeddingException e) {
+          if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Failed to generate embedding for column {}: {}",
+                column.getName(), e.getMessage());
+          }
+          record.put(column.getName(), null);
+        }
+      } else {
+        record.put(column.getName(), null);
+      }
+    }
+  }
+
+  /**
+   * Concatenates multiple fields into natural language format for row-level embeddings.
+   * Example: "Series Name: Unemployment Rate, Category: Labor Force, Value: 3.7 Percent"
+   */
+  private String concatenateFieldsNatural(Map<String, Object> record,
+      String[] fieldNames, PartitionedTableConfig.TableColumn embeddingColumn) {
+
+    String template = embeddingColumn.getEmbeddingTemplate();
+    String separator = embeddingColumn.getEmbeddingSeparator();
+    boolean excludeNull = embeddingColumn.getEmbeddingExcludeNull();
+
+    StringBuilder sb = new StringBuilder();
+
+    for (String fieldName : fieldNames) {
+      Object value = record.get(fieldName);
+
+      if (value == null && excludeNull) {
+        continue;
+      }
+
+      if (value != null) {
+        if (sb.length() > 0) {
+          sb.append(separator);
+        }
+
+        // Apply template format
+        if ("natural".equals(template)) {
+          // Natural language: "Series Name: Unemployment Rate"
+          String humanizedName = humanizeColumnName(fieldName);
+          String cleansedValue = cleanseValue(fieldName, value, record);
+          sb.append(humanizedName).append(": ").append(cleansedValue);
+        } else {
+          // Simple format: just the value
+          sb.append(cleanseValue(fieldName, value, record));
+        }
+      }
+    }
+
+    return sb.toString();
+  }
+
+  /**
+   * Humanizes column names for natural language format.
+   * Example: series_name -> Series Name, seasonal_adjustment -> Seasonally Adjusted
+   */
+  private String humanizeColumnName(String columnName) {
+    return Arrays.stream(columnName.split("_"))
+        .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1))
+        .collect(Collectors.joining(" "));
+  }
+
+  /**
+   * Cleanses values for embedding text (handles numbers, dates, booleans).
+   */
+  private String cleanseValue(String columnName, Object value, Map<String, Object> record) {
+    if (value == null) {
+      return "";
+    }
+
+    // Booleans: Yes/No instead of true/false
+    if (value instanceof Boolean) {
+      return ((Boolean) value) ? "Yes" : "No";
+    }
+
+    // Numbers with units: look for adjacent unit column
+    if (value instanceof Number) {
+      String unitColumn = findUnitColumn(columnName, record);
+      if (unitColumn != null) {
+        Object unit = record.get(unitColumn);
+        if (unit != null) {
+          return value + " " + unit;
+        }
+      }
+      return value.toString();
+    }
+
+    // Dates: natural format for monthly/yearly, ISO for daily
+    if (columnName.toLowerCase().contains("date") && value instanceof String) {
+      return formatDateNaturally((String) value);
+    }
+
+    return value.toString();
+  }
+
+  /**
+   * Find associated unit column for a value column.
+   * Example: "value" -> "units", "amount" -> "units"
+   */
+  private String findUnitColumn(String columnName, Map<String, Object> record) {
+    // Common patterns: value/units, amount/currency, etc.
+    String[] unitColumnNames = {"units", "unit", "currency", "denomination"};
+
+    for (String unitCol : unitColumnNames) {
+      if (record.containsKey(unitCol)) {
+        return unitCol;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Format dates naturally for better semantic matching.
+   * 2023-01-01 -> January 2023 (for monthly data)
+   * 2023-01-15 -> 2023-01-15 (for daily data - keep ISO format)
+   */
+  private String formatDateNaturally(String dateStr) {
+    // Simple heuristic: if date is first of month, assume monthly aggregation
+    if (dateStr.endsWith("-01")) {
+      try {
+        String[] parts = dateStr.split("-");
+        if (parts.length == 3) {
+          int month = Integer.parseInt(parts[1]);
+          String[] monthNames = {"January", "February", "March", "April", "May", "June",
+              "July", "August", "September", "October", "November", "December"};
+          return monthNames[month - 1] + " " + parts[0];
+        }
+      } catch (Exception e) {
+        // Fall through to return original
+      }
+    }
+    return dateStr; // Keep ISO format for daily data
+  }
+
+  /**
+   * Checks if a column is marked as computed in the schema.
+   */
+  private boolean isComputedColumn(List<PartitionedTableConfig.TableColumn> columns,
+      String columnName) {
+    return columns.stream()
+        .anyMatch(c -> c.getName().equals(columnName) && c.isComputed());
   }
 }
