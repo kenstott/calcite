@@ -112,6 +112,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads FRED indicators data for the specified year range and series list.
+   * Uses IterationDimension pattern for declarative multi-dimensional iteration.
    *
    * @param startYear First year to download
    * @param endYear Last year to download
@@ -126,53 +127,28 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading {} FRED series for years {}-{}", seriesIds.size(), startYear, endYear);
     assert cacheManifest != null;
 
-    // Download each series for each year using metadata-driven approach
-    int downloadedCount = 0;
-    int skippedCount = 0;
-
     String tableName = getTableName();
 
-    for (String seriesId : seriesIds) {
-      for (int year = startYear; year <= endYear; year++) {
+    // Build iteration dimensions: series x year
+    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    dimensions.add(new IterationDimension("series", seriesIds));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-        Map<String, String> variables =
-            ImmutableMap.of("year", String.valueOf(year),
-            "series", seriesId);
-
-        if (isCachedOrExists("fred_indicators", year, variables)) {
-          skippedCount++;
-          continue;
-        }
-
-        // Download via metadata-driven executeDownload()
-        try {
-          String cachedPath = cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, variables));
-          StorageProvider.FileMetadata metadata = cacheStorageProvider.getMetadata(cachedPath);
-
-          // Mark as downloaded in cache manifest using the actual path returned
-          cacheManifest.markCached("fred_indicators", year, variables, cachedPath, metadata.getSize());
-          cacheManifest.save(operatingDirectory);
-
-          downloadedCount++;
-
-          if (downloadedCount % 100 == 0) {
-            LOGGER.info("Downloaded {}/{} series (skipped {} cached)", downloadedCount, seriesIds.size() * (endYear - startYear + 1), skippedCount);
-          }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading FRED series {} for year {}: {}", seriesId, year, e.getMessage());
-          // Continue with next series
-        }
-      }
-    }
-
-    // Save manifest after all downloads complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest: {}", e.getMessage());
-    }
-
-    LOGGER.info("FRED download complete: downloaded {} series-years, skipped {} (cached)", downloadedCount, skippedCount);
+    // Use iterateTableOperations() for automatic progress tracking and manifest management
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> isCachedOrExists(tableName, year, vars),
+        (year, vars) -> {
+          String cachedPath = cacheStorageProvider.resolvePath(
+              cacheDirectory, executeDownload(tableName, vars));
+          StorageProvider.FileMetadata metadata =
+              cacheStorageProvider.getMetadata(cachedPath);
+          cacheManifest.markCached(tableName, year, vars,
+              cachedPath, metadata.getSize());
+        },
+        "download"
+    );
   }
 
   /**
@@ -188,6 +164,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Converts all downloaded FRED indicator JSON files to Parquet format.
+   * Uses IterationDimension pattern for declarative multi-dimensional iteration.
    *
    * @param startYear First year to convert
    * @param endYear Last year to convert
@@ -201,45 +178,33 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Converting {} FRED series to Parquet for years {}-{}", seriesIds.size(), startYear, endYear);
 
-    int convertedCount = 0;
-    int skippedCount = 0;
-
     String tableName = getTableName();
-    Map<String, Object> metadata = loadTableMetadata();
-    String pattern = (String) metadata.get("pattern");
 
-    for (String seriesId : seriesIds) {
-      for (int year = startYear; year <= endYear; year++) {
-        // Build paths for this series/year
-        Map<String, String> variables =
-            ImmutableMap.of("year", String.valueOf(year),
-            "series", seriesId);
-        String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
-        String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    // Build iteration dimensions: series x year
+    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    dimensions.add(new IterationDimension("series", seriesIds));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-        if (isParquetConvertedOrExists(tableName, year, variables, rawPath, parquetPath)) {
-          skippedCount++;
-          continue;
-        }
-
-        // Convert via metadata-driven approach
-        try {
-          convertCachedJsonToParquet(tableName, variables);
-          cacheManifest.markParquetConverted(tableName, year, variables, parquetPath);
-          cacheManifest.save(operatingDirectory);
-          convertedCount++;
-
-          if (convertedCount % 100 == 0) {
-            LOGGER.info("Converted {}/{} series (skipped {} up-to-date)", convertedCount, seriesIds.size() * (endYear - startYear + 1), skippedCount);
-          }
-        } catch (Exception e) {
-          LOGGER.error("Error converting FRED series {} for year {}: {}", seriesId, year, e.getMessage());
-          // Continue with next series
-        }
-      }
-    }
-
-    LOGGER.info("FRED conversion complete: converted {} series-years, skipped {} (up-to-date)", convertedCount, skippedCount);
+    // Use iterateTableOperations() for automatic progress tracking and manifest management
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> {
+          Map<String, Object> metadata = loadTableMetadata();
+          String pattern = (String) metadata.get("pattern");
+          String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, vars));
+          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, vars));
+          return isParquetConvertedOrExists(tableName, year, vars, rawPath, parquetPath);
+        },
+        (year, vars) -> {
+          convertCachedJsonToParquet(tableName, vars);
+          Map<String, Object> metadata = loadTableMetadata();
+          String pattern = (String) metadata.get("pattern");
+          String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, vars));
+          cacheManifest.markParquetConverted(tableName, year, vars, parquetPath);
+        },
+        "conversion"
+    );
   }
 
   /**
