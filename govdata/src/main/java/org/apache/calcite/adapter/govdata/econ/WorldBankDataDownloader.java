@@ -533,7 +533,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("world_indicators");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "WorldIndicator", "WorldIndicator");
+    convertInMemoryToParquetViaDuckDB("world_indicators", columns, dataRecords, targetPath);
   }
 
 
@@ -629,7 +629,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("world_indicators");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "WorldIndicator", "WorldIndicator");
+    convertInMemoryToParquetViaDuckDB("world_indicators", columns, dataRecords, targetPath);
   }
 
 

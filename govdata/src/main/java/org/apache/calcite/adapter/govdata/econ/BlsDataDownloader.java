@@ -1903,7 +1903,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = new HashMap<>();
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("jolts_industries", -1, cacheParams)) {
+    if (isCachedOrExists("reference_jolts_industries", -1, cacheParams)) {
       LOGGER.info("JOLTS industry reference data already cached");
       return;
     }
@@ -1933,7 +1933,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Save to cache (use year=-1 for non-partitioned reference data)
-    saveToCache("jolts_industries", -1, cacheParams, jsonFilePath, json);
+    saveToCache("reference_jolts_industries", -1, cacheParams, jsonFilePath, json);
   }
 
   private static List<Map<String, Object>> getMaps(byte[] data, String industry_code, String industry_name) throws IOException {
@@ -1975,7 +1975,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = new HashMap<>();
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("jolts_dataelements", -1, cacheParams)) {
+    if (isCachedOrExists("reference_jolts_dataelements", -1, cacheParams)) {
       LOGGER.info("JOLTS data element reference data already cached");
       return;
     }
@@ -2005,7 +2005,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Save to cache (use year=-1 for non-partitioned reference data)
-    saveToCache("jolts_dataelements", -1, cacheParams, jsonFilePath, json);
+    saveToCache("reference_jolts_dataelements", -1, cacheParams, jsonFilePath, json);
   }
 
   /**
@@ -2304,7 +2304,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("regional_employment");
-    storageProvider.writeAvroParquet(fullParquetPath, columns, dataRecords, "regional_employment", "regional_employment");
+    convertInMemoryToParquetViaDuckDB("regional_employment", columns, dataRecords, fullParquetPath);
 
     LOGGER.debug("Wrote {} records to {}", dataRecords.size(), fullParquetPath);
   }
@@ -2505,7 +2505,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     if (!dataRecords.isEmpty()) {
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
           loadTableColumns("county_qcew");
-      storageProvider.writeAvroParquet(fullParquetPath, columns, dataRecords, "CountyQcew", "CountyQcew");
+      convertInMemoryToParquetViaDuckDB("county_qcew", columns, dataRecords, fullParquetPath);
       LOGGER.info("Converted QCEW data to Parquet: {} ({} records)", fullParquetPath, dataRecords.size());
     } else {
       LOGGER.warn("No county records found in QCEW data for year {}", year);
@@ -3177,7 +3177,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("employment_statistics");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "employment_statistics", "employment_statistics");
+    convertInMemoryToParquetViaDuckDB("employment_statistics", columns, dataRecords, targetPath);
   }
 
   /**
@@ -3209,7 +3209,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("inflation_metrics");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "inflation_metrics", "inflation_metrics");
+    convertInMemoryToParquetViaDuckDB("inflation_metrics", columns, dataRecords, targetPath);
   }
 
   /**
@@ -3248,7 +3248,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("wage_growth");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "wage_growth", "wage_growth");
+    convertInMemoryToParquetViaDuckDB("wage_growth", columns, dataRecords, targetPath);
   }
 
   /**
@@ -3278,7 +3278,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("regional_employment");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "regional_employment", "regional_employment");
+    convertInMemoryToParquetViaDuckDB("regional_employment", columns, dataRecords, targetPath);
   }
 
   private void writeRegionalCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
@@ -3304,7 +3304,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("regional_cpi");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "regional_cpi", "regional_cpi");
+    convertInMemoryToParquetViaDuckDB("regional_cpi", columns, dataRecords, targetPath);
   }
 
   private void writeMetroCpiParquet(Map<String, List<Map<String, Object>>> seriesData,
@@ -3330,7 +3330,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("metro_cpi");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_cpi", "metro_cpi");
+    convertInMemoryToParquetViaDuckDB("metro_cpi", columns, dataRecords, targetPath);
   }
 
   private void writeStateIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
@@ -3358,7 +3358,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("state_industry");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "state_industry", "state_industry");
+    convertInMemoryToParquetViaDuckDB("state_industry", columns, dataRecords, targetPath);
   }
 
   private void writeStateWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
@@ -3377,7 +3377,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("state_wages");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "state_wages", "state_wages");
+    convertInMemoryToParquetViaDuckDB("state_wages", columns, dataRecords, targetPath);
   }
 
   private void writeMetroIndustryParquet(Map<String, List<Map<String, Object>>> seriesData,
@@ -3405,7 +3405,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("metro_industry");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_industry", "metro_industry");
+    convertInMemoryToParquetViaDuckDB("metro_industry", columns, dataRecords, targetPath);
   }
 
   private void writeMetroWagesQcewParquet(List<Map<String, Object>> records, String targetPath) throws IOException {
@@ -3424,7 +3424,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("metro_wages");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "metro_wages", "metro_wages");
+    convertInMemoryToParquetViaDuckDB("metro_wages", columns, dataRecords, targetPath);
   }
 
   private void writeJoltsRegionalParquet(Map<String, List<Map<String, Object>>> seriesData,
@@ -3451,7 +3451,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("jolts_regional");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_regional", "jolts_regional");
+    convertInMemoryToParquetViaDuckDB("jolts_regional", columns, dataRecords, targetPath);
   }
 
   private void writeCountyWagesParquet(List<Map<String, Object>> countyWages, String targetPath) throws IOException {
@@ -3472,7 +3472,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("county_wages");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "county_wages", "county_wages");
+    convertInMemoryToParquetViaDuckDB("county_wages", columns, dataRecords, targetPath);
   }
 
   private void writeJoltsStateParquet(List<Map<String, Object>> joltsState, String targetPath) throws IOException {
@@ -3494,7 +3494,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("jolts_state");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_state", "jolts_state");
+    convertInMemoryToParquetViaDuckDB("jolts_state", columns, dataRecords, targetPath);
   }
 
   private void writeJoltsIndustriesParquet(List<Map<String, Object>> industries, String targetPath) throws IOException {
@@ -3510,7 +3510,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("reference_jolts_industries");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_industries", "jolts_industries");
+    convertInMemoryToParquetViaDuckDB("reference_jolts_industries", columns, dataRecords, targetPath);
   }
 
   private void writeJoltsDataelementsParquet(List<Map<String, Object>> dataelements, String targetPath) throws IOException {
@@ -3526,7 +3526,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("reference_jolts_dataelements");
-    storageProvider.writeAvroParquet(targetPath, columns, dataRecords, "jolts_dataelements", "jolts_dataelements");
+    convertInMemoryToParquetViaDuckDB("reference_jolts_dataelements", columns, dataRecords, targetPath);
   }
 
   private String extractAreaCodeFromSeries(String seriesId) {
@@ -4935,10 +4935,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads BLS reference tables (JOLTS industries and dataelements).
-   * Uses year=0 sentinel value for reference tables without year dimension.
+   * Uses year=-1 sentinel value for reference tables without year dimension.
    */
   @Override public void downloadReferenceData() throws IOException {
     LOGGER.info("Downloading BLS JOLTS reference tables");
+
+    // Download JOLTS industries from BLS FTP
+    downloadJoltsIndustries();
 
     // Download and convert reference_jolts_industries
     String joltsIndustriesParquetPath =
@@ -4946,16 +4949,19 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsIndustriesRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_industries.json");
 
-    if (!isParquetConvertedOrExists("jolts_industries", 0, new java.util.HashMap<>(),
+    if (!isParquetConvertedOrExists("reference_jolts_industries", -1, new java.util.HashMap<>(),
         joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
       java.util.Map<String, String> variables = new java.util.HashMap<>();
-      convertCachedJsonToParquet("jolts_industries", variables);
-      cacheManifest.markParquetConverted("jolts_industries", 0, null,
+      convertCachedJsonToParquet("reference_jolts_industries", variables);
+      cacheManifest.markParquetConverted("reference_jolts_industries", -1, null,
           joltsIndustriesParquetPath);
       LOGGER.info("Converted reference_jolts_industries to parquet");
     } else {
       LOGGER.info("reference_jolts_industries already converted, skipping");
     }
+
+    // Download JOLTS data elements from BLS FTP
+    downloadJoltsDataelements();
 
     // Download and convert reference_jolts_dataelements
     String joltsDataelementsParquetPath =
@@ -4963,11 +4969,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsDataelementsRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_dataelements.json");
 
-    if (!isParquetConvertedOrExists("jolts_dataelements", 0, new java.util.HashMap<>(),
+    if (!isParquetConvertedOrExists("reference_jolts_dataelements", -1, new java.util.HashMap<>(),
         joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
       java.util.Map<String, String> variables = new java.util.HashMap<>();
-      convertCachedJsonToParquet("jolts_dataelements", variables);
-      cacheManifest.markParquetConverted("jolts_dataelements", 0, null,
+      convertCachedJsonToParquet("reference_jolts_dataelements", variables);
+      cacheManifest.markParquetConverted("reference_jolts_dataelements", -1, null,
           joltsDataelementsParquetPath);
       LOGGER.info("Converted reference_jolts_dataelements to parquet");
     } else {

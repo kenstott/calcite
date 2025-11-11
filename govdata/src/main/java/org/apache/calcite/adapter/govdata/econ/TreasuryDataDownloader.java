@@ -370,7 +370,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("treasury_yields");
-    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "TreasuryYield", "TreasuryYield");
+    convertInMemoryToParquetViaDuckDB("treasury_yields", columns, dataRecords, targetFilePath);
   }
 
   private void writeFederalDebtParquet(List<FederalDebt> debtRecords, String targetFilePath) throws IOException {
@@ -390,7 +390,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("federal_debt");
-    storageProvider.writeAvroParquet(targetFilePath, columns, dataRecords, "FederalDebt", "FederalDebt");
+    convertInMemoryToParquetViaDuckDB("federal_debt", columns, dataRecords, targetFilePath);
   }
 
 

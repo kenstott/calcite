@@ -980,7 +980,102 @@ public class FredCatalogDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("reference_fred_series");
-    storageProvider.writeAvroParquet(parquetFile, columns, transformedSeries, "FredCatalogSeries", "FredCatalogSeries");
+    convertInMemoryToParquetViaDuckDB("reference_fred_series", columns, transformedSeries, parquetFile);
+  }
+
+  /**
+   * Converts in-memory records to Parquet using DuckDB.
+   * Simplified version for FredCatalogDownloader (doesn't extend AbstractGovDataDownloader).
+   */
+  private void convertInMemoryToParquetViaDuckDB(
+      String tableName,
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> records,
+      String fullParquetPath) throws IOException {
+
+    // Write records to temporary JSON file in cache
+    String tempJsonPath = fullParquetPath.replace(".parquet", "_temp.json");
+    String fullTempJsonPath = storageProvider.resolvePath(cacheDir,
+        tempJsonPath.substring(tempJsonPath.lastIndexOf('/') + 1));
+
+    try {
+      // Write JSON
+      writeJsonRecords(fullTempJsonPath, records);
+
+      // Convert using DuckDB
+      String sql = org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.buildDuckDBConversionSql(
+          columns, null, fullTempJsonPath, fullParquetPath);
+
+      LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
+
+      // Execute using in-memory DuckDB connection
+      try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:duckdb:");
+           java.sql.Statement stmt = conn.createStatement()) {
+
+        // Load DuckDB extensions (quackformers, spatial, etc.)
+        loadDuckDBExtensions(conn);
+
+        // Execute the COPY statement
+        stmt.execute(sql);
+
+        LOGGER.info("Successfully converted {} to Parquet using DuckDB", tableName);
+
+      } catch (java.sql.SQLException e) {
+        String errorMsg = String.format(
+            "DuckDB conversion failed for table '%s': %s", tableName, e.getMessage());
+        LOGGER.error(errorMsg, e);
+        throw new IOException(errorMsg, e);
+      }
+
+      // Clean up temp file
+      storageProvider.delete(fullTempJsonPath);
+
+    } catch (IOException | RuntimeException e) {
+      // Clean up temp file on error
+      try {
+        storageProvider.delete(fullTempJsonPath);
+      } catch (IOException cleanupError) {
+        LOGGER.warn("Failed to clean up temp JSON file: {}", fullTempJsonPath, cleanupError);
+      }
+      throw e instanceof IOException ? (IOException) e : new IOException(e);
+    }
+  }
+
+  /**
+   * Loads DuckDB extensions for data conversion (quackformers, spatial, etc.).
+   */
+  private void loadDuckDBExtensions(java.sql.Connection conn) {
+    String[][] extensions = {
+        {"quackformers", "FROM community"},
+        {"spatial", ""},
+        {"h3", "FROM community"},
+        {"excel", ""},
+        {"fts", ""}
+    };
+
+    for (String[] ext : extensions) {
+      try {
+        LOGGER.debug("Loading DuckDB extension: {}", ext[0]);
+        conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
+        conn.createStatement().execute("LOAD " + ext[0]);
+        LOGGER.debug("Successfully loaded extension: {}", ext[0]);
+      } catch (java.sql.SQLException e) {
+        LOGGER.warn("Failed to load extension '{}': {}", ext[0], e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Writes in-memory records to a JSON file.
+   */
+  private void writeJsonRecords(String fullJsonPath, List<Map<String, Object>> records) throws IOException {
+    // StorageProvider.writeFile automatically creates parent directories if needed
+
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    objectMapper.writeValue(baos, records);
+    storageProvider.writeFile(fullJsonPath, baos.toByteArray());
+
+    LOGGER.debug("Wrote {} records to temporary JSON: {}", records.size(), fullJsonPath);
   }
 
 }

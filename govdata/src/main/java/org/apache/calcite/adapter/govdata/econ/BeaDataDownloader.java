@@ -1310,8 +1310,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       String parquetPath = "type=reference/section=" + section + "/nipa_tables.parquet";
       String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
-      storageProvider.writeAvroParquet(fullParquetPath, columns, sectionRecords,
-          "reference_nipa_tables", "reference_nipa_tables");
+      convertInMemoryToParquetViaDuckDB("reference_nipa_tables", columns, sectionRecords, fullParquetPath);
 
       LOGGER.info("Wrote {} tables for section {} to {}", sectionRecords.size(), section,
           parquetPath);
@@ -1459,8 +1458,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         // Write parquet partition
         List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
             loadTableColumns(tableName);
-        storageProvider.writeAvroParquet(fullParquetPath, columns, enrichedRecords,
-            "RegionalLineCodes", "RegionalLineCodes");
+        convertInMemoryToParquetViaDuckDB(tableName, columns, enrichedRecords, fullParquetPath);
 
         // Mark as converted in manifest
         cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
