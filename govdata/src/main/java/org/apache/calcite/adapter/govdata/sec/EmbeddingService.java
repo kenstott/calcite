@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import org.apache.calcite.adapter.file.similarity.EmbeddingException;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -38,9 +36,9 @@ public interface EmbeddingService {
    *
    * @param text The input text to embed
    * @return Array of embedding values (typically 128-1536 dimensions)
-   * @throws EmbeddingException if embedding generation fails
+   * @throws RuntimeException if embedding generation fails
    */
-  double[] generateEmbedding(String text) throws EmbeddingException;
+  double[] generateEmbedding(String text);
 
   /**
    * Generate embeddings for multiple texts (batch processing).
@@ -48,9 +46,9 @@ public interface EmbeddingService {
    *
    * @param texts Array of input texts to embed
    * @return Array of embedding arrays
-   * @throws EmbeddingException if batch embedding fails
+   * @throws RuntimeException if batch embedding fails
    */
-  double[][] generateEmbeddings(String[] texts) throws EmbeddingException;
+  double[][] generateEmbeddings(String[] texts);
 
   /**
    * Generate embeddings asynchronously.
