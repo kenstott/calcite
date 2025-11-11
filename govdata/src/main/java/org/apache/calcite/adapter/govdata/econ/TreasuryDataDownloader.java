@@ -50,103 +50,117 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads daily treasury yield curve data.
-   * @return The storage path (local or S3) where the data was saved
+   * Downloads daily treasury yield curve data using metadata-driven pattern.
+   * Uses IterationDimension pattern for declarative multi-dimensional iteration.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
    */
-  public String downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
-    // Download for each year separately to match FileSchema partitioning expectations
-    String lastPath = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String relativePath = buildPartitionPath("timeseries", DataFrequency.DAILY, year) + "/treasury_yields.json";
+  public void downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading treasury yields for years {}-{}", startYear, endYear);
 
-      Map<String, String> cacheParams = new HashMap<>();
+    String tableName = "treasury_yields";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
-      // Check cache using base class helper
-      if (isCachedOrExists("treasury_yields", year, cacheParams)) {
-        LOGGER.info("Found cached treasury yields for year {} - skipping download", year);
-        lastPath = relativePath;
-        continue;
-      }
+    // Build iteration dimensions: year only (no other dimensions needed)
+    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-      // Fetch data from Treasury API for this year
-      LOGGER.info("Downloading treasury yields for year {}", year);
+    // Use iterateTableOperations() for automatic progress tracking and manifest management
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> isCachedOrExists(tableName, year, vars),
+        (year, vars) -> {
+          String startDate = year + "-01-01";
+          String endDate = year + "-12-31";
 
-      String startDate = year + "-01-01";
-      String endDate = year + "-12-31";
+          String url = TREASURY_API_BASE + "v2/accounting/od/avg_interest_rates"
+              + "?filter=record_date:gte:" + startDate
+              + ",record_date:lte:" + endDate
+              + "&sort=-record_date&page[size]=10000";
 
-      String url = TREASURY_API_BASE + "v2/accounting/od/avg_interest_rates"
-          + "?filter=record_date:gte:" + startDate
-          + ",record_date:lte:" + endDate
-          + "&sort=-record_date&page[size]=10000";
+          HttpRequest request = HttpRequest.newBuilder()
+              .uri(URI.create(url))
+              .timeout(Duration.ofSeconds(30))
+              .build();
 
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(30))
-          .build();
+          HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          if (response.statusCode() != 200) {
+            throw new IOException("Treasury API request failed with status: " + response.statusCode());
+          }
 
-      if (response.statusCode() != 200) {
-        LOGGER.warn("Treasury API request failed for year {} with status: {}", year, response.statusCode());
-        continue;
-      }
+          // Use metadata-driven path resolution
+          String jsonPath = resolveJsonPath(pattern, vars);
+          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-      // Save to cache using base class helper
-      saveToCache("treasury_yields", year, cacheParams, relativePath, response.body());
-      lastPath = relativePath;
-    }
+          // Write data to cache (StorageProvider handles directory creation)
+          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-    return lastPath;
+          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+          cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
+        },
+        "download"
+    );
   }
 
   /**
-   * Downloads federal debt statistics.
-   * @return The storage path (local or S3) where the data was saved
+   * Downloads federal debt statistics using metadata-driven pattern.
+   * Uses IterationDimension pattern for declarative multi-dimensional iteration.
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
    */
-  public String downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
-    // Download for each year separately to match FileSchema partitioning expectations
-    String lastPath = null;
-    for (int year = startYear; year <= endYear; year++) {
-      String relativePath = buildPartitionPath("timeseries", DataFrequency.DAILY, year) + "/federal_debt.json";
+  public void downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
+    LOGGER.info("Downloading federal debt for years {}-{}", startYear, endYear);
 
-      Map<String, String> cacheParams = new HashMap<>();
+    String tableName = "federal_debt";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
 
-      // Check cache using base class helper
-      if (isCachedOrExists("federal_debt", year, cacheParams)) {
-        LOGGER.info("Found cached federal debt for year {} - skipping download", year);
-        lastPath = relativePath;
-        continue;
-      }
+    // Build iteration dimensions: year only (no other dimensions needed)
+    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-      // Fetch debt to the penny data for this year
-      LOGGER.info("Downloading federal debt data for year {}", year);
+    // Use iterateTableOperations() for automatic progress tracking and manifest management
+    iterateTableOperations(
+        tableName,
+        dimensions,
+        (year, vars) -> isCachedOrExists(tableName, year, vars),
+        (year, vars) -> {
+          String startDate = year + "-01-01";
+          String endDate = year + "-12-31";
 
-      String startDate = year + "-01-01";
-      String endDate = year + "-12-31";
+          String url = TREASURY_API_BASE + "v2/accounting/od/debt_to_penny"
+              + "?filter=record_date:gte:" + startDate
+              + ",record_date:lte:" + endDate
+              + "&page[size]=10000";
 
-      String url = TREASURY_API_BASE + "v2/accounting/od/debt_to_penny"
-          + "?filter=record_date:gte:" + startDate
-          + ",record_date:lte:" + endDate
-          + "&page[size]=10000";
+          HttpRequest request = HttpRequest.newBuilder()
+              .uri(URI.create(url))
+              .timeout(Duration.ofSeconds(30))
+              .build();
 
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(30))
-          .build();
+          HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          if (response.statusCode() != 200) {
+            throw new IOException("Treasury API request failed with status: " + response.statusCode());
+          }
 
-      if (response.statusCode() != 200) {
-        LOGGER.warn("Treasury API request failed for year {} with status: {}", year, response.statusCode());
-        continue;
-      }
+          // Use metadata-driven path resolution
+          String jsonPath = resolveJsonPath(pattern, vars);
+          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-      // Save to cache using base class helper
-      saveToCache("federal_debt", year, cacheParams, relativePath, response.body());
-      lastPath = relativePath;
-    }
+          // Write data to cache (StorageProvider handles directory creation)
+          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-    return lastPath;
+          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+          cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
+        },
+        "download"
+    );
   }
 
 }

@@ -18,8 +18,6 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import com.google.common.collect.ImmutableMap;
-
 import java.util.Map;
 
 /**
