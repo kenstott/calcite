@@ -1283,8 +1283,8 @@ public class EconIntegrationTest {
 
       Set<String> tables = new HashSet<>();
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+           ResultSet rs =
+               stmt.executeQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
                + "WHERE TABLE_SCHEMA = 'ECON' AND TABLE_NAME LIKE 'employment_statistics%'")) {
         while (rs.next()) {
           String tableName = rs.getString("TABLE_NAME");
@@ -1378,8 +1378,8 @@ public class EconIntegrationTest {
       // Execute query on detail table
       int detailCount = 0;
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) FROM employment_statistics WHERE frequency = 'M'")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) FROM employment_statistics WHERE frequency = 'M'")) {
         if (rs.next()) {
           detailCount = rs.getInt(1);
           LOGGER.info("   Detail table row count: {}", detailCount);
@@ -1389,8 +1389,8 @@ public class EconIntegrationTest {
       // Execute query on trend table
       int trendCount = 0;
       try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(
-               "SELECT COUNT(*) FROM employment_statistics_trend WHERE frequency = 'M'")) {
+           ResultSet rs =
+               stmt.executeQuery("SELECT COUNT(*) FROM employment_statistics_trend WHERE frequency = 'M'")) {
         if (rs.next()) {
           trendCount = rs.getInt(1);
           LOGGER.info("   Trend table row count: {}", trendCount);
