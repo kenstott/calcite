@@ -1,13 +1,6 @@
 {
   "schemaName": "econ",
-  "comment": "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, and cross-domain correlation with geographic and demographic data.",
-  "embeddingCache": {
-    "enabled": true,
-    "path": "{cacheDir}/embeddings_cache",
-    "provider": "onnx",
-    "model": "all-MiniLM-L6-v2",
-    "dimension": 384
-  },
+  "comment": "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, and cross-domain correlation with geographic and demographic data. Uses DuckDB quackformers extension for native embedding generation.",
   "partitionedTables": [
     {
       "name": "employment_statistics",
@@ -101,12 +94,8 @@
           "name": "series_name_embedding",
           "type": "array<double>",
           "nullable": true,
-          "computed": true,
-          "embeddingConfig": {
-            "sourceColumn": "series_name",
-            "provider": "onnx"
-          },
-          "comment": "384-dim vector embedding for semantic search on series_name"
+          "expression": "CASE WHEN length(series_name) > 10 THEN embed(series_name)::FLOAT[384] ELSE NULL END",
+          "comment": "384-dim vector embedding for semantic search on series_name (only for substantial text)"
         }
       ],
       "download": {
@@ -2579,12 +2568,8 @@
           "name": "title_embedding",
           "type": "array<double>",
           "nullable": true,
-          "computed": true,
-          "embeddingConfig": {
-            "sourceColumn": "title",
-            "provider": "onnx"
-          },
-          "comment": "384-dim vector embedding for semantic search on title"
+          "expression": "CASE WHEN length(title) > 10 THEN embed(title)::FLOAT[384] ELSE NULL END",
+          "comment": "384-dim vector embedding for semantic search on title (only for substantial text)"
         }
       ]
     }

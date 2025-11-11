@@ -172,28 +172,37 @@ public class PartitionedTableConfig {
   }
 
   /**
-   * Metadata for a table column including type, nullability, and comment.
+   * Metadata for a table column including type, nullability, comment, and optional expression.
+   * Columns with an expression are computed columns, where the expression is a SQL expression
+   * that will be evaluated by the execution engine (e.g., DuckDB).
+   *
+   * <p>Example expressions:
+   * <ul>
+   *   <li>Date/time: {@code EXTRACT(YEAR FROM date)}</li>
+   *   <li>String operations: {@code SUBSTR(fips, 1, 2)}</li>
+   *   <li>Embeddings: {@code embed(text)::FLOAT[384]}</li>
+   *   <li>Calculations: {@code price * quantity}</li>
+   *   <li>Geospatial: {@code h3_latlng_to_cell(lat, lon, 7)}</li>
+   * </ul>
    */
   public static class TableColumn {
     private final String name;
     private final String type;
     private final boolean nullable;
     private final String comment;
-    private final boolean computed;
-    private final java.util.Map<String, Object> embeddingConfig;
+    private final String expression;
 
     public TableColumn(String name, String type, boolean nullable, String comment) {
-      this(name, type, nullable, comment, false, null);
+      this(name, type, nullable, comment, null);
     }
 
     public TableColumn(String name, String type, boolean nullable, String comment,
-        boolean computed, java.util.Map<String, Object> embeddingConfig) {
+        String expression) {
       this.name = name;
       this.type = type;
       this.nullable = nullable;
       this.comment = comment;
-      this.computed = computed;
-      this.embeddingConfig = embeddingConfig;
+      this.expression = expression;
     }
 
     public String getName() {
@@ -212,67 +221,39 @@ public class PartitionedTableConfig {
       return comment;
     }
 
+    /**
+     * Returns the SQL expression for this column, or null if this is a regular column.
+     * The expression is evaluated by the execution engine during data conversion.
+     *
+     * @return SQL expression string, or null for regular columns
+     */
+    public String getExpression() {
+      return expression;
+    }
+
+    /**
+     * Checks whether this column has a non-empty expression.
+     *
+     * @return true if expression is defined and not empty
+     */
+    public boolean hasExpression() {
+      return expression != null && !expression.trim().isEmpty();
+    }
+
+    /**
+     * Checks whether this is a computed column (has an expression).
+     *
+     * @return true if this column has an expression
+     */
     public boolean isComputed() {
-      return computed;
-    }
-
-    public boolean hasEmbeddingConfig() {
-      return embeddingConfig != null && !embeddingConfig.isEmpty();
+      return hasExpression();
     }
 
     /**
-     * Get embedding source columns (supports both single and multi-column).
-     * Returns array with single element for sourceColumn, or full array for sourceColumns.
+     * Checks whether this column has a vector/array type.
+     *
+     * @return true if type starts with "array&lt;"
      */
-    @SuppressWarnings("unchecked")
-    public String[] getEmbeddingSourceColumns() {
-      if (embeddingConfig == null) {
-        return null;
-      }
-
-      // Check for multi-column (sourceColumns array)
-      if (embeddingConfig.containsKey("sourceColumns")) {
-        java.util.List<String> cols = (java.util.List<String>) embeddingConfig.get("sourceColumns");
-        return cols != null ? cols.toArray(new String[0]) : null;
-      }
-
-      // Check for single-column (sourceColumn string)
-      if (embeddingConfig.containsKey("sourceColumn")) {
-        return new String[]{(String) embeddingConfig.get("sourceColumn")};
-      }
-
-      return null;
-    }
-
-    /**
-     * @deprecated Use getEmbeddingSourceColumns() instead
-     */
-    @Deprecated
-    public String getEmbeddingSourceColumn() {
-      String[] cols = getEmbeddingSourceColumns();
-      return (cols != null && cols.length > 0) ? cols[0] : null;
-    }
-
-    public String getEmbeddingTemplate() {
-      return embeddingConfig != null
-          ? (String) embeddingConfig.getOrDefault("template", "natural") : "natural";
-    }
-
-    public String getEmbeddingSeparator() {
-      return embeddingConfig != null
-          ? (String) embeddingConfig.getOrDefault("separator", ", ") : ", ";
-    }
-
-    public boolean getEmbeddingExcludeNull() {
-      return embeddingConfig != null
-          ? (Boolean) embeddingConfig.getOrDefault("excludeNull", true) : true;
-    }
-
-    public String getEmbeddingProvider() {
-      return embeddingConfig != null
-          ? (String) embeddingConfig.getOrDefault("provider", "onnx") : "onnx";
-    }
-
     public boolean isVectorType() {
       return type != null && type.startsWith("array<");
     }
@@ -389,7 +370,8 @@ public class PartitionedTableConfig {
 
   /**
    * Parses columns from JSON format.
-   * Expects: [{"name": "col1", "type": "string", "nullable": false, "comment": "Comment 1"}, ...]
+   * Expects: [{"name": "col1", "type": "string", "nullable": false, "comment": "Comment 1",
+   *            "expression": "EXTRACT(YEAR FROM date)"}, ...]
    */
   @SuppressWarnings("unchecked")
   private static List<TableColumn> parseColumns(Object obj) {
@@ -404,11 +386,9 @@ public class PartitionedTableConfig {
           Boolean nullableObj = (Boolean) m.get("nullable");
           boolean nullable = nullableObj != null ? nullableObj : false;
           String comment = (String) m.get("comment");
-          Boolean computedObj = (Boolean) m.get("computed");
-          boolean computed = computedObj != null ? computedObj : false;
-          Map<String, Object> embeddingConfig = (Map<String, Object>) m.get("embeddingConfig");
+          String expression = (String) m.get("expression");
           if (name != null) {
-            result.add(new TableColumn(name, type, nullable, comment, computed, embeddingConfig));
+            result.add(new TableColumn(name, type, nullable, comment, expression));
           }
         }
       }

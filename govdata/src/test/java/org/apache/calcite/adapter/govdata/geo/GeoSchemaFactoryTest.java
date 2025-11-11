@@ -155,7 +155,7 @@ public class GeoSchemaFactoryTest {
   }
 
   @Test public void testSchemaWithModelJson() throws Exception {
-    // Create a model JSON string
+    // Create a model JSON string using environment variable placeholders
     String modelJson = "{"
         + "\"version\": \"1.0\","
         + "\"defaultSchema\": \"GEO\","
@@ -165,7 +165,8 @@ public class GeoSchemaFactoryTest {
         + "  \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\","
         + "  \"operand\": {"
         + "    \"dataSource\": \"geo\","
-        + "    \"cacheDir\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "    \"cacheDirectory\": \"${GOVDATA_CACHE_DIR}\","
+        + "    \"directory\": \"${GOVDATA_PARQUET_DIR}\","
         + "    \"autoDownload\": false"
         + "  }"
         + "}]"
