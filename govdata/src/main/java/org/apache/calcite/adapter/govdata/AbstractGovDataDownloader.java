@@ -38,14 +38,12 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Cross-schema base class for government data downloaders (ECON, GEO, SEC).
@@ -2038,39 +2036,6 @@ public abstract class AbstractGovDataDownloader {
     } else {
       LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
       throw new IOException("Parquet file not found after write: " + fullParquetPath);
-    }
-  }
-
-  /**
-   * Checks if a table has earlyDownload flag set to true in its download configuration.
-   *
-   * <p>Tables with earlyDownload=true should be downloaded before regular partitioned tables,
-   * typically used for reference/catalog tables that other tables depend on.</p>
-   *
-   * @param tableName Name of table to check
-   * @return true if table has earlyDownload=true in download config
-   */
-  @SuppressWarnings("unchecked")
-  protected boolean isEarlyDownload(String tableName) {
-    try {
-      Map<String, Object> metadata = loadTableMetadata(tableName);
-      if (!metadata.containsKey("download")) {
-        return false;
-      }
-
-      Object downloadObj = metadata.get("download");
-      Map<String, Object> downloadConfig;
-      if (downloadObj instanceof JsonNode) {
-        downloadConfig = MAPPER.convertValue((JsonNode) downloadObj, Map.class);
-      } else {
-        downloadConfig = (Map<String, Object>) downloadObj;
-      }
-
-      Object earlyDownloadObj = downloadConfig.get("earlyDownload");
-      return earlyDownloadObj != null && Boolean.parseBoolean(earlyDownloadObj.toString());
-    } catch (Exception e) {
-      LOGGER.debug("Could not check earlyDownload for table {}: {}", tableName, e.getMessage());
-      return false;
     }
   }
 
