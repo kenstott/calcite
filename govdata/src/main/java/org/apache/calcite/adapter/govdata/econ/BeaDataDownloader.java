@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -160,8 +159,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws IOException If download or file I/O fails
    * @throws InterruptedException If download is interrupted
    */
-  @Override
-  public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading all BEA data for years {}-{}", startYear, endYear);
 
     if (nipaTablesList != null) {
@@ -184,8 +182,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to convert
    * @param endYear Last year to convert
    */
-  @Override
-  public void convertAll(int startYear, int endYear) {
+  @Override public void convertAll(int startYear, int endYear) {
     LOGGER.info("Converting all BEA data for years {}-{}", startYear, endYear);
 
     if (nipaTablesList != null) {
@@ -324,10 +321,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("TableName", parts[0]);
 
           // Resolve paths
-          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
-              resolveJsonPath(pattern, fullVars));
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String rawPath =
+              cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Check using params with TableName only
           Map<String, String> params = new HashMap<>();
@@ -345,8 +342,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("TableName", parts[0]);
 
           // Resolve parquet path for manifest
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Convert
           convertCachedJsonToParquet(tableName, fullVars);
@@ -357,6 +354,63 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
         },
         "conversion");
+  }
+
+  /**
+   * Returns the valid GeoFips codes for a given BEA Regional table.
+   * Each table type only works with specific geography levels based on its prefix.
+   *
+   * @param tableName BEA Regional table name (e.g., "SAINC7N", "CAINC1")
+   * @return Set of valid GeoFips codes for this table (e.g., {"STATE"}, {"COUNTY", "MSA"})
+   */
+  private Set<String> getValidGeoFipsForTable(String tableName) {
+    if (tableName == null || tableName.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    // State-level tables (SA* = State Annual, SQ* = State Quarterly)
+    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
+      return Collections.singleton("STATE");
+    }
+
+    // County-level tables (CA* = County Annual)
+    if (tableName.startsWith("CA")) {
+      return new HashSet<>(java.util.Arrays.asList("COUNTY", "MSA"));
+    }
+
+    // Metropolitan area tables (MA* = Metro Annual)
+    if (tableName.startsWith("MA")) {
+      return Collections.singleton("MSA");
+    }
+
+    // Micropolitan area tables (MI*)
+    if (tableName.startsWith("MI")) {
+      return Collections.singleton("MIC");
+    }
+
+    // Port area tables (PARPP, etc.)
+    if (tableName.startsWith("PARPP") || tableName.startsWith("PORT")) {
+      return Collections.singleton("PORT");
+    }
+
+    // Metropolitan division tables
+    if (tableName.contains("DIV")) {
+      return Collections.singleton("DIV");
+    }
+
+    // Combined statistical area tables
+    if (tableName.contains("CSA")) {
+      return Collections.singleton("CSA");
+    }
+
+    // Territory tables (TA*)
+    if (tableName.startsWith("TA")) {
+      return Collections.singleton("STATE");  // Territories use STATE code
+    }
+
+    // Default: STATE (most common case)
+    LOGGER.warn("Unknown table prefix for {}, defaulting to STATE geography", tableName);
+    return Collections.singleton("STATE");
   }
 
   /**
@@ -386,21 +440,37 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
-    Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
 
     // Build flat list of all (tablename, line_code, geo_fips) combinations
+    // Filter GeoFips based on table type to avoid invalid API parameter combinations
     List<String> combos = new ArrayList<>();
+    int skippedCombinations = 0;
     for (String tablename : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
         LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
         continue;
       }
+
+      // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
+      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tablename);
+
       for (String lineCode : lineCodesForTable) {
-        for (String geoFipsCode : geoFips.keySet()) {
+        for (String geoFipsCode : validGeoFipsForTable) {
           combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
         }
       }
+
+      // Log how many invalid combinations we avoided
+      int totalLineCodes = lineCodesForTable.size();
+      Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
+      int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
+      skippedCombinations += totalLineCodes * invalidGeoCount;
+    }
+
+    if (skippedCombinations > 0) {
+      LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
+          skippedCombinations);
     }
 
     LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo-year combinations)",
@@ -466,23 +536,39 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
-    Map<String, Object> geoFips = extractApiSet(tableName, "geoFipsSet");
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
     // Build flat list of all (tablename, line_code, geo_fips_set) combinations
+    // Filter GeoFips based on table type to avoid invalid API parameter combinations
     List<String> combos = new ArrayList<>();
+    int skippedCombinations = 0;
     for (String tablename : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
         LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
         continue;
       }
+
+      // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
+      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tablename);
+
       for (String lineCode : lineCodesForTable) {
-        for (String geoFipsCode : geoFips.keySet()) {
+        for (String geoFipsCode : validGeoFipsForTable) {
           combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
         }
       }
+
+      // Log how many invalid combinations we avoided
+      int totalLineCodes = lineCodesForTable.size();
+      Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
+      int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
+      skippedCombinations += totalLineCodes * invalidGeoCount;
+    }
+
+    if (skippedCombinations > 0) {
+      LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
+          skippedCombinations);
     }
 
     LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo-year combinations)",
@@ -507,10 +593,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("geo_fips_set", parts[2]);
 
           // Resolve paths
-          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
-              resolveJsonPath(pattern, fullVars));
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String rawPath =
+              cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, fullParquetPath);
         },
@@ -524,8 +610,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("geo_fips_set", parts[2]);
 
           // Resolve parquet path for manifest
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Convert
           convertCachedJsonToParquet(tableName, fullVars);
@@ -736,10 +822,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("frequency", parts[1]);
 
           // Resolve paths
-          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
-              resolveJsonPath(pattern, fullVars));
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String rawPath =
+              cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, fullParquetPath);
         },
@@ -752,8 +838,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("frequency", parts[1]);
 
           // Resolve parquet path for manifest
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Convert
           convertCachedJsonToParquet(tableName, fullVars);
@@ -854,10 +940,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("Industry", vars.get("Industry"));
 
           // Resolve paths
-          String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
-              resolveJsonPath(pattern, fullVars));
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String rawPath =
+              cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Cache checking uses params with only Industry
           Map<String, String> params = new HashMap<>();
@@ -873,8 +959,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("Industry", vars.get("Industry"));
 
           // Resolve parquet path for manifest
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory,
-              resolveParquetPath(pattern, fullVars));
+          String fullParquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
 
           // Convert
           convertCachedJsonToParquet(tableName, fullVars);

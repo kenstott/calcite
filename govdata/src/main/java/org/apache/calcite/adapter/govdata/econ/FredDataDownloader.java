@@ -67,8 +67,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     this.fredCatalogForceRefresh = fredCatalogForceRefresh;
 
     // Build series list from catalog + custom series
-    this.seriesIds = buildSeriesList(customFredSeries, fredMinPopularity,
-        catalogCacheTtlDays != null ? catalogCacheTtlDays : 365);
+    this.seriesIds =
+        buildSeriesList(customFredSeries, fredMinPopularity, catalogCacheTtlDays != null ? catalogCacheTtlDays : 365);
   }
 
   @Override protected String getTableName() {
@@ -105,8 +105,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @throws java.io.IOException if download or file operations fail
    * @throws InterruptedException if download is interrupted
    */
-  @Override
-  public void downloadAll(int startYear, int endYear)
+  @Override public void downloadAll(int startYear, int endYear)
       throws java.io.IOException, InterruptedException {
     downloadAllSeries(startYear, endYear, this.seriesIds);
   }
@@ -183,8 +182,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to convert
    * @param endYear Last year to convert
    */
-  @Override
-  public void convertAll(int startYear, int endYear) {
+  @Override public void convertAll(int startYear, int endYear) {
     convertAllSeries(startYear, endYear, this.seriesIds);
   }
 
@@ -319,8 +317,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           // Read JSON file as array of series objects using InputStream
           java.util.List<java.util.Map<String, Object>> seriesList;
           try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(catalogFile);
-               java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream,
-                   java.nio.charset.StandardCharsets.UTF_8)) {
+               java.io.InputStreamReader reader =
+                   new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
             com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>> typeRef =
                 new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {};
             seriesList = objectMapper.readValue(reader, typeRef);
