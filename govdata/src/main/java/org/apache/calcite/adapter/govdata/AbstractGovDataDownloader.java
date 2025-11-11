@@ -25,14 +25,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -74,6 +72,45 @@ public abstract class AbstractGovDataDownloader {
      * @return Transformed record (can be same instance if modified in-place, or new instance)
      */
     Map<String, Object> transform(Map<String, Object> record);
+  }
+
+  /**
+   * Functional interface for table operations (download or convert).
+   * Executes an operation given a map of variables.
+   */
+  @FunctionalInterface
+  public interface TableOperation {
+    void execute(int year, Map<String, String> variables) throws Exception;
+  }
+
+  /**
+   * Functional interface for checking if an operation is cached.
+   */
+  @FunctionalInterface
+  public interface CacheChecker {
+    boolean isCached(int year, Map<String, String> variables);
+  }
+
+  /**
+   * Represents a single dimension of iteration with variable name and values.
+   * Used for multi-dimensional iteration over download/conversion operations.
+   */
+  public static class IterationDimension {
+    final String variableName;
+    final List<String> values;
+
+    public IterationDimension(String variableName, java.util.Collection<String> values) {
+      this.variableName = variableName;
+      this.values = new ArrayList<>(values);
+    }
+
+    public static IterationDimension fromYearRange(int startYear, int endYear) {
+      List<String> years = new ArrayList<>();
+      for (int year = startYear; year <= endYear; year++) {
+        years.add(String.valueOf(year));
+      }
+      return new IterationDimension("year", years);
+    }
   }
 
   /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/...) */
@@ -365,52 +402,6 @@ public abstract class AbstractGovDataDownloader {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Interrupted while downloading: " + url, e);
-    }
-  }
-
-  // ===== Diagnostics helpers (optional use) =====
-
-  /** Log file size if available using the given provider. */
-  protected void logFileSize(StorageProvider provider, String fullPath, String label) {
-    try {
-      long size = provider.getMetadata(fullPath).getSize();
-      LOGGER.debug("[DEBUG] {} exists, size={} bytes: {}", label, size, fullPath);
-    } catch (Exception e) {
-      LOGGER.debug("[DEBUG] Unable to read metadata for {}: {}", fullPath, e.getMessage());
-    }
-  }
-
-  /** Preview the head of a file for debugging (non-destructive). */
-  protected void previewHead(StorageProvider provider, String fullPath, int bytes, String label) {
-    try (InputStream in = provider.openInputStream(fullPath);
-         BufferedInputStream bin = new BufferedInputStream(in)) {
-      bin.mark(bytes + 1);
-      byte[] head = bin.readNBytes(bytes);
-      LOGGER.debug("[DEBUG] Head of {} ({} bytes):\n{}", label, head.length, new String(head, StandardCharsets.UTF_8));
-      bin.reset();
-    } catch (Exception e) {
-      LOGGER.debug("[DEBUG] Unable to preview head for {}: {}", fullPath, e.getMessage());
-    }
-  }
-
-  /** Log basic JSON shape information for quick diagnostics. */
-  protected void logJsonShape(JsonNode root, String label) {
-    try {
-      LOGGER.debug("[DEBUG] {} JSON root type: {}", label, root.getNodeType());
-      if (root.isObject()) {
-        List<String> keys = new ArrayList<>();
-        root.fieldNames().forEachRemaining(keys::add);
-        LOGGER.debug("[DEBUG] {} JSON object keys: {}", label, keys);
-      } else if (root.isArray()) {
-        LOGGER.debug("[DEBUG] {} JSON array size: {}", label, root.size());
-        if (root.size() > 0) {
-          List<String> keys = new ArrayList<>();
-          root.get(0).fieldNames().forEachRemaining(keys::add);
-          LOGGER.debug("[DEBUG] {} first element keys: {}", label, keys);
-        }
-      }
-    } catch (Exception ignore) {
-      // best-effort logging only
     }
   }
 
@@ -1428,45 +1419,6 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Converts a JSON record (object) to a typed Map based on column metadata.
-   *
-   * @param recordNode The JSON record node
-   * @param columnTypeMap Map of column names to their types
-   * @param missingValueIndicator String value that indicates null (e.g., ".", "-", "N/A")
-   * @return Map with properly typed values
-   */
-  protected Map<String, Object> convertJsonRecordToTypedMap(JsonNode recordNode,
-      Map<String, String> columnTypeMap, String missingValueIndicator) {
-    Map<String, Object> record = new java.util.HashMap<>();
-
-    // Iterate through all fields in the JSON record
-    java.util.Iterator<Map.Entry<String, JsonNode>> fields = recordNode.fields();
-    while (fields.hasNext()) {
-      Map.Entry<String, JsonNode> field = fields.next();
-      String fieldName = field.getKey();
-      JsonNode fieldValue = field.getValue();
-
-      // Get the column type from metadata (if available)
-      String columnType = columnTypeMap.get(fieldName);
-
-      if (columnType != null) {
-        // Convert using type metadata
-        Object convertedValue =
-            convertJsonValueToType(fieldValue, fieldName, columnType, missingValueIndicator);
-        record.put(fieldName, convertedValue);
-      } else {
-        // Field not in schema - use Jackson's default conversion but it will be DROPPED later
-        LOGGER.debug("Field '{}' not found in column metadata - will be DROPPED in Parquet output",
-            fieldName);
-        Object defaultValue = MAPPER.convertValue(fieldValue, Object.class);
-        record.put(fieldName, defaultValue);
-      }
-    }
-
-    return record;
-  }
-
-  /**
    * Converts a JSON value to the appropriate Java type based on column metadata.
    *
    * @param jsonValue The JSON value (may be null)
@@ -1763,7 +1715,7 @@ public abstract class AbstractGovDataDownloader {
    * Builds the GitHub URL for the quackformers extension binary.
    *
    * <p>Constructs a platform-specific URL like:
-   * https://github.com/martin-conur/quackformers/raw/main/builds/v1.4.1/osx_arm64/quackformers.duckdb_extension
+   * <a href="https://github.com/martin-conur/quackformers/raw/main/builds/v1.4.1/osx_arm64/quackformers.duckdb_extension">...</a>
    *
    * @param conn DuckDB connection to detect version
    * @return Full GitHub URL to the quackformers binary
@@ -2352,5 +2304,128 @@ public abstract class AbstractGovDataDownloader {
         "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ")\n" +
         "  ORDER BY year\n" +
         ") TO " + quoteLiteral(targetPath) + " (FORMAT PARQUET);";
+  }
+
+  /**
+   * Generic method to iterate over table operations with arbitrary nesting levels (1-4 loops).
+   * Handles variable map generation, cache checking, operation execution, progress tracking,
+   * and manifest saving.
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensions List of iteration dimensions (1-4 dimensions supported)
+   * @param cacheChecker Lambda to check if operation is cached
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   */
+  protected void iterateTableOperations(
+      String tableName,
+      List<IterationDimension> dimensions,
+      CacheChecker cacheChecker,
+      TableOperation operation,
+      String operationDescription) {
+
+    if (dimensions == null || dimensions.isEmpty()) {
+      LOGGER.warn("No dimensions provided for {} operations on {}", operationDescription, tableName);
+      return;
+    }
+
+    // Calculate total operations for progress tracking
+    int totalOperations = 1;
+    for (IterationDimension dim : dimensions) {
+      totalOperations *= dim.values.size();
+    }
+
+    LOGGER.info("Starting {} operations for {} ({} total combinations)",
+        operationDescription, tableName, totalOperations);
+
+    // Track progress
+    int[] counters = new int[2]; // [0]=executed, [1]=skipped
+
+    // Generate and execute all combinations using recursive iteration
+    iterateDimensionsRecursive(dimensions, 0, new HashMap<String, String>(),
+        tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
+
+    // Save manifest after all operations complete
+    try {
+      cacheManifest.save(operatingDirectory);
+    } catch (Exception e) {
+      LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
+    }
+
+    LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
+        tableName, operationDescription, counters[0], counters[1]);
+  }
+
+  /**
+   * Recursive helper to iterate over all combinations of dimension values.
+   * Builds up the variables map as it recurses through dimensions.
+   *
+   * @param dimensions All iteration dimensions
+   * @param dimensionIndex Current dimension being iterated
+   * @param variables Variables map built so far
+   * @param tableName Table name for logging
+   * @param cacheChecker Cache checking lambda
+   * @param operation Operation execution lambda
+   * @param operationDescription Description for logging
+   * @param counters Progress counters [executed, skipped]
+   * @param totalOperations Total operations for progress logging
+   */
+  private void iterateDimensionsRecursive(
+      List<IterationDimension> dimensions,
+      int dimensionIndex,
+      Map<String, String> variables,
+      String tableName,
+      CacheChecker cacheChecker,
+      TableOperation operation,
+      String operationDescription,
+      int[] counters,
+      int totalOperations) {
+
+    // Base case: all dimensions iterated, execute operation
+    if (dimensionIndex >= dimensions.size()) {
+      // Extract year from variables (default to 0 if not present)
+      int year = 0;
+      if (variables.containsKey("year")) {
+        try {
+          year = Integer.parseInt(variables.get("year"));
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
+        }
+      }
+
+      // Check cache
+      if (cacheChecker.isCached(year, variables)) {
+        counters[1]++; // skipped
+        return;
+      }
+
+      // Execute operation
+      try {
+        operation.execute(year, variables);
+        counters[0]++; // executed
+
+        // Log progress every 10 operations
+        if (counters[0] % 10 == 0) {
+          LOGGER.info("{} {}/{} operations (skipped {} cached)",
+              operationDescription, counters[0], totalOperations, counters[1]);
+        }
+      } catch (Exception e) {
+        LOGGER.error("Error during {} for {} with variables {}: {}",
+            operationDescription, tableName, variables, e.getMessage());
+      }
+      return;
+    }
+
+    // Recursive case: iterate over current dimension
+    IterationDimension currentDim = dimensions.get(dimensionIndex);
+    for (String value : currentDim.values) {
+      // Add current dimension's variable to map
+      Map<String, String> nextVariables = new HashMap<>(variables);
+      nextVariables.put(currentDim.variableName, value);
+
+      // Recurse to next dimension
+      iterateDimensionsRecursive(dimensions, dimensionIndex + 1, nextVariables,
+          tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
+    }
   }
 }
