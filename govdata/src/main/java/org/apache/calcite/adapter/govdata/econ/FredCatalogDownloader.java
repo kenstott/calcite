@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,13 +26,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -89,7 +97,7 @@ public class FredCatalogDownloader {
   private final ObjectMapper objectMapper;
   private final String cacheDir;
   private final String parquetDir;
-  private final org.apache.calcite.adapter.file.storage.StorageProvider storageProvider;
+  private final StorageProvider storageProvider;
   private final CacheManifest cacheManifest;
 
   private long lastRequestTime = 0;
@@ -97,7 +105,7 @@ public class FredCatalogDownloader {
   private final Map<String, List<Map<String, Object>>> partitionedSeries = new HashMap<>();
 
   public FredCatalogDownloader(String fredApiKey, String cacheDir, String parquetDir,
-                               org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+                               StorageProvider storageProvider,
                                CacheManifest cacheManifest) {
     this.fredApiKey = fredApiKey;
     this.cacheDir = cacheDir;
@@ -765,8 +773,8 @@ public class FredCatalogDownloader {
       // If file already exists, merge with existing data
       List<Map<String, Object>> existingData = new ArrayList<>();
       if (storageProvider.exists(jsonFile)) {
-        try (java.io.InputStream inputStream = storageProvider.openInputStream(jsonFile);
-             java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+        try (InputStream inputStream = storageProvider.openInputStream(jsonFile);
+             InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
           existingData = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
         }
       }
@@ -794,7 +802,7 @@ public class FredCatalogDownloader {
     String catalogPath = storageProvider.resolvePath(cacheDir, "type=reference");
 
     try {
-      List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> files =
+      List<StorageProvider.FileEntry> files =
           storageProvider.listFiles(catalogPath, true);
 
       if (files == null || files.isEmpty()) {
@@ -803,7 +811,7 @@ public class FredCatalogDownloader {
       }
 
       // Filter for JSON catalog files and skip macOS metadata
-      for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry file : files) {
+      for (StorageProvider.FileEntry file : files) {
         if (!file.isDirectory() &&
             file.getName().equals("reference_fred_series.json") &&
             !file.getName().startsWith(".")) {
@@ -880,8 +888,8 @@ public class FredCatalogDownloader {
 
     // Read JSON data with error handling for corrupted files
     List<Map<String, Object>> seriesList;
-    try (java.io.InputStream inputStream = storageProvider.openInputStream(jsonFile);
-         java.io.InputStreamReader reader = new java.io.InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+    try (InputStream inputStream = storageProvider.openInputStream(jsonFile);
+         InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
       seriesList = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
     } catch (Exception e) {
       LOGGER.warn("Skipping corrupted or invalid JSON file {}: {}", jsonFile, e.getMessage());
@@ -980,7 +988,7 @@ public class FredCatalogDownloader {
    */
   private void writeParquetWithStorageProvider(String parquetFile, List<Map<String, Object>> transformedSeries) throws IOException {
     // Load column metadata and write parquet
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+    List<PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("reference_fred_series");
     convertInMemoryToParquetViaDuckDB(columns, transformedSeries, parquetFile);
   }
@@ -1010,8 +1018,8 @@ public class FredCatalogDownloader {
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
       // Execute using in-memory DuckDB connection
-      try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:duckdb:");
-           java.sql.Statement stmt = conn.createStatement()) {
+      try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+           Statement stmt = conn.createStatement()) {
 
         // Load DuckDB extensions (quackformers, spatial, etc.)
         loadDuckDBExtensions(conn);
@@ -1021,7 +1029,7 @@ public class FredCatalogDownloader {
 
         LOGGER.info("Successfully converted {} to Parquet using DuckDB", "reference_fred_series");
 
-      } catch (java.sql.SQLException e) {
+      } catch (SQLException e) {
         String errorMsg =
             String.format("DuckDB conversion failed for table '%s': %s", "reference_fred_series", e.getMessage());
         LOGGER.error(errorMsg, e);
@@ -1045,7 +1053,7 @@ public class FredCatalogDownloader {
   /**
    * Loads DuckDB extensions for data conversion (quackformers, spatial, etc.).
    */
-  private void loadDuckDBExtensions(java.sql.Connection conn) {
+  private void loadDuckDBExtensions(Connection conn) {
     String[][] extensions = {
         {"quackformers", "FROM community"},
         {"spatial", ""},
@@ -1060,7 +1068,7 @@ public class FredCatalogDownloader {
         conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
         conn.createStatement().execute("LOAD " + ext[0]);
         LOGGER.debug("Successfully loaded extension: {}", ext[0]);
-      } catch (java.sql.SQLException e) {
+      } catch (SQLException e) {
         LOGGER.warn("Failed to load extension '{}': {}", ext[0], e.getMessage());
       }
     }
@@ -1072,7 +1080,7 @@ public class FredCatalogDownloader {
   private void writeJsonRecords(String fullJsonPath, List<Map<String, Object>> records) throws IOException {
     // StorageProvider.writeFile automatically creates parent directories if needed
 
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
     objectMapper.writeValue(baos, records);
     storageProvider.writeFile(fullJsonPath, baos.toByteArray());
 

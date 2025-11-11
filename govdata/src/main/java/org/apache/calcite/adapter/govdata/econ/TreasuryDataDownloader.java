@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,8 +25,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,11 +41,11 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(TreasuryDataDownloader.class);
   private static final String TREASURY_API_BASE = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/";
 
-  public TreasuryDataDownloader(String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+  public TreasuryDataDownloader(String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
     this(cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest) {
+  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
   }
 
@@ -64,7 +68,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     // Build iteration dimensions: year only (no other dimensions needed)
-    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    List<IterationDimension> dimensions = new ArrayList<>();
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
     // Use iterateTableOperations() for automatic progress tracking and manifest management
@@ -97,13 +101,12 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
           // Write data to cache (StorageProvider handles directory creation)
-          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
 
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
           cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
         },
-        "download"
-    );
+        "download");
   }
 
   /**
@@ -121,7 +124,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     // Build iteration dimensions: year only (no other dimensions needed)
-    java.util.List<IterationDimension> dimensions = new java.util.ArrayList<>();
+    List<IterationDimension> dimensions = new ArrayList<>();
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
     // Use iterateTableOperations() for automatic progress tracking and manifest management
@@ -154,13 +157,12 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
           // Write data to cache (StorageProvider handles directory creation)
-          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
 
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
           cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
         },
-        "download"
-    );
+        "download");
   }
 
 }
