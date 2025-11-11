@@ -55,6 +55,12 @@ public abstract class AbstractGovDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(AbstractGovDataDownloader.class);
 
   /**
+   * Default retry interval (in days) for API errors (HTTP 200 with error content).
+   * Prevents expensive retries on every restart while allowing periodic retry attempts.
+   */
+  protected static final int DEFAULT_API_ERROR_RETRY_DAYS = 7;
+
+  /**
    * Functional interface for transforming records during JSON to Parquet conversion.
    *
    * <p>Allows per-record transformations such as:
@@ -2479,6 +2485,28 @@ public abstract class AbstractGovDataDownloader {
       } catch (Exception e) {
         LOGGER.error("Error during {} for {} with variables {}: {}",
             operationDescription, tableName, variables, e.getMessage());
+
+        // Check if this is an HTTP 200 with error content (API error)
+        if (e instanceof IOException && e.getMessage() != null
+            && e.getMessage().contains("API returned error (HTTP 200 with error content)")) {
+          // Extract error message from exception
+          String errorMessage = e.getMessage();
+          if (errorMessage.startsWith("API returned error (HTTP 200 with error content): ")) {
+            errorMessage = errorMessage.substring("API returned error (HTTP 200 with error content): ".length());
+          }
+
+          // Mark as API error with retry cadence in the cache manifest
+          if (cacheManifest != null) {
+            try {
+              cacheManifest.markApiError(tableName, year, variables, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
+              cacheManifest.save(operatingDirectory);
+              LOGGER.info("Marked {} year={} as API error - will retry in {} days",
+                  tableName, year, DEFAULT_API_ERROR_RETRY_DAYS);
+            } catch (Exception manifestError) {
+              LOGGER.warn("Could not mark API error in cache manifest: {}", manifestError.getMessage());
+            }
+          }
+        }
       }
       return;
     }

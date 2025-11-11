@@ -65,6 +65,19 @@ public abstract class AbstractCacheManifest {
 
     @JsonProperty("parquetConvertedAt")
     public long parquetConvertedAt;  // Timestamp when parquet was created
+
+    // API error tracking fields (for HTTP 200 responses with error content)
+    @JsonProperty("lastError")
+    public String lastError;  // Last API error code/message (e.g., "APIErrorCode 101: Unknown error")
+
+    @JsonProperty("errorCount")
+    public int errorCount;  // Number of consecutive API errors
+
+    @JsonProperty("lastAttemptAt")
+    public long lastAttemptAt;  // Timestamp of last download attempt
+
+    @JsonProperty("downloadRetry")
+    public long downloadRetry;  // Timestamp when retry should occur (0 = no retry restriction)
   }
 
   /**
@@ -128,4 +141,22 @@ public abstract class AbstractCacheManifest {
    */
   public abstract void markParquetConverted(String dataType, int year, Map<String, String> params,
       String parquetPath);
+
+  /**
+   * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
+   * Prevents expensive retries on every restart while tracking error details for debugging.
+   *
+   * <p>This handles cases where the API returns HTTP 200 OK but includes error information
+   * in the response body (e.g., BEA APIErrorCode 101 "Unknown error"). Unlike HTTP errors
+   * (404, 500, etc.) which are handled elsewhere, these are successful HTTP responses that
+   * contain API-level errors.
+   *
+   * @param dataType Type of data that failed
+   * @param year Year of the data
+   * @param parameters Additional parameters
+   * @param errorMessage Full error message from API (e.g., JSON error object)
+   * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
+   */
+  public abstract void markApiError(String dataType, int year, Map<String, String> parameters,
+      String errorMessage, int retryAfterDays);
 }
