@@ -101,35 +101,8 @@ public class EconDataDownloadTest {
     verifyParquetReadable(parquetPath, "federal_debt");
   }
 
-  @Test public void testWorldBankIndicators() throws Exception {
-    StorageProvider storageProvider = createStorageProvider();
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
-
-    // Download just 2 years for G7 countries
-    downloader.downloadWorldIndicators(2022, 2023);
-
-    // Verify parquet file was created
-    String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "source=econ/type=worldbank/year_range=2022_2023/world_indicators.parquet");
-    assertTrue(storageProvider.exists(parquetPath));
-
-    verifyParquetReadable(parquetPath, "world_indicators");
-  }
-
-  @Test public void testWorldBankGlobalGDP() throws Exception {
-    StorageProvider storageProvider = createStorageProvider();
-    WorldBankDataDownloader downloader = new WorldBankDataDownloader(tempDir.toString(), storageProvider, storageProvider);
-
-    // Download just 1 year of GDP data
-    downloader.downloadGlobalGDP(2023, 2023);
-
-    // Verify parquet file was created
-    String parquetPath =
-        storageProvider.resolvePath(tempDir.toString(), "source=econ/type=worldbank/year_range=2023_2023/global_gdp.parquet");
-    assertTrue(storageProvider.exists(parquetPath));
-
-    verifyParquetReadable(parquetPath, "global_gdp");
-  }
+  // World Bank legacy download tests removed - downloadWorldIndicators() and downloadGlobalGDP()
+  // methods removed in favor of year-by-year approach with proper Hive partitioning
 
   // FRED download tests removed - downloadSeries() method removed in favor of metadata-driven approach
   // TODO: Add tests for executeDownload() metadata-driven downloads
