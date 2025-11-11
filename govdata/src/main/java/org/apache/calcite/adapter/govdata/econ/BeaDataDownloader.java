@@ -445,7 +445,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return year >= 2001;
     }
 
-    // Historical tables (suffix "H"): typically valid across entire range
+    // Historical tables (suffix "H"): discontinued legacy tables, typically valid through 2005
+    // These were transitional tables during the SIC-to-NAICS conversion period
+    if (tableName.endsWith("H")) {
+      return year <= 2005;
+    }
+
     // Other tables without classification suffix: no restrictions
     return true;
   }
@@ -521,8 +526,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           skippedGeoFipsCombinations);
     }
     if (skippedYearCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-year combinations based on SIC/NAICS classification " +
-          "(SIC tables: 1969-2000, NAICS tables: 2001-forward)", skippedYearCombinations);
+      LOGGER.info("Filtered out {} invalid table-year combinations based on industry classification " +
+          "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
     }
 
     LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo combinations, " +
@@ -650,8 +655,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           skippedGeoFipsCombinations);
     }
     if (skippedYearCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-year combinations based on SIC/NAICS classification " +
-          "(SIC tables: 1969-2000, NAICS tables: 2001-forward)", skippedYearCombinations);
+      LOGGER.info("Filtered out {} invalid table-year combinations based on industry classification " +
+          "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
     }
 
     LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo combinations, " +
