@@ -65,11 +65,6 @@ dependencies {
     implementation("commons-net:commons-net:3.9.0")
     implementation("com.jcraft:jsch:0.1.55")
 
-    // Embedding model dependencies (ONNX Runtime + DJL tokenizers)
-    implementation("com.microsoft.onnxruntime:onnxruntime:1.16.3")
-    implementation("ai.djl:api:0.25.0")
-    implementation("ai.djl.huggingface:tokenizers:0.25.0")
-
     // Apache Iceberg support
     implementation("org.apache.iceberg:iceberg-core:1.4.0")
     implementation("org.apache.iceberg:iceberg-api:1.4.0")
@@ -79,8 +74,8 @@ dependencies {
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine
-    compileOnly("org.duckdb:duckdb_jdbc:1.1.3")
-    testImplementation("org.duckdb:duckdb_jdbc:1.1.3")
+    compileOnly("org.duckdb:duckdb_jdbc:1.4.1.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.4.1.0")
 
     annotationProcessor("org.immutables:value")
     compileOnly("org.immutables:value-annotations")
