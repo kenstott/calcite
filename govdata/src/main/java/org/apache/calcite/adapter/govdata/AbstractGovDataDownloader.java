@@ -17,9 +17,6 @@
 package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
-import org.apache.calcite.adapter.file.similarity.EmbeddingException;
-import org.apache.calcite.adapter.file.similarity.EmbeddingProviderFactory;
-import org.apache.calcite.adapter.file.similarity.TextEmbeddingProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -108,9 +105,6 @@ public abstract class AbstractGovDataDownloader {
 
   /** Cached rate limit configuration (loaded on first access) */
   private Map<String, Object> rateLimitConfig = null;
-
-  /** Embedding provider for generating vector embeddings (lazy-initialized) */
-  private TextEmbeddingProvider embeddingProvider = null;
 
   protected AbstractGovDataDownloader(
       String cacheDirectory,
@@ -258,55 +252,6 @@ public abstract class AbstractGovDataDownloader {
       }
     }
     return rateLimitConfig;
-  }
-
-  /**
-   * Lazily initializes the embedding provider from schema configuration.
-   * Returns null if embeddings are disabled in schema.
-   */
-  private TextEmbeddingProvider getEmbeddingProvider() throws EmbeddingException {
-    if (embeddingProvider == null) {
-      // Load schema root config from resources
-      try (InputStream schemaStream = getClass().getResourceAsStream(schemaResourceName)) {
-        if (schemaStream == null) {
-          LOGGER.warn("Schema resource not found: {}", schemaResourceName);
-          return null;
-        }
-
-        JsonNode root = MAPPER.readTree(schemaStream);
-
-        // Read embedding config from schema root
-        if (!root.has("embeddingCache")) {
-          return null; // Embeddings disabled
-        }
-
-        JsonNode embeddingCacheNode = root.get("embeddingCache");
-        if (!embeddingCacheNode.get("enabled").asBoolean(false)) {
-          return null; // Embeddings disabled
-        }
-
-        // Build provider config
-        String provider = embeddingCacheNode.get("provider").asText("onnx");
-        String cachePath = embeddingCacheNode.get("path").asText();
-
-        // Resolve {cacheDir} placeholder
-        cachePath = cachePath.replace("{cacheDir}", cacheDirectory);
-
-        Map<String, Object> config = new HashMap<>();
-        config.put("cachePath", cachePath);
-        config.put("storageProvider", this.storageProvider);
-        config.put("dimensions", embeddingCacheNode.get("dimension").asInt(384));
-        config.put("model", embeddingCacheNode.get("model").asText());
-
-        embeddingProvider = EmbeddingProviderFactory.createProvider(provider, config);
-        LOGGER.info("Initialized embedding provider: {}", embeddingProvider.getProviderName());
-
-      } catch (IOException e) {
-        throw new EmbeddingException("Failed to load schema config: " + e.getMessage(), e);
-      }
-    }
-
-    return embeddingProvider;
   }
 
   /**
@@ -1481,16 +1426,6 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
-    // Generate computed columns (embeddings)
-    try {
-      TextEmbeddingProvider provider = getEmbeddingProvider();
-      if (provider != null) {
-        generateEmbeddingColumns(typedRecord, columns, provider);
-      }
-    } catch (EmbeddingException e) {
-      LOGGER.warn("Failed to initialize embedding provider: {}", e.getMessage());
-    }
-
     return typedRecord;
   }
 
@@ -1638,7 +1573,7 @@ public abstract class AbstractGovDataDownloader {
    * @param parquetPath Output Parquet file path
    * @return Complete DuckDB SQL statement ready for execution
    */
-  protected String buildConversionSql(
+  public static String buildDuckDBConversionSql(
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       String missingValueIndicator,
       String jsonPath,
@@ -1657,30 +1592,40 @@ public abstract class AbstractGovDataDownloader {
       firstColumn = false;
 
       String columnName = column.getName();
-      String sqlType = javaToDuckDbType(column.getType());
-
       sql.append("    ");
 
-      // Handle missing value indicator with CASE expression
-      if (missingValueIndicator != null && !missingValueIndicator.isEmpty()) {
-        sql.append("CAST(CASE WHEN ");
-        sql.append(quoteIdentifier(columnName));
-        sql.append(" = ");
-        sql.append(quoteLiteral(missingValueIndicator));
-        sql.append(" THEN NULL ELSE ");
-        sql.append(quoteIdentifier(columnName));
-        sql.append(" END AS ");
-        sql.append(sqlType);
+      // Check if this is a computed column with an expression
+      if (column.hasExpression()) {
+        // Expression column: use SQL expression directly
+        sql.append("(");
+        sql.append(column.getExpression());
         sql.append(") AS ");
         sql.append(quoteIdentifier(columnName));
       } else {
-        // Simple CAST without null handling
-        sql.append("CAST(");
-        sql.append(quoteIdentifier(columnName));
-        sql.append(" AS ");
-        sql.append(sqlType);
-        sql.append(") AS ");
-        sql.append(quoteIdentifier(columnName));
+        // Regular column: CAST from JSON with type conversion
+        String sqlType = javaToDuckDbType(column.getType());
+
+        // Handle missing value indicator with CASE expression
+        if (missingValueIndicator != null && !missingValueIndicator.isEmpty()) {
+          sql.append("CAST(CASE WHEN ");
+          sql.append(quoteIdentifier(columnName));
+          sql.append(" = ");
+          sql.append(quoteLiteral(missingValueIndicator));
+          sql.append(" THEN NULL ELSE ");
+          sql.append(quoteIdentifier(columnName));
+          sql.append(" END AS ");
+          sql.append(sqlType);
+          sql.append(") AS ");
+          sql.append(quoteIdentifier(columnName));
+        } else {
+          // Simple CAST without null handling
+          sql.append("CAST(");
+          sql.append(quoteIdentifier(columnName));
+          sql.append(" AS ");
+          sql.append(sqlType);
+          sql.append(") AS ");
+          sql.append(quoteIdentifier(columnName));
+        }
       }
     }
 
@@ -1697,7 +1642,7 @@ public abstract class AbstractGovDataDownloader {
   /**
    * Maps Java/Calcite type names to DuckDB SQL types.
    */
-  private String javaToDuckDbType(String javaType) {
+  private static String javaToDuckDbType(String javaType) {
     String normalized = javaType.toLowerCase();
     switch (normalized) {
       case "string":
@@ -1728,7 +1673,7 @@ public abstract class AbstractGovDataDownloader {
   /**
    * Quotes a SQL identifier (column/table name) for DuckDB.
    */
-  private String quoteIdentifier(String identifier) {
+  private static String quoteIdentifier(String identifier) {
     // DuckDB uses double quotes for identifiers
     return "\"" + identifier.replace("\"", "\"\"") + "\"";
   }
@@ -1736,9 +1681,219 @@ public abstract class AbstractGovDataDownloader {
   /**
    * Quotes a SQL string literal for DuckDB.
    */
-  private String quoteLiteral(String literal) {
+  private static String quoteLiteral(String literal) {
     // DuckDB uses single quotes for string literals
     return "'" + literal.replace("'", "''") + "'";
+  }
+
+  /**
+   * Creates a DuckDB connection with conversion-time extensions loaded.
+   *
+   * <p>Extensions are loaded with graceful degradation - failures are logged as warnings
+   * but don't prevent connection creation. This allows the system to work even if some
+   * extensions are unavailable.</p>
+   *
+   * @return DuckDB connection with extensions loaded
+   * @throws java.sql.SQLException if connection creation fails
+   */
+  private Connection getDuckDBConnection() throws java.sql.SQLException {
+    Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    loadConversionExtensions(conn);
+    return conn;
+  }
+
+  /**
+   * Loads DuckDB extensions needed for data conversion operations.
+   *
+   * <p>Extensions loaded:
+   * <ul>
+   *   <li><b>quackformers</b> - Embedding generation via embed() function</li>
+   *   <li><b>spatial</b> - GIS operations (ST_Read, ST_Area, etc.)</li>
+   *   <li><b>h3</b> - Geospatial hexagonal indexing</li>
+   *   <li><b>excel</b> - Excel file reading support</li>
+   *   <li><b>fts</b> - Full-text search indexing</li>
+   * </ul>
+   *
+   * <p>Failures are logged as warnings and do not prevent conversion. This allows
+   * the system to work with basic functionality even if some extensions are missing.</p>
+   *
+   * @param conn DuckDB connection to load extensions into
+   */
+  private void loadConversionExtensions(Connection conn) {
+    String[][] extensions = {
+        {"quackformers", "FROM community"},  // Embedding generation
+        {"spatial", ""},                      // GIS operations
+        {"h3", "FROM community"},             // Geospatial hex indexing
+        {"excel", ""},                        // Excel file support
+        {"fts", ""}                           // Full-text indexing
+    };
+
+    for (String[] ext : extensions) {
+      try {
+        LOGGER.debug("Loading conversion extension: {}", ext[0]);
+        conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
+        conn.createStatement().execute("LOAD " + ext[0]);
+        LOGGER.debug("Successfully loaded extension: {}", ext[0]);
+      } catch (java.sql.SQLException e) {
+        // Special fallback for quackformers: try loading from GitHub
+        if ("quackformers".equals(ext[0])) {
+          try {
+            LOGGER.info("Retrying quackformers from GitHub repository...");
+            // Try simple GitHub URL first (DuckDB auto-discovers platform/version)
+            conn.createStatement().execute("LOAD quackformers FROM 'https://github.com/martin-conur/quackformers'");
+            LOGGER.info("Successfully loaded quackformers from GitHub");
+            continue;
+          } catch (java.sql.SQLException e2) {
+            // If that fails, try platform-specific URL as fallback
+            try {
+              String githubUrl = buildQuackformersGitHubUrl(conn);
+              LOGGER.info("Retrying with platform-specific URL: {}", githubUrl);
+              conn.createStatement().execute("LOAD quackformers FROM '" + githubUrl + "'");
+              LOGGER.info("Successfully loaded quackformers from platform-specific GitHub URL");
+              continue;
+            } catch (java.sql.SQLException e3) {
+              LOGGER.warn("Failed to load quackformers from GitHub: {}", e3.getMessage());
+            }
+          }
+        }
+        LOGGER.warn("Failed to load extension '{}' (continuing): {}", ext[0], e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Builds the GitHub URL for the quackformers extension binary.
+   *
+   * <p>Constructs a platform-specific URL like:
+   * https://github.com/martin-conur/quackformers/raw/main/builds/v1.4.1/osx_arm64/quackformers.duckdb_extension
+   *
+   * @param conn DuckDB connection to detect version
+   * @return Full GitHub URL to the quackformers binary
+   */
+  private String buildQuackformersGitHubUrl(Connection conn) throws java.sql.SQLException {
+    // Detect DuckDB version
+    String duckdbVersion = detectDuckDBVersion(conn);
+
+    // Detect platform
+    String platform = detectPlatform();
+
+    // Build URL
+    return "https://github.com/martin-conur/quackformers/raw/main/builds/v"
+        + duckdbVersion + "/" + platform + "/quackformers.duckdb_extension";
+  }
+
+  /**
+   * Detects the DuckDB version from the connection.
+   *
+   * @param conn DuckDB connection
+   * @return Version string (e.g., "1.4.1")
+   */
+  private String detectDuckDBVersion(Connection conn) throws java.sql.SQLException {
+    try (java.sql.ResultSet rs = conn.createStatement().executeQuery("SELECT library_version FROM pragma_version()")) {
+      if (rs.next()) {
+        String fullVersion = rs.getString(1);
+        // Extract major.minor.patch (e.g., "1.4.1" from "v1.4.1")
+        if (fullVersion.startsWith("v")) {
+          fullVersion = fullVersion.substring(1);
+        }
+        return fullVersion;
+      }
+    }
+    // Fallback to metadata
+    return conn.getMetaData().getDatabaseProductVersion();
+  }
+
+  /**
+   * Detects the current platform (OS + architecture).
+   *
+   * @return Platform string (e.g., "osx_arm64", "linux_amd64", "windows_amd64")
+   */
+  private String detectPlatform() {
+    String osName = System.getProperty("os.name").toLowerCase();
+    String osArch = System.getProperty("os.arch").toLowerCase();
+
+    String os;
+    if (osName.contains("mac") || osName.contains("darwin")) {
+      os = "osx";
+    } else if (osName.contains("linux")) {
+      os = "linux";
+    } else if (osName.contains("windows")) {
+      os = "windows";
+    } else {
+      os = "unknown";
+    }
+
+    String arch;
+    if (osArch.equals("aarch64") || osArch.equals("arm64")) {
+      arch = "arm64";
+    } else if (osArch.contains("amd64") || osArch.contains("x86_64")) {
+      arch = "amd64";
+    } else {
+      arch = "unknown";
+    }
+
+    return os + "_" + arch;
+  }
+
+  /**
+   * Converts in-memory records to Parquet using DuckDB.
+   *
+   * <p>This method writes the in-memory records to a temporary JSON file, then uses
+   * DuckDB to convert it to Parquet. The temp JSON file is written to the cache location
+   * for debugging purposes and consistency with other conversions.
+   *
+   * @param tableName Name of table in schema
+   * @param columns Column definitions from schema
+   * @param records In-memory records to convert
+   * @param fullParquetPath Absolute path to output Parquet file
+   * @throws IOException if conversion fails
+   */
+  protected void convertInMemoryToParquetViaDuckDB(
+      String tableName,
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<Map<String, Object>> records,
+      String fullParquetPath) throws IOException {
+
+    // Write records to temporary JSON file in cache
+    String tempJsonPath = fullParquetPath.replace(".parquet", "_temp.json");
+    String fullTempJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, tempJsonPath);
+
+    try {
+      // Write JSON
+      writeJsonRecords(fullTempJsonPath, records);
+
+      // Convert using DuckDB
+      convertCachedJsonToParquetViaDuckDB(tableName, columns, null, fullTempJsonPath, fullParquetPath);
+
+      // Clean up temp file
+      cacheStorageProvider.delete(fullTempJsonPath);
+
+    } catch (IOException e) {
+      // Clean up temp file on error
+      try {
+        cacheStorageProvider.delete(fullTempJsonPath);
+      } catch (IOException cleanupError) {
+        LOGGER.warn("Failed to clean up temp JSON file: {}", fullTempJsonPath, cleanupError);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Writes in-memory records to a JSON file.
+   *
+   * @param fullJsonPath Absolute path to write JSON file
+   * @param records Records to write
+   * @throws IOException if write fails
+   */
+  private void writeJsonRecords(String fullJsonPath, List<Map<String, Object>> records) throws IOException {
+    ensureParentDirectory(fullJsonPath);
+
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    MAPPER.writeValue(baos, records);
+    cacheStorageProvider.writeFile(fullJsonPath, baos.toByteArray());
+
+    LOGGER.debug("Wrote {} records to temporary JSON: {}", records.size(), fullJsonPath);
   }
 
   /**
@@ -1762,12 +1917,12 @@ public abstract class AbstractGovDataDownloader {
       String fullParquetPath) throws IOException {
 
     // Build the SQL statement
-    String sql = buildConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath);
+    String sql = buildDuckDBConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath);
 
     LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
-    // Execute using in-memory DuckDB connection
-    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    // Execute using in-memory DuckDB connection with extensions loaded
+    try (Connection conn = getDuckDBConnection();
          Statement stmt = conn.createStatement()) {
 
       // Execute the COPY statement
@@ -1820,18 +1975,17 @@ public abstract class AbstractGovDataDownloader {
    *   <li>JSON structure (data path for extracting records)</li>
    * </ul>
    *
-   * <p>The optional transformer allows per-record transformations such as:
-   * <ul>
-   *   <li>Adding calculated/derived fields (e.g., quarter from TimePeriod)</li>
-   *   <li>Field value modifications</li>
-   *   <li>Field filtering or enrichment</li>
-   * </ul>
+   * <p><b>Note:</b> The transformer parameter is deprecated as of Phase 2. All transformations
+   * should now be specified via expression columns in the schema. The parameter is retained
+   * for backward compatibility but is ignored.</p>
    *
    * @param tableName Name of table in schema
    * @param variables Variables for path resolution (e.g., {year: "2020"})
-   * @param transformer Optional function to transform each record (null for no transformation)
+   * @param transformer Deprecated - use expression columns in schema instead
    * @throws IOException if file operations fail
+   * @deprecated Use expression columns in schema instead of runtime transformations
    */
+  @Deprecated
   public void convertCachedJsonToParquet(String tableName, Map<String, String> variables,
       RecordTransformer transformer) throws IOException {
     LOGGER.info("Converting cached JSON to Parquet for table: {}", tableName);
@@ -1846,9 +2000,6 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Resolve source (JSON) and target (Parquet) paths
-    String jsonPath = resolveJsonPath(pattern, variables);
-    String parquetPath = resolveParquetPath(pattern, variables);
-
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
     String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
@@ -1876,83 +2027,16 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
-    // Choose conversion path based on whether transformation is needed
-    if (transformer == null) {
-      // Fast path: Use DuckDB for direct JSON→Parquet conversion
-      LOGGER.info("Using DuckDB for JSON to Parquet conversion (no transformations)");
-      convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
-          fullJsonPath, fullParquetPath);
-
-      // Verify file was written
-      if (storageProvider.exists(fullParquetPath)) {
-        LOGGER.info("Successfully converted {} to Parquet: {}", tableName, parquetPath);
-      } else {
-        LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
-        throw new IOException("Parquet file not found after write: " + fullParquetPath);
-      }
-      return;
-    }
-
-    // Slow path: Use Java-based conversion when transformations are needed
-    LOGGER.info("Using Java-based conversion (transformations required)");
-
-    // Build column type map for efficient lookup
-    Map<String, String> columnTypeMap = new java.util.HashMap<>();
-    for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
-      columnTypeMap.put(column.getName(), column.getType());
-    }
-
-    // Read JSON file with type-aware conversion
-    List<Map<String, Object>> records = new ArrayList<>();
-    try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath);
-         java.io.InputStreamReader reader =
-             new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8)) {
-      JsonNode root = MAPPER.readTree(reader);
-
-      // Extract records with proper type conversion
-      if (root.isArray()) {
-        for (JsonNode recordNode : root) {
-          Map<String, Object> record =
-              convertJsonRecordToTypedMap(recordNode, columnTypeMap, missingValueIndicator);
-          // Apply optional transformer
-          if (transformer != null) {
-            record = transformer.transform(record);
-          }
-          records.add(record);
-        }
-      } else if (root.isObject()) {
-        // Single object - wrap in list
-        Map<String, Object> record =
-            convertJsonRecordToTypedMap(root, columnTypeMap, missingValueIndicator);
-        // Apply optional transformer
-        if (transformer != null) {
-          record = transformer.transform(record);
-        }
-        records.add(record);
-      } else {
-        throw new IOException("Data node is neither array nor object.");
-      }
-
-      LOGGER.info("Read {} records from {}", records.size(), jsonPath);
-    } catch (Exception e) {
-      LOGGER.error("Failed to read JSON file {}: {}", fullJsonPath, e.getMessage(), e);
-      throw new IOException("Failed to read JSON: " + e.getMessage(), e);
-    }
-
-    if (records.isEmpty()) {
-      LOGGER.warn("No records found in JSON file: {}", fullJsonPath);
-      return;
-    }
-
-    // Write to Parquet using StorageProvider
-    LOGGER.info("Writing {} records to Parquet: {}", records.size(), parquetPath);
-    storageProvider.writeAvroParquet(fullParquetPath, columns, records, tableName, tableName);
+    // Use DuckDB for JSON→Parquet conversion with expression columns
+    LOGGER.info("Using DuckDB for JSON to Parquet conversion with expression columns");
+    convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
+        fullJsonPath, fullParquetPath);
 
     // Verify file was written
     if (storageProvider.exists(fullParquetPath)) {
-      LOGGER.info("Successfully converted {} to Parquet: {}", tableName, parquetPath);
+      LOGGER.info("Successfully converted {} to Parquet: {}", tableName, fullParquetPath);
     } else {
-      LOGGER.error("Parquet file not found after write: {}", fullParquetPath);
+      LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
       throw new IOException("Parquet file not found after write: " + fullParquetPath);
     }
   }
@@ -1988,181 +2072,6 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.debug("Could not check earlyDownload for table {}: {}", tableName, e.getMessage());
       return false;
     }
-  }
-
-
-  /**
-   * Generates embedding columns for all computed columns with embeddingConfig.
-   * Supports both single-column and multi-column (row-level) embeddings.
-   */
-  private void generateEmbeddingColumns(Map<String, Object> record,
-      List<PartitionedTableConfig.TableColumn> columns, TextEmbeddingProvider provider) {
-
-    for (PartitionedTableConfig.TableColumn column : columns) {
-      if (!column.isComputed() || !column.hasEmbeddingConfig()) {
-        continue;
-      }
-
-      String[] sourceColumns = column.getEmbeddingSourceColumns();
-      if (sourceColumns == null || sourceColumns.length == 0) {
-        continue;
-      }
-
-      // Build text to embed
-      String text;
-      if (sourceColumns.length == 1) {
-        // Single column (existing behavior)
-        Object value = record.get(sourceColumns[0]);
-        text = (value instanceof String) ? (String) value : null;
-      } else {
-        // Multi-column concatenation (NEW: row-level embeddings)
-        text = concatenateFieldsNatural(record, sourceColumns, column);
-      }
-
-      if (text != null && !text.isEmpty()) {
-        try {
-          double[] embedding = provider.generateEmbedding(text);
-          record.put(column.getName(), embedding);
-
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Generated embedding for column {} from {}: {} dimensions",
-                column.getName(), String.join(",", sourceColumns), embedding.length);
-          }
-        } catch (EmbeddingException e) {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Failed to generate embedding for column {}: {}",
-                column.getName(), e.getMessage());
-          }
-          record.put(column.getName(), null);
-        }
-      } else {
-        record.put(column.getName(), null);
-      }
-    }
-  }
-
-  /**
-   * Concatenates multiple fields into natural language format for row-level embeddings.
-   * Example: "Series Name: Unemployment Rate, Category: Labor Force, Value: 3.7 Percent"
-   */
-  private String concatenateFieldsNatural(Map<String, Object> record,
-      String[] fieldNames, PartitionedTableConfig.TableColumn embeddingColumn) {
-
-    String template = embeddingColumn.getEmbeddingTemplate();
-    String separator = embeddingColumn.getEmbeddingSeparator();
-    boolean excludeNull = embeddingColumn.getEmbeddingExcludeNull();
-
-    StringBuilder sb = new StringBuilder();
-
-    for (String fieldName : fieldNames) {
-      Object value = record.get(fieldName);
-
-      if (value == null && excludeNull) {
-        continue;
-      }
-
-      if (value != null) {
-        if (sb.length() > 0) {
-          sb.append(separator);
-        }
-
-        // Apply template format
-        if ("natural".equals(template)) {
-          // Natural language: "Series Name: Unemployment Rate"
-          String humanizedName = humanizeColumnName(fieldName);
-          String cleansedValue = cleanseValue(fieldName, value, record);
-          sb.append(humanizedName).append(": ").append(cleansedValue);
-        } else {
-          // Simple format: just the value
-          sb.append(cleanseValue(fieldName, value, record));
-        }
-      }
-    }
-
-    return sb.toString();
-  }
-
-  /**
-   * Humanizes column names for natural language format.
-   * Example: series_name -> Series Name, seasonal_adjustment -> Seasonally Adjusted
-   */
-  private String humanizeColumnName(String columnName) {
-    return Arrays.stream(columnName.split("_"))
-        .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1))
-        .collect(Collectors.joining(" "));
-  }
-
-  /**
-   * Cleanses values for embedding text (handles numbers, dates, booleans).
-   */
-  private String cleanseValue(String columnName, Object value, Map<String, Object> record) {
-    if (value == null) {
-      return "";
-    }
-
-    // Booleans: Yes/No instead of true/false
-    if (value instanceof Boolean) {
-      return ((Boolean) value) ? "Yes" : "No";
-    }
-
-    // Numbers with units: look for adjacent unit column
-    if (value instanceof Number) {
-      String unitColumn = findUnitColumn(columnName, record);
-      if (unitColumn != null) {
-        Object unit = record.get(unitColumn);
-        if (unit != null) {
-          return value + " " + unit;
-        }
-      }
-      return value.toString();
-    }
-
-    // Dates: natural format for monthly/yearly, ISO for daily
-    if (columnName.toLowerCase().contains("date") && value instanceof String) {
-      return formatDateNaturally((String) value);
-    }
-
-    return value.toString();
-  }
-
-  /**
-   * Find associated unit column for a value column.
-   * Example: "value" -> "units", "amount" -> "units"
-   */
-  private String findUnitColumn(String columnName, Map<String, Object> record) {
-    // Common patterns: value/units, amount/currency, etc.
-    String[] unitColumnNames = {"units", "unit", "currency", "denomination"};
-
-    for (String unitCol : unitColumnNames) {
-      if (record.containsKey(unitCol)) {
-        return unitCol;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Format dates naturally for better semantic matching.
-   * 2023-01-01 -> January 2023 (for monthly data)
-   * 2023-01-15 -> 2023-01-15 (for daily data - keep ISO format)
-   */
-  private String formatDateNaturally(String dateStr) {
-    // Simple heuristic: if date is first of month, assume monthly aggregation
-    if (dateStr.endsWith("-01")) {
-      try {
-        String[] parts = dateStr.split("-");
-        if (parts.length == 3) {
-          int month = Integer.parseInt(parts[1]);
-          String[] monthNames = {"January", "February", "March", "April", "May", "June",
-              "July", "August", "September", "October", "November", "December"};
-          return monthNames[month - 1] + " " + parts[0];
-        }
-      } catch (Exception e) {
-        // Fall through to return original
-      }
-    }
-    return dateStr; // Keep ISO format for daily data
   }
 
   /**
