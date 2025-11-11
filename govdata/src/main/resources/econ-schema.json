@@ -1470,7 +1470,8 @@
         "nipaTablesList": [],
         "response": {
           "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
+          "dataPath": "BEAAPI.Results.Data",
+          "errorPath": "BEAAPI.Results.Error"
         },
         "rateLimit": {
           "minIntervalMs": 500,
@@ -1691,7 +1692,8 @@
         },
         "response": {
           "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
+          "dataPath": "BEAAPI.Results.Data",
+          "errorPath": "BEAAPI.Results.Error"
         },
         "rateLimit": {
           "minIntervalMs": 500,
@@ -1840,7 +1842,8 @@
         ],
         "response": {
           "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
+          "dataPath": "BEAAPI.Results.Data",
+          "errorPath": "BEAAPI.Results.Error"
         },
         "rateLimit": {
           "minIntervalMs": 500,
@@ -2079,7 +2082,8 @@
         ],
         "response": {
           "format": "json",
-          "dataPath": "BEAAPI.Results.Data"
+          "dataPath": "BEAAPI.Results.Data",
+          "errorPath": "BEAAPI.Results.Error"
         },
         "rateLimit": {
           "minIntervalMs": 500,
