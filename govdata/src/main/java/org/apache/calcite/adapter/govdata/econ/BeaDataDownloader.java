@@ -414,8 +414,47 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Determines if a BEA Regional table is valid for a given year based on industry
+   * classification system.
+   *
+   * <p>BEA transitioned from SIC (Standard Industrial Classification) to NAICS
+   * (North American Industry Classification System) in 2001:
+   * <ul>
+   *   <li>SIC tables (suffix "S"): Valid 1969-2000</li>
+   *   <li>NAICS tables (suffix "N"): Valid 2001-forward</li>
+   *   <li>Historical tables (suffix "H"): Valid across transition (varies by table)</li>
+   *   <li>Other tables: No year restrictions</li>
+   * </ul>
+   *
+   * @param tableName BEA Regional table name (e.g., "SAINC7S", "SAINC7N")
+   * @param year Year to check
+   * @return true if table has data for the specified year, false otherwise
+   */
+  private boolean isTableValidForYear(String tableName, int year) {
+    if (tableName == null || tableName.isEmpty()) {
+      return false;
+    }
+
+    // SIC-based tables (suffix "S"): only valid through 2000
+    if (tableName.endsWith("S")) {
+      return year <= 2000;
+    }
+
+    // NAICS-based tables (suffix "N"): only valid from 2001 onward
+    if (tableName.endsWith("N")) {
+      return year >= 2001;
+    }
+
+    // Historical tables (suffix "H"): typically valid across entire range
+    // Other tables without classification suffix: no restrictions
+    return true;
+  }
+
+  /**
    * Downloads regional income data using metadata-driven pattern.
    * Loads valid LineCodes from the reference_regional_linecodes catalog.
+   * Automatically filters tables by valid year ranges based on industry classification
+   * (SIC vs NAICS).
    *
    * @param startYear     First year to download
    * @param endYear       Last year to download
@@ -442,55 +481,77 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
 
     // Build flat list of all (tablename, line_code, geo_fips) combinations
-    // Filter GeoFips based on table type to avoid invalid API parameter combinations
+    // Filter GeoFips based on table type and years based on industry classification
+    // to avoid invalid API parameter combinations
     List<String> combos = new ArrayList<>();
-    int skippedCombinations = 0;
-    for (String tablename : tablenames.keySet()) {
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
+    int skippedGeoFipsCombinations = 0;
+    int skippedYearCombinations = 0;
+    for (String tableNameKey : tablenames.keySet()) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
+        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tableNameKey);
         continue;
       }
 
       // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
-      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tablename);
+      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
 
       for (String lineCode : lineCodesForTable) {
         for (String geoFipsCode : validGeoFipsForTable) {
-          combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
+          combos.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
         }
       }
 
-      // Log how many invalid combinations we avoided
+      // Log how many invalid geo combinations we avoided
       int totalLineCodes = lineCodesForTable.size();
       Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
       int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
-      skippedCombinations += totalLineCodes * invalidGeoCount;
+      skippedGeoFipsCombinations += totalLineCodes * invalidGeoCount;
+
+      // Count how many year combinations we'll skip based on industry classification
+      for (int year = startYear; year <= endYear; year++) {
+        if (!isTableValidForYear(tableNameKey, year)) {
+          skippedYearCombinations += lineCodesForTable.size() * validGeoFipsForTable.size();
+        }
+      }
     }
 
-    if (skippedCombinations > 0) {
+    if (skippedGeoFipsCombinations > 0) {
       LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
-          skippedCombinations);
+          skippedGeoFipsCombinations);
+    }
+    if (skippedYearCombinations > 0) {
+      LOGGER.info("Filtered out {} invalid table-year combinations based on SIC/NAICS classification " +
+          "(SIC tables: 1969-2000, NAICS tables: 2001-forward)", skippedYearCombinations);
     }
 
-    LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo-year combinations)",
-        startYear, endYear, combos.size() * (endYear - startYear + 1));
+    LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo combinations, " +
+        "{} valid table-year combinations)",
+        startYear, endYear, combos.size(),
+        combos.size() * (endYear - startYear + 1) - skippedYearCombinations);
 
     // Create dimensions for iteration
     List<IterationDimension> dimensions = new ArrayList<>();
     dimensions.add(new IterationDimension("combo", combos));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework
+    // Execute using generic framework with year filtering
     iterateTableOperations(
         tableName,
         dimensions,
         (year, vars) -> {
           // Parse combo back into separate variables
           String[] parts = vars.get("combo").split(":", 3);
+          String tableNameKey = parts[0];
+
+          // Skip this combination if table is not valid for this year
+          if (!isTableValidForYear(tableNameKey, year)) {
+            return true;  // Return true to skip (treat as already cached)
+          }
+
           Map<String, String> fullVars = new HashMap<>();
           fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", parts[0]);
+          fullVars.put("tablename", tableNameKey);
           fullVars.put("line_code", parts[1]);
           fullVars.put("geo_fips_set", parts[2]);
           return isCachedOrExists(tableName, year, fullVars);
@@ -498,9 +559,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         (year, vars) -> {
           // Parse combo and execute download
           String[] parts = vars.get("combo").split(":", 3);
+          String tableNameKey = parts[0];
+
+          // Skip this combination if table is not valid for this year
+          if (!isTableValidForYear(tableNameKey, year)) {
+            return;  // Skip download
+          }
+
           Map<String, String> fullVars = new HashMap<>();
           fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", parts[0]);
+          fullVars.put("tablename", tableNameKey);
           fullVars.put("line_code", parts[1]);
           fullVars.put("geo_fips_set", parts[2]);
 
@@ -516,6 +584,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts regional income data using metadata-driven pattern.
    * Loads valid LineCodes from the reference_regional_linecodes catalog.
+   * Automatically filters tables by valid year ranges based on industry classification
+   * (SIC vs NAICS).
    */
   public void convertRegionalIncomeMetadata(int startYear, int endYear) {
     String tableName = "regional_income";
@@ -540,55 +610,77 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     // Build flat list of all (tablename, line_code, geo_fips_set) combinations
-    // Filter GeoFips based on table type to avoid invalid API parameter combinations
+    // Filter GeoFips based on table type and years based on industry classification
+    // to avoid invalid API parameter combinations
     List<String> combos = new ArrayList<>();
-    int skippedCombinations = 0;
-    for (String tablename : tablenames.keySet()) {
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tablename);
+    int skippedGeoFipsCombinations = 0;
+    int skippedYearCombinations = 0;
+    for (String tableNameKey : tablenames.keySet()) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tablename);
+        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tableNameKey);
         continue;
       }
 
       // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
-      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tablename);
+      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
 
       for (String lineCode : lineCodesForTable) {
         for (String geoFipsCode : validGeoFipsForTable) {
-          combos.add(tablename + ":" + lineCode + ":" + geoFipsCode);
+          combos.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
         }
       }
 
-      // Log how many invalid combinations we avoided
+      // Log how many invalid geo combinations we avoided
       int totalLineCodes = lineCodesForTable.size();
       Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
       int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
-      skippedCombinations += totalLineCodes * invalidGeoCount;
+      skippedGeoFipsCombinations += totalLineCodes * invalidGeoCount;
+
+      // Count how many year combinations we'll skip based on industry classification
+      for (int year = startYear; year <= endYear; year++) {
+        if (!isTableValidForYear(tableNameKey, year)) {
+          skippedYearCombinations += lineCodesForTable.size() * validGeoFipsForTable.size();
+        }
+      }
     }
 
-    if (skippedCombinations > 0) {
+    if (skippedGeoFipsCombinations > 0) {
       LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
-          skippedCombinations);
+          skippedGeoFipsCombinations);
+    }
+    if (skippedYearCombinations > 0) {
+      LOGGER.info("Filtered out {} invalid table-year combinations based on SIC/NAICS classification " +
+          "(SIC tables: 1969-2000, NAICS tables: 2001-forward)", skippedYearCombinations);
     }
 
-    LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo-year combinations)",
-        startYear, endYear, combos.size() * (endYear - startYear + 1));
+    LOGGER.info("Converting regional income data to Parquet for years {}-{} ({} table-linecode-geo combinations, " +
+        "{} valid table-year combinations)",
+        startYear, endYear, combos.size(),
+        combos.size() * (endYear - startYear + 1) - skippedYearCombinations);
 
     // Create dimensions for iteration
     List<IterationDimension> dimensions = new ArrayList<>();
     dimensions.add(new IterationDimension("combo", combos));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework
+    // Execute using generic framework with year filtering
     iterateTableOperations(
         tableName,
         dimensions,
         (year, vars) -> {
           // Parse combo back into separate variables
           String[] parts = vars.get("combo").split(":", 3);
+          String tableNameKey = parts[0];
+
+          // Skip this combination if table is not valid for this year
+          if (!isTableValidForYear(tableNameKey, year)) {
+            return true;  // Return true to skip (treat as already converted)
+          }
+
           Map<String, String> fullVars = new HashMap<>();
           fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", parts[0]);
+          fullVars.put("tablename", tableNameKey);
           fullVars.put("line_code", parts[1]);
           fullVars.put("geo_fips_set", parts[2]);
 
@@ -603,9 +695,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         (year, vars) -> {
           // Parse combo and execute conversion
           String[] parts = vars.get("combo").split(":", 3);
+          String tableNameKey = parts[0];
+
+          // Skip this combination if table is not valid for this year
+          if (!isTableValidForYear(tableNameKey, year)) {
+            return;  // Skip conversion
+          }
+
           Map<String, String> fullVars = new HashMap<>();
           fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", parts[0]);
+          fullVars.put("tablename", tableNameKey);
           fullVars.put("line_code", parts[1]);
           fullVars.put("geo_fips_set", parts[2]);
 
