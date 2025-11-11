@@ -1195,6 +1195,30 @@ public abstract class AbstractGovDataDownloader {
       // Parse response
       JsonNode rootNode = MAPPER.readTree(response.body());
 
+      // Check for error response (HTTP 200 with error content) before extracting data
+      if (downloadConfig.containsKey("response")) {
+        Object responseObj = downloadConfig.get("response");
+        Map<String, Object> responseConfig;
+        if (responseObj instanceof JsonNode) {
+          responseConfig = MAPPER.convertValue((JsonNode) responseObj, Map.class);
+        } else {
+          responseConfig = (Map<String, Object>) responseObj;
+        }
+
+        // Check for errorPath first
+        if (responseConfig.containsKey("errorPath")) {
+          String errorPath = responseConfig.get("errorPath").toString();
+          JsonNode errorNode = navigateJsonPath(rootNode, errorPath);
+
+          if (!errorNode.isMissingNode()) {
+            // API returned an error in the response body (even though HTTP status was 200)
+            String errorMsg = errorNode.toString();
+            LOGGER.error("API returned error response (HTTP 200 with error content): {}", errorMsg);
+            throw new IOException("API returned error (HTTP 200 with error content): " + errorMsg);
+          }
+        }
+      }
+
       // Extract data from response using dataPath if specified
       JsonNode dataNode = rootNode;
       if (downloadConfig.containsKey("response")) {
@@ -1249,6 +1273,25 @@ public abstract class AbstractGovDataDownloader {
     }
 
     return allData;
+  }
+
+  /**
+   * Navigates a JSON path string (e.g., "BEAAPI.Results.Error") through a JSON node tree.
+   * Returns the node at the specified path, or a MissingNode if any segment is not found.
+   *
+   * @param root The root JSON node to navigate from
+   * @param path The dot-separated path string (e.g., "BEAAPI.Results.Data")
+   * @return The JSON node at the specified path, or MissingNode if not found
+   */
+  private JsonNode navigateJsonPath(JsonNode root, String path) {
+    JsonNode current = root;
+    for (String segment : path.split("\\.")) {
+      current = current.path(segment);
+      if (current.isMissingNode()) {
+        return current;
+      }
+    }
+    return current;
   }
 
   /**
@@ -1403,8 +1446,8 @@ public abstract class AbstractGovDataDownloader {
 
       String columnType = columnTypeMap.get(fieldName);
       if (columnType != null) {
-        Object convertedValue = convertJsonValueToType(
-            field.getValue(), fieldName, columnType, missingValueIndicator);
+        Object convertedValue =
+            convertJsonValueToType(field.getValue(), fieldName, columnType, missingValueIndicator);
         typedRecord.put(fieldName, convertedValue);
       } else {
         // Field not in schema - use Jackson's default conversion but it will be DROPPED later
@@ -1882,10 +1925,47 @@ public abstract class AbstractGovDataDownloader {
 
     } catch (java.sql.SQLException e) {
       // Wrap SQLException as IOException for consistent error handling
-      String errorMsg = String.format(
-          "DuckDB conversion failed for table '%s': %s",
+      String errorMsg =
+          String.format("DuckDB conversion failed for table '%s': %s",
           tableName,
           e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Executes arbitrary DuckDB SQL statement with extensions loaded.
+   *
+   * <p>This is a generic helper for executing DuckDB operations including:
+   * <ul>
+   *   <li>CSV→Parquet conversions via COPY (SELECT ... FROM read_csv()) TO ... </li>
+   *   <li>Custom data transformations with SQL expressions</li>
+   *   <li>Multi-source JOINs with reference data</li>
+   * </ul>
+   *
+   * @param sql DuckDB SQL statement to execute
+   * @param operationDescription Brief description for logging (e.g., "CSV to Parquet conversion")
+   * @throws IOException if SQL execution fails
+   */
+  protected void executeDuckDBSql(String sql, String operationDescription) throws IOException {
+    LOGGER.debug("{} - DuckDB SQL:\n{}", operationDescription, sql);
+
+    try (Connection conn = getDuckDBConnection();
+         Statement stmt = conn.createStatement()) {
+
+      // Execute the SQL statement
+      stmt.execute(sql);
+
+      LOGGER.info("{} completed successfully", operationDescription);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg =
+          String.format("%s failed: %s (SQL State: %s, Error Code: %d)",
+          operationDescription,
+          e.getMessage(),
+          e.getSQLState(),
+          e.getErrorCode());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -2244,8 +2324,8 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.info("Successfully consolidated trend: {}", trend.trendName);
 
     } catch (java.sql.SQLException e) {
-      String errorMsg = String.format(
-          "DuckDB consolidation failed for trend '%s': %s",
+      String errorMsg =
+          String.format("DuckDB consolidation failed for trend '%s': %s",
           trend.trendName,
           e.getMessage());
       LOGGER.error(errorMsg, e);
@@ -2300,9 +2380,12 @@ public abstract class AbstractGovDataDownloader {
    * @return SQL COPY statement
    */
   private String buildTrendConsolidationSql(String sourceGlob, String targetPath) {
-    return "COPY (\n" +
-        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ")\n" +
-        "  ORDER BY year\n" +
+    return "COPY (\n"
+  +
+        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ")\n"
+  +
+        "  ORDER BY year\n"
+  +
         ") TO " + quoteLiteral(targetPath) + " (FORMAT PARQUET);";
   }
 
