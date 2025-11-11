@@ -1082,6 +1082,23 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
+    // Check if cached JSON already exists (skip re-downloading reference data)
+    String pattern = (String) metadata.get("pattern");
+    String jsonPath = resolveJsonPath(pattern, variables);
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+
+    if (cacheStorageProvider.exists(fullJsonPath)) {
+      try {
+        StorageProvider.FileMetadata fileMetadata = cacheStorageProvider.getMetadata(fullJsonPath);
+        if (fileMetadata.getSize() > 0) {
+          LOGGER.info("Cached JSON already exists, skipping download: {}", jsonPath);
+          return jsonPath;
+        }
+      } catch (IOException e) {
+        LOGGER.warn("Could not check existing cache file: {}, will re-download", fullJsonPath);
+      }
+    }
+
     // Aggregate all downloaded data
     List<JsonNode> allData = new ArrayList<>();
 
@@ -1106,9 +1123,7 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.info("Downloaded {} total records for {}", allData.size(), tableName);
 
     // Write aggregated data to JSON cache file
-    String pattern = (String) metadata.get("pattern");
-    String jsonPath = resolveJsonPath(pattern, variables);
-    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+    // (pattern, jsonPath, fullJsonPath already resolved earlier for cache check)
 
     // Ensure parent directory exists
     ensureParentDirectory(fullJsonPath);
