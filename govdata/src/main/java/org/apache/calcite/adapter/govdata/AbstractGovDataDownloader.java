@@ -31,6 +31,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -93,7 +94,7 @@ public abstract class AbstractGovDataDownloader {
 
   /**
    * Represents a single dimension of iteration with variable name and values.
-   * Used for multi-dimensional iteration over download/conversion operations.
+   * Used for multidimensional iteration over download/conversion operations.
    */
   public static class IterationDimension {
     final String variableName;
@@ -383,28 +384,6 @@ public abstract class AbstractGovDataDownloader {
     throw new IOException("Failed after " + maxRetries + " attempts");
   }
 
-  /** Convenience: download a URL to bytes with default headers and retry. */
-  protected byte[] downloadFile(String url) throws IOException {
-    try {
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(url))
-          .timeout(Duration.ofSeconds(60))
-          .header("User-Agent", getDefaultUserAgent())
-          .header("Accept", "*/*")
-          .GET()
-          .build();
-      HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-      int code = response.statusCode();
-      if (code >= 200 && code < 300) {
-        return response.body();
-      }
-      throw new IOException("HTTP " + code + " for " + url);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while downloading: " + url, e);
-    }
-  }
-
   // ===== Metadata-Driven Path Resolution =====
 
   protected Map<String, Object> loadTableMetadata() {
@@ -540,9 +519,7 @@ public abstract class AbstractGovDataDownloader {
           JsonNode objectNode = download.get(objectKey);
           if (objectNode != null && objectNode.isObject()) {
             Map<String, Object> result = new LinkedHashMap<>();
-            objectNode.fields().forEachRemaining(entry -> {
-              result.put(entry.getKey(), entry.getValue());
-            });
+            objectNode.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue()));
             LOGGER.debug("Extracted {} entries from {} for table {}", result.size(), objectKey,
                 tableName);
             return result;
@@ -814,7 +791,7 @@ public abstract class AbstractGovDataDownloader {
       Map<String, Object> paramConfig = (Map<String, Object>) paramEntry.getValue();
 
       String type = paramConfig.get("type").toString();
-      String paramValue = null;
+      String paramValue;
 
       switch (type) {
         case "constant":
@@ -993,12 +970,7 @@ public abstract class AbstractGovDataDownloader {
    * Simple implementation for common characters (avoids heavy dependency).
    */
   private String urlEncode(String value) {
-    try {
-      return java.net.URLEncoder.encode(value, "UTF-8");
-    } catch (java.io.UnsupportedEncodingException e) {
-      // UTF-8 is always supported
-      throw new RuntimeException(e);
-    }
+    return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 
   /**
@@ -1043,7 +1015,7 @@ public abstract class AbstractGovDataDownloader {
     Object downloadObj = metadata.get("download");
     Map<String, Object> downloadConfig;
     if (downloadObj instanceof JsonNode) {
-      downloadConfig = MAPPER.convertValue((JsonNode) downloadObj, Map.class);
+      downloadConfig = MAPPER.convertValue(downloadObj, Map.class);
     } else {
       downloadConfig = (Map<String, Object>) downloadObj;
     }
@@ -1071,7 +1043,7 @@ public abstract class AbstractGovDataDownloader {
       Object paginationObj = downloadConfig.get("pagination");
       Map<String, Object> paginationConfig;
       if (paginationObj instanceof JsonNode) {
-        paginationConfig = MAPPER.convertValue((JsonNode) paginationObj, Map.class);
+        paginationConfig = MAPPER.convertValue(paginationObj, Map.class);
       } else {
         paginationConfig = (Map<String, Object>) paginationObj;
       }
@@ -1215,7 +1187,7 @@ public abstract class AbstractGovDataDownloader {
         Object responseObj = downloadConfig.get("response");
         Map<String, Object> responseConfig;
         if (responseObj instanceof JsonNode) {
-          responseConfig = MAPPER.convertValue((JsonNode) responseObj, Map.class);
+          responseConfig = MAPPER.convertValue(responseObj, Map.class);
         } else {
           responseConfig = (Map<String, Object>) responseObj;
         }
@@ -1240,14 +1212,13 @@ public abstract class AbstractGovDataDownloader {
         Object responseObj = downloadConfig.get("response");
         Map<String, Object> responseConfig;
         if (responseObj instanceof JsonNode) {
-          responseConfig = MAPPER.convertValue((JsonNode) responseObj, Map.class);
+          responseConfig = MAPPER.convertValue(responseObj, Map.class);
         } else {
           responseConfig = (Map<String, Object>) responseObj;
         }
         if (responseConfig.containsKey("dataPath")) {
           String dataPath = responseConfig.get("dataPath").toString();
           // Navigate nested path (e.g., "BEAAPI.Results.ParamValue")
-          dataNode = rootNode;
           for (String pathSegment : dataPath.split("\\.")) {
             dataNode = dataNode.path(pathSegment);
             if (dataNode.isMissingNode()) {
@@ -1270,7 +1241,6 @@ public abstract class AbstractGovDataDownloader {
         // Check if we need to paginate
         if (paginationEnabled && recordCount >= maxPerRequest) {
           offset += maxPerRequest;
-          hasMore = true;
         } else {
           hasMore = false;
         }
@@ -1313,7 +1283,7 @@ public abstract class AbstractGovDataDownloader {
    * Ensures parent directory exists for the given file path.
    * Uses storage provider to create directories if needed.
    */
-  private void ensureParentDirectory(String fullPath) throws IOException {
+  private void ensureParentDirectory(String fullPath) {
     // Extract parent directory from path
     int lastSlash = fullPath.lastIndexOf('/');
     if (lastSlash > 0) {
@@ -2136,9 +2106,8 @@ public abstract class AbstractGovDataDownloader {
    *   type=employment_statistics/frequency=A/employment_statistics.parquet
    * </pre>
    *
-   * @throws IOException if consolidation fails
    */
-  public void consolidateAll() throws IOException {
+  public void consolidateAll() {
     LOGGER.info("Starting trend consolidation for all tables");
 
     List<TrendPattern> trendPatterns = getTrendPatterns();
@@ -2237,7 +2206,7 @@ public abstract class AbstractGovDataDownloader {
     // Trend:  type=employment_statistics/frequency={frequency}/employment_statistics.parquet
 
     // Find variables in source pattern (e.g., {frequency}, {year})
-    java.util.regex.Pattern varPattern = java.util.regex.Pattern.compile("\\{(\\w+)\\}");
+    java.util.regex.Pattern varPattern = java.util.regex.Pattern.compile("\\{(\\w+)}");
     java.util.regex.Matcher sourceMatcher = varPattern.matcher(trend.sourcePattern);
 
     List<String> sourceVars = new ArrayList<>();
@@ -2367,7 +2336,7 @@ public abstract class AbstractGovDataDownloader {
     result = result.replace("{year}", "*");
 
     // Also handle year= patterns
-    result = result.replaceAll("year=\\{year\\}", "year=*");
+    result = result.replaceAll("year=\\{year}", "year=*");
 
     return result;
   }
