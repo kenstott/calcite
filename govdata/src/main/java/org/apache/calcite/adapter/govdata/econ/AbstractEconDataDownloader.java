@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -75,50 +74,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 
   /**
-   * Data frequency for partitioning strategy (Phase 4).
-   * Enables partition pruning for time-range queries.
-   */
-  public enum DataFrequency {
-    DAILY("daily", "D"),
-    MONTHLY("monthly", "M"),
-    QUARTERLY("quarterly", "Q"),
-    ANNUAL("annual", "A"),
-    VARIOUS("various", "V");
-
-    private final String partitionName;
-    private final String shortCode;
-
-    DataFrequency(String partitionName, String shortCode) {
-      this.partitionName = partitionName;
-      this.shortCode = shortCode;
-    }
-
-    public String getPartitionName() {
-      return partitionName;
-    }
-
-    public String getShortCode() {
-      return shortCode;
-    }
-
-    /**
-     * Parse frequency from short code (D, M, Q, A).
-     *
-     * @param code Short frequency code
-     * @return Corresponding DataFrequency
-     * @throws IllegalArgumentException if code is unknown
-     */
-    public static DataFrequency fromShortCode(String code) {
-      for (DataFrequency freq : values()) {
-        if (freq.shortCode.equals(code)) {
-          return freq;
-        }
-      }
-      throw new IllegalArgumentException("Unknown frequency code: " + code);
-    }
-  }
-
-  /**
    * Constructs base downloader with required infrastructure.
    *
    * @param cacheDirectory Local directory for caching raw JSON data
@@ -140,7 +95,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    */
-  protected AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
+  public AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory,
+      StorageProvider cacheStorageProvider,
+      StorageProvider storageProvider,
+      CacheManifest sharedManifest) {
     super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ", sharedManifest);
   }
 
@@ -198,170 +156,13 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
     // Save raw JSON data via cache storage provider
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
     // Mark as cached in manifest (operating metadata stays in .aperio via File API)
     cacheManifest.markCached(dataType, year, params, relativePath, jsonContent.length());
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
-  }
-
-  /**
-   * Build partition path with frequency dimension (Phase 4).
-   * Format: source=econ/type=X/frequency=Y/year=YYYY/
-   *
-   * @param dataType Data type (e.g., "state_wages", "treasury_yields")
-   * @param frequency Data frequency
-   * @param year Year
-   * @return Partition path
-   */
-  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year) {
-    return buildPartitionPath(dataType, frequency, year, null);
-  }
-
-  protected String buildPartitionPath(String dataType, int year) {
-    return buildPartitionPath(dataType, DataFrequency.VARIOUS, year, null);
-  }
-
-  /**
-   * Build partition path with frequency and optional month (for daily data).
-   * Format: source=econ/type=X/frequency=Y/year=YYYY/month=MM/
-   *
-   * @param dataType Data type (e.g., "treasury_yields")
-   * @param frequency Data frequency
-   * @param year Year
-   * @param month Optional month (1-12) for daily data
-   * @return Partition path
-   */
-  protected String buildPartitionPath(String dataType, DataFrequency frequency, int year, Integer month) {
-    StringBuilder path = new StringBuilder();
-    // Don't prepend source=econ - baseDirectory in EconSchemaFactory already includes it
-    path.append("type=").append(dataType);
-    if (frequency != DataFrequency.VARIOUS) {
-      path.append("/frequency=").append(frequency.getPartitionName());
-    }
-    path.append("/year=").append(year);
-
-    if (month != null && frequency == DataFrequency.DAILY) {
-      path.append("/month=").append(String.format("%02d", month));
-    }
-
-    return path.toString();
-  }
-
-
-  /**
-   * Extracts all Hive-style partition parameters from path.
-   * For example, from "type=custom/year=2020/maturity=10Y/file.parquet"
-   * extracts {"maturity": "10Y"} (year is handled separately).
-   *
-   * @param path File path with Hive partitions
-   * @return Map of partition key-value pairs (excluding year, type, and source)
-   */
-  protected final Map<String, String> extractPartitionParams(String path) {
-    Map<String, String> params = new java.util.HashMap<>();
-
-    // Match all key=value patterns in the path
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([^/=]+)=([^/]+)");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-
-    while (matcher.find()) {
-      String key = matcher.group(1);
-      String value = matcher.group(2);
-
-      // Skip organizational partitions: year (handled separately), type (added by caller), source (organizational only)
-      if (!"year".equals(key) && !"type".equals(key) && !"source".equals(key)) {
-        params.put(key, value);
-      }
-    }
-
-    return params;
-  }
-
-  /**
-   * Extracts year from Hive-style partitioned path (e.g., "year=2020").
-   *
-   * @param path File path containing year partition
-   * @return Extracted year
-   */
-  protected final int extractYearFromPath(String path) {
-    // Look for year=YYYY pattern in path
-    int yearIndex = path.indexOf("year=");
-    if (yearIndex != -1) {
-      String yearStr = path.substring(yearIndex + 5);
-      // Extract 4-digit year
-      int endIndex = yearStr.indexOf('/');
-      if (endIndex != -1) {
-        yearStr = yearStr.substring(0, endIndex);
-      } else {
-        // Check for file extension
-        endIndex = yearStr.indexOf('.');
-        if (endIndex != -1) {
-          yearStr = yearStr.substring(0, endIndex);
-        }
-      }
-      return Integer.parseInt(yearStr);
-    }
-    throw new IllegalArgumentException("Path does not contain year partition: " + path);
-  }
-
-  /**
-   * Enriches an Avro Schema with documentation from a PartitionedTableConfig.
-   * This method takes a base schema (with types defined) and adds .doc() annotations
-   * for each field that has a corresponding entry in the config's columnComments.
-   *
-   * <p>Implementation note: Avro Schema is immutable, so this method creates a new
-   * schema by manipulating the schema's JSON representation, then parsing it back.
-   *
-   * @param baseSchema The base Avro schema with field names and types defined
-   * @param config The partitioned table config containing columnComments
-   * @return A new Schema identical to baseSchema but with doc annotations from config
-   */
-  protected static org.apache.avro.Schema enrichSchemaWithComments(
-      org.apache.avro.Schema baseSchema,
-      org.apache.calcite.adapter.file.partition.PartitionedTableConfig config) {
-    // If no column comments, return original schema unchanged
-    if (config == null || config.getColumnComments() == null
-        || config.getColumnComments().isEmpty()) {
-      return baseSchema;
-    }
-
-    try {
-      // Convert schema to JSON for manipulation
-      com.fasterxml.jackson.databind.JsonNode schemaJson =
-          MAPPER.readTree(baseSchema.toString());
-
-      // Get column comments map
-      java.util.Map<String, String> columnComments = config.getColumnComments();
-
-      // Schema JSON is an object with a "fields" array
-      if (schemaJson.has("fields") && schemaJson.get("fields").isArray()) {
-        com.fasterxml.jackson.databind.node.ArrayNode fields =
-            (com.fasterxml.jackson.databind.node.ArrayNode) schemaJson.get("fields");
-
-        // Iterate through fields and add doc if available
-        for (com.fasterxml.jackson.databind.JsonNode field : fields) {
-          if (field.has("name")) {
-            String fieldName = field.get("name").asText();
-            String comment = columnComments.get(fieldName);
-
-            if (comment != null && !comment.isEmpty()) {
-              // Add doc field to this field object
-              ((com.fasterxml.jackson.databind.node.ObjectNode) field).put("doc", comment);
-            }
-          }
-        }
-      }
-
-      // Convert back to Schema
-      return new org.apache.avro.Schema.Parser().parse(schemaJson.toString());
-    } catch (Exception e) {
-      // If enrichment fails, log warning and return original schema
-      LOGGER.warn("Failed to enrich schema with comments from config for table {}: {}",
-          config.getName(), e.getMessage());
-      return baseSchema;
-    }
   }
 
   /**
@@ -378,10 +179,8 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    */
   protected static java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
-    try {
-      // Load econ-schema.json from resources
-      java.io.InputStream schemaStream =
-          AbstractEconDataDownloader.class.getResourceAsStream("/econ-schema.json");
+    try (java.io.InputStream schemaStream =
+        AbstractEconDataDownloader.class.getResourceAsStream("/econ-schema.json")) {
       if (schemaStream == null) {
         throw new IllegalArgumentException(
             "econ-schema.json not found in resources");
@@ -496,49 +295,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     return false;
   }
 
-  /**
-   * Filters a collection of items using include/exclude lists.
-   * Supports whitelist (include) or blacklist (exclude) patterns, but not both.
-   *
-   * @param allItems Complete set of all available items
-   * @param includeItems Whitelist - if not null, only these items are included (null means no whitelist)
-   * @param excludeItems Blacklist - if not null, all items except these are included (null means no blacklist)
-   * @param itemTypeName Human-readable name for logging (e.g., "tables", "series", "datasets")
-   * @param downloaderName Downloader name for logging (e.g., "BLS", "FRED")
-   * @return Filtered set of items, or null if no filtering requested
-   * @throws IllegalArgumentException if both includeItems and excludeItems are non-null
-   */
-  protected java.util.Set<String> applyIncludeExcludeFilter(
-      java.util.Set<String> allItems,
-      java.util.List<String> includeItems,
-      java.util.List<String> excludeItems,
-      String itemTypeName,
-      String downloaderName) {
-
-    // Validate mutual exclusivity
-    if (includeItems != null && excludeItems != null) {
-      throw new IllegalArgumentException(
-          String.format("Cannot specify both 'include%s' and 'exclude%s' for %s. " +
-              "Use include for whitelist or exclude for blacklist, but not both.",
-              itemTypeName, itemTypeName, downloaderName));
-    }
-
-    if (includeItems != null) {
-      java.util.Set<String> filtered = new java.util.HashSet<>(includeItems);
-      LOGGER.info("{} filter: including {} {}: {}", downloaderName, filtered.size(), itemTypeName, includeItems);
-      return filtered;
-    }
-
-    if (excludeItems != null) {
-      java.util.Set<String> filtered = new java.util.HashSet<>(allItems);
-      filtered.removeAll(excludeItems);
-      LOGGER.info("{} filter: excluding {} {}, downloading {} {}",
-          downloaderName, excludeItems.size(), itemTypeName, filtered.size(), itemTypeName);
-      return filtered;
-    }
-
-    return null; // No filtering
-  }
 
   /**
    * Extracts an iteration list from econ-schema.json metadata for a given table.
