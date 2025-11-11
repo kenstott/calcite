@@ -42,6 +42,8 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import com.google.common.collect.ImmutableList;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -450,10 +452,22 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   }
 
   @Override public Statistic getStatistic() {
-    LOGGER.debug("getStatistic called for table '{}': constraintConfig={}", tableName,
-        constraintConfig != null ? constraintConfig.keySet() : "null");
+    LOGGER.debug("getStatistic called for table '{}': constraintConfig={}, fileCount={}",
+        tableName, constraintConfig != null ? constraintConfig.keySet() : "null",
+        filePaths != null ? filePaths.size() : 0);
+
+    // Calculate row count estimate based on partition count
+    // More partitions → higher cost due to S3 list API overhead
+    // This helps optimizer prefer trend tables (fewer partitions) for full table scans
+    double rowCountEstimate = estimateRowCount();
+
     if (constraintConfig == null || constraintConfig.isEmpty()) {
-      // No constraints configured, return default
+      // No constraints, but still report row count for cost calculation
+      if (rowCountEstimate > 0) {
+        LOGGER.debug("Table '{}': {} partitions, estimated {} rows", tableName,
+            filePaths != null ? filePaths.size() : 0, rowCountEstimate);
+        return Statistics.of(rowCountEstimate, ImmutableList.of());
+      }
       return Statistics.UNKNOWN;
     }
 
@@ -475,8 +489,43 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       LOGGER.warn("No column names available for table '{}' - constraints won't work", tableName);
     }
 
-    // Create statistic with constraints, passing schema and table names
-    return TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
+    // Create statistic with constraints AND row count, passing schema and table names
+    Statistic constraintStatistic = TableConstraints.fromConfig(tableConfig, columnNames,
+        null, schemaName, tableName);
+
+    // Enhance with row count if we have an estimate
+    if (rowCountEstimate > 0) {
+      return Statistics.of(rowCountEstimate, constraintStatistic.getKeys());
+    }
+
+    return constraintStatistic;
+  }
+
+  /**
+   * Estimate row count based on partition count and typical partition size.
+   * More partitions implies more S3 API overhead, so we inflate the cost
+   * to encourage optimizer to prefer trend tables with fewer partitions.
+   */
+  private double estimateRowCount() {
+    if (filePaths == null || filePaths.isEmpty()) {
+      return 0;
+    }
+
+    int partitionCount = filePaths.size();
+
+    // Estimate based on partition count:
+    // - Each partition typically has 1000-10000 rows
+    // - Add S3 API overhead factor (100 rows per partition for list cost)
+    // This makes tables with many partitions appear more expensive
+    double rowsPerPartition = 5000;  // Conservative estimate
+    double s3ApiOverhead = 100;      // Cost of listing each partition
+
+    double estimate = (partitionCount * rowsPerPartition) + (partitionCount * s3ApiOverhead);
+
+    LOGGER.debug("Table '{}' row count estimate: {} partitions × {} rows + {} API cost = {}",
+        tableName, partitionCount, rowsPerPartition, s3ApiOverhead, estimate);
+
+    return estimate;
   }
 
   @Override public RelDataType getRowType(@NonNull RelDataTypeFactory typeFactory) {

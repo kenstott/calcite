@@ -553,11 +553,110 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
+   * Validates that a trend pattern is properly derived from a detail pattern.
+   *
+   * <p>A valid trend pattern must:
+   * <ul>
+   *   <li>Have the same base structure as the detail pattern</li>
+   *   <li>Only differ by having fewer partition key segments (e.g., key=value/ removed)</li>
+   *   <li>Keep the same file name at the end</li>
+   * </ul>
+   *
+   * <p>Example valid trend pattern:
+   * <pre>
+   * Detail:  "type=employment/frequency={frequency}/year={year}/data.parquet"
+   * Trend:   "type=employment/frequency={frequency}/data.parquet"
+   * </pre>
+   *
+   * @param detailPattern The detail table pattern (with all partition keys)
+   * @param trendPattern The trend table pattern (with subset of partition keys)
+   * @param tableName The table name (for logging)
+   * @return true if trend pattern is valid, false otherwise
+   */
+  default boolean validateTrendPattern(String detailPattern, String trendPattern,
+      String tableName) {
+    // Split patterns by '/' to analyze path segments
+    String[] detailSegments = detailPattern.split("/");
+    String[] trendSegments = trendPattern.split("/");
+
+    // Trend pattern must have fewer or equal segments
+    if (trendSegments.length > detailSegments.length) {
+      LOGGER.warn("Trend pattern for '{}' has more path segments than detail pattern",
+          tableName);
+      return false;
+    }
+
+    // Last segment (file name) must match exactly
+    String detailFileName = detailSegments[detailSegments.length - 1];
+    String trendFileName = trendSegments[trendSegments.length - 1];
+    if (!detailFileName.equals(trendFileName)) {
+      LOGGER.warn("Trend pattern for '{}' has different file name: '{}' vs '{}'",
+          tableName, trendFileName, detailFileName);
+      return false;
+    }
+
+    // Check that all trend segments exist in detail pattern in the same order
+    int detailIdx = 0;
+    for (int trendIdx = 0; trendIdx < trendSegments.length; trendIdx++) {
+      String trendSeg = trendSegments[trendIdx];
+      boolean found = false;
+
+      // Search for matching segment in remaining detail segments
+      while (detailIdx < detailSegments.length) {
+        String detailSeg = detailSegments[detailIdx];
+
+        // Extract partition key name (before '=') for comparison
+        String trendKey = extractPartitionKey(trendSeg);
+        String detailKey = extractPartitionKey(detailSeg);
+
+        if (trendKey != null && detailKey != null) {
+          // Both are partition segments - compare keys
+          if (trendKey.equals(detailKey)) {
+            found = true;
+            detailIdx++;
+            break;
+          }
+        } else if (trendKey == null && detailKey == null) {
+          // Both are non-partition segments - must match exactly
+          if (trendSeg.equals(detailSeg)) {
+            found = true;
+            detailIdx++;
+            break;
+          }
+        }
+        detailIdx++;
+      }
+
+      if (!found) {
+        LOGGER.warn("Trend pattern for '{}' contains segment '{}' not found in detail pattern",
+            tableName, trendSeg);
+        return false;
+      }
+    }
+
+    LOGGER.debug("Validated trend pattern for '{}': removed {} partition key(s)",
+        tableName, detailSegments.length - trendSegments.length);
+    return true;
+  }
+
+  /**
+   * Extracts partition key name from a path segment (e.g., "year={year}" → "year").
+   * Returns null if segment is not a partition pattern.
+   */
+  default String extractPartitionKey(String segment) {
+    if (segment.contains("=")) {
+      int equalsIdx = segment.indexOf('=');
+      return segment.substring(0, equalsIdx);
+    }
+    return null;
+  }
+
+  /**
    * Expands trend_patterns from table definitions into standalone table definitions.
    *
    * <p>For each table with a "trend_patterns" array, creates additional table definitions
    * for the consolidated trend tables. These trend tables consolidate year-partitioned data
-   * into single files for faster time-series queries.
+   * into single files for faster time-series queries and trend analysis across periods.
    *
    * <p>Example: employment_statistics with pattern
    * "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet"
@@ -579,6 +678,10 @@ public interface GovDataSubSchemaFactory {
         continue;
       }
 
+      // Get detail table pattern for validation
+      String detailPattern = (String) table.get("pattern");
+      String tableName = (String) table.get("name");
+
       // For each trend pattern, create a new table definition
       for (Map<String, Object> trendPattern : trendPatterns) {
         String trendName = (String) trendPattern.get("name");
@@ -586,7 +689,16 @@ public interface GovDataSubSchemaFactory {
 
         if (trendName == null || trendPatternStr == null) {
           LOGGER.warn("Skipping trend pattern with missing name or pattern in table '{}'",
-              table.get("name"));
+              tableName);
+          continue;
+        }
+
+        // Validate that trend pattern is derived from detail pattern
+        if (!validateTrendPattern(detailPattern, trendPatternStr, tableName)) {
+          LOGGER.error("Invalid trend pattern '{}' for table '{}': "
+              + "trend pattern must be detail pattern with partition keys removed. "
+              + "Detail: '{}', Trend: '{}'",
+              trendName, tableName, detailPattern, trendPatternStr);
           continue;
         }
 
@@ -594,6 +706,11 @@ public interface GovDataSubSchemaFactory {
         Map<String, Object> trendTable = new java.util.HashMap<>();
         trendTable.put("name", trendName);
         trendTable.put("pattern", trendPatternStr);
+
+        // Mark this as a trend table and link to its detail table for materialization registration
+        trendTable.put("_isTrendTable", true);
+        trendTable.put("_detailTableName", tableName);
+        trendTable.put("_detailTablePattern", detailPattern);
 
         // Copy column definitions from source table (same schema)
         if (table.containsKey("columns")) {
@@ -615,7 +732,8 @@ public interface GovDataSubSchemaFactory {
 
         // Add to trend tables list
         trendTables.add(trendTable);
-        LOGGER.debug("Expanded trend pattern '{}' from table '{}'", trendName, table.get("name"));
+        LOGGER.debug("Expanded trend pattern '{}' from detail table '{}' for materialized view registration",
+            trendName, tableName);
       }
     }
 
