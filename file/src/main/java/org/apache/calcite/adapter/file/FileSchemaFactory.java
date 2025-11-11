@@ -702,8 +702,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
             viewSchemaPath != null ? viewSchemaPath : Collections.singletonList(schemaName),
             table,
             false, // create = false (don't create table, just register)
-            existing != null ? existing : true  // existing = true by default
-        );
+            existing != null ? existing : true);  // existing = true by default
         LOGGER.info("Registered materialization: {} -> {}", table, sql);
       } catch (Exception e) {
         LOGGER.error("Failed to register materialization for table '{}': {}",
