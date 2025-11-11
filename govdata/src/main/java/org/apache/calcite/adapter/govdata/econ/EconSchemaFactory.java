@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -607,11 +608,16 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         // Format expected by FileSchema:
         // {
         //   "table": "trend_table_name",
-        //   "sql": "SELECT * FROM detail_table"
+        //   "sql": "SELECT * FROM detail_table",
+        //   "viewSchemaPath": ["ECON"],
+        //   "existing": true
         // }
         Map<String, Object> materialization = new HashMap<>();
         materialization.put("table", trendTableName);
         materialization.put("sql", "SELECT * FROM " + detailTableName);
+
+        // Set the schema path for the materialized view (ECON schema)
+        materialization.put("viewSchemaPath", Collections.singletonList("ECON"));
 
         // Mark as existing (trend data files already exist, don't need to be generated)
         materialization.put("existing", true);
