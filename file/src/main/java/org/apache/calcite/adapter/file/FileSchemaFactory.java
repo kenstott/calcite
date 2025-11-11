@@ -22,6 +22,8 @@ import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.materialize.MaterializationService;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.model.ModelHandler;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
@@ -34,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -604,6 +607,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // (DuckDB engine handles views separately as native DuckDB views)
     registerSqlViews(parentSchema, name, tables, operand);
 
+    // Register materializations with MaterializationService for optimizer substitution
+    // This enables Calcite's optimizer to automatically substitute materialized views
+    // (e.g., trend tables) when they provide better performance
+    if (materializations != null && !materializations.isEmpty()) {
+      registerMaterializations(parentSchema, name, materializations);
+    }
+
     return fileSchema;
   }
 
@@ -633,6 +643,73 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     LOGGER.debug("Schema name '{}' is unique within parent schema", name);
+  }
+
+  /**
+   * Registers materialized views with Calcite's MaterializationService for optimizer substitution.
+   *
+   * <p>This enables automatic query rewriting where the optimizer can substitute materialized
+   * views (e.g., trend tables) when they provide better performance than the original query.
+   *
+   * <p>Each materialization entry should contain:
+   * <ul>
+   *   <li>table: The materialized view table name</li>
+   *   <li>sql: The query that defines the materialization (e.g., "SELECT * FROM detail_table")</li>
+   *   <li>viewSchemaPath: Optional schema path for the view (defaults to current schema)</li>
+   *   <li>existing: Whether the table pre-exists (default: true)</li>
+   * </ul>
+   *
+   * @param parentSchema the parent schema containing the file schema
+   * @param schemaName the name of the file schema
+   * @param materializations list of materialization definitions
+   */
+  @SuppressWarnings("deprecation") // getSubSchema is deprecated but needed for schema access
+  private static void registerMaterializations(SchemaPlus parentSchema, String schemaName,
+      List<Map<String, Object>> materializations) {
+
+    // Get the CalciteSchema for materialization registration
+    SchemaPlus fileSchema = parentSchema.getSubSchema(schemaName);
+    if (fileSchema == null) {
+      LOGGER.warn("Could not access schema '{}' - materializations not registered", schemaName);
+      return;
+    }
+
+    CalciteSchema calciteSchema = CalciteSchema.from(fileSchema);
+    if (calciteSchema == null) {
+      LOGGER.warn("Could not access CalciteSchema for '{}' - materializations not registered",
+          schemaName);
+      return;
+    }
+
+    // Register each materialization with MaterializationService
+    for (Map<String, Object> mv : materializations) {
+      String table = (String) mv.get("table");
+      String sql = (String) mv.get("sql");
+      @SuppressWarnings("unchecked")
+      List<String> viewSchemaPath = (List<String>) mv.get("viewSchemaPath");
+      Boolean existing = (Boolean) mv.get("existing");
+
+      if (table == null || sql == null) {
+        LOGGER.warn("Skipping materialization with missing table or sql: {}", mv);
+        continue;
+      }
+
+      try {
+        MaterializationService.instance().defineMaterialization(
+            calciteSchema,
+            null,  // tileKey - not used for simple materializations
+            sql,
+            viewSchemaPath != null ? viewSchemaPath : Collections.singletonList(schemaName),
+            table,
+            false, // create = false (don't create table, just register)
+            existing != null ? existing : true  // existing = true by default
+        );
+        LOGGER.info("Registered materialization: {} -> {}", table, sql);
+      } catch (Exception e) {
+        LOGGER.error("Failed to register materialization for table '{}': {}",
+            table, e.getMessage());
+      }
+    }
   }
 
   private static void addMetadataSchemas(SchemaPlus parentSchema) {
