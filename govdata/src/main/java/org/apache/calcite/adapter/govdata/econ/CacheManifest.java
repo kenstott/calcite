@@ -64,12 +64,32 @@ public class CacheManifest extends AbstractCacheManifest {
   /**
    * Check if data is cached and fresh for the given parameters.
    * Uses ETag-based caching when available, falling back to time-based TTL.
+   * Also handles API error retry cadence to prevent expensive retries.
    */
   public boolean isCached(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
     CacheEntry entry = entries.get(key);
 
     if (entry == null) {
+      return false;
+    }
+
+    long now = System.currentTimeMillis();
+
+    // Check if this is an API error entry with pending retry restriction
+    if (entry.downloadRetry > 0 && now < entry.downloadRetry) {
+      // Still within retry restriction period - skip download attempt
+      long hoursUntilRetry = TimeUnit.MILLISECONDS.toHours(entry.downloadRetry - now);
+      LOGGER.debug("Skipping {} year={} due to API error retry restriction (retry in {} hours, error count: {})",
+          dataType, year, hoursUntilRetry, entry.errorCount);
+      return true;  // Return true to skip download attempt
+    }
+
+    // If retry period has passed for an API error, allow retry by removing the entry
+    if (entry.downloadRetry > 0 && now >= entry.downloadRetry) {
+      LOGGER.info("API error retry period expired for {} year={} (error count: {}), allowing retry",
+          dataType, year, entry.errorCount);
+      entries.remove(key);
       return false;
     }
 
@@ -80,7 +100,6 @@ public class CacheManifest extends AbstractCacheManifest {
     }
 
     // Fallback: check if refresh time has passed for entries without ETags
-    long now = System.currentTimeMillis();
     if (now >= entry.refreshAfter) {
       long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
       LOGGER.info("Cache entry expired for {} year={} (age: {} hours, refresh policy: {})",
@@ -208,6 +227,53 @@ public class CacheManifest extends AbstractCacheManifest {
 
     LOGGER.info("Marked {} year={} as unavailable (retry in {} days): {}",
         dataType, year, retryAfterDays, reason);
+  }
+
+  /**
+   * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
+   * Prevents expensive retries on every restart while tracking error details for debugging.
+   *
+   * <p>This handles cases where the API returns HTTP 200 OK but includes error information
+   * in the response body (e.g., BEA APIErrorCode 101 "Unknown error"). Unlike HTTP errors
+   * (404, 500, etc.) which are handled elsewhere, these are successful HTTP responses that
+   * contain API-level errors.
+   *
+   * @param dataType Type of data that failed
+   * @param year Year of the data
+   * @param parameters Additional parameters
+   * @param errorMessage Full error message from API (e.g., JSON error object)
+   * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
+   */
+  public void markApiError(String dataType, int year, Map<String, String> parameters,
+                          String errorMessage, int retryAfterDays) {
+    String key = buildKey(dataType, year, parameters);
+    CacheEntry entry = entries.get(key);
+
+    // Create new entry or update existing one
+    if (entry == null) {
+      entry = new CacheEntry();
+      entry.dataType = dataType;
+      entry.year = year;
+      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
+      entry.errorCount = 0;
+    }
+
+    // Update error tracking fields
+    entry.filePath = null;  // No file - API error
+    entry.fileSize = 0;
+    entry.lastError = errorMessage;
+    entry.errorCount++;
+    entry.lastAttemptAt = System.currentTimeMillis();
+    entry.downloadRetry = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
+    entry.refreshAfter = entry.downloadRetry;  // Use downloadRetry as refresh time
+    entry.refreshReason = "api_error_retry";
+
+    entries.put(key, entry);
+    lastUpdated = System.currentTimeMillis();
+
+    LOGGER.info("Marked {} year={} as API error (retry in {} days, error count: {}): {}",
+        dataType, year, retryAfterDays, entry.errorCount,
+        errorMessage.length() > 100 ? errorMessage.substring(0, 100) + "..." : errorMessage);
   }
 
   /**
