@@ -68,28 +68,6 @@ public abstract class AbstractCacheManifest {
   }
 
   /**
-   * Utility method to build parameter-based cache keys (used by ECON and GEO schemas).
-   * SEC schema uses different key structure (CIK-based).
-   *
-   * @param dataType The type of data
-   * @param year The year
-   * @param parameters Additional parameters
-   * @return Cache key string
-   */
-  protected static String buildParameterKey(String dataType, int year, Map<String, String> parameters) {
-    StringBuilder key = new StringBuilder();
-    key.append(dataType).append(":").append(year);
-
-    if (parameters != null && !parameters.isEmpty()) {
-      parameters.entrySet().stream()
-          .sorted(Map.Entry.comparingByKey())
-          .forEach(entry -> key.append(":").append(entry.getKey()).append("=").append(entry.getValue()));
-    }
-
-    return key.toString();
-  }
-
-  /**
    * Utility method to safely copy parameters map.
    *
    * @param parameters Parameters to copy
