@@ -246,113 +246,8 @@ public class SimilarityFunctions {
       return 0.0;
     }
 
-    try {
-      // Get default embedding provider (local)
-      TextEmbeddingProvider provider = getDefaultEmbeddingProvider();
-
-      // Generate embeddings for both texts
-      double[] embedding1 = provider.generateEmbedding(text1);
-      double[] embedding2 = provider.generateEmbedding(text2);
-
-      // Convert to comma-separated strings and compute cosine similarity
-      String vector1 = arrayToString(embedding1);
-      String vector2 = arrayToString(embedding2);
-
-      return cosineSimilarity(vector1, vector2);
-
-    } catch (EmbeddingException e) {
-      // Fall back to simple Jaccard similarity if embedding fails
-      return computeJaccardSimilarity(text1, text2);
-    }
-  }
-
-  /**
-   * Generate embedding for text.
-   * Uses the configured embedding provider to generate semantic embeddings.
-   *
-   * @param text Input text
-   * @return Embedding as comma-separated string
-   */
-  public static String embed(String text) {
-    if (text == null || text.isEmpty()) {
-      // Return zero vector with default dimensions
-      TextEmbeddingProvider provider = getDefaultEmbeddingProvider();
-      int dimensions = provider.getDimensions();
-      StringBuilder result = new StringBuilder();
-      for (int i = 0; i < dimensions; i++) {
-        if (i > 0) result.append(",");
-        result.append("0.0");
-      }
-      return result.toString();
-    }
-
-    try {
-      TextEmbeddingProvider provider = getDefaultEmbeddingProvider();
-      double[] embedding = provider.generateEmbedding(text);
-      return arrayToString(embedding);
-
-    } catch (EmbeddingException e) {
-      // Fall back to deterministic hash-based vector
-      return generateHashBasedEmbedding(text, 384);
-    }
-  }
-
-  /**
-   * Generate embedding with specific provider settings.
-   *
-   * @param text Input text
-   * @param dimension Embedding dimension (e.g., 384)
-   * @param provider Provider type ("local", "openai", "cohere")
-   * @param model Model name (e.g., "tf-idf", "text-embedding-ada-002")
-   * @return Embedding as comma-separated string
-   */
-  public static String embed(String text, int dimension, String provider, String model) {
-    if (text == null || text.isEmpty()) {
-      return generateZeroVector(dimension);
-    }
-
-    try {
-      java.util.Map<String, Object> config = new java.util.HashMap<>();
-      config.put("embeddingDimension", dimension);
-      if (model != null) {
-        config.put("model", model);
-      }
-
-      TextEmbeddingProvider embeddingProvider =
-          EmbeddingProviderFactory.createProvider(provider, config);
-      double[] embedding = embeddingProvider.generateEmbedding(text);
-      return arrayToString(embedding);
-
-    } catch (EmbeddingException e) {
-      return generateHashBasedEmbedding(text, dimension);
-    }
-  }
-
-  /**
-   * Overload for dimension + provider (use default model).
-   *
-   * @param text Input text
-   * @param dimension Embedding dimension
-   * @param provider Provider type
-   * @return Embedding as comma-separated string
-   */
-  public static String embed(String text, int dimension, String provider) {
-    return embed(text, dimension, provider, null);
-  }
-
-  /**
-   * Generate a zero vector of specified dimension.
-   *
-   * @param dimension Vector dimension
-   * @return Zero vector as comma-separated string
-   */
-  private static String generateZeroVector(int dimension) {
-    StringBuilder result = new StringBuilder();
-    for (int i = 0; i < dimension; i++) {
-      if (i > 0) result.append(",");
-      result.append("0.0");
-    }
-    return result.toString();
+    // Use Jaccard similarity for text comparison
+    return computeJaccardSimilarity(text1, text2);
   }
 
   /**
@@ -507,31 +402,6 @@ public class SimilarityFunctions {
     // Text operations
     schema.add("TEXT_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "textSimilarity"));
-    schema.add("EMBED",
-        ScalarFunctionImpl.create(SimilarityFunctions.class, "embed"));
-  }
-
-  /**
-   * Get the default embedding provider (local TF-IDF).
-   */
-  private static TextEmbeddingProvider getDefaultEmbeddingProvider() {
-    try {
-      return EmbeddingProviderFactory.createProvider("local", new java.util.HashMap<>());
-    } catch (EmbeddingException e) {
-      throw new RuntimeException("Failed to create default embedding provider", e);
-    }
-  }
-
-  /**
-   * Convert double array to comma-separated string.
-   */
-  private static String arrayToString(double[] array) {
-    StringBuilder result = new StringBuilder();
-    for (int i = 0; i < array.length; i++) {
-      if (i > 0) result.append(",");
-      result.append(array[i]);
-    }
-    return result.toString();
   }
 
   /**
@@ -556,19 +426,4 @@ public class SimilarityFunctions {
     return union.isEmpty() ? 0.0 : (double) intersection.size() / union.size();
   }
 
-  /**
-   * Generate hash-based embedding as fallback.
-   */
-  private static String generateHashBasedEmbedding(String text, int dimensions) {
-    int hash = text.hashCode();
-    java.util.Random random = new java.util.Random(hash);
-    StringBuilder result = new StringBuilder();
-
-    for (int i = 0; i < dimensions; i++) {
-      if (i > 0) result.append(",");
-      result.append(random.nextGaussian());
-    }
-
-    return result.toString();
-  }
 }
