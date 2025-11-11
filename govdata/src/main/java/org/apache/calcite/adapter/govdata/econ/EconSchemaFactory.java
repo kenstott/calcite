@@ -244,6 +244,14 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Added {} views to 'tables' operand for FileSchema", regularTables.size());
     }
 
+    // Generate materializations from trend tables for automatic optimizer substitution
+    List<Map<String, Object>> materializations = generateMaterializations(allTables);
+    if (!materializations.isEmpty()) {
+      mutableOperand.put("materializations", materializations);
+      LOGGER.info("Generated {} materializations from trend patterns for automatic substitution",
+          materializations.size());
+    }
+
     // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
     if (operand.containsKey("executionEngine")) {
       mutableOperand.put("executionEngine", operand.get("executionEngine"));
@@ -566,6 +574,55 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // EconSchemaFactory doesn't use tableDefinitions
     LOGGER.debug("Received constraint metadata for {} tables",
         tableConstraints != null ? tableConstraints.size() : 0);
+  }
+
+  /**
+   * Generate materialization definitions from trend tables.
+   *
+   * <p>For each trend table (marked with _isTrendTable=true), creates a materialization
+   * that tells Calcite's optimizer that the trend table is equivalent to:
+   * SELECT * FROM detail_table
+   *
+   * <p>This allows the optimizer to automatically substitute trend tables when queries
+   * don't use all partition keys, reducing S3 API calls.
+   *
+   * @param tables List of all table definitions (including trend tables)
+   * @return List of materialization definitions for FileSchema
+   */
+  private List<Map<String, Object>> generateMaterializations(List<Map<String, Object>> tables) {
+    List<Map<String, Object>> materializations = new ArrayList<>();
+
+    for (Map<String, Object> table : tables) {
+      Boolean isTrendTable = (Boolean) table.get("_isTrendTable");
+      if (isTrendTable != null && isTrendTable) {
+        String trendTableName = (String) table.get("name");
+        String detailTableName = (String) table.get("_detailTableName");
+
+        if (trendTableName == null || detailTableName == null) {
+          LOGGER.warn("Skipping materialization for trend table with missing metadata");
+          continue;
+        }
+
+        // Create materialization definition
+        // Format expected by FileSchema:
+        // {
+        //   "table": "trend_table_name",
+        //   "sql": "SELECT * FROM detail_table"
+        // }
+        Map<String, Object> materialization = new HashMap<>();
+        materialization.put("table", trendTableName);
+        materialization.put("sql", "SELECT * FROM " + detailTableName);
+
+        // Mark as existing (trend data files already exist, don't need to be generated)
+        materialization.put("existing", true);
+
+        materializations.add(materialization);
+        LOGGER.debug("Created materialization: trend table '{}' for detail table '{}'",
+            trendTableName, detailTableName);
+      }
+    }
+
+    return materializations;
   }
 
 }
