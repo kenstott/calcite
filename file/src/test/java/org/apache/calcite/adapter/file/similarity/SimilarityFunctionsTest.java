@@ -60,23 +60,8 @@ public class SimilarityFunctionsTest {
     assertTrue(similarity < 0.5, "Similarity should be low for unrelated texts");
   }
 
-  @Test void testEmbedFunction() {
-    String text = "Net income increased due to higher margins";
-
-    String embedding = SimilarityFunctions.embed(text);
-
-    assertNotNull(embedding);
-    assertFalse(embedding.isEmpty());
-
-    // Should be comma-separated numbers
-    String[] parts = embedding.split(",");
-    assertTrue(parts.length > 100, "Embedding should have reasonable dimensions");
-
-    // Each part should be a valid number
-    for (String part : parts) {
-      assertDoesNotThrow(() -> Double.parseDouble(part.trim()));
-    }
-  }
+  // testEmbedFunction removed - embed() function deleted in Phase 4
+  // Use DuckDB quackformers extension instead: SELECT embed(text)::FLOAT[384]
 
   @Test void testVectorNorm() {
     String vector = "3.0,4.0,0.0";
