@@ -16,19 +16,16 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -879,6 +876,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts all downloaded BLS data to Parquet format for the specified year range.
    * Uses the enabledTables set passed to the constructor to filter which tables to convert.
+   * Uses IterationDimension pattern for declarative multi-dimensional iteration.
    *
    * @param startYear First year to convert
    * @param endYear Last year to convert
@@ -888,134 +886,67 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void convertAll(int startYear, int endYear) throws IOException {
     LOGGER.info("Converting BLS data for years {}-{}", startYear, endYear);
 
-    int convertedCount = 0;
-    int skippedCount = 0;
+    // Define all BLS tables (12 tables)
+    List<String> tablesToConvert = java.util.Arrays.asList(
+        TABLE_EMPLOYMENT_STATISTICS,
+        TABLE_INFLATION_METRICS,
+        TABLE_REGIONAL_CPI,
+        TABLE_METRO_CPI,
+        TABLE_STATE_INDUSTRY,
+        TABLE_STATE_WAGES,
+        TABLE_METRO_INDUSTRY,
+        TABLE_METRO_WAGES,
+        TABLE_JOLTS_REGIONAL,
+        TABLE_COUNTY_WAGES,
+        TABLE_JOLTS_STATE,
+        TABLE_WAGE_GROWTH
+    );
 
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> variables = new HashMap<>();
-      variables.put("year", String.valueOf(year));
-      variables.put("frequency", "monthly");
+    // Define iteration dimension (year)
+    List<AbstractGovDataDownloader.IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(AbstractGovDataDownloader.IterationDimension.fromYearRange(startYear, endYear));
 
-      // Convert each enabled table
-      if (enabledTables == null || enabledTables.contains(TABLE_EMPLOYMENT_STATISTICS)) {
-        if (convertTableIfNeeded("employment_statistics", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
+    // Convert each enabled table using IterationDimension pattern
+    for (String tableName : tablesToConvert) {
+      if (enabledTables == null || enabledTables.contains(tableName)) {
+        iterateTableOperations(
+            tableName,
+            dimensions,
+            (year, vars) -> {
+              // Add frequency variable
+              Map<String, String> fullVars = new HashMap<>(vars);
+              fullVars.put("frequency", "monthly");
 
-      if (enabledTables == null || enabledTables.contains(TABLE_INFLATION_METRICS)) {
-        if (convertTableIfNeeded("inflation_metrics", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
+              // Check if already converted
+              Map<String, Object> metadata = loadTableMetadata(tableName);
+              String pattern = (String) metadata.get("pattern");
+              String parquetPath = storageProvider.resolvePath(parquetDirectory,
+                  resolveParquetPath(pattern, fullVars));
+              String rawPath = cacheStorageProvider.resolvePath(cacheDirectory,
+                  resolveJsonPath(pattern, fullVars));
 
-      if (enabledTables == null || enabledTables.contains(TABLE_REGIONAL_CPI)) {
-        if (convertTableIfNeeded("regional_cpi", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
+              return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, parquetPath);
+            },
+            (year, vars) -> {
+              // Add frequency variable
+              Map<String, String> fullVars = new HashMap<>(vars);
+              fullVars.put("frequency", "monthly");
 
-      if (enabledTables == null || enabledTables.contains(TABLE_METRO_CPI)) {
-        if (convertTableIfNeeded("metro_cpi", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
+              // Execute conversion
+              convertCachedJsonToParquet(tableName, fullVars);
 
-      if (enabledTables == null || enabledTables.contains(TABLE_STATE_INDUSTRY)) {
-        if (convertTableIfNeeded("state_industry", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_STATE_WAGES)) {
-        if (convertTableIfNeeded("state_wages", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_METRO_INDUSTRY)) {
-        if (convertTableIfNeeded("metro_industry", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_METRO_WAGES)) {
-        if (convertTableIfNeeded("metro_wages", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_REGIONAL)) {
-        if (convertTableIfNeeded("jolts_regional", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_COUNTY_WAGES)) {
-        if (convertTableIfNeeded("county_wages", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_JOLTS_STATE)) {
-        if (convertTableIfNeeded("jolts_state", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
-      if (enabledTables == null || enabledTables.contains(TABLE_WAGE_GROWTH)) {
-        if (convertTableIfNeeded("wage_growth", year, variables)) {
-          convertedCount++;
-        } else {
-          skippedCount++;
-        }
+              // Mark as converted in manifest
+              Map<String, Object> metadata = loadTableMetadata(tableName);
+              String pattern = (String) metadata.get("pattern");
+              String parquetPath = storageProvider.resolvePath(parquetDirectory,
+                  resolveParquetPath(pattern, fullVars));
+              cacheManifest.markParquetConverted(tableName, year, null, parquetPath);
+            },
+            "conversion");
       }
     }
 
-    LOGGER.info("BLS conversion complete: converted {} tables, skipped {} (up-to-date)",
-        convertedCount, skippedCount);
-  }
-
-  /**
-   * Helper method to convert a table if needed (checks cache manifest first).
-   * Returns true if converted, false if skipped.
-   */
-  private boolean convertTableIfNeeded(String tableName, int year, Map<String, String> variables)
-      throws IOException {
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
-    String parquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
-    String rawPath = cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
-
-    if (isParquetConvertedOrExists(tableName, year, variables, rawPath, parquetPath)) {
-      return false; // Already converted, skip
-    }
-
-    convertCachedJsonToParquet(tableName, variables);
-    cacheManifest.markParquetConverted(tableName, year, null, parquetPath);
-    return true; // Converted
+    LOGGER.info("BLS conversion complete for all enabled tables");
   }
 
   /**
@@ -1066,8 +997,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = buildPartitionPath("regional_cpi", DataFrequency.MONTHLY, year);
-      String jsonFilePath = outputDirPath + "/regional_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("regional_cpi", year, cacheParams)) {
@@ -1116,8 +1045,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = buildPartitionPath("metro_cpi", DataFrequency.MONTHLY, year);
-      String jsonFilePath = outputDirPath + "/metro_cpi.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("metro_cpi", year, cacheParams)) {
@@ -1174,7 +1101,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = buildPartitionPath("state_industry", DataFrequency.QUARTERLY, year) + "/state_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("state_industry", year, cacheParams)) {
@@ -1239,11 +1165,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
       byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
 
-      if (zipData == null) {
-        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping state wages", year);
-        continue;
-      }
-
       // Parse CSV and extract state-level wage data (agglvl_code = 50)
       String stateWagesJson = parseQcewForStateWages(zipData, year);
 
@@ -1277,11 +1198,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // Download QCEW CSV (reuses cache from state_wages if available)
       String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
       byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
-
-      if (zipData == null) {
-        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping county wages", year);
-        continue;
-      }
 
       // Parse CSV and extract county-level wage data (agglvl_code = 70)
       String countyWagesJson = parseQcewForCountyWages(zipData, year);
@@ -1323,11 +1239,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
       byte[] zipData = downloadQcewCsvIfNeeded(year, qcewZipPath);
 
-      if (zipData == null) {
-        LOGGER.warn("Failed to download QCEW CSV for year {} - skipping county QCEW", year);
-        continue;
-      }
-
       // Parse and convert to Parquet
       parseAndConvertQcewToParquet(zipData, fullParquetPath, year);
       LOGGER.info("Completed county QCEW data for year {}", year);
@@ -1357,7 +1268,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String jsonFilePath = buildPartitionPath("metro_industry", DataFrequency.QUARTERLY, year) + "/metro_industry.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("metro_industry", year, cacheParams)) {
@@ -1842,17 +1752,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
 
       String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
-      byte[] seriesData = downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
-
-      if (seriesData == null) {
-        LOGGER.warn("Failed to download JOLTS series file - skipping year {}", year);
-        continue;
-      }
+      downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
 
       String joltsRegionalJson = parseJoltsFtpForRegional(year);
 
       if (joltsRegionalJson != null) {
-        String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonFilePath);
         saveToCache("jolts_regional", year, cacheParams, jsonFilePath, joltsRegionalJson);
         LOGGER.info("Extracted JOLTS regional data for year {} (4 regions × 5 metrics)", year);
       }
@@ -1913,10 +1817,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Download file (will be cached by downloadJoltsFtpFileIfNeeded)
     byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
-    if (data == null) {
-      LOGGER.warn("Failed to download JOLTS industry reference file");
-      return;
-    }
 
     // Parse tab-delimited file
     List<Map<String, Object>> industries = getMaps(data, "industry_code", "industry_name");
@@ -1985,10 +1885,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Download file (will be cached by downloadJoltsFtpFileIfNeeded)
     byte[] data = downloadJoltsFtpFileIfNeeded(ftpPath, url);
-    if (data == null) {
-      LOGGER.warn("Failed to download JOLTS data element reference file");
-      return;
-    }
 
     // Parse tab-delimited file
     List<Map<String, Object>> dataElements = getMaps(data, "dataelement_code", "dataelement_text");
@@ -2021,8 +1917,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      String outputDirPath = buildPartitionPath("inflation_metrics", DataFrequency.MONTHLY, year);
-      String jsonFilePath = outputDirPath + "/inflation_metrics.json";
       Map<String, String> cacheParams = new HashMap<>();
 
       if (isCachedOrExists("inflation_metrics", year, cacheParams)) {

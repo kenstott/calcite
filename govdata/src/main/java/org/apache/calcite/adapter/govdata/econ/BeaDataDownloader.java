@@ -51,167 +51,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private final List<String> keyIndustriesList;
 
   /**
-   * Functional interface for table operations (download or convert).
-   * Executes an operation given a map of variables.
-   */
-  @FunctionalInterface
-  interface TableOperation {
-    void execute(int year, Map<String, String> variables) throws Exception;
-  }
-
-  /**
-   * Functional interface for checking if an operation is cached.
-   */
-  @FunctionalInterface
-  interface CacheChecker {
-    boolean isCached(int year, Map<String, String> variables);
-  }
-
-  /**
-   * Represents a single dimension of iteration with variable name and values.
-   */
-  static class IterationDimension {
-    final String variableName;
-    final List<String> values;
-
-    IterationDimension(String variableName, Collection<String> values) {
-      this.variableName = variableName;
-      this.values = new ArrayList<>(values);
-    }
-
-    static IterationDimension fromYearRange(int startYear, int endYear) {
-      List<String> years = new ArrayList<>();
-      for (int year = startYear; year <= endYear; year++) {
-        years.add(String.valueOf(year));
-      }
-      return new IterationDimension("year", years);
-    }
-  }
-
-  /**
-   * Generic method to iterate over table operations with arbitrary nesting levels (1-4 loops).
-   * Handles variable map generation, cache checking, operation execution, progress tracking,
-   * and manifest saving.
-   *
-   * @param tableName Table name for logging and manifest operations
-   * @param dimensions List of iteration dimensions (1-4 dimensions supported)
-   * @param cacheChecker Lambda to check if operation is cached
-   * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
-   */
-  private void iterateTableOperations(
-      String tableName,
-      List<IterationDimension> dimensions,
-      CacheChecker cacheChecker,
-      TableOperation operation,
-      String operationDescription) {
-
-    if (dimensions == null || dimensions.isEmpty()) {
-      LOGGER.warn("No dimensions provided for {} operations on {}", operationDescription, tableName);
-      return;
-    }
-
-    // Calculate total operations for progress tracking
-    int totalOperations = 1;
-    for (IterationDimension dim : dimensions) {
-      totalOperations *= dim.values.size();
-    }
-
-    LOGGER.info("Starting {} operations for {} ({} total combinations)",
-        operationDescription, tableName, totalOperations);
-
-    // Track progress
-    int[] counters = new int[2]; // [0]=executed, [1]=skipped
-
-    // Generate and execute all combinations using recursive iteration
-    iterateDimensionsRecursive(dimensions, 0, new HashMap<String, String>(),
-        tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
-
-    // Save manifest after all operations complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
-    }
-
-    LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
-        tableName, operationDescription, counters[0], counters[1]);
-  }
-
-  /**
-   * Recursive helper to iterate over all combinations of dimension values.
-   * Builds up the variables map as it recurses through dimensions.
-   *
-   * @param dimensions All iteration dimensions
-   * @param dimensionIndex Current dimension being iterated
-   * @param variables Variables map built so far
-   * @param tableName Table name for logging
-   * @param cacheChecker Cache checking lambda
-   * @param operation Operation execution lambda
-   * @param operationDescription Description for logging
-   * @param counters Progress counters [executed, skipped]
-   * @param totalOperations Total operations for progress logging
-   */
-  private void iterateDimensionsRecursive(
-      List<IterationDimension> dimensions,
-      int dimensionIndex,
-      Map<String, String> variables,
-      String tableName,
-      CacheChecker cacheChecker,
-      TableOperation operation,
-      String operationDescription,
-      int[] counters,
-      int totalOperations) {
-
-    // Base case: all dimensions iterated, execute operation
-    if (dimensionIndex >= dimensions.size()) {
-      // Extract year from variables (default to 0 if not present)
-      int year = 0;
-      if (variables.containsKey("year")) {
-        try {
-          year = Integer.parseInt(variables.get("year"));
-        } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
-        }
-      }
-
-      // Check cache
-      if (cacheChecker.isCached(year, variables)) {
-        counters[1]++; // skipped
-        return;
-      }
-
-      // Execute operation
-      try {
-        operation.execute(year, variables);
-        counters[0]++; // executed
-
-        // Log progress every 10 operations
-        if (counters[0] % 10 == 0) {
-          LOGGER.info("{} {}/{} operations (skipped {} cached)",
-              operationDescription, counters[0], totalOperations, counters[1]);
-        }
-      } catch (Exception e) {
-        LOGGER.error("Error during {} for {} with variables {}: {}",
-            operationDescription, tableName, variables, e.getMessage());
-      }
-      return;
-    }
-
-    // Recursive case: iterate over current dimension
-    IterationDimension currentDim = dimensions.get(dimensionIndex);
-    for (String value : currentDim.values) {
-      // Add current dimension's variable to map
-      Map<String, String> nextVariables = new HashMap<>(variables);
-      nextVariables.put(currentDim.variableName, value);
-
-      // Recurse to next dimension
-      iterateDimensionsRecursive(dimensions, dimensionIndex + 1, nextVariables,
-          tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
-    }
-  }
-
-  /**
    * Simple constructor without shared manifest (creates one from operatingDirectory).
    */
   public BeaDataDownloader(String cacheDir, String parquetDir,
@@ -257,21 +96,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     this.keyIndustriesList = keyIndustriesListFromSchema;
   }
 
-  /**
-   * Internal constructor for passing pre-computed configuration (used by legacy code and tests).
-   */
-  private BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
-      StorageProvider cacheStorageProvider, StorageProvider storageProvider,
-      CacheManifest sharedManifest, List<String> nipaTablesList,
-      Map<String, java.util.Set<String>> tableFrequencies, List<String> keyIndustriesList) {
-    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest);
-    this.parquetDir = parquetDir;
-    this.nipaTablesList = nipaTablesList;
-    this.tableFrequencies = tableFrequencies;
-    this.keyIndustriesList = keyIndustriesList;
-  }
-
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
   public BeaDataDownloader(String cacheDir) {
     super(cacheDir,
@@ -296,10 +120,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    *   <li>reference_regional_linecodes - Line code catalogs for all BEA Regional tables</li>
    * </ul>
    *
-   * @throws IOException If download or file I/O fails
-   * @throws InterruptedException If download is interrupted
    */
-  @Override public void downloadReferenceData() throws IOException, InterruptedException {
+  @Override public void downloadReferenceData() {
     LOGGER.info("Downloading BEA reference tables");
 
     // Download and convert reference_nipa_tables
@@ -361,10 +183,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    *
    * @param startYear First year to convert
    * @param endYear Last year to convert
-   * @throws IOException If conversion or file I/O fails
    */
   @Override
-  public void convertAll(int startYear, int endYear) throws IOException {
+  public void convertAll(int startYear, int endYear) {
     LOGGER.info("Converting all BEA data for years {}-{}", startYear, endYear);
 
     if (nipaTablesList != null) {
@@ -986,9 +807,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           fullVars.put("frequency", "A");
           fullVars.put("Industry", vars.get("Industry"));
 
-          // Download
-          String cachedPath = executeDownload(tableName, fullVars);
-
           // Resolve relative path for manifest
           String relativePath = resolveJsonPath(pattern, fullVars);
           String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
@@ -1236,8 +1054,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Regex pattern to match frequency indicators
-    Pattern frequencyPattern = Pattern.compile("\\(([AQ])\\)");
-
     List<Map<String, Object>> enrichedRecords = new ArrayList<>();
     for (com.fasterxml.jackson.databind.JsonNode item : root) {
       com.fasterxml.jackson.databind.JsonNode keyNode = item.get("TableName");
@@ -1325,7 +1141,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Download BEA Regional LineCode catalog using GetParameterValuesFiltered API.
    * Downloads valid LineCodes for all 54 BEA Regional tables listed in the schema.
    */
-  public void downloadRegionalLineCodeCatalog() throws IOException, InterruptedException {
+  public void downloadRegionalLineCodeCatalog() {
     LOGGER.info("Downloading BEA Regional LineCode catalog");
 
     String tableName = "reference_regional_linecodes";
@@ -1386,7 +1202,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Convert BEA Regional LineCode catalog JSON to Parquet with enrichment.
    * Enriches data with parsed metadata (table_prefix, data_category, geography_level, frequency).
    */
-  public void convertRegionalLineCodeCatalog() throws IOException {
+  public void convertRegionalLineCodeCatalog() {
     LOGGER.info("Converting BEA Regional LineCode catalog to Parquet");
 
     String tableName = "reference_regional_linecodes";
@@ -1427,7 +1243,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           dataNode = MAPPER.readTree(is);
         }
 
-        if (!dataNode.isArray() || dataNode.size() == 0) {
+        if (!dataNode.isArray() || dataNode.isEmpty()) {
           LOGGER.warn("Invalid or empty LineCode array for table {} in {}", regionalTableName, fullJsonPath);
           continue;
         }
@@ -1601,7 +1417,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         // Extract LineCodes for this table
         Set<String> lineCodes = new HashSet<>();
         for (Map<String, Object> record : records) {
-          Object tableNameObj = record.get("TableName");
           Object lineCodeObj = record.get("LineCode");
 
           if (lineCodeObj != null) {
