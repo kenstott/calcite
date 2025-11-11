@@ -28,7 +28,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -88,8 +87,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads all Treasury data for the specified year range.
    */
-  @Override
-  public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     // Download treasury yields data
     downloadTreasuryYields(startYear, endYear);
 
@@ -100,8 +98,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   /**
    * Converts all downloaded Treasury data to Parquet format for the specified year range.
    */
-  @Override
-  public void convertAll(int startYear, int endYear) throws IOException {
+  @Override public void convertAll(int startYear, int endYear) throws IOException {
     LOGGER.info("Converting Treasury data for years {}-{}", startYear, endYear);
 
     int convertedCount = 0;
@@ -143,69 +140,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Treasury conversion complete: converted {} tables, skipped {} (up-to-date)",
         convertedCount, skippedCount);
-  }
-
-  /**
-   * Gets the default start year from environment variables.
-   */
-  public static int getDefaultStartYear() {
-    // Check for ECON-specific override
-    String econStart = System.getenv("ECON_START_YEAR");
-    if (econStart != null) {
-      try {
-        return Integer.parseInt(econStart);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid ECON_START_YEAR: {}", econStart);
-      }
-    }
-
-    // Fall back to unified setting
-    String govdataStart = System.getenv("GOVDATA_START_YEAR");
-    if (govdataStart != null) {
-      try {
-        return Integer.parseInt(govdataStart);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid GOVDATA_START_YEAR: {}", govdataStart);
-      }
-    }
-
-    // Default to 5 years ago
-    return LocalDate.now().getYear() - 5;
-  }
-
-  /**
-   * Gets the default end year from environment variables.
-   */
-  public static int getDefaultEndYear() {
-    // Check for ECON-specific override
-    String econEnd = System.getenv("ECON_END_YEAR");
-    if (econEnd != null) {
-      try {
-        return Integer.parseInt(econEnd);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid ECON_END_YEAR: {}", econEnd);
-      }
-    }
-
-    // Fall back to unified setting
-    String govdataEnd = System.getenv("GOVDATA_END_YEAR");
-    if (govdataEnd != null) {
-      try {
-        return Integer.parseInt(govdataEnd);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid GOVDATA_END_YEAR: {}", govdataEnd);
-      }
-    }
-
-    // Default to current year
-    return LocalDate.now().getYear();
-  }
-
-  /**
-   * Downloads treasury yields using default date range from environment.
-   */
-  public String downloadTreasuryYields() throws IOException, InterruptedException {
-    return downloadTreasuryYields(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**
@@ -256,13 +190,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     }
 
     return lastPath;
-  }
-
-  /**
-   * Downloads federal debt using default date range from environment.
-   */
-  public String downloadFederalDebt() throws IOException, InterruptedException {
-    return downloadFederalDebt(getDefaultStartYear(), getDefaultEndYear());
   }
 
   /**

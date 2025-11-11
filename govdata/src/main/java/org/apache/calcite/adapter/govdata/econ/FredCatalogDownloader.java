@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -630,7 +632,7 @@ public class FredCatalogDownloader {
       JsonNode response = makeApiRequest(url);
       JsonNode seriesArray = response.get("seriess");
 
-      if (seriesArray != null && seriesArray.size() > 0) {
+      if (seriesArray != null && !seriesArray.isEmpty()) {
         for (JsonNode series : seriesArray) {
           Map<String, Object> seriesMap =
               objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
@@ -980,7 +982,7 @@ public class FredCatalogDownloader {
     // Load column metadata and write parquet
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractEconDataDownloader.loadTableColumns("reference_fred_series");
-    convertInMemoryToParquetViaDuckDB("reference_fred_series", columns, transformedSeries, parquetFile);
+    convertInMemoryToParquetViaDuckDB(columns, transformedSeries, parquetFile);
   }
 
   /**
@@ -988,23 +990,22 @@ public class FredCatalogDownloader {
    * Simplified version for FredCatalogDownloader (doesn't extend AbstractGovDataDownloader).
    */
   private void convertInMemoryToParquetViaDuckDB(
-      String tableName,
-      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
+      List<PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> records,
       String fullParquetPath) throws IOException {
 
     // Write records to temporary JSON file in cache
     String tempJsonPath = fullParquetPath.replace(".parquet", "_temp.json");
-    String fullTempJsonPath = storageProvider.resolvePath(cacheDir,
-        tempJsonPath.substring(tempJsonPath.lastIndexOf('/') + 1));
+    String fullTempJsonPath =
+        storageProvider.resolvePath(cacheDir, tempJsonPath.substring(tempJsonPath.lastIndexOf('/') + 1));
 
     try {
       // Write JSON
       writeJsonRecords(fullTempJsonPath, records);
 
       // Convert using DuckDB
-      String sql = org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.buildDuckDBConversionSql(
-          columns, null, fullTempJsonPath, fullParquetPath);
+      String sql =
+          org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.buildDuckDBConversionSql(columns, null, fullTempJsonPath, fullParquetPath);
 
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
@@ -1018,11 +1019,11 @@ public class FredCatalogDownloader {
         // Execute the COPY statement
         stmt.execute(sql);
 
-        LOGGER.info("Successfully converted {} to Parquet using DuckDB", tableName);
+        LOGGER.info("Successfully converted {} to Parquet using DuckDB", "reference_fred_series");
 
       } catch (java.sql.SQLException e) {
-        String errorMsg = String.format(
-            "DuckDB conversion failed for table '%s': %s", tableName, e.getMessage());
+        String errorMsg =
+            String.format("DuckDB conversion failed for table '%s': %s", "reference_fred_series", e.getMessage());
         LOGGER.error(errorMsg, e);
         throw new IOException(errorMsg, e);
       }

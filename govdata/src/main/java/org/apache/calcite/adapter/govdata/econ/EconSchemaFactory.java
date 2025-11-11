@@ -321,8 +321,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create BLS downloader if enabled
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      BlsDataDownloader blsDownloader = new BlsDataDownloader(blsApiKey, cacheDir,
-          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+      BlsDataDownloader blsDownloader =
+          new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
           cacheManifest, enabledBlsTables);
       downloaders.add(blsDownloader);
       LOGGER.debug("Added BLS downloader to orchestration list");
@@ -335,8 +335,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         Integer catalogCacheTtlDays = (Integer) operand.get("fredCatalogCacheTtlDays");
 
         // FredDataDownloader handles all FRED-specific initialization internally
-        FredDataDownloader fredDownloader = new FredDataDownloader(fredApiKey, cacheDir,
-            econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+        FredDataDownloader fredDownloader =
+            new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
             cacheManifest, customFredSeries, fredMinPopularity, fredCatalogForceRefresh,
             catalogCacheTtlDays);
         downloaders.add(fredDownloader);
@@ -348,8 +348,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create Treasury downloader if enabled (no API key required)
     if (enabledSources.contains("treasury")) {
-      TreasuryDataDownloader treasuryDownloader = new TreasuryDataDownloader(cacheDir,
-          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+      TreasuryDataDownloader treasuryDownloader =
+          new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
       downloaders.add(treasuryDownloader);
       LOGGER.debug("Added Treasury downloader to orchestration list");
     }
@@ -358,8 +358,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
       try {
         // BeaDataDownloader handles all BEA-specific initialization internally
-        BeaDataDownloader beaDownloader = new BeaDataDownloader(cacheDir, econOperatingDirectory,
-            parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+        BeaDataDownloader beaDownloader =
+            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
         downloaders.add(beaDownloader);
         LOGGER.debug("Added BEA downloader to orchestration list");
       } catch (Exception e) {
@@ -369,8 +369,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create WorldBank downloader if enabled (no API key required)
     if (enabledSources.contains("worldbank")) {
-      WorldBankDataDownloader worldBankDownloader = new WorldBankDataDownloader(cacheDir,
-          econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+      WorldBankDataDownloader worldBankDownloader =
+          new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
       downloaders.add(worldBankDownloader);
       LOGGER.debug("Added WorldBank downloader to orchestration list");
     }
@@ -541,8 +541,9 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * @return Set of enabled table names, or null to download all tables
    */
   private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
-    Set<String> allBlsTables = new HashSet<>(
-        Arrays.asList(
+    Set<String> allBlsTables =
+        new HashSet<>(
+            Arrays.asList(
             BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
             BlsDataDownloader.TABLE_INFLATION_METRICS,
             BlsDataDownloader.TABLE_REGIONAL_CPI,
