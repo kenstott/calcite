@@ -6,10 +6,7 @@
       "name": "FINANCIAL",
       "factory": "org.apache.calcite.adapter.sec.SecEmbeddingSchemaFactory",
       "operand": {
-        "directory": "financial-data",
-        "embeddingConfig": {
-          "embeddingDimension": 256
-        }
+        "directory": "financial-data"
       }
     }
   ]

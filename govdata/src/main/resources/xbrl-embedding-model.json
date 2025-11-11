@@ -11,14 +11,6 @@
         "directory": "sec-data",
         "targetDirectory": "parquet-data",
         "executionEngine": "duckdb",
-        "enableEmbeddings": true,
-        "embeddingConfig": {
-          "modelLoader": "org.apache.calcite.adapter.sec.EmbeddingModelLoader",
-          "vocabularyPath": "/models/financial-vocabulary.txt",
-          "contextMappingsPath": "/models/context-mappings.json",
-          "embeddingDimension": 128,
-          "generateOnConversion": true
-        },
         "edgarConfig": {
           "autoDownload": true,
           "cacheDirectory": "edgar-cache",
