@@ -16,10 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import org.apache.calcite.adapter.file.similarity.EmbeddingException;
-import org.apache.calcite.adapter.file.similarity.EmbeddingProviderFactory;
-import org.apache.calcite.adapter.file.similarity.TextEmbeddingProvider;
-
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -48,8 +44,8 @@ public class SecTextVectorizer {
   // Default embedding dimension
   private final int embeddingDimension;
 
-  // Embedding provider for generating real embeddings
-  private final TextEmbeddingProvider embeddingProvider;
+  // NOTE: Embedding functionality removed in Phase 4 - DuckDB native embeddings via quackformers
+  // Embeddings should now be generated using expression columns in schemas
 
   // Concept groups for contextual chunking
   private static final Map<String, List<String>> CONCEPT_GROUPS = new HashMap<>();
@@ -87,18 +83,20 @@ public class SecTextVectorizer {
 
   /**
    * Constructor with specified embedding dimension and provider configuration.
+   * NOTE: Provider configuration ignored - use DuckDB expression columns instead
    */
   public SecTextVectorizer(int embeddingDimension, Map<String, Object> textSimilarityConfig) {
     this.embeddingDimension = embeddingDimension;
-    this.embeddingProvider = createEmbeddingProvider(textSimilarityConfig);
+    // Embedding provider removed - use DuckDB quackformers extension via expression columns
   }
 
   /**
    * Constructor with specified embedding dimension using local provider.
+   * NOTE: Local provider removed - use DuckDB expression columns instead
    */
   public SecTextVectorizer(int embeddingDimension) {
     this.embeddingDimension = embeddingDimension;
-    this.embeddingProvider = createDefaultEmbeddingProvider();
+    // Embedding provider removed - use DuckDB quackformers extension via expression columns
   }
 
   /**
@@ -915,13 +913,13 @@ public class SecTextVectorizer {
 
   /**
    * Generate real semantic embedding using configured provider.
+   * NOTE: Direct embedding generation removed - use DuckDB expression columns instead.
+   * This method now only generates fallback embeddings for legacy compatibility.
    */
   private double[] generateRealEmbedding(String text) {
-    try {
-      return embeddingProvider.generateEmbedding(text);
-    } catch (EmbeddingException e) {
-      return generateFallbackEmbedding(text);
-    }
+    // Embedding provider removed - use DuckDB quackformers extension via expression columns
+    // Fall back to deterministic hash-based embedding for legacy code paths
+    return generateFallbackEmbedding(text);
   }
 
   /**
@@ -996,29 +994,21 @@ public class SecTextVectorizer {
   }
 
   /**
-   * Create embedding provider from configuration.
+   * STUB: Embedding provider creation removed in Phase 4.
+   * Use DuckDB quackformers extension with expression columns instead.
    */
-  private TextEmbeddingProvider createEmbeddingProvider(Map<String, Object> config) {
-    try {
-      Map<String, Object> embeddingConfig = EmbeddingProviderFactory.extractEmbeddingConfig(config);
-      String providerType = (String) config.getOrDefault("embeddingProvider", "local");
-      return EmbeddingProviderFactory.createProvider(providerType, embeddingConfig);
-    } catch (EmbeddingException e) {
-      return createDefaultEmbeddingProvider();
-    }
+  private Object createEmbeddingProvider(Map<String, Object> config) {
+    // Embedding functionality removed - use DuckDB expression columns
+    return null;
   }
 
   /**
-   * Create default local embedding provider.
+   * STUB: Default embedding provider removed in Phase 4.
+   * Use DuckDB quackformers extension with expression columns instead.
    */
-  private TextEmbeddingProvider createDefaultEmbeddingProvider() {
-    try {
-      Map<String, Object> config = new HashMap<>();
-      config.put("dimensions", embeddingDimension);
-      return EmbeddingProviderFactory.createProvider("local", config);
-    } catch (EmbeddingException e) {
-      throw new RuntimeException("Failed to create default embedding provider", e);
-    }
+  private Object createDefaultEmbeddingProvider() {
+    // Embedding functionality removed - use DuckDB expression columns
+    return null;
   }
 
   /**
