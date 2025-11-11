@@ -333,6 +333,9 @@ public class DuckDBJdbcSchemaFactory {
       // Register similarity functions as DuckDB UDFs
       registerSimilarityFunctions(setupConn);
 
+      // Load query-time extensions for optimization (vss, fts)
+      loadQueryExtensions(setupConn);
+
       // Create a schema matching the FileSchema name
       // ALWAYS quote the schema name to preserve casing as-is
       String duckdbSchema = schemaName;
@@ -707,6 +710,42 @@ public class DuckDBJdbcSchemaFactory {
       LOGGER.debug("Error details: ", e);
       // This is not fatal - queries will fall back to Calcite function resolution
     }
+  }
+
+  /**
+   * Loads query-time DuckDB extensions for advanced functionality.
+   * These extensions are loaded in the persistent DuckDB catalog to enable
+   * query optimization features like vector similarity search and full-text search.
+   *
+   * @param conn DuckDB connection to load extensions into
+   */
+  private static void loadQueryExtensions(Connection conn) {
+    String[][] extensions = {
+        {"vss", ""},    // Vector Similarity Search: HNSW indexes for approximate nearest neighbor
+        {"fts", ""}     // Full-Text Search: BM25 ranking and keyword search
+    };
+
+    LOGGER.info("Loading query-time DuckDB extensions for optimization...");
+    for (String[] ext : extensions) {
+      try {
+        String installCmd = "INSTALL " + ext[0] + (ext[1].isEmpty() ? "" : " " + ext[1]);
+        String loadCmd = "LOAD " + ext[0];
+
+        LOGGER.debug("Installing extension: {}", installCmd);
+        conn.createStatement().execute(installCmd);
+
+        LOGGER.debug("Loading extension: {}", loadCmd);
+        conn.createStatement().execute(loadCmd);
+
+        LOGGER.info("✓ Loaded query extension: {}", ext[0]);
+      } catch (Exception e) {
+        LOGGER.warn("✗ Failed to load query extension '{}' (continuing): {}",
+                   ext[0], e.getMessage());
+        LOGGER.debug("Extension load error details: ", e);
+        // Graceful degradation - continue even if extension fails to load
+      }
+    }
+    LOGGER.info("Query extension loading complete");
   }
 
   /**

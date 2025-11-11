@@ -57,6 +57,8 @@
     <logger name="org.apache.calcite.adapter.govdata.econ.BeaDataDownloader" level="DEBUG"/>
     <!-- Enable debug logging for S3 storage to see exists() checks -->
     <logger name="org.apache.calcite.adapter.file.storage.S3StorageProvider" level="DEBUG"/>
+    <!-- Enable debug logging for govdata package (includes AbstractGovDataDownloader) -->
+    <logger name="org.apache.calcite.adapter.govdata" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.govdata.econ" level="DEBUG"/>
   </Loggers>
 </Configuration>
