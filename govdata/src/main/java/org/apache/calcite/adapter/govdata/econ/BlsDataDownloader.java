@@ -962,6 +962,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      Map<String, String> cacheParams = new HashMap<>();
+
+      if (isCachedOrExists("employment_statistics", year, cacheParams)) {
+        LOGGER.info("Found cached employment statistics for year {} - skipping", year);
+      } else {
+        uncachedYears.add(year);
+      }
+    }
 
     if (uncachedYears.isEmpty()) {
       LOGGER.info("All employment statistics data cached (years {}-{})", startYear, endYear);
