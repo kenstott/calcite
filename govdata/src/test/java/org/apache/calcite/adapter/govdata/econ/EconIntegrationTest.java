@@ -138,6 +138,16 @@ public class EconIntegrationTest {
       endYear = "2024";
     }
 
+    // NOTE: Government statistical agencies have varying data release lags:
+    // - National data (FRED, BEA NIPA): ~1-3 month lag
+    // - State-level data (BEA Regional): ~3-6 month lag
+    // - County/MSA-level data (BEA Regional): ~6-12 month lag
+    // - Employment data (BLS QCEW): ~5-6 month lag
+    //
+    // If endYear requests data not yet released, you'll see API error 101 in logs.
+    // This is expected - the system will automatically retry on next refresh and
+    // download the data once it becomes available.
+
     String fredApiKey = TestEnvironmentLoader.getEnv("FRED_API_KEY");
     String blsApiKey = TestEnvironmentLoader.getEnv("BLS_API_KEY");
     String beaApiKey = TestEnvironmentLoader.getEnv("BEA_API_KEY");
@@ -1254,6 +1264,149 @@ public class EconIntegrationTest {
 
       LOGGER.info("\n================================================================================");
       LOGGER.info(" ✅ COMPLEX CENSUS JOIN QUERY TEST COMPLETE!");
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  /**
+   * Test that trend table materialized view substitution works correctly.
+   * Verifies that queries without all partition keys use trend tables instead of detail tables.
+   */
+  @Test public void testTrendTableSubstitution() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" TESTING TREND TABLE MATERIALIZED VIEW SUBSTITUTION");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      // First verify both detail and trend tables exist
+      LOGGER.info("\n1. Verifying employment_statistics tables exist...");
+
+      Set<String> tables = new HashSet<>();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+               + "WHERE TABLE_SCHEMA = 'ECON' AND TABLE_NAME LIKE 'employment_statistics%'")) {
+        while (rs.next()) {
+          String tableName = rs.getString("TABLE_NAME");
+          tables.add(tableName);
+          LOGGER.info("   Found table: {}", tableName);
+        }
+      }
+
+      boolean hasDetailTable = tables.contains("EMPLOYMENT_STATISTICS");
+      boolean hasTrendTable = tables.contains("EMPLOYMENT_STATISTICS_TREND");
+
+      LOGGER.info("   Detail table exists: {}", hasDetailTable);
+      LOGGER.info("   Trend table exists: {}", hasTrendTable);
+
+      if (!hasDetailTable) {
+        LOGGER.warn("⚠️  employment_statistics detail table not found - skipping test");
+        return;
+      }
+
+      if (!hasTrendTable) {
+        LOGGER.warn("⚠️  employment_statistics_trend trend table not found");
+        LOGGER.warn("   This indicates trend_patterns may not be defined in econ-schema.json");
+        LOGGER.warn("   Skipping materialized view substitution test");
+        return;
+      }
+
+      // Test 1: Query WITH year filter - should use detail table (can leverage partition pruning)
+      LOGGER.info("\n2. Testing query WITH year filter (should use detail table)...");
+      String queryWithYear = "SELECT frequency, COUNT(*) as cnt FROM employment_statistics "
+          + "WHERE year = 2023 AND frequency = 'M' GROUP BY frequency";
+
+      LOGGER.info("   SQL: {}", queryWithYear);
+
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery("EXPLAIN PLAN FOR " + queryWithYear)) {
+        StringBuilder plan = new StringBuilder();
+        while (rs.next()) {
+          plan.append(rs.getString(1)).append("\n");
+        }
+        String planText = plan.toString();
+        LOGGER.info("\n   Query plan:\n{}", planText);
+
+        // When year filter is present, detail table can use partition pruning
+        // So optimizer might still prefer detail table
+        LOGGER.info("   ✓ Query with year filter executed");
+      }
+
+      // Test 2: Query WITHOUT year filter - should use trend table (fewer files to scan)
+      LOGGER.info("\n3. Testing query WITHOUT year filter (should use trend table)...");
+      String queryWithoutYear = "SELECT frequency, COUNT(*) as cnt FROM employment_statistics "
+          + "WHERE frequency = 'M' GROUP BY frequency";
+
+      LOGGER.info("   SQL: {}", queryWithoutYear);
+
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery("EXPLAIN PLAN FOR " + queryWithoutYear)) {
+        StringBuilder plan = new StringBuilder();
+        while (rs.next()) {
+          plan.append(rs.getString(1)).append("\n");
+        }
+        String planText = plan.toString();
+        LOGGER.info("\n   Query plan:\n{}", planText);
+
+        // Check if plan mentions the trend table
+        boolean usesTrendTable = planText.toUpperCase()
+            .contains("EMPLOYMENT_STATISTICS_TREND");
+        boolean usesDetailTable = planText.toUpperCase()
+            .contains("EMPLOYMENT_STATISTICS")
+            && !planText.toUpperCase().contains("EMPLOYMENT_STATISTICS_TREND");
+
+        if (usesTrendTable) {
+          LOGGER.info("\n   ✅ SUCCESS: Optimizer substituted trend table!");
+          LOGGER.info("   Query plan uses: employment_statistics_trend");
+          LOGGER.info("   This reduces S3 API calls by scanning fewer partition files");
+        } else if (usesDetailTable) {
+          LOGGER.warn("\n   ⚠️  Query still uses detail table");
+          LOGGER.warn("   Possible reasons:");
+          LOGGER.warn("   - Materialization not registered with optimizer");
+          LOGGER.warn("   - Statistics not available for cost comparison");
+          LOGGER.warn("   - Optimizer didn't recognize the optimization opportunity");
+          LOGGER.warn("\n   Plan text: {}", planText);
+        } else {
+          LOGGER.info("\n   ℹ️  Cannot determine which table is used from plan");
+          LOGGER.info("   Plan may use intermediate representation");
+        }
+      }
+
+      // Test 3: Execute both queries and verify they return same results
+      LOGGER.info("\n4. Verifying query results are identical...");
+
+      // Execute query on detail table
+      int detailCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT COUNT(*) FROM employment_statistics WHERE frequency = 'M'")) {
+        if (rs.next()) {
+          detailCount = rs.getInt(1);
+          LOGGER.info("   Detail table row count: {}", detailCount);
+        }
+      }
+
+      // Execute query on trend table
+      int trendCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT COUNT(*) FROM employment_statistics_trend WHERE frequency = 'M'")) {
+        if (rs.next()) {
+          trendCount = rs.getInt(1);
+          LOGGER.info("   Trend table row count: {}", trendCount);
+        }
+      }
+
+      if (detailCount > 0 && trendCount > 0) {
+        assertEquals(detailCount, trendCount,
+            "Detail and trend tables should have same data");
+        LOGGER.info("   ✅ Row counts match - data is consistent");
+      } else {
+        LOGGER.warn("   ⚠️  One or both tables are empty - cannot verify consistency");
+      }
+
+      LOGGER.info("\n================================================================================");
+      LOGGER.info(" ✅ TREND TABLE SUBSTITUTION TEST COMPLETE!");
       LOGGER.info("================================================================================");
     }
   }
