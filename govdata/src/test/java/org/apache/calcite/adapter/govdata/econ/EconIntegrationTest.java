@@ -365,10 +365,10 @@ public class EconIntegrationTest {
 
         // Sample query demonstrating series filtering (raw observations)
         LOGGER.info("\n4. Sample query - filtering by series (raw observations):");
-        String sampleQuery = "SELECT series, date, value " +
+        String sampleQuery = "SELECT series, \"date\", value " +
             "FROM \"ECON\".fred_indicators " +
             "WHERE series = 'DGS10' " +
-            "ORDER BY date DESC " +
+            "ORDER BY \"date\" DESC " +
             "LIMIT 5";
         try (ResultSet rs = stmt.executeQuery(sampleQuery)) {
           LOGGER.info("  Recent DGS10 (10-Year Treasury) raw observations:");
@@ -382,10 +382,10 @@ public class EconIntegrationTest {
 
         // Sample query using enriched view with metadata
         LOGGER.info("\n5. Sample query - using fred_indicators_enriched view:");
-        String enrichedQuery = "SELECT series, date, value, series_name, units, frequency " +
+        String enrichedQuery = "SELECT series, \"date\", value, series_name, units, frequency " +
             "FROM \"ECON\".fred_indicators_enriched " +
             "WHERE series = 'UNRATE' " +
-            "ORDER BY date DESC " +
+            "ORDER BY \"date\" DESC " +
             "LIMIT 5";
         try (ResultSet rs = stmt.executeQuery(enrichedQuery)) {
           LOGGER.info("  Recent UNRATE (Unemployment Rate) with metadata:");
