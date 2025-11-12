@@ -2551,8 +2551,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "    q.area_fips AS county_fips,\n"
     +
-          "    q.area_title AS county_name,\n"
-    +
           "    substring(q.area_fips, 1, 2) AS state_fips,\n"
     +
           "    s.state_name,\n"
