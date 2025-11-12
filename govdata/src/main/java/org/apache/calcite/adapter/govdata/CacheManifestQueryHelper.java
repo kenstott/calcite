@@ -172,7 +172,7 @@ public class CacheManifestQueryHelper {
               "  json_extract(value, '$.etag')::VARCHAR as etag, " +
               "  json_extract(value, '$.lastError')::VARCHAR as last_error " +
               "FROM read_json('%s', " +
-              "  format='json', " +
+              "  format='unstructured', " +
               "  records='false', " +  // Not newline-delimited JSON
               "  maximum_object_size=10000000" +  // Support large manifest files
               ") AS t, " +
@@ -296,7 +296,7 @@ public class CacheManifestQueryHelper {
             "      json_extract(value, '$.refreshAfter')::BIGINT as refresh_after, " +
             "      json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
             "      json_extract(value, '$.etag')::VARCHAR as etag " +
-            "    FROM read_json(?, format='json', records='false', maximum_object_size=10000000) AS t, " +
+            "    FROM read_json(?, format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
             "    json_each(t.entries) AS entries(key, value) " +
             "), " +
             "  needed AS ( " +
