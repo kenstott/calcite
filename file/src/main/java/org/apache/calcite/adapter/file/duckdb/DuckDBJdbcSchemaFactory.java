@@ -721,8 +721,9 @@ public class DuckDBJdbcSchemaFactory {
    */
   private static void loadQueryExtensions(Connection conn) {
     String[][] extensions = {
-        {"vss", ""},    // Vector Similarity Search: HNSW indexes for approximate nearest neighbor
-        {"fts", ""}     // Full-Text Search: BM25 ranking and keyword search
+        {"spatial", ""},  // Spatial extension: PostGIS-compatible spatial functions, ST_Point, ST_Contains, ST_Intersects
+        {"vss", ""},      // Vector Similarity Search: HNSW indexes for approximate nearest neighbor
+        {"fts", ""}       // Full-Text Search: BM25 ranking and keyword search
     };
 
     LOGGER.info("Loading query-time DuckDB extensions for optimization...");
