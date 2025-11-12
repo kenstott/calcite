@@ -49,6 +49,21 @@
           "comment": "WKT representation of state boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/STATE/",
+        "filePattern": "tl_{year}_us_state.zip",
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "geo-variable-mappings.json"
+        },
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -110,6 +125,21 @@
           "comment": "WKT representation of county boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/",
+        "filePattern": "tl_{year}_us_county.zip",
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "geo-variable-mappings.json"
+        },
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
