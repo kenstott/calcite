@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -530,30 +531,22 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Download comprehensive ACS data for all table types.
    */
   private void downloadAcsData(CensusApiClient censusClient, int startYear, int endYear,
-      String censusParquetDir, StorageProvider storageProvider) throws IOException {
+      String censusParquetDir, StorageProvider storageProvider) throws IOException, InterruptedException {
     LOGGER.info("Downloading comprehensive ACS data for years {} to {}", startYear, endYear);
 
     // The CensusApiClient.downloadAll already handles the core demographics, housing, and economic data
     // We just need to call it with the year range
     censusClient.downloadAll(startYear, endYear);
 
-    // Download all ACS subject tables for each table type
+    // Download all tables with download configurations from census-schema.json
+    List<String> acsTableNames = getTablesWithDownloadConfig("acs");
+
     for (int year = startYear; year <= endYear; year++) {
       try {
-        // Download data for each ACS table type using ConceptualVariableMapper
-        downloadAcsTableData(censusClient, year, "acs_population", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_demographics", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_poverty", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_employment", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_education", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_housing_costs", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_commuting", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_health_insurance", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_language", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_disability", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_veterans", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_migration", censusParquetDir, storageProvider);
-        downloadAcsTableData(censusClient, year, "acs_occupation", censusParquetDir, storageProvider);
+        // Download data for each ACS table using schema-driven approach
+        for (String tableName : acsTableNames) {
+          downloadTableData(censusClient, year, tableName, censusParquetDir, storageProvider);
+        }
 
         LOGGER.info("Downloaded comprehensive ACS data for year {}", year);
       } catch (Exception e) {
@@ -563,24 +556,58 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Download ACS data for a specific table type.
+   * Get list of table names from census-schema.json that have download configurations
+   * for a specific census type.
    */
-  private void downloadAcsTableData(CensusApiClient censusClient, int year, String tableName,
+  private List<String> getTablesWithDownloadConfig(String censusType) {
+    return org.apache.calcite.adapter.govdata.SchemaConfigReader.getTablesWithDownloadConfig(
+        "census-schema.json", "censusType", censusType);
+  }
+
+  /**
+   * Download Census data for a specific table using conceptual variable mapping.
+   * Works for any census type (ACS, decennial, economic, population).
+   */
+  private void downloadTableData(CensusApiClient censusClient, int year, String tableName,
       String censusParquetDir, StorageProvider storageProvider) throws IOException {
-    String[] variables = ConceptualVariableMapper.getVariablesToDownload(tableName, year, "acs");
+    // Determine census type from the table's download config in schema
+    String censusType = getCensusTypeForTable(tableName);
+    if (censusType == null) {
+      LOGGER.warn("No census type found for table {}, skipping", tableName);
+      return;
+    }
+
+    // Use ConceptualMapper interface instead of static methods
+    ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", censusType);
+
+    String[] variables = mapper.getVariablesToDownload(tableName, dimensions);
     if (variables.length == 0) {
       LOGGER.info("No variables available for {} in year {} - skipping download", tableName, year);
       return;
     }
 
     String variableList = String.join(",", variables);
-    LOGGER.info("Downloading {} variables for {}: {}", variables.length, tableName, variableList);
+    LOGGER.info("Downloading {} variables for {} ({}): {}", variables.length, tableName, censusType, variableList);
+
+    // Get geographies from download config
+    List<String> geographies = getGeographiesForTable(tableName);
+    if (geographies.isEmpty()) {
+      geographies = Arrays.asList("state:*", "county:*");  // Default
+    }
 
     try {
-      // Download for states
-      censusClient.getAcsData(year, variableList, "state:*");
-      // Download for counties
-      censusClient.getAcsData(year, variableList, "county:*");
+      // Download for each geography
+      for (String geography : geographies) {
+        if ("acs".equals(censusType)) {
+          censusClient.getAcsData(year, variableList, geography);
+        } else if ("decennial".equals(censusType)) {
+          censusClient.getDecennialData(year, variableList, geography);
+        }
+        // Add other census types as needed
+      }
 
       LOGGER.info("Successfully downloaded {} data for year {}", tableName, year);
     } catch (Exception e) {
@@ -590,9 +617,10 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.warn("Census data not available for {} year {} (404 - not released yet)", tableName, year);
         // Create zero-row marker so we don't keep retrying
         try {
+          String typeDir = censusType;
           String parquetPath =
-              storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-          createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "acs");
+              storageProvider.resolvePath(censusParquetDir, "type=" + typeDir + "/year=" + year + "/" + tableName + ".parquet");
+          createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, censusType);
           LOGGER.info("Created zero-row marker for {} year {} (will recheck based on TTL)", tableName, year);
         } catch (Exception markerEx) {
           LOGGER.error("Failed to create zero-row marker for {} year {}: {}",
@@ -604,6 +632,22 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, errorMsg);
       }
     }
+  }
+
+  /**
+   * Get census type for a table from its download configuration.
+   */
+  private String getCensusTypeForTable(String tableName) {
+    return org.apache.calcite.adapter.govdata.SchemaConfigReader.getDownloadConfigField(
+        "census-schema.json", tableName, "censusType");
+  }
+
+  /**
+   * Get geographies for a table from its download configuration.
+   */
+  private List<String> getGeographiesForTable(String tableName) {
+    return org.apache.calcite.adapter.govdata.SchemaConfigReader.getDownloadGeographies(
+        "census-schema.json", tableName);
   }
 
   /**
@@ -622,7 +666,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Download decennial data for a specific table type using conceptual variable mappings.
    */
   private void downloadDecennialTableData(CensusApiClient censusClient, int year, String tableName) throws IOException {
-    String[] variables = ConceptualVariableMapper.getVariablesToDownload(tableName, year, "decennial");
+    // Use ConceptualMapper interface
+    ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", "decennial");
+
+    String[] variables = mapper.getVariablesToDownload(tableName, dimensions);
     if (variables.length == 0) {
       LOGGER.info("No variables available for {} in year {} - skipping download", tableName, year);
       return;
@@ -783,8 +833,21 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Converting Census data to Parquet: {} for year {}", tableName, year);
 
     try {
-      // Get variable mappings for this table using conceptual mappings
-      Map<String, String> variableMap = ConceptualVariableMapper.getVariablesForTable(tableName, year, censusType);
+      // Get variable mappings using ConceptualMapper interface
+      ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+      Map<String, Object> dimensions = new HashMap<>();
+      dimensions.put("year", year);
+      dimensions.put("censusType", censusType);
+
+      Map<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> mappings =
+          mapper.getVariablesForTable(tableName, dimensions);
+
+      // Convert to legacy format for CensusDataTransformer
+      Map<String, String> variableMap = new HashMap<>();
+      for (Map.Entry<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> entry : mappings.entrySet()) {
+        variableMap.put(entry.getKey(), entry.getValue().getConceptualName());
+      }
+
       if (variableMap.isEmpty()) {
         LOGGER.warn("No variable mappings found for table: {} ({} year {})", tableName, censusType, year);
         return;
@@ -1004,7 +1067,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Download economic data for a specific table type using conceptual variable mappings.
    */
   private void downloadEconomicTableData(CensusApiClient censusClient, int year, String tableName) throws IOException {
-    String[] variables = ConceptualVariableMapper.getVariablesToDownload(tableName, year, "economic");
+    // Use ConceptualMapper interface
+    ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", "economic");
+
+    String[] variables = mapper.getVariablesToDownload(tableName, dimensions);
     if (variables.length == 0) {
       LOGGER.info("No variables available for {} in year {} - skipping download", tableName, year);
       return;
@@ -1033,7 +1102,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private void downloadPopulationEstimatesData(CensusApiClient censusClient, int year) throws IOException {
     LOGGER.info("Downloading Population Estimates data for year {}", year);
 
-    String[] variables = ConceptualVariableMapper.getVariablesToDownload("population_estimates", year, "population");
+    // Use ConceptualMapper interface
+    ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", "population");
+
+    String[] variables = mapper.getVariablesToDownload("population_estimates", dimensions);
     if (variables.length == 0) {
       LOGGER.info("No variables available for population_estimates in year {} - skipping download", year);
       return;
@@ -1137,8 +1212,20 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       StorageProvider storageProvider, String censusType) throws IOException {
     LOGGER.info("Creating zero-row parquet file: {}", targetPath);
 
-    // Get variable mappings for this table to create proper schema
-    Map<String, String> variableMap = ConceptualVariableMapper.getVariablesForTable(tableName, year, censusType);
+    // Get variable mappings using ConceptualMapper interface
+    ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", censusType);
+
+    Map<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> mappings =
+        mapper.getVariablesForTable(tableName, dimensions);
+
+    // Convert to legacy format for CensusDataTransformer
+    Map<String, String> variableMap = new HashMap<>();
+    for (Map.Entry<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> entry : mappings.entrySet()) {
+      variableMap.put(entry.getKey(), entry.getValue().getConceptualName());
+    }
 
     // Use the existing createZeroRowParquetFile method from CensusDataTransformer
     CensusDataTransformer transformer = new CensusDataTransformer();
