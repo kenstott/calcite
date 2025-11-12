@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.census;
 
+import org.apache.calcite.adapter.govdata.AbstractConceptualMapper;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -24,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,8 +35,8 @@ import java.util.Map;
  * Year-aware mapper for Census Bureau variables that handles variable evolution
  * across different census studies and time periods.
  *
- * <p>This class replaces the static CensusVariableMapper with a dynamic approach
- * that can map conceptual variables (like "total_population") to the appropriate
+ * <p>This class implements {@link ConceptualMapper} and provides a dynamic approach
+ * to map conceptual variables (like "total_population") to the appropriate
  * Census API variables based on the specific year and census type.
  *
  * <p>For example, total population is:
@@ -41,14 +44,25 @@ import java.util.Map;
  * - 2020 Decennial: P1_001N in pl dataset
  * - ACS (all years): B01001_001E in acs5 dataset
  */
-public class ConceptualVariableMapper {
+public class ConceptualVariableMapper extends AbstractConceptualMapper {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConceptualVariableMapper.class);
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static JsonNode mappingsConfig;
+  private static String currentMappingFile = "census-variable-mappings.json";
+
+  // Singleton instance for interface-based usage
+  private static final ConceptualVariableMapper INSTANCE = new ConceptualVariableMapper();
 
   static {
     loadMappingsConfig();
+  }
+
+  /**
+   * Get singleton instance.
+   */
+  public static ConceptualVariableMapper getInstance() {
+    return INSTANCE;
   }
 
   /**
@@ -79,19 +93,33 @@ public class ConceptualVariableMapper {
   }
 
   /**
-   * Load the conceptual mappings configuration from census-variable-mappings.json.
+   * Load the conceptual mappings configuration from default file.
    */
   private static void loadMappingsConfig() {
+    loadMappingsConfig(currentMappingFile);
+  }
+
+  /**
+   * Load the conceptual mappings configuration from specified file.
+   *
+   * @param mappingFile Path to mapping file (relative to classpath)
+   */
+  private static void loadMappingsConfig(String mappingFile) {
     try (InputStream is = ConceptualVariableMapper.class.getClassLoader()
-        .getResourceAsStream("census-variable-mappings.json")) {
+        .getResourceAsStream(mappingFile)) {
       if (is == null) {
-        throw new RuntimeException("census-variable-mappings.json not found in classpath");
+        throw new RuntimeException(mappingFile + " not found in classpath");
       }
       mappingsConfig = OBJECT_MAPPER.readTree(is);
-      LOGGER.info("Loaded census variable mappings configuration");
+      currentMappingFile = mappingFile;
+      LOGGER.info("Loaded census variable mappings configuration from {}", mappingFile);
     } catch (IOException e) {
-      throw new RuntimeException("Failed to load census variable mappings", e);
+      throw new RuntimeException("Failed to load census variable mappings from " + mappingFile, e);
     }
+  }
+
+  @Override public void loadMappingConfig(String mappingFile) {
+    loadMappingsConfig(mappingFile);
   }
 
   /**
@@ -359,12 +387,12 @@ public class ConceptualVariableMapper {
   }
 
   /**
-   * Get all conceptual columns defined for a table.
+   * Get all conceptual columns defined for a table (static helper).
    *
    * @param tableName Name of the table
    * @return Array of conceptual column names
    */
-  public static String[] getConceptualColumns(String tableName) {
+  private static String[] getConceptualColumnsStatic(String tableName) {
     try {
       JsonNode tableDefinition = mappingsConfig.path("tableDefinitions").path(tableName);
       JsonNode conceptualColumns = tableDefinition.path("conceptualColumns");
@@ -384,6 +412,32 @@ public class ConceptualVariableMapper {
   }
 
   /**
+   * Get variables to download for a table - includes only variables that exist for the given year/type (static helper).
+   *
+   * @param tableName Name of the table
+   * @param year Year of the data
+   * @param censusType Type of census
+   * @return Array of variable codes to request from Census API
+   */
+  private static String[] getVariablesToDownloadStatic(String tableName, int year, String censusType) {
+    Map<String, String> mappings = getVariablesForTable(tableName, year, censusType);
+    return mappings.keySet().toArray(new String[0]);
+  }
+
+  // ========== Public Static API (for backward compatibility) ==========
+  // These delegate to the singleton instance
+
+  /**
+   * Get all conceptual columns defined for a table.
+   *
+   * @param tableName Name of the table
+   * @return Array of conceptual column names
+   */
+  public static String[] getConceptualColumnsForTable(String tableName) {
+    return getConceptualColumnsStatic(tableName);
+  }
+
+  /**
    * Get variables to download for a table - includes only variables that exist for the given year/type.
    *
    * @param tableName Name of the table
@@ -392,7 +446,48 @@ public class ConceptualVariableMapper {
    * @return Array of variable codes to request from Census API
    */
   public static String[] getVariablesToDownload(String tableName, int year, String censusType) {
-    Map<String, String> mappings = getVariablesForTable(tableName, year, censusType);
-    return mappings.keySet().toArray(new String[0]);
+    return getVariablesToDownloadStatic(tableName, year, censusType);
+  }
+
+  // ========== ConceptualMapper Interface Implementation ==========
+
+  @Override public Map<String, AbstractConceptualMapper.VariableMapping> getVariablesForTable(
+      String tableName, Map<String, Object> dimensions) {
+    int year = extractYear(dimensions);
+    String censusType = extractCensusType(dimensions);
+
+    Map<String, String> variableToConceptualMap = getVariablesForTable(tableName, year, censusType);
+    Map<String, AbstractConceptualMapper.VariableMapping> result = new java.util.LinkedHashMap<>();
+
+    for (Map.Entry<String, String> entry : variableToConceptualMap.entrySet()) {
+      String variable = entry.getKey();
+      String conceptualName = entry.getValue();
+      VariableMapping mapping = getVariableMapping(conceptualName, year, censusType);
+      if (mapping != null) {
+        result.put(variable, new AbstractConceptualMapper.VariableMapping(
+            mapping.getDataset(), mapping.getVariable(), mapping.getConceptualName(), mapping.getDataType()));
+      }
+    }
+
+    return result;
+  }
+
+  @Override public String[] getVariablesToDownload(String tableName, Map<String, Object> dimensions) {
+    int year = extractYear(dimensions);
+    String censusType = extractCensusType(dimensions);
+    return getVariablesToDownloadStatic(tableName, year, censusType);
+  }
+
+  /**
+   * Extract census type from dimensions map with default fallback.
+   * Overrides parent extractType() to provide Census-specific default behavior.
+   */
+  private String extractCensusType(Map<String, Object> dimensions) {
+    String censusType = extractType(dimensions);
+    if (censusType == null) {
+      // Default to "decennial" for Census if not specified
+      return "decennial";
+    }
+    return censusType;
   }
 }
