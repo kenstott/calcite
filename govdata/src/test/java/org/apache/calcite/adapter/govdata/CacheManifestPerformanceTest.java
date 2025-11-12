@@ -54,7 +54,7 @@ public class CacheManifestPerformanceTest {
     testOperatingDir.mkdirs();
 
     // Create test manifest with realistic data
-    testManifest = new CacheManifest(testOperatingDir.getAbsolutePath());
+    testManifest = CacheManifest.load(testOperatingDir.getAbsolutePath());
 
     // Populate with 1000 cached entries (simulating realistic cache)
     for (int i = 0; i < 1000; i++) {
@@ -118,7 +118,7 @@ public class CacheManifestPerformanceTest {
    * This uses CacheManifestQueryHelper for bulk filtering.
    */
   @Test
-  public void testOptimizedCacheFiltering() {
+  public void testOptimizedCacheFiltering() throws Exception {
     // Generate same 2000 download requests
     List<CacheManifestQueryHelper.DownloadRequest> requests = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
@@ -133,7 +133,7 @@ public class CacheManifestPerformanceTest {
     long startTime = System.nanoTime();
 
     // Optimized approach: filter all requests in single SQL query
-    String manifestPath = testOperatingDir.getAbsolutePath() + "/econ-cache-manifest.parquet";
+    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.parquet";
     List<CacheManifestQueryHelper.DownloadRequest> uncached =
         CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests);
 
@@ -158,7 +158,7 @@ public class CacheManifestPerformanceTest {
    * Comparative benchmark showing speedup factor.
    */
   @Test
-  public void testComparativePerformance() {
+  public void testComparativePerformance() throws Exception {
     // Generate test data
     List<CacheManifestQueryHelper.DownloadRequest> requests = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
@@ -180,7 +180,7 @@ public class CacheManifestPerformanceTest {
     long traditionalMs = (System.nanoTime() - traditionalStart) / 1_000_000;
 
     // Run optimized approach
-    String manifestPath = testOperatingDir.getAbsolutePath() + "/econ-cache-manifest.parquet";
+    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.parquet";
     long optimizedStart = System.nanoTime();
     List<CacheManifestQueryHelper.DownloadRequest> uncached =
         CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests);
