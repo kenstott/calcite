@@ -35,9 +35,11 @@ import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -99,8 +101,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private final Map<String, Schema> createdSchemas = new HashMap<>();
   private final Map<String, String> schemaDataSources = new HashMap<>();
 
-  @Override public Schema create(SchemaPlus parentSchema, String name,
-      Map<String, Object> operand) {
+  @Override @NonNull public Schema create(@Nullable SchemaPlus parentSchema, @NonNull String name,
+      @NonNull Map<String, Object> operand) {
 
     // Initialize storage provider based on configuration
     initializeStorageProvider(operand);
@@ -149,6 +151,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create schema using FileSchemaFactory which properly handles StorageProvider and path resolution
     LOGGER.info("Creating schema with unified operand for {} data", dataSource);
+    assert parentSchema != null;
     Schema schema = org.apache.calcite.adapter.file.FileSchemaFactory.INSTANCE.create(parentSchema, name, unifiedOperand);
 
     // Get the operating cache directory from FileSchema (.aperio/<schema_name>/)
@@ -560,13 +563,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Get .aperio directory for metadata (always local filesystem)
     File aperioDir = fileSchema.getOperatingCacheDirectory();
-    String manifestPath = aperioDir.getAbsolutePath();
-
-    // Operating directory for ECON metadata (same as manifestPath)
-    String econOperatingDirectory = manifestPath;
+    String econOperatingDirectory = aperioDir.getAbsolutePath();
 
     // Load cache manifest from .aperio directory (not raw cache directory)
-    CacheManifest cacheManifest = CacheManifest.load(manifestPath);
+    CacheManifest cacheManifest = CacheManifest.load(econOperatingDirectory);
 
     // Extract API keys from environment variables or operand
     String blsApiKey = extractApiKey(operand, "blsApiKey", "BLS_API_KEY");
@@ -616,7 +616,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     fileSchema.registerRawToParquetConverter(econConverter);
 
-    LOGGER.info("Registered EconRawToParquetConverter with FileSchema (raw cache: {}, manifest: {})", econCacheDir, manifestPath);
+    LOGGER.info("Registered EconRawToParquetConverter with FileSchema (raw cache: {}, manifest: {})", econCacheDir, econOperatingDirectory);
   }
 
   /**
@@ -716,7 +716,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
     LOGGER.debug("Received constraint metadata for {} tables",
-        tableConstraints != null ? tableConstraints.size() : 0);
+        tableConstraints.size());
   }
 
   /**
@@ -744,11 +744,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Define FK from filing_metadata.state_of_incorporation to tiger_states.state_code
     Map<String, Object> filingMetadataConstraints = new HashMap<>();
     Map<String, Object> stateIncorpFK = new HashMap<>();
-    stateIncorpFK.put("columns", Arrays.asList("state_of_incorporation"));
+    stateIncorpFK.put("columns", List.of("state_of_incorporation"));
     stateIncorpFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
-    stateIncorpFK.put("targetColumns", Arrays.asList("state_code"));
+    stateIncorpFK.put("targetColumns", List.of("state_code"));
 
-    filingMetadataConstraints.put("foreignKeys", Arrays.asList(stateIncorpFK));
+    filingMetadataConstraints.put("foreignKeys", List.of(stateIncorpFK));
     constraints.put("filing_metadata", filingMetadataConstraints);
 
     LOGGER.info("Added cross-domain FK constraint: filing_metadata.state_of_incorporation -> {}.tiger_states.state_code",
@@ -788,9 +788,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     List<Map<String, Object>> regionalEmploymentFks = new ArrayList<>();
 
     Map<String, Object> regionalEmploymentToStatesFK = new HashMap<>();
-    regionalEmploymentToStatesFK.put("columns", Arrays.asList("state_code"));
+    regionalEmploymentToStatesFK.put("columns", List.of("state_code"));
     regionalEmploymentToStatesFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
-    regionalEmploymentToStatesFK.put("targetColumns", Arrays.asList("state_code"));
+    regionalEmploymentToStatesFK.put("targetColumns", List.of("state_code"));
     regionalEmploymentFks.add(regionalEmploymentToStatesFK);
 
     regionalEmploymentConstraints.put("foreignKeys", regionalEmploymentFks);
@@ -805,9 +805,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     List<Map<String, Object>> regionalIncomeFks = new ArrayList<>();
 
     Map<String, Object> regionalIncomeToStatesFK = new HashMap<>();
-    regionalIncomeToStatesFK.put("columns", Arrays.asList("geo_fips"));
+    regionalIncomeToStatesFK.put("columns", List.of("geo_fips"));
     regionalIncomeToStatesFK.put("targetTable", Arrays.asList(geoSchemaName, "tiger_states"));
-    regionalIncomeToStatesFK.put("targetColumns", Arrays.asList("state_fips"));
+    regionalIncomeToStatesFK.put("targetColumns", List.of("state_fips"));
     regionalIncomeFks.add(regionalIncomeToStatesFK);
 
     regionalIncomeConstraints.put("foreignKeys", regionalIncomeFks);
@@ -821,10 +821,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     List<Map<String, Object>> stateGdpFks = new ArrayList<>();
 
     Map<String, Object> stateGdpToStatesFK = new HashMap<>();
-    stateGdpToStatesFK.put("columns", Arrays.asList("geo_fips"));
+    stateGdpToStatesFK.put("columns", List.of("geo_fips"));
     stateGdpToStatesFK.put("targetSchema", geoSchemaName);
     stateGdpToStatesFK.put("targetTable", "tiger_states");
-    stateGdpToStatesFK.put("targetColumns", Arrays.asList("state_fips"));
+    stateGdpToStatesFK.put("targetColumns", List.of("state_fips"));
     stateGdpFks.add(stateGdpToStatesFK);
 
     stateGdpConstraints.put("foreignKeys", stateGdpFks);

@@ -42,8 +42,6 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import com.google.common.collect.ImmutableList;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -57,6 +55,8 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
+
+import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -490,8 +490,8 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     }
 
     // Create statistic with constraints AND row count, passing schema and table names
-    Statistic constraintStatistic = TableConstraints.fromConfig(tableConfig, columnNames,
-        null, schemaName, tableName);
+    Statistic constraintStatistic =
+        TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
 
     // Enhance with row count if we have an estimate
     if (rowCountEstimate > 0) {

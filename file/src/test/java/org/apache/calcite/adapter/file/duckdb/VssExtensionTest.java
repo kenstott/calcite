@@ -38,8 +38,7 @@ public class VssExtensionTest {
   /**
    * Tests that VSS extension can be loaded.
    */
-  @Test
-  void testVssExtensionLoads() throws Exception {
+  @Test void testVssExtensionLoads() throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       Statement stmt = conn.createStatement();
 
@@ -61,8 +60,7 @@ public class VssExtensionTest {
   /**
    * Tests array_distance function availability (basic VSS function).
    */
-  @Test
-  void testArrayDistanceFunctionAvailable() throws Exception {
+  @Test void testArrayDistanceFunctionAvailable() throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       Statement stmt = conn.createStatement();
 
@@ -77,9 +75,8 @@ public class VssExtensionTest {
 
       // Test array_distance function (cosine distance by default)
       try {
-        ResultSet rs = stmt.executeQuery(
-            "SELECT array_distance([1.0, 0.0]::FLOAT[2], [0.0, 1.0]::FLOAT[2]) as distance"
-        );
+        ResultSet rs =
+            stmt.executeQuery("SELECT array_distance([1.0, 0.0]::FLOAT[2], [0.0, 1.0]::FLOAT[2]) as distance");
 
         assertTrue(rs.next(), "Query should return a result");
         double distance = rs.getDouble("distance");
@@ -94,8 +91,7 @@ public class VssExtensionTest {
   /**
    * Tests HNSW index creation on a sample table with embeddings.
    */
-  @Test
-  void testHnswIndexCreation() throws Exception {
+  @Test void testHnswIndexCreation() throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       Statement stmt = conn.createStatement();
 
@@ -131,8 +127,7 @@ public class VssExtensionTest {
    * Tests similarity search with and without HNSW index.
    * This demonstrates the query optimization capability of VSS.
    */
-  @Test
-  void testSimilaritySearchWithIndex() throws Exception {
+  @Test void testSimilaritySearchWithIndex() throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       Statement stmt = conn.createStatement();
 
@@ -154,20 +149,19 @@ public class VssExtensionTest {
         for (int j = 0; j < 5; j++) {
           emb[j] = Math.random();
         }
-        stmt.execute(String.format(
+        stmt.execute(
+            String.format(
             "INSERT INTO documents VALUES (%d, 'Document %d', [%f, %f, %f, %f, %f]::FLOAT[5])",
-            i, i, emb[0], emb[1], emb[2], emb[3], emb[4]
-        ));
+            i, i, emb[0], emb[1], emb[2], emb[3], emb[4]));
       }
 
       // Query without index (brute force)
       long startTime = System.currentTimeMillis();
-      ResultSet rs = stmt.executeQuery(
-          "SELECT id, text, array_distance(embedding, [0.5, 0.5, 0.5, 0.5, 0.5]::FLOAT[5]) as dist " +
+      ResultSet rs =
+          stmt.executeQuery("SELECT id, text, array_distance(embedding, [0.5, 0.5, 0.5, 0.5, 0.5]::FLOAT[5]) as dist " +
           "FROM documents " +
           "ORDER BY dist " +
-          "LIMIT 5"
-      );
+          "LIMIT 5");
       long bruteForceTime = System.currentTimeMillis() - startTime;
 
       int count = 0;
@@ -186,12 +180,11 @@ public class VssExtensionTest {
 
         // Query with index (approximate nearest neighbor)
         startTime = System.currentTimeMillis();
-        rs = stmt.executeQuery(
-            "SELECT id, text, array_distance(embedding, [0.5, 0.5, 0.5, 0.5, 0.5]::FLOAT[5]) as dist " +
+        rs =
+            stmt.executeQuery("SELECT id, text, array_distance(embedding, [0.5, 0.5, 0.5, 0.5, 0.5]::FLOAT[5]) as dist " +
             "FROM documents " +
             "ORDER BY dist " +
-            "LIMIT 5"
-        );
+            "LIMIT 5");
         long indexTime = System.currentTimeMillis() - startTime;
 
         count = 0;
@@ -217,16 +210,14 @@ public class VssExtensionTest {
    * Tests that VSS extensions are gracefully handled when not available.
    * This ensures the system doesn't crash when VSS is not installed.
    */
-  @Test
-  void testGracefulDegradationWithoutVss() throws Exception {
+  @Test void testGracefulDegradationWithoutVss() throws Exception {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
       // Even without VSS, basic similarity operations should work using DuckDB's
       // built-in list functions
       Statement stmt = conn.createStatement();
 
-      ResultSet rs = stmt.executeQuery(
-          "SELECT list_cosine_similarity([1.0, 0.0], [0.0, 1.0]) as similarity"
-      );
+      ResultSet rs =
+          stmt.executeQuery("SELECT list_cosine_similarity([1.0, 0.0], [0.0, 1.0]) as similarity");
 
       assertTrue(rs.next(), "Basic list_cosine_similarity should work");
       double similarity = rs.getDouble("similarity");

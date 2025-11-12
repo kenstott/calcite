@@ -572,8 +572,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
    * Note: SEC adapter does not currently use this method as it has different error handling patterns.
    * This is a stub implementation to satisfy AbstractCacheManifest contract.
    */
-  @Override
-  public void markApiError(String dataType, int year, Map<String, String> parameters,
+  @Override public void markApiError(String dataType, int year, Map<String, String> parameters,
                           String errorMessage, int retryAfterDays) {
     // SEC adapter does not use the generic table operations framework that triggers API errors
     LOGGER.warn("markApiError called on SecCacheManifest - not implemented for SEC adapter");
