@@ -102,6 +102,10 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     LOGGER.info("Census API client initialized with cache directory: {}", cacheDir);
   }
 
+  @Override protected String getTableName() {
+    return "acs_population"; // Default table name for Census ACS data
+  }
+
   @Override protected long getMinRequestIntervalMs() {
     return RATE_LIMIT_DELAY_MS; // Census API: 500ms between requests (2 per second)
   }
@@ -155,7 +159,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   /**
    * Download all Census data for the specified year range (matching ECON pattern).
    */
-  public void downloadAll(int startYear, int endYear) throws IOException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
     LOGGER.info("Downloading all Census data for years {} to {}", startYear, endYear);
 
     // Download demographic data for each year
@@ -181,12 +185,301 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   }
 
   /**
+   * Convert all downloaded Census JSON files to Parquet format using DuckDB.
+   * This replaces the custom Avro-based conversion with metadata-driven DuckDB conversion.
+   */
+  @Override public void convertAll(int startYear, int endYear) {
+    LOGGER.info("Converting all Census JSON to Parquet for years {} to {}", startYear, endYear);
+
+    // Define Census data tables to convert
+    String[] censusDataTypes = {"population_demographics", "housing_characteristics", "economic_indicators"};
+
+    // Build iteration dimensions for conversion
+    List<IterationDimension> dimensions = new ArrayList<>();
+    dimensions.add(new IterationDimension("data_type", java.util.Arrays.asList(censusDataTypes)));
+    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
+
+    // Use iterateTableOperations() for automatic progress tracking
+    iterateTableOperations(
+        getTableName(),
+        dimensions,
+        (year, vars) -> {
+          // Check if parquet already exists
+          String dataType = vars.get("data_type");
+          String parquetPath = storageProvider.resolvePath(parquetDirectory,
+              "type=acs/year=" + year + "/" + dataType + ".parquet");
+
+          // Check manifest first
+          if (cacheManifest != null && cacheManifest.isParquetConverted(dataType, year, vars)) {
+            return true;
+          }
+
+          // Fallback to file existence check
+          try {
+            return storageProvider != null && storageProvider.exists(parquetPath);
+          } catch (IOException e) {
+            LOGGER.warn("Error checking parquet file existence for {}: {}", dataType, e.getMessage());
+            return false;
+          }
+        },
+        (year, vars) -> {
+          // Convert JSON to Parquet using DuckDB
+          String dataType = vars.get("data_type");
+          convertCensusDataToParquet(dataType, year, vars);
+
+          String parquetPath = storageProvider.resolvePath(parquetDirectory,
+              "type=acs/year=" + year + "/" + dataType + ".parquet");
+          if (cacheManifest != null) {
+            cacheManifest.markParquetConverted(dataType, year, vars, parquetPath);
+            cacheManifest.save(operatingDirectory);
+          }
+        },
+        "conversion");
+
+    LOGGER.info("Census JSON to Parquet conversion completed for years {} to {}", startYear, endYear);
+  }
+
+  /**
+   * Convert Census JSON data to Parquet using DuckDB.
+   * Replaces the custom Avro-based conversion methods.
+   *
+   * Census API returns JSON arrays in format:
+   * [["NAME", "VAR1", "VAR2", "state"], ["California", "123", "456", "06"], ...]
+   * Row 0 is header, rows 1+ are data, last column is geo identifier.
+   */
+  private void convertCensusDataToParquet(String dataType, int year, Map<String, String> vars) {
+    try {
+      // Build JSON source paths
+      String jsonBasePath = cacheStorageProvider.resolvePath(cacheDirectory, "year=" + year);
+      List<String> jsonFiles = new ArrayList<>();
+
+      // Add state-level file
+      String stateFile = cacheStorageProvider.resolvePath(jsonBasePath, dataType + "_states.json");
+      if (cacheStorageProvider.exists(stateFile)) {
+        jsonFiles.add(stateFile);
+      }
+
+      // Add county-level files for major states
+      String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+      for (String state : stateFips) {
+        String countyFile = cacheStorageProvider.resolvePath(jsonBasePath,
+            dataType + "_county_" + state + ".json");
+        if (cacheStorageProvider.exists(countyFile)) {
+          jsonFiles.add(countyFile);
+        }
+      }
+
+      if (jsonFiles.isEmpty()) {
+        LOGGER.warn("No JSON files found for Census data type '{}', year {}", dataType, year);
+        return;
+      }
+
+      // Build parquet target path
+      String parquetPath = storageProvider.resolvePath(parquetDirectory,
+          "type=acs/year=" + year + "/" + dataType + ".parquet");
+
+      // Load column definitions from census-schema.json
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          loadCensusTableColumns(dataType, year);
+
+      // Convert each JSON file separately, then combine
+      // For now, convert first file only (state-level data) as MVP
+      // TODO: Union multiple files after verifying schema consistency
+      if (!jsonFiles.isEmpty()) {
+        String firstJsonFile = jsonFiles.get(0);
+        LOGGER.info("Converting Census {} data for year {} from {} to Parquet",
+            dataType, year, firstJsonFile);
+
+        convertCachedJsonToParquetViaDuckDB(
+            dataType,
+            columns,
+            "null",  // Missing value indicator
+            firstJsonFile,
+            parquetPath);
+
+        LOGGER.info("Successfully converted Census {} data for year {} to Parquet", dataType, year);
+      }
+
+    } catch (Exception e) {
+      LOGGER.error("Failed to convert Census {} data for year {}: {}", dataType, year, e.getMessage(), e);
+      throw new RuntimeException("Census parquet conversion failed for " + dataType, e);
+    }
+  }
+
+  /**
+   * Loads column metadata for a Census table from census-schema.json.
+   *
+   * @param tableName The name of the table to load column metadata for
+   * @param year The year to substitute in expressions
+   * @return List of table column definitions with expressions resolved
+   * @throws IllegalArgumentException if the table is not found or schema is invalid
+   */
+  private static List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+      loadCensusTableColumns(String tableName, int year) {
+    try {
+      // Load census-schema.json from resources
+      java.io.InputStream schemaStream =
+          CensusApiClient.class.getResourceAsStream("/census-schema.json");
+      if (schemaStream == null) {
+        throw new IllegalArgumentException(
+            "census-schema.json not found in resources");
+      }
+
+      // Parse JSON
+      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+
+      // Find the table in the "partitionedTables" array
+      if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
+        throw new IllegalArgumentException(
+            "Invalid census-schema.json: missing 'partitionedTables' array");
+      }
+
+      for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("partitionedTables")) {
+        String name = tableNode.has("name") ? tableNode.get("name").asText() : null;
+        if (tableName.equals(name)) {
+          // Check if table uses conceptual mapping (indicated by presence of conceptualMappingFile)
+          String conceptualMappingFile = tableNode.has("conceptualMappingFile")
+              ? tableNode.get("conceptualMappingFile").asText() : null;
+
+          if (conceptualMappingFile != null && !conceptualMappingFile.isEmpty()) {
+            // Generate columns dynamically from conceptual mapper
+            return loadColumnsFromConceptualMapper(tableName, year, tableNode, conceptualMappingFile);
+          } else {
+            // Use static columns from schema
+            if (!tableNode.has("columns") || !tableNode.get("columns").isArray()) {
+              throw new IllegalArgumentException(
+                  "Table '" + tableName + "' has no 'columns' array in census-schema.json");
+            }
+
+            List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+                columns = new ArrayList<>();
+
+            for (com.fasterxml.jackson.databind.JsonNode colNode : tableNode.get("columns")) {
+              String colName = colNode.has("name") ? colNode.get("name").asText() : null;
+              String colType = colNode.has("type") ? colNode.get("type").asText() : "string";
+              boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
+              String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
+              String expression = colNode.has("expression") ? colNode.get("expression").asText() : null;
+
+              // Substitute {year} placeholder in expression
+              if (expression != null) {
+                expression = expression.replace("{year}", String.valueOf(year));
+              }
+
+              if (colName != null) {
+                columns.add(
+                    new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+                    colName, colType, nullable, comment, expression));
+              }
+            }
+
+            return columns;
+          }
+        }
+      }
+
+      // Table not found
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' not found in census-schema.json");
+
+    } catch (java.io.IOException e) {
+      throw new IllegalArgumentException(
+          "Failed to load column metadata for table '" + tableName + "': " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Load columns dynamically from conceptual mapper based on year and census type.
+   *
+   * @param tableName Name of the table
+   * @param year Year for variable resolution
+   * @param tableNode JSON node containing table metadata
+   * @param conceptualMappingFile Path to the conceptual mapping file (e.g., "census-variable-mappings.json")
+   */
+  private static List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+      loadColumnsFromConceptualMapper(String tableName, int year,
+          com.fasterxml.jackson.databind.JsonNode tableNode, String conceptualMappingFile) {
+    // Load the specified mapping file into the ConceptualVariableMapper
+    org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper mapper =
+        org.apache.calcite.adapter.govdata.census.ConceptualVariableMapper.getInstance();
+    mapper.loadMappingConfig(conceptualMappingFile);
+
+    // Determine census type from table pattern
+    String pattern = tableNode.has("pattern") ? tableNode.get("pattern").asText() : "";
+    String censusType = determineCensusType(pattern);
+
+    // Use ConceptualMapper interface to get variable mappings
+    java.util.Map<String, Object> dimensions = new java.util.HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("censusType", censusType);
+
+    java.util.Map<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> mappings =
+        mapper.getVariablesForTable(tableName, dimensions);
+
+    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        new ArrayList<>();
+
+    // Add geo_id column (always last in Census API response)
+    columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+        "geo_id", "string", false, "Geographic identifier",
+        "list_element(data, array_length(data))"));
+
+    // Add columns for each variable in order
+    int position = 2;  // Census API response format: [NAME, var1, var2, ..., varN, GEO_ID]
+    for (java.util.Map.Entry<String, org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping> entry : mappings.entrySet()) {
+      String variable = entry.getKey();
+      org.apache.calcite.adapter.govdata.AbstractConceptualMapper.VariableMapping mapping = entry.getValue();
+
+      String conceptualName = mapping.getConceptualName();
+      String dataType = mapping.getDataType().toLowerCase();
+      String sqlType = dataType.contains("int") || dataType.contains("long") ? "integer" :
+          dataType.contains("double") || dataType.contains("float") ? "double" : "string";
+
+      String expression = String.format("CAST(list_element(data, %d) AS %s)",
+          position, sqlType.toUpperCase());
+      String comment = String.format("%s (%s)", conceptualName.replace("_", " "), variable);
+
+      columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+          conceptualName, sqlType, true, comment, expression));
+
+      position++;
+    }
+
+    LOGGER.info("Generated {} columns for table {} (year {}, type {})",
+        columns.size(), tableName, year, censusType);
+
+    return columns;
+  }
+
+  /**
+   * Determine census type from table pattern.
+   */
+  private static String determineCensusType(String pattern) {
+    if (pattern.contains("type=acs/")) {
+      return "acs";
+    } else if (pattern.contains("type=decennial/")) {
+      return "decennial";
+    } else if (pattern.contains("type=economic/")) {
+      return "economic";
+    } else if (pattern.contains("type=population/")) {
+      return "population";
+    }
+    return "acs";  // Default
+  }
+
+  /**
    * Download population demographics for a specific year.
    */
   private void downloadPopulationDemographics(int year) throws IOException {
-    String variables = Variables.TOTAL_POPULATION + "," +
-                      Variables.MALE_POPULATION + "," +
-                      Variables.FEMALE_POPULATION;
+    // Use GeoConceptualMapper to get variables dynamically based on year
+    GeoConceptualMapper mapper = GeoConceptualMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("dataSource", "census_api");
+    dimensions.put("censusType", "acs");
+
+    String[] variableArray = mapper.getVariablesToDownload("population_demographics", dimensions);
+    String variables = String.join(",", variableArray);
 
     // Download state-level data
     JsonNode stateData = getAcsData(year, variables, "state:*");
@@ -204,10 +497,15 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    * Download housing characteristics for a specific year.
    */
   private void downloadHousingCharacteristics(int year) throws IOException {
-    String variables = Variables.TOTAL_HOUSING_UNITS + "," +
-                      Variables.OCCUPIED_HOUSING_UNITS + "," +
-                      Variables.VACANT_HOUSING_UNITS + "," +
-                      Variables.MEDIAN_HOME_VALUE;
+    // Use GeoConceptualMapper to get variables dynamically based on year
+    GeoConceptualMapper mapper = GeoConceptualMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("dataSource", "census_api");
+    dimensions.put("censusType", "acs");
+
+    String[] variableArray = mapper.getVariablesToDownload("housing_characteristics", dimensions);
+    String variables = String.join(",", variableArray);
 
     // Download state-level data
     JsonNode stateData = getAcsData(year, variables, "state:*");
@@ -231,11 +529,15 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       return;
     }
 
-    String variables = Variables.MEDIAN_HOUSEHOLD_INCOME + "," +
-                      Variables.PER_CAPITA_INCOME + "," +
-                      Variables.LABOR_FORCE + "," +
-                      Variables.EMPLOYED + "," +
-                      Variables.UNEMPLOYED;
+    // Use GeoConceptualMapper to get variables dynamically based on year
+    GeoConceptualMapper mapper = GeoConceptualMapper.getInstance();
+    Map<String, Object> dimensions = new HashMap<>();
+    dimensions.put("year", year);
+    dimensions.put("dataSource", "census_api");
+    dimensions.put("censusType", "acs");
+
+    String[] variableArray = mapper.getVariablesToDownload("economic_indicators", dimensions);
+    String variables = String.join(",", variableArray);
 
     try {
       // Download state-level data
@@ -893,267 +1195,4 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     public static final String GRADUATE_DEGREE = "B15003_024E";
   }
 
-  /**
-   * Convert Census JSON data to Parquet format (matching ECON pattern).
-   */
-  @SuppressWarnings("deprecation")
-  public void convertToParquet(File sourceDir, String targetFilePath) throws IOException {
-    // Extract year from path (pattern: year=YYYY)
-    int year = extractYearFromPath(targetFilePath);
-
-    // Extract data type from filename
-    String fileName = targetFilePath.substring(targetFilePath.lastIndexOf("/") + 1);
-    String dataType = fileName.replace(".parquet", "");
-
-    // Check manifest first (avoids S3 check)
-    if (cacheManifest != null) {
-      java.util.Map<String, String> params = new java.util.HashMap<>();
-      params.put("type", dataType);
-      if (cacheManifest.isParquetConverted(dataType, year, params)) {
-        LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
-        return;
-      }
-    }
-
-    // Defensive check if file already exists (for backfill/legacy data)
-    if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
-      // Update manifest since file exists but wasn't tracked
-      if (cacheManifest != null) {
-        java.util.Map<String, String> params = new java.util.HashMap<>();
-        params.put("type", dataType);
-        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-        cacheManifest.save(this.operatingDirectory);
-      }
-      return;
-    }
-
-    LOGGER.info("Converting Census data from {} to parquet: {}", sourceDir, targetFilePath);
-
-    // Determine which type of data to convert based on the file name
-    if (fileName.contains("population_demographics")) {
-      convertPopulationDemographicsToParquet(sourceDir, targetFilePath);
-    } else if (fileName.contains("housing_characteristics")) {
-      convertHousingCharacteristicsToParquet(sourceDir, targetFilePath);
-    } else if (fileName.contains("economic_indicators")) {
-      convertEconomicIndicatorsToParquet(sourceDir, targetFilePath);
-    } else {
-      LOGGER.warn("Unknown Census data type for conversion: {}", fileName);
-      return;
-    }
-
-    // Mark parquet conversion complete in manifest
-    if (cacheManifest != null) {
-      java.util.Map<String, String> params = new java.util.HashMap<>();
-      params.put("type", dataType);
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
-      cacheManifest.save(this.operatingDirectory);
-    }
-  }
-
-  // extractYearFromPath() is now provided by AbstractGeoDataDownloader
-
-  /**
-   * Convert population demographics JSON to Parquet.
-   */
-  @SuppressWarnings("deprecation")
-  private void convertPopulationDemographicsToParquet(File sourceDir, String targetFilePath)
-      throws IOException {
-
-    // Load schema metadata from geo-schema.json
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        loadTableColumns("population_demographics");
-
-    // Extract year from source directory
-    String yearStr = sourceDir.getName().replace("year=", "");
-    int year = Integer.parseInt(yearStr);
-
-    // Prepare data as List<Map<String, Object>>
-    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
-
-    // Read and convert state-level data
-    File stateFile = new File(sourceDir, "population_demographics_states.json");
-    if (stateFile.exists()) {
-      JsonNode data = objectMapper.readTree(stateFile);
-      for (int i = 1; i < data.size(); i++) { // Skip header row
-        JsonNode row = data.get(i);
-        java.util.Map<String, Object> record = new java.util.HashMap<>();
-        record.put("geo_id", row.get(row.size() - 1).asText()); // Last column is usually state FIPS
-        record.put("year", year);
-        record.put("total_population", (int) row.get(0).asLong(0L));
-        record.put("male_population", (int) row.get(1).asLong(0L));
-        record.put("female_population", (int) row.get(2).asLong(0L));
-        record.put("state_fips", row.get(row.size() - 1).asText());
-        record.put("county_fips", null);
-        dataList.add(record);
-      }
-    }
-
-    // Read and convert county-level data
-    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    for (String state : stateFips) {
-      File countyFile = new File(sourceDir, "population_demographics_county_" + state + ".json");
-      if (countyFile.exists()) {
-        JsonNode data = objectMapper.readTree(countyFile);
-        for (int i = 1; i < data.size(); i++) { // Skip header row
-          JsonNode row = data.get(i);
-          java.util.Map<String, Object> record = new java.util.HashMap<>();
-          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFipsVal);
-          record.put("year", year);
-          record.put("total_population", (int) row.get(0).asLong(0L));
-          record.put("male_population", (int) row.get(1).asLong(0L));
-          record.put("female_population", (int) row.get(2).asLong(0L));
-          record.put("state_fips", state);
-          record.put("county_fips", countyFipsVal);
-          dataList.add(record);
-        }
-      }
-    }
-
-    // Write to Parquet using StorageProvider
-    if (storageProvider != null && !dataList.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "PopulationDemographics", "PopulationDemographics");
-      LOGGER.info("Created population demographics parquet: {} with {} records",
-          targetFilePath, dataList.size());
-    }
-  }
-
-  /**
-   * Convert housing characteristics JSON to Parquet.
-   */
-  @SuppressWarnings("deprecation")
-  private void convertHousingCharacteristicsToParquet(File sourceDir, String targetFilePath)
-      throws IOException {
-
-    // Load schema metadata from geo-schema.json
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        loadTableColumns("housing_characteristics");
-
-    // Extract year from source directory
-    String yearStr = sourceDir.getName().replace("year=", "");
-    int year = Integer.parseInt(yearStr);
-
-    // Prepare data as List<Map<String, Object>>
-    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
-
-    // Read and convert state-level data
-    File stateFile = new File(sourceDir, "housing_characteristics_states.json");
-    if (stateFile.exists()) {
-      JsonNode data = objectMapper.readTree(stateFile);
-      for (int i = 1; i < data.size(); i++) { // Skip header row
-        JsonNode row = data.get(i);
-        java.util.Map<String, Object> record = new java.util.HashMap<>();
-        record.put("geo_id", row.get(row.size() - 1).asText());
-        record.put("year", year);
-        record.put("total_housing_units", (int) row.get(0).asLong(0L));
-        record.put("occupied_units", (int) row.get(1).asLong(0L));
-        record.put("vacant_units", (int) row.get(2).asLong(0L));
-        record.put("median_home_value", row.get(3).asDouble(0.0));
-        record.put("state_fips", row.get(row.size() - 1).asText());
-        record.put("county_fips", null);
-        dataList.add(record);
-      }
-    }
-
-    // Read and convert county-level data
-    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    for (String state : stateFips) {
-      File countyFile = new File(sourceDir, "housing_characteristics_county_" + state + ".json");
-      if (countyFile.exists()) {
-        JsonNode data = objectMapper.readTree(countyFile);
-        for (int i = 1; i < data.size(); i++) { // Skip header row
-          JsonNode row = data.get(i);
-          java.util.Map<String, Object> record = new java.util.HashMap<>();
-          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFipsVal);
-          record.put("year", year);
-          record.put("total_housing_units", (int) row.get(0).asLong(0L));
-          record.put("occupied_units", (int) row.get(1).asLong(0L));
-          record.put("vacant_units", (int) row.get(2).asLong(0L));
-          record.put("median_home_value", row.get(3).asDouble(0.0));
-          record.put("state_fips", state);
-          record.put("county_fips", countyFipsVal);
-          dataList.add(record);
-        }
-      }
-    }
-
-    // Write to Parquet using StorageProvider
-    if (storageProvider != null && !dataList.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "HousingCharacteristics", "HousingCharacteristics");
-      LOGGER.info("Created housing characteristics parquet: {} with {} records",
-          targetFilePath, dataList.size());
-    }
-  }
-
-  /**
-   * Convert economic indicators JSON to Parquet.
-   */
-  @SuppressWarnings("deprecation")
-  private void convertEconomicIndicatorsToParquet(File sourceDir, String targetFilePath)
-      throws IOException {
-
-    // Load schema metadata from geo-schema.json
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        loadTableColumns("economic_indicators");
-
-    // Extract year from source directory
-    String yearStr = sourceDir.getName().replace("year=", "");
-    int year = Integer.parseInt(yearStr);
-
-    // Prepare data as List<Map<String, Object>>
-    java.util.List<java.util.Map<String, Object>> dataList = new java.util.ArrayList<>();
-
-    // Read and convert state-level data
-    File stateFile = new File(sourceDir, "economic_indicators_states.json");
-    if (stateFile.exists()) {
-      JsonNode data = objectMapper.readTree(stateFile);
-      for (int i = 1; i < data.size(); i++) { // Skip header row
-        JsonNode row = data.get(i);
-        java.util.Map<String, Object> record = new java.util.HashMap<>();
-        record.put("geo_id", row.get(row.size() - 1).asText());
-        record.put("year", year);
-        record.put("median_household_income", row.get(0).asDouble(0.0));
-        record.put("per_capita_income", row.get(1).asDouble(0.0));
-        record.put("labor_force", (Integer) (int) row.get(2).asLong(0L));
-        record.put("employed", (Integer) (int) row.get(3).asLong(0L));
-        record.put("unemployed", (Integer) (int) row.get(4).asLong(0L));
-        record.put("state_fips", row.get(row.size() - 1).asText());
-        record.put("county_fips", null);
-        dataList.add(record);
-      }
-    }
-
-    // Read and convert county-level data
-    String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    for (String state : stateFips) {
-      File countyFile = new File(sourceDir, "economic_indicators_county_" + state + ".json");
-      if (countyFile.exists()) {
-        JsonNode data = objectMapper.readTree(countyFile);
-        for (int i = 1; i < data.size(); i++) { // Skip header row
-          JsonNode row = data.get(i);
-          java.util.Map<String, Object> record = new java.util.HashMap<>();
-          String countyFipsVal = row.get(row.size() - 1).asText(); // County FIPS
-          record.put("geo_id", countyFipsVal);
-          record.put("year", year);
-          record.put("median_household_income", row.get(0).asDouble(0.0));
-          record.put("per_capita_income", row.get(1).asDouble(0.0));
-          record.put("labor_force", (Integer) (int) row.get(2).asLong(0L));
-          record.put("employed", (Integer) (int) row.get(3).asLong(0L));
-          record.put("unemployed", (Integer) (int) row.get(4).asLong(0L));
-          record.put("state_fips", state);
-          record.put("county_fips", countyFipsVal);
-          dataList.add(record);
-        }
-      }
-    }
-
-    // Write to Parquet using StorageProvider
-    if (storageProvider != null && !dataList.isEmpty()) {
-      storageProvider.writeAvroParquet(targetFilePath, columns, dataList, "EconomicIndicators", "EconomicIndicators");
-      LOGGER.info("Created economic indicators parquet: {} with {} records",
-          targetFilePath, dataList.size());
-    }
-  }
 }
