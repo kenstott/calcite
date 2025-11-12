@@ -59,7 +59,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Main constructor for BEA downloader.
-   * Handles all BEA-specific initialization including loading catalogs and patching table lists.
+   * Handles all BEA-specific initialization including loading catalogs.
    */
   public BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
@@ -69,28 +69,25 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     this.parquetDir = parquetDir;
 
     // Extract iteration lists from schema metadata
-    List<String> nipaTablesListFromSchema = extractIterationList("national_accounts", "nipaTablesList");
     List<String> keyIndustriesListFromSchema = extractIterationList("industry_gdp", "keyIndustriesList");
 
-    // PATCH: Load active NIPA tables from catalog and use for downloads
-    Map<String, java.util.Set<String>> loadedTableFrequencies = java.util.Collections.emptyMap();
-    List<String> finalNipaTablesList = nipaTablesListFromSchema;
-
+    // Load active NIPA tables from catalog - this is the ONLY source of truth
+    Map<String, java.util.Set<String>> loadedTableFrequencies;
     try {
       loadedTableFrequencies = loadNipaTableFrequencies();
-      if (!loadedTableFrequencies.isEmpty()) {
-        // Extract just the table names
-        finalNipaTablesList = new java.util.ArrayList<>(loadedTableFrequencies.keySet());
-        LOGGER.info("Patching nipaTablesList with {} active tables from catalog (was: {})",
-            finalNipaTablesList.size(), nipaTablesListFromSchema.size());
-      } else {
-        LOGGER.warn("No active NIPA tables found in catalog, using default nipaTablesList");
+      if (loadedTableFrequencies.isEmpty()) {
+        throw new IllegalStateException("reference_nipa_tables catalog is empty - cannot proceed");
       }
+      LOGGER.info("Loaded {} NIPA tables from reference_nipa_tables catalog",
+          loadedTableFrequencies.size());
     } catch (Exception e) {
-      LOGGER.warn("Could not load active NIPA tables from catalog: {}. Using default nipaTablesList.", e.getMessage());
+      throw new IllegalStateException(
+          "Failed to load reference_nipa_tables catalog. This is required for NIPA data downloads. "
+          + "Ensure reference data has been downloaded first via downloadReferenceData(). "
+          + "Error: " + e.getMessage(), e);
     }
 
-    this.nipaTablesList = finalNipaTablesList;
+    this.nipaTablesList = new java.util.ArrayList<>(loadedTableFrequencies.keySet());
     this.tableFrequencies = loadedTableFrequencies;
     this.keyIndustriesList = keyIndustriesListFromSchema;
   }
@@ -1173,166 +1170,119 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Maps NIPA section number to descriptive section name.
-   *
-   * <p>NIPA tables are organized into 8 sections based on the first digit after 'T':
-   * <ul>
-   *   <li>1 = Domestic Product and Income (GDP, national income, value added)</li>
-   *   <li>2 = Personal Income and Outlays (wages, consumer spending, disposable income)</li>
-   *   <li>3 = Government (current receipts, expenditures, benefits)</li>
-   *   <li>4 = Foreign Transactions (exports, imports, international transactions)</li>
-   *   <li>5 = Saving and Investment (fixed investment, inventories, capital formation)</li>
-   *   <li>6 = Income and Employment by Industry (compensation, profits by sector)</li>
-   *   <li>7 = Supplemental Tables (per capita, pension plans, additional details)</li>
-   *   <li>8 = Not Seasonally Adjusted (unadjusted versions of other tables)</li>
-   * </ul>
-   *
-   * @param section Section number as string (1-8)
-   * @return Descriptive section name (e.g., "domestic_product_income")
-   */
-  private static String getSectionName(String section) {
-    switch (section) {
-    case "1":
-      return "domestic_product_income";
-    case "2":
-      return "personal_income_outlays";
-    case "3":
-      return "government";
-    case "4":
-      return "foreign_transactions";
-    case "5":
-      return "saving_investment";
-    case "6":
-      return "industry";
-    case "7":
-      return "supplemental";
-    case "8":
-      return "not_seasonally_adjusted";
-    default:
-      return "unknown";
-    }
-  }
-
-  /**
-   * Converts reference_nipa_tables JSON to Parquet with dynamic frequency columns and section
-   * categorization.
-   * Parses Description field to add annual and quarterly boolean flags.
-   * Parses TableName to extract section, family, metric, and table_number.
+   * Converts reference_nipa_tables JSON to Parquet with DuckDB doing all enrichment.
+   * Uses SQL to parse Description for frequencies and TableName for section/family/metric.
    *
    * @throws IOException if conversion fails
    */
   public void convertReferenceNipaTablesWithFrequencies() throws IOException {
-    LOGGER.info("Converting reference_nipa_tables to parquet with frequency columns");
+    LOGGER.info("Converting reference_nipa_tables to parquet with DuckDB-based enrichment");
 
-    String jsonPath = "type=reference/nipa_tables.json";
-    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-
-    // Early check: if parquet is already converted, skip entire process
+    String tableName = "reference_nipa_tables";
     int year = 0;  // Sentinel value for reference tables without year dimension
-    Map<String, String> params = new HashMap<>();  // No additional params for reference tables
+    Map<String, String> variables = new HashMap<>();  // No partition variables for non-partitioned download
 
-    if (cacheManifest.isParquetConverted("reference_nipa_tables", year, params)) {
+    if (cacheManifest.isParquetConverted(tableName, year, variables)) {
       LOGGER.info("⚡ reference_nipa_tables already converted to parquet, skipping");
       return;
     }
 
-    // Read JSON
-    com.fasterxml.jackson.databind.JsonNode root;
-    try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
-      root = MAPPER.readTree(is);
-    }
+    // Load pattern from schema and resolve paths
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+    String cachePattern = (String) downloadConfig.get("cachePattern");
+    String jsonPath = resolveJsonPath(cachePattern, variables);
+    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-    if (!root.isArray()) {
-      throw new IOException("reference_nipa_tables.json is not an array");
-    }
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      // Load JSON and enrich in one SQL query
+      String enrichSql =
+          String.format("CREATE TEMP TABLE enriched AS "
+          + "SELECT "
+          + "  TableName, "
+          + "  Description, "
+          + "  CASE "
+          + "    WHEN TableName LIKE 'T%%' AND length(TableName) >= 4 THEN substring(TableName, 2, 1) "
+          + "    ELSE NULL "
+          + "  END AS section, "
+          + "  CASE substring(TableName, 2, 1) "
+          + "    WHEN '1' THEN 'domestic_product_income' "
+          + "    WHEN '2' THEN 'personal_income_outlays' "
+          + "    WHEN '3' THEN 'government' "
+          + "    WHEN '4' THEN 'foreign_transactions' "
+          + "    WHEN '5' THEN 'saving_investment' "
+          + "    WHEN '6' THEN 'industry' "
+          + "    WHEN '7' THEN 'supplemental' "
+          + "    WHEN '8' THEN 'not_seasonally_adjusted' "
+          + "    ELSE 'unknown' "
+          + "  END AS section_name, "
+          + "  CASE "
+          + "    WHEN TableName LIKE 'T%%' AND length(TableName) >= 4 THEN substring(TableName, 3, 2) "
+          + "    ELSE NULL "
+          + "  END AS family, "
+          + "  CASE "
+          + "    WHEN TableName LIKE 'T%%' AND length(TableName) > 4 THEN substring(TableName, 5) "
+          + "    ELSE NULL "
+          + "  END AS metric, "
+          + "  CASE "
+          + "    WHEN TableName LIKE 'T%%' AND length(TableName) >= 4 THEN "
+          + "      substring(TableName, 2, 1) || '.' || substring(TableName, 3, 2) || '.' || substring(TableName, 5) "
+          + "    ELSE NULL "
+          + "  END AS table_number, "
+          + "  contains(Description, '(A)') AS annual, "
+          + "  contains(Description, '(Q)') AS quarterly "
+          + "FROM read_json('%s', format='array', maximum_object_size=10000000)",
+          fullJsonPath);
 
-    // Regex pattern to match frequency indicators
-    List<Map<String, Object>> enrichedRecords = new ArrayList<>();
-    for (com.fasterxml.jackson.databind.JsonNode item : root) {
-      com.fasterxml.jackson.databind.JsonNode keyNode = item.get("TableName");
-      com.fasterxml.jackson.databind.JsonNode descNode = item.get("Description");
+      try (java.sql.Statement stmt = duckdb.createStatement()) {
+        stmt.execute(enrichSql);
 
-      if (keyNode != null && descNode != null) {
-        String tableName = keyNode.asText();
-        String description = descNode.asText();
-
-        // Parse frequency indicators from description
-        boolean hasAnnual = description.contains("(A)");
-        boolean hasQuarterly = description.contains("(Q)");
-
-        // Parse TableName structure: TXYYZZ where X=section, YY=family, ZZ=metric
-        String section = null;
-        String sectionName = null;
-        String family = null;
-        String metric = null;
-        String tableNumber = null;
-
-        if (tableName != null && tableName.startsWith("T") && tableName.length() >= 4) {
-          try {
-            section = tableName.substring(1, 2);           // Character at position 1
-            family = tableName.substring(2, 4);            // Characters at positions 2-3
-            metric = tableName.substring(4);               // Remaining characters (may include
-            // letters like 'B')
-            sectionName = getSectionName(section);
-            tableNumber = section + "." + family + "." + metric;  // e.g., "1.01.05" or "4.02.05B"
-          } catch (Exception e) {
-            LOGGER.warn("Failed to parse TableName '{}': {}", tableName, e.getMessage());
+        // Get distinct sections for partitioned writing
+        java.util.List<String> sections = new java.util.ArrayList<>();
+        try (java.sql.ResultSet rs =
+            stmt.executeQuery("SELECT DISTINCT coalesce(section, 'unknown') AS section FROM enriched ORDER BY section")) {
+          while (rs.next()) {
+            sections.add(rs.getString("section"));
           }
         }
 
-        Map<String, Object> record = new HashMap<>();
-        record.put("TableName", tableName);
-        record.put("Description", description);
-        record.put("section", section);
-        record.put("section_name", sectionName);
-        record.put("family", family);
-        record.put("metric", metric);
-        record.put("table_number", tableNumber);
-        record.put("annual", hasAnnual);
-        record.put("quarterly", hasQuarterly);
+        LOGGER.info("Writing {} sections to partitioned parquet files", sections.size());
 
-        enrichedRecords.add(record);
+        // Write each section partition
+        for (String section : sections) {
+          String parquetPath = "type=reference/section=" + section + "/nipa_tables.parquet";
+          String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+
+          // Ensure parent directory exists
+          ensureParentDirectory(fullParquetPath);
+
+          String copySql =
+              String.format("COPY (SELECT * FROM enriched WHERE coalesce(section, 'unknown') = '%s') "
+              + "TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",
+              section, fullParquetPath);
+
+          stmt.execute(copySql);
+
+          long count = 0;
+          try (java.sql.ResultSet countRs =
+              stmt.executeQuery(String.format("SELECT count(*) FROM enriched WHERE coalesce(section, 'unknown') = '%s'", section))) {
+            if (countRs.next()) {
+              count = countRs.getLong(1);
+            }
+          }
+
+          LOGGER.info("Wrote {} tables for section {} to {}", count, section, parquetPath);
+        }
+
+        LOGGER.info("Converted reference_nipa_tables to parquet across {} sections", sections.size());
       }
+    } catch (java.sql.SQLException e) {
+      throw new IOException("Failed to convert reference_nipa_tables with DuckDB: " + e.getMessage(), e);
     }
-
-    LOGGER.info("Enriched {} NIPA tables with frequency and section columns",
-        enrichedRecords.size());
-
-    // Group records by section for partitioned writing
-    Map<String, List<Map<String, Object>>> recordsBySection = new HashMap<>();
-    for (Map<String, Object> record : enrichedRecords) {
-      String section = (String) record.get("section");
-      if (section == null) {
-        section = "unknown";
-      }
-      recordsBySection.computeIfAbsent(section, k -> new ArrayList<>()).add(record);
-    }
-
-    // Write each section partition separately
-    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-        loadTableColumnsFromMetadata("reference_nipa_tables");
-
-    for (Map.Entry<String, List<Map<String, Object>>> entry : recordsBySection.entrySet()) {
-      String section = entry.getKey();
-      List<Map<String, Object>> sectionRecords = entry.getValue();
-
-      String parquetPath = "type=reference/section=" + section + "/nipa_tables.parquet";
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
-
-      convertInMemoryToParquetViaDuckDB("reference_nipa_tables", columns, sectionRecords, fullParquetPath);
-
-      LOGGER.info("Wrote {} tables for section {} to {}", sectionRecords.size(), section,
-          parquetPath);
-    }
-
-    LOGGER.info("Converted reference_nipa_tables to parquet with frequency and section columns " +
-            "across {} sections",
-        recordsBySection.size());
 
     // Mark as converted in cache manifest after successful conversion
-    Map<String, Object> metadata = loadTableMetadata("reference_nipa_tables");
     String pattern = (String) metadata.get("pattern");
-    cacheManifest.markParquetConverted("reference_nipa_tables", year, params, pattern);
+    cacheManifest.markParquetConverted(tableName, year, variables, pattern);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -1398,11 +1348,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Convert BEA Regional LineCode catalog JSON to Parquet with enrichment.
-   * Enriches data with parsed metadata (table_prefix, data_category, geography_level, frequency).
+   * Convert BEA Regional LineCode catalog JSON to Parquet with DuckDB-based enrichment.
+   * Uses SQL to parse table name components and enrich with metadata.
    */
   public void convertRegionalLineCodeCatalog() {
-    LOGGER.info("Converting BEA Regional LineCode catalog to Parquet");
+    LOGGER.info("Converting BEA Regional LineCode catalog to Parquet with DuckDB");
 
     String tableName = "reference_regional_linecodes";
     List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
@@ -1412,7 +1362,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    // Load metadata to get the pattern
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
@@ -1424,146 +1373,76 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
 
       try {
-        // Resolve paths
         String jsonPath = resolveJsonPath(pattern, variables);
         String parquetPath = resolveParquetPath(pattern, variables);
         String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
-        // Check if already converted
         if (isParquetConvertedOrExists(tableName, year, variables, fullJsonPath, fullParquetPath)) {
           skippedCount++;
           continue;
         }
 
-        // Read JSON array (pre-extracted by dataPath during download)
-        com.fasterxml.jackson.databind.JsonNode dataNode;
-        try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
-          dataNode = MAPPER.readTree(is);
+        ensureParentDirectory(fullParquetPath);
+
+        // Convert with DuckDB doing all parsing and enrichment
+        try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+          String enrichSql =
+              String.format("COPY ("
+              + "SELECT "
+              + "  '%s' AS TableName, "
+              + "  Key AS LineCode, "
+              + "  Desc AS Description, "
+              + "  substring('%s', 1, 2) AS table_prefix, "
+              + "  CASE "
+              + "    WHEN ('%s' LIKE '%%INC%%') THEN 'INC' "
+              + "    WHEN ('%s' LIKE '%%GDP%%') THEN 'GDP' "
+              + "    WHEN ('%s' LIKE '%%ACE%%' OR '%s' LIKE '%%SAAC%%') THEN 'ACE' "
+              + "    WHEN ('%s' LIKE '%%RP%%') THEN 'RPP' "
+              + "    WHEN ('%s' LIKE '%%PCE%%') THEN 'PCE' "
+              + "    ELSE NULL "
+              + "  END AS data_category, "
+              + "  CASE "
+              + "    WHEN ('%s' LIKE 'SA%%' OR '%s' LIKE 'SQ%%') THEN 'state' "
+              + "    WHEN ('%s' LIKE 'CA%%') THEN 'county' "
+              + "    WHEN ('%s' LIKE 'MA%%') THEN 'msa' "
+              + "    WHEN ('%s' LIKE 'MI%%') THEN 'micropolitan' "
+              + "    ELSE NULL "
+              + "  END AS geography_level, "
+              + "  CASE "
+              + "    WHEN ('%s' LIKE 'SA%%' OR '%s' LIKE 'CA%%' OR '%s' LIKE 'MA%%') THEN 'annual' "
+              + "    WHEN ('%s' LIKE 'SQ%%') THEN 'quarterly' "
+              + "    ELSE NULL "
+              + "  END AS frequency "
+              + "FROM read_json('%s', format='array', maximum_object_size=10000000)"
+              + ") TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",
+              regionalTableName,  // TableName
+              regionalTableName,  // table_prefix
+              regionalTableName, regionalTableName, regionalTableName, regionalTableName,  // data_category (4 refs)
+              regionalTableName, regionalTableName,  // data_category cont (2 refs)
+              regionalTableName, regionalTableName, regionalTableName, regionalTableName,  // geography_level (4 refs)
+              regionalTableName,  // geography_level cont (1 ref)
+              regionalTableName, regionalTableName, regionalTableName, regionalTableName,  // frequency (4 refs)
+              fullJsonPath,
+              fullParquetPath);
+
+          try (java.sql.Statement stmt = duckdb.createStatement()) {
+            stmt.execute(enrichSql);
+          }
         }
 
-        if (!dataNode.isArray() || dataNode.isEmpty()) {
-          LOGGER.warn("Invalid or empty LineCode array for table {} in {}", regionalTableName, fullJsonPath);
-          continue;
-        }
-
-        // Parse table structure for enrichment
-        String tablePrefix = parseTablePrefix(regionalTableName);  // SA, SQ, CA, etc.
-        String dataCategory = parseDataCategory(regionalTableName);  // INC, GDP, etc.
-        String geographyLevel = parseGeographyLevel(regionalTableName);  // state, county, msa
-        String frequency = parseFrequency(regionalTableName);  // annual, quarterly
-
-        List<Map<String, Object>> enrichedRecords = new ArrayList<>();
-        for (com.fasterxml.jackson.databind.JsonNode item : dataNode) {
-          String lineCode = item.get("Key").asText();
-          String description = item.get("Desc").asText();
-
-          Map<String, Object> record = new HashMap<>();
-          record.put("TableName", regionalTableName);
-          record.put("LineCode", lineCode);
-          record.put("Description", description);
-          record.put("table_prefix", tablePrefix);
-          record.put("data_category", dataCategory);
-          record.put("geography_level", geographyLevel);
-          record.put("frequency", frequency);
-
-          enrichedRecords.add(record);
-        }
-
-        // Write parquet partition
-        List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
-            loadTableColumns(tableName);
-        convertInMemoryToParquetViaDuckDB(tableName, columns, enrichedRecords, fullParquetPath);
-
-        // Mark as converted in manifest
         cacheManifest.markParquetConverted(tableName, year, variables, fullParquetPath);
-
         convertedCount++;
-        LOGGER.debug("Converted LineCodes for table {} ({} line codes)", regionalTableName, enrichedRecords.size());
+        LOGGER.debug("Converted LineCodes for table {} with DuckDB", regionalTableName);
 
       } catch (Exception e) {
         LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
       }
     }
 
-    // Save manifest after conversions complete
     cacheManifest.save(operatingDirectory);
-
     LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables, skipped {} up-to-date",
         convertedCount, skippedCount);
-  }
-
-  /**
-   * Parse table prefix from BEA Regional table name.
-   * SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc.
-   */
-  private String parseTablePrefix(String tableName) {
-    if (tableName.length() >= 2) {
-      return tableName.substring(0, 2);
-    }
-    return null;
-  }
-
-  /**
-   * Parse data category from BEA Regional table name.
-   * INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc.
-   */
-  private String parseDataCategory(String tableName) {
-    if (tableName.startsWith("S") && tableName.contains("INC")) {
-      return "INC";
-    }
-    if (tableName.startsWith("C") && tableName.contains("INC")) {
-      return "INC";
-    }
-    if (tableName.startsWith("S") && tableName.contains("GDP")) {
-      return "GDP";
-    }
-    if (tableName.startsWith("C") && tableName.contains("GDP")) {
-      return "GDP";
-    }
-    if (tableName.contains("ACE") || tableName.contains("SAAC")) {
-      return "ACE";
-    }
-    if (tableName.contains("RP")) {
-      return "RPP";  // Regional Price Parities
-    }
-    if (tableName.contains("PCE")) {
-      return "PCE";  // Personal Consumption Expenditures
-    }
-    return null;
-  }
-
-  /**
-   * Parse geography level from BEA Regional table name.
-   */
-  private String parseGeographyLevel(String tableName) {
-    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
-      return "state";
-    }
-    if (tableName.startsWith("CA")) {
-      return "county";
-    }
-    if (tableName.startsWith("MA")) {
-      return "msa";
-    }
-    if (tableName.startsWith("MI")) {
-      return "micropolitan";
-    }
-    return null;
-  }
-
-  /**
-   * Parse frequency from BEA Regional table name.
-   */
-  private String parseFrequency(String tableName) {
-    if (tableName.startsWith("SA") || tableName.startsWith("CA")
-        || tableName.startsWith("MA")) {
-      return "annual";
-    }
-    if (tableName.startsWith("SQ")) {
-      return "quarterly";
-    }
-    return null;
   }
 
   /**

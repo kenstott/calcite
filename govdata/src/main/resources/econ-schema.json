@@ -1467,7 +1467,6 @@
             "value": "JSON"
           }
         },
-        "nipaTablesList": [],
         "response": {
           "format": "json",
           "dataPath": "BEAAPI.Results.Data",
@@ -2245,6 +2244,7 @@
             "value": "JSON"
           }
         },
+        "cachePattern": "type=reference/nipa_tables.parquet",
         "response": {
           "format": "json",
           "dataPath": "BEAAPI.Results.ParamValue"

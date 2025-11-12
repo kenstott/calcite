@@ -1165,6 +1165,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadStateWages(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading state wages from QCEW CSV files for {}-{}", startYear, endYear);
 
+    String tableName = "state_wages";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
     for (int year = startYear; year <= endYear; year++) {
       // QCEW data only available from 1990 forward
       if (year < 1990) {
@@ -1172,8 +1176,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-      String fullParquetPath =
-          storageProvider.resolvePath(parquetDirectory, "type=state_wages/frequency=monthly/year=" + year + "/state_wages.parquet");
+      Map<String, String> variables = ImmutableMap.of("frequency", "monthly", "year", String.valueOf(year));
+      String parquetPath = resolveParquetPath(pattern, variables);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
       // Check if already exists
       if (storageProvider.exists(fullParquetPath)) {
@@ -1181,7 +1186,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-      // Download QCEW CSV (reuses cache if available)
+      // Download QCEW CSV (reuses cache if available) - hardcoded path for intermediate cache file
       String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
       downloadQcewCsvIfNeeded(year, qcewZipPath);
 
@@ -1203,9 +1208,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadCountyWages(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading county wages from QCEW CSV files for {}-{}", startYear, endYear);
 
+    String tableName = "county_wages";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
     for (int year = startYear; year <= endYear; year++) {
-      String fullParquetPath =
-          storageProvider.resolvePath(parquetDirectory, "type=county_wages/frequency=quarterly/year=" + year + "/county_wages.parquet");
+      Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
+      String parquetPath = resolveParquetPath(pattern, variables);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
       // Check if already exists
       if (storageProvider.exists(fullParquetPath)) {
@@ -1242,9 +1252,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadCountyQcew(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
 
+    String tableName = "county_qcew";
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
     for (int year = startYear; year <= endYear; year++) {
-      String fullParquetPath =
-          storageProvider.resolvePath(parquetDirectory, "type=county_qcew/frequency=quarterly/year=" + year + "/county_qcew.parquet");
+      Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
+      String parquetPath = resolveParquetPath(pattern, variables);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
       // Check if already exists
       if (storageProvider.exists(fullParquetPath)) {
@@ -2333,45 +2348,52 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void parseAndConvertQcewToParquet(String fullZipPath, String fullParquetPath, int year) throws IOException {
     LOGGER.info("Converting QCEW CSV to Parquet via DuckDB for year {}", year);
 
-    // Build DuckDB SQL to read CSV from ZIP, filter, and write to Parquet
-    // DuckDB's read_csv_auto can read directly from ZIP files
-    String sql =
-        String.format("COPY (\n"
-  +
-        "  SELECT\n"
-  +
-        "    area_fips,\n"
-  +
-        "    own_code,\n"
-  +
-        "    industry_code,\n"
-  +
-        "    agglvl_code,\n"
-  +
-        "    TRY_CAST(annual_avg_estabs AS INTEGER) AS annual_avg_estabs,\n"
-  +
-        "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS annual_avg_emplvl,\n"
-  +
-        "    TRY_CAST(total_annual_wages AS BIGINT) AS total_annual_wages,\n"
-  +
-        "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS annual_avg_wkly_wage\n"
-  +
-        "  FROM read_csv_auto('%s')\n"
-  +
-        "  WHERE agglvl_code LIKE '7%%'\n"
-  +  // County-level aggregations (70-78)
-        "    AND length(area_fips) = 5\n"
-  +     // 5-digit FIPS codes only
-        "    AND area_fips != 'US000'\n"
-  +      // Exclude national aggregate
-        ") TO '%s' (FORMAT PARQUET);",
-        fullZipPath.replace("'", "''"),  // Escape single quotes in path
-        fullParquetPath.replace("'", "''"));
+    // Extract CSV from ZIP to temp file (DuckDB cannot read CSV from ZIP in S3)
+    String csvTempPath = extractCsvFromZip(fullZipPath, year);
 
-    // Execute via DuckDB
-    executeDuckDBSql(sql, "QCEW county CSV to Parquet conversion");
+    try {
+      // Build DuckDB SQL to read extracted CSV, filter, and write to Parquet
+      String sql =
+          String.format("COPY (\n"
+    +
+          "  SELECT\n"
+    +
+          "    area_fips,\n"
+    +
+          "    own_code,\n"
+    +
+          "    industry_code,\n"
+    +
+          "    agglvl_code,\n"
+    +
+          "    TRY_CAST(annual_avg_estabs AS INTEGER) AS annual_avg_estabs,\n"
+    +
+          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS annual_avg_emplvl,\n"
+    +
+          "    TRY_CAST(total_annual_wages AS BIGINT) AS total_annual_wages,\n"
+    +
+          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS annual_avg_wkly_wage\n"
+    +
+          "  FROM read_csv_auto('%s')\n"
+    +
+          "  WHERE agglvl_code LIKE '7%%'\n"
+    +  // County-level aggregations (70-78)
+          "    AND length(area_fips) = 5\n"
+    +     // 5-digit FIPS codes only
+          "    AND area_fips != 'US000'\n"
+    +      // Exclude national aggregate
+          ") TO '%s' (FORMAT PARQUET);",
+          csvTempPath.replace("'", "''"),  // Escape single quotes in path
+          fullParquetPath.replace("'", "''"));
 
-    LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
+      // Execute via DuckDB
+      executeDuckDBSql(sql, "QCEW county CSV to Parquet conversion");
+
+      LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
+    } finally {
+      // Clean up temp CSV file
+      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+    }
   }
 
   /**
@@ -2388,10 +2410,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
       if (cacheStorageProvider.exists(fullPath)) {
         LOGGER.info("Using cached QCEW CSV for year {} (from manifest)", year);
-        try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
-          inputStream.readAllBytes();
-          return;
-        }
+        return;
       } else {
         LOGGER.warn("Cache manifest lists QCEW ZIP for year {} but file not found - re-downloading", year);
       }
@@ -2430,51 +2449,59 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void parseQcewForStateWages(String fullZipPath, String fullParquetPath, int year) throws IOException {
     LOGGER.info("Converting QCEW CSV to Parquet via DuckDB for state wages year {}", year);
 
-    // Get the resource path for state_fips.json
-    String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
+    // Extract CSV from ZIP to temp file (DuckDB cannot read CSV from ZIP in S3)
+    String csvTempPath = extractCsvFromZip(fullZipPath, year);
 
-    // Build DuckDB SQL to read CSV from ZIP, filter, enrich with state names, and write to Parquet
-    String sql =
-        String.format("COPY (\n"
-  +
-        "  SELECT\n"
-  +
-        "    substring(area_fips, 1, 2) AS state_fips,\n"
-  +
-        "    s.state_name,\n"
-  +
-        "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
-  +
-        "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
-  +
-        "    %d AS year\n"
-  +
-        "  FROM read_csv_auto('%s')\n"
-  +
-        "  LEFT JOIN read_json_auto('%s') s\n"
-  +
-        "    ON substring(area_fips, 1, 2) = s.fips_code\n"
-  +
-        "  WHERE agglvl_code = '50'\n"
-  +
-        "    AND own_code = '0'\n"
-  +
-        "    AND industry_code = '10'\n"
-  +
-        "    AND length(area_fips) = 5\n"
-  +
-        "    AND area_fips LIKE '%%000'\n"
-  +
-        ") TO '%s' (FORMAT PARQUET);",
-        year,
-        fullZipPath.replace("'", "''"),
-        stateFipsJsonPath.replace("'", "''"),
-        fullParquetPath.replace("'", "''"));
+    try {
+      // Get the resource path for state_fips.json
+      String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
-    // Execute via DuckDB
-    executeDuckDBSql(sql, "QCEW state wages CSV to Parquet conversion");
+      // Build DuckDB SQL to read extracted CSV, filter, enrich with state names, and write to Parquet
+      String sql =
+          String.format("COPY (\n"
+    +
+          "  SELECT\n"
+    +
+          "    substring(area_fips, 1, 2) AS state_fips,\n"
+    +
+          "    s.state_name,\n"
+    +
+          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
+    +
+          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
+    +
+          "    %d AS year\n"
+    +
+          "  FROM read_csv_auto('%s')\n"
+    +
+          "  LEFT JOIN read_json_auto('%s') s\n"
+    +
+          "    ON substring(area_fips, 1, 2) = s.fips_code\n"
+    +
+          "  WHERE agglvl_code = '50'\n"
+    +
+          "    AND own_code = '0'\n"
+    +
+          "    AND industry_code = '10'\n"
+    +
+          "    AND length(area_fips) = 5\n"
+    +
+          "    AND area_fips LIKE '%%000'\n"
+    +
+          ") TO '%s' (FORMAT PARQUET);",
+          year,
+          csvTempPath.replace("'", "''"),
+          stateFipsJsonPath.replace("'", "''"),
+          fullParquetPath.replace("'", "''"));
 
-    LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
+      // Execute via DuckDB
+      executeDuckDBSql(sql, "QCEW state wages CSV to Parquet conversion");
+
+      LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
+    } finally {
+      // Clean up temp CSV file
+      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+    }
   }
 
   /**
@@ -2490,53 +2517,114 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void parseQcewForCountyWages(String fullZipPath, String fullParquetPath, int year) throws IOException {
     LOGGER.info("Converting QCEW CSV to Parquet via DuckDB for county wages year {}", year);
 
-    // Get the resource path for state_fips.json
-    String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
+    // Extract CSV from ZIP to temp file (DuckDB cannot read CSV from ZIP in S3)
+    String csvTempPath = extractCsvFromZip(fullZipPath, year);
 
-    // Build DuckDB SQL to read CSV from ZIP, filter, enrich with state names, and write to Parquet
-    String sql =
-        String.format("COPY (\n"
-  +
-        "  SELECT\n"
-  +
-        "    area_fips AS county_fips,\n"
-  +
-        "    area_title AS county_name,\n"
-  +
-        "    substring(area_fips, 1, 2) AS state_fips,\n"
-  +
-        "    s.state_name,\n"
-  +
-        "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
-  +
-        "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
-  +
-        "    %d AS year\n"
-  +
-        "  FROM read_csv_auto('%s')\n"
-  +
-        "  LEFT JOIN read_json_auto('%s') s\n"
-  +
-        "    ON substring(area_fips, 1, 2) = s.fips_code\n"
-  +
-        "  WHERE agglvl_code = '70'\n"
-  +
-        "    AND own_code = '0'\n"
-  +
-        "    AND industry_code = '10'\n"
-  +
-        "    AND length(area_fips) = 5\n"
-  +
-        ") TO '%s' (FORMAT PARQUET);",
-        year,
-        fullZipPath.replace("'", "''"),
-        stateFipsJsonPath.replace("'", "''"),
-        fullParquetPath.replace("'", "''"));
+    try {
+      // Get the resource path for state_fips.json
+      String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
-    // Execute via DuckDB
-    executeDuckDBSql(sql, "QCEW county wages CSV to Parquet conversion");
+      // Build DuckDB SQL to read extracted CSV, filter, enrich with state names, and write to Parquet
+      String sql =
+          String.format("COPY (\n"
+    +
+          "  SELECT\n"
+    +
+          "    area_fips AS county_fips,\n"
+    +
+          "    area_title AS county_name,\n"
+    +
+          "    substring(area_fips, 1, 2) AS state_fips,\n"
+    +
+          "    s.state_name,\n"
+    +
+          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
+    +
+          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
+    +
+          "    %d AS year\n"
+    +
+          "  FROM read_csv_auto('%s')\n"
+    +
+          "  LEFT JOIN read_json_auto('%s') s\n"
+    +
+          "    ON substring(area_fips, 1, 2) = s.fips_code\n"
+    +
+          "  WHERE agglvl_code = '70'\n"
+    +
+          "    AND own_code = '0'\n"
+    +
+          "    AND industry_code = '10'\n"
+    +
+          "    AND length(area_fips) = 5\n"
+    +
+          ") TO '%s' (FORMAT PARQUET);",
+          year,
+          csvTempPath.replace("'", "''"),
+          stateFipsJsonPath.replace("'", "''"),
+          fullParquetPath.replace("'", "''"));
 
-    LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
+      // Execute via DuckDB
+      executeDuckDBSql(sql, "QCEW county wages CSV to Parquet conversion");
+
+      LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
+    } finally {
+      // Clean up temp CSV file
+      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+    }
+  }
+
+  /**
+   * Extracts CSV file from ZIP archive to a temporary file.
+   * DuckDB cannot read CSV files directly from ZIP archives in S3,
+   * so we need to extract first.
+   *
+   * @param fullZipPath Full path to ZIP file in cache storage
+   * @param year Year for CSV filename pattern
+   * @return Path to extracted temporary CSV file
+   * @throws IOException if extraction fails
+   */
+  private String extractCsvFromZip(String fullZipPath, int year) throws IOException {
+    LOGGER.info("Extracting CSV from ZIP: {}", fullZipPath);
+
+    // Create temp file for CSV
+    java.nio.file.Path tempCsv = java.nio.file.Files.createTempFile("qcew_" + year + "_", ".csv");
+    String tempCsvPath = tempCsv.toString();
+
+    try (java.io.InputStream zipInputStream = cacheStorageProvider.openInputStream(fullZipPath);
+         java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(zipInputStream)) {
+
+      java.util.zip.ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String entryName = entry.getName();
+
+        // Look for the CSV file in the ZIP (format: YYYY.annual.singlefile.csv)
+        if (entryName.endsWith(".csv") && entryName.contains(String.valueOf(year))) {
+          LOGGER.info("Found CSV in ZIP: {}", entryName);
+
+          // Copy to temp file
+          try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempCsv.toFile())) {
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = zis.read(buffer)) > 0) {
+              fos.write(buffer, 0, len);
+            }
+          }
+
+          LOGGER.info("Extracted CSV to temp file: {}", tempCsvPath);
+          return tempCsvPath;
+        }
+
+        zis.closeEntry();
+      }
+
+      throw new IOException("Could not find CSV file for year " + year + " in ZIP: " + fullZipPath);
+
+    } catch (IOException e) {
+      // Clean up temp file if extraction failed
+      java.nio.file.Files.deleteIfExists(tempCsv);
+      throw e;
+    }
   }
 
   /**

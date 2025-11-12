@@ -1486,8 +1486,7 @@ public class TigerDataDownloader {
             "  SELECT %s" +
             "  FROM ST_Read('/vsizip/%s/%s')" +
             ") TO '%s' (FORMAT PARQUET)",
-        selectClause, zipFilePath, shapefileName, targetFilePath
-    );
+        selectClause, zipFilePath, shapefileName, targetFilePath);
   }
 
   /**
