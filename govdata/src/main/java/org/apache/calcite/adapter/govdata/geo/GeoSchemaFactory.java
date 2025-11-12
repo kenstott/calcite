@@ -312,6 +312,155 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
+   * Metadata-driven download of geographic data using SchemaConfigReader.
+   * Replaces hardcoded table logic with JSON-driven configuration.
+   *
+   * @param operand Schema configuration operand
+   * @param cacheDir Cache directory for raw downloads
+   * @param geoParquetDir Parquet output directory
+   * @param storageProvider Storage provider for file operations
+   * @param tigerYears Years to process for TIGER data
+   * @param cacheManifest Cache manifest for tracking downloads
+   */
+  private void downloadGeoDataMetadataDriven(Map<String, Object> operand, String cacheDir,
+      String geoParquetDir, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+      List<Integer> tigerYears, GeoCacheManifest cacheManifest) {
+
+    LOGGER.info("Starting metadata-driven geo data download");
+
+    // Get all TIGER tables from schema configuration
+    List<String> tigerTables = org.apache.calcite.adapter.govdata.SchemaConfigReader
+        .getTablesWithDownloadConfig("geo-schema.json", "dataSource", "tiger");
+
+    if (tigerTables.isEmpty()) {
+      LOGGER.info("No TIGER tables configured for download");
+      return;
+    }
+
+    LOGGER.info("Found {} TIGER tables configured for download: {}",
+        tigerTables.size(), tigerTables);
+
+    String geoOperatingDirectory = (String) operand.get("operatingDirectory");
+    String tigerCacheDir = storageProvider.resolvePath(cacheDir, "tiger");
+
+    // Create TIGER downloader
+    TigerDataDownloader tigerDownloader = new TigerDataDownloader(
+        tigerCacheDir, geoOperatingDirectory, tigerYears, true,
+        storageProvider, cacheManifest);
+
+    // For each table and year combination, check if download/conversion needed
+    for (String tableName : tigerTables) {
+      for (int year : tigerYears) {
+        try {
+          downloadAndConvertTigerTable(tableName, year, tigerDownloader,
+              geoParquetDir, storageProvider);
+        } catch (Exception e) {
+          LOGGER.error("Error processing TIGER table {} for year {}: {}",
+              tableName, year, e.getMessage());
+          LOGGER.debug("Error details: ", e);
+        }
+      }
+    }
+
+    LOGGER.info("Metadata-driven geo data download complete");
+  }
+
+  /**
+   * Download and convert a single TIGER table for a specific year.
+   * Uses schema configuration to determine download URLs and conversion settings.
+   */
+  private void downloadAndConvertTigerTable(String tableName, int year,
+      TigerDataDownloader tigerDownloader, String geoParquetDir,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) throws Exception {
+
+    // Build paths
+    String parquetPath = storageProvider.resolvePath(geoParquetDir,
+        BOUNDARY_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+
+    java.util.Map<String, String> params = new java.util.HashMap<>();
+
+    // Check if already converted (via manifest or file existence)
+    if (tigerDownloader.getCacheManifest().isParquetConverted(tableName, year, params)) {
+      LOGGER.debug("Table {} year {} already converted per manifest", tableName, year);
+      return;
+    }
+
+    // Check if parquet file exists
+    try {
+      if (storageProvider.exists(parquetPath)) {
+        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+        if (metadata.getSize() > 0) {
+          LOGGER.debug("Table {} year {} parquet already exists", tableName, year);
+          // Update manifest since file exists but wasn't tracked
+          tigerDownloader.getCacheManifest().markParquetConverted(
+              tableName, year, params, parquetPath);
+          tigerDownloader.getCacheManifest().save(
+              tigerDownloader.getOperatingDirectory());
+          return;
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Could not check parquet existence for {} year {}: {}",
+          tableName, year, e.getMessage());
+    }
+
+    // Need to download and convert
+    LOGGER.info("Downloading and converting TIGER table {} for year {}", tableName, year);
+
+    // Download based on table type
+    File downloadedDir = downloadTigerTableForYear(tigerDownloader, tableName, year);
+
+    if (downloadedDir != null && downloadedDir.exists()) {
+      // Convert to Parquet (will use DuckDB spatial if ZIP file available)
+      tigerDownloader.convertToParquet(downloadedDir, parquetPath);
+      LOGGER.info("Successfully processed TIGER table {} for year {}", tableName, year);
+    } else {
+      LOGGER.warn("Failed to download TIGER table {} for year {}", tableName, year);
+    }
+  }
+
+  /**
+   * Download a TIGER table for a specific year.
+   * Routes to the appropriate TigerDataDownloader method based on table name.
+   */
+  private File downloadTigerTableForYear(TigerDataDownloader downloader,
+      String tableName, int year) {
+    try {
+      switch (tableName) {
+        case "states":
+          return downloader.downloadStatesForYear(year);
+        case "counties":
+          return downloader.downloadCountiesForYear(year);
+        case "places":
+          // Download multiple states for places
+          downloader.downloadPlacesForYear(year, "06"); // California
+          downloader.downloadPlacesForYear(year, "48"); // Texas
+          downloader.downloadPlacesForYear(year, "36"); // New York
+          return downloader.downloadPlacesForYear(year, "12"); // Florida (returns dir)
+        case "zctas":
+          return downloader.downloadZctasForYear(year);
+        case "census_tracts":
+          return downloader.downloadCensusTractsForYear(year);
+        case "block_groups":
+          return downloader.downloadBlockGroupsForYear(year);
+        case "cbsa":
+          return downloader.downloadCbsasForYear(year);
+        case "congressional_districts":
+          return downloader.downloadCongressionalDistrictsForYear(year);
+        case "school_districts":
+          return downloader.downloadSchoolDistrictsForYear(year, "06"); // California example
+        default:
+          LOGGER.warn("Unknown TIGER table type: {}", tableName);
+          return null;
+      }
+    } catch (Exception e) {
+      LOGGER.error("Error downloading TIGER table {} for year {}: {}",
+          tableName, year, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
    * Download geographic data from various sources.
    */
   private void downloadGeoData(Map<String, Object> operand, String cacheDir, String geoParquetDir, String censusApiKey,
@@ -792,49 +941,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           int endYear = censusYears.isEmpty() ? 2020 : censusYears.get(censusYears.size() - 1);
           censusClient.downloadAll(startYear, endYear);
 
-          // Convert to Parquet for each year
-          // Note: Census data is stored in cache with year-specific subdirectories
-          for (int year : censusYears) {
-            String yearPath = "year=" + year;
-            File yearCacheDir;
-
-            // For S3, download to temp; for local, use cached files directly
-            if (censusCacheDir.startsWith("s3://")) {
-              // Download from S3 cache to temp directory
-              // Create temp base directory, then create year= subdirectory inside it
-              File tempBaseDir = java.nio.file.Files.createTempDirectory("census-data-").toFile();
-              yearCacheDir = new File(tempBaseDir, yearPath);
-              yearCacheDir.mkdirs();
-
-              String cachePath = storageProvider.resolvePath(censusCacheDir, yearPath);
-              java.util.List<StorageProvider.FileEntry> files = storageProvider.listFiles(cachePath, false);
-              for (StorageProvider.FileEntry file : files) {
-                if (!file.isDirectory()) {
-                  File targetFile = new File(yearCacheDir, file.getName());
-                  try (java.io.InputStream in = storageProvider.openInputStream(file.getPath());
-                       java.io.OutputStream out = new java.io.FileOutputStream(targetFile)) {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
-                      out.write(buffer, 0, bytesRead);
-                    }
-                  }
-                }
-              }
-            } else {
-              // Local filesystem - use directly
-              yearCacheDir = new File(censusCacheDir, yearPath);
-            }
-
-            String populationPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/population_demographics.parquet");
-            censusClient.convertToParquet(yearCacheDir, populationPath);
-
-            String housingPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/housing_characteristics.parquet");
-            censusClient.convertToParquet(yearCacheDir, housingPath);
-
-            String economicPath = storageProvider.resolvePath(geoParquetDir, DEMOGRAPHIC_TYPE + "/year=" + year + "/economic_indicators.parquet");
-            censusClient.convertToParquet(yearCacheDir, economicPath);
-          }
+          // Convert to Parquet using new pattern
+          LOGGER.info("Converting Census demographic data to Parquet for years: {}", censusYears);
+          censusClient.convertAll(startYear, endYear);
 
         } catch (Exception e) {
           LOGGER.error("Error downloading Census data", e);
