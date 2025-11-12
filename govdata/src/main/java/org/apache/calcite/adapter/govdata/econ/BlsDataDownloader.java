@@ -2379,29 +2379,29 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "  SELECT\n"
     +
-          "    area_fips,\n"
+          "    q.area_fips,\n"
     +
-          "    own_code,\n"
+          "    q.own_code,\n"
     +
-          "    industry_code,\n"
+          "    q.industry_code,\n"
     +
-          "    agglvl_code,\n"
+          "    q.agglvl_code,\n"
     +
-          "    TRY_CAST(annual_avg_estabs AS INTEGER) AS annual_avg_estabs,\n"
+          "    TRY_CAST(q.annual_avg_estabs AS INTEGER) AS annual_avg_estabs,\n"
     +
-          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS annual_avg_emplvl,\n"
+          "    TRY_CAST(q.annual_avg_emplvl AS INTEGER) AS annual_avg_emplvl,\n"
     +
-          "    TRY_CAST(total_annual_wages AS BIGINT) AS total_annual_wages,\n"
+          "    TRY_CAST(q.total_annual_wages AS BIGINT) AS total_annual_wages,\n"
     +
-          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS annual_avg_wkly_wage\n"
+          "    TRY_CAST(q.annual_avg_wkly_wage AS INTEGER) AS annual_avg_wkly_wage\n"
     +
-          "  FROM read_csv_auto('%s')\n"
+          "  FROM read_csv_auto('%s') q\n"
     +
-          "  WHERE agglvl_code LIKE '7%%'\n"
+          "  WHERE q.agglvl_code LIKE '7%%'\n"
     +  // County-level aggregations (70-78)
-          "    AND length(area_fips) = 5\n"
+          "    AND length(q.area_fips) = 5\n"
     +     // 5-digit FIPS codes only
-          "    AND area_fips != 'US000'\n"
+          "    AND q.area_fips != 'US000'\n"
     +      // Exclude national aggregate
           ") TO '%s' (FORMAT PARQUET);",
           csvTempPath.replace("'", "''"),  // Escape single quotes in path
@@ -2481,31 +2481,31 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "  SELECT\n"
     +
-          "    substring(area_fips, 1, 2) AS state_fips,\n"
+          "    substring(q.area_fips, 1, 2) AS state_fips,\n"
     +
           "    s.state_name,\n"
     +
-          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
+          "    TRY_CAST(q.annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
     +
-          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
+          "    TRY_CAST(q.annual_avg_emplvl AS INTEGER) AS total_employment,\n"
     +
           "    %d AS year\n"
     +
-          "  FROM read_csv_auto('%s')\n"
+          "  FROM read_csv_auto('%s') q\n"
     +
           "  LEFT JOIN read_json_auto('%s') s\n"
     +
-          "    ON substring(area_fips, 1, 2) = s.fips_code\n"
+          "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
     +
-          "  WHERE agglvl_code = '50'\n"
+          "  WHERE q.agglvl_code = '50'\n"
     +
-          "    AND own_code = '0'\n"
+          "    AND q.own_code = '0'\n"
     +
-          "    AND industry_code = '10'\n"
+          "    AND q.industry_code = '10'\n"
     +
-          "    AND length(area_fips) = 5\n"
+          "    AND length(q.area_fips) = 5\n"
     +
-          "    AND area_fips LIKE '%%000'\n"
+          "    AND q.area_fips LIKE '%%000'\n"
     +
           ") TO '%s' (FORMAT PARQUET);",
           year,
@@ -2549,33 +2549,33 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "  SELECT\n"
     +
-          "    area_fips AS county_fips,\n"
+          "    q.area_fips AS county_fips,\n"
     +
-          "    area_title AS county_name,\n"
+          "    q.area_title AS county_name,\n"
     +
-          "    substring(area_fips, 1, 2) AS state_fips,\n"
+          "    substring(q.area_fips, 1, 2) AS state_fips,\n"
     +
           "    s.state_name,\n"
     +
-          "    TRY_CAST(annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
+          "    TRY_CAST(q.annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
     +
-          "    TRY_CAST(annual_avg_emplvl AS INTEGER) AS total_employment,\n"
+          "    TRY_CAST(q.annual_avg_emplvl AS INTEGER) AS total_employment,\n"
     +
           "    %d AS year\n"
     +
-          "  FROM read_csv_auto('%s')\n"
+          "  FROM read_csv_auto('%s') q\n"
     +
           "  LEFT JOIN read_json_auto('%s') s\n"
     +
-          "    ON substring(area_fips, 1, 2) = s.fips_code\n"
+          "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
     +
-          "  WHERE agglvl_code = '70'\n"
+          "  WHERE q.agglvl_code = '70'\n"
     +
-          "    AND own_code = '0'\n"
+          "    AND q.own_code = '0'\n"
     +
-          "    AND industry_code = '10'\n"
+          "    AND q.industry_code = '10'\n"
     +
-          "    AND length(area_fips) = 5\n"
+          "    AND length(q.area_fips) = 5\n"
     +
           ") TO '%s' (FORMAT PARQUET);",
           year,
