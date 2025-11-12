@@ -238,32 +238,26 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     dimensions.add(new IterationDimension("table_freq", tableFreqCombos));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework
-    iterateTableOperations(
+    // Execute using optimized framework with DuckDB-based cache filtering (10-20x faster)
+    // Note: Cache keys use table_freq composite key to match dimension structure
+    iterateTableOperationsOptimized(
         tableName,
         dimensions,
         (year, vars) -> {
-          // Parse table_freq back into separate variables
-          String[] parts = vars.get("table_freq").split(":", 2);
-          Map<String, String> fullVars = new HashMap<>(vars);
-          fullVars.put("tablename", parts[0]);
-          fullVars.put("frequency", parts[1]);
-          return isCachedOrExists(tableName, year, fullVars);
-        },
-        (year, vars) -> {
           // Parse table_freq and execute download
           String[] parts = vars.get("table_freq").split(":", 2);
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", parts[0]);
-          fullVars.put("frequency", parts[1]);
+          Map<String, String> downloadVars = new HashMap<>();
+          downloadVars.put("year", vars.get("year"));
+          downloadVars.put("tablename", parts[0]);
+          downloadVars.put("frequency", parts[1]);
 
           String cachedPath =
               cacheStorageProvider.resolvePath(
-                  cacheDirectory, executeDownload(tableName, fullVars));
+                  cacheDirectory, executeDownload(tableName, downloadVars));
 
           long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-          cacheManifest.markCached(tableName, year, fullVars, cachedPath, fileSize);
+          // Mark with composite table_freq key (same as iteration dimensions)
+          cacheManifest.markCached(tableName, year, vars, cachedPath, fileSize);
         },
         "download");
   }
