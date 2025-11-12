@@ -1416,7 +1416,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
+      Map<String, String> variables =
+          ImmutableMap.of("year", String.valueOf(year), "frequency", "quarterly");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
