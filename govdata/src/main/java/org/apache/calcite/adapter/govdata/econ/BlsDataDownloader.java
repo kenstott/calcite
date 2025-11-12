@@ -1186,9 +1186,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-      // Download QCEW CSV (reuses cache if available) - hardcoded path for intermediate cache file
-      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
-      downloadQcewCsvIfNeeded(year, qcewZipPath);
+      // Get QCEW ZIP download metadata from schema
+      Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+      String cachePattern = (String) downloadConfig.get("cachePattern");
+      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+
+      // Download QCEW CSV (reuses cache if available)
+      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
       // Get full path to cached ZIP file
       String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
@@ -1212,6 +1217,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
+    // Get QCEW ZIP download metadata from state_wages table (shared download)
+    Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
+    Map<String, Object> downloadConfig = (Map<String, Object>) stateWagesMetadata.get("download");
+
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
       String parquetPath = resolveParquetPath(pattern, variables);
@@ -1223,9 +1232,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
+      // Get QCEW ZIP download metadata from schema
+      String cachePattern = (String) downloadConfig.get("cachePattern");
+      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+
       // Download QCEW CSV (reuses cache from state_wages if available)
-      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
-      downloadQcewCsvIfNeeded(year, qcewZipPath);
+      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
       // Get full path to cached ZIP file
       String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
@@ -1256,6 +1269,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
+    // Get QCEW ZIP download metadata from state_wages table (shared download)
+    Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
+    Map<String, Object> downloadConfig = (Map<String, Object>) stateWagesMetadata.get("download");
+
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
       String parquetPath = resolveParquetPath(pattern, variables);
@@ -1267,9 +1284,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
+      // Get QCEW ZIP download metadata from schema
+      String cachePattern = (String) downloadConfig.get("cachePattern");
+      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+
       // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
-      String qcewZipPath = "type=qcew/year=" + year + "/qcew_annual.zip";
-      downloadQcewCsvIfNeeded(year, qcewZipPath);
+      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
       // Get full path to cached ZIP file
       String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
@@ -2401,9 +2422,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Reuses cached data if available to avoid redundant downloads.
    *
    * @param year        Year to download
-   * @param qcewZipPath Relative path for caching
+   * @param qcewZipPath Relative path for caching (from schema)
+   * @param downloadUrl Download URL (from schema)
    */
-  private void downloadQcewCsvIfNeeded(int year, String qcewZipPath) throws IOException {
+  private void downloadQcewCsvIfNeeded(int year, String qcewZipPath, String downloadUrl) throws IOException {
     // Check the cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
     if (cacheManifest.isCached("qcew_zip", year, cacheParams)) {
@@ -2416,12 +2438,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    // Download from BLS
-    String url =
-        String.format("https://data.bls.gov/cew/data/files/%d/csv/%d_annual_singlefile.zip", year, year);
-
-    LOGGER.info("Downloading QCEW CSV for year {} from {}", year, url);
-    byte[] zipData = blsDownloadFile(url);
+    // Download from BLS using URL from schema
+    LOGGER.info("Downloading QCEW CSV for year {} from {}", year, downloadUrl);
+    byte[] zipData = blsDownloadFile(downloadUrl);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
