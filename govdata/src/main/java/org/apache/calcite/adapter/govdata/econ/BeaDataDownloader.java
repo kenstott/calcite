@@ -1336,8 +1336,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         recordsBySection.size());
 
     // Mark as converted in cache manifest after successful conversion
-    cacheManifest.markParquetConverted("reference_nipa_tables", year, params,
-        "type=reference/section=*/nipa_tables.parquet");
+    Map<String, Object> metadata = loadTableMetadata("reference_nipa_tables");
+    String pattern = (String) metadata.get("pattern");
+    cacheManifest.markParquetConverted("reference_nipa_tables", year, params, pattern);
     cacheManifest.save(operatingDirectory);
   }
 
