@@ -1187,10 +1187,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
 
       // Get QCEW ZIP download metadata from schema
-      Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
-      String cachePattern = (String) downloadConfig.get("cachePattern");
+      com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) metadata.get("download");
+      String cachePattern = downloadNode.get("cachePattern").asText();
       String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
       // Download QCEW CSV (reuses cache if available)
       downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
@@ -1219,7 +1219,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    Map<String, Object> downloadConfig = (Map<String, Object>) stateWagesMetadata.get("download");
+    com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
 
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
@@ -1233,9 +1233,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
 
       // Get QCEW ZIP download metadata from schema
-      String cachePattern = (String) downloadConfig.get("cachePattern");
+      String cachePattern = downloadNode.get("cachePattern").asText();
       String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
       // Download QCEW CSV (reuses cache from state_wages if available)
       downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
@@ -1271,7 +1271,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    Map<String, Object> downloadConfig = (Map<String, Object>) stateWagesMetadata.get("download");
+    com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
 
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
@@ -1285,9 +1285,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
 
       // Get QCEW ZIP download metadata from schema
-      String cachePattern = (String) downloadConfig.get("cachePattern");
+      String cachePattern = downloadNode.get("cachePattern").asText();
       String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = ((String) downloadConfig.get("url")).replace("{year}", String.valueOf(year));
+      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
       // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
       downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
