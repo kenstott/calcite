@@ -1,0 +1,454 @@
+{
+  "conceptualFields": {
+    "state_fips": {
+      "description": "State FIPS code",
+      "tiger": {
+        "2010-2029": {"field": "STATEFP", "type": "VARCHAR"}
+      },
+      "hud": {
+        "field": "state", "type": "VARCHAR"
+      }
+    },
+    "state_code": {
+      "description": "State GEOID code",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "state_name": {
+      "description": "State name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAME", "type": "VARCHAR"}
+      }
+    },
+    "state_abbr": {
+      "description": "State postal abbreviation",
+      "tiger": {
+        "2010-2029": {"field": "STUSPS", "type": "VARCHAR"}
+      }
+    },
+    "county_fips": {
+      "description": "County FIPS code",
+      "tiger": {
+        "2010-2029": {"field": "COUNTYFP", "type": "VARCHAR"}
+      },
+      "hud": {
+        "field": "county", "type": "VARCHAR"
+      }
+    },
+    "county_geoid": {
+      "description": "County GEOID code",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "county_name": {
+      "description": "County name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAMELSAD", "type": "VARCHAR"}
+      }
+    },
+    "tract_code": {
+      "description": "Census tract code",
+      "tiger": {
+        "2010-2029": {"field": "TRACTCE", "type": "VARCHAR"}
+      }
+    },
+    "tract_geoid": {
+      "description": "Census tract GEOID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "tract_name": {
+      "description": "Census tract name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAMELSAD", "type": "VARCHAR"}
+      }
+    },
+    "block_group_code": {
+      "description": "Block group code",
+      "tiger": {
+        "2010-2029": {"field": "BLKGRPCE", "type": "VARCHAR"}
+      }
+    },
+    "block_group_geoid": {
+      "description": "Block group GEOID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "place_fips": {
+      "description": "Place FIPS code",
+      "tiger": {
+        "2010-2029": {"field": "PLACEFP", "type": "VARCHAR"}
+      }
+    },
+    "place_geoid": {
+      "description": "Place GEOID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "place_name": {
+      "description": "Place name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAMELSAD", "type": "VARCHAR"}
+      }
+    },
+    "zcta": {
+      "description": "ZIP Code Tabulation Area",
+      "tiger": {
+        "2010-2019": {"field": "ZCTA5CE10", "type": "VARCHAR"},
+        "2020-2029": {"field": "ZCTA5CE20", "type": "VARCHAR"}
+      },
+      "hud": {
+        "field": "zip", "type": "VARCHAR"
+      }
+    },
+    "cbsa_code": {
+      "description": "Core-Based Statistical Area code",
+      "tiger": {
+        "2010-2029": {"field": "CBSAFP", "type": "VARCHAR"}
+      }
+    },
+    "cbsa_geoid": {
+      "description": "CBSA GEOID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "cbsa_name": {
+      "description": "CBSA name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAMELSAD", "type": "VARCHAR"}
+      }
+    },
+    "congressional_district": {
+      "description": "Congressional district code",
+      "tiger": {
+        "2010-2019": {"field": "CD115FP", "type": "VARCHAR"},
+        "2020-2029": {"field": "CD118FP", "type": "VARCHAR"}
+      }
+    },
+    "cd_geoid": {
+      "description": "Congressional district GEOID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "school_district_id": {
+      "description": "School district ID",
+      "tiger": {
+        "2010-2029": {"field": "GEOID", "type": "VARCHAR"}
+      }
+    },
+    "school_district_name": {
+      "description": "School district name",
+      "tiger": {
+        "2010-2019": {"field": "NAME", "type": "VARCHAR"},
+        "2020-2029": {"field": "NAME", "type": "VARCHAR"}
+      }
+    },
+    "land_area": {
+      "description": "Land area in square meters",
+      "tiger": {
+        "2010-2019": {"field": "ALAND", "type": "BIGINT"},
+        "2020-2029": {"field": "ALAND", "type": "BIGINT"}
+      }
+    },
+    "water_area": {
+      "description": "Water area in square meters",
+      "tiger": {
+        "2010-2019": {"field": "AWATER", "type": "BIGINT"},
+        "2020-2029": {"field": "AWATER", "type": "BIGINT"}
+      }
+    },
+    "geometry": {
+      "description": "Geometry as WKT string",
+      "tiger": {
+        "2010-2029": {"field": "geom", "type": "GEOMETRY"}
+      }
+    }
+  },
+  "conceptualVariables": {
+    "total_population": {
+      "description": "Total population for geographic area",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B01001_001E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P001001"},
+          "2020": {"dataset": "pl", "variable": "P1_001N"}
+        }
+      }
+    },
+    "white_alone": {
+      "description": "Population identifying as White alone",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B01001_002E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P003002"},
+          "2020": {"dataset": "pl", "variable": "P1_003N"}
+        }
+      }
+    },
+    "black_african_american_alone": {
+      "description": "Population identifying as Black or African American alone",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B01001_026E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P003003"},
+          "2020": {"dataset": "pl", "variable": "P1_004N"}
+        }
+      }
+    },
+    "asian_alone": {
+      "description": "Population identifying as Asian alone",
+      "dataType": "LONG",
+      "census": {
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P003005"},
+          "2020": {"dataset": "pl", "variable": "P1_006N"}
+        }
+      }
+    },
+    "male_population": {
+      "description": "Total male population",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B01001_002E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P012002"},
+          "2020": {"dataset": "pl", "variable": "P1_002N"}
+        }
+      }
+    },
+    "female_population": {
+      "description": "Total female population",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B01001_026E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "P012026"},
+          "2020": {"dataset": "pl", "variable": "P1_026N"}
+        }
+      }
+    },
+    "total_housing_units": {
+      "description": "Total housing units",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B25001_001E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "H001001"},
+          "2020": {"dataset": "pl", "variable": "H1_001N"}
+        }
+      }
+    },
+    "occupied_housing_units": {
+      "description": "Occupied housing units",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B25002_002E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "H003001"},
+          "2020": {"dataset": "pl", "variable": "H1_002N"}
+        }
+      }
+    },
+    "vacant_housing_units": {
+      "description": "Vacant housing units",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B25002_003E"}
+        },
+        "decennial": {
+          "2010": {"dataset": "sf1", "variable": "H003003"},
+          "2020": {"dataset": "pl", "variable": "H1_003N"}
+        }
+      }
+    },
+    "median_household_income": {
+      "description": "Median household income in dollars",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B19013_001E"}
+        }
+      }
+    },
+    "per_capita_income": {
+      "description": "Per capita income in dollars",
+      "dataType": "LONG",
+      "census": {
+        "acs": {
+          "allYears": {"variable": "B19301_001E"}
+        }
+      }
+    }
+  },
+  "tableDefinitions": {
+    "states": {
+      "description": "State boundary geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "state_code",
+        "state_name",
+        "state_abbr",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "counties": {
+      "description": "County boundary geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "county_fips",
+        "county_geoid",
+        "county_name",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "census_tracts": {
+      "description": "Census tract boundary geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "county_fips",
+        "tract_code",
+        "tract_geoid",
+        "tract_name",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "block_groups": {
+      "description": "Block group boundary geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "county_fips",
+        "tract_code",
+        "block_group_code",
+        "block_group_geoid",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "places": {
+      "description": "Place (city/town) boundary geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "place_fips",
+        "place_geoid",
+        "place_name",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "zctas": {
+      "description": "ZIP Code Tabulation Area geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "zcta",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "cbsa": {
+      "description": "Core-Based Statistical Area geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "cbsa_code",
+        "cbsa_geoid",
+        "cbsa_name",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "congressional_districts": {
+      "description": "Congressional district geographic data from TIGER",
+      "dataSource": "tiger",
+      "conceptualItems": [
+        "state_fips",
+        "congressional_district",
+        "cd_geoid",
+        "land_area",
+        "water_area",
+        "geometry"
+      ]
+    },
+    "zip_county_crosswalk": {
+      "description": "ZIP to County crosswalk from HUD",
+      "dataSource": "hud",
+      "conceptualItems": [
+        "zcta",
+        "county_fips",
+        "state_fips"
+      ]
+    },
+    "population_demographics": {
+      "description": "Population demographic data from Census API",
+      "dataSource": "census_api",
+      "conceptualItems": [
+        "total_population",
+        "white_alone",
+        "black_african_american_alone",
+        "asian_alone",
+        "male_population",
+        "female_population"
+      ]
+    },
+    "housing_characteristics": {
+      "description": "Housing characteristics from Census API",
+      "dataSource": "census_api",
+      "conceptualItems": [
+        "total_housing_units",
+        "occupied_housing_units",
+        "vacant_housing_units"
+      ]
+    },
+    "economic_indicators": {
+      "description": "Economic indicators from Census API",
+      "dataSource": "census_api",
+      "conceptualItems": [
+        "median_household_income",
+        "per_capita_income"
+      ]
+    }
+  }
+}
