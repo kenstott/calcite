@@ -1061,7 +1061,13 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Check if cached JSON already exists (skip re-downloading reference data)
-    String pattern = (String) metadata.get("pattern");
+    // Use cachePattern from download config if available, otherwise use table pattern
+    String pattern;
+    if (downloadConfig.containsKey("cachePattern")) {
+      pattern = (String) downloadConfig.get("cachePattern");
+    } else {
+      pattern = (String) metadata.get("pattern");
+    }
     String jsonPath = resolveJsonPath(pattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
@@ -1289,7 +1295,7 @@ public abstract class AbstractGovDataDownloader {
    * Ensures parent directory exists for the given file path.
    * Uses storage provider to create directories if needed.
    */
-  private void ensureParentDirectory(String fullPath) {
+  protected void ensureParentDirectory(String fullPath) {
     // Extract parent directory from path
     int lastSlash = fullPath.lastIndexOf('/');
     if (lastSlash > 0) {

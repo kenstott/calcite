@@ -57,7 +57,7 @@ import java.util.Set;
  * List<DownloadRequest> needed = CacheManifestQueryHelper.filterUncachedRequests(
  *     "/path/to/cache_manifest.json",
  *     allRequests
- * );
+ *);
  *
  * // Execute only uncached downloads
  * for (DownloadRequest req : needed) {
@@ -114,8 +114,7 @@ public class CacheManifestQueryHelper {
       return key.toString();
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return buildKey();
     }
   }
@@ -163,8 +162,8 @@ public class CacheManifestQueryHelper {
 
       // 1. Load cache manifest into DuckDB temp table
       // Uses DuckDB's read_json with custom format settings to handle nested JSON structure
-      String loadManifestSql = String.format(
-          "CREATE TEMP TABLE cached_files AS " +
+      String loadManifestSql =
+          String.format("CREATE TEMP TABLE cached_files AS " +
               "SELECT " +
               "  key, " +
               "  json_extract(value, '$.cachedAt')::BIGINT as cached_at, " +
@@ -178,8 +177,7 @@ public class CacheManifestQueryHelper {
               "  maximum_object_size=10000000" +  // Support large manifest files
               ") AS t, " +
               "json_each(t.entries) AS entries(key, value)",
-          manifestPath
-      );
+          manifestPath);
 
       try (Statement stmt = duckdb.createStatement()) {
         stmt.execute(loadManifestSql);
@@ -195,8 +193,8 @@ public class CacheManifestQueryHelper {
       }
 
       // 3. Insert all requested downloads (batch insert for performance)
-      try (PreparedStatement insert = duckdb.prepareStatement(
-          "INSERT INTO needed_downloads VALUES (?)")) {
+      try (PreparedStatement insert =
+          duckdb.prepareStatement("INSERT INTO needed_downloads VALUES (?)")) {
         int batchCount = 0;
         for (DownloadRequest req : allRequests) {
           insert.setString(1, req.buildKey());
@@ -300,7 +298,7 @@ public class CacheManifestQueryHelper {
             "      json_extract(value, '$.etag')::VARCHAR as etag " +
             "    FROM read_json(?, format='json', records='false', maximum_object_size=10000000) AS t, " +
             "    json_each(t.entries) AS entries(key, value) " +
-            "  ), " +
+            "), " +
             "  needed AS ( " +
             "    SELECT unnest(CAST(? AS VARCHAR[])) as cache_key " +
             "  ) " +

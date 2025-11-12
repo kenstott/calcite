@@ -206,8 +206,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
         (year, vars) -> {
           // Check if parquet already exists
           String dataType = vars.get("data_type");
-          String parquetPath = storageProvider.resolvePath(parquetDirectory,
-              "type=acs/year=" + year + "/" + dataType + ".parquet");
+          String parquetPath =
+              storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
 
           // Check manifest first
           if (cacheManifest != null && cacheManifest.isParquetConverted(dataType, year, vars)) {
@@ -227,8 +227,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
           String dataType = vars.get("data_type");
           convertCensusDataToParquet(dataType, year, vars);
 
-          String parquetPath = storageProvider.resolvePath(parquetDirectory,
-              "type=acs/year=" + year + "/" + dataType + ".parquet");
+          String parquetPath =
+              storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
           if (cacheManifest != null) {
             cacheManifest.markParquetConverted(dataType, year, vars, parquetPath);
             cacheManifest.save(operatingDirectory);
@@ -262,8 +262,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       // Add county-level files for major states
       String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
       for (String state : stateFips) {
-        String countyFile = cacheStorageProvider.resolvePath(jsonBasePath,
-            dataType + "_county_" + state + ".json");
+        String countyFile =
+            cacheStorageProvider.resolvePath(jsonBasePath, dataType + "_county_" + state + ".json");
         if (cacheStorageProvider.exists(countyFile)) {
           jsonFiles.add(countyFile);
         }
@@ -275,8 +275,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       }
 
       // Build parquet target path
-      String parquetPath = storageProvider.resolvePath(parquetDirectory,
-          "type=acs/year=" + year + "/" + dataType + ".parquet");
+      String parquetPath =
+          storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
 
       // Load column definitions from census-schema.json
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
@@ -420,7 +420,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
         new ArrayList<>();
 
     // Add geo_id column (always last in Census API response)
-    columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+    columns.add(
+        new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
         "geo_id", "string", false, "Geographic identifier",
         "list_element(data, array_length(data))"));
 
@@ -435,11 +436,12 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       String sqlType = dataType.contains("int") || dataType.contains("long") ? "integer" :
           dataType.contains("double") || dataType.contains("float") ? "double" : "string";
 
-      String expression = String.format("CAST(list_element(data, %d) AS %s)",
-          position, sqlType.toUpperCase());
+      String expression =
+          String.format("CAST(list_element(data, %d) AS %s)", position, sqlType.toUpperCase());
       String comment = String.format("%s (%s)", conceptualName.replace("_", " "), variable);
 
-      columns.add(new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+      columns.add(
+          new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
           conceptualName, sqlType, true, comment, expression));
 
       position++;

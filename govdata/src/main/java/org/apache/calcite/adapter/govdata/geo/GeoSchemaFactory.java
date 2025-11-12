@@ -344,8 +344,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     String tigerCacheDir = storageProvider.resolvePath(cacheDir, "tiger");
 
     // Create TIGER downloader
-    TigerDataDownloader tigerDownloader = new TigerDataDownloader(
-        tigerCacheDir, geoOperatingDirectory, tigerYears, true,
+    TigerDataDownloader tigerDownloader =
+        new TigerDataDownloader(tigerCacheDir, geoOperatingDirectory, tigerYears, true,
         storageProvider, cacheManifest);
 
     // For each table and year combination, check if download/conversion needed
@@ -374,8 +374,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) throws Exception {
 
     // Build paths
-    String parquetPath = storageProvider.resolvePath(geoParquetDir,
-        BOUNDARY_TYPE + "/year=" + year + "/" + tableName + ".parquet");
+    String parquetPath =
+        storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
     java.util.Map<String, String> params = new java.util.HashMap<>();
 

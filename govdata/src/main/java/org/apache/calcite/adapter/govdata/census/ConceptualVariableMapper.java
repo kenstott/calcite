@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -464,7 +463,8 @@ public class ConceptualVariableMapper extends AbstractConceptualMapper {
       String conceptualName = entry.getValue();
       VariableMapping mapping = getVariableMapping(conceptualName, year, censusType);
       if (mapping != null) {
-        result.put(variable, new AbstractConceptualMapper.VariableMapping(
+        result.put(
+            variable, new AbstractConceptualMapper.VariableMapping(
             mapping.getDataset(), mapping.getVariable(), mapping.getConceptualName(), mapping.getDataType()));
       }
     }
