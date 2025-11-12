@@ -4,6 +4,27 @@
     {
       "name": "acs_population",
       "pattern": "type=acs/year=*/acs_population.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -22,6 +43,27 @@
     {
       "name": "acs_demographics",
       "pattern": "type=acs/year=*/acs_demographics.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Detailed demographic characteristics including household composition, family structure, marital status, and birth/fertility data from the American Community Survey.",
       "partitions": {
         "style": "hive",
@@ -40,6 +82,27 @@
     {
       "name": "acs_income",
       "pattern": "type=acs/year=*/acs_income.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Household and family income statistics from ACS including median household income, per capita income, income distribution by brackets, and poverty status. Essential for economic analysis and demographic profiling.",
       "partitions": {
         "style": "hive",
@@ -58,6 +121,27 @@
     {
       "name": "acs_poverty",
       "pattern": "type=acs/year=*/acs_poverty.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Poverty statistics including population below poverty level, poverty rates by age groups, and ratio of income to poverty level. Crucial for social program planning and economic equity analysis.",
       "partitions": {
         "style": "hive",
@@ -76,6 +160,27 @@
     {
       "name": "acs_employment",
       "pattern": "type=acs/year=*/acs_employment.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Employment status, labor force participation, unemployment rates, and work status by demographic groups. Includes occupation categories and industry of employment.",
       "partitions": {
         "style": "hive",
@@ -94,6 +199,27 @@
     {
       "name": "acs_education",
       "pattern": "type=acs/year=*/acs_education.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Educational attainment levels from less than high school to graduate degrees. Includes school enrollment status and field of bachelor's degree for college graduates.",
       "partitions": {
         "style": "hive",
@@ -112,6 +238,27 @@
     {
       "name": "acs_housing",
       "pattern": "type=acs/year=*/acs_housing.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Housing characteristics including occupancy status, tenure (owner/renter), housing value, rent costs, number of rooms, and year structure built. Critical for real estate and housing policy analysis.",
       "partitions": {
         "style": "hive",
@@ -130,6 +277,27 @@
     {
       "name": "acs_housing_costs",
       "pattern": "type=acs/year=*/acs_housing_costs.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Detailed housing costs including median home values, median rent, housing cost burden (percentage of income spent on housing), and mortgage status.",
       "partitions": {
         "style": "hive",
@@ -148,6 +316,27 @@
     {
       "name": "acs_commuting",
       "pattern": "type=acs/year=*/acs_commuting.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Commuting patterns including means of transportation to work, travel time to work, departure time, and vehicles available. Important for transportation planning and infrastructure analysis.",
       "partitions": {
         "style": "hive",
@@ -166,6 +355,27 @@
     {
       "name": "acs_health_insurance",
       "pattern": "type=acs/year=*/acs_health_insurance.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Health insurance coverage status including types of coverage (private, public, Medicare, Medicaid) by age groups and employment status.",
       "partitions": {
         "style": "hive",
@@ -184,6 +394,27 @@
     {
       "name": "acs_language",
       "pattern": "type=acs/year=*/acs_language.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Language spoken at home and English proficiency levels. Includes detailed language categories for population 5 years and over.",
       "partitions": {
         "style": "hive",
@@ -202,6 +433,27 @@
     {
       "name": "acs_disability",
       "pattern": "type=acs/year=*/acs_disability.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Disability status by age group and type of disability including hearing, vision, cognitive, ambulatory, self-care, and independent living difficulties.",
       "partitions": {
         "style": "hive",
@@ -220,6 +472,27 @@
     {
       "name": "acs_veterans",
       "pattern": "type=acs/year=*/acs_veterans.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Veteran status and characteristics including period of service, disability rating, and demographic profile of veteran population.",
       "partitions": {
         "style": "hive",
@@ -238,6 +511,27 @@
     {
       "name": "acs_migration",
       "pattern": "type=acs/year=*/acs_migration.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Geographic mobility and migration patterns including residence 1 year ago, domestic migration flows, and foreign-born population statistics.",
       "partitions": {
         "style": "hive",
@@ -256,6 +550,27 @@
     {
       "name": "acs_occupation",
       "pattern": "type=acs/year=*/acs_occupation.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/acs/acs5",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "acs"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Detailed occupation categories and industry of employment. Cross-tabulated with demographic characteristics for workforce analysis.",
       "partitions": {
         "style": "hive",
@@ -274,6 +589,27 @@
     {
       "name": "decennial_population",
       "pattern": "type=decennial/year=*/decennial_population.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/dec/pl",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "decennial"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Decennial Census total population counts and basic demographics. Most accurate population count conducted every 10 years (2010, 2020, etc.).",
       "partitions": {
         "style": "hive",
@@ -292,6 +628,27 @@
     {
       "name": "decennial_demographics",
       "pattern": "type=decennial/year=*/decennial_demographics.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/dec/pl",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "decennial"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Detailed demographic characteristics from the Decennial Census including age, sex, race, ethnicity, and household relationships.",
       "partitions": {
         "style": "hive",
@@ -310,6 +667,27 @@
     {
       "name": "decennial_housing",
       "pattern": "type=decennial/year=*/decennial_housing.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/dec/pl",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "decennial"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Housing unit counts and occupancy status from Decennial Census. Includes vacant units, seasonal units, and tenure information.",
       "partitions": {
         "style": "hive",
@@ -328,6 +706,27 @@
     {
       "name": "economic_census",
       "pattern": "type=economic/year=*/economic_census.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/ecnbasic",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "economic"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Economic Census data conducted every 5 years providing detailed statistics on business establishments, employment, payroll, and sales by industry.",
       "partitions": {
         "style": "hive",
@@ -346,6 +745,27 @@
     {
       "name": "county_business_patterns",
       "pattern": "type=economic/year=*/county_business_patterns.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/ecnbasic",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "economic"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Annual County Business Patterns data showing number of establishments, employment, and payroll by industry at county level.",
       "partitions": {
         "style": "hive",
@@ -364,6 +784,27 @@
     {
       "name": "population_estimates",
       "pattern": "type=population/year=*/population_estimates.parquet",
+      "conceptualMappingFile": "census-variable-mappings.json",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.census.gov/data/{year}/pep/population",
+        "authentication": {
+          "type": "query_param",
+          "paramName": "key",
+          "envVar": "CENSUS_API_KEY"
+        },
+        "variables": {
+          "type": "conceptualMapper",
+          "source": "census-variable-mappings.json",
+          "censusType": "population"
+        },
+        "geographies": ["state:*", "county:*"],
+        "response": {
+          "format": "json",
+          "dataPath": "data"
+        }
+      },
       "comment": "Annual population estimates between decennial censuses. Includes components of population change (births, deaths, migration).",
       "partitions": {
         "style": "hive",
