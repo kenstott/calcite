@@ -2397,7 +2397,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "  FROM read_csv_auto('%s') q\n"
     +
-          "  WHERE q.agglvl_code LIKE '7%%'\n"
+          "  WHERE CAST(q.agglvl_code AS VARCHAR) LIKE '7%%'\n"
     +  // County-level aggregations (70-78)
           "    AND length(q.area_fips) = 5\n"
     +     // 5-digit FIPS codes only
@@ -2497,11 +2497,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
     +
-          "  WHERE q.agglvl_code = '50'\n"
+          "  WHERE CAST(q.agglvl_code AS VARCHAR) = '50'\n"
     +
-          "    AND q.own_code = '0'\n"
+          "    AND CAST(q.own_code AS VARCHAR) = '0'\n"
     +
-          "    AND q.industry_code = '10'\n"
+          "    AND CAST(q.industry_code AS VARCHAR) = '10'\n"
     +
           "    AND length(q.area_fips) = 5\n"
     +
@@ -2567,11 +2567,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     +
           "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
     +
-          "  WHERE q.agglvl_code = '70'\n"
+          "  WHERE CAST(q.agglvl_code AS VARCHAR) = '70'\n"
     +
-          "    AND q.own_code = '0'\n"
+          "    AND CAST(q.own_code AS VARCHAR) = '0'\n"
     +
-          "    AND q.industry_code = '10'\n"
+          "    AND CAST(q.industry_code AS VARCHAR) = '10'\n"
     +
           "    AND length(q.area_fips) = 5\n"
     +
