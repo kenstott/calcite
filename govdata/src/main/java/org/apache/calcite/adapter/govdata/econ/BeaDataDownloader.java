@@ -1233,6 +1233,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     String jsonPath = "type=reference/nipa_tables.json";
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
+    // Early check: if parquet is already converted, skip entire process
+    int year = 0;  // Sentinel value for reference tables without year dimension
+    Map<String, String> params = new HashMap<>();  // No additional params for reference tables
+
+    if (cacheManifest.isParquetConverted("reference_nipa_tables", year, params)) {
+      LOGGER.info("⚡ reference_nipa_tables already converted to parquet, skipping");
+      return;
+    }
+
     // Read JSON
     com.fasterxml.jackson.databind.JsonNode root;
     try (java.io.InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
@@ -1325,6 +1334,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Converted reference_nipa_tables to parquet with frequency and section columns " +
             "across {} sections",
         recordsBySection.size());
+
+    // Mark as converted in cache manifest after successful conversion
+    cacheManifest.markParquetConverted("reference_nipa_tables", year, params,
+        "type=reference/section=*/nipa_tables.parquet");
+    cacheManifest.save(operatingDirectory);
   }
 
   /**
