@@ -2150,12 +2150,16 @@
     },
     {
       "name": "reference_nipa_tables",
-      "pattern": "type=reference/nipa_tables.parquet",
+      "pattern": "type=reference/section=*/nipa_tables.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {
             "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "section",
             "type": "VARCHAR"
           }
         ]
@@ -2173,12 +2177,6 @@
           "type": "string",
           "nullable": true,
           "comment": "Full table description from BEA including frequency indicators"
-        },
-        {
-          "name": "section",
-          "type": "string",
-          "nullable": true,
-          "comment": "Section number (1-8) extracted from TableName. Indicates major category of economic data."
         },
         {
           "name": "section_name",
