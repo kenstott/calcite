@@ -49,8 +49,8 @@ public class CacheManifestPerformanceTest {
   @BeforeAll
   public static void setup() throws Exception {
     // Create temporary test directory
-    testOperatingDir = new File(System.getProperty("java.io.tmpdir"),
-        "cache-perf-test-" + System.currentTimeMillis());
+    testOperatingDir =
+        new File(System.getProperty("java.io.tmpdir"), "cache-perf-test-" + System.currentTimeMillis());
     testOperatingDir.mkdirs();
 
     // Create test manifest with realistic data
@@ -76,8 +76,7 @@ public class CacheManifestPerformanceTest {
    * Test traditional row-by-row cache checking performance.
    * This simulates the old approach: check each request individually using HashMap.
    */
-  @Test
-  public void testTraditionalCacheChecking() {
+  @Test public void testTraditionalCacheChecking() {
     // Generate 2000 download requests (simulating full iteration)
     List<Map<String, String>> requests = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
@@ -117,8 +116,7 @@ public class CacheManifestPerformanceTest {
    * Test DuckDB SQL-based cache filtering performance.
    * This uses CacheManifestQueryHelper for bulk filtering.
    */
-  @Test
-  public void testOptimizedCacheFiltering() throws Exception {
+  @Test public void testOptimizedCacheFiltering() throws Exception {
     // Generate same 2000 download requests
     List<CacheManifestQueryHelper.DownloadRequest> requests = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
@@ -157,8 +155,7 @@ public class CacheManifestPerformanceTest {
   /**
    * Comparative benchmark showing speedup factor.
    */
-  @Test
-  public void testComparativePerformance() throws Exception {
+  @Test public void testComparativePerformance() throws Exception {
     // Generate test data
     List<CacheManifestQueryHelper.DownloadRequest> requests = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
