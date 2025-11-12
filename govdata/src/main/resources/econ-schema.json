@@ -448,6 +448,11 @@
         ]
       },
       "comment": "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.",
+      "download": {
+        "cachePattern": "type=qcew/year={year}/qcew_annual.zip",
+        "url": "https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip",
+        "comment": "QCEW bulk CSV download shared by state_wages, county_wages, and county_qcew tables"
+      },
       "columns": [
         {
           "name": "date",
