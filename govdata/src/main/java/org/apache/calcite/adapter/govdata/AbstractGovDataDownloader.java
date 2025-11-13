@@ -148,6 +148,9 @@ public abstract class AbstractGovDataDownloader {
   /** Cached rate limit configuration (loaded on first access) */
   private Map<String, Object> rateLimitConfig = null;
 
+  /** Cache for SQL resource files (loaded once, reused across instances) */
+  private static final Map<String, String> SQL_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
   protected AbstractGovDataDownloader(
       String cacheDirectory,
       String operatingDirectory,
@@ -615,7 +618,7 @@ public abstract class AbstractGovDataDownloader {
    * @return Pattern with wildcards replaced
    * @throws IllegalArgumentException if a required variable is missing from the map
    */
-  private String substitutePatternVariables(String pattern, Map<String, String> variables) {
+  protected String substitutePatternVariables(String pattern, Map<String, String> variables) {
     if (variables == null) {
       variables = new java.util.HashMap<>();
     }
@@ -1735,7 +1738,8 @@ public abstract class AbstractGovDataDownloader {
         {"spatial", ""},                      // GIS operations
         {"h3", "FROM community"},             // Geospatial hex indexing
         {"excel", ""},                        // Excel file support
-        {"fts", ""}                           // Full-text indexing
+        {"fts", ""},                          // Full-text indexing
+        {"zipfs", "FROM community"}           // ZIP file reading support
     };
 
     for (String[] ext : extensions) {
@@ -1985,6 +1989,217 @@ public abstract class AbstractGovDataDownloader {
           e.getErrorCode());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Converts CSV data (potentially inside ZIP archives) to Parquet format using metadata-driven configuration.
+   *
+   * <p>This method supports direct CSV→Parquet conversion without intermediate JSON files,
+   * leveraging DuckDB's zipfs extension to read compressed files and apply SQL filters.
+   *
+   * <h3>Metadata Configuration</h3>
+   * <p>The table's download section should contain a csvConversion object:
+   * <pre>
+   * "download": {
+   *   "csvConversion": {
+   *     "sourcePattern": "type=qcew_bulk/year={year}/{frequency}_singlefile.zip",
+   *     "csvPath": "{year}_{frequency}_singlefile.csv",
+   *     "filterConditions": [
+   *       "agglvl_code = '80'",
+   *       "own_code = '0'",
+   *       "industry_code = '10'",
+   *       "area_fips IN ('C1206', 'C3100', ...)"
+   *     ],
+   *     "columnMappings": {
+   *       "area_fips": "metro_code",
+   *       "year": "year",
+   *       "qtr": "qtr",
+   *       "avg_wkly_wage": "value"
+   *     },
+   *     "computedColumns": {
+   *       "metro_name": "CASE area_fips WHEN 'C1206' THEN 'Atlanta' ... END"
+   *     }
+   *   }
+   * }
+   * </pre>
+   *
+   * @param tableName Name of table in schema
+   * @param variables Variables for path resolution (e.g., {year: "2020", frequency: "quarterly"})
+   * @throws IOException if file operations fail or metadata is invalid
+   */
+  public void convertCsvToParquet(String tableName, Map<String, String> variables)
+      throws IOException {
+    LOGGER.info("Converting CSV to Parquet for table: {}", tableName);
+
+    // Load metadata
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+
+    // Extract csvConversion configuration
+    if (!metadata.containsKey("download")) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' has no 'download' section in schema");
+    }
+
+    JsonNode downloadNode = (JsonNode) metadata.get("download");
+    JsonNode csvConversionNode = downloadNode.get("csvConversion");
+
+    if (csvConversionNode == null || csvConversionNode.isNull()) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' has no 'csvConversion' configuration in download section");
+    }
+
+    // Extract configuration values
+    String sourcePattern = csvConversionNode.get("sourcePattern").asText();
+    String csvPath = csvConversionNode.has("csvPath") ? csvConversionNode.get("csvPath").asText() : null;
+
+    // Resolve source ZIP path and target Parquet path
+    String resolvedSourcePattern = substitutePatternVariables(sourcePattern, variables);
+    String fullSourcePath = cacheStorageProvider.resolvePath(cacheDirectory, resolvedSourcePattern);
+
+    String pattern = (String) metadata.get("pattern");
+    String fullParquetPath = storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
+
+    LOGGER.info("Converting {} to {}", fullSourcePath, fullParquetPath);
+
+    // Check if source exists
+    if (!cacheStorageProvider.exists(fullSourcePath)) {
+      LOGGER.warn("Source file not found: {}", fullSourcePath);
+      return;
+    }
+
+    // Load column metadata
+    List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
+
+    // Build SQL for CSV→Parquet conversion
+    String sql = buildCsvToParquetSql(
+        tableName,
+        fullSourcePath,
+        csvPath != null ? substitutePatternVariables(csvPath, variables) : null,
+        fullParquetPath,
+        columns,
+        csvConversionNode
+    );
+
+    // Execute conversion
+    executeDuckDBSql(sql, "CSV to Parquet conversion for " + tableName);
+
+    // Verify file was written
+    if (storageProvider.exists(fullParquetPath)) {
+      LOGGER.info("Successfully converted {} to Parquet: {}", tableName, fullParquetPath);
+    } else {
+      LOGGER.error("Parquet file not found after conversion: {}", fullParquetPath);
+      throw new IOException("Parquet file not found after write: " + fullParquetPath);
+    }
+  }
+
+  /**
+   * Builds DuckDB SQL for CSV→Parquet conversion with filters and column mappings.
+   *
+   * <p>Column handling:
+   * <ul>
+   *   <li>If column has {@code expression} field: use the expression as-is</li>
+   *   <li>If column has {@code csvColumn} field: read from that CSV column name with type casting</li>
+   *   <li>Otherwise: read from CSV column with same name as output column</li>
+   * </ul>
+   */
+  private String buildCsvToParquetSql(
+      String tableName,
+      String sourcePath,
+      String csvPath,
+      String targetPath,
+      List<PartitionedTableConfig.TableColumn> columns,
+      JsonNode csvConversionNode) {
+
+    StringBuilder sql = new StringBuilder("COPY (\n  SELECT\n");
+
+    // Build SELECT clause from column definitions
+    boolean first = true;
+    for (PartitionedTableConfig.TableColumn col : columns) {
+      if (col.isComputed()) {
+        continue; // Skip partition columns marked as computed
+      }
+
+      if (!first) {
+        sql.append(",\n");
+      }
+      first = false;
+
+      String colName = col.getName();
+
+      // Check if this column has an expression
+      if (col.getExpression() != null && !col.getExpression().isEmpty()) {
+        // Use the expression directly (already contains type handling)
+        sql.append("    (").append(col.getExpression()).append(") AS ").append(colName);
+      }
+      // Check if this column has a csvColumn attribute (different CSV name)
+      else if (col.getCsvColumn() != null && !col.getCsvColumn().isEmpty()) {
+        // Map from CSV column name with type casting
+        String castExpr = buildTypeCastExpression(col.getCsvColumn(), col.getType());
+        sql.append("    ").append(castExpr).append(" AS ").append(colName);
+      } else {
+        // Direct mapping: CSV column name == output column name
+        String castExpr = buildTypeCastExpression(colName, col.getType());
+        sql.append("    ").append(castExpr).append(" AS ").append(colName);
+      }
+    }
+
+    // Add FROM clause with zipfs path or direct CSV path
+    sql.append("\n  FROM read_csv('");
+
+    if (csvPath != null && sourcePath.toLowerCase().endsWith(".zip")) {
+      // Use zipfs extension to read CSV inside ZIP
+      sql.append("zipfs://").append(sourcePath).append("/").append(csvPath);
+    } else {
+      // Direct CSV file
+      sql.append(sourcePath);
+    }
+
+    sql.append("', AUTO_DETECT=TRUE, HEADER=TRUE)");
+
+    // Add WHERE clause with filter conditions
+    if (csvConversionNode.has("filterConditions")) {
+      JsonNode filtersNode = csvConversionNode.get("filterConditions");
+      if (filtersNode.isArray() && filtersNode.size() > 0) {
+        sql.append("\n  WHERE ");
+        boolean firstFilter = true;
+        for (JsonNode filterNode : filtersNode) {
+          if (!firstFilter) {
+            sql.append("\n    AND ");
+          }
+          firstFilter = false;
+          sql.append(filterNode.asText());
+        }
+      }
+    }
+
+    sql.append("\n) TO '").append(targetPath).append("' (FORMAT PARQUET);");
+
+    return sql.toString();
+  }
+
+  /**
+   * Builds a type cast expression for a CSV column.
+   */
+  private String buildTypeCastExpression(String columnName, String targetType) {
+    // Map Calcite types to DuckDB types
+    String duckdbType = targetType.toUpperCase();
+
+    if (duckdbType.startsWith("VARCHAR") || duckdbType.equals("STRING")) {
+      return columnName; // No cast needed for strings
+    } else if (duckdbType.equals("INTEGER") || duckdbType.equals("INT")) {
+      return "CAST(" + columnName + " AS INTEGER)";
+    } else if (duckdbType.equals("BIGINT") || duckdbType.equals("LONG")) {
+      return "CAST(" + columnName + " AS BIGINT)";
+    } else if (duckdbType.equals("DOUBLE") || duckdbType.equals("FLOAT")) {
+      return "CAST(" + columnName + " AS DOUBLE)";
+    } else if (duckdbType.equals("DATE")) {
+      return "CAST(" + columnName + " AS DATE)";
+    } else if (duckdbType.equals("TIMESTAMP")) {
+      return "CAST(" + columnName + " AS TIMESTAMP)";
+    } else {
+      // Default: try to cast to the target type
+      return "CAST(" + columnName + " AS " + duckdbType + ")";
     }
   }
 
@@ -2707,6 +2922,56 @@ public abstract class AbstractGovDataDownloader {
       next.put(dim.variableName, value);
       generateCombinationsRecursive(tableName, dimensions, dimensionIndex + 1, next, results);
     }
+  }
+
+  // ===== SQL RESOURCE LOADING =====
+
+  /**
+   * Loads a SQL query from classpath resources.
+   * Results are cached in memory for reuse across multiple calls.
+   *
+   * <p>SQL files use named parameter syntax: {@code {paramName}}
+   * which can be substituted using {@link #substituteSqlParameters}.
+   *
+   * @param resourcePath Path to SQL file (e.g., "/sql/cache/load_manifest.sql")
+   * @return SQL query text
+   * @throws IllegalStateException if resource not found
+   * @throws RuntimeException if I/O error occurs
+   */
+  protected String loadSqlResource(String resourcePath) {
+    return SQL_CACHE.computeIfAbsent(resourcePath, path -> {
+      try (InputStream is = getClass().getResourceAsStream(path)) {
+        if (is == null) {
+          throw new IllegalStateException("SQL resource not found: " + path);
+        }
+        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to load SQL resource: " + path, e);
+      }
+    });
+  }
+
+  /**
+   * Substitutes named parameters in SQL template.
+   * Replaces {@code {paramName}} with actual values from params map.
+   *
+   * <p>Example:
+   * <pre>
+   * String sql = loadSqlResource("/sql/cache/load_manifest.sql");
+   * String resolved = substituteSqlParameters(sql,
+   *     ImmutableMap.of("manifestPath", "/path/to/manifest.json"));
+   * </pre>
+   *
+   * @param sqlTemplate SQL template with {@code {paramName}} placeholders
+   * @param params Map of parameter names to values
+   * @return SQL with parameters substituted
+   */
+  protected String substituteSqlParameters(String sqlTemplate, Map<String, String> params) {
+    String result = sqlTemplate;
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      result = result.replace("{" + entry.getKey() + "}", entry.getValue());
+    }
+    return result;
   }
 
 }

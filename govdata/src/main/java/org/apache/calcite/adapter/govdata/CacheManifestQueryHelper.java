@@ -19,6 +19,9 @@ package org.apache.calcite.adapter.govdata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -67,6 +70,9 @@ import java.util.Set;
  */
 public class CacheManifestQueryHelper {
   private static final Logger LOGGER = LoggerFactory.getLogger(CacheManifestQueryHelper.class);
+
+  /** Cache for SQL resource files */
+  private static final Map<String, String> SQL_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
   /**
    * Represents a download candidate (table + year + parameters).
@@ -162,22 +168,9 @@ public class CacheManifestQueryHelper {
 
       // 1. Load cache manifest into DuckDB temp table
       // Uses DuckDB's read_json with custom format settings to handle nested JSON structure
-      String loadManifestSql =
-          String.format("CREATE TEMP TABLE cached_files AS " +
-              "SELECT " +
-              "  key, " +
-              "  json_extract(value, '$.cachedAt')::BIGINT as cached_at, " +
-              "  json_extract(value, '$.refreshAfter')::BIGINT as refresh_after, " +
-              "  json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
-              "  json_extract(value, '$.etag')::VARCHAR as etag, " +
-              "  json_extract(value, '$.lastError')::VARCHAR as last_error " +
-              "FROM read_json('%s', " +
-              "  format='unstructured', " +
-              "  records='false', " +  // Not newline-delimited JSON
-              "  maximum_object_size=10000000" +  // Support large manifest files
-              ") AS t, " +
-              "json_each(t.entries) AS entries(key, value)",
-          manifestPath);
+      String loadManifestSql = substituteSqlParameters(
+          loadSqlResource("/sql/cache/load_manifest.sql"),
+          java.util.Collections.singletonMap("manifestPath", manifestPath));
 
       try (Statement stmt = duckdb.createStatement()) {
         stmt.execute(loadManifestSql);
@@ -370,5 +363,41 @@ public class CacheManifestQueryHelper {
       LOGGER.debug("Using temp table strategy for {} requests", allRequests.size());
       return filterUncachedRequests(manifestPath, allRequests);
     }
+  }
+
+  // ===== SQL RESOURCE LOADING =====
+
+  /**
+   * Loads a SQL query from classpath resources with caching.
+   *
+   * @param resourcePath Path to SQL file (e.g., "/sql/cache/load_manifest.sql")
+   * @return SQL query text
+   */
+  private static String loadSqlResource(String resourcePath) {
+    return SQL_CACHE.computeIfAbsent(resourcePath, path -> {
+      try (InputStream is = CacheManifestQueryHelper.class.getResourceAsStream(path)) {
+        if (is == null) {
+          throw new IllegalStateException("SQL resource not found: " + path);
+        }
+        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to load SQL resource: " + path, e);
+      }
+    });
+  }
+
+  /**
+   * Substitutes named parameters in SQL template.
+   *
+   * @param sqlTemplate SQL with {@code {paramName}} placeholders
+   * @param params Parameter values
+   * @return SQL with parameters substituted
+   */
+  private static String substituteSqlParameters(String sqlTemplate, Map<String, String> params) {
+    String result = sqlTemplate;
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      result = result.replace("{" + entry.getKey() + "}", entry.getValue());
+    }
+    return result;
   }
 }
