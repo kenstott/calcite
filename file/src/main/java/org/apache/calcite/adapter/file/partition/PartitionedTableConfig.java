@@ -191,18 +191,25 @@ public class PartitionedTableConfig {
     private final boolean nullable;
     private final String comment;
     private final String expression;
+    private final String csvColumn;
 
     public TableColumn(String name, String type, boolean nullable, String comment) {
-      this(name, type, nullable, comment, null);
+      this(name, type, nullable, comment, null, null);
     }
 
     public TableColumn(String name, String type, boolean nullable, String comment,
         String expression) {
+      this(name, type, nullable, comment, expression, null);
+    }
+
+    public TableColumn(String name, String type, boolean nullable, String comment,
+        String expression, String csvColumn) {
       this.name = name;
       this.type = type;
       this.nullable = nullable;
       this.comment = comment;
       this.expression = expression;
+      this.csvColumn = csvColumn;
     }
 
     public String getName() {
@@ -256,6 +263,16 @@ public class PartitionedTableConfig {
      */
     public boolean isVectorType() {
       return type != null && type.startsWith("array<");
+    }
+
+    /**
+     * Returns the CSV column name if this column maps from a different CSV column name.
+     * Used for CSV→Parquet conversions where the output column name differs from the CSV column name.
+     *
+     * @return CSV column name, or null if same as output column name
+     */
+    public String getCsvColumn() {
+      return csvColumn;
     }
   }
 
@@ -387,8 +404,9 @@ public class PartitionedTableConfig {
           boolean nullable = nullableObj != null ? nullableObj : false;
           String comment = (String) m.get("comment");
           String expression = (String) m.get("expression");
+          String csvColumn = (String) m.get("csvColumn");
           if (name != null) {
-            result.add(new TableColumn(name, type, nullable, comment, expression));
+            result.add(new TableColumn(name, type, nullable, comment, expression, csvColumn));
           }
         }
       }
