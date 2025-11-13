@@ -525,27 +525,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     dimensions.add(new IterationDimension("combo", combos));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework with year filtering
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    // Note: Year filtering happens in the operation lambda
+    iterateTableOperationsOptimized(
         tableName,
         dimensions,
-        (year, vars) -> {
-          // Parse combo back into separate variables
-          String[] parts = vars.get("combo").split(":", 3);
-          String tableNameKey = parts[0];
-
-          // Skip this combination if table is not valid for this year
-          if (!isTableValidForYear(tableNameKey, year)) {
-            return true;  // Return true to skip (treat as already cached)
-          }
-
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", tableNameKey);
-          fullVars.put("line_code", parts[1]);
-          fullVars.put("geo_fips_set", parts[2]);
-          return isCachedOrExists(tableName, year, fullVars);
-        },
         (year, vars) -> {
           // Parse combo and execute download
           String[] parts = vars.get("combo").split(":", 3);
@@ -813,19 +797,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     dimensions.add(new IterationDimension("indicator_freq", combos));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
         tableName,
         dimensions,
-        (year, vars) -> {
-          // Parse combo back into separate variables
-          String[] parts = vars.get("indicator_freq").split(":", 2);
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("indicator", parts[0]);
-          fullVars.put("frequency", parts[1]);
-          return isCachedOrExists(tableName, year, fullVars);
-        },
         (year, vars) -> {
           // Parse combo and execute download
           String[] parts = vars.get("indicator_freq").split(":", 2);
@@ -926,16 +901,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     dimensions.add(new IterationDimension("Industry", keyIndustriesList));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Execute using generic framework
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
         tableName,
         dimensions,
-        (year, vars) -> {
-          // Cache checking uses params with only Industry
-          Map<String, String> params = new HashMap<>();
-          params.put("Industry", vars.get("Industry"));
-          return isCachedOrExists(tableName, year, params);
-        },
         (year, vars) -> {
           // Build full variables with frequency
           Map<String, String> fullVars = new HashMap<>();
