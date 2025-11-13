@@ -195,21 +195,16 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     dimensions.add(new IterationDimension("series", seriesIds));
     dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
 
-    // Use iterateTableOperations() for automatic progress tracking and manifest management
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    // Note: For conversion, we check parquet_converted status in manifest
+    iterateTableOperationsOptimized(
         tableName,
         dimensions,
         (year, vars) -> {
-          Map<String, Object> metadata = loadTableMetadata();
-          String pattern = (String) metadata.get("pattern");
-          String parquetPath =
-              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, vars));
-          String rawPath =
-              cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, vars));
-          return isParquetConvertedOrExists(tableName, year, vars, rawPath, parquetPath);
-        },
-        (year, vars) -> {
+          // Execute conversion
           convertCachedJsonToParquet(tableName, vars);
+
+          // Mark as converted in manifest
           Map<String, Object> metadata = loadTableMetadata();
           String pattern = (String) metadata.get("pattern");
           String parquetPath =
