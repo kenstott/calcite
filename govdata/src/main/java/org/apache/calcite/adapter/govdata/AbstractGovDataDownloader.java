@@ -1078,7 +1078,7 @@ public abstract class AbstractGovDataDownloader {
       try {
         StorageProvider.FileMetadata fileMetadata = cacheStorageProvider.getMetadata(fullJsonPath);
         if (fileMetadata.getSize() > 0) {
-          LOGGER.info("Cached JSON already exists, skipping download: {}", jsonPath);
+          LOGGER.debug("Cached JSON already exists, skipping download: {}", jsonPath);
           return jsonPath;
         }
       } catch (IOException e) {
