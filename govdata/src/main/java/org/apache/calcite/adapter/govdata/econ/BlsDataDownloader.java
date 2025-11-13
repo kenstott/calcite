@@ -1755,7 +1755,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // 1. Identify uncached years
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
+      // Wage growth data is monthly
+      Map<String, String> variables = ImmutableMap.of(
+          "year", String.valueOf(year),
+          "frequency", "M");
 
       if (isCachedOrExists(tableName, year, variables)) {
         LOGGER.info("Found cached {} data for year {} - skipping", tableName, year);
@@ -1778,7 +1781,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
+      // Wage growth data is monthly
+      Map<String, String> variables = ImmutableMap.of(
+          "year", String.valueOf(year),
+          "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
@@ -2189,43 +2195,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // Get the resource path for state_fips.json
       String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
-      // Build DuckDB SQL to read extracted CSV, filter, enrich with state names, and write to Parquet
-      String sql =
-          String.format("COPY (\n"
-    +
-          "  SELECT\n"
-    +
-          "    substring(q.area_fips, 1, 2) AS state_fips,\n"
-    +
-          "    s.state_name,\n"
-    +
-          "    TRY_CAST(q.annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
-    +
-          "    TRY_CAST(q.annual_avg_emplvl AS INTEGER) AS total_employment,\n"
-    +
-          "    %d AS year\n"
-    +
-          "  FROM read_csv_auto('%s') q\n"
-    +
-          "  LEFT JOIN read_json_auto('%s') s\n"
-    +
-          "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
-    +
-          "  WHERE CAST(q.agglvl_code AS VARCHAR) = '50'\n"
-    +
-          "    AND CAST(q.own_code AS VARCHAR) = '0'\n"
-    +
-          "    AND CAST(q.industry_code AS VARCHAR) = '10'\n"
-    +
-          "    AND length(q.area_fips) = 5\n"
-    +
-          "    AND q.area_fips LIKE '%%000'\n"
-    +
-          ") TO '%s' (FORMAT PARQUET);",
-          year,
-          csvTempPath.replace("'", "''"),
-          stateFipsJsonPath.replace("'", "''"),
-          fullParquetPath.replace("'", "''"));
+      // Load SQL from resource and substitute parameters
+      String sql = substituteSqlParameters(
+          loadSqlResource("/sql/bls/convert_state_wages.sql"),
+          ImmutableMap.of(
+              "year", String.valueOf(year),
+              "csvPath", csvTempPath.replace("'", "''"),
+              "stateFipsPath", stateFipsJsonPath.replace("'", "''"),
+              "parquetPath", fullParquetPath.replace("'", "''")));
 
       // Execute via DuckDB
       executeDuckDBSql(sql, "QCEW state wages CSV to Parquet conversion");
@@ -2257,43 +2234,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // Get the resource path for state_fips.json
       String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
-      // Build DuckDB SQL to read extracted CSV, filter, enrich with state names, and write to Parquet
-      String sql =
-          String.format("COPY (\n"
-    +
-          "  SELECT\n"
-    +
-          "    q.area_fips AS county_fips,\n"
-    +
-          "    substring(q.area_fips, 1, 2) AS state_fips,\n"
-    +
-          "    s.state_name,\n"
-    +
-          "    TRY_CAST(q.annual_avg_wkly_wage AS INTEGER) AS average_weekly_wage,\n"
-    +
-          "    TRY_CAST(q.annual_avg_emplvl AS INTEGER) AS total_employment,\n"
-    +
-          "    %d AS year\n"
-    +
-          "  FROM read_csv_auto('%s') q\n"
-    +
-          "  LEFT JOIN read_json_auto('%s') s\n"
-    +
-          "    ON substring(q.area_fips, 1, 2) = s.fips_code\n"
-    +
-          "  WHERE CAST(q.agglvl_code AS VARCHAR) = '70'\n"
-    +
-          "    AND CAST(q.own_code AS VARCHAR) = '0'\n"
-    +
-          "    AND CAST(q.industry_code AS VARCHAR) = '10'\n"
-    +
-          "    AND length(q.area_fips) = 5\n"
-    +
-          ") TO '%s' (FORMAT PARQUET);",
-          year,
-          csvTempPath.replace("'", "''"),
-          stateFipsJsonPath.replace("'", "''"),
-          fullParquetPath.replace("'", "''"));
+      // Load SQL from resource and substitute parameters
+      String sql = substituteSqlParameters(
+          loadSqlResource("/sql/bls/convert_county_wages.sql"),
+          ImmutableMap.of(
+              "year", String.valueOf(year),
+              "csvPath", csvTempPath.replace("'", "''"),
+              "stateFipsPath", stateFipsJsonPath.replace("'", "''"),
+              "parquetPath", fullParquetPath.replace("'", "''")));
 
       // Execute via DuckDB
       executeDuckDBSql(sql, "QCEW county wages CSV to Parquet conversion");
