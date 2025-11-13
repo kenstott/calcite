@@ -17,6 +17,8 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -26,13 +28,26 @@ import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -48,7 +63,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private static final String BLS_API_BASE = "https://api.bls.gov/publicAPI/v2/";
 
   private final String apiKey;
-  private final java.util.Set<String> enabledTables;
+  private final Set<String> enabledTables;
 
   // Rate limiting: BLS enforces requests per second limit
   private static final long MIN_REQUEST_INTERVAL_MS = 1100; // 1.1 seconds between requests (safe margin)
@@ -191,73 +206,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     METRO_BLS_AREA_CODES.put("A319", "2412580");  // Baltimore: State 24 + Area 12580
     METRO_BLS_AREA_CODES.put("A433", "1245300");  // Tampa: State 12 + Area 45300
     METRO_BLS_AREA_CODES.put("A440", "0211260");  // Anchorage: State 02 + Area 11260
-  }
-
-  // QCEW area codes mapping: Publication Code → QCEW Area Code (e.g., "C3562")
-  // Format for QCEW Open Data API: "C" + first 4 digits of CBSA code
-  // Used to download metro wage data from QCEW Open Data API
-  private static final Map<String, String> METRO_QCEW_AREA_CODES = new HashMap<>();
-  static {
-    METRO_QCEW_AREA_CODES.put("A100", "C3562");  // New York-Newark-Jersey City, NY-NJ-PA MSA
-    METRO_QCEW_AREA_CODES.put("A400", "C3108");  // Los Angeles-Long Beach-Anaheim, CA MSA
-    METRO_QCEW_AREA_CODES.put("A207", "C1698");  // Chicago-Naperville-Elgin, IL-IN MSA
-    METRO_QCEW_AREA_CODES.put("A425", "C2642");  // Houston-The Woodlands-Sugar Land, TX MSA (CBSA 26420)
-    METRO_QCEW_AREA_CODES.put("A423", "C3806");  // Phoenix-Mesa-Chandler, AZ MSA
-    METRO_QCEW_AREA_CODES.put("A102", "C3798");  // Philadelphia-Camden-Wilmington, PA-NJ-DE-MD MSA
-    METRO_QCEW_AREA_CODES.put("A426", "C4170");  // San Antonio-New Braunfels, TX MSA
-    METRO_QCEW_AREA_CODES.put("A421", "C4174");  // San Diego-Chula Vista-Carlsbad, CA MSA
-    METRO_QCEW_AREA_CODES.put("A127", "C1910");  // Dallas-Fort Worth-Arlington, TX MSA
-    METRO_QCEW_AREA_CODES.put("A429", "C4194");  // San Jose-Sunnyvale-Santa Clara, CA MSA
-    METRO_QCEW_AREA_CODES.put("A438", "C1242");  // Austin-Round Rock-San Marcos, TX MSA
-    METRO_QCEW_AREA_CODES.put("A420", "C2726");  // Jacksonville, FL MSA
-    METRO_QCEW_AREA_CODES.put("A103", "C1446");  // Boston-Cambridge-Newton, MA-NH MSA
-    METRO_QCEW_AREA_CODES.put("A428", "C4266");  // Seattle-Tacoma-Bellevue, WA MSA
-    METRO_QCEW_AREA_CODES.put("A427", "C1974");  // Denver-Aurora-Centennial, CO MSA
-    METRO_QCEW_AREA_CODES.put("A101", "C4790");  // Washington-Arlington-Alexandria, DC-VA-MD-WV MSA
-    METRO_QCEW_AREA_CODES.put("A211", "C1982");  // Detroit-Warren-Dearborn, MI MSA
-    METRO_QCEW_AREA_CODES.put("A104", "C1746");  // Cleveland-Elyria, OH MSA
-    METRO_QCEW_AREA_CODES.put("A212", "C3346");  // Minneapolis-St. Paul-Bloomington, MN-WI MSA
-    METRO_QCEW_AREA_CODES.put("A422", "C3310");  // Miami-Fort Lauderdale-West Palm Beach, FL MSA
-    METRO_QCEW_AREA_CODES.put("A419", "C1206");  // Atlanta-Sandy Springs-Roswell, GA MSA
-    METRO_QCEW_AREA_CODES.put("A437", "C3890");  // Portland-Vancouver-Hillsboro, OR-WA MSA
-    METRO_QCEW_AREA_CODES.put("A424", "C4014");  // Riverside-San Bernardino-Ontario, CA MSA
-    METRO_QCEW_AREA_CODES.put("A320", "C4118");  // St. Louis, MO-IL MSA
-    METRO_QCEW_AREA_CODES.put("A319", "C1258");  // Baltimore-Columbia-Towson, MD MSA
-    METRO_QCEW_AREA_CODES.put("A433", "C4530");  // Tampa-St. Petersburg-Clearwater, FL MSA
-    METRO_QCEW_AREA_CODES.put("A440", "C1126");  // Anchorage, AK MSA
-  }
-
-  // Metro area names (publication code -> name)
-  // Used for metro_wages table metro_name column
-  private static final Map<String, String> METRO_NAMES = new HashMap<>();
-  static {
-    METRO_NAMES.put("A100", "New York-Newark-Jersey City, NY-NJ-PA");
-    METRO_NAMES.put("A400", "Los Angeles-Long Beach-Anaheim, CA");
-    METRO_NAMES.put("A207", "Chicago-Naperville-Elgin, IL-IN");
-    METRO_NAMES.put("A425", "Houston-The Woodlands-Sugar Land, TX");
-    METRO_NAMES.put("A423", "Phoenix-Mesa-Chandler, AZ");
-    METRO_NAMES.put("A102", "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD");
-    METRO_NAMES.put("A426", "San Antonio-New Braunfels, TX");
-    METRO_NAMES.put("A421", "San Diego-Chula Vista-Carlsbad, CA");
-    METRO_NAMES.put("A127", "Dallas-Fort Worth-Arlington, TX");
-    METRO_NAMES.put("A429", "San Jose-Sunnyvale-Santa Clara, CA");
-    METRO_NAMES.put("A438", "Austin-Round Rock-San Marcos, TX");
-    METRO_NAMES.put("A420", "Jacksonville, FL");
-    METRO_NAMES.put("A103", "Boston-Cambridge-Newton, MA-NH");
-    METRO_NAMES.put("A428", "Seattle-Tacoma-Bellevue, WA");
-    METRO_NAMES.put("A427", "Denver-Aurora-Centennial, CO");
-    METRO_NAMES.put("A101", "Washington-Arlington-Alexandria, DC-VA-MD-WV");
-    METRO_NAMES.put("A211", "Detroit-Warren-Dearborn, MI");
-    METRO_NAMES.put("A104", "Cleveland-Elyria, OH");
-    METRO_NAMES.put("A212", "Minneapolis-St. Paul-Bloomington, MN-WI");
-    METRO_NAMES.put("A422", "Miami-Fort Lauderdale-West Palm Beach, FL");
-    METRO_NAMES.put("A419", "Atlanta-Sandy Springs-Roswell, GA");
-    METRO_NAMES.put("A437", "Portland-Vancouver-Hillsboro, OR-WA");
-    METRO_NAMES.put("A424", "Riverside-San Bernardino-Ontario, CA");
-    METRO_NAMES.put("A320", "St. Louis, MO-IL");
-    METRO_NAMES.put("A319", "Baltimore-Columbia-Towson, MD");
-    METRO_NAMES.put("A433", "Tampa-St. Petersburg-Clearwater, FL");
-    METRO_NAMES.put("A440", "Anchorage, AK");
   }
 
   // NAICS supersector codes for industry employment
@@ -421,11 +369,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+  public BlsDataDownloader(String apiKey, String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
     this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null);
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, org.apache.calcite.adapter.file.storage.StorageProvider cacheStorageProvider, org.apache.calcite.adapter.file.storage.StorageProvider storageProvider, CacheManifest sharedManifest, java.util.Set<String> enabledTables) {
+  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables) {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
@@ -433,6 +381,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   @Override protected String getTableName() {
     return "employment_statistics";
+  }
+
+  @Override protected long getMinRequestIntervalMs() {
+    return MIN_REQUEST_INTERVAL_MS;
+  }
+
+  @Override protected int getMaxRetries() {
+    return MAX_RETRIES;
+  }
+
+  @Override protected long getRetryDelayMs() {
+    return RETRY_DELAY_MS;
   }
 
   // Table name constants for filtering
@@ -762,7 +722,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param enabledTables Set of table names to download, or null to download all tables.
    *                      If provided, only tables in this set will be downloaded.
    */
-  private void downloadAllTables(int startYear, int endYear, java.util.Set<String> enabledTables) throws IOException, InterruptedException {
+  private void downloadAllTables(int startYear, int endYear, Set<String> enabledTables) throws IOException, InterruptedException {
     // Download employment statistics
     if (enabledTables == null || enabledTables.contains(TABLE_EMPLOYMENT_STATISTICS)) {
       downloadEmploymentStatistics(startYear, endYear);
@@ -881,7 +841,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Define all BLS tables (12 tables)
     List<String> tablesToConvert =
-        java.util.Arrays.asList(TABLE_EMPLOYMENT_STATISTICS,
+        Arrays.asList(TABLE_EMPLOYMENT_STATISTICS,
         TABLE_INFLATION_METRICS,
         TABLE_REGIONAL_CPI,
         TABLE_METRO_CPI,
@@ -901,6 +861,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Convert each enabled table using IterationDimension pattern
     for (String tableName : tablesToConvert) {
       if (enabledTables == null || enabledTables.contains(tableName)) {
+        // metro_wages uses direct CSV→Parquet conversion (no intermediate JSON)
+        if (TABLE_METRO_WAGES.equals(tableName)) {
+          convertMetroWagesAll(startYear, endYear);
+          continue;
+        }
+
+        // Other tables use JSON→Parquet conversion
         iterateTableOperations(
             tableName,
             dimensions,
@@ -1363,155 +1330,115 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads average weekly wages for 27 major U.S. metropolitan areas
-   * from BLS QCEW (Quarterly Census of Employment and Wages) bulk CSV files.
+   * Downloads QCEW bulk ZIP files containing metro wage data.
+   *
+   * <p>Downloads both annual and quarterly bulk files from BLS QCEW.
+   * Conversion to Parquet is handled separately by {@link #convertMetroWagesAll(int, int)}
+   * which uses DuckDB's zipfs extension to read CSV files directly from the ZIP archives.
    *
    * <p><b>Data Source:</b>
-   * Downloads both annual and quarterly bulk CSV files from BLS:
    * <pre>
-   * Annual: <a href="https://data.bls.gov/cew/data/files/">...</a>{year}/csv/{year}_annual_singlefile.zip (~80MB)
+   * Annual:    https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip (~80MB)
    * Quarterly: https://data.bls.gov/cew/data/files/{year}/csv/{year}_qtrly_singlefile.zip (~323MB)
    * </pre>
    *
-   * <p><b>Data Structure:</b>
-   * Each record contains:
-   * <ul>
-   *   <li>{@code metro_area_code} - Metro publication code (e.g., "A419" for Atlanta)</li>
-   *   <li>{@code metro_area_name} - Metro area name</li>
-   *   <li>{@code year} - Year of data</li>
-   *   <li>{@code qtr} - Quarter: "A" for annual average, "1"-"4" for quarterly data</li>
-   *   <li>{@code average_weekly_wage} - Average weekly wage (CSV field 14)</li>
-   *   <li>{@code average_annual_pay} - Average annual pay (CSV field 15)</li>
-   * </ul>
-   *
-   * <p><b>Cache Structure:</b>
-   * <pre>
-   * ZIP files: source=econ/type=qcew_bulk/year={year}/{frequency}_singlefile.zip
-   * Extracted CSV: source=econ/type=qcew_bulk/year={year}/{year}.{frequency}.singlefile.csv
-   * JSON output: source=econ/type=metro_wages/frequency=monthly/year={year}/metro_wages.json
-   * </pre>
-   *
    * <p><b>Coverage:</b>
-   * 27 major metropolitan areas (defined in {@code METRO_QCEW_AREA_CODES}) with both
-   * annual and quarterly data from 1990 to present.
+   * 27 major metropolitan areas from 1990 to present.
    *
    * @param startYear Start year (must be >= 1990, when QCEW data begins)
    * @param endYear   End year
-   * @throws IOException If download or file operations fail
-   * @see #downloadQcewMetroWagesFromApi(int) For implementation details
-   * @see #downloadQcewBulkFile(int, String) For bulk file download logic
-   * @see #parseQcewBulkFile(String, java.util.Set) For CSV parsing and filtering logic
+   * @see #downloadQcewBulkFile(int, String) For ZIP download implementation
+   * @see #convertMetroWagesAll(int, int) For ZIP→Parquet conversion
    */
-  public void downloadMetroWages(int startYear, int endYear) throws IOException {
-    LOGGER.info("Downloading metro wages from QCEW Open Data API for {}-{}", startYear, endYear);
+  public void downloadMetroWages(int startYear, int endYear) {
+    LOGGER.info("Downloading QCEW bulk files for metro wages {}-{}", startYear, endYear);
 
-    String tableName = "metro_wages";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
+    // QCEW data only available from 1990 forward
+    int effectiveStartYear = Math.max(startYear, 1990);
 
-    for (int year = startYear; year <= endYear; year++) {
-      // QCEW data only available from 1990 forward
-      if (year < 1990) {
-        LOGGER.warn("QCEW data only available from 1990 forward. Skipping year {}", year);
-        continue;
-      }
+    String[] frequencies = {"annual", "qtrly"};
 
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year), "frequency", "quarterly");
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
-
-      if (isCachedOrExists(tableName, year, variables)) {
-        LOGGER.info("Found cached {} for year {} - skipping", tableName, year);
-        continue;
-      }
-
-      // Download quarterly data from QCEW Open Data API for all 27 metros
-      String metroWagesJson = downloadQcewMetroWagesFromApi(year);
-
-      if (metroWagesJson != null) {
-        saveToCache(tableName, year, variables, jsonFilePath, metroWagesJson);
-        LOGGER.info("Downloaded {} for year {} ({} metros)", tableName, year, METRO_QCEW_AREA_CODES.size());
-      } else {
-        LOGGER.warn("Failed to download {} for year {}", tableName, year);
+    for (int year = effectiveStartYear; year <= endYear; year++) {
+      for (String frequency : frequencies) {
+        try {
+          // Download the bulk ZIP file (method checks cache internally)
+          String zipPath = downloadQcewBulkFile(year, frequency);
+          LOGGER.info("Downloaded QCEW bulk {} file for year {}: {}", frequency, year, zipPath);
+        } catch (IOException e) {
+          LOGGER.warn("Failed to download QCEW bulk {} file for year {}: {}",
+              frequency, year, e.getMessage());
+          // Continue with next file instead of failing completely
+        }
       }
     }
 
+    LOGGER.info("QCEW bulk file download complete for years {}-{}", effectiveStartYear, endYear);
   }
 
   /**
-   * Downloads metro wage data from QCEW bulk CSV files for a specific year.
-   * Uses bulk download approach instead of per-metro API calls to avoid HTTP 404 errors.
+   * Converts metro wage data from bulk CSV files (in ZIP archives) directly to Parquet format.
+   * Uses DuckDB's zipfs extension to read CSV data without extracting or creating intermediate JSON files.
    *
-   * <p>Downloads both annual and quarterly bulk files, extracts data for all 27 metros,
-   * and returns combined records with qtr field ("A" for annual, "1"-"4" for quarters).
+   * <p>This method:
+   * <ul>
+   *   <li>Checks cache manifest to skip already-converted years</li>
+   *   <li>Uses metadata-driven CSV→Parquet conversion via {@link #convertCsvToParquet}</li>
+   *   <li>Applies SQL filters to extract only the 27 major metro areas</li>
+   *   <li>Maps QCEW area codes to publication codes and names via SQL CASE expressions</li>
+   *   <li>Updates cache manifest after successful conversion</li>
+   * </ul>
    *
-   * @param year The year to download data for
-   * @return JSON array string containing metro wage records or null if download fails
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
    */
-  private String downloadQcewMetroWagesFromApi(int year) {
-    LOGGER.info("Downloading QCEW metro wages from bulk files for {} metros in year {}",
-        METRO_QCEW_AREA_CODES.size(), year);
+  public void convertMetroWagesAll(int startYear, int endYear) {
+    LOGGER.info("Converting metro wages from CSV (ZIP) to Parquet for years {}-{}", startYear, endYear);
 
-    List<Map<String, Object>> allMetroWages = new ArrayList<>();
+    String tableName = TABLE_METRO_WAGES;
 
-    try {
-      // Download and extract bulk files (annual + quarterly)
-      String annualZipPath = downloadQcewBulkFile(year, "annual");
-      String annualCsvPath = extractQcewBulkFile(annualZipPath, year, "annual");
+    // QCEW data only available from 1990 forward
+    int effectiveStartYear = Math.max(startYear, 1990);
 
-      String qtrlyZipPath = downloadQcewBulkFile(year, "qtrly");
-      String qtrlyCsvPath = extractQcewBulkFile(qtrlyZipPath, year, "qtrly");
+    // Process both annual and quarterly data
+    String[] frequencies = {"annual", "qtrly"};
 
-      // Build a set of C-codes to extract from bulk files
-      java.util.Set<String> metroCCodes = new java.util.HashSet<>(METRO_QCEW_AREA_CODES.values());
+    for (int year = effectiveStartYear; year <= endYear; year++) {
+      for (String frequency : frequencies) {
+        try {
+          // Build variables map
+          Map<String, String> variables = new HashMap<>();
+          variables.put("year", String.valueOf(year));
+          variables.put("frequency", frequency);
 
-      // Parse annual data (qtr="A")
-      List<MetroWageRecord> annualRecords = parseQcewBulkFile(annualCsvPath, metroCCodes);
-      LOGGER.info("Extracted {} annual metro wage records from bulk file", annualRecords.size());
+          // Check if already converted using cache manifest
+          Map<String, Object> metadata = loadTableMetadata(tableName);
+          String pattern = (String) metadata.get("pattern");
+          String parquetPath =
+              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
-      // Parse quarterly data (qtr="1","2","3","4")
-      List<MetroWageRecord> qtrlyRecords = parseQcewBulkFile(qtrlyCsvPath, metroCCodes);
-      LOGGER.info("Extracted {} quarterly metro wage records from bulk file", qtrlyRecords.size());
+          if (isParquetConvertedOrExists(tableName, year, variables, null, parquetPath)) {
+            LOGGER.info("Skipping {} for year {} {} - already converted", tableName, year, frequency);
+            continue;
+          }
 
-      // Combine annual + quarterly records and convert to JSON format
-      List<MetroWageRecord> allRecords = new ArrayList<>();
-      allRecords.addAll(annualRecords);
-      allRecords.addAll(qtrlyRecords);
+          // Use new CSV→Parquet conversion method
+          convertCsvToParquet(tableName, variables);
 
-      for (MetroWageRecord record : allRecords) {
-        Map<String, Object> wageData = new HashMap<>();
-        wageData.put("metro_area_code", record.metroCode);
-        wageData.put("metro_area_name", record.metroName);
-        wageData.put("year", record.year);
-        wageData.put("qtr", record.qtr);
+          // Mark as converted in cache manifest
+          cacheManifest.markParquetConverted(tableName, year, variables, parquetPath);
+          cacheManifest.save(operatingDirectory);
 
-        if (record.avgWklyWage != null) {
-          wageData.put("average_weekly_wage", record.avgWklyWage);
+          LOGGER.info("Successfully converted {} for year {} {} to Parquet", tableName, year, frequency);
+
+        } catch (IOException e) {
+          LOGGER.error("Failed to convert {} for year {} {}: {}",
+              tableName, year, frequency, e.getMessage(), e);
+          // Continue with next year/frequency instead of failing completely
         }
-        if (record.avgAnnualPay != null) {
-          wageData.put("average_annual_pay", record.avgAnnualPay);
-        }
-
-        allMetroWages.add(wageData);
       }
-
-      if (allMetroWages.isEmpty()) {
-        LOGGER.error("No metro wage data extracted from bulk files for year {}", year);
-        return null;
-      }
-
-      LOGGER.info("Successfully processed {} metro wage records (annual + quarterly) for year {}",
-          allMetroWages.size(), year);
-
-      // Convert to JSON array format
-      return MAPPER.writeValueAsString(allMetroWages);
-
-    } catch (Exception e) {
-      LOGGER.error("Failed to download/parse metro wages from bulk files for year {}: {}",
-          year, e.getMessage(), e);
-      return null;
     }
+
+    LOGGER.info("Metro wages conversion complete for years {}-{}", effectiveStartYear, endYear);
   }
 
   /**
@@ -1577,226 +1504,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Extracts QCEW bulk ZIP file to a cached CSV file.
-   *
-   * <p>Extracts the single CSV file contained in the QCEW bulk ZIP file to a cached location
-   * to avoid re-extraction on subsequent runs. For large files (500MB+ uncompressed), this
-   * disk-based caching is more efficient than in-memory processing.
-   *
-   * <p>Extracted CSV cached at: a source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
-   *
-   * @param zipFilePath Path to a cached ZIP file (from downloadQcewBulkFile)
-   * @param year Year of the data
-   * @param frequency Frequency type: "annual" or "qtrly"
-   * @return Path to an extracted CSV file
-   * @throws IOException if extraction fails
-   */
-  String extractQcewBulkFile(String zipFilePath, int year, String frequency) throws IOException {
-    // Build cache path for extracted CSV: source=econ/type=qcew_bulk/{year}/{year}.{frequency}.singlefile.csv
-    String csvRelativePath =
-                                            String.format("type=qcew_bulk/year=%d/%d.%s.singlefile.csv", year, year, frequency);
-    String csvFullPath = cacheStorageProvider.resolvePath(cacheDirectory, csvRelativePath);
-
-    // Check if CSV already extracted
-    if (cacheStorageProvider.exists(csvFullPath)) {
-      LOGGER.info("Using cached extracted QCEW {} CSV for {}: {}", frequency, year, csvRelativePath);
-      return csvFullPath;
-    }
-
-    LOGGER.info("Extracting QCEW bulk {} file for {} to cache", frequency, year);
-
-    try (InputStream zipIn = cacheStorageProvider.openInputStream(zipFilePath);
-         ZipInputStream zis = new ZipInputStream(new java.io.BufferedInputStream(zipIn))) {
-
-      ZipEntry entry = zis.getNextEntry();
-      if (entry == null) {
-        throw new IOException("ZIP file contains no entries: " + zipFilePath);
-      }
-      if (entry.isDirectory()) {
-        throw new IOException("Unexpected directory entry in ZIP: " + entry.getName());
-      }
-
-      LOGGER.debug("Extracting ZIP entry: {} (compressed: {} bytes, uncompressed: {} bytes)",
-                   entry.getName(), entry.getCompressedSize(), entry.getSize());
-
-      // Ensure destination directory exists (if applicable for this storage provider)
-      try {
-        java.nio.file.Path parent = java.nio.file.Paths.get(csvFullPath).getParent();
-        if (parent != null) {
-          cacheStorageProvider.createDirectories(parent.toString());
-        }
-      } catch (Exception ignore) {
-        // Some providers may not require directory creation
-      }
-
-      // Stream the CSV entry directly to the cache without buffering entire file in memory
-      cacheStorageProvider.writeFile(csvFullPath, new java.io.BufferedInputStream(zis, 1 << 20));
-      zis.closeEntry();
-
-      LOGGER.info("Extracted and cached QCEW {} CSV for {}.", frequency, year);
-      return csvFullPath;
-
-    } catch (IOException e) {
-      LOGGER.error("Error extracting ZIP file {}: {}", zipFilePath, e.getMessage());
-      throw new IOException("Failed to extract QCEW bulk file: " + e.getMessage(), e);
-    }
-  }
-
-  /**
-   * Data class for holding metro wage records extracted from QCEW bulk files.
-   */
-  static class MetroWageRecord {
-    final String metroCode;      // Publication code (e.g., "A419" for Atlanta)
-    final String metroName;      // Metro area name
-    final int year;              // Year
-    final String qtr;            // Quarter: "1", "2", "3", "4", or "A" for annual
-    final Integer avgWklyWage;   // Average weekly wage (field 14)
-    final Integer avgAnnualPay;  // Average annual pay (field 15)
-
-    MetroWageRecord(String metroCode, String metroName, int year, String qtr,
-                    Integer avgWklyWage, Integer avgAnnualPay) {
-      this.metroCode = metroCode;
-      this.metroName = metroName;
-      this.year = year;
-      this.qtr = qtr;
-      this.avgWklyWage = avgWklyWage;
-      this.avgAnnualPay = avgAnnualPay;
-    }
-  }
-
-  /**
-   * Parses QCEW bulk CSV file and extracts metro wage data for specified metro areas.
-   *
-   * <p>Bulk CSV files contain ALL metro areas. This method filters rows for the specified
-   * metro C-codes and extracts wage data. Uses stream processing to handle large files (500MB+).
-   *
-   * <p>Filtering criteria:
-   * - area_fips IN metroC-codes (e.g., "C1206", "C1242", "C3890")
-   * - own_code = "0" (total, all ownership)
-   * - industry_code = "10" (total, all industries)
-   * - agglvl_code = "80" (MSA level, not "40," which is county)
-   *
-   * <p>Extracts fields:
-   * - Field 6: year
-   * - Field 7: qtr ("1", "2", "3", "4", or "A" for annual)
-   * - Field 14: annual_avg_wkly_wage
-   * - Field 15: avg_annual_pay
-   *
-   * @param csvFilePath Path to an extracted CSV file (from extractQcewBulkFile)
-   * @param metroCCodes Set of QCEW C-codes to extract (e.g., {"C1206", "C1242", "C3890"})
-   * @return List of metro wage records extracted from the CSV
-   * @throws IOException if reading or parsing fails
-   */
-  List<MetroWageRecord> parseQcewBulkFile(String csvFilePath, java.util.Set<String> metroCCodes)
-      throws IOException {
-    List<MetroWageRecord> records = new ArrayList<>();
-
-    LOGGER.info("Parsing QCEW bulk CSV file for {} metro areas: {}", metroCCodes.size(), csvFilePath);
-
-    long linesProcessed = 0;
-    long matchedRows = 0;
-
-    try (InputStream csvInputStream = cacheStorageProvider.openInputStream(csvFilePath);
-         BufferedReader reader =
-             new BufferedReader(new InputStreamReader(csvInputStream, StandardCharsets.UTF_8))) {
-
-      String line;
-      boolean isHeader = true;
-
-      while ((line = reader.readLine()) != null) {
-        linesProcessed++;
-
-        // Log progress every 100K lines
-        if (linesProcessed % 100000 == 0) {
-          LOGGER.debug("Processed {} lines, found {} matching metro records", linesProcessed, matchedRows);
-        }
-
-        if (isHeader) {
-          isHeader = false;
-          continue;
-        }
-
-        String[] fields = parseCsvLine(line);
-        if (fields.length < 16) continue;  // Need at least 16 fields
-
-        String areaFips = fields[0].trim();
-        String ownCode = fields[1].trim();
-        String industryCode = fields[2].trim();
-        String agglvlCode = fields[3].trim();
-
-        // Filter: MSA level (80), all ownership (0), total industry (10), and metro C-code
-        if (!agglvlCode.equals("80") || !ownCode.equals("0") || !industryCode.equals("10")) {
-          continue;
-        }
-
-        if (!metroCCodes.contains(areaFips)) {
-          continue;
-        }
-
-        // Found a matching metro record - extract fields
-        matchedRows++;
-
-        try {
-          int year = Integer.parseInt(fields[5].trim());
-          String qtr = fields[6].trim();
-          Integer avgWklyWage = parseIntOrNull(fields[14]);
-          Integer avgAnnualPay = parseIntOrNull(fields[15]);
-
-          // Map C-code to publication code and metro name
-          String publicationCode = getMetroPublicationCode(areaFips);
-          String metroName = getMetroName(publicationCode);
-
-          if (publicationCode != null && metroName != null) {
-            MetroWageRecord record =
-                new MetroWageRecord(publicationCode, metroName, year, qtr, avgWklyWage, avgAnnualPay);
-            records.add(record);
-          } else {
-            LOGGER.warn("Could not map C-code {} to publication code/name", areaFips);
-          }
-
-        } catch (NumberFormatException e) {
-          LOGGER.warn("Error parsing numeric fields in line {}: {}", linesProcessed, e.getMessage());
-        }
-      }
-
-      LOGGER.info("Completed parsing QCEW bulk CSV: processed {} lines, found {} metro wage records",
-                  linesProcessed, matchedRows);
-
-    } catch (IOException e) {
-      LOGGER.error("Error reading CSV file {}: {}", csvFilePath, e.getMessage());
-      throw new IOException("Failed to parse QCEW bulk CSV file: " + e.getMessage(), e);
-    }
-
-    return records;
-  }
-
-  /**
-   * Maps a QCEW C-code to the metro publication code.
-   * Uses reverse lookup in METRO_QCEW_AREA_CODES map.
-   *
-   * @param cCode QCEW C-code (e.g., "C1206")
-   * @return Publication code (e.g., "A419"), or null if not found
-   */
-  private String getMetroPublicationCode(String cCode) {
-    for (Map.Entry<String, String> entry : METRO_QCEW_AREA_CODES.entrySet()) {
-      if (entry.getValue().equals(cCode)) {
-        return entry.getKey();
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Gets the metro area name for a publication code.
-   *
-   * @param publicationCode Metro publication code (e.g., "A419")
-   * @return Metro area name, or null if not found
-   */
-  private String getMetroName(String publicationCode) {
-    return METRO_NAMES.get(publicationCode);
-  }
-
-  /**
    * Downloads JOLTS (Job Openings and Labor Turnover Survey) regional data from BLS FTP flat files.
    * Regional data is NOT available via BLS API v2 - must use download.bls.gov flat files.
    * Covers 4 Census regions (Northeast, Midwest, South, West) with 5 metrics each (20 series).
@@ -1814,7 +1521,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         continue;
       }
 
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
+      // JOLTS data is monthly
+      Map<String, String> variables = ImmutableMap.of(
+          "year", String.valueOf(year),
+          "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
@@ -1848,7 +1558,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
+      // JOLTS data is monthly
+      Map<String, String> variables = ImmutableMap.of(
+          "year", String.valueOf(year),
+          "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
@@ -2223,7 +1936,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String stateFips) throws IOException {
 
     // Build data records
-    java.util.List<java.util.Map<String, Object>> dataRecords = new java.util.ArrayList<>();
+    List<Map<String, Object>> dataRecords = new ArrayList<>();
 
     // Parse series from JSON response
     JsonNode seriesArray = jsonResponse.path("Results").path("series");
@@ -2262,7 +1975,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String date = String.format("%s-%02d-01", yearStr, Integer.parseInt(month));
 
         // Create a data record
-        java.util.Map<String, Object> record = new java.util.HashMap<>();
+        Map<String, Object> record = new HashMap<>();
         record.put("date", date);
         record.put("series_id", seriesId);
         record.put("value", value);
@@ -2280,7 +1993,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Load column metadata and write parquet
-    java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+    List<PartitionedTableConfig.TableColumn> columns =
         loadTableColumns("regional_employment");
     convertInMemoryToParquetViaDuckDB("regional_employment", columns, dataRecords, fullParquetPath);
 
@@ -2414,7 +2127,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
     } finally {
       // Clean up temp CSV file
-      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+      Files.deleteIfExists(Paths.get(csvTempPath));
     }
   }
 
@@ -2520,7 +2233,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
     } finally {
       // Clean up temp CSV file
-      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+      Files.deleteIfExists(Paths.get(csvTempPath));
     }
   }
 
@@ -2588,7 +2301,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
     } finally {
       // Clean up temp CSV file
-      java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(csvTempPath));
+      Files.deleteIfExists(Paths.get(csvTempPath));
     }
   }
 
@@ -2606,13 +2319,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Extracting CSV from ZIP: {}", fullZipPath);
 
     // Create temp file for CSV
-    java.nio.file.Path tempCsv = java.nio.file.Files.createTempFile("qcew_" + year + "_", ".csv");
+    Path tempCsv = Files.createTempFile("qcew_" + year + "_", ".csv");
     String tempCsvPath = tempCsv.toString();
 
-    try (java.io.InputStream zipInputStream = cacheStorageProvider.openInputStream(fullZipPath);
-         java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(zipInputStream)) {
+    try (InputStream zipInputStream = cacheStorageProvider.openInputStream(fullZipPath);
+         ZipInputStream zis = new ZipInputStream(zipInputStream)) {
 
-      java.util.zip.ZipEntry entry;
+      ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String entryName = entry.getName();
 
@@ -2621,7 +2334,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           LOGGER.info("Found CSV in ZIP: {}", entryName);
 
           // Copy to temp file
-          try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempCsv.toFile())) {
+          try (FileOutputStream fos = new FileOutputStream(tempCsv.toFile())) {
             byte[] buffer = new byte[8192];
             int len;
             while ((len = zis.read(buffer)) > 0) {
@@ -2640,39 +2353,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     } catch (IOException e) {
       // Clean up temp file if extraction failed
-      java.nio.file.Files.deleteIfExists(tempCsv);
+      Files.deleteIfExists(tempCsv);
       throw e;
     }
-  }
-
-  /**
-   * Parses a CSV line handling quoted fields.
-   *
-   * @param line CSV line to parse
-   * @return Array of field values
-   */
-  private String[] parseCsvLine(String line) {
-    List<String> fields = new ArrayList<>();
-    StringBuilder currentField = new StringBuilder();
-    boolean inQuotes = false;
-
-    for (int i = 0; i < line.length(); i++) {
-      char c = line.charAt(i);
-
-      if (c == '"') {
-        inQuotes = !inQuotes;
-      } else if (c == ',' && !inQuotes) {
-        fields.add(currentField.toString());
-        currentField.setLength(0);
-      } else {
-        currentField.append(c);
-      }
-    }
-
-    // Add the last field
-    fields.add(currentField.toString());
-
-    return fields.toArray(new String[0]);
   }
 
   /**
@@ -2694,7 +2377,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         try { size = cacheStorageProvider.getMetadata(fullPath).getSize(); } catch (Exception ignore) {}
         if (size > 0) {
           LOGGER.info("Using cached JOLTS FTP file: {} (from manifest, size={} bytes)", ftpPath, size);
-          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+          try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
             return inputStream.readAllBytes();
           }
         } else {
@@ -2929,22 +2612,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Parses an integer from a string, returning null if empty or invalid.
-   */
-  private Integer parseIntOrNull(String value) {
-    if (value == null || value.trim().isEmpty()) {
-      return null;
-    }
-    try {
-      return Integer.parseInt(value.trim());
-    } catch (NumberFormatException e) {
-      return null;
-    }
-  }
-
-  /**
    * Fetches raw JSON response for multiple BLS series in a single API call.
-   * Implements rate limiting and retry logic for 429 (rate limit) errors.
+   * Uses the generic retry mechanism from AbstractGovDataDownloader.
    */
   private String fetchMultipleSeriesRaw(
       List<String> seriesIds, int startYear, int endYear) throws IOException, InterruptedException {
@@ -2968,41 +2637,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         .timeout(Duration.ofSeconds(30))
         .build();
 
-    // Retry loop with exponential backoff
-    int attempt = 0;
-    while (true) {
-      // Rate limiting: ensure minimum interval between requests
-      synchronized (this) {
-        long now = System.currentTimeMillis();
-        long timeSinceLastRequest = now - lastRequestTime;
-        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
-          long sleepTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
-          LOGGER.debug("Rate limiting: sleeping {}ms before BLS API request", sleepTime);
-          sleep(sleepTime);
-        }
-        lastRequestTime = System.currentTimeMillis();
-      }
+    HttpResponse<String> response = executeWithRetry(request);
 
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-      if (response.statusCode() == 200) {
-        return response.body();
-      } else if (response.statusCode() == 429) {
-        // Rate limit exceeded - retry with exponential backoff
-        attempt++;
-        if (attempt >= MAX_RETRIES) {
-          throw new IOException("BLS API rate limit exceeded after " + MAX_RETRIES + " retries. " +
-              "Response: " + response.body());
-        }
-        long backoffDelay = RETRY_DELAY_MS * (1L << (attempt - 1)); // Exponential: 2s, 4s, 8s
-        LOGGER.warn("BLS API rate limit hit (429). Retry {}/{} after {}ms delay",
-            attempt, MAX_RETRIES, backoffDelay);
-        sleep(backoffDelay);
-      } else {
-        // Other error - don't retry
-        throw new IOException("BLS API request failed with status: " + response.statusCode() +
-            " - Response: " + response.body());
-      }
+    if (response.statusCode() == 200) {
+      return response.body();
+    } else {
+      throw new IOException("BLS API request failed with status: " + response.statusCode() +
+          " - Response: " + response.body());
     }
   }
 
@@ -3025,9 +2666,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsIndustriesRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_industries.json");
 
-    if (!isParquetConvertedOrExists("reference_jolts_industries", -1, new java.util.HashMap<>(),
+    if (!isParquetConvertedOrExists("reference_jolts_industries", -1, new HashMap<>(),
         joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
-      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      Map<String, String> variables = new HashMap<>();
       convertCachedJsonToParquet("reference_jolts_industries", variables);
       cacheManifest.markParquetConverted("reference_jolts_industries", -1, null,
           joltsIndustriesParquetPath);
@@ -3045,9 +2686,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsDataelementsRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_dataelements.json");
 
-    if (!isParquetConvertedOrExists("reference_jolts_dataelements", -1, new java.util.HashMap<>(),
+    if (!isParquetConvertedOrExists("reference_jolts_dataelements", -1, new HashMap<>(),
         joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
-      java.util.Map<String, String> variables = new java.util.HashMap<>();
+      Map<String, String> variables = new HashMap<>();
       convertCachedJsonToParquet("reference_jolts_dataelements", variables);
       cacheManifest.markParquetConverted("reference_jolts_dataelements", -1, null,
           joltsDataelementsParquetPath);

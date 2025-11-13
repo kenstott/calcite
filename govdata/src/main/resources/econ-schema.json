@@ -593,42 +593,57 @@
       "comment": "Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis.",
       "columns": [
         {
-          "name": "date",
-          "type": "string",
-          "nullable": true,
-          "comment": "Observation date (ISO 8601 format)"
-        },
-        {
-          "name": "series",
-          "type": "string",
-          "nullable": true,
-          "comment": "BLS series identifier"
-        },
-        {
           "name": "metro_code",
           "type": "string",
           "nullable": true,
-          "comment": "Metro area code"
+          "comment": "Metro area publication code (e.g., A419 for Atlanta)",
+          "expression": "CASE area_fips WHEN 'C3562' THEN 'A100' WHEN 'C3108' THEN 'A400' WHEN 'C1698' THEN 'A207' WHEN 'C2642' THEN 'A425' WHEN 'C3806' THEN 'A423' WHEN 'C3798' THEN 'A102' WHEN 'C4170' THEN 'A426' WHEN 'C4174' THEN 'A421' WHEN 'C1910' THEN 'A127' WHEN 'C4194' THEN 'A429' WHEN 'C1242' THEN 'A438' WHEN 'C2726' THEN 'A420' WHEN 'C1446' THEN 'A103' WHEN 'C4266' THEN 'A428' WHEN 'C1974' THEN 'A427' WHEN 'C4790' THEN 'A101' WHEN 'C1982' THEN 'A211' WHEN 'C1746' THEN 'A104' WHEN 'C3346' THEN 'A212' WHEN 'C3310' THEN 'A422' WHEN 'C1206' THEN 'A419' WHEN 'C3890' THEN 'A437' WHEN 'C4014' THEN 'A424' WHEN 'C4118' THEN 'A320' WHEN 'C1258' THEN 'A319' WHEN 'C4530' THEN 'A433' WHEN 'C1126' THEN 'A440' END"
         },
         {
           "name": "metro_name",
           "type": "string",
           "nullable": true,
-          "comment": "Metro area name"
+          "comment": "Metro area name",
+          "expression": "CASE area_fips WHEN 'C3562' THEN 'New York-Newark-Jersey City, NY-NJ-PA' WHEN 'C3108' THEN 'Los Angeles-Long Beach-Anaheim, CA' WHEN 'C1698' THEN 'Chicago-Naperville-Elgin, IL-IN' WHEN 'C2642' THEN 'Houston-The Woodlands-Sugar Land, TX' WHEN 'C3806' THEN 'Phoenix-Mesa-Chandler, AZ' WHEN 'C3798' THEN 'Philadelphia-Camden-Wilmington, PA-NJ-DE-MD' WHEN 'C4170' THEN 'San Antonio-New Braunfels, TX' WHEN 'C4174' THEN 'San Diego-Chula Vista-Carlsbad, CA' WHEN 'C1910' THEN 'Dallas-Fort Worth-Arlington, TX' WHEN 'C4194' THEN 'San Jose-Sunnyvale-Santa Clara, CA' WHEN 'C1242' THEN 'Austin-Round Rock-San Marcos, TX' WHEN 'C2726' THEN 'Jacksonville, FL' WHEN 'C1446' THEN 'Boston-Cambridge-Newton, MA-NH' WHEN 'C4266' THEN 'Seattle-Tacoma-Bellevue, WA' WHEN 'C1974' THEN 'Denver-Aurora-Centennial, CO' WHEN 'C4790' THEN 'Washington-Arlington-Alexandria, DC-VA-MD-WV' WHEN 'C1982' THEN 'Detroit-Warren-Dearborn, MI' WHEN 'C1746' THEN 'Cleveland-Elyria, OH' WHEN 'C3346' THEN 'Minneapolis-St. Paul-Bloomington, MN-WI' WHEN 'C3310' THEN 'Miami-Fort Lauderdale-West Palm Beach, FL' WHEN 'C1206' THEN 'Atlanta-Sandy Springs-Roswell, GA' WHEN 'C3890' THEN 'Portland-Vancouver-Hillsboro, OR-WA' WHEN 'C4014' THEN 'Riverside-San Bernardino-Ontario, CA' WHEN 'C4118' THEN 'St. Louis, MO-IL' WHEN 'C1258' THEN 'Baltimore-Columbia-Towson, MD' WHEN 'C4530' THEN 'Tampa-St. Petersburg-Clearwater, FL' WHEN 'C1126' THEN 'Anchorage, AK' END"
         },
         {
-          "name": "value",
-          "type": "double",
-          "nullable": true,
-          "comment": "Average weekly wage in dollars"
+          "name": "year",
+          "type": "integer",
+          "nullable": false,
+          "comment": "Year of observation"
         },
         {
-          "name": "percent_change_year",
-          "type": "double",
+          "name": "qtr",
+          "type": "string",
           "nullable": true,
-          "comment": "Year-over-year percentage change"
+          "comment": "Quarter ('1'-'4' for quarterly, 'A' for annual average)"
+        },
+        {
+          "name": "avg_weekly_wage",
+          "type": "integer",
+          "nullable": true,
+          "comment": "Average weekly wage in dollars",
+          "csvColumn": "avg_wkly_wage"
+        },
+        {
+          "name": "avg_annual_pay",
+          "type": "integer",
+          "nullable": true,
+          "comment": "Average annual pay in dollars"
         }
-      ]
+      ],
+      "download": {
+        "csvConversion": {
+          "sourcePattern": "type=qcew_bulk/year={year}/{frequency}_singlefile.zip",
+          "csvPath": "{year}_{frequency}_singlefile.csv",
+          "filterConditions": [
+            "agglvl_code = '80'",
+            "own_code = '0'",
+            "industry_code = '10'",
+            "area_fips IN ('C3562', 'C3108', 'C1698', 'C2642', 'C3806', 'C3798', 'C4170', 'C4174', 'C1910', 'C4194', 'C1242', 'C2726', 'C1446', 'C4266', 'C1974', 'C4790', 'C1982', 'C1746', 'C3346', 'C3310', 'C1206', 'C3890', 'C4014', 'C4118', 'C1258', 'C4530', 'C1126')"
+          ]
+        }
+      }
     },
     {
       "name": "county_qcew",
