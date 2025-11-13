@@ -242,7 +242,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   /**
    * Convert Census JSON data to Parquet using DuckDB.
    * Replaces the custom Avro-based conversion methods.
-   *
+   * <p>
    * Census API returns JSON arrays in format:
    * [["NAME", "VAR1", "VAR2", "state"], ["California", "123", "456", "06"], ...]
    * Row 0 is header, rows 1+ are data, last column is geo identifier.
@@ -524,7 +524,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   /**
    * Download economic indicators for a specific year.
    */
-  private void downloadEconomicIndicators(int year) throws IOException {
+  private void downloadEconomicIndicators(int year) {
     // Skip economic indicators for 2010 and earlier - many ACS variables not available
     if (year <= 2010) {
       LOGGER.debug("Skipping economic indicators for year {} - ACS variables not fully available", year);
