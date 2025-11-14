@@ -1144,42 +1144,42 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading state wages from QCEW CSV files for {}-{}", startYear, endYear);
 
     String tableName = "state_wages";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year = startYear; year <= endYear; year++) {
-      // QCEW data only available from 1990 forward
-      if (year < 1990) {
-        LOGGER.warn("QCEW data only available from 1990 forward. Skipping year {}", year);
-        continue;
-      }
+    // QCEW data only available from 1990 forward
+    int effectiveStartYear = Math.max(startYear, 1990);
 
-      Map<String, String> variables = ImmutableMap.of("frequency", "monthly", "year", String.valueOf(year));
-      String parquetPath = resolveParquetPath(pattern, variables);
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(effectiveStartYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      // Check if already exists
-      if (storageProvider.exists(fullParquetPath)) {
-        LOGGER.info("State wages for year {} already exists - skipping", year);
-        continue;
-      }
+          // Get QCEW ZIP download metadata from schema
+          Map<String, Object> metadata = loadTableMetadata(tableName);
+          com.fasterxml.jackson.databind.JsonNode downloadNode =
+              (com.fasterxml.jackson.databind.JsonNode) metadata.get("download");
+          String cachePattern = downloadNode.get("cachePattern").asText();
+          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
-      // Get QCEW ZIP download metadata from schema
-      com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) metadata.get("download");
-      String cachePattern = downloadNode.get("cachePattern").asText();
-      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Download QCEW CSV (reuses cache if available)
+          downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
-      // Download QCEW CSV (reuses cache if available)
-      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
+          // Get full path to cached ZIP file
+          String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
-      // Get full path to cached ZIP file
-      String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
-
-      // Parse CSV and convert to Parquet using DuckDB
-      parseQcewForStateWages(fullZipPath, fullParquetPath, year);
-      LOGGER.info("Completed state wages for year {}", year);
-    }
+          // Parse CSV and convert to Parquet using DuckDB
+          parseQcewForStateWages(fullZipPath, parquetPath, year);
+          LOGGER.info("Completed state wages for year {}", year);
+        },
+        "convert"
+    );
 
   }
 
@@ -1192,39 +1192,41 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading county wages from QCEW CSV files for {}-{}", startYear, endYear);
 
     String tableName = "county_wages";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
+    com.fasterxml.jackson.databind.JsonNode downloadNode =
+        (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
 
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
-      String parquetPath = resolveParquetPath(pattern, variables);
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("quarterly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      // Check if already exists
-      if (storageProvider.exists(fullParquetPath)) {
-        LOGGER.info("County wages for year {} already exists - skipping", year);
-        continue;
-      }
+          // Get QCEW ZIP download metadata from schema
+          String cachePattern = downloadNode.get("cachePattern").asText();
+          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
-      // Get QCEW ZIP download metadata from schema
-      String cachePattern = downloadNode.get("cachePattern").asText();
-      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Download QCEW CSV (reuses cache from state_wages if available)
+          downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
-      // Download QCEW CSV (reuses cache from state_wages if available)
-      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
+          // Get full path to cached ZIP file
+          String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
-      // Get full path to cached ZIP file
-      String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
-
-      // Parse CSV and convert to Parquet using DuckDB
-      parseQcewForCountyWages(fullZipPath, fullParquetPath, year);
-      LOGGER.info("Completed county wages for year {}", year);
-    }
+          // Parse CSV and convert to Parquet using DuckDB
+          parseQcewForCountyWages(fullZipPath, parquetPath, year);
+          LOGGER.info("Completed county wages for year {}", year);
+        },
+        "convert"
+    );
 
   }
 
@@ -1244,39 +1246,41 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
 
     String tableName = "county_qcew";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    com.fasterxml.jackson.databind.JsonNode downloadNode = (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
+    com.fasterxml.jackson.databind.JsonNode downloadNode =
+        (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
 
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> variables = ImmutableMap.of("frequency", "quarterly", "year", String.valueOf(year));
-      String parquetPath = resolveParquetPath(pattern, variables);
-      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("quarterly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      // Check if already exists
-      if (storageProvider.exists(fullParquetPath)) {
-        LOGGER.info("County QCEW data for year {} already exists - skipping", year);
-        continue;
-      }
+          // Get QCEW ZIP download metadata from schema
+          String cachePattern = downloadNode.get("cachePattern").asText();
+          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
+          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
 
-      // Get QCEW ZIP download metadata from schema
-      String cachePattern = downloadNode.get("cachePattern").asText();
-      String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-      String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
+          downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
 
-      // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
-      downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
+          // Get full path to cached ZIP file
+          String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
-      // Get full path to cached ZIP file
-      String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
-
-      // Parse and convert to Parquet using DuckDB
-      parseAndConvertQcewToParquet(fullZipPath, fullParquetPath, year);
-      LOGGER.info("Completed county QCEW data for year {}", year);
-    }
+          // Parse and convert to Parquet using DuckDB
+          parseAndConvertQcewToParquet(fullZipPath, parquetPath, year);
+          LOGGER.info("Completed county QCEW data for year {}", year);
+        },
+        "convert"
+    );
 
   }
 
@@ -1512,40 +1516,34 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", startYear, endYear);
 
     String tableName = "jolts_regional";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year = startYear; year <= endYear; year++) {
-      if (year < 2001) {
-        LOGGER.warn("JOLTS data only available from 2001 forward. Skipping year {}", year);
-        continue;
-      }
+    // JOLTS data only available from 2001 forward
+    int effectiveStartYear = Math.max(startYear, 2001);
 
-      // JOLTS data is monthly
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year),
-          "frequency", "M");
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(effectiveStartYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      Map<String, String> allParams = new HashMap<>(variables);
-      CacheKey cacheKey = new CacheKey(tableName, allParams);
+          String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
+          downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
 
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached Jolts Regional {} for year {} - skipping", tableName, year);
-        continue;
-      }
+          String joltsRegionalJson = parseJoltsFtpForRegional(year);
 
-      String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
-      downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
-
-      String joltsRegionalJson = parseJoltsFtpForRegional(year);
-
-      if (joltsRegionalJson != null) {
-        saveToCache(tableName, year, variables, jsonFilePath, joltsRegionalJson);
-        LOGGER.info("Extracted {} data for year {} (4 regions × 5 metrics)", tableName, year);
-      }
-    }
+          if (joltsRegionalJson != null) {
+            saveToCache(tableName, year, vars, jsonPath, joltsRegionalJson);
+            LOGGER.info("Extracted {} data for year {} (4 regions × 5 metrics)", tableName, year);
+          }
+        },
+        "download"
+    );
 
   }
 
@@ -1557,34 +1555,29 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", startYear, endYear);
 
     String tableName = "jolts_state";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year = startYear; year <= endYear; year++) {
-      // JOLTS data is monthly
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year),
-          "frequency", "M");
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      Map<String, String> allParams = new HashMap<>(variables);
-      CacheKey cacheKey = new CacheKey(tableName, allParams);
+          // Parse JOLTS FTP files for state data
+          String joltsStateJson = parseJoltsFtpForState(year);
 
-      // Check if a file is already in the cache and up to date
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("{} data for year {} is already cached", tableName, year);
-        continue;
-      }
-
-      // Parse JOLTS FTP files for state data
-      String joltsStateJson = parseJoltsFtpForState(year);
-
-      if (joltsStateJson != null) {
-        saveToCache(tableName, year, variables, jsonFilePath, joltsStateJson);
-        LOGGER.info("Extracted {} data for year {} (51 states × 5 metrics)", tableName, year);
-      }
-    }
+          if (joltsStateJson != null) {
+            saveToCache(tableName, year, vars, jsonPath, joltsStateJson);
+            LOGGER.info("Extracted {} data for year {} (51 states × 5 metrics)", tableName, year);
+          }
+        },
+        "download"
+    );
 
   }
 
@@ -1783,7 +1776,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * (50 states + DC). Includes unemployment rate, employment level, unemployment level, and labor force.
    *
    * <p>Data is partitioned by year and state_fips, with each state saved to a separate parquet file.
-   * This enables incremental downloads - if a state file already exists for a given year, it's skipped.
+   * Uses DuckDB bulk cache filtering to eliminate redundant checks across 51 states × N years.
    *
    * <p>Optimized to batch up to 20 years per API call (per state), reducing total API calls from
    * ~1,275 (51 states × 25 years) to ~102 (51 states × ~2 batches).
@@ -1791,132 +1784,60 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadRegionalEmployment(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", startYear, endYear);
 
-    int totalFilesDownloaded = 0;
-    int totalFilesSkipped = 0;
+    String tableName = "regional_employment";
 
-    // Process each state independently with year-batching
-    for (Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
-      String stateName = entry.getKey();
-      String stateFips = entry.getValue();
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "state_fips": return new ArrayList<>(STATE_FIPS_MAP.values());
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+          String stateFips = vars.get("state_fips");
 
-      LOGGER.info("Processing state {} (FIPS {})", stateName, stateFips);
+          // Generate series IDs for this state (4 measures)
+          // Format: LASST{state_fips}0000000000{measure}
+          List<String> seriesIds = new ArrayList<>();
+          seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
+          seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
+          seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
+          seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
 
-      // 1. Identify uncached years for this state
-      List<Integer> uncachedYears = new ArrayList<>();
-      for (int year = startYear; year <= endYear; year++) {
-        String relativeParquetPath = "type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
+          // Fetch data for this state/year
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
 
-        Map<String, String> cacheParams = new HashMap<>();
-        cacheParams.put("state_fips", stateFips);
-        cacheParams.put("year", String.valueOf(year));
+          if (rawJson == null) {
+            LOGGER.warn("No data returned for state_fips {} year {} - skipping", stateFips, year);
+            return;
+          }
 
-        CacheKey cacheKey = new CacheKey("regional_employment", cacheParams);
-
-        // Check the cache manifest first
-        if (cacheManifest.isParquetConverted(cacheKey)) {
-          LOGGER.debug("State {} year {} already cached - skipping", stateName, year);
-          totalFilesSkipped++;
-          continue;
-        }
-
-        // Defensive check: if a file exists but not in manifest, update manifest
-        if (storageProvider.exists(fullParquetPath)) {
-          LOGGER.info("State {} year {} parquet exists, updating manifest", stateName, year);
-          Map<String, String> allParamsExists = new HashMap<>(cacheParams);
-          allParamsExists.put("year", String.valueOf(year));
-          CacheKey existsCacheKey = new CacheKey("regional_employment", allParamsExists);
-          cacheManifest.markParquetConverted(existsCacheKey, relativeParquetPath);
-          cacheManifest.save(operatingDirectory);
-          totalFilesSkipped++;
-          continue;
-        }
-
-        uncachedYears.add(year);
-      }
-
-      if (uncachedYears.isEmpty()) {
-        LOGGER.info("All years cached for state {} - skipping", stateName);
-        continue;
-      }
-
-      // 2. Generate series IDs for this state (4 measures)
-      // Format: LASST{state_fips}0000000000{measure}
-      List<String> seriesIds = new ArrayList<>();
-      seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
-      seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
-      seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
-      seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
-
-      // 3. Batch fetches uncached years (up to 20 years per API call)
-      LOGGER.info("Fetching {} uncached years for state {}", uncachedYears.size(), stateName);
-      Map<Integer, String> resultsByYear;
-      try {
-        resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-      } catch (Exception e) {
-        LOGGER.warn("Failed to fetch data for state {}: {}", stateName, e.getMessage());
-
-        // Check if rate limit error
-        if (e.getMessage() != null && e.getMessage().contains("rate limit")) {
-          LOGGER.warn("BLS API rate limit reached. Stopping download.");
-          LOGGER.info("Downloaded {} files, skipped {} already cached", totalFilesDownloaded, totalFilesSkipped);
-          return;
-        }
-
-        continue; // Skip this state
-      }
-
-      // 4. Save each year
-      for (int year : uncachedYears) {
-        String relativeParquetPath = "type=regional/year=" + year + "/state_fips=" + stateFips + "/regional_employment.parquet";
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
-
-        String rawJson = resultsByYear.get(year);
-        if (rawJson == null) {
-          LOGGER.warn("No data returned for state {} year {} - skipping", stateName, year);
-          continue;
-        }
-
-        try {
           // Parse and validate response
           JsonNode batchRoot = MAPPER.readTree(rawJson);
           String status = batchRoot.path("status").asText("UNKNOWN");
 
           if (!"REQUEST_SUCCEEDED".equals(status)) {
-            LOGGER.warn("API error for state {} year {}: {} - skipping", stateName, year, status);
-            continue;
+            LOGGER.warn("API error for state_fips {} year {}: {} - skipping", stateFips, year, status);
+            return;
           }
 
           JsonNode seriesNode = batchRoot.path("Results").path("series");
           if (!seriesNode.isArray() || seriesNode.isEmpty()) {
-            LOGGER.warn("No series data for state {} year {} - skipping", stateName, year);
-            continue;
+            LOGGER.warn("No series data for state_fips {} year {} - skipping", stateFips, year);
+            return;
           }
 
           // Convert JSON response to Parquet and save
-          convertAndSaveRegionalEmployment(batchRoot, fullParquetPath, stateFips);
+          convertAndSaveRegionalEmployment(batchRoot, parquetPath, stateFips);
 
-          // Mark as converted in manifest
-          Map<String, String> cacheParams = new HashMap<>();
-          cacheParams.put("state_fips", stateFips);
-          cacheParams.put("year", String.valueOf(year));
-          CacheKey cacheKey = new CacheKey("regional_employment", cacheParams);
-          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
-          cacheManifest.save(operatingDirectory);
-
-          totalFilesDownloaded++;
-
-          LOGGER.info("Saved state {} year {} ({} series)", stateName, year, seriesNode.size());
-
-        } catch (Exception e) {
-          LOGGER.warn("Failed to save state {} year {}: {}", stateName, year, e.getMessage());
-          // Continue with next year
-        }
-      }
-    }
-
-    LOGGER.info("Regional employment download complete: {} files downloaded, {} already cached",
-                totalFilesDownloaded, totalFilesSkipped);
+          LOGGER.info("Saved state_fips {} year {} ({} series)", stateFips, year, seriesNode.size());
+        },
+        "convert"
+    );
 
   }
 
