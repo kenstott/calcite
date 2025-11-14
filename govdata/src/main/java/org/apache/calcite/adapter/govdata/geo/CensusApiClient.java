@@ -193,44 +193,29 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
     // Define Census data tables to convert
     String[] censusDataTypes = {"population_demographics", "housing_characteristics", "economic_indicators"};
+    List<String> dataTypes = java.util.Arrays.asList(censusDataTypes);
 
-    // Build iteration dimensions for conversion
-    List<IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(new IterationDimension("data_type", java.util.Arrays.asList(censusDataTypes)));
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
-    // Use iterateTableOperations() for automatic progress tracking
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB cache filtering (10-20x faster)
+    // Note: For conversion operations, the optimized version checks cacheManifest.isParquetConverted()
+    iterateTableOperationsOptimized(
         getTableName(),
-        dimensions,
-        (year, vars) -> {
-          // Check if parquet already exists
-          String dataType = vars.get("data_type");
-          String parquetPath =
-              storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
-
-          // Check manifest first
-          if (cacheManifest != null && cacheManifest.isParquetConverted(dataType, year, vars)) {
-            return true;
+        startYear,
+        endYear,
+        (dimensionName) -> {
+          if ("data_type".equals(dimensionName)) {
+            return dataTypes;
           }
-
-          // Fallback to file existence check
-          try {
-            return storageProvider != null && storageProvider.exists(parquetPath);
-          } catch (IOException e) {
-            LOGGER.warn("Error checking parquet file existence for {}: {}", dataType, e.getMessage());
-            return false;
-          }
+          return null;
         },
-        (year, vars) -> {
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
           // Convert JSON to Parquet using DuckDB
           String dataType = vars.get("data_type");
           convertCensusDataToParquet(dataType, year, vars);
 
-          String parquetPath =
-              storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
           if (cacheManifest != null) {
-            cacheManifest.markParquetConverted(dataType, year, vars, parquetPath);
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
             cacheManifest.save(operatingDirectory);
           }
         },
@@ -599,7 +584,10 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       Map<String, String> params = new HashMap<>();
       params.put("variables", variables);
       params.put("geography", geography);
-      if (cacheManifest.isCached(cacheKey, year, params)) {
+      params.put("year", String.valueOf(year));
+      org.apache.calcite.adapter.govdata.CacheKey manifestKey =
+          new org.apache.calcite.adapter.govdata.CacheKey(cacheKey, params);
+      if (cacheManifest.isCached(manifestKey)) {
         LOGGER.debug("Using cached ACS data per manifest: {}", cacheFilePath);
         return readJsonFromStorage(cacheFilePath);
       }
@@ -623,7 +611,10 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       Map<String, String> params = new HashMap<>();
       params.put("variables", variables);
       params.put("geography", geography);
-      cacheManifest.markCached(cacheKey, year, params, cacheFilePath, jsonBytes.length);
+      params.put("year", String.valueOf(year));
+      org.apache.calcite.adapter.govdata.CacheKey manifestKey =
+          new org.apache.calcite.adapter.govdata.CacheKey(cacheKey, params);
+      cacheManifest.markCached(manifestKey, cacheFilePath, jsonBytes.length, Long.MAX_VALUE, "census_immutable");
       cacheManifest.save(operatingDirectory);
     }
 

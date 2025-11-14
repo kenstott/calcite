@@ -579,7 +579,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
-      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      params.put("year", String.valueOf(year));
+      org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+          new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
         return;
       }
@@ -592,7 +595,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("type", dataType);
-        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        params.put("year", String.valueOf(year));
+        org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+            new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
+        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
       return;
@@ -616,7 +622,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
-      cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+      params.put("year", String.valueOf(year));
+      org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+          new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
+      cacheManifest.markParquetConverted(cacheKey, targetFilePath);
       cacheManifest.save(this.operatingDirectory);
     }
   }

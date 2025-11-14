@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -915,8 +916,10 @@ public class FredCatalogDownloader {
     partitionParams.put("frequency", frequency);
     partitionParams.put("source", sourceName);
     partitionParams.put("status", seriesStatus);
+    partitionParams.put("year", "0");
+    CacheKey cacheKey = new CacheKey("catalog", partitionParams);
 
-    if (cacheManifest.isParquetConverted("catalog", 0, partitionParams)) {
+    if (cacheManifest.isParquetConverted(cacheKey)) {
       LOGGER.debug("Parquet file already converted (manifest), skipping partition {}/{}/{}/{}", categoryName, frequency, sourceName, seriesStatus);
       return;
     }
@@ -963,7 +966,7 @@ public class FredCatalogDownloader {
 
     // Mark as converted in manifest to avoid expensive S3 exists checks on subsequent runs
     // Note: Manifest will be saved centrally by EconSchemaFactory after all conversions complete
-    cacheManifest.markParquetConverted("catalog", 0, partitionParams, parquetFile);
+    cacheManifest.markParquetConverted(cacheKey, parquetFile);
 
     LOGGER.debug("Created Parquet file for partition {}/{}/{}/{}: {} series",
         categoryName, frequency, sourceName, seriesStatus, transformedSeries.size());

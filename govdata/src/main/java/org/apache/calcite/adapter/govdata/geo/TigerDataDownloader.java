@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -277,7 +278,9 @@ public class TigerDataDownloader {
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isCached("states", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("states", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("States shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "states_" + year);
       }
@@ -377,7 +380,9 @@ public class TigerDataDownloader {
     // Check manifest first - if parquet already converted, no need to download raw files
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted("counties", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("counties", params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Counties parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -386,7 +391,9 @@ public class TigerDataDownloader {
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isCached("counties", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("counties", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("Counties shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "counties_" + year);
       }
@@ -458,7 +465,9 @@ public class TigerDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("state", stateFips);
-      if (cacheManifest.isParquetConverted("places", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("places", params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Places parquet already converted per manifest for state {} year {} - skipping raw download", stateFips, year);
         return null; // No need to download raw files if parquet exists
       }
@@ -468,7 +477,9 @@ public class TigerDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("state", stateFips);
-      if (cacheManifest.isCached("places", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("places", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("Places shapefile cached per manifest for state {} year {}", stateFips, year);
         return downloadCacheToTemp(cachePath, "places_" + stateFips + "_" + year);
       }
@@ -554,7 +565,9 @@ public class TigerDataDownloader {
     // Check manifest first - if parquet already converted, no need to download raw files
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted("zctas", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("zctas", params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("ZCTAs parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -563,7 +576,9 @@ public class TigerDataDownloader {
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isCached("zctas", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("zctas", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("ZCTAs shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "zctas_" + year);
       }
@@ -633,7 +648,9 @@ public class TigerDataDownloader {
     // Check manifest first - if parquet already converted, no need to download raw files
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted("congressional_districts", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("congressional_districts", params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Congressional districts parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -642,7 +659,9 @@ public class TigerDataDownloader {
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isCached("congressional_districts", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("congressional_districts", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("Congressional districts shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "congressional_districts_" + year);
       }
@@ -890,7 +909,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isParquetConverted("census_tracts", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("census_tracts", params);
+        if (cacheManifest.isParquetConverted(cacheKey)) {
           LOGGER.debug("Census tracts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           continue;
         }
@@ -900,7 +921,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isCached("census_tracts", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("census_tracts", params);
+        if (cacheManifest.isCached(cacheKey)) {
           LOGGER.debug("Census tracts shapefile cached per manifest for state {} year {}", fips, year);
           // Download this state's data to temp dir
           File stateTemp = downloadCacheToTemp(cachePath, "census_tracts_" + fips + "_" + year);
@@ -995,7 +1018,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isParquetConverted("block_groups", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("block_groups", params);
+        if (cacheManifest.isParquetConverted(cacheKey)) {
           LOGGER.debug("Block groups parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           continue;
         }
@@ -1005,7 +1030,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isCached("block_groups", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("block_groups", params);
+        if (cacheManifest.isCached(cacheKey)) {
           LOGGER.debug("Block groups shapefile cached per manifest for state {} year {}", fips, year);
           // Download this state's data to temp dir
           File stateTemp = downloadCacheToTemp(cachePath, "block_groups_" + fips + "_" + year);
@@ -1097,7 +1124,9 @@ public class TigerDataDownloader {
     // Check manifest first - if parquet already converted, no need to download raw files
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted("cbsa", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("cbsa", params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("CBSA parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -1106,7 +1135,9 @@ public class TigerDataDownloader {
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isCached("cbsa", year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("cbsa", params);
+      if (cacheManifest.isCached(cacheKey)) {
         LOGGER.debug("CBSA shapefile cached per manifest for year {}", year);
         return downloadCacheToTemp(cachePath, "cbsa_" + year);
       }
@@ -1192,7 +1223,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isParquetConverted("school_districts", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("school_districts", params);
+        if (cacheManifest.isParquetConverted(cacheKey)) {
           LOGGER.debug("School districts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           // Still need to copy to temp dir if we have cached data
           File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
@@ -1212,7 +1245,9 @@ public class TigerDataDownloader {
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("state", fips);
-        if (cacheManifest.isCached("school_districts", year, params)) {
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey("school_districts", params);
+        if (cacheManifest.isCached(cacheKey)) {
           LOGGER.debug("School districts shapefile cached per manifest for state {} year {}", fips, year);
           // Download this state's data to temp dir
           File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
@@ -1300,7 +1335,9 @@ public class TigerDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
-      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey(dataType, params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Manifest indicates parquet already converted, skipping download");
         return true;
       }
@@ -1324,7 +1361,9 @@ public class TigerDataDownloader {
     // Check manifest first (avoids S3 check)
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      if (cacheManifest.isParquetConverted(dataType, year, params)) {
+      params.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey(dataType, params);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
         LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
         return;
       }
@@ -1336,7 +1375,9 @@ public class TigerDataDownloader {
       // Update manifest since file exists but wasn't tracked
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey(dataType, params);
+        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
       return;
@@ -1380,7 +1421,9 @@ public class TigerDataDownloader {
       // Mark parquet conversion complete in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey(dataType, params);
+        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
     } catch (Exception e) {
@@ -1441,7 +1484,9 @@ public class TigerDataDownloader {
       // Mark parquet conversion complete in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markParquetConverted(dataType, year, params, targetFilePath);
+        params.put("year", String.valueOf(year));
+        CacheKey cacheKey = new CacheKey(dataType, params);
+        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
     }
@@ -1591,8 +1636,13 @@ public class TigerDataDownloader {
       java.util.Map<String, String> params, String shapefileCachePath, String parquetPath) {
 
     // 1. Check manifest first - trust it as source of truth
-    if (cacheManifest != null && cacheManifest.isParquetConverted(dataType, year, params)) {
-      return true;
+    if (cacheManifest != null) {
+      java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
+      allParams.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey(dataType, allParams);
+      if (cacheManifest.isParquetConverted(cacheKey)) {
+        return true;
+      }
     }
 
     // 2. Defensive check: if parquet file exists but not in manifest, verify it's up-to-date
@@ -1615,7 +1665,10 @@ public class TigerDataDownloader {
             LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
                 dataType, year);
             if (cacheManifest != null) {
-              cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+              java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
+              allParams.put("year", String.valueOf(year));
+              CacheKey cacheKey = new CacheKey(dataType, allParams);
+              cacheManifest.markParquetConverted(cacheKey, parquetPath);
               cacheManifest.save(this.operatingDirectory);
             }
             return true;
@@ -1630,7 +1683,10 @@ public class TigerDataDownloader {
           LOGGER.info("⚡ Parquet exists (shapefile not found), updating cache manifest: {} (year={})",
               dataType, year);
           if (cacheManifest != null) {
-            cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+            java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
+            allParams.put("year", String.valueOf(year));
+            CacheKey cacheKey = new CacheKey(dataType, allParams);
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
             cacheManifest.save(this.operatingDirectory);
           }
           return true;
@@ -1675,7 +1731,9 @@ public class TigerDataDownloader {
         for (String stateFips : states) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", stateFips);
-          if (!cacheManifest.isParquetConverted(dataType, year, params)) {
+          params.put("year", String.valueOf(year));
+          CacheKey cacheKey = new CacheKey(dataType, params);
+          if (!cacheManifest.isParquetConverted(cacheKey)) {
             anyStateMissingInManifest = true;
             LOGGER.debug("{} needs processing for state {} year {} (not in manifest)",
                 dataType, stateFips, year);
@@ -1723,7 +1781,9 @@ public class TigerDataDownloader {
         for (String stateFips : states) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", stateFips);
-          cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+          params.put("year", String.valueOf(year));
+          CacheKey cacheKey = new CacheKey(dataType, params);
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
         }
         cacheManifest.save(this.operatingDirectory);
       }

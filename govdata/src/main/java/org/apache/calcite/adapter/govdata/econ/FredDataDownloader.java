@@ -140,22 +140,25 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = getTableName();
 
-    // Build iteration dimensions: series x year
-    List<IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(new IterationDimension("series", seriesIds));
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        dimensions,
-        (year, vars) -> {
-          String cachedPath =
-              cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, vars));
-          StorageProvider.FileMetadata metadata =
-              cacheStorageProvider.getMetadata(cachedPath);
-          cacheManifest.markCached(tableName, year, vars,
-              cachedPath, metadata.getSize());
+        startYear,
+        endYear,
+        (dimensionName) -> {
+          if ("series".equals(dimensionName)) {
+            return seriesIds;
+          }
+          return null;
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
+          // Download to cache
+          DownloadResult result = executeDownload(tableName, vars);
+
+          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
+              getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
   }
@@ -190,26 +193,24 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = getTableName();
 
-    // Build iteration dimensions: series x year
-    List<IterationDimension> dimensions = new java.util.ArrayList<>();
-    dimensions.add(new IterationDimension("series", seriesIds));
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     // Note: For conversion, we check parquet_converted status in manifest
     iterateTableOperationsOptimized(
         tableName,
-        dimensions,
-        (year, vars) -> {
+        startYear,
+        endYear,
+        (dimensionName) -> {
+          if ("series".equals(dimensionName)) {
+            return seriesIds;
+          }
+          return null;
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
           // Execute conversion
           convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted in manifest
-          Map<String, Object> metadata = loadTableMetadata();
-          String pattern = (String) metadata.get("pattern");
-          String parquetPath =
-              storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, vars));
-          cacheManifest.markParquetConverted(tableName, year, vars, parquetPath);
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
         "conversion");
   }

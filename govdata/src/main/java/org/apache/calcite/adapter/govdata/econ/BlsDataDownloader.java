@@ -16,9 +16,10 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -51,7 +52,6 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static java.lang.Thread.sleep;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -854,10 +854,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         TABLE_JOLTS_STATE,
         TABLE_WAGE_GROWTH);
 
-    // Define iteration dimension (year)
-    List<AbstractGovDataDownloader.IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(AbstractGovDataDownloader.IterationDimension.fromYearRange(startYear, endYear));
-
     // Convert each enabled table using IterationDimension pattern
     for (String tableName : tablesToConvert) {
       if (enabledTables == null || enabledTables.contains(tableName)) {
@@ -870,8 +866,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
         iterateTableOperationsOptimized(
             tableName,
-            dimensions,
-            (year, vars) -> {
+            startYear,
+            endYear,
+            (dimensionName) -> null, // No additional dimensions beyond year
+            (cacheKey, vars, jsonPath, parquetPath) -> {
               // Add frequency variable
               Map<String, String> fullVars = new HashMap<>(vars);
               fullVars.put("frequency", "monthly");
@@ -879,12 +877,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               // Execute conversion
               convertCachedJsonToParquet(tableName, fullVars);
 
-              // Mark as converted in manifest with full parameter set (must match iteration dimensions)
-              Map<String, Object> metadata = loadTableMetadata(tableName);
-              String pattern = (String) metadata.get("pattern");
-              String parquetPath =
-                  storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
-              cacheManifest.markParquetConverted(tableName, year, vars, parquetPath);
+              // Mark as converted in manifest
+              cacheManifest.markParquetConverted(cacheKey, parquetPath);
             },
             "conversion");
       }
@@ -908,8 +902,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("employment_statistics", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("employment_statistics", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached employment statistics for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -957,8 +953,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("regional_cpi", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("regional_cpi", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached regional CPI for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1009,8 +1007,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("metro_cpi", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("metro_cpi", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached metro CPI for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1069,8 +1069,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("state_industry", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("state_industry", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached state industry employment for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1277,8 +1279,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("metro_industry", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("metro_industry", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached metro industry employment for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1401,7 +1405,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String parquetPath =
               storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
 
-          if (isParquetConvertedOrExists(tableName, year, variables, null, parquetPath)) {
+          CacheKey cacheKey = new CacheKey(tableName, variables);
+          if (isParquetConvertedOrExists(cacheKey, null, parquetPath)) {
             LOGGER.info("Skipping {} for year {} {} - already converted", tableName, year, frequency);
             continue;
           }
@@ -1410,7 +1415,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertCsvToParquet(tableName, variables);
 
           // Mark as converted in cache manifest
-          cacheManifest.markParquetConverted(tableName, year, variables, parquetPath);
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
           cacheManifest.save(operatingDirectory);
 
           LOGGER.info("Successfully converted {} for year {} {} to Parquet", tableName, year, frequency);
@@ -1507,13 +1512,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
 
       // JOLTS data is monthly
-      Map<String, String> variables = ImmutableMap.of(
-          "year", String.valueOf(year),
+      Map<String, String> variables =
+          ImmutableMap.of("year", String.valueOf(year),
           "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
-      if (isCachedOrExists(tableName, year, variables)) {
+      Map<String, String> allParams = new HashMap<>(variables);
+      CacheKey cacheKey = new CacheKey(tableName, allParams);
+
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached Jolts Regional {} for year {} - skipping", tableName, year);
         continue;
       }
@@ -1544,14 +1552,17 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     for (int year = startYear; year <= endYear; year++) {
       // JOLTS data is monthly
-      Map<String, String> variables = ImmutableMap.of(
-          "year", String.valueOf(year),
+      Map<String, String> variables =
+          ImmutableMap.of("year", String.valueOf(year),
           "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
+      Map<String, String> allParams = new HashMap<>(variables);
+      CacheKey cacheKey = new CacheKey(tableName, allParams);
+
       // Check if a file is already in the cache and up to date
-      if (isCachedOrExists(tableName, year, variables)) {
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("{} data for year {} is already cached", tableName, year);
         continue;
       }
@@ -1579,9 +1590,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String outputDirPath = "type=reference";
     String jsonFilePath = outputDirPath + "/jolts_industries.json";
     Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("year", String.valueOf(-1));
+
+    CacheKey cacheKey = new CacheKey("reference_jolts_industries", cacheParams);
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("reference_jolts_industries", -1, cacheParams)) {
+    if (isCachedOrExists(cacheKey)) {
       LOGGER.info("JOLTS industry reference data already cached");
       return;
     }
@@ -1647,9 +1661,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String outputDirPath = "type=reference";
     String jsonFilePath = outputDirPath + "/jolts_dataelements.json";
     Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("year", String.valueOf(-1));
+
+    CacheKey cacheKey = new CacheKey("reference_jolts_dataelements", cacheParams);
 
     // Check if already cached (use year=-1 for non-partitioned reference data)
-    if (isCachedOrExists("reference_jolts_dataelements", -1, cacheParams)) {
+    if (isCachedOrExists(cacheKey)) {
       LOGGER.info("JOLTS data element reference data already cached");
       return;
     }
@@ -1692,8 +1709,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> cacheParams = new HashMap<>();
+      cacheParams.put("year", String.valueOf(year));
 
-      if (isCachedOrExists("inflation_metrics", year, cacheParams)) {
+      CacheKey cacheKey = new CacheKey("inflation_metrics", cacheParams);
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached inflation metrics for year {} - skipping", year);
       } else {
         uncachedYears.add(year);
@@ -1741,11 +1760,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<Integer> uncachedYears = new ArrayList<>();
     for (int year = startYear; year <= endYear; year++) {
       // Wage growth data is monthly
-      Map<String, String> variables = ImmutableMap.of(
-          "year", String.valueOf(year),
+      Map<String, String> variables =
+          ImmutableMap.of("year", String.valueOf(year),
           "frequency", "M");
 
-      if (isCachedOrExists(tableName, year, variables)) {
+      Map<String, String> allParams = new HashMap<>(variables);
+      CacheKey cacheKey = new CacheKey(tableName, allParams);
+
+      if (isCachedOrExists(cacheKey)) {
         LOGGER.info("Found cached {} data for year {} - skipping", tableName, year);
       } else {
         uncachedYears.add(year);
@@ -1767,8 +1789,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     for (int year : uncachedYears) {
       // Wage growth data is monthly
-      Map<String, String> variables = ImmutableMap.of(
-          "year", String.valueOf(year),
+      Map<String, String> variables =
+          ImmutableMap.of("year", String.valueOf(year),
           "frequency", "M");
       String jsonFilePath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
@@ -1812,9 +1834,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         Map<String, String> cacheParams = new HashMap<>();
         cacheParams.put("state_fips", stateFips);
+        cacheParams.put("year", String.valueOf(year));
+
+        CacheKey cacheKey = new CacheKey("regional_employment", cacheParams);
 
         // Check the cache manifest first
-        if (cacheManifest.isParquetConverted("regional_employment", year, cacheParams)) {
+        if (cacheManifest.isParquetConverted(cacheKey)) {
           LOGGER.debug("State {} year {} already cached - skipping", stateName, year);
           totalFilesSkipped++;
           continue;
@@ -1823,7 +1848,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         // Defensive check: if a file exists but not in manifest, update manifest
         if (storageProvider.exists(fullParquetPath)) {
           LOGGER.info("State {} year {} parquet exists, updating manifest", stateName, year);
-          cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
+          Map<String, String> allParamsExists = new HashMap<>(cacheParams);
+          allParamsExists.put("year", String.valueOf(year));
+          CacheKey existsCacheKey = new CacheKey("regional_employment", allParamsExists);
+          cacheManifest.markParquetConverted(existsCacheKey, relativeParquetPath);
           cacheManifest.save(operatingDirectory);
           totalFilesSkipped++;
           continue;
@@ -1896,7 +1924,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted in manifest
           Map<String, String> cacheParams = new HashMap<>();
           cacheParams.put("state_fips", stateFips);
-          cacheManifest.markParquetConverted("regional_employment", year, cacheParams, relativeParquetPath);
+          cacheParams.put("year", String.valueOf(year));
+          CacheKey cacheKey = new CacheKey("regional_employment", cacheParams);
+          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
           cacheManifest.save(operatingDirectory);
 
           totalFilesDownloaded++;
@@ -2133,7 +2163,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void downloadQcewCsvIfNeeded(int year, String qcewZipPath, String downloadUrl) throws IOException {
     // Check the cache manifest first
     Map<String, String> cacheParams = new HashMap<>();
-    if (cacheManifest.isCached("qcew_zip", year, cacheParams)) {
+    cacheParams.put("year", String.valueOf(year));
+
+    CacheKey cacheKey = new CacheKey("qcew_zip", cacheParams);
+    if (cacheManifest.isCached(cacheKey)) {
       String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
       if (cacheStorageProvider.exists(fullPath)) {
         LOGGER.info("Using cached QCEW CSV for year {} (from manifest)", year);
@@ -2153,7 +2186,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Mark in cache manifest - QCEW data is immutable (historical), never refresh
     long refreshAfter = Long.MAX_VALUE;
-    ((CacheManifest) cacheManifest).markCached("qcew_zip", year, cacheParams, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
+    Map<String, String> allParams = new HashMap<>(cacheParams);
+    allParams.put("year", String.valueOf(year));
+    CacheKey qcewCacheKey = new CacheKey("qcew_zip", allParams);
+    ((CacheManifest) cacheManifest).markCached(qcewCacheKey, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached QCEW CSV for year {} ({} MB)", year, zipData.length / (1024 * 1024));
@@ -2181,8 +2217,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
       // Load SQL from resource and substitute parameters
-      String sql = substituteSqlParameters(
-          loadSqlResource("/sql/bls/convert_state_wages.sql"),
+      String sql =
+          substituteSqlParameters(loadSqlResource("/sql/bls/convert_state_wages.sql"),
           ImmutableMap.of(
               "year", String.valueOf(year),
               "csvPath", csvTempPath.replace("'", "''"),
@@ -2220,8 +2256,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String stateFipsJsonPath = requireNonNull(getClass().getResource("/state_fips.json")).getPath();
 
       // Load SQL from resource and substitute parameters
-      String sql = substituteSqlParameters(
-          loadSqlResource("/sql/bls/convert_county_wages.sql"),
+      String sql =
+          substituteSqlParameters(loadSqlResource("/sql/bls/convert_county_wages.sql"),
           ImmutableMap.of(
               "year", String.valueOf(year),
               "csvPath", csvTempPath.replace("'", "''"),
@@ -2303,7 +2339,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Check the cache manifest first (use year=0 for non-year-partitioned files)
     Map<String, String> cacheParams = new HashMap<>();
     cacheParams.put("file", fileName);
-    if (cacheManifest.isCached(dataType, 0, cacheParams)) {
+    cacheParams.put("year", String.valueOf(0));
+
+    CacheKey cacheKey = new CacheKey(dataType, cacheParams);
+    if (cacheManifest.isCached(cacheKey)) {
       String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
       if (cacheStorageProvider.exists(fullPath)) {
         long size = 0L;
@@ -2330,7 +2369,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Mark in cache manifest - refresh monthly (JOLTS data updates monthly with ~2-month lag)
     long refreshAfter = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000); // 30 days in milliseconds
-    ((CacheManifest) cacheManifest).markCached(dataType, 0, cacheParams, ftpPath, data.length, refreshAfter, "monthly_refresh");
+    Map<String, String> allParams = new HashMap<>(cacheParams);
+    allParams.put("year", String.valueOf(0));
+    CacheKey joltsFtpCacheKey = new CacheKey(dataType, allParams);
+    ((CacheManifest) cacheManifest).markCached(joltsFtpCacheKey, ftpPath, data.length, refreshAfter, "monthly_refresh");
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached JOLTS FTP file ({} KB)", data.length / 1024);
@@ -2599,11 +2641,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsIndustriesRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_industries.json");
 
-    if (!isParquetConvertedOrExists("reference_jolts_industries", -1, new HashMap<>(),
+    Map<String, String> joltsIndustriesParams = new HashMap<>();
+    joltsIndustriesParams.put("year", String.valueOf(-1));
+    CacheKey joltsIndustriesCacheKey = new CacheKey("reference_jolts_industries", joltsIndustriesParams);
+
+    if (!isParquetConvertedOrExists(joltsIndustriesCacheKey,
         joltsIndustriesRawPath, joltsIndustriesParquetPath)) {
       Map<String, String> variables = new HashMap<>();
       convertCachedJsonToParquet("reference_jolts_industries", variables);
-      cacheManifest.markParquetConverted("reference_jolts_industries", -1, null,
+      cacheManifest.markParquetConverted(joltsIndustriesCacheKey,
           joltsIndustriesParquetPath);
       LOGGER.info("Converted reference_jolts_industries to parquet");
     } else {
@@ -2619,11 +2665,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String joltsDataelementsRawPath =
         cacheStorageProvider.resolvePath(cacheDirectory, "type=reference/jolts_dataelements.json");
 
-    if (!isParquetConvertedOrExists("reference_jolts_dataelements", -1, new HashMap<>(),
+    Map<String, String> joltsDataelementsParams = new HashMap<>();
+    joltsDataelementsParams.put("year", String.valueOf(-1));
+    CacheKey joltsDataelementsCacheKey = new CacheKey("reference_jolts_dataelements", joltsDataelementsParams);
+
+    if (!isParquetConvertedOrExists(joltsDataelementsCacheKey,
         joltsDataelementsRawPath, joltsDataelementsParquetPath)) {
       Map<String, String> variables = new HashMap<>();
       convertCachedJsonToParquet("reference_jolts_dataelements", variables);
-      cacheManifest.markParquetConverted("reference_jolts_dataelements", -1, null,
+      cacheManifest.markParquetConverted(joltsDataelementsCacheKey,
           joltsDataelementsParquetPath);
       LOGGER.info("Converted reference_jolts_dataelements to parquet");
     } else {

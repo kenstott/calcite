@@ -67,16 +67,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
-    // Build iteration dimensions: year only (no other dimensions needed)
-    List<IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
-    // Use iterateTableOperations() for automatic progress tracking and manifest management
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
         tableName,
-        dimensions,
-        (year, vars) -> isCachedOrExists(tableName, year, vars),
-        (year, vars) -> {
+        startYear,
+        endYear,
+        (dimensionName) -> null, // No additional dimensions beyond year
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
           String startDate = year + "-01-01";
           String endDate = year + "-12-31";
 
@@ -96,15 +95,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
             throw new IOException("Treasury API request failed with status: " + response.statusCode());
           }
 
-          // Use metadata-driven path resolution
-          String jsonPath = resolveJsonPath(pattern, vars);
-          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-
           // Write data to cache (StorageProvider handles directory creation)
+          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
           cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
 
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-          cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
+          cacheManifest.markCached(cacheKey, fullJsonPath, fileSize,
+              getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
   }
@@ -123,16 +120,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata(tableName);
     String pattern = (String) metadata.get("pattern");
 
-    // Build iteration dimensions: year only (no other dimensions needed)
-    List<IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
-    // Use iterateTableOperations() for automatic progress tracking and manifest management
-    iterateTableOperations(
+    // Use optimized iteration with DuckDB cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
         tableName,
-        dimensions,
-        (year, vars) -> isCachedOrExists(tableName, year, vars),
-        (year, vars) -> {
+        startYear,
+        endYear,
+        (dimensionName) -> null, // No additional dimensions beyond year
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
           String startDate = year + "-01-01";
           String endDate = year + "-12-31";
 
@@ -152,15 +148,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
             throw new IOException("Treasury API request failed with status: " + response.statusCode());
           }
 
-          // Use metadata-driven path resolution
-          String jsonPath = resolveJsonPath(pattern, vars);
-          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-
           // Write data to cache (StorageProvider handles directory creation)
+          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
           cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
 
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-          cacheManifest.markCached(tableName, year, vars, fullJsonPath, fileSize);
+          cacheManifest.markCached(cacheKey, fullJsonPath, fileSize,
+              getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
   }
