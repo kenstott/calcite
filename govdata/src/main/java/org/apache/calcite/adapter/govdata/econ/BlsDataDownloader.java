@@ -1096,53 +1096,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 STATE_FIPS_MAP.size(), NAICS_SUPERSECTORS.size(),
                 STATE_FIPS_MAP.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
 
-    List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
+    final List<String> seriesIds = Series.getAllStateIndustryEmploymentSeriesIds();
     LOGGER.info("Generated {} state industry employment series IDs", seriesIds.size());
     LOGGER.info("State industry series examples: {}, {}, {}",
         !seriesIds.isEmpty() ? seriesIds.get(0) : "none",
                 seriesIds.size() > 1 ? seriesIds.get(1) : "none",
                 seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("state_industry", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached state industry employment for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All state industry employment data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years (with series batching)
-    LOGGER.info("Fetching state industry employment for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, uncachedYears);
-
-    // 3. Save each year
     String tableName = "state_industry";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson == null) {
-        LOGGER.warn("No data returned from API for {} year {} - skipping save", tableName, year);
-      } else {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
-    }
+          // Batch fetch for this year (with large series batching)
+          Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
+
+          if (rawJson == null) {
+            LOGGER.warn("No data returned from API for {} year {} - skipping save", tableName, year);
+          } else {
+            validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
+          }
+        },
+        "download"
+    );
 
   }
 
@@ -1306,53 +1292,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 METRO_AREA_CODES.size(), NAICS_SUPERSECTORS.size(),
                 METRO_AREA_CODES.size() * NAICS_SUPERSECTORS.size(), startYear, endYear);
 
-    List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
+    final List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
     LOGGER.info("Generated {} metro industry employment series IDs", seriesIds.size());
     LOGGER.info("Metro industry series examples: {}, {}, {}",
         !seriesIds.isEmpty() ? seriesIds.get(0) : "none",
                 seriesIds.size() > 1 ? seriesIds.get(1) : "none",
                 seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("metro_industry", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached metro industry employment for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All metro industry employment data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years (with series batching)
-    LOGGER.info("Fetching metro industry employment for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, uncachedYears);
-
-    // 3. Save each year
     String tableName = "metro_industry";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson == null) {
-        LOGGER.warn("No data returned from API for {} year {} - skipping save", tableName, year);
-      } else {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
-    }
+          // Batch fetch for this year (with large series batching)
+          Map<Integer, String> resultsByYear = fetchAndSplitByYearLargeSeries(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
+
+          if (rawJson == null) {
+            LOGGER.warn("No data returned from API for {} year {} - skipping save", tableName, year);
+          } else {
+            validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
+          }
+        },
+        "download"
+    );
 
   }
 
@@ -1738,49 +1710,35 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   public void downloadInflationMetrics(int startYear, int endYear) throws IOException, InterruptedException {
 
-    List<String> seriesIds =
+    final List<String> seriesIds =
         List.of(Series.CPI_ALL_URBAN,
         Series.CPI_CORE,
         Series.PPI_FINAL_DEMAND);
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("inflation_metrics", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached inflation metrics for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All inflation metrics data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years
-    LOGGER.info("Fetching inflation metrics for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each year
     String tableName = "inflation_metrics";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null) {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
-    }
+          // Batch fetch for this year
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
+
+          if (rawJson != null) {
+            validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
+          }
+        },
+        "download"
+    );
 
   }
 
@@ -1789,55 +1747,34 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   public void downloadWageGrowth(int startYear, int endYear) throws IOException, InterruptedException {
 
-    List<String> seriesIds =
+    final List<String> seriesIds =
         List.of(Series.AVG_HOURLY_EARNINGS,
         Series.EMPLOYMENT_COST_INDEX);
 
     String tableName = "wage_growth";
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      // Wage growth data is monthly
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year),
-          "frequency", "M");
 
-      Map<String, String> allParams = new HashMap<>(variables);
-      CacheKey cacheKey = new CacheKey(tableName, allParams);
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached {} data for year {} - skipping", tableName, year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
+          // Batch fetch for this year
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
 
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All {} data cached (years {}-{})", tableName, startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years
-    LOGGER.info("Fetching {} for {} uncached years", tableName, uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each year
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
-
-    for (int year : uncachedYears) {
-      // Wage growth data is monthly
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year),
-          "frequency", "M");
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
-
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null) {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
-    }
+          if (rawJson != null) {
+            validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
+          }
+        },
+        "download"
+    );
 
   }
 
