@@ -2019,7 +2019,7 @@
     },
     {
       "name": "industry_gdp",
-      "pattern": "type=indicators/frequency=*/year=*/Industry=*/industry_gdp.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/industry=*/industry_gdp.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
@@ -2036,7 +2036,7 @@
             "type": "INTEGER"
           },
           {
-            "name": "Industry",
+            "name": "industry",
             "type": "VARCHAR"
           }
         ]

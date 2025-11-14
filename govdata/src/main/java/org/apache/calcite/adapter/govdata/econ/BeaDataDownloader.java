@@ -945,7 +945,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         endYear,
         (dimensionName) -> {
           switch (dimensionName) {
-            case "Industry": return keyIndustriesList;
+            case "industry": return keyIndustriesList;
             case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
             default: return null;
           }
@@ -983,7 +983,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         endYear,
         (dimensionName) -> {
           switch (dimensionName) {
-            case "Industry": return keyIndustriesList;
+            case "industry": return keyIndustriesList;
             case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
             default: return null;
           }
