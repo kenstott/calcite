@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.CacheManifestQueryHelper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
@@ -333,10 +334,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Convert
           convertCachedJsonToParquet(tableName, fullVars);
 
-          // Mark as converted with params containing TableName
-          Map<String, String> params = new HashMap<>();
-          params.put("TableName", table);
-          cacheManifest.markParquetConverted(tableName, year, params, fullParquetPath);
+          // Mark as converted with full parameter set (must match iteration dimensions)
+          cacheManifest.markParquetConverted(tableName, year, fullVars, fullParquetPath);
         },
         "conversion");
   }
@@ -470,10 +469,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
 
-    // Build flat list of all (tablename, line_code, geo_fips) combinations
+    // Build flat list of all (tablename, line_code, geo_fips) combinations with individual parameters
     // Filter GeoFips based on table type and years based on industry classification
     // to avoid invalid API parameter combinations
-    List<String> combos = new ArrayList<>();
+    List<Map<String, String>> parameterCombinations = new ArrayList<>();
     int skippedGeoFipsCombinations = 0;
     int skippedYearCombinations = 0;
     for (String tableNameKey : tablenames.keySet()) {
@@ -488,7 +487,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       for (String lineCode : lineCodesForTable) {
         for (String geoFipsCode : validGeoFipsForTable) {
-          combos.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
+          Map<String, String> params = new HashMap<>();
+          params.put("tablename", tableNameKey);
+          params.put("line_code", lineCode);
+          params.put("geo_fips_set", geoFipsCode);
+          parameterCombinations.add(params);
         }
       }
 
@@ -517,40 +520,26 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Downloading regional income data for years {}-{} ({} table-linecode-geo combinations, " +
         "{} valid table-year combinations)",
-        startYear, endYear, combos.size(),
-        combos.size() * (endYear - startYear + 1) - skippedYearCombinations);
+        startYear, endYear, parameterCombinations.size(),
+        parameterCombinations.size() * (endYear - startYear + 1) - skippedYearCombinations);
 
-    // Create dimensions for iteration
-    List<IterationDimension> dimensions = new ArrayList<>();
-    dimensions.add(new IterationDimension("combo", combos));
-    dimensions.add(IterationDimension.fromYearRange(startYear, endYear));
-
-    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
-    // Note: Year filtering happens in the operation lambda
-    iterateTableOperationsOptimized(
-        tableName,
-        dimensions,
-        (year, vars) -> {
-          // Parse combo and execute download
-          String[] parts = vars.get("combo").split(":", 3);
-          String tableNameKey = parts[0];
-
+    // Use custom iteration with individual parameters instead of combo strings
+    iterateWithParameters(tableName, parameterCombinations, startYear, endYear,
+        (year, params) -> {
           // Skip this combination if table is not valid for this year
+          String tableNameKey = params.get("tablename");
           if (!isTableValidForYear(tableNameKey, year)) {
             return;  // Skip download
           }
 
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", tableNameKey);
-          fullVars.put("line_code", parts[1]);
-          fullVars.put("geo_fips_set", parts[2]);
+          Map<String, String> fullVars = new HashMap<>(params);
+          fullVars.put("year", String.valueOf(year));
 
           String cachedPath =
               cacheStorageProvider.resolvePath(cacheDirectory, executeDownload(tableName, fullVars));
 
           long fileSize = cacheStorageProvider.getMetadata(cachedPath).getSize();
-          cacheManifest.markCached(tableName, year, fullVars, cachedPath, fileSize);
+          cacheManifest.markCached(tableName, year, params, cachedPath, fileSize);
         },
         "download");
   }
@@ -1282,6 +1271,87 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     cacheManifest.save(operatingDirectory);
     LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables, skipped {} up-to-date",
         convertedCount, skippedCount);
+  }
+
+  /**
+   * Custom iteration helper for parameter combinations.
+   * Generates DownloadRequests with individual parameters instead of combo strings,
+   * then uses DuckDB bulk cache filtering.
+   *
+   * @param tableName Table name for cache manifest
+   * @param parameterCombinations List of parameter maps (one per combination)
+   * @param startYear First year to process
+   * @param endYear Last year to process
+   * @param operation Operation to execute for uncached combinations
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   */
+  private void iterateWithParameters(
+      String tableName,
+      List<Map<String, String>> parameterCombinations,
+      int startYear,
+      int endYear,
+      TableOperation operation,
+      String operationDescription) {
+
+    LOGGER.info("Starting {} operations for {} ({} parameter combinations x {} years = {} total)",
+        operationDescription, tableName, parameterCombinations.size(),
+        (endYear - startYear + 1),
+        parameterCombinations.size() * (endYear - startYear + 1));
+
+    // 1. Generate all DownloadRequests with individual parameters
+    List<CacheManifestQueryHelper.DownloadRequest> allRequests = new ArrayList<>();
+    for (Map<String, String> params : parameterCombinations) {
+      for (int year = startYear; year <= endYear; year++) {
+        allRequests.add(new CacheManifestQueryHelper.DownloadRequest(tableName, year, params));
+      }
+    }
+
+    LOGGER.debug("Generated {} download request combinations", allRequests.size());
+
+    // 2. Filter using DuckDB SQL query (FAST!)
+    List<CacheManifestQueryHelper.DownloadRequest> needed;
+    try {
+      long startMs = System.currentTimeMillis();
+      String manifestPath = operatingDirectory + "/cache_manifest.json";
+      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests);
+      long elapsedMs = System.currentTimeMillis() - startMs;
+
+      LOGGER.info("DuckDB cache filtering: {} uncached out of {} total ({}ms, {}% reduction)",
+          needed.size(), allRequests.size(), elapsedMs,
+          (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100));
+
+    } catch (Exception e) {
+      LOGGER.warn("DuckDB cache filtering failed: {}", e.getMessage());
+      LOGGER.debug("Fallback details: ", e);
+      // Execute all requests without filtering
+      needed = allRequests;
+    }
+
+    // 3. Execute only the needed operations
+    int executed = 0;
+    int skipped = allRequests.size() - needed.size();
+
+    for (CacheManifestQueryHelper.DownloadRequest req : needed) {
+      try {
+        operation.execute(req.year, req.parameters);
+        executed++;
+
+        if (executed % 10 == 0) {
+          LOGGER.info("{} {}/{} operations (skipped {} cached)",
+              operationDescription, executed, needed.size(), skipped);
+        }
+
+      } catch (Exception e) {
+        LOGGER.error("Error during {} for {} with params {}: {}",
+            operationDescription, tableName, req.parameters, e.getMessage());
+      }
+    }
+
+    LOGGER.info("Completed {} operations: executed {}, skipped {} (cached)",
+        operationDescription, executed, skipped);
+
+    // Save manifest
+    cacheManifest.save(operatingDirectory);
   }
 
   /**

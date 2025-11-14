@@ -867,25 +867,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           continue;
         }
 
-        // Other tables use JSON→Parquet conversion
-        iterateTableOperations(
+        // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
+        iterateTableOperationsOptimized(
             tableName,
             dimensions,
-            (year, vars) -> {
-              // Add frequency variable
-              Map<String, String> fullVars = new HashMap<>(vars);
-              fullVars.put("frequency", "monthly");
-
-              // Check if already converted
-              Map<String, Object> metadata = loadTableMetadata(tableName);
-              String pattern = (String) metadata.get("pattern");
-              String parquetPath =
-                  storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
-              String rawPath =
-                  cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, fullVars));
-
-              return isParquetConvertedOrExists(tableName, year, fullVars, rawPath, parquetPath);
-            },
             (year, vars) -> {
               // Add frequency variable
               Map<String, String> fullVars = new HashMap<>(vars);
@@ -894,12 +879,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               // Execute conversion
               convertCachedJsonToParquet(tableName, fullVars);
 
-              // Mark as converted in manifest
+              // Mark as converted in manifest with full parameter set (must match iteration dimensions)
               Map<String, Object> metadata = loadTableMetadata(tableName);
               String pattern = (String) metadata.get("pattern");
               String parquetPath =
                   storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, fullVars));
-              cacheManifest.markParquetConverted(tableName, year, null, parquetPath);
+              cacheManifest.markParquetConverted(tableName, year, vars, parquetPath);
             },
             "conversion");
       }
