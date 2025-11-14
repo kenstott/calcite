@@ -1755,12 +1755,16 @@
     },
     {
       "name": "ita_data",
-      "pattern": "type=indicators/year=*/indicator=*/ita_data.parquet",
+      "pattern": "type=indicators/frequency=*/year=*/indicator=*/ita_data.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
           {
             "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "frequency",
             "type": "VARCHAR"
           },
           {
