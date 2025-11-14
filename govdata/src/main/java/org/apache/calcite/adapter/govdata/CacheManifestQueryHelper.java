@@ -168,8 +168,8 @@ public class CacheManifestQueryHelper {
 
       // 1. Load cache manifest into DuckDB temp table
       // Uses DuckDB's read_json with custom format settings to handle nested JSON structure
-      String loadManifestSql = substituteSqlParameters(
-          loadSqlResource("/sql/cache/load_manifest.sql"),
+      String loadManifestSql =
+          substituteSqlParameters(loadSqlResource("/sql/cache/load_manifest.sql"),
           java.util.Collections.singletonMap("manifestPath", manifestPath));
 
       try (Statement stmt = duckdb.createStatement()) {

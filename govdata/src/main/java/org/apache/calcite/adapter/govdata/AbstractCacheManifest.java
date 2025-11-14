@@ -93,26 +93,24 @@ public abstract class AbstractCacheManifest {
   // ===== Abstract methods that all cache manifests must implement =====
 
   /**
-   * Check if data is cached and fresh for the given parameters.
+   * Check if data is cached and fresh for the given cache key.
    *
-   * @param dataType Type of data
-   * @param year Year of data
-   * @param parameters Additional parameters
+   * @param cacheKey The cache key identifying the data
    * @return true if cached and fresh, false otherwise
    */
-  public abstract boolean isCached(String dataType, int year, Map<String, String> parameters);
+  public abstract boolean isCached(CacheKey cacheKey);
 
   /**
-   * Mark data as cached in the manifest.
+   * Mark data as cached in the manifest with explicit refresh policy.
    *
-   * @param dataType Type of data
-   * @param year Year of data
-   * @param params Additional parameters
-   * @param relativePath Relative path to cached file
+   * @param cacheKey The cache key identifying the data
+   * @param filePath Path to cached file
    * @param fileSize Size of cached file in bytes
+   * @param refreshAfter Timestamp when this entry should be refreshed
+   * @param refreshReason Human-readable reason for the refresh policy
    */
-  public abstract void markCached(String dataType, int year, Map<String, String> params,
-      String relativePath, long fileSize);
+  public abstract void markCached(CacheKey cacheKey, String filePath, long fileSize,
+      long refreshAfter, String refreshReason);
 
   /**
    * Save manifest to disk.
@@ -122,25 +120,20 @@ public abstract class AbstractCacheManifest {
   public abstract void save(String directory);
 
   /**
-   * Check if parquet conversion has been completed for the given parameters.
+   * Check if parquet conversion has been completed for the given cache key.
    *
-   * @param dataType Type of data
-   * @param year Year of data
-   * @param params Additional parameters
+   * @param cacheKey The cache key identifying the data
    * @return true if parquet exists and is current, false otherwise
    */
-  public abstract boolean isParquetConverted(String dataType, int year, Map<String, String> params);
+  public abstract boolean isParquetConverted(CacheKey cacheKey);
 
   /**
    * Mark parquet file as converted in the manifest.
    *
-   * @param dataType Type of data
-   * @param year Year of data
-   * @param params Additional parameters
+   * @param cacheKey The cache key identifying the data
    * @param parquetPath Path to parquet file
    */
-  public abstract void markParquetConverted(String dataType, int year, Map<String, String> params,
-      String parquetPath);
+  public abstract void markParquetConverted(CacheKey cacheKey, String parquetPath);
 
   /**
    * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
@@ -151,12 +144,9 @@ public abstract class AbstractCacheManifest {
    * (404, 500, etc.) which are handled elsewhere, these are successful HTTP responses that
    * contain API-level errors.
    *
-   * @param dataType Type of data that failed
-   * @param year Year of the data
-   * @param parameters Additional parameters
+   * @param cacheKey The cache key identifying the data
    * @param errorMessage Full error message from API (e.g., JSON error object)
    * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
    */
-  public abstract void markApiError(String dataType, int year, Map<String, String> parameters,
-      String errorMessage, int retryAfterDays);
+  public abstract void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays);
 }

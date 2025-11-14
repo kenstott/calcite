@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -167,7 +168,11 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
     cacheStorageProvider.writeFile(filePath, content);
 
     // Mark as cached in manifest (operating metadata stays in .aperio via File API)
-    cacheManifest.markCached(dataType, year, params, relativePath, content.length);
+    Map<String, String> allParams = new HashMap<>(params != null ? params : new HashMap<>());
+    allParams.put("year", String.valueOf(year));
+    org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+        new org.apache.calcite.adapter.govdata.CacheKey(dataType, allParams);
+    cacheManifest.markCached(cacheKey, relativePath, content.length, Long.MAX_VALUE, "geo_immutable");
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, content.length);

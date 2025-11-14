@@ -82,20 +82,41 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Functional interface for table operations (download or convert).
-   * Executes an operation given a map of variables.
+   * Result of a download operation containing path and file size.
    */
-  @FunctionalInterface
-  public interface TableOperation {
-    void execute(int year, Map<String, String> variables) throws Exception;
+  public static class DownloadResult {
+    public final String jsonPath;  // Relative path
+    public final long fileSize;
+
+    public DownloadResult(String jsonPath, long fileSize) {
+      this.jsonPath = jsonPath;
+      this.fileSize = fileSize;
+    }
   }
 
   /**
-   * Functional interface for checking if an operation is cached.
+   * Functional interface for table operations (download or convert).
+   * Executes an operation with resolved paths and parameters.
+   *
+   * @param cacheKey The cache key for manifest tracking
+   * @param vars The parameter map (includes year and all dimension values)
+   * @param jsonPath The resolved JSON cache path (relative to cache directory)
+   * @param parquetPath The resolved Parquet path (relative to parquet directory)
    */
   @FunctionalInterface
-  public interface CacheChecker {
-    boolean isCached(int year, Map<String, String> variables);
+  public interface TableOperation {
+    void execute(CacheKey cacheKey, Map<String, String> vars, String jsonPath, String parquetPath) throws Exception;
+  }
+
+  /**
+   * Functional interface for providing dimension values from table metadata or runtime data.
+   * Called for each dimension found in the table's partition pattern.
+   *
+   * @return List of values for the dimension, or null to use defaults
+   */
+  @FunctionalInterface
+  public interface DimensionProvider {
+    List<String> getValues(String dimensionName);
   }
 
   /**
@@ -1010,7 +1031,7 @@ public abstract class AbstractGovDataDownloader {
    * @throws InterruptedException if download is interrupted
    */
   @SuppressWarnings("unchecked")
-  protected String executeDownload(String tableName, Map<String, String> variables)
+  protected DownloadResult executeDownload(String tableName, Map<String, String> variables)
       throws IOException, InterruptedException {
     // Load metadata including download config
     Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -1079,7 +1100,7 @@ public abstract class AbstractGovDataDownloader {
         StorageProvider.FileMetadata fileMetadata = cacheStorageProvider.getMetadata(fullJsonPath);
         if (fileMetadata.getSize() > 0) {
           LOGGER.debug("Cached JSON already exists, skipping download: {}", jsonPath);
-          return jsonPath;
+          return new DownloadResult(jsonPath, fileMetadata.getSize());
         }
       } catch (IOException e) {
         LOGGER.warn("Could not check existing cache file: {}, will re-download", fullJsonPath);
@@ -1118,10 +1139,11 @@ public abstract class AbstractGovDataDownloader {
     // Write as JSON array - use ByteArrayOutputStream then writeFile
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     MAPPER.writeValue(baos, allData);
-    cacheStorageProvider.writeFile(fullJsonPath, baos.toByteArray());
+    byte[] data = baos.toByteArray();
+    cacheStorageProvider.writeFile(fullJsonPath, data);
 
-    LOGGER.info("Wrote {} records to {}", allData.size(), jsonPath);
-    return jsonPath;
+    LOGGER.info("Wrote {} records ({} bytes) to {}", allData.size(), data.length, jsonPath);
+    return new DownloadResult(jsonPath, data.length);
   }
 
   /**
@@ -1331,32 +1353,45 @@ public abstract class AbstractGovDataDownloader {
    *
    * <p>Subclasses implement schema-specific caching logic including zero-byte file detection.
    *
-   * @param dataType Type of data being checked
-   * @param year Year of data
-   * @param params Additional parameters for cache key
+   * @param cacheKey The cache key identifying the data
    * @return true if cached (skip download), false if needs download
    */
-  protected boolean isCachedOrExists(String dataType, int year, Map<String, String> params) {
+  protected boolean isCachedOrExists(CacheKey cacheKey) {
 
     // 1. Check cache manifest first - trust it as source of truth
-    if (cacheManifest.isCached(dataType, year, params)) {
-      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {} (year={})", dataType, year);
+    if (cacheManifest.isCached(cacheKey)) {
+      LOGGER.info("⚡ Cached (manifest: fresh ETag/TTL), skipped download: {}", cacheKey.asString());
       return true;
     }
 
     // 2. Defensive check: if file exists but not in manifest, update manifest
-    Map<String, Object> metadata = loadTableMetadata(dataType);
+    String tableName = cacheKey.getTableName();
+    Map<String, String> params = cacheKey.getParameters();
+    Map<String, Object> metadata = loadTableMetadata(tableName);
     String filePath = storageProvider.resolvePath(cacheDirectory, resolveJsonPath(metadata.get("pattern").toString(), params));
     try {
       if (cacheStorageProvider.exists(filePath)) {
         long fileSize = cacheStorageProvider.getMetadata(filePath).getSize();
         if (fileSize > 0) {
-          LOGGER.info("⚡ JSON exists, updating cache manifest: {} (year={})", dataType, year);
-          cacheManifest.markCached(dataType, year, params, filePath, fileSize);
+          LOGGER.info("⚡ JSON exists, updating cache manifest: {}", cacheKey.asString());
+          // Calculate reasonable default refresh time (same logic as CacheManifest.markCached)
+          int currentYear = java.time.LocalDate.now().getYear();
+          String yearStr = params.get("year");
+          int year = yearStr != null ? Integer.parseInt(yearStr) : currentYear;
+          long refreshAfter;
+          String refreshReason;
+          if (year == currentYear) {
+            refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+            refreshReason = "current_year_daily";
+          } else {
+            refreshAfter = Long.MAX_VALUE;
+            refreshReason = "historical_immutable";
+          }
+          cacheManifest.markCached(cacheKey, filePath, fileSize, refreshAfter, refreshReason);
           cacheManifest.save(operatingDirectory);
           return true;
         } else {
-          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", dataType, filePath);
+          LOGGER.warn("Found zero-byte cache file for {} at {} — will re-download instead of using cache.", tableName, filePath);
         }
       }
     } catch (IOException e) {
@@ -2072,14 +2107,13 @@ public abstract class AbstractGovDataDownloader {
     List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
 
     // Build SQL for CSV→Parquet conversion
-    String sql = buildCsvToParquetSql(
-        tableName,
+    String sql =
+        buildCsvToParquetSql(tableName,
         fullSourcePath,
         csvPath != null ? substitutePatternVariables(csvPath, variables) : null,
         fullParquetPath,
         columns,
-        csvConversionNode
-    );
+        csvConversionNode);
 
     // Execute conversion
     executeDuckDBSql(sql, "CSV to Parquet conversion for " + tableName);
@@ -2621,153 +2655,70 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Generic method to iterate over table operations with arbitrary nesting levels (1-4 loops).
-   * Handles variable map generation, cache checking, operation execution, progress tracking,
-   * and manifest saving.
+   * Builds iteration dimensions from a table's partition pattern.
+   * Extracts wildcard variables (e.g., frequency=*, year=*, tablename=*) and gets their values.
    *
-   * @param tableName Table name for logging and manifest operations
-   * @param dimensions List of iteration dimensions (1-4 dimensions supported)
-   * @param cacheChecker Lambda to check if operation is cached
-   * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param tableName Table name to load pattern from
+   * @param startYear Start year for year dimension
+   * @param endYear End year for year dimension
+   * @param dimensionProvider Lambda to provide values for non-year dimensions
+   * @return List of IterationDimension objects in pattern order
    */
-  protected void iterateTableOperations(
+  private List<IterationDimension> buildDimensionsFromPattern(
       String tableName,
-      List<IterationDimension> dimensions,
-      CacheChecker cacheChecker,
-      TableOperation operation,
-      String operationDescription) {
+      int startYear,
+      int endYear,
+      DimensionProvider dimensionProvider) {
 
-    if (dimensions == null || dimensions.isEmpty()) {
-      LOGGER.warn("No dimensions provided for {} operations on {}", operationDescription, tableName);
-      return;
+    // Load table metadata to get pattern
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
+    if (pattern == null || pattern.isEmpty()) {
+      LOGGER.warn("No pattern found for table {}", tableName);
+      return new ArrayList<>();
     }
 
-    // Calculate total operations for progress tracking
-    int totalOperations = 1;
-    for (IterationDimension dim : dimensions) {
-      totalOperations *= dim.values.size();
+    // Extract dimension names from pattern (variables with wildcards)
+    // Pattern format: "type=xxx/frequency=*/year=*/tablename=*/file.parquet"
+    List<IterationDimension> dimensions = new ArrayList<>();
+    String[] parts = pattern.split("/");
+
+    for (String part : parts) {
+      if (part.contains("=*")) {
+        String dimName = part.substring(0, part.indexOf("="));
+
+        List<String> values;
+        if ("year".equals(dimName)) {
+          // Year dimension uses year range
+          values = new ArrayList<>();
+          for (int year = startYear; year <= endYear; year++) {
+            values.add(String.valueOf(year));
+          }
+        } else {
+          // Other dimensions use provider
+          values = dimensionProvider.getValues(dimName);
+          if (values == null || values.isEmpty()) {
+            LOGGER.warn("No values provided for dimension '{}' in table {}", dimName, tableName);
+            continue;
+          }
+        }
+
+        dimensions.add(new IterationDimension(dimName, values));
+        LOGGER.debug("Added dimension '{}' with {} values for table {}",
+            dimName, values.size(), tableName);
+      }
     }
 
-    LOGGER.info("Starting {} operations for {} ({} total combinations)",
-        operationDescription, tableName, totalOperations);
-
-    // Track progress
-    int[] counters = new int[2]; // [0]=executed, [1]=skipped
-
-    // Generate and execute all combinations using recursive iteration
-    iterateDimensionsRecursive(dimensions, 0, new HashMap<String, String>(),
-        tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
-
-    // Save manifest after all operations complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
-    }
-
-    LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
-        tableName, operationDescription, counters[0], counters[1]);
+    return dimensions;
   }
 
   /**
-   * Recursive helper to iterate over all combinations of dimension values.
-   * Builds up the variables map as it recurses through dimensions.
-   *
-   * @param dimensions All iteration dimensions
-   * @param dimensionIndex Current dimension being iterated
-   * @param variables Variables map built so far
-   * @param tableName Table name for logging
-   * @param cacheChecker Cache checking lambda
-   * @param operation Operation execution lambda
-   * @param operationDescription Description for logging
-   * @param counters Progress counters [executed, skipped]
-   * @param totalOperations Total operations for progress logging
-   */
-  private void iterateDimensionsRecursive(
-      List<IterationDimension> dimensions,
-      int dimensionIndex,
-      Map<String, String> variables,
-      String tableName,
-      CacheChecker cacheChecker,
-      TableOperation operation,
-      String operationDescription,
-      int[] counters,
-      int totalOperations) {
-
-    // Base case: all dimensions iterated, execute operation
-    if (dimensionIndex >= dimensions.size()) {
-      // Extract year from variables (default to 0 if not present)
-      int year = 0;
-      if (variables.containsKey("year")) {
-        try {
-          year = Integer.parseInt(variables.get("year"));
-        } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
-        }
-      }
-
-      // Check cache
-      if (cacheChecker.isCached(year, variables)) {
-        counters[1]++; // skipped
-        return;
-      }
-
-      // Execute operation
-      try {
-        operation.execute(year, variables);
-        counters[0]++; // executed
-
-        // Log progress every 10 operations
-        if (counters[0] % 10 == 0) {
-          LOGGER.info("{} {}/{} operations (skipped {} cached)",
-              operationDescription, counters[0], totalOperations, counters[1]);
-        }
-      } catch (Exception e) {
-        LOGGER.error("Error during {} for {} with variables {}: {}",
-            operationDescription, tableName, variables, e.getMessage());
-
-        // Check if this is an HTTP 200 with error content (API error)
-        if (e instanceof IOException && e.getMessage() != null
-            && e.getMessage().contains("API returned error (HTTP 200 with error content)")) {
-          // Extract error message from exception
-          String errorMessage = e.getMessage();
-          if (errorMessage.startsWith("API returned error (HTTP 200 with error content): ")) {
-            errorMessage = errorMessage.substring("API returned error (HTTP 200 with error content): ".length());
-          }
-
-          // Mark as API error with retry cadence in the cache manifest
-          if (cacheManifest != null) {
-            try {
-              cacheManifest.markApiError(tableName, year, variables, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
-              cacheManifest.save(operatingDirectory);
-              LOGGER.info("Marked {} year={} as API error - will retry in {} days",
-                  tableName, year, DEFAULT_API_ERROR_RETRY_DAYS);
-            } catch (Exception manifestError) {
-              LOGGER.warn("Could not mark API error in cache manifest: {}", manifestError.getMessage());
-            }
-          }
-        }
-      }
-      return;
-    }
-
-    // Recursive case: iterate over current dimension
-    IterationDimension currentDim = dimensions.get(dimensionIndex);
-    for (String value : currentDim.values) {
-      // Add current dimension's variable to map
-      Map<String, String> nextVariables = new HashMap<>(variables);
-      nextVariables.put(currentDim.variableName, value);
-
-      // Recurse to next dimension
-      iterateDimensionsRecursive(dimensions, dimensionIndex + 1, nextVariables,
-          tableName, cacheChecker, operation, operationDescription, counters, totalOperations);
-    }
-  }
-
-  /**
-   * Optimized version of iterateTableOperations using DuckDB for cache filtering.
+   * Optimized version of table iteration using DuckDB for cache filtering.
    * Replaces row-by-row cache checking with single SQL query (10-20x faster for large sets).
+   *
+   * <p>Dimensions are automatically extracted from the table's partition pattern.
+   * The dimensionProvider lambda is called for each dimension to get its values.
    *
    * <p>Performance comparison for 25,000 combinations against 16,000 cached entries:
    * <ul>
@@ -2775,21 +2726,28 @@ public abstract class AbstractGovDataDownloader {
    *   <li>DuckDB: ~50-100ms (single hash join operation)</li>
    * </ul>
    *
-   * <p>Falls back to traditional row-by-row iteration if DuckDB query fails.
-   *
    * @param tableName Table name for logging and manifest operations
-   * @param dimensions List of iteration dimensions (1-4 dimensions supported)
+   * @param startYear First year to iterate (used for year dimension)
+   * @param endYear Last year to iterate (used for year dimension)
+   * @param dimensionProvider Lambda that provides values for each dimension name
    * @param operation Lambda to execute the operation (download or convert)
    * @param operationDescription Description for logging (e.g., "download", "conversion")
    */
   protected void iterateTableOperationsOptimized(
       String tableName,
-      List<IterationDimension> dimensions,
+      int startYear,
+      int endYear,
+      DimensionProvider dimensionProvider,
       TableOperation operation,
       String operationDescription) {
 
+    // Build dimensions from table pattern
+    List<IterationDimension> dimensions = buildDimensionsFromPattern(
+        tableName, startYear, endYear, dimensionProvider);
+
     if (dimensions == null || dimensions.isEmpty()) {
-      LOGGER.warn("No dimensions provided for {} operations on {}", operationDescription, tableName);
+      LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
+          operationDescription, tableName);
       return;
     }
 
@@ -2821,23 +2779,31 @@ public abstract class AbstractGovDataDownloader {
           (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100));
 
     } catch (Exception e) {
-      LOGGER.warn("DuckDB cache filtering failed, falling back to traditional iteration: {}",
-          e.getMessage());
-      LOGGER.debug("Fallback details: ", e);
-      // Fallback to original implementation
-      iterateTableOperations(tableName, dimensions,
-          (year, vars) -> isCachedOrExists(tableName, year, vars),
-          operation, operationDescription);
-      return;
+      LOGGER.error("DuckDB cache filtering failed for {} {}: {}",
+          tableName, operationDescription, e.getMessage());
+      throw new RuntimeException("Failed to filter cached operations for " + tableName, e);
     }
 
     // 3. Execute only the needed operations
     int executed = 0;
     int skipped = allRequests.size() - needed.size();
 
+    // Load table metadata once for path resolution
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    String pattern = (String) metadata.get("pattern");
+
     for (CacheManifestQueryHelper.DownloadRequest req : needed) {
+      // Create cache key from table name and partition parameters
+      CacheKey cacheKey = new CacheKey(tableName, req.parameters);
+
+      // Resolve paths using pattern (fully resolved, not relative)
+      String relativeJsonPath = resolveJsonPath(pattern, req.parameters);
+      String relativeParquetPath = resolveParquetPath(pattern, req.parameters);
+      String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
+      String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
+
       try {
-        operation.execute(req.year, req.parameters);
+        operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath);
         executed++;
 
         if (executed % 10 == 0) {
@@ -2846,8 +2812,8 @@ public abstract class AbstractGovDataDownloader {
         }
 
       } catch (Exception e) {
-        LOGGER.error("Error during {} for {} with params {}: {}",
-            operationDescription, tableName, req.parameters, e.getMessage());
+        LOGGER.error("Error during {} for {} with cache key {}: {}",
+            operationDescription, tableName, cacheKey.asString(), e.getMessage());
 
         // Handle API errors (same as traditional method)
         if (e instanceof IOException && e.getMessage() != null
@@ -2859,11 +2825,10 @@ public abstract class AbstractGovDataDownloader {
 
           if (cacheManifest != null) {
             try {
-              cacheManifest.markApiError(tableName, req.year, req.parameters,
-                  errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
+              cacheManifest.markApiError(cacheKey, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
               cacheManifest.save(operatingDirectory);
-              LOGGER.info("Marked {} year={} as API error - will retry in {} days",
-                  tableName, req.year, DEFAULT_API_ERROR_RETRY_DAYS);
+              LOGGER.info("Marked {} as API error - will retry in {} days",
+                  cacheKey.asString(), DEFAULT_API_ERROR_RETRY_DAYS);
             } catch (Exception manifestError) {
               LOGGER.warn("Could not mark API error in cache manifest: {}",
                   manifestError.getMessage());
@@ -2972,6 +2937,35 @@ public abstract class AbstractGovDataDownloader {
       result = result.replace("{" + entry.getKey() + "}", entry.getValue());
     }
     return result;
+  }
+
+  // ===== CACHE EXPIRY HELPERS =====
+
+  /**
+   * Calculates cache expiry timestamp based on whether year is current year.
+   * Current year data expires after 24 hours, historical data never expires.
+   *
+   * @param year The data year
+   * @return Expiry timestamp in milliseconds (Long.MAX_VALUE for no expiry)
+   */
+  protected long getCacheExpiryForYear(int year) {
+    int currentYear = java.time.LocalDate.now().getYear();
+    if (year == currentYear) {
+      return System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+    }
+    return Long.MAX_VALUE;
+  }
+
+  /**
+   * Returns cache policy tag based on whether year is current year.
+   * Used for cache manifest categorization and debugging.
+   *
+   * @param year The data year
+   * @return "current_year_daily" for current year, "historical_immutable" otherwise
+   */
+  protected String getCachePolicyForYear(int year) {
+    int currentYear = java.time.LocalDate.now().getYear();
+    return (year == currentYear) ? "current_year_daily" : "historical_immutable";
   }
 
 }
