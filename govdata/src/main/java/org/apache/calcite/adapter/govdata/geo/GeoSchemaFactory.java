@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 
@@ -378,9 +379,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         storageProvider.resolvePath(geoParquetDir, BOUNDARY_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
     java.util.Map<String, String> params = new java.util.HashMap<>();
+    params.put("year", String.valueOf(year));
 
     // Check if already converted (via manifest or file existence)
-    if (tigerDownloader.getCacheManifest().isParquetConverted(tableName, year, params)) {
+    CacheKey cacheKey = new CacheKey(tableName, params);
+    if (tigerDownloader.getCacheManifest().isParquetConverted(cacheKey)) {
       LOGGER.debug("Table {} year {} already converted per manifest", tableName, year);
       return;
     }
@@ -392,8 +395,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         if (metadata.getSize() > 0) {
           LOGGER.debug("Table {} year {} parquet already exists", tableName, year);
           // Update manifest since file exists but wasn't tracked
-          tigerDownloader.getCacheManifest().markParquetConverted(
-              tableName, year, params, parquetPath);
+          tigerDownloader.getCacheManifest().markParquetConverted(cacheKey, parquetPath);
           tigerDownloader.getCacheManifest().save(
               tigerDownloader.getOperatingDirectory());
           return;
@@ -509,7 +511,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           boolean parquetConverted = false;
           if (cacheManifest != null) {
             java.util.Map<String, String> params = new java.util.HashMap<>();
-            parquetConverted = cacheManifest.isParquetConverted(dataType, year, params);
+            params.put("year", String.valueOf(year));
+            CacheKey cacheKey = new CacheKey(dataType, params);
+            parquetConverted = cacheManifest.isParquetConverted(cacheKey);
           }
 
           if (parquetConverted) {
@@ -620,7 +624,10 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                 createZeroRowTigerParquet(zctasParquetPath, "zctas", storageProvider);
                 // Mark in manifest to avoid recreating on next startup
                 if (cacheManifest != null) {
-                  cacheManifest.markParquetConverted("zctas", year, zctasParams, zctasParquetPath);
+                  java.util.Map<String, String> allParams = new java.util.HashMap<>(zctasParams);
+                  allParams.put("year", String.valueOf(year));
+                  CacheKey cacheKey = new CacheKey("zctas", allParams);
+                  cacheManifest.markParquetConverted(cacheKey, zctasParquetPath);
                   cacheManifest.save(geoOperatingDirectory);
                 }
               }
@@ -639,7 +646,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   for (String stateFips : tractStates) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("state", stateFips);
-                    cacheManifest.markParquetConverted("census_tracts", year, params, tractsParquetPath);
+                    params.put("year", String.valueOf(year));
+                    CacheKey cacheKey = new CacheKey("census_tracts", params);
+                    cacheManifest.markParquetConverted(cacheKey, tractsParquetPath);
                   }
                   cacheManifest.save(geoOperatingDirectory);
                 }
@@ -659,7 +668,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   for (String stateFips : blockGroupStates) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("state", stateFips);
-                    cacheManifest.markParquetConverted("block_groups", year, params, blockGroupsParquetPath);
+                    params.put("year", String.valueOf(year));
+                    CacheKey cacheKey = new CacheKey("block_groups", params);
+                    cacheManifest.markParquetConverted(cacheKey, blockGroupsParquetPath);
                   }
                   cacheManifest.save(geoOperatingDirectory);
                 }
@@ -682,7 +693,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   // Mark in manifest to avoid recreating on next startup
                   if (cacheManifest != null) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
-                    cacheManifest.markParquetConverted("cbsa", year, params, cbsaParquetPath);
+                    params.put("year", String.valueOf(year));
+                    CacheKey cacheKey = new CacheKey("cbsa", params);
+                    cacheManifest.markParquetConverted(cacheKey, cbsaParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 }
@@ -694,7 +707,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   // Mark in manifest
                   if (cacheManifest != null) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
-                    cacheManifest.markParquetConverted("cbsa", year, params, cbsaParquetPath);
+                    params.put("year", String.valueOf(year));
+                    CacheKey cacheKey = new CacheKey("cbsa", params);
+                    cacheManifest.markParquetConverted(cacheKey, cbsaParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 } catch (IOException markerEx) {
@@ -719,7 +734,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   // Mark in manifest to avoid recreating on next startup
                   if (cacheManifest != null) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
-                    cacheManifest.markParquetConverted("congressional_districts", year, params, congressionalParquetPath);
+                    params.put("year", String.valueOf(year));
+                    CacheKey cacheKey = new CacheKey("congressional_districts", params);
+                    cacheManifest.markParquetConverted(cacheKey, congressionalParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 }
@@ -742,7 +759,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                     for (String stateFips : schoolStates) {
                       java.util.Map<String, String> params = new java.util.HashMap<>();
                       params.put("state", stateFips);
-                      cacheManifest.markParquetConverted("school_districts", year, params, schoolParquetPath);
+                      params.put("year", String.valueOf(year));
+                      CacheKey cacheKey = new CacheKey("school_districts", params);
+                      cacheManifest.markParquetConverted(cacheKey, schoolParquetPath);
                     }
                     cacheManifest.save(geoOperatingDirectory);
                   }
@@ -755,7 +774,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                     for (String stateFips : schoolStates) {
                       java.util.Map<String, String> params = new java.util.HashMap<>();
                       params.put("state", stateFips);
-                      cacheManifest.markParquetConverted("school_districts", year, params, schoolParquetPath);
+                      params.put("year", String.valueOf(year));
+                      CacheKey cacheKey = new CacheKey("school_districts", params);
+                      cacheManifest.markParquetConverted(cacheKey, schoolParquetPath);
                     }
                     cacheManifest.save(geoOperatingDirectory);
                   }
