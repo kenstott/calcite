@@ -95,7 +95,11 @@ public class CacheManifestPerformanceTest {
     int uncachedCount = 0;
     for (Map<String, String> params : requests) {
       int year = 2010; // Simplified - would extract from iteration
-      if (testManifest.isCached("fred_indicators", year, params)) {
+      Map<String, String> allParams = new HashMap<>(params);
+      allParams.put("year", String.valueOf(year));
+      org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+          new org.apache.calcite.adapter.govdata.CacheKey("fred_indicators", allParams);
+      if (testManifest.isCached(cacheKey)) {
         cachedCount++;
       } else {
         uncachedCount++;
@@ -170,7 +174,11 @@ public class CacheManifestPerformanceTest {
     long traditionalStart = System.nanoTime();
     int traditionalCached = 0;
     for (CacheManifestQueryHelper.DownloadRequest req : requests) {
-      if (testManifest.isCached(req.dataType, req.year, req.parameters)) {
+      Map<String, String> allParams = new HashMap<>(req.parameters);
+      allParams.put("year", String.valueOf(req.year));
+      org.apache.calcite.adapter.govdata.CacheKey cacheKey =
+          new org.apache.calcite.adapter.govdata.CacheKey(req.dataType, allParams);
+      if (testManifest.isCached(cacheKey)) {
         traditionalCached++;
       }
     }

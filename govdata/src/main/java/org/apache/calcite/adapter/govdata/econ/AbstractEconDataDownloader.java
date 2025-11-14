@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -25,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -158,8 +160,25 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
     cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
+    // Create cache key with year as a partition parameter
+    Map<String, String> allParams = new HashMap<>(params != null ? params : new HashMap<>());
+    allParams.put("year", String.valueOf(year));
+    CacheKey cacheKey = new CacheKey(dataType, allParams);
+
+    // Calculate reasonable default refresh time (same logic as CacheManifest.markCached)
+    int currentYear = java.time.LocalDate.now().getYear();
+    long refreshAfter;
+    String refreshReason;
+    if (year == currentYear) {
+      refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+      refreshReason = "current_year_daily";
+    } else {
+      refreshAfter = Long.MAX_VALUE;
+      refreshReason = "historical_immutable";
+    }
+
     // Mark as cached in manifest (operating metadata stays in .aperio via File API)
-    cacheManifest.markCached(dataType, year, params, relativePath, jsonContent.length());
+    cacheManifest.markCached(cacheKey, relativePath, jsonContent.length(), refreshAfter, refreshReason);
     cacheManifest.save(operatingDirectory);
 
     LOGGER.info("{} data saved to: {} ({} bytes)", dataType, relativePath, jsonContent.length());
@@ -248,11 +267,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param parquetPath Full path to parquet file
    * @return true if parquet exists and is newer than raw file, false if conversion needed
    */
-  protected final boolean isParquetConvertedOrExists(String dataType, int year,
-      java.util.Map<String, String> params, String rawFilePath, String parquetPath) {
+  protected final boolean isParquetConvertedOrExists(CacheKey cacheKey, String rawFilePath, String parquetPath) {
 
     // 1. Check manifest first - trust it as source of truth
-    if (cacheManifest.isParquetConverted(dataType, year, params)) {
+    if (cacheManifest.isParquetConverted(cacheKey)) {
       return true;
     }
 
@@ -268,21 +286,21 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
           if (parquetModTime > rawModTime) {
             // Parquet is newer than raw file - update manifest and skip conversion
-            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={}, params={})",
-                dataType, year, params);
-            cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {}",
+                cacheKey.asString());
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
             cacheManifest.save(operatingDirectory);
             return true;
           } else {
             // Raw file is newer - needs reconversion
-            LOGGER.info("Raw file is newer than parquet, will reconvert: {} (year={})", dataType, year);
+            LOGGER.info("Raw file is newer than parquet, will reconvert: {}", cacheKey.asString());
             return false;
           }
         } else {
           // No raw file exists - parquet is valid
-          LOGGER.info("⚡ Parquet exists and raw file not found, updating cache manifest: {} (year={})",
-              dataType, year);
-          cacheManifest.markParquetConverted(dataType, year, params, parquetPath);
+          LOGGER.info("⚡ Parquet exists and raw file not found, updating cache manifest: {}",
+              cacheKey.asString());
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
           cacheManifest.save(operatingDirectory);
           return true;
         }

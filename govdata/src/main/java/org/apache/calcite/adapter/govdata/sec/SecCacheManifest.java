@@ -327,26 +327,59 @@ public class SecCacheManifest extends AbstractCacheManifest {
   // SEC schema uses CIK-based caching (different paradigm than ECON/GEO)
   // These methods are not used by SEC downloaders
 
-  @Override public boolean isCached(String dataType, int year, Map<String, String> parameters) {
+  @Override public boolean isCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
     // SEC uses CIK-based caching via isCached(String cik)
     throw new UnsupportedOperationException(
         "SEC schema uses CIK-based caching. Use isCached(String cik) instead.");
   }
 
-  @Override public void markCached(String dataType, int year, Map<String, String> params,
+  @Override public void markCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+      String filePath, long fileSize, long refreshAfter, String refreshReason) {
+    // SEC uses CIK-based caching via markCached(String cik, ...)
+    throw new UnsupportedOperationException(
+        "SEC schema uses CIK-based caching. Use markCached(String cik, ...) instead.");
+  }
+
+  @Override public boolean isParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
+    // SEC tracks parquet conversion differently via filing-level state
+    throw new UnsupportedOperationException(
+        "SEC schema tracks parquet conversion via filing-level state.");
+  }
+
+  @Override public void markParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+      String parquetPath) {
+    // SEC tracks parquet conversion differently via filing-level state
+    throw new UnsupportedOperationException(
+        "SEC schema tracks parquet conversion via filing-level state.");
+  }
+
+  @Override public void markApiError(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+      String errorMessage, int retryAfterDays) {
+    // SEC adapter does not use the generic table operations framework that triggers API errors
+    LOGGER.warn("markApiError called on SecCacheManifest - not implemented for SEC adapter");
+  }
+
+  // Deprecated methods - kept for backward compatibility during transition
+  public boolean isCached(String dataType, int year, Map<String, String> parameters) {
+    // SEC uses CIK-based caching via isCached(String cik)
+    throw new UnsupportedOperationException(
+        "SEC schema uses CIK-based caching. Use isCached(String cik) instead.");
+  }
+
+  public void markCached(String dataType, int year, Map<String, String> params,
       String relativePath, long fileSize) {
     // SEC uses CIK-based caching via markCached(String cik, ...)
     throw new UnsupportedOperationException(
         "SEC schema uses CIK-based caching. Use markCached(String cik, ...) instead.");
   }
 
-  @Override public boolean isParquetConverted(String dataType, int year, Map<String, String> params) {
+  public boolean isParquetConverted(String dataType, int year, Map<String, String> params) {
     // SEC tracks parquet conversion differently via filing-level state
     throw new UnsupportedOperationException(
         "SEC schema tracks parquet conversion via filing-level state.");
   }
 
-  @Override public void markParquetConverted(String dataType, int year, Map<String, String> params,
+  public void markParquetConverted(String dataType, int year, Map<String, String> params,
       String parquetPath) {
     // SEC tracks parquet conversion differently via filing-level state
     throw new UnsupportedOperationException(
@@ -567,16 +600,6 @@ public class SecCacheManifest extends AbstractCacheManifest {
     return cik + "/" + accession + "/" + fileName;
   }
 
-  /**
-   * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
-   * Note: SEC adapter does not currently use this method as it has different error handling patterns.
-   * This is a stub implementation to satisfy AbstractCacheManifest contract.
-   */
-  @Override public void markApiError(String dataType, int year, Map<String, String> parameters,
-                          String errorMessage, int retryAfterDays) {
-    // SEC adapter does not use the generic table operations framework that triggers API errors
-    LOGGER.warn("markApiError called on SecCacheManifest - not implemented for SEC adapter");
-  }
 
   /**
    * Cache statistics.
