@@ -481,27 +481,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Parses a combo string (e.g., "GDP:Q") into separate variable fields.
-   * Creates a new map with year and the parsed fields.
-   *
-   * @param vars       Original variables map containing "year" and combo key
-   * @param fieldNames The field names to assign to each part of the split combo
-   * @return New map with year and parsed fields
-   */
-  private Map<String, String> parseComboVariables(Map<String, String> vars,
-      String... fieldNames) {
-    String[] parts = vars.get("indicator_freq").split(":", fieldNames.length);
-    Map<String, String> fullVars = new HashMap<>();
-    fullVars.put("year", vars.get("year"));
-
-    for (int i = 0; i < fieldNames.length && i < parts.length; i++) {
-      fullVars.put(fieldNames[i], parts[i]);
-    }
-
-    return fullVars;
-  }
-
-  /**
    * Downloads regional income data using metadata-driven pattern.
    * Loads valid LineCodes from the reference_regional_linecodes catalog.
    * Automatically filters tables by valid year ranges based on industry classification
@@ -832,18 +811,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
     List<String> frequencies = extractApiList("ita_data", "frequencyList");
-    LOGGER.info("Downloading {} ITA indicators for years {}-{}", itaIndicatorsList.size(),
-        startYear, endYear);
+    LOGGER.info("Downloading {} ITA indicators ({} frequencies) for years {}-{}",
+        itaIndicatorsList.size(), frequencies.size(), startYear, endYear);
 
     String tableName = "ita_data";
-
-    // Build flat list of all indicator-frequency combinations
-    List<String> combos = new ArrayList<>();
-    for (String indicator : itaIndicatorsList) {
-      for (String frequency : frequencies) {
-        combos.add(indicator + ":" + frequency);
-      }
-    }
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
@@ -851,20 +822,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         startYear,
         endYear,
         (dimensionName) -> {
-          if ("indicator_freq".equals(dimensionName)) {
-            return combos;
+          switch (dimensionName) {
+            case "indicator": return itaIndicatorsList;
+            case "frequency": return frequencies;
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath) -> {
           int year = extractYear(vars);
 
-          // Parse combo and execute download
-          Map<String, String> fullVars = parseComboVariables(vars,
-              "indicator", "frequency");
-
           // Download to cache
-          DownloadResult result = executeDownload(tableName, fullVars);
+          DownloadResult result = executeDownload(tableName, vars);
 
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
@@ -882,18 +850,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
     List<String> frequencies = extractApiList("ita_data", "frequencyList");
 
-    LOGGER.info("Converting {} ITA indicators to Parquet for years {}-{}",
-        itaIndicatorsList.size(), startYear, endYear);
+    LOGGER.info("Converting {} ITA indicators ({} frequencies) to Parquet for years {}-{}",
+        itaIndicatorsList.size(), frequencies.size(), startYear, endYear);
 
     String tableName = "ita_data";
-
-    // Build flat list of all indicator-frequency combinations
-    List<String> combos = new ArrayList<>();
-    for (String indicator : itaIndicatorsList) {
-      for (String frequency : frequencies) {
-        combos.add(indicator + ":" + frequency);
-      }
-    }
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
@@ -901,18 +861,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         startYear,
         endYear,
         (dimensionName) -> {
-          if ("indicator_freq".equals(dimensionName)) {
-            return combos;
+          switch (dimensionName) {
+            case "indicator": return itaIndicatorsList;
+            case "frequency": return frequencies;
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath) -> {
-          // Parse combo and execute conversion
-          Map<String, String> fullVars = parseComboVariables(vars,
-              "indicator", "frequency");
-
           // Convert
-          convertCachedJsonToParquet(tableName, fullVars);
+          convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
