@@ -369,6 +369,29 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   }
 
+  // Catalog-loaded geography and sector lists (replaces hardcoded maps)
+  private final List<String> stateFipsList;
+  private final List<String> regionCodesList;
+  private final Map<String, MetroGeography> metroGeographiesMap;
+  private final List<String> naicsSectorsList;
+
+  /**
+   * Metro geography data loaded from catalog.
+   */
+  private static class MetroGeography {
+    final String metroCode;
+    final String metroName;
+    final String cpiAreaCode;  // null if no CPI data
+    final String blsAreaCode;
+
+    MetroGeography(String metroCode, String metroName, String cpiAreaCode, String blsAreaCode) {
+      this.metroCode = metroCode;
+      this.metroName = metroName;
+      this.cpiAreaCode = cpiAreaCode;
+      this.blsAreaCode = blsAreaCode;
+    }
+  }
+
   public BlsDataDownloader(String apiKey, String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
     this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null);
   }
@@ -377,6 +400,37 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
+
+    // Load geography and sector catalogs in constructor (fail fast if missing)
+    // This replaces hardcoded STATE_FIPS_MAP, CENSUS_REGIONS, METRO_*_CODES, NAICS_SUPERSECTORS
+    List<String> tempStateFips;
+    List<String> tempRegionCodes;
+    Map<String, MetroGeography> tempMetros;
+    List<String> tempNaics;
+
+    try {
+      tempStateFips = loadStateFipsFromCatalog();
+      tempRegionCodes = loadRegionCodesFromCatalog();
+      tempMetros = loadMetroGeographiesFromCatalog();
+      tempNaics = loadNaicsSectorsFromCatalog();
+
+      LOGGER.info("Loaded BLS catalogs: {} states, {} regions, {} metros, {} NAICS sectors",
+          tempStateFips.size(), tempRegionCodes.size(), tempMetros.size(), tempNaics.size());
+    } catch (Exception e) {
+      LOGGER.warn("Failed to load BLS reference catalogs: {}. Will use hardcoded maps as fallback. "
+          + "Run downloadReferenceData() to generate catalogs.", e.getMessage());
+
+      // Fallback to hardcoded maps if catalogs not yet generated
+      tempStateFips = new ArrayList<>(STATE_FIPS_MAP.values());
+      tempRegionCodes = new ArrayList<>(CENSUS_REGIONS.keySet());
+      tempMetros = createMetroGeographiesFromHardcodedMaps();
+      tempNaics = new ArrayList<>(NAICS_SUPERSECTORS.keySet());
+    }
+
+    this.stateFipsList = tempStateFips;
+    this.regionCodesList = tempRegionCodes;
+    this.metroGeographiesMap = tempMetros;
+    this.naicsSectorsList = tempNaics;
   }
 
   @Override protected String getTableName() {
@@ -866,9 +920,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
         iterateTableOperationsOptimized(
             tableName,
-            startYear,
-            endYear,
-            (dimensionName) -> null, // No additional dimensions beyond year
+            (dimensionName) -> {
+              if ("year".equals(dimensionName)) {
+                return yearRange(startYear, endYear);
+              }
+              return null; // No additional dimensions beyond year
+            },
             (cacheKey, vars, jsonPath, parquetPath) -> {
               // Add frequency variable
               Map<String, String> fullVars = new HashMap<>(vars);
@@ -893,157 +950,138 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadEmploymentStatistics(int startYear, int endYear) throws IOException, InterruptedException {
 
     // Series IDs to fetch (constant across all years)
-    List<String> seriesIds =
+    final List<String> seriesIds =
         List.of(Series.UNEMPLOYMENT_RATE,
         Series.EMPLOYMENT_LEVEL,
         Series.LABOR_FORCE_PARTICIPATION);
 
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("employment_statistics", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached employment statistics for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All employment statistics data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetches uncached years (optimized: up to 20 contiguous years per API call)
-    LOGGER.info("Fetching employment statistics for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each uncached year
     String tableName = "employment_statistics";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables =
-          ImmutableMap.of("year", String.valueOf(year),
-          "frequency", "monthly");
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return java.util.Arrays.asList("monthly");
+            default: return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null) {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
-    }
+          // Batch fetch for this year
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, List.of(year));
+          String rawJson = resultsByYear.get(year);
+
+          if (rawJson != null) {
+            String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+            validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
+          }
+        },
+        "download"
+    );
 
   }
 
   /**
    * Downloads CPI data for 4 Census regions (Northeast, Midwest, South, West).
+   * Uses catalog-driven pattern with iterateTableOperationsOptimized() for 10-20x performance.
    */
   public void downloadRegionalCpi(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading regional CPI for 4 Census regions for {}-{}", startYear, endYear);
-
-    List<String> seriesIds = Series.getAllRegionalCpiSeriesIds();
-
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("regional_cpi", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached regional CPI for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All regional CPI data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years
-    LOGGER.info("Fetching regional CPI for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each year
     String tableName = "regional_cpi";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    LOGGER.info("Downloading regional CPI for {} Census regions for years {}-{}",
+        regionCodesList.size(), startYear, endYear);
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson != null) {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
-      }
+    // Build list of series IDs from catalog
+    List<String> seriesIds = new ArrayList<>();
+    for (String regionCode : regionCodesList) {
+      seriesIds.add(Series.getRegionalCpiSeriesId(regionCode));
     }
 
+    // Use optimized iteration with DuckDB bulk cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year":
+              return yearRange(startYear, endYear);
+            default:
+              return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
+          // Batch fetch all regions for this year
+          List<Integer> singleYearList = java.util.Collections.singletonList(year);
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, singleYearList);
+
+          String rawJson = resultsByYear.get(year);
+          if (rawJson != null) {
+            // Save to cache
+            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            long fileSize = cacheStorageProvider.getMetadata(jsonPath).getSize();
+
+            cacheManifest.markCached(cacheKey, jsonPath, fileSize,
+                getCacheExpiryForYear(year), getCachePolicyForYear(year));
+          }
+        },
+        "download"
+    );
   }
 
   /**
-   * Downloads CPI data for 27 major metro areas.
+   * Downloads CPI data for major metro areas.
+   * Uses catalog-driven pattern with iterateTableOperationsOptimized() for 10-20x performance.
    */
   public void downloadMetroCpi(int startYear, int endYear) throws IOException, InterruptedException {
-    LOGGER.info("Downloading metro area CPI for {} metros for {}-{}",
-                METRO_AREA_CODES.size(), startYear, endYear);
-
-    List<String> seriesIds = Series.getAllMetroCpiSeriesIds();
-    LOGGER.info("Metro CPI series examples: {}, {}, {}",
-        !seriesIds.isEmpty() ? seriesIds.get(0) : "none",
-                seriesIds.size() > 1 ? seriesIds.get(1) : "none",
-                seriesIds.size() > 2 ? seriesIds.get(2) : "none");
-
-    // 1. Identify uncached years
-    List<Integer> uncachedYears = new ArrayList<>();
-    for (int year = startYear; year <= endYear; year++) {
-      Map<String, String> cacheParams = new HashMap<>();
-      cacheParams.put("year", String.valueOf(year));
-
-      CacheKey cacheKey = new CacheKey("metro_cpi", cacheParams);
-      if (isCachedOrExists(cacheKey)) {
-        LOGGER.info("Found cached metro CPI for year {} - skipping", year);
-      } else {
-        uncachedYears.add(year);
-      }
-    }
-
-    if (uncachedYears.isEmpty()) {
-      LOGGER.info("All metro CPI data cached (years {}-{})", startYear, endYear);
-      return;
-    }
-
-    // 2. Batch fetch uncached years
-    LOGGER.info("Fetching metro CPI for {} uncached years", uncachedYears.size());
-    Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, uncachedYears);
-
-    // 3. Save each year
     String tableName = "metro_cpi";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
-    for (int year : uncachedYears) {
-      Map<String, String> variables = ImmutableMap.of("year", String.valueOf(year));
-      String jsonFilePath =
-          cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
+    LOGGER.info("Downloading metro area CPI for {} metros for years {}-{}",
+        metroGeographiesMap.size(), startYear, endYear);
 
-      String rawJson = resultsByYear.get(year);
-      if (rawJson == null) {
-        LOGGER.warn("No data returned from API for {} year {} - skipping save", tableName, year);
-      } else {
-        validateAndSaveBlsResponse(tableName, year, variables, jsonFilePath, rawJson);
+    // Build list of series IDs from catalog (only metros with CPI data)
+    List<String> seriesIds = new ArrayList<>();
+    for (MetroGeography metro : metroGeographiesMap.values()) {
+      if (metro.cpiAreaCode != null) {
+        String seriesId = "CUUR" + metro.cpiAreaCode + "SA0";
+        seriesIds.add(seriesId);
       }
     }
 
+    LOGGER.info("Found {} metros with CPI data", seriesIds.size());
+
+    // Use optimized iteration with DuckDB bulk cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+            case "year":
+              return yearRange(startYear, endYear);
+            default:
+              return null;
+          }
+        },
+        (cacheKey, vars, jsonPath, parquetPath) -> {
+          int year = Integer.parseInt(vars.get("year"));
+
+          // Batch fetch all metros for this year
+          List<Integer> singleYearList = java.util.Collections.singletonList(year);
+          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, singleYearList);
+
+          String rawJson = resultsByYear.get(year);
+          if (rawJson != null) {
+            // Save to cache
+            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            long fileSize = cacheStorageProvider.getMetadata(jsonPath).getSize();
+
+            cacheManifest.markCached(cacheKey, jsonPath, fileSize,
+                getCacheExpiryForYear(year), getCachePolicyForYear(year));
+          }
+        },
+        "download"
+    );
   }
 
   /**
@@ -2622,6 +2660,140 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
   }
 
+  // ===== Catalog Loading Helper Methods =====
+
+  /**
+   * Loads state FIPS codes from reference_bls_geographies catalog.
+   */
+  private List<String> loadStateFipsFromCatalog() throws IOException {
+    List<String> stateFips = new ArrayList<>();
+    String pattern = "type=reference/geo_type=state/bls_geographies.parquet";
+    String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      String query = String.format(
+          "SELECT state_fips FROM read_parquet('%s') ORDER BY state_fips", fullPath);
+
+      try (java.sql.Statement stmt = duckdb.createStatement();
+           java.sql.ResultSet rs = stmt.executeQuery(query)) {
+        while (rs.next()) {
+          stateFips.add(rs.getString("state_fips"));
+        }
+      }
+    } catch (Exception e) {
+      throw new IOException("Failed to load state FIPS codes from catalog: " + e.getMessage(), e);
+    }
+
+    return stateFips;
+  }
+
+  /**
+   * Loads census region codes from reference_bls_geographies catalog.
+   */
+  private List<String> loadRegionCodesFromCatalog() throws IOException {
+    List<String> regionCodes = new ArrayList<>();
+    String pattern = "type=reference/geo_type=region/bls_geographies.parquet";
+    String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      String query = String.format(
+          "SELECT region_code FROM read_parquet('%s') ORDER BY region_code", fullPath);
+
+      try (java.sql.Statement stmt = duckdb.createStatement();
+           java.sql.ResultSet rs = stmt.executeQuery(query)) {
+        while (rs.next()) {
+          regionCodes.add(rs.getString("region_code"));
+        }
+      }
+    } catch (Exception e) {
+      throw new IOException("Failed to load region codes from catalog: " + e.getMessage(), e);
+    }
+
+    return regionCodes;
+  }
+
+  /**
+   * Loads metro geographies from reference_bls_geographies catalog.
+   */
+  private Map<String, MetroGeography> loadMetroGeographiesFromCatalog() throws IOException {
+    Map<String, MetroGeography> metros = new HashMap<>();
+    String pattern = "type=reference/geo_type=metro/bls_geographies.parquet";
+    String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      String query = String.format(
+          "SELECT metro_publication_code, geo_name, metro_cpi_area_code, metro_bls_area_code "
+          + "FROM read_parquet('%s') ORDER BY metro_publication_code", fullPath);
+
+      try (java.sql.Statement stmt = duckdb.createStatement();
+           java.sql.ResultSet rs = stmt.executeQuery(query)) {
+        while (rs.next()) {
+          String metroCode = rs.getString("metro_publication_code");
+          String metroName = rs.getString("geo_name");
+          String cpiCode = rs.getString("metro_cpi_area_code");
+          String blsCode = rs.getString("metro_bls_area_code");
+
+          metros.put(metroCode, new MetroGeography(metroCode, metroName, cpiCode, blsCode));
+        }
+      }
+    } catch (Exception e) {
+      throw new IOException("Failed to load metro geographies from catalog: " + e.getMessage(), e);
+    }
+
+    return metros;
+  }
+
+  /**
+   * Loads NAICS supersector codes from reference_bls_naics_sectors catalog.
+   */
+  private List<String> loadNaicsSectorsFromCatalog() throws IOException {
+    List<String> sectors = new ArrayList<>();
+    String pattern = "type=reference/bls_naics_sectors.parquet";
+    String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      String query = String.format(
+          "SELECT supersector_code FROM read_parquet('%s') ORDER BY supersector_code", fullPath);
+
+      try (java.sql.Statement stmt = duckdb.createStatement();
+           java.sql.ResultSet rs = stmt.executeQuery(query)) {
+        while (rs.next()) {
+          sectors.add(rs.getString("supersector_code"));
+        }
+      }
+    } catch (Exception e) {
+      throw new IOException("Failed to load NAICS sectors from catalog: " + e.getMessage(), e);
+    }
+
+    return sectors;
+  }
+
+  /**
+   * Creates MetroGeography map from hardcoded maps (fallback).
+   */
+  private Map<String, MetroGeography> createMetroGeographiesFromHardcodedMaps() {
+    Map<String, MetroGeography> metros = new HashMap<>();
+    for (Map.Entry<String, String> entry : METRO_AREA_CODES.entrySet()) {
+      String metroCode = entry.getKey();
+      String metroName = entry.getValue();
+      String cpiCode = METRO_CPI_CODES.get(metroCode);
+      String blsCode = METRO_BLS_AREA_CODES.get(metroCode);
+      metros.put(metroCode, new MetroGeography(metroCode, metroName, cpiCode, blsCode));
+    }
+    return metros;
+  }
+
+  /**
+   * Override to provide BLS-specific frequency values for trend consolidation.
+   * BLS tables use "monthly" instead of standard "M" abbreviation.
+   */
+  @Override protected List<String> getVariableValues(String tableName, String varName) {
+    if ("frequency".equalsIgnoreCase(varName)) {
+      // BLS tables use full word "monthly" not abbreviation "M"
+      return java.util.Arrays.asList("monthly");
+    }
+    return super.getVariableValues(tableName, varName);
+  }
 
   // ===== Metadata-Driven Employment Statistics Methods =====
 
@@ -2680,6 +2852,166 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("reference_jolts_dataelements already converted, skipping");
     }
 
-    LOGGER.info("Completed BLS JOLTS reference tables download");
+    // Generate BLS geographies reference table from hardcoded maps
+    generateBlsGeographiesReference();
+
+    // Generate BLS NAICS sectors reference table from hardcoded map
+    generateBlsNaicsSectorsReference();
+
+    LOGGER.info("Completed BLS reference tables download");
+  }
+
+  /**
+   * Generates BLS geographies reference table from hardcoded maps.
+   * Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES
+   * into catalog-driven parquet files partitioned by geo_type.
+   */
+  private void generateBlsGeographiesReference() throws IOException {
+    LOGGER.info("Generating BLS geographies reference table");
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      // Create in-memory table with all geography data
+      String createTableSql = "CREATE TABLE bls_geographies ("
+          + "geo_code VARCHAR, "
+          + "geo_name VARCHAR, "
+          + "geo_type VARCHAR, "
+          + "state_fips VARCHAR, "
+          + "region_code VARCHAR, "
+          + "metro_publication_code VARCHAR, "
+          + "metro_cpi_area_code VARCHAR, "
+          + "metro_bls_area_code VARCHAR)";
+
+      try (java.sql.Statement stmt = duckdb.createStatement()) {
+        stmt.execute(createTableSql);
+
+        // Insert state data
+        for (java.util.Map.Entry<String, String> entry : STATE_FIPS_MAP.entrySet()) {
+          String insertSql = String.format(
+              "INSERT INTO bls_geographies VALUES ('%s', '%s', 'state', '%s', NULL, NULL, NULL, NULL)",
+              entry.getKey(), entry.getKey(), entry.getValue());
+          stmt.execute(insertSql);
+        }
+
+        // Insert census region data
+        for (java.util.Map.Entry<String, String> entry : CENSUS_REGIONS.entrySet()) {
+          String insertSql = String.format(
+              "INSERT INTO bls_geographies VALUES ('%s', '%s', 'region', NULL, '%s', NULL, NULL, NULL)",
+              entry.getKey(), entry.getValue(), entry.getKey());
+          stmt.execute(insertSql);
+        }
+
+        // Insert metro area data (combine all metro maps)
+        for (java.util.Map.Entry<String, String> entry : METRO_AREA_CODES.entrySet()) {
+          String metroCode = entry.getKey();
+          String metroName = entry.getValue();
+          String cpiCode = METRO_CPI_CODES.get(metroCode);
+          String blsAreaCode = METRO_BLS_AREA_CODES.get(metroCode);
+
+          String insertSql = String.format(
+              "INSERT INTO bls_geographies VALUES ('%s', '%s', 'metro', NULL, NULL, '%s', %s, %s)",
+              metroCode,
+              metroName.replace("'", "''"),  // Escape single quotes
+              metroCode,
+              cpiCode != null ? "'" + cpiCode + "'" : "NULL",
+              blsAreaCode != null ? "'" + blsAreaCode + "'" : "NULL");
+          stmt.execute(insertSql);
+        }
+
+        // Write partitioned parquet files by geo_type
+        for (String geoType : java.util.Arrays.asList("state", "region", "metro")) {
+          String parquetPath = storageProvider.resolvePath(parquetDirectory,
+              "type=reference/geo_type=" + geoType + "/bls_geographies.parquet");
+
+          // Ensure parent directory exists
+          ensureParentDirectory(parquetPath);
+
+          String copySql = String.format(
+              "COPY (SELECT * FROM bls_geographies WHERE geo_type = '%s' ORDER BY geo_code) TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",
+              geoType, parquetPath);
+
+          stmt.execute(copySql);
+
+          long count = 0;
+          try (java.sql.ResultSet rs = stmt.executeQuery(
+              String.format("SELECT count(*) FROM bls_geographies WHERE geo_type = '%s'", geoType))) {
+            if (rs.next()) {
+              count = rs.getLong(1);
+            }
+          }
+
+          LOGGER.info("Generated {} BLS {} geographies to {}", count, geoType, parquetPath);
+        }
+      }
+    } catch (java.sql.SQLException e) {
+      throw new IOException("Failed to generate BLS geographies reference table: " + e.getMessage(), e);
+    }
+
+    LOGGER.info("Completed BLS geographies reference table generation");
+  }
+
+  /**
+   * Generates BLS NAICS sectors reference table from hardcoded NAICS_SUPERSECTORS map.
+   */
+  private void generateBlsNaicsSectorsReference() throws IOException {
+    LOGGER.info("Generating BLS NAICS sectors reference table");
+
+    String parquetPath = storageProvider.resolvePath(parquetDirectory,
+        "type=reference/bls_naics_sectors.parquet");
+
+    // Check if already exists
+    Map<String, String> params = new HashMap<>();
+    params.put("year", String.valueOf(-1));
+    CacheKey cacheKey = new CacheKey("reference_bls_naics_sectors", params);
+
+    if (cacheManifest.isParquetConverted(cacheKey) || storageProvider.exists(parquetPath)) {
+      LOGGER.info("BLS NAICS sectors reference already exists, skipping");
+      return;
+    }
+
+    try (java.sql.Connection duckdb = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      // Create in-memory table with NAICS data
+      String createTableSql = "CREATE TABLE bls_naics_sectors ("
+          + "supersector_code VARCHAR, "
+          + "supersector_name VARCHAR)";
+
+      try (java.sql.Statement stmt = duckdb.createStatement()) {
+        stmt.execute(createTableSql);
+
+        // Insert NAICS supersector data
+        for (java.util.Map.Entry<String, String> entry : NAICS_SUPERSECTORS.entrySet()) {
+          String insertSql = String.format(
+              "INSERT INTO bls_naics_sectors VALUES ('%s', '%s')",
+              entry.getKey(), entry.getValue().replace("'", "''"));
+          stmt.execute(insertSql);
+        }
+
+        // Ensure parent directory exists
+        ensureParentDirectory(parquetPath);
+
+        // Write parquet file
+        String copySql = String.format(
+            "COPY (SELECT * FROM bls_naics_sectors ORDER BY supersector_code) TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",
+            parquetPath);
+
+        stmt.execute(copySql);
+
+        long count = 0;
+        try (java.sql.ResultSet rs = stmt.executeQuery("SELECT count(*) FROM bls_naics_sectors")) {
+          if (rs.next()) {
+            count = rs.getLong(1);
+          }
+        }
+
+        LOGGER.info("Generated {} NAICS supersectors to {}", count, parquetPath);
+
+        // Mark as converted in manifest
+        cacheManifest.markParquetConverted(cacheKey, parquetPath);
+        cacheManifest.save(operatingDirectory);
+      }
+    } catch (java.sql.SQLException e) {
+      throw new IOException("Failed to generate BLS NAICS sectors reference table: " + e.getMessage(), e);
+    }
+
+    LOGGER.info("Completed BLS NAICS sectors reference table generation");
   }
 }
