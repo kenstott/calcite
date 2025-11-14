@@ -183,6 +183,7 @@ class MetadataPathResolverTest {
 
     Map<String, String> variables = new HashMap<>();
     variables.put("year", "2021");
+    variables.put("series", "GDP");  // Required by fred_indicators pattern
 
     String jsonPath = downloader.resolveJsonPath(pattern, variables);
     String parquetPath = downloader.resolveParquetPath(pattern, variables);

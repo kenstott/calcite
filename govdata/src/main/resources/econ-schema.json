@@ -1,6 +1,14 @@
 {
   "schemaName": "econ",
   "comment": "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, and cross-domain correlation with geographic and demographic data. Uses DuckDB quackformers extension for native embedding generation.",
+  "bulkDownloads": {
+    "qcew_annual_bulk": {
+      "cachePattern": "type=qcew_bulk/year={year}/frequency={frequency}/qcew.zip",
+      "url": "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip",
+      "variables": ["year", "frequency"],
+      "comment": "QCEW bulk CSV download shared by state_wages, county_wages, county_qcew, and metro_wages tables. Single ~80MB ZIP file contains all counties, states, and metros for a given year."
+    }
+  },
   "partitionedTables": [
     {
       "name": "employment_statistics",
@@ -449,9 +457,15 @@
       },
       "comment": "Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.",
       "download": {
-        "cachePattern": "type=qcew/year={year}/qcew_annual.zip",
-        "url": "https://data.bls.gov/cew/data/files/{year}/csv/{year}_annual_singlefile.zip",
-        "comment": "QCEW bulk CSV download shared by state_wages, county_wages, and county_qcew tables"
+        "bulkDownload": "qcew_annual_bulk",
+        "csvConversion": {
+          "csvPath": "{year}_{frequency}_singlefile.csv",
+          "filterConditions": [
+            "agglvl_code = '50'",
+            "own_code = '0'",
+            "industry_code = '10'"
+          ]
+        }
       },
       "columns": [
         {
@@ -633,8 +647,8 @@
         }
       ],
       "download": {
+        "bulkDownload": "qcew_annual_bulk",
         "csvConversion": {
-          "sourcePattern": "type=qcew_bulk/year={year}/{frequency}_singlefile.zip",
           "csvPath": "{year}_{frequency}_singlefile.csv",
           "filterConditions": [
             "agglvl_code = '80'",
@@ -715,7 +729,14 @@
           "nullable": true,
           "comment": "Average weekly wage in dollars"
         }
-      ]
+      ],
+      "download": {
+        "bulkDownload": "qcew_annual_bulk",
+        "csvConversion": {
+          "csvPath": "{year}_{frequency}_singlefile.csv",
+          "filterConditions": []
+        }
+      }
     },
     {
       "name": "county_wages",
@@ -781,7 +802,18 @@
           "nullable": true,
           "comment": "Year"
         }
-      ]
+      ],
+      "download": {
+        "bulkDownload": "qcew_annual_bulk",
+        "csvConversion": {
+          "csvPath": "{year}_{frequency}_singlefile.csv",
+          "filterConditions": [
+            "agglvl_code = '70'",
+            "own_code = '0'",
+            "industry_code = '10'"
+          ]
+        }
+      }
     },
     {
       "name": "jolts_regional",
