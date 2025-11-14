@@ -937,8 +937,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         endYear);
 
     String tableName = "industry_gdp";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
@@ -946,27 +944,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         startYear,
         endYear,
         (dimensionName) -> {
-          if ("Industry".equals(dimensionName)) {
-            return keyIndustriesList;
+          switch (dimensionName) {
+            case "Industry": return keyIndustriesList;
+            case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath) -> {
           int year = extractYear(vars);
 
-          // Build full variables with frequency
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("frequency", "A");
-          fullVars.put("Industry", vars.get("Industry"));
+          // Download to cache
+          DownloadResult result = executeDownload(tableName, vars);
 
-          // Resolve relative path for manifest
-          String relativePath = resolveJsonPath(pattern, fullVars);
-          String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-          long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
-
-          // Mark as cached
-          cacheManifest.markCached(cacheKey, relativePath, fileSize,
+          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
@@ -992,20 +982,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         startYear,
         endYear,
         (dimensionName) -> {
-          if ("Industry".equals(dimensionName)) {
-            return keyIndustriesList;
+          switch (dimensionName) {
+            case "Industry": return keyIndustriesList;
+            case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath) -> {
-          // Build full variables with frequency
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("frequency", "A");
-          fullVars.put("Industry", vars.get("Industry"));
-
           // Convert
-          convertCachedJsonToParquet(tableName, fullVars);
+          convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
