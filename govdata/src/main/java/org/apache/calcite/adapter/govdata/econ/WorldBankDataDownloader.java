@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -244,9 +245,13 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       String rawPath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
 
-      if (!isParquetConvertedOrExists("world_indicators", year, variables, rawPath, parquetPath)) {
+      Map<String, String> allParams = new HashMap<>(variables);
+      allParams.put("year", String.valueOf(year));
+      CacheKey cacheKey = new CacheKey("world_indicators", allParams);
+
+      if (!isParquetConvertedOrExists(cacheKey, rawPath, parquetPath)) {
         convertCachedJsonToParquet("world_indicators", variables);
-        cacheManifest.markParquetConverted("world_indicators", year, null, parquetPath);
+        cacheManifest.markParquetConverted(cacheKey, parquetPath);
         convertedCount++;
       } else {
         skippedCount++;
