@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 
@@ -291,6 +292,54 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public String getSchemaResourceName() {
     return "/econ-schema.json";
+  }
+
+  /**
+   * Loads bulk download configurations from the econ-schema.json resource file.
+   * Bulk downloads are large source files that feed multiple tables (e.g., QCEW ZIP file).
+   *
+   * @return Map of bulk download name to BulkDownloadConfig
+   */
+  protected Map<String, BulkDownloadConfig> loadBulkDownloads() {
+    try (java.io.InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+      if (is == null) {
+        throw new IllegalStateException(
+            "Could not find " + getSchemaResourceName() + " resource file");
+      }
+
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
+
+      Map<String, Map<String, Object>> bulkDownloadsJson =
+          (Map<String, Map<String, Object>>) schema.get("bulkDownloads");
+      if (bulkDownloadsJson == null) {
+        LOGGER.debug("No 'bulkDownloads' section found in schema, returning empty map");
+        return new HashMap<>();
+      }
+
+      Map<String, BulkDownloadConfig> bulkDownloads = new HashMap<>();
+      for (Map.Entry<String, Map<String, Object>> entry : bulkDownloadsJson.entrySet()) {
+        String name = entry.getKey();
+        Map<String, Object> config = entry.getValue();
+
+        String cachePattern = (String) config.get("cachePattern");
+        String url = (String) config.get("url");
+        List<String> variables = (List<String>) config.get("variables");
+        String comment = (String) config.get("comment");
+
+        BulkDownloadConfig bulkDownload =
+            new BulkDownloadConfig(name, cachePattern, url, variables, comment);
+        bulkDownloads.put(name, bulkDownload);
+
+        LOGGER.debug("Loaded bulk download config: {}", bulkDownload);
+      }
+
+      LOGGER.info("Loaded {} bulk download configurations from {}", bulkDownloads.size(), getSchemaResourceName());
+      return bulkDownloads;
+
+    } catch (Exception e) {
+      throw new RuntimeException("Error loading bulk downloads from " + getSchemaResourceName(), e);
+    }
   }
 
   /**
