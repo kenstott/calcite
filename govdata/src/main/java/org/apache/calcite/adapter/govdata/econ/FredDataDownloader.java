@@ -128,9 +128,12 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       List<String> seriesIds) {
     return (dimensionName) -> {
       switch (dimensionName) {
-        case "year": return yearRange(startYear, endYear);
-        case "series": return seriesIds;
-        default: return null;
+        case "year":
+          return yearRange(startYear, endYear);
+        case "series":
+          return seriesIds;
+        default:
+          return null;
       }
     };
   }
