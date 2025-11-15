@@ -612,7 +612,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create and register the ECON converter
     EconRawToParquetConverter econConverter =
-        new EconRawToParquetConverter(blsDownloader, fredDownloader, treasuryDownloader, beaDownloader, worldBankDownloader);
+        new EconRawToParquetConverter(blsDownloader, fredDownloader);
 
     fileSchema.registerRawToParquetConverter(econConverter);
 
