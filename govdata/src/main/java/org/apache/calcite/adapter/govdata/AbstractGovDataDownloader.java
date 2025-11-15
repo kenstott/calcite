@@ -198,24 +198,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Insert partition keys
-      StringBuilder insertPartitionSql = new StringBuilder("INSERT INTO partition_lookup VALUES (");
-      for (int i = 0; i < partitionKeys.size(); i++) {
-        insertPartitionSql.append("?, ");
-      }
-      insertPartitionSql.append("?)");
-
-      try (PreparedStatement ps = duckdbConn.prepareStatement(insertPartitionSql.toString())) {
-        for (int i = 0; i < partitionVars.size(); i++) {
-          Map<String, String> pVars = partitionVars.get(i);
-          int paramIndex = 1;
-          for (String key : partitionKeys) {
-            ps.setString(paramIndex++, pVars.get(key));
-          }
-          ps.setInt(paramIndex, i);
-          ps.addBatch();
-        }
-        ps.executeBatch();
-      }
+      insertPartitionLookup("partition_lookup", partitionVars, "json_idx");
 
       // JOIN and insert into cache table
       StringBuilder joinInsert = new StringBuilder("INSERT INTO ");
@@ -258,24 +241,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Insert partition keys
-      StringBuilder insertPartitionSql = new StringBuilder("INSERT INTO partition_lookup_csv VALUES (");
-      for (int i = 0; i < partitionKeys.size(); i++) {
-        insertPartitionSql.append("?, ");
-      }
-      insertPartitionSql.append("?)");
-
-      try (PreparedStatement ps = duckdbConn.prepareStatement(insertPartitionSql.toString())) {
-        for (int i = 0; i < partitionVars.size(); i++) {
-          Map<String, String> pVars = partitionVars.get(i);
-          int paramIndex = 1;
-          for (String key : partitionKeys) {
-            ps.setString(paramIndex++, pVars.get(key));
-          }
-          ps.setInt(paramIndex, i);
-          ps.addBatch();
-        }
-        ps.executeBatch();
-      }
+      insertPartitionLookup("partition_lookup_csv", partitionVars, "csv_idx");
 
       // JOIN and insert into cache table
       StringBuilder joinInsert = new StringBuilder("INSERT INTO ");
@@ -342,24 +308,10 @@ public abstract class AbstractGovDataDownloader {
      * Retrieve JSON data for given partition keys.
      */
     public String getJson(Map<String, String> partitionVars) throws SQLException {
-      StringBuilder sql = new StringBuilder("SELECT _raw_json FROM ");
-      sql.append(cacheTableName).append(" WHERE ");
+      String sql = "SELECT _raw_json FROM " + cacheTableName + " WHERE " + buildWhereClause();
 
-      boolean first = true;
-      for (String key : partitionKeys) {
-        if (!first) {
-          sql.append(" AND ");
-        }
-        sql.append(key).append(" = ?");
-        first = false;
-      }
-
-      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
-        int paramIndex = 1;
-        for (String key : partitionKeys) {
-          ps.setString(paramIndex++, partitionVars.get(key));
-        }
-
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql)) {
+        bindPartitionKeys(ps, partitionVars);
         try (ResultSet rs = ps.executeQuery()) {
           return rs.next() ? rs.getString(1) : null;
         }
@@ -370,24 +322,10 @@ public abstract class AbstractGovDataDownloader {
      * Retrieve CSV data for given partition keys.
      */
     public String getCsv(Map<String, String> partitionVars) throws SQLException {
-      StringBuilder sql = new StringBuilder("SELECT _raw_csv FROM ");
-      sql.append(cacheTableName).append(" WHERE ");
+      String sql = "SELECT _raw_csv FROM " + cacheTableName + " WHERE " + buildWhereClause();
 
-      boolean first = true;
-      for (String key : partitionKeys) {
-        if (!first) {
-          sql.append(" AND ");
-        }
-        sql.append(key).append(" = ?");
-        first = false;
-      }
-
-      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
-        int paramIndex = 1;
-        for (String key : partitionKeys) {
-          ps.setString(paramIndex++, partitionVars.get(key));
-        }
-
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql)) {
+        bindPartitionKeys(ps, partitionVars);
         try (ResultSet rs = ps.executeQuery()) {
           return rs.next() ? rs.getString(1) : null;
         }
@@ -398,23 +336,10 @@ public abstract class AbstractGovDataDownloader {
      * Retrieve structured record for given partition keys.
      */
     public Map<String, Object> getRecord(Map<String, String> partitionVars) throws SQLException {
-      StringBuilder sql = new StringBuilder("SELECT * FROM ");
-      sql.append(cacheTableName).append(" WHERE ");
+      String sql = "SELECT * FROM " + cacheTableName + " WHERE " + buildWhereClause();
 
-      boolean first = true;
-      for (String key : partitionKeys) {
-        if (!first) {
-          sql.append(" AND ");
-        }
-        sql.append(key).append(" = ?");
-        first = false;
-      }
-
-      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
-        int paramIndex = 1;
-        for (String key : partitionKeys) {
-          ps.setString(paramIndex++, partitionVars.get(key));
-        }
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql)) {
+        bindPartitionKeys(ps, partitionVars);
 
         try (ResultSet rs = ps.executeQuery()) {
           if (!rs.next()) {
@@ -429,6 +354,59 @@ public abstract class AbstractGovDataDownloader {
           }
           return record;
         }
+      }
+    }
+
+    /**
+     * Helper: Build WHERE clause with partition key equality conditions.
+     */
+    private String buildWhereClause() {
+      StringBuilder where = new StringBuilder();
+      boolean first = true;
+      for (String key : partitionKeys) {
+        if (!first) {
+          where.append(" AND ");
+        }
+        where.append(key).append(" = ?");
+        first = false;
+      }
+      return where.toString();
+    }
+
+    /**
+     * Helper: Bind partition key values to prepared statement parameters.
+     */
+    private void bindPartitionKeys(PreparedStatement ps, Map<String, String> partitionVars)
+        throws SQLException {
+      int paramIndex = 1;
+      for (String key : partitionKeys) {
+        ps.setString(paramIndex++, partitionVars.get(key));
+      }
+    }
+
+    /**
+     * Helper: Insert partition lookup data into temp table.
+     * Shared by insertJsonBatch and insertCsvBatch.
+     */
+    private void insertPartitionLookup(String tableName, List<Map<String, String>> partitionVars,
+                                       String idxColumnName) throws SQLException {
+      StringBuilder insertSql = new StringBuilder("INSERT INTO ").append(tableName).append(" VALUES (");
+      for (int i = 0; i < partitionKeys.size(); i++) {
+        insertSql.append("?, ");
+      }
+      insertSql.append("?)");
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertSql.toString())) {
+        for (int i = 0; i < partitionVars.size(); i++) {
+          Map<String, String> pVars = partitionVars.get(i);
+          int paramIndex = 1;
+          for (String key : partitionKeys) {
+            ps.setString(paramIndex++, pVars.get(key));
+          }
+          ps.setInt(paramIndex, i);
+          ps.addBatch();
+        }
+        ps.executeBatch();
       }
     }
   }
@@ -612,6 +590,21 @@ public abstract class AbstractGovDataDownloader {
    */
   protected AbstractCacheManifest getCacheManifest() {
     return cacheManifest;
+  }
+
+  /**
+   * Converts an object to a Map, handling both JsonNode and Map types.
+   * This is a common pattern when dealing with Jackson-parsed configuration objects.
+   *
+   * @param obj Object to convert (JsonNode or Map)
+   * @return Map representation of the object
+   */
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> convertToMap(Object obj) {
+    if (obj instanceof JsonNode) {
+      return MAPPER.convertValue(obj, Map.class);
+    }
+    return (Map<String, Object>) obj;
   }
 
   /**
@@ -1373,12 +1366,7 @@ public abstract class AbstractGovDataDownloader {
 
     // Convert JsonNode to Map<String, Object> for download config
     Object downloadObj = metadata.get("download");
-    Map<String, Object> downloadConfig;
-    if (downloadObj instanceof JsonNode) {
-      downloadConfig = MAPPER.convertValue(downloadObj, Map.class);
-    } else {
-      downloadConfig = (Map<String, Object>) downloadObj;
-    }
+    Map<String, Object> downloadConfig = convertToMap(downloadObj);
 
     // Check if download is enabled
     Object enabledObj = downloadConfig.get("enabled");
@@ -1401,12 +1389,7 @@ public abstract class AbstractGovDataDownloader {
     int maxPerRequest = 100000;
     if (downloadConfig.containsKey("pagination")) {
       Object paginationObj = downloadConfig.get("pagination");
-      Map<String, Object> paginationConfig;
-      if (paginationObj instanceof JsonNode) {
-        paginationConfig = MAPPER.convertValue(paginationObj, Map.class);
-      } else {
-        paginationConfig = (Map<String, Object>) paginationObj;
-      }
+      Map<String, Object> paginationConfig = convertToMap(paginationObj);
       Object enabledPagination = paginationConfig.get("enabled");
       paginationEnabled = enabledPagination != null && Boolean.parseBoolean(enabledPagination.toString());
       if (paginationConfig.containsKey("maxPerRequest")) {
@@ -1544,12 +1527,7 @@ public abstract class AbstractGovDataDownloader {
       // Check for error response (HTTP 200 with error content) before extracting data
       if (downloadConfig.containsKey("response")) {
         Object responseObj = downloadConfig.get("response");
-        Map<String, Object> responseConfig;
-        if (responseObj instanceof JsonNode) {
-          responseConfig = MAPPER.convertValue(responseObj, Map.class);
-        } else {
-          responseConfig = (Map<String, Object>) responseObj;
-        }
+        Map<String, Object> responseConfig = convertToMap(responseObj);
 
         // Check for errorPath first
         if (responseConfig.containsKey("errorPath")) {
@@ -1569,12 +1547,7 @@ public abstract class AbstractGovDataDownloader {
       JsonNode dataNode = rootNode;
       if (downloadConfig.containsKey("response")) {
         Object responseObj = downloadConfig.get("response");
-        Map<String, Object> responseConfig;
-        if (responseObj instanceof JsonNode) {
-          responseConfig = MAPPER.convertValue(responseObj, Map.class);
-        } else {
-          responseConfig = (Map<String, Object>) responseObj;
-        }
+        Map<String, Object> responseConfig = convertToMap(responseObj);
         if (responseConfig.containsKey("dataPath")) {
           String dataPath = responseConfig.get("dataPath").toString();
           // Navigate nested path (e.g., "BEAAPI.Results.ParamValue")
@@ -2904,7 +2877,7 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.debug("Consolidation SQL:\n{}", sql);
 
     // Execute using DuckDB
-    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    try (Connection conn = getDuckDBConnection();
          Statement stmt = conn.createStatement()) {
 
       stmt.execute(sql);
@@ -3096,7 +3069,7 @@ public abstract class AbstractGovDataDownloader {
     if (prefetchCallback != null) {
       try {
         // Create in-memory DuckDB connection
-        prefetchDb = java.sql.DriverManager.getConnection("jdbc:duckdb:");
+        prefetchDb = getDuckDBConnection();
 
         // Build allDimensionValues map for prefetch context
         for (IterationDimension dim : dimensions) {
@@ -3392,7 +3365,7 @@ public abstract class AbstractGovDataDownloader {
     // Add schema data columns (excluding partition keys)
     for (PartitionedTableConfig.TableColumn col : columns) {
       if (!partitionKeys.contains(col.getName())) {
-        String duckdbType = mapCalciteTypeToDuckDB(col.getType());
+        String duckdbType = javaToDuckDbType(col.getType());
         sql.append(col.getName()).append(" ").append(duckdbType).append(", ");
       }
     }
@@ -3405,37 +3378,6 @@ public abstract class AbstractGovDataDownloader {
     try (java.sql.Statement stmt = connection.createStatement()) {
       stmt.execute(sql.toString());
       LOGGER.debug("Created prefetch cache table: {}", sql.toString());
-    }
-  }
-
-  /**
-   * Maps Calcite type names to DuckDB type names for prefetch cache table creation.
-   *
-   * @param calciteType Calcite type string
-   * @return DuckDB type string
-   */
-  private String mapCalciteTypeToDuckDB(String calciteType) {
-    if (calciteType == null) {
-      return "VARCHAR";
-    }
-
-    String upperType = calciteType.toUpperCase();
-    if (upperType.startsWith("VARCHAR") || upperType.equals("STRING")) {
-      return "VARCHAR";
-    } else if (upperType.equals("INTEGER") || upperType.equals("INT")) {
-      return "INTEGER";
-    } else if (upperType.equals("BIGINT") || upperType.equals("LONG")) {
-      return "BIGINT";
-    } else if (upperType.equals("DOUBLE") || upperType.equals("FLOAT")) {
-      return "DOUBLE";
-    } else if (upperType.equals("DATE")) {
-      return "DATE";
-    } else if (upperType.equals("TIMESTAMP")) {
-      return "TIMESTAMP";
-    } else if (upperType.equals("BOOLEAN")) {
-      return "BOOLEAN";
-    } else {
-      return "VARCHAR";  // Default fallback
     }
   }
 
