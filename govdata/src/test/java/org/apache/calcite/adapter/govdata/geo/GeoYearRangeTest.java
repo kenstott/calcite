@@ -53,6 +53,7 @@ public class GeoYearRangeTest {
     factory = new GeoSchemaFactory();
   }
 
+  @SuppressWarnings("unchecked")
   @Test public void testCensusYearDetermination() throws Exception {
     // Use reflection to test the private determineCensusYears method
     Method method =
