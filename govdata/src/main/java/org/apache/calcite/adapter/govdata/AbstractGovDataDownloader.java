@@ -264,7 +264,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Build INSERT statement with all columns from first record
-      Set<String> dataColumns = records.getFirst().keySet();
+      Set<String> dataColumns = records.get(0).keySet();
       StringBuilder insertSql = new StringBuilder("INSERT INTO ");
       insertSql.append(cacheTableName).append(" (");
       insertSql.append(String.join(", ", partitionKeys));
@@ -603,7 +603,8 @@ public abstract class AbstractGovDataDownloader {
         try {
           Map<String, Object> metadata = loadTableMetadata(tableName);
           Object downloadObj = metadata.get("download");
-          if (downloadObj instanceof JsonNode download) {
+          if (downloadObj instanceof JsonNode) {
+            JsonNode download = (JsonNode) downloadObj;
             if (download.has("rateLimit")) {
               JsonNode rateLimit = download.get("rateLimit");
               Map<String, Object> config = new java.util.HashMap<>();
@@ -872,7 +873,8 @@ public abstract class AbstractGovDataDownloader {
       Map<String, Object> metadata = loadTableMetadata(tableName);
       Object downloadObj = metadata.get("download");
 
-      if (downloadObj instanceof JsonNode download) {
+      if (downloadObj instanceof JsonNode) {
+        JsonNode download = (JsonNode) downloadObj;
         if (download.has(listKey)) {
           JsonNode listNode = download.get(listKey);
           if (listNode != null && listNode.isArray()) {
@@ -912,7 +914,8 @@ public abstract class AbstractGovDataDownloader {
       Map<String, Object> metadata = loadTableMetadata(tableName);
       Object downloadObj = metadata.get("download");
 
-      if (downloadObj instanceof JsonNode download) {
+      if (downloadObj instanceof JsonNode) {
+        JsonNode download = (JsonNode) downloadObj;
         if (download.has(objectKey)) {
           JsonNode objectNode = download.get(objectKey);
           if (objectNode != null && objectNode.isObject()) {
@@ -2981,7 +2984,7 @@ public abstract class AbstractGovDataDownloader {
     // TODO: Extend to handle multiple non-year variables with Cartesian product
 
     if (trendVars.size() == 1) {
-      String varName = trendVars.getFirst();
+      String varName = trendVars.get(0);
 
       // Extract possible values from table metadata if available
       // For frequency: typically ["A", "M", "Q"]
