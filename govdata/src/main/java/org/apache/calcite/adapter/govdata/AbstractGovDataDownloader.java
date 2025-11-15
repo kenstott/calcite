@@ -103,11 +103,6 @@ public abstract class AbstractGovDataDownloader {
    * Functional interface for table operations (download or convert).
    * Executes an operation with resolved paths and parameters.
    *
-   * @param cacheKey The cache key for manifest tracking
-   * @param vars The parameter map (includes year and all dimension values)
-   * @param jsonPath The resolved JSON cache path (relative to cache directory)
-   * @param parquetPath The resolved Parquet path (relative to parquet directory)
-   * @param prefetchHelper Helper for accessing prefetched data (may be null if no prefetch used)
    */
   @FunctionalInterface
   public interface TableOperation {
@@ -119,7 +114,6 @@ public abstract class AbstractGovDataDownloader {
    * Functional interface for providing dimension values from table metadata or runtime data.
    * Called for each dimension found in the table's partition pattern.
    *
-   * @return List of values for the dimension, or null to use defaults
    */
   @FunctionalInterface
   public interface DimensionProvider {
@@ -153,7 +147,7 @@ public abstract class AbstractGovDataDownloader {
                            Map<String, List<String>> allDimensionValues) {
       this.tableName = tableName;
       this.segmentDimensionName = segmentDimensionName;
-      this.ancestorValues = Collections.unmodifiableMap(new HashMap<>(ancestorValues));
+      this.ancestorValues = Map.copyOf(ancestorValues);
       this.allDimensionValues = allDimensionValues;  // Intentionally mutable for dynamic updates
     }
   }
@@ -270,7 +264,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Build INSERT statement with all columns from first record
-      Set<String> dataColumns = records.get(0).keySet();
+      Set<String> dataColumns = records.getFirst().keySet();
       StringBuilder insertSql = new StringBuilder("INSERT INTO ");
       insertSql.append(cacheTableName).append(" (");
       insertSql.append(String.join(", ", partitionKeys));
@@ -390,13 +384,11 @@ public abstract class AbstractGovDataDownloader {
      */
     private void insertPartitionLookup(String tableName, List<Map<String, String>> partitionVars,
                                        String idxColumnName) throws SQLException {
-      StringBuilder insertSql = new StringBuilder("INSERT INTO ").append(tableName).append(" VALUES (");
-      for (int i = 0; i < partitionKeys.size(); i++) {
-        insertSql.append("?, ");
-      }
-      insertSql.append("?)");
+      String insertSql = "INSERT INTO " + tableName + " VALUES (" +
+          "?, ".repeat(partitionKeys.size()) +
+          "?)";
 
-      try (PreparedStatement ps = duckdbConn.prepareStatement(insertSql.toString())) {
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertSql)) {
         for (int i = 0; i < partitionVars.size(); i++) {
           Map<String, String> pVars = partitionVars.get(i);
           int paramIndex = 1;
@@ -440,13 +432,6 @@ public abstract class AbstractGovDataDownloader {
       this.values = new ArrayList<>(values);
     }
 
-    public static IterationDimension fromYearRange(int startYear, int endYear) {
-      List<String> years = new ArrayList<>();
-      for (int year = startYear; year <= endYear; year++) {
-        years.add(String.valueOf(year));
-      }
-      return new IterationDimension("year", years);
-    }
   }
 
   /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/...) */
@@ -618,8 +603,7 @@ public abstract class AbstractGovDataDownloader {
         try {
           Map<String, Object> metadata = loadTableMetadata(tableName);
           Object downloadObj = metadata.get("download");
-          if (downloadObj instanceof JsonNode) {
-            JsonNode download = (JsonNode) downloadObj;
+          if (downloadObj instanceof JsonNode download) {
             if (download.has("rateLimit")) {
               JsonNode rateLimit = download.get("rateLimit");
               Map<String, Object> config = new java.util.HashMap<>();
@@ -679,7 +663,7 @@ public abstract class AbstractGovDataDownloader {
     if (config != null && config.containsKey("retryDelayMs")) {
       return (Long) config.get("retryDelayMs");
     }
-    return 1000; // Default: 1 second retry delay
+    return 1000; // Default: 1-second retry delay
   }
 
   /** Optional: override to customize default User-Agent. */
@@ -738,10 +722,6 @@ public abstract class AbstractGovDataDownloader {
   }
 
   // ===== Metadata-Driven Path Resolution =====
-
-  protected Map<String, Object> loadTableMetadata() {
-    return loadTableMetadata(getTableName());
-  }
 
   /**
    * Loads full table metadata from the schema resource file (e.g., econ-schema.json).
@@ -892,8 +872,7 @@ public abstract class AbstractGovDataDownloader {
       Map<String, Object> metadata = loadTableMetadata(tableName);
       Object downloadObj = metadata.get("download");
 
-      if (downloadObj instanceof JsonNode) {
-        JsonNode download = (JsonNode) downloadObj;
+      if (downloadObj instanceof JsonNode download) {
         if (download.has(listKey)) {
           JsonNode listNode = download.get(listKey);
           if (listNode != null && listNode.isArray()) {
@@ -933,8 +912,7 @@ public abstract class AbstractGovDataDownloader {
       Map<String, Object> metadata = loadTableMetadata(tableName);
       Object downloadObj = metadata.get("download");
 
-      if (downloadObj instanceof JsonNode) {
-        JsonNode download = (JsonNode) downloadObj;
+      if (downloadObj instanceof JsonNode download) {
         if (download.has(objectKey)) {
           JsonNode objectNode = download.get(objectKey);
           if (objectNode != null && objectNode.isObject()) {
@@ -1527,7 +1505,6 @@ public abstract class AbstractGovDataDownloader {
    * @throws IOException if download fails
    * @throws InterruptedException if download is interrupted
    */
-  @SuppressWarnings("unchecked")
   private List<JsonNode> downloadWithPagination(
       Map<String, Object> downloadConfig,
       Map<String, String> variables,
@@ -1675,29 +1652,6 @@ public abstract class AbstractGovDataDownloader {
     return current;
   }
 
-  /**
-   * Ensures parent directory exists for the given file path.
-   * Uses storage provider to create directories if needed.
-   */
-  protected void ensureParentDirectory(String fullPath) {
-    // Extract parent directory from path
-    int lastSlash = fullPath.lastIndexOf('/');
-    if (lastSlash > 0) {
-      String parentDir = fullPath.substring(0, lastSlash);
-      // Most storage providers auto-create parent directories, but we'll be explicit
-      try {
-        if (!cacheStorageProvider.exists(parentDir)) {
-          LOGGER.debug("Creating parent directory: {}", parentDir);
-          // Note: Most StorageProvider implementations handle this automatically
-          // but we document the intent here
-        }
-      } catch (Exception e) {
-        // Best effort - storage provider may handle this automatically
-        LOGGER.trace("Could not check parent directory existence: {}", e.getMessage());
-      }
-    }
-  }
-
   // ===== Cache Management =====
 
   /**
@@ -1713,7 +1667,7 @@ public abstract class AbstractGovDataDownloader {
    * <p>Subclasses implement schema-specific caching logic including zero-byte file detection.
    *
    * @param cacheKey The cache key identifying the data
-   * @return true if cached (skip download), false if needs download
+   * @return true if cached (skip download), false if it needs download
    */
   protected boolean isCachedOrExists(CacheKey cacheKey) {
 
@@ -1845,7 +1799,7 @@ public abstract class AbstractGovDataDownloader {
             convertJsonValueToType(field.getValue(), fieldName, columnType, missingValueIndicator);
         typedRecord.put(fieldName, convertedValue);
       } else {
-        // Field not in schema - use Jackson's default conversion but it will be DROPPED later
+        // Field not in schema - use Jackson's default conversion, but it will be DROPPED later
         LOGGER.debug("Field '{}' not found in column metadata - will be DROPPED in Parquet output",
             fieldName);
         Object defaultValue = MAPPER.convertValue(field.getValue(), Object.class);
@@ -2095,7 +2049,7 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Creates a DuckDB connection with all conversion extensions pre-loaded.
+   * Creates a DuckDB connection with all conversion extensions preloaded.
    * This is a shared utility method that can be used by any govdata downloader.
    *
    * <p>Extensions are loaded with graceful degradation - failures are logged as warnings
@@ -2246,19 +2200,6 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Converts in-memory records to Parquet using DuckDB.
-   *
-   * <p>This method writes the in-memory records to a temporary JSON file, then uses
-   * DuckDB to convert it to Parquet. The temp JSON file is written to the cache location
-   * for debugging purposes and consistency with other conversions.
-   *
-   * @param tableName Name of table in schema
-   * @param columns Column definitions from schema
-   * @param records In-memory records to convert
-   * @param fullParquetPath Absolute path to output Parquet file
-   * @throws IOException if conversion fails
-   */
-  /**
    * Converts in-memory records directly to Parquet using DuckDB without temporary files.
    * This is an optimized version that inserts data directly into DuckDB.
    *
@@ -2330,22 +2271,6 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
-  }
-
-  /**
-   * Writes in-memory records to a JSON file.
-   *
-   * @param fullJsonPath Absolute path to write JSON file
-   * @param records Records to write
-   * @throws IOException if write fails
-   */
-  private void writeJsonRecords(String fullJsonPath, List<Map<String, Object>> records) throws IOException {
-
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    MAPPER.writeValue(baos, records);
-    cacheStorageProvider.writeFile(fullJsonPath, baos.toByteArray());
-
-    LOGGER.debug("Wrote {} records to temporary JSON: {}", records.size(), fullJsonPath);
   }
 
   /**
@@ -2746,7 +2671,7 @@ public abstract class AbstractGovDataDownloader {
     // Add WHERE clause with filter conditions
     if (csvConversionNode.has("filterConditions")) {
       JsonNode filtersNode = csvConversionNode.get("filterConditions");
-      if (filtersNode.isArray() && filtersNode.size() > 0) {
+      if (filtersNode.isArray() && !filtersNode.isEmpty()) {
         sql.append("\n  WHERE ");
         boolean firstFilter = true;
         for (JsonNode filterNode : filtersNode) {
@@ -3040,12 +2965,6 @@ public abstract class AbstractGovDataDownloader {
 
     // Find variables in source pattern (e.g., {frequency}, {year})
     java.util.regex.Pattern varPattern = java.util.regex.Pattern.compile("\\{(\\w+)}");
-    java.util.regex.Matcher sourceMatcher = varPattern.matcher(trend.sourcePattern);
-
-    List<String> sourceVars = new ArrayList<>();
-    while (sourceMatcher.find()) {
-      sourceVars.add(sourceMatcher.group(1));
-    }
 
     // Find variables in trend pattern (e.g., {frequency})
     java.util.regex.Matcher trendMatcher = varPattern.matcher(trend.trendPattern);
@@ -3062,7 +2981,7 @@ public abstract class AbstractGovDataDownloader {
     // TODO: Extend to handle multiple non-year variables with Cartesian product
 
     if (trendVars.size() == 1) {
-      String varName = trendVars.get(0);
+      String varName = trendVars.getFirst();
 
       // Extract possible values from table metadata if available
       // For frequency: typically ["A", "M", "Q"]
@@ -3303,7 +3222,7 @@ public abstract class AbstractGovDataDownloader {
     List<IterationDimension> dimensions = buildDimensionsFromPattern(
         tableName, dimensionProvider);
 
-    if (dimensions == null || dimensions.isEmpty()) {
+    if (dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
           operationDescription, tableName);
       return;
@@ -3445,6 +3364,7 @@ public abstract class AbstractGovDataDownloader {
 
       // 4. Save manifest after all operations complete
       try {
+        assert cacheManifest != null;
         cacheManifest.save(operatingDirectory);
       } catch (Exception e) {
         LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
@@ -3634,7 +3554,7 @@ public abstract class AbstractGovDataDownloader {
 
     try (java.sql.Statement stmt = connection.createStatement()) {
       stmt.execute(sql.toString());
-      LOGGER.debug("Created prefetch cache table: {}", sql.toString());
+      LOGGER.debug("Created prefetch cache table: {}", sql);
     }
   }
 
@@ -3712,7 +3632,7 @@ public abstract class AbstractGovDataDownloader {
     // Replace {paramName} with ? and track order
     String sql = sqlTemplate;
     for (Map.Entry<String, String> entry : params.entrySet()) {
-      String placeholder = "\\{" + entry.getKey() + "\\}";
+      String placeholder = "\\{" + entry.getKey() + "}";
       if (sql.contains("{" + entry.getKey() + "}")) {
         sql = sql.replaceFirst(placeholder, "?");
         paramOrder.add(entry.getKey());
@@ -3755,7 +3675,7 @@ public abstract class AbstractGovDataDownloader {
     // Replace {paramName} with ? and track order
     String sql = sqlTemplate;
     for (Map.Entry<String, String> entry : params.entrySet()) {
-      String placeholder = "\\{" + entry.getKey() + "\\}";
+      String placeholder = "\\{" + entry.getKey() + "}";
       if (sql.contains("{" + entry.getKey() + "}")) {
         sql = sql.replaceFirst(placeholder, "?");
         paramOrder.add(entry.getKey());
