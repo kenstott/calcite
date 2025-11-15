@@ -1148,14 +1148,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Creates dimension provider for regional LineCode catalog (no year dimension).
    */
   private DimensionProvider createRegionalLineCodeDimensions(List<String> tableNamesList) {
-    return (dimensionName) -> {
-      switch (dimensionName) {
-        case "tablename":
-          return tableNamesList;
-        default:
-          return null;
-      }
-    };
+    return (dimensionName) -> dimensionName.equals("tablename") ? tableNamesList : null;
   }
 
   /**
