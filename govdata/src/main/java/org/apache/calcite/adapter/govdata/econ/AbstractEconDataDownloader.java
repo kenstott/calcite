@@ -260,9 +260,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * <p>This method supports optional partition parameters for tables with additional partitioning
    * beyond year (e.g., FRED indicators partitioned by series ID).
    *
-   * @param dataType Type of data (e.g., "fred_indicators", "gdp_components")
-   * @param year Year of data
-   * @param params Additional partition parameters (e.g., {"series": "GDP"}), or null for year-only partitioning
    * @param rawFilePath Full path to raw source file (JSON)
    * @param parquetPath Full path to parquet file
    * @return true if parquet exists and is newer than raw file, false if conversion needed
