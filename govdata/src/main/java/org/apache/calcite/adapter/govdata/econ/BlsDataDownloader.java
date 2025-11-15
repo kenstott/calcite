@@ -21,10 +21,12 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
 import org.apache.calcite.adapter.govdata.CacheKey;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
@@ -164,8 +166,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <p>All values are loaded once on first access and cached for performance.
    * Uses Jackson POJO deserialization to eliminate imperative JSON parsing code.
    */
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static final class BlsConstants {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper(new YAMLFactory());
     private static volatile BlsConstants instance = null;
 
     // Rate limiting configuration
@@ -198,6 +201,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * Rate limiting configuration POJO.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class RateLimits {
       public long minRequestIntervalMs;
       public int maxRetries;
@@ -207,6 +211,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * API batching limits POJO.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Batching {
       public int maxSeriesPerRequest;
       public int maxYearsPerRequest;
@@ -215,6 +220,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * Metro CPI code with metadata POJO.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class MetroCpiCode {
       public String cpiCode;  // null if no CPI data available
       public String name;
@@ -224,23 +230,27 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * BLS series identifiers organized by category POJO.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SeriesIds {
       public Employment employment;
       public Inflation inflation;
       public Wages wages;
 
+      @JsonIgnoreProperties(ignoreUnknown = true)
       public static class Employment {
         public String unemploymentRate;
         public String employmentLevel;
         public String laborForceParticipation;
       }
 
+      @JsonIgnoreProperties(ignoreUnknown = true)
       public static class Inflation {
         public String cpiAllUrban;
         public String cpiCore;
         public String ppiFinalDemand;
       }
 
+      @JsonIgnoreProperties(ignoreUnknown = true)
       public static class Wages {
         public String avgHourlyEarnings;
         public String employmentCostIndex;
@@ -250,6 +260,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     /**
      * BLS table name constants POJO.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class TableNames {
       public String employmentStatistics;
       public String inflationMetrics;
@@ -285,13 +296,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     private static BlsConstants loadFromResource() {
-      try (InputStream is = BlsConstants.class.getResourceAsStream("/bls/bls-constants.json")) {
+      try (InputStream is = BlsConstants.class.getResourceAsStream("/bls/bls-constants.yaml")) {
         if (is == null) {
-          throw new IOException("BLS constants resource not found: /bls/bls-constants.json");
+          throw new IOException("BLS constants resource not found: /bls/bls-constants.yaml");
         }
         return MAPPER.readValue(is, BlsConstants.class);
       } catch (IOException e) {
-        throw new RuntimeException("Failed to load BLS constants from /bls/bls-constants.json", e);
+        throw new RuntimeException("Failed to load BLS constants from /bls/bls-constants.yaml", e);
       }
     }
   }
