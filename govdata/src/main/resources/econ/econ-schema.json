@@ -3,10 +3,10 @@
   "comment": "U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS), Bureau of Economic Analysis (BEA), and Treasury Department. Includes employment statistics, inflation metrics, GDP components, interest rates, regional economic data, and over 800,000 time series from FRED. Enables macroeconomic analysis, economic forecasting, policy research, and cross-domain correlation with geographic and demographic data. Uses DuckDB quackformers extension for native embedding generation.",
   "bulkDownloads": {
     "qcew_annual_bulk": {
-      "cachePattern": "type=qcew_bulk/year={year}/frequency={frequency}/qcew.zip",
+      "cachePattern": "type=qcew_bulk/year={year}/{frequency}_singlefile.zip",
       "url": "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip",
       "variables": ["year", "frequency"],
-      "comment": "QCEW bulk CSV download shared by state_wages, county_wages, county_qcew, and metro_wages tables. Single ~80MB ZIP file contains all counties, states, and metros for a given year."
+      "comment": "QCEW bulk CSV download shared by state_wages, county_wages, county_qcew, and metro_wages tables. Annual file ~80MB, quarterly file ~323MB. Contains all counties, states, and metros for a given year."
     }
   },
   "partitionedTables": [
@@ -223,7 +223,41 @@
           "nullable": true,
           "comment": "Whether price index is seasonally adjusted"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        },
+        "requestBody": {
+          "seriesid": {
+            "type": "iteration",
+            "source": "seriesList"
+          },
+          "startyear": "{year}",
+          "endyear": "{year}",
+          "registrationkey": {
+            "type": "auth"
+          }
+        },
+        "seriesList": [
+          "CUUR0000SA0",
+          "CUUR0000SA0L1E",
+          "WPUFD49207"
+        ],
+        "rateLimit": {
+          "minIntervalMs": 1100,
+          "maxRetries": 3
+        },
+        "response": {
+          "format": "json",
+          "dataPath": "Results.series"
+        }
+      }
     },
     {
       "name": "regional_cpi",
@@ -289,7 +323,17 @@
           "nullable": true,
           "comment": "Year-over-year percentage change"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "metro_cpi",
@@ -355,7 +399,17 @@
           "nullable": true,
           "comment": "Year-over-year percentage change"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "state_industry",
@@ -433,7 +487,17 @@
           "nullable": true,
           "comment": "Year-over-year percentage change"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "state_wages",
@@ -582,7 +646,17 @@
           "nullable": true,
           "comment": "Year-over-year percentage change"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "metro_wages",
@@ -1109,7 +1183,17 @@
           "nullable": true,
           "comment": "Year-over-year percentage change in wages/earnings"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "regional_employment",
@@ -1169,7 +1253,17 @@
           "nullable": true,
           "comment": "Employment measure type"
         }
-      ]
+      ],
+      "download": {
+        "enabled": true,
+        "method": "POST",
+        "baseUrl": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+        "authentication": {
+          "type": "json_body",
+          "paramName": "registrationkey",
+          "envVar": "BLS_API_KEY"
+        }
+      }
     },
     {
       "name": "treasury_yields",

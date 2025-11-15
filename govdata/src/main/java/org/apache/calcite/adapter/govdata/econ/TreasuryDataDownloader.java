@@ -21,8 +21,6 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-
 /**
  * Downloads and converts U.S. Treasury data to Parquet format.
  * Supports daily treasury yields and federal debt statistics.

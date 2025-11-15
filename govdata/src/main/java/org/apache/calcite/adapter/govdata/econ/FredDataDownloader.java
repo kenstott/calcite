@@ -306,7 +306,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Filter by popularity and extract series IDs
-          for (java.util.Map<String, Object> series : seriesList) {
+          for (Map<String, Object> series : seriesList) {
             totalSeriesProcessed++;
 
             // Extract series_id (maybe under "id" or "series_id" key)
@@ -346,7 +346,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       LOGGER.error("Error extracting series from FRED catalog", e);
     }
 
-    return new java.util.ArrayList<>(seriesIds);
+    return new ArrayList<>(seriesIds);
   }
 
   /**
