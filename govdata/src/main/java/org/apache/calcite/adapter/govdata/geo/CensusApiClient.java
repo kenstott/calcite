@@ -199,15 +199,14 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     // Note: For conversion operations, the optimized version checks cacheManifest.isParquetConverted()
     iterateTableOperationsOptimized(
         getTableName(),
-        startYear,
-        endYear,
         (dimensionName) -> {
-          if ("data_type".equals(dimensionName)) {
-            return dataTypes;
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "data_type": return dataTypes;
+            default: return null;
           }
-          return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Convert JSON to Parquet using DuckDB

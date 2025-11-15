@@ -122,6 +122,20 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Creates dimension provider for FRED data.
+   */
+  private DimensionProvider createFredDimensions(int startYear, int endYear,
+      List<String> seriesIds) {
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "year": return yearRange(startYear, endYear);
+        case "series": return seriesIds;
+        default: return null;
+      }
+    };
+  }
+
+  /**
    * Downloads FRED indicators data for the specified year range and series list.
    * Uses IterationDimension pattern for declarative multi-dimensional iteration.
    *
@@ -143,15 +157,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          if ("series".equals(dimensionName)) {
-            return seriesIds;
-          }
-          return null;
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createFredDimensions(startYear, endYear, seriesIds),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Download to cache
@@ -197,15 +204,8 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Note: For conversion, we check parquet_converted status in manifest
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          if ("series".equals(dimensionName)) {
-            return seriesIds;
-          }
-          return null;
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createFredDimensions(startYear, endYear, seriesIds),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Execute conversion
           convertCachedJsonToParquet(tableName, vars);
 

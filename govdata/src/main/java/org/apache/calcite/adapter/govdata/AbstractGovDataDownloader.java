@@ -34,6 +34,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,6 +47,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Cross-schema base class for government data downloaders (ECON, GEO, SEC).
@@ -102,10 +107,12 @@ public abstract class AbstractGovDataDownloader {
    * @param vars The parameter map (includes year and all dimension values)
    * @param jsonPath The resolved JSON cache path (relative to cache directory)
    * @param parquetPath The resolved Parquet path (relative to parquet directory)
+   * @param prefetchHelper Helper for accessing prefetched data (may be null if no prefetch used)
    */
   @FunctionalInterface
   public interface TableOperation {
-    void execute(CacheKey cacheKey, Map<String, String> vars, String jsonPath, String parquetPath) throws Exception;
+    void execute(CacheKey cacheKey, Map<String, String> vars, String jsonPath, String parquetPath,
+                 PrefetchHelper prefetchHelper) throws Exception;
   }
 
   /**
@@ -117,6 +124,329 @@ public abstract class AbstractGovDataDownloader {
   @FunctionalInterface
   public interface DimensionProvider {
     List<String> getValues(String dimensionName);
+  }
+
+  /**
+   * Functional interface for prefetch callbacks that enable batching optimizations.
+   * Called at the start of each dimension segment during iteration.
+   * Allows bulk fetching of data (e.g., 20 years in one API call) and caching
+   * in DuckDB for subsequent TableOperation executions.
+   */
+  @FunctionalInterface
+  public interface PrefetchCallback {
+    void prefetch(PrefetchContext context, PrefetchHelper helper) throws Exception;
+  }
+
+  /**
+   * Context provided to prefetch callbacks containing segment information.
+   * Allows prefetch logic to understand the current iteration state and make
+   * batch decisions based on dimension values and ancestor context.
+   */
+  public static class PrefetchContext {
+    public final String tableName;
+    public final String segmentDimensionName;              // Current dimension being iterated
+    public final Map<String, String> ancestorValues;        // Chosen parent dimension values
+    public final Map<String, List<String>> allDimensionValues;  // ALL dimension values (mutable)
+
+    public PrefetchContext(String tableName, String segmentDimensionName,
+                           Map<String, String> ancestorValues,
+                           Map<String, List<String>> allDimensionValues) {
+      this.tableName = tableName;
+      this.segmentDimensionName = segmentDimensionName;
+      this.ancestorValues = Collections.unmodifiableMap(new HashMap<>(ancestorValues));
+      this.allDimensionValues = allDimensionValues;  // Intentionally mutable for dynamic updates
+    }
+  }
+
+  /**
+   * Helper class for prefetch callbacks and table operations to cache/retrieve data
+   * using in-memory DuckDB. Auto-manages schema based on table metadata.
+   * Supports JSON strings, CSV strings, and structured records.
+   */
+  public static class PrefetchHelper {
+    private final Connection duckdbConn;
+    private final String cacheTableName;
+    private final List<String> partitionKeys;
+
+    PrefetchHelper(Connection duckdbConn, String cacheTableName, List<String> partitionKeys) {
+      this.duckdbConn = duckdbConn;
+      this.cacheTableName = cacheTableName;
+      this.partitionKeys = partitionKeys;
+    }
+
+    /**
+     * Insert JSON data with partition keys. Stores raw JSON in _raw_json column.
+     */
+    public void insertJsonBatch(List<Map<String, String>> partitionVars, List<String> jsonStrings)
+        throws SQLException {
+      // Create temp tables for batch insert
+      try (Statement stmt = duckdbConn.createStatement()) {
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS json_raw (idx INTEGER, data VARCHAR)");
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS partition_lookup ("
+            + String.join(" VARCHAR, ", partitionKeys) + " VARCHAR, json_idx INTEGER)");
+      }
+
+      // Insert JSON strings
+      String insertJson = "INSERT INTO json_raw VALUES (?, ?)";
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertJson)) {
+        for (int i = 0; i < jsonStrings.size(); i++) {
+          ps.setInt(1, i);
+          ps.setString(2, jsonStrings.get(i));
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+
+      // Insert partition keys
+      StringBuilder insertPartitionSql = new StringBuilder("INSERT INTO partition_lookup VALUES (");
+      for (int i = 0; i < partitionKeys.size(); i++) {
+        insertPartitionSql.append("?, ");
+      }
+      insertPartitionSql.append("?)");
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertPartitionSql.toString())) {
+        for (int i = 0; i < partitionVars.size(); i++) {
+          Map<String, String> pVars = partitionVars.get(i);
+          int paramIndex = 1;
+          for (String key : partitionKeys) {
+            ps.setString(paramIndex++, pVars.get(key));
+          }
+          ps.setInt(paramIndex, i);
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+
+      // JOIN and insert into cache table
+      StringBuilder joinInsert = new StringBuilder("INSERT INTO ");
+      joinInsert.append(cacheTableName).append(" (");
+      joinInsert.append(String.join(", ", partitionKeys));
+      joinInsert.append(", _raw_json) SELECT ");
+      for (String key : partitionKeys) {
+        joinInsert.append("p.").append(key).append(", ");
+      }
+      joinInsert.append("j.data FROM partition_lookup p JOIN json_raw j ON p.json_idx = j.idx");
+
+      try (Statement stmt = duckdbConn.createStatement()) {
+        stmt.execute(joinInsert.toString());
+        stmt.execute("DROP TABLE json_raw");
+        stmt.execute("DROP TABLE partition_lookup");
+      }
+    }
+
+    /**
+     * Insert CSV data with partition keys. Stores raw CSV in _raw_csv column.
+     */
+    public void insertCsvBatch(List<Map<String, String>> partitionVars, List<String> csvStrings)
+        throws SQLException {
+      // Create temp tables
+      try (Statement stmt = duckdbConn.createStatement()) {
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS csv_raw (idx INTEGER, data VARCHAR)");
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS partition_lookup_csv ("
+            + String.join(" VARCHAR, ", partitionKeys) + " VARCHAR, csv_idx INTEGER)");
+      }
+
+      // Insert CSV strings
+      String insertCsv = "INSERT INTO csv_raw VALUES (?, ?)";
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertCsv)) {
+        for (int i = 0; i < csvStrings.size(); i++) {
+          ps.setInt(1, i);
+          ps.setString(2, csvStrings.get(i));
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+
+      // Insert partition keys
+      StringBuilder insertPartitionSql = new StringBuilder("INSERT INTO partition_lookup_csv VALUES (");
+      for (int i = 0; i < partitionKeys.size(); i++) {
+        insertPartitionSql.append("?, ");
+      }
+      insertPartitionSql.append("?)");
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertPartitionSql.toString())) {
+        for (int i = 0; i < partitionVars.size(); i++) {
+          Map<String, String> pVars = partitionVars.get(i);
+          int paramIndex = 1;
+          for (String key : partitionKeys) {
+            ps.setString(paramIndex++, pVars.get(key));
+          }
+          ps.setInt(paramIndex, i);
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+
+      // JOIN and insert into cache table
+      StringBuilder joinInsert = new StringBuilder("INSERT INTO ");
+      joinInsert.append(cacheTableName).append(" (");
+      joinInsert.append(String.join(", ", partitionKeys));
+      joinInsert.append(", _raw_csv) SELECT ");
+      for (String key : partitionKeys) {
+        joinInsert.append("p.").append(key).append(", ");
+      }
+      joinInsert.append("c.data FROM partition_lookup_csv p JOIN csv_raw c ON p.csv_idx = c.idx");
+
+      try (Statement stmt = duckdbConn.createStatement()) {
+        stmt.execute(joinInsert.toString());
+        stmt.execute("DROP TABLE csv_raw");
+        stmt.execute("DROP TABLE partition_lookup_csv");
+      }
+    }
+
+    /**
+     * Insert structured records with partition keys.
+     */
+    public void insertRecords(List<Map<String, String>> partitionVars,
+                              List<Map<String, Object>> records) throws SQLException {
+      if (records.isEmpty()) {
+        return;
+      }
+
+      // Build INSERT statement with all columns from first record
+      Set<String> dataColumns = records.get(0).keySet();
+      StringBuilder insertSql = new StringBuilder("INSERT INTO ");
+      insertSql.append(cacheTableName).append(" (");
+      insertSql.append(String.join(", ", partitionKeys));
+      for (String col : dataColumns) {
+        insertSql.append(", ").append(col);
+      }
+      insertSql.append(") VALUES (");
+      for (int i = 0; i < partitionKeys.size() + dataColumns.size(); i++) {
+        if (i > 0) {
+          insertSql.append(", ");
+        }
+        insertSql.append("?");
+      }
+      insertSql.append(")");
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(insertSql.toString())) {
+        for (int i = 0; i < partitionVars.size(); i++) {
+          Map<String, String> pVars = partitionVars.get(i);
+          Map<String, Object> record = records.get(i);
+
+          int paramIndex = 1;
+          for (String key : partitionKeys) {
+            ps.setString(paramIndex++, pVars.get(key));
+          }
+          for (String col : dataColumns) {
+            ps.setObject(paramIndex++, record.get(col));
+          }
+          ps.addBatch();
+        }
+        ps.executeBatch();
+      }
+    }
+
+    /**
+     * Retrieve JSON data for given partition keys.
+     */
+    public String getJson(Map<String, String> partitionVars) throws SQLException {
+      StringBuilder sql = new StringBuilder("SELECT _raw_json FROM ");
+      sql.append(cacheTableName).append(" WHERE ");
+
+      boolean first = true;
+      for (String key : partitionKeys) {
+        if (!first) {
+          sql.append(" AND ");
+        }
+        sql.append(key).append(" = ?");
+        first = false;
+      }
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
+        int paramIndex = 1;
+        for (String key : partitionKeys) {
+          ps.setString(paramIndex++, partitionVars.get(key));
+        }
+
+        try (ResultSet rs = ps.executeQuery()) {
+          return rs.next() ? rs.getString(1) : null;
+        }
+      }
+    }
+
+    /**
+     * Retrieve CSV data for given partition keys.
+     */
+    public String getCsv(Map<String, String> partitionVars) throws SQLException {
+      StringBuilder sql = new StringBuilder("SELECT _raw_csv FROM ");
+      sql.append(cacheTableName).append(" WHERE ");
+
+      boolean first = true;
+      for (String key : partitionKeys) {
+        if (!first) {
+          sql.append(" AND ");
+        }
+        sql.append(key).append(" = ?");
+        first = false;
+      }
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
+        int paramIndex = 1;
+        for (String key : partitionKeys) {
+          ps.setString(paramIndex++, partitionVars.get(key));
+        }
+
+        try (ResultSet rs = ps.executeQuery()) {
+          return rs.next() ? rs.getString(1) : null;
+        }
+      }
+    }
+
+    /**
+     * Retrieve structured record for given partition keys.
+     */
+    public Map<String, Object> getRecord(Map<String, String> partitionVars) throws SQLException {
+      StringBuilder sql = new StringBuilder("SELECT * FROM ");
+      sql.append(cacheTableName).append(" WHERE ");
+
+      boolean first = true;
+      for (String key : partitionKeys) {
+        if (!first) {
+          sql.append(" AND ");
+        }
+        sql.append(key).append(" = ?");
+        first = false;
+      }
+
+      try (PreparedStatement ps = duckdbConn.prepareStatement(sql.toString())) {
+        int paramIndex = 1;
+        for (String key : partitionKeys) {
+          ps.setString(paramIndex++, partitionVars.get(key));
+        }
+
+        try (ResultSet rs = ps.executeQuery()) {
+          if (!rs.next()) {
+            return null;
+          }
+
+          Map<String, Object> record = new HashMap<>();
+          ResultSetMetaData meta = rs.getMetaData();
+          for (int i = 1; i <= meta.getColumnCount(); i++) {
+            String colName = meta.getColumnName(i);
+            record.put(colName, rs.getObject(i));
+          }
+          return record;
+        }
+      }
+    }
+  }
+
+  /**
+   * Helper method to generate a list of year strings from start to end (inclusive).
+   * Useful for providing year dimension values via DimensionProvider.
+   *
+   * @param startYear First year (inclusive)
+   * @param endYear Last year (inclusive)
+   * @return List of year strings
+   */
+  protected static List<String> yearRange(int startYear, int endYear) {
+    List<String> years = new ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      years.add(String.valueOf(year));
+    }
+    return years;
   }
 
   /**
@@ -1095,17 +1425,9 @@ public abstract class AbstractGovDataDownloader {
     String jsonPath = resolveJsonPath(pattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-    if (cacheStorageProvider.exists(fullJsonPath)) {
-      try {
-        StorageProvider.FileMetadata fileMetadata = cacheStorageProvider.getMetadata(fullJsonPath);
-        if (fileMetadata.getSize() > 0) {
-          LOGGER.debug("Cached JSON already exists, skipping download: {}", jsonPath);
-          return new DownloadResult(jsonPath, fileMetadata.getSize());
-        }
-      } catch (IOException e) {
-        LOGGER.warn("Could not check existing cache file: {}, will re-download", fullJsonPath);
-      }
-    }
+    // Note: Cache manifest is the source of truth. If manifest says "download", we download.
+    // No defensive exists() checks - they're slow (especially on S3) and undermine manifest trust.
+    // If files exist but manifest doesn't know about them, that's a manifest bug to fix, not a normal case.
 
     // Aggregate all downloaded data
     List<JsonNode> allData = new ArrayList<>();
@@ -2659,15 +2981,11 @@ public abstract class AbstractGovDataDownloader {
    * Extracts wildcard variables (e.g., frequency=*, year=*, tablename=*) and gets their values.
    *
    * @param tableName Table name to load pattern from
-   * @param startYear Start year for year dimension
-   * @param endYear End year for year dimension
-   * @param dimensionProvider Lambda to provide values for non-year dimensions
+   * @param dimensionProvider Lambda to provide values for all dimensions (including year)
    * @return List of IterationDimension objects in pattern order
    */
   private List<IterationDimension> buildDimensionsFromPattern(
       String tableName,
-      int startYear,
-      int endYear,
       DimensionProvider dimensionProvider) {
 
     // Load table metadata to get pattern
@@ -2688,20 +3006,11 @@ public abstract class AbstractGovDataDownloader {
       if (part.contains("=*")) {
         String dimName = part.substring(0, part.indexOf("="));
 
-        List<String> values;
-        if ("year".equals(dimName)) {
-          // Year dimension uses year range
-          values = new ArrayList<>();
-          for (int year = startYear; year <= endYear; year++) {
-            values.add(String.valueOf(year));
-          }
-        } else {
-          // Other dimensions use provider
-          values = dimensionProvider.getValues(dimName);
-          if (values == null || values.isEmpty()) {
-            LOGGER.warn("No values provided for dimension '{}' in table {}", dimName, tableName);
-            continue;
-          }
+        // All dimensions use provider (no special handling for year)
+        List<String> values = dimensionProvider.getValues(dimName);
+        if (values == null || values.isEmpty()) {
+          LOGGER.warn("No values provided for dimension '{}' in table {}", dimName, tableName);
+          continue;
         }
 
         dimensions.add(new IterationDimension(dimName, values));
@@ -2715,10 +3024,31 @@ public abstract class AbstractGovDataDownloader {
 
   /**
    * Optimized version of table iteration using DuckDB for cache filtering.
+   * Delegates to overload with no prefetch callback.
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   */
+  protected void iterateTableOperationsOptimized(
+      String tableName,
+      DimensionProvider dimensionProvider,
+      TableOperation operation,
+      String operationDescription) {
+    iterateTableOperationsOptimized(tableName, dimensionProvider, null, operation, operationDescription);
+  }
+
+  /**
+   * Optimized version of table iteration using DuckDB for cache filtering with prefetch support.
    * Replaces row-by-row cache checking with single SQL query (10-20x faster for large sets).
    *
    * <p>Dimensions are automatically extracted from the table's partition pattern.
    * The dimensionProvider lambda is called for each dimension to get its values.
+   * Use yearRange(start, end) helper for year dimensions.
+   *
+   * <p>Prefetch callback is called at the start of each dimension segment (including root),
+   * enabling API batching optimizations (e.g., fetch 20 years in one API call instead of 20 calls).
    *
    * <p>Performance comparison for 25,000 combinations against 16,000 cached entries:
    * <ul>
@@ -2727,23 +3057,21 @@ public abstract class AbstractGovDataDownloader {
    * </ul>
    *
    * @param tableName Table name for logging and manifest operations
-   * @param startYear First year to iterate (used for year dimension)
-   * @param endYear Last year to iterate (used for year dimension)
-   * @param dimensionProvider Lambda that provides values for each dimension name
+   * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
+   * @param prefetchCallback Optional callback for batching API calls (may be null)
    * @param operation Lambda to execute the operation (download or convert)
    * @param operationDescription Description for logging (e.g., "download", "conversion")
    */
   protected void iterateTableOperationsOptimized(
       String tableName,
-      int startYear,
-      int endYear,
       DimensionProvider dimensionProvider,
+      PrefetchCallback prefetchCallback,
       TableOperation operation,
       String operationDescription) {
 
     // Build dimensions from table pattern
     List<IterationDimension> dimensions = buildDimensionsFromPattern(
-        tableName, startYear, endYear, dimensionProvider);
+        tableName, dimensionProvider);
 
     if (dimensions == null || dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
@@ -2760,9 +3088,56 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.info("Starting {} operations for {} ({} total combinations, using DuckDB optimization)",
         operationDescription, tableName, totalOperations);
 
-    // 1. Generate all possible download combinations upfront
-    List<CacheManifestQueryHelper.DownloadRequest> allRequests = new ArrayList<>();
-    generateCombinationsRecursive(tableName, dimensions, 0, new HashMap<>(), allRequests);
+    // Setup prefetch infrastructure if callback provided
+    Connection prefetchDb = null;
+    PrefetchHelper prefetchHelper = null;
+    Map<String, List<String>> allDimensionValues = new HashMap<>();
+
+    if (prefetchCallback != null) {
+      try {
+        // Create in-memory DuckDB connection
+        prefetchDb = java.sql.DriverManager.getConnection("jdbc:duckdb:");
+
+        // Build allDimensionValues map for prefetch context
+        for (IterationDimension dim : dimensions) {
+          allDimensionValues.put(dim.variableName, new ArrayList<>(dim.values));
+        }
+
+        // Load table metadata and extract partition keys
+        Map<String, Object> metadata = loadTableMetadata(tableName);
+        String pattern = (String) metadata.get("pattern");
+        List<String> partitionKeys = extractPartitionKeysFromPattern(pattern);
+
+        // Auto-create prefetch cache table
+        createPrefetchCacheTable(prefetchDb, tableName, partitionKeys, metadata);
+
+        // Create helper
+        prefetchHelper = new PrefetchHelper(prefetchDb, tableName + "_prefetch", partitionKeys);
+
+        LOGGER.info("Prefetch enabled for {} with {} partition keys", tableName, partitionKeys.size());
+
+      } catch (Exception e) {
+        LOGGER.warn("Failed to initialize prefetch for {}: {}", tableName, e.getMessage());
+        if (prefetchDb != null) {
+          try {
+            prefetchDb.close();
+          } catch (Exception closeEx) {
+            // Ignore
+          }
+        }
+        prefetchDb = null;
+        prefetchHelper = null;
+      }
+    }
+
+    final Connection finalPrefetchDb = prefetchDb;
+    final PrefetchHelper finalPrefetchHelper = prefetchHelper;
+
+    try {
+      // 1. Generate all possible download combinations upfront
+      List<CacheManifestQueryHelper.DownloadRequest> allRequests = new ArrayList<>();
+      generateCombinationsRecursive(tableName, dimensions, 0, new HashMap<>(), allRequests,
+          prefetchCallback, finalPrefetchHelper, allDimensionValues);
 
     LOGGER.debug("Generated {} download request combinations", allRequests.size());
 
@@ -2803,7 +3178,7 @@ public abstract class AbstractGovDataDownloader {
       String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
       try {
-        operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath);
+        operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath, finalPrefetchHelper);
         executed++;
 
         if (executed % 10 == 0) {
@@ -2838,15 +3213,27 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
-    // 4. Save manifest after all operations complete
-    try {
-      cacheManifest.save(operatingDirectory);
-    } catch (Exception e) {
-      LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
-    }
+      // 4. Save manifest after all operations complete
+      try {
+        cacheManifest.save(operatingDirectory);
+      } catch (Exception e) {
+        LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
+      }
 
-    LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
-        tableName, operationDescription, executed, skipped);
+      LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
+          tableName, operationDescription, executed, skipped);
+
+    } finally {
+      // Cleanup prefetch DuckDB connection
+      if (finalPrefetchDb != null) {
+        try {
+          finalPrefetchDb.close();
+          LOGGER.debug("Closed prefetch DuckDB connection for {}", tableName);
+        } catch (Exception e) {
+          LOGGER.warn("Error closing prefetch connection: {}", e.getMessage());
+        }
+      }
+    }
   }
 
   /**
@@ -2886,6 +3273,169 @@ public abstract class AbstractGovDataDownloader {
       Map<String, String> next = new HashMap<>(variables);
       next.put(dim.variableName, value);
       generateCombinationsRecursive(tableName, dimensions, dimensionIndex + 1, next, results);
+    }
+  }
+
+  /**
+   * Generates all download combinations with prefetch callback support.
+   * Calls prefetch callback at the start of each dimension segment.
+   *
+   * @param tableName Table name for the requests
+   * @param dimensions All iteration dimensions
+   * @param dimensionIndex Current dimension being iterated
+   * @param variables Variables map built so far
+   * @param results Output list to collect all combinations
+   * @param prefetchCallback Optional prefetch callback
+   * @param prefetchHelper Optional prefetch helper
+   * @param allDimensionValues All dimension values for prefetch context
+   */
+  private void generateCombinationsRecursive(
+      String tableName,
+      List<IterationDimension> dimensions,
+      int dimensionIndex,
+      Map<String, String> variables,
+      List<CacheManifestQueryHelper.DownloadRequest> results,
+      PrefetchCallback prefetchCallback,
+      PrefetchHelper prefetchHelper,
+      Map<String, List<String>> allDimensionValues) {
+
+    if (dimensionIndex >= dimensions.size()) {
+      // Base case: add to results
+      int year = 0;
+      if (variables.containsKey("year")) {
+        try {
+          year = Integer.parseInt(variables.get("year"));
+        } catch (NumberFormatException e) {
+          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
+        }
+      }
+      results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, year, variables));
+      return;
+    }
+
+    // PREFETCH CALLBACK - Called at start of each segment
+    if (prefetchCallback != null && prefetchHelper != null) {
+      IterationDimension currentDim = dimensions.get(dimensionIndex);
+      PrefetchContext context = new PrefetchContext(
+          tableName,
+          currentDim.variableName,
+          new HashMap<>(variables),  // Ancestor values chosen so far
+          allDimensionValues         // All dimension values (mutable)
+      );
+
+      try {
+        prefetchCallback.prefetch(context, prefetchHelper);
+      } catch (Exception e) {
+        LOGGER.warn("Prefetch failed for {} at segment {}: {}",
+            tableName, currentDim.variableName, e.getMessage());
+      }
+    }
+
+    // Recursive case - iterate current dimension
+    IterationDimension dim = dimensions.get(dimensionIndex);
+    for (String value : dim.values) {
+      Map<String, String> next = new HashMap<>(variables);
+      next.put(dim.variableName, value);
+      generateCombinationsRecursive(tableName, dimensions, dimensionIndex + 1, next, results,
+          prefetchCallback, prefetchHelper, allDimensionValues);
+    }
+  }
+
+  /**
+   * Extracts partition key names from a table pattern.
+   * <p>Example: type=employment/frequency=STAR/year=STAR becomes [type, frequency, year]
+   *
+   * @param pattern The partition pattern from schema
+   * @return List of partition key names in order
+   */
+  private List<String> extractPartitionKeysFromPattern(String pattern) {
+    List<String> keys = new ArrayList<>();
+    if (pattern == null || pattern.isEmpty()) {
+      return keys;
+    }
+
+    // Split by / and extract key names from key=value patterns
+    String[] parts = pattern.split("/");
+    for (String part : parts) {
+      int equalsIndex = part.indexOf('=');
+      if (equalsIndex > 0) {
+        String key = part.substring(0, equalsIndex);
+        keys.add(key);
+      }
+    }
+    return keys;
+  }
+
+  /**
+   * Creates prefetch cache table in DuckDB with partition keys and schema columns.
+   * Auto-generates schema from table metadata.
+   *
+   * @param connection DuckDB connection
+   * @param tableName Table name
+   * @param partitionKeys Partition key names
+   * @param metadata Table metadata containing column definitions
+   */
+  private void createPrefetchCacheTable(Connection connection, String tableName,
+                                        List<String> partitionKeys,
+                                        Map<String, Object> metadata) throws Exception {
+    // Load column metadata
+    List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
+
+    StringBuilder sql = new StringBuilder("CREATE TABLE ");
+    sql.append(tableName).append("_prefetch (");
+
+    // Add partition key columns
+    for (String key : partitionKeys) {
+      sql.append(key).append(" VARCHAR, ");
+    }
+
+    // Add schema data columns (excluding partition keys)
+    for (PartitionedTableConfig.TableColumn col : columns) {
+      if (!partitionKeys.contains(col.getName())) {
+        String duckdbType = mapCalciteTypeToDuckDB(col.getType());
+        sql.append(col.getName()).append(" ").append(duckdbType).append(", ");
+      }
+    }
+
+    // Add raw format columns
+    sql.append("_raw_json VARCHAR, ");
+    sql.append("_raw_csv VARCHAR");
+    sql.append(")");
+
+    try (java.sql.Statement stmt = connection.createStatement()) {
+      stmt.execute(sql.toString());
+      LOGGER.debug("Created prefetch cache table: {}", sql.toString());
+    }
+  }
+
+  /**
+   * Maps Calcite type names to DuckDB type names for prefetch cache table creation.
+   *
+   * @param calciteType Calcite type string
+   * @return DuckDB type string
+   */
+  private String mapCalciteTypeToDuckDB(String calciteType) {
+    if (calciteType == null) {
+      return "VARCHAR";
+    }
+
+    String upperType = calciteType.toUpperCase();
+    if (upperType.startsWith("VARCHAR") || upperType.equals("STRING")) {
+      return "VARCHAR";
+    } else if (upperType.equals("INTEGER") || upperType.equals("INT")) {
+      return "INTEGER";
+    } else if (upperType.equals("BIGINT") || upperType.equals("LONG")) {
+      return "BIGINT";
+    } else if (upperType.equals("DOUBLE") || upperType.equals("FLOAT")) {
+      return "DOUBLE";
+    } else if (upperType.equals("DATE")) {
+      return "DATE";
+    } else if (upperType.equals("TIMESTAMP")) {
+      return "TIMESTAMP";
+    } else if (upperType.equals("BOOLEAN")) {
+      return "BOOLEAN";
+    } else {
+      return "VARCHAR";  // Default fallback
     }
   }
 

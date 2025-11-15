@@ -210,6 +210,25 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   // and the executeDownload() infrastructure from AbstractGovDataDownloader
 
   /**
+   * Creates dimension provider for national accounts data.
+   */
+  private DimensionProvider createNationalAccountsDimensions(int startYear, int endYear,
+      List<String> tableNames, List<String> frequencies) {
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "year":
+          return yearRange(startYear, endYear);
+        case "tablename":
+          return tableNames;
+        case "frequency":
+          return frequencies;
+        default:
+          return null;
+      }
+    };
+  }
+
+  /**
    * Downloads national accounts (NIPA) data using metadata-driven pattern.
    *
    * @param startYear        First year to download
@@ -243,16 +262,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Execute using optimized framework with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "tablename": return tableNames;
-            case "frequency": return frequencies;
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createNationalAccountsDimensions(startYear, endYear, tableNames, frequencies),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Skip invalid table-frequency combinations
@@ -303,16 +314,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "tablename": return tableNames;
-            case "frequency": return frequencies;
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createNationalAccountsDimensions(startYear, endYear, tableNames, frequencies),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Skip invalid table-frequency combinations
           if (!isValidTableFrequency(vars.get("tablename"), vars.get("frequency"))) {
             return; // Skip this combination
@@ -467,20 +470,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Logs progress at regular intervals (every 10 items).
-   *
-   * @param operation   Operation name (e.g., "Downloaded", "Converted")
-   * @param current     Current count of processed items
-   * @param total       Total number of items to process
-   * @param skipped     Number of skipped items
-   */
-  private void logProgress(String operation, int current, int total, int skipped) {
-    if (current % 10 == 0) {
-      LOGGER.info("{} {}/{} items (skipped {} cached)", operation, current, total, skipped);
-    }
-  }
-
-  /**
    * Downloads regional income data using metadata-driven pattern.
    * Loads valid LineCodes from the reference_regional_linecodes catalog.
    * Automatically filters tables by valid year ranges based on industry classification
@@ -566,7 +555,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Use custom iteration with individual parameters instead of combo strings
     iterateWithParameters(tableName, parameterCombinations, startYear, endYear,
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Skip this combination if table is not valid for this year
@@ -664,15 +653,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Note: Year filtering happens in the operation lambda
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
         (dimensionName) -> {
-          if ("combo".equals(dimensionName)) {
-            return combos;
+          switch (dimensionName) {
+            case "year":
+              return yearRange(startYear, endYear);
+            case "combo":
+              return combos;
+            default:
+              return null;
           }
-          return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Parse combo and execute conversion
@@ -799,6 +790,25 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Creates dimension provider for ITA data.
+   */
+  private DimensionProvider createItaDataDimensions(int startYear, int endYear,
+      List<String> itaIndicatorsList, List<String> frequencies) {
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "year":
+          return yearRange(startYear, endYear);
+        case "indicator":
+          return itaIndicatorsList;
+        case "frequency":
+          return frequencies;
+        default:
+          return null;
+      }
+    };
+  }
+
+  /**
    * Downloads ITA data using metadata-driven pattern.
    *
    * @param startYear         First year to download
@@ -819,16 +829,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "indicator": return itaIndicatorsList;
-            case "frequency": return frequencies;
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createItaDataDimensions(startYear, endYear, itaIndicatorsList, frequencies),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Download to cache
@@ -858,16 +860,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "indicator": return itaIndicatorsList;
-            case "frequency": return frequencies;
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createItaDataDimensions(startYear, endYear, itaIndicatorsList, frequencies),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
           convertCachedJsonToParquet(tableName, vars);
 
@@ -875,6 +869,25 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
         "conversion");
+  }
+
+  /**
+   * Creates dimension provider for industry GDP data.
+   */
+  private DimensionProvider createIndustryGdpDimensions(int startYear, int endYear,
+      List<String> keyIndustriesList) {
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "year":
+          return yearRange(startYear, endYear);
+        case "industry":
+          return keyIndustriesList;
+        case "frequency":
+          return Collections.singletonList("A");  // Industry GDP is Annual only
+        default:
+          return null;
+      }
+    };
   }
 
   /**
@@ -898,16 +911,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "industry": return keyIndustriesList;
-            case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createIndustryGdpDimensions(startYear, endYear, keyIndustriesList),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Download to cache
@@ -936,16 +941,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "industry": return keyIndustriesList;
-            case "frequency": return Collections.singletonList("A");  // Industry GDP is Annual only
-            default: return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        createIndustryGdpDimensions(startYear, endYear, keyIndustriesList),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
           convertCachedJsonToParquet(tableName, vars);
 
@@ -1148,6 +1145,20 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Creates dimension provider for regional LineCode catalog (no year dimension).
+   */
+  private DimensionProvider createRegionalLineCodeDimensions(List<String> tableNamesList) {
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "tablename":
+          return tableNamesList;
+        default:
+          return null;
+      }
+    };
+  }
+
+  /**
    * Download BEA Regional LineCode catalog using GetParameterValuesFiltered API.
    * Downloads valid LineCodes for all 54 BEA Regional tables listed in the schema.
    */
@@ -1164,47 +1175,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     LOGGER.info("Downloading LineCodes for {} BEA Regional tables", tableNamesList.size());
 
-    int downloadedCount = 0;
-    int skippedCount = 0;
-    int year = 0;  // Sentinel value for reference tables without year dimension
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
+        tableName,
+        createRegionalLineCodeDimensions(tableNamesList),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+          // Download to cache
+          DownloadResult result = executeDownload(tableName, vars);
 
-    for (String regionalTableName : tableNamesList) {
-      Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
-
-      Map<String, String> allParams = new HashMap<>(variables);
-      allParams.put("year", String.valueOf(year));
-      CacheKey cacheKey = new CacheKey(tableName, allParams);
-
-      // Check cache manifest before downloading
-      if (isCachedOrExists(cacheKey)) {
-        skippedCount++;
-        continue;
-      }
-
-      try {
-        DownloadResult result = executeDownload(tableName, variables);
-
-        // Mark as cached in manifest
-        try {
-          String fullCachedPath = cacheStorageProvider.resolvePath(cacheDirectory, result.jsonPath);
-          cacheManifest.markCached(cacheKey, fullCachedPath, result.fileSize, Long.MAX_VALUE, "reference_immutable");
-        } catch (Exception ex) {
-          LOGGER.warn("Failed to mark LineCodes for {} as cached in manifest: {}",
-              regionalTableName, ex.getMessage());
-        }
-
-        downloadedCount++;
-        logProgress("Downloaded LineCodes for", downloadedCount, tableNamesList.size(), skippedCount);
-      } catch (Exception e) {
-        LOGGER.error("Error downloading LineCodes for table {}: {}", regionalTableName, e.getMessage());
-      }
-    }
-
-    // Save manifest after downloads complete
-    cacheManifest.save(operatingDirectory);
-
-    LOGGER.info("Regional LineCode catalog download complete: downloaded {} tables, skipped {} cached",
-        downloadedCount, skippedCount);
+          // Mark as cached with immutable reference policy
+          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
+              Long.MAX_VALUE, "reference_immutable");
+        },
+        "download");
   }
 
   /**
@@ -1222,59 +1205,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
+    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    iterateTableOperationsOptimized(
+        tableName,
+        createRegionalLineCodeDimensions(tableNamesList),
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+          String regionalTableName = vars.get("tablename");
 
-    int convertedCount = 0;
-    int skippedCount = 0;
-    int year = 0;  // Sentinel value for reference tables without year dimension
+          // Convert with DuckDB doing all parsing and enrichment
+          try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+            String enrichSql =
+                substituteSqlParameters(loadSqlResource("/sql/bea/enrich_regional_linecodes.sql"),
+                ImmutableMap.of(
+                    "tableName", regionalTableName,
+                    "jsonPath", jsonPath,
+                    "parquetPath", parquetPath));
 
-    for (String regionalTableName : tableNamesList) {
-      Map<String, String> variables = ImmutableMap.of("tablename", regionalTableName);
-
-      try {
-        String jsonPath = resolveJsonPath(pattern, variables);
-        String parquetPath = resolveParquetPath(pattern, variables);
-        String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
-
-        Map<String, String> allParams = new HashMap<>(variables);
-        allParams.put("year", String.valueOf(year));
-        CacheKey cacheKey = new CacheKey(tableName, allParams);
-
-        if (isParquetConvertedOrExists(cacheKey, fullJsonPath, fullParquetPath)) {
-          skippedCount++;
-          continue;
-        }
-
-        ensureParentDirectory(fullParquetPath);
-
-        // Convert with DuckDB doing all parsing and enrichment
-        try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-          String enrichSql =
-              substituteSqlParameters(loadSqlResource("/sql/bea/enrich_regional_linecodes.sql"),
-              ImmutableMap.of(
-                  "tableName", regionalTableName,
-                  "jsonPath", fullJsonPath,
-                  "parquetPath", fullParquetPath));
-
-          try (Statement stmt = duckdb.createStatement()) {
-            stmt.execute(enrichSql);
+            try (Statement stmt = duckdb.createStatement()) {
+              stmt.execute(enrichSql);
+            }
+          } catch (Exception e) {
+            LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
+            throw new RuntimeException(e);
           }
-        }
 
-        cacheManifest.markParquetConverted(cacheKey, fullParquetPath);
-        convertedCount++;
-        LOGGER.debug("Converted LineCodes for table {} with DuckDB", regionalTableName);
-
-      } catch (Exception e) {
-        LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
-      }
-    }
-
-    cacheManifest.save(operatingDirectory);
-    LOGGER.info("Regional LineCode catalog conversion complete: converted {} tables, skipped {} up-to-date",
-        convertedCount, skippedCount);
+          // Mark as converted
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+        },
+        "conversion");
   }
 
   /**
@@ -1351,7 +1309,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
         String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
-        operation.execute(cacheKey, allParams, fullJsonPath, fullParquetPath);
+        operation.execute(cacheKey, allParams, fullJsonPath, fullParquetPath, null);
         executed++;
 
         if (executed % 10 == 0) {
