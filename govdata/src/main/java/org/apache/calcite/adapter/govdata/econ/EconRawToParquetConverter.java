@@ -74,33 +74,29 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
 
   private final BlsDataDownloader blsDownloader;
   private final FredDataDownloader fredDownloader;
-  private final TreasuryDataDownloader treasuryDownloader;
-  private final BeaDataDownloader beaDownloader;
-  private final WorldBankDataDownloader worldBankDownloader;
 
   /**
    * Constructs ECON converter with references to all economic data downloaders.
    *
-   * @param blsDownloader BLS data downloader
+   * @param blsDownloader  BLS data downloader
    * @param fredDownloader FRED data downloader
-   * @param treasuryDownloader Treasury data downloader
-   * @param beaDownloader BEA data downloader
-   * @param worldBankDownloader World Bank data downloader
    */
-  public EconRawToParquetConverter(
-      BlsDataDownloader blsDownloader,
-      FredDataDownloader fredDownloader,
-      TreasuryDataDownloader treasuryDownloader,
-      BeaDataDownloader beaDownloader,
-      WorldBankDataDownloader worldBankDownloader) {
+  public EconRawToParquetConverter(BlsDataDownloader blsDownloader,
+                                   FredDataDownloader fredDownloader) {
     this.blsDownloader = blsDownloader;
     this.fredDownloader = fredDownloader;
-    this.treasuryDownloader = treasuryDownloader;
-    this.beaDownloader = beaDownloader;
-    this.worldBankDownloader = worldBankDownloader;
   }
 
-  @Override public boolean canConvert(String rawFilePath, ConversionMetadata metadata) {
+  public BlsDataDownloader blsDownloader() {
+    return blsDownloader;
+  }
+
+  public FredDataDownloader fredDownloader() {
+    return fredDownloader;
+  }
+
+  @Override
+  public boolean canConvert(String rawFilePath, ConversionMetadata metadata) {
     // Check if this is an ECON data file by looking for source=econ in path
     boolean canConvert = rawFilePath.contains("source=econ/");
     if (canConvert) {
@@ -109,156 +105,148 @@ public class EconRawToParquetConverter implements RawToParquetConverter {
     return canConvert;
   }
 
-  @Override public boolean convertToParquet(String rawFilePath, String targetParquetPath,
+  @Override
+  public boolean convertToParquet(String rawFilePath, String targetParquetPath,
       StorageProvider storageProvider) throws IOException {
 
-    LOGGER.info("=== ECON CONVERSION START ===");
-    LOGGER.info("CONVERT: Raw file path from FileSchema: {}", rawFilePath);
-    LOGGER.info("CONVERT: Target parquet path from FileSchema: {}", targetParquetPath);
+    LOGGER.info("Starting ECON data conversion for file: {}",
+        rawFilePath.substring(rawFilePath.lastIndexOf('/') + 1));
+    LOGGER.debug("Full raw path: {}", rawFilePath);
+    LOGGER.debug("Target parquet path: {}", targetParquetPath);
 
-    // Extract year from path (e.g., "year=2020")
+    // Extract year from path
     String year = extractYearFrom(rawFilePath);
     if (year == null) {
-      LOGGER.error("CONVERT: Could not extract year from path: {}", rawFilePath);
+        LOGGER.error("Failed to extract year from path structure: {}", rawFilePath);
       return false;
     }
+    LOGGER.debug("Extracted year: {}", year);
 
-    // Extract govdata path components from rawFilePath to construct correct parquet path
-    // rawFilePath contains: .../source=econ/type=indicators/year=2020/fred_indicators.json
-    // We need: type=indicators/year=2020/fred_indicators.parquet
+    // Extract govdata path components
     String govdataRelativePath = extractGovDataPath(rawFilePath);
-    LOGGER.info("CONVERT: Extracted govdata relative path: {}", govdataRelativePath);
-
-    // Construct correct parquet path for govdata (relative path for storageProvider)
     String correctedParquetPath = govdataRelativePath.replace(".json", ".parquet");
-    LOGGER.info("CONVERT: Corrected parquet path for GOVDATA_PARQUET_DIR: {}", correctedParquetPath);
+    LOGGER.debug("Resolved parquet output path: {}", correctedParquetPath);
 
-    // Route based on path patterns and construct CORRECT raw file paths
+    // Route based on data type
     try {
-      // FRED indicators - raw files are at source=econ/type=fred_indicators/year=YYYY/
+        // FRED indicators
       if (rawFilePath.contains("type=fred_indicators") && rawFilePath.contains("fred_indicators")) {
-        LOGGER.info("CONVERT: Routing to FRED downloader for fred_indicators");
+            LOGGER.info("Processing FRED indicators data for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         fredDownloader.convertCachedJsonToParquet("fred_indicators", variables);
-        LOGGER.info("CONVERT: ✅ FRED conversion completed successfully");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed to exist at storage location");
+                LOGGER.info("Successfully converted FRED indicators to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ ERROR - File does NOT exist at storage location after conversion!");
+                LOGGER.error("FRED conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // BLS employment statistics - raw files are at source=econ/type=employment_statistics/frequency=monthly/year=YYYY/
+        // BLS employment statistics
       if (rawFilePath.contains("type=employment_statistics") && rawFilePath.contains("employment_statistics")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for employment_statistics");
+            LOGGER.info("Processing BLS employment statistics for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         variables.put("frequency", "monthly");
         blsDownloader.convertCachedJsonToParquet("employment_statistics", variables);
-        LOGGER.info("CONVERT: ✅ BLS employment conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS employment data to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS employment conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // BLS inflation metrics - raw files are at source=econ/type=inflation_metrics/frequency=monthly/year=YYYY/
+        // BLS inflation metrics
       if (rawFilePath.contains("type=inflation_metrics") && rawFilePath.contains("inflation_metrics")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for inflation_metrics");
+            LOGGER.info("Processing BLS inflation metrics for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         variables.put("frequency", "monthly");
         blsDownloader.convertCachedJsonToParquet("inflation_metrics", variables);
-        LOGGER.info("CONVERT: ✅ BLS inflation conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS inflation data to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS inflation conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // BLS wage growth - raw files are at source=econ/type=wage_growth/frequency=monthly/year=YYYY/
+        // BLS wage growth
       if (rawFilePath.contains("type=wage_growth") && rawFilePath.contains("wage_growth")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for wage_growth");
+            LOGGER.info("Processing BLS wage growth data for year {} (quarterly)", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         variables.put("frequency", "quarterly");
         blsDownloader.convertCachedJsonToParquet("wage_growth", variables);
-        LOGGER.info("CONVERT: ✅ BLS wage growth conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS wage data to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS wage conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // Phase 3: BLS jolts_regional - raw files at source=econ/type=jolts_regional/year=YYYY/
+        // BLS JOLTS regional
       if (rawFilePath.contains("type=jolts_regional")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for jolts_regional");
+            LOGGER.info("Processing BLS JOLTS regional data for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         variables.put("frequency", "monthly");
         blsDownloader.convertCachedJsonToParquet("jolts_regional", variables);
-        LOGGER.info("CONVERT: ✅ BLS jolts_regional conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS JOLTS data to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS JOLTS conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // Phase 3: BLS metro_cpi - raw files at source=econ/type=metro_cpi/year=YYYY/
+        // BLS metro CPI
       if (rawFilePath.contains("type=metro_cpi") || rawFilePath.contains("metro_cpi")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for metro_cpi");
+            LOGGER.info("Processing BLS metro area CPI data for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         blsDownloader.convertCachedJsonToParquet("metro_cpi", variables);
-        LOGGER.info("CONVERT: ✅ BLS metro_cpi conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS metro CPI to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS metro CPI conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // BLS metro_wages - raw files at source=econ/type=metro_wages/year=YYYY/
+        // BLS metro wages
       if (rawFilePath.contains("type=metro_wages") || rawFilePath.contains("metro_wages")) {
-        LOGGER.info("CONVERT: Routing to BLS downloader for metro_wages");
+            LOGGER.info("Processing BLS metro area wage data for year {}", year);
         Map<String, String> variables = new HashMap<>();
-        variables.put("year", String.valueOf(year));
+        variables.put("year", year);
         blsDownloader.convertCachedJsonToParquet("metro_wages", variables);
-        LOGGER.info("CONVERT: ✅ BLS metro_wages conversion completed");
+
         if (storageProvider.exists(correctedParquetPath)) {
-          LOGGER.info("CONVERT: ✅ File confirmed at: {}", correctedParquetPath);
+                LOGGER.info("Successfully converted BLS metro wages to: {}", correctedParquetPath);
         } else {
-          LOGGER.error("CONVERT: ❌ File NOT found at: {}", correctedParquetPath);
+                LOGGER.error("BLS metro wage conversion failed - output file not found: {}", correctedParquetPath);
         }
         return true;
       }
 
-      // BEA conversions now handled by metadata-driven methods in BeaDataDownloader
-      // through EconSchemaFactory.downloadEconData()
-
-      // TODO: Implement correct path mapping for remaining data sources
-      // For now, Phase 1 and Phase 3 tables are fully implemented
-
-      LOGGER.warn("CONVERT: Path mapping not yet implemented for: {}", rawFilePath);
-      LOGGER.warn("CONVERT: This conversion will be skipped. Add path mapping for this data source.");
-
-      // If we get here, we recognized it as ECON data but don't have a specific handler
-      LOGGER.warn("EconRawToParquetConverter recognized ECON data but no specific handler for: {}", rawFilePath);
+        // Unhandled data type
+        LOGGER.warn("No converter configured for data type in path: {}", rawFilePath);
+        LOGGER.debug("Unhandled path pattern - add converter for this data source");
       return false;
 
     } catch (Exception e) {
-      LOGGER.error("EconRawToParquetConverter failed to convert {}: {}", rawFilePath, e.getMessage(), e);
+        LOGGER.error("Conversion failed for {} - Error: {}",
+            rawFilePath.substring(rawFilePath.lastIndexOf('/') + 1),
+            e.getMessage(), e);
       throw new IOException("ECON conversion failed: " + e.getMessage(), e);
     }
   }
