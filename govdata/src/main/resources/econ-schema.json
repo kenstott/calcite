@@ -835,6 +835,40 @@
           }
         ]
       },
+      "sourcePaths": {
+        "ftpFiles": [
+          {
+            "cachePath": "type=jolts_ftp/jt.series",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.series",
+            "comment": "JOLTS series definitions"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.2.JobOpenings",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.2.JobOpenings",
+            "comment": "Job openings data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.3.Hires",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.3.Hires",
+            "comment": "Hires data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.4.TotalSeparations",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.4.TotalSeparations",
+            "comment": "Total separations data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.5.Quits",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.5.Quits",
+            "comment": "Quits data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.6.LayoffsDischarges",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges",
+            "comment": "Layoffs and discharges data"
+          }
+        ]
+      },
       "comment": "Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends.",
       "columns": [
         {
@@ -904,6 +938,40 @@
           {
             "name": "year",
             "type": "INTEGER"
+          }
+        ]
+      },
+      "sourcePaths": {
+        "ftpFiles": [
+          {
+            "cachePath": "type=jolts_ftp/jt.series",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.series",
+            "comment": "JOLTS series definitions"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.2.JobOpenings",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.2.JobOpenings",
+            "comment": "Job openings data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.3.Hires",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.3.Hires",
+            "comment": "Hires data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.4.TotalSeparations",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.4.TotalSeparations",
+            "comment": "Total separations data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.5.Quits",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.5.Quits",
+            "comment": "Quits data"
+          },
+          {
+            "cachePath": "type=jolts_ftp/jt.data.6.LayoffsDischarges",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges",
+            "comment": "Layoffs and discharges data"
           }
         ]
       },
@@ -1124,6 +1192,29 @@
         ]
       },
       "comment": "Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API.",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates",
+        "authentication": {
+          "type": "none"
+        },
+        "queryParams": {
+          "filter": {
+            "type": "expression",
+            "value": "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+          },
+          "sort": {
+            "type": "constant",
+            "value": "-record_date"
+          },
+          "page[size]": {
+            "type": "constant",
+            "value": "10000"
+          }
+        },
+        "cachePattern": "type=timeseries/frequency=daily/year={year}/treasury_yields.json"
+      },
       "columns": [
         {
           "name": "date",
@@ -1178,6 +1269,29 @@
         ]
       },
       "comment": "U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API.",
+      "download": {
+        "enabled": true,
+        "method": "GET",
+        "baseUrl": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny",
+        "authentication": {
+          "type": "none"
+        },
+        "queryParams": {
+          "filter": {
+            "type": "expression",
+            "value": "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+          },
+          "sort": {
+            "type": "constant",
+            "value": "-record_date"
+          },
+          "page[size]": {
+            "type": "constant",
+            "value": "10000"
+          }
+        },
+        "cachePattern": "type=timeseries/frequency=daily/year={year}/federal_debt.json"
+      },
       "columns": [
         {
           "name": "date",
@@ -2159,6 +2273,15 @@
           }
         ]
       },
+      "sourcePaths": {
+        "ftpFiles": [
+          {
+            "cachePath": "type=jolts_ftp/jt.industry",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.industry",
+            "comment": "JOLTS industry code reference file"
+          }
+        ]
+      },
       "comment": "JOLTS industry code reference table from BLS. Maps industry codes to human-readable industry names for JOLTS data (jolts_regional, jolts_state tables). Essential dimension table for decoding JOLTS industry classifications.",
       "columns": [
         {
@@ -2184,6 +2307,15 @@
           {
             "name": "type",
             "type": "VARCHAR"
+          }
+        ]
+      },
+      "sourcePaths": {
+        "ftpFiles": [
+          {
+            "cachePath": "type=jolts_ftp/jt.dataelement",
+            "url": "https://download.bls.gov/pub/time.series/jt/jt.dataelement",
+            "comment": "JOLTS data element code reference file"
           }
         ]
       },
