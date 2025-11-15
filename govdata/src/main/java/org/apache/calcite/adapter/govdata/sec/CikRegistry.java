@@ -102,9 +102,9 @@ public class CikRegistry {
    * Load registry from classpath resource.
    */
   private static void loadRegistryFromResource() throws IOException {
-    InputStream is = CikRegistry.class.getResourceAsStream("/cik-registry.json");
+    InputStream is = CikRegistry.class.getResourceAsStream("/sec/cik-registry.json");
     if (is == null) {
-      throw new IOException("CIK registry resource not found: /cik-registry.json");
+      throw new IOException("CIK registry resource not found: /sec/cik-registry.json");
     }
 
     try {

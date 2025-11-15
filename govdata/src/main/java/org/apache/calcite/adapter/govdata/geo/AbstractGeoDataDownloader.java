@@ -245,10 +245,10 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
     try {
       // Load geo-schema.json from resources
       java.io.InputStream schemaStream =
-          AbstractGeoDataDownloader.class.getResourceAsStream("/geo-schema.json");
+          AbstractGeoDataDownloader.class.getResourceAsStream("/geo/geo-schema.json");
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "geo-schema.json not found in resources");
+            "/geo/geo-schema.json not found in resources");
       }
 
       // Parse JSON

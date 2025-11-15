@@ -459,7 +459,7 @@ public abstract class AbstractGovDataDownloader {
   protected final StorageProvider cacheStorageProvider;
   /** Storage provider for reading/writing parquet files (supports local and S3) */
   protected final StorageProvider storageProvider;
-  /** Schema resource name (e.g., "/econ-schema.json", "/geo-schema.json") */
+  /** Schema resource name (e.g., "/econ/econ-schema.json", "/geo/geo-schema.json") */
   protected final String schemaResourceName;
 
   /** Cache manifest for tracking downloads and conversions */
@@ -2260,34 +2260,77 @@ public abstract class AbstractGovDataDownloader {
    * @param fullParquetPath Absolute path to output Parquet file
    * @throws IOException if conversion fails
    */
+  /**
+   * Converts in-memory records directly to Parquet using DuckDB without temporary files.
+   * This is an optimized version that inserts data directly into DuckDB.
+   *
+   * @param tableName Name of table (for logging)
+   * @param columns Column definitions from schema
+   * @param records List of data rows as maps
+   * @param fullParquetPath Absolute path to output Parquet file
+   * @throws IOException if conversion fails
+   */
   protected void convertInMemoryToParquetViaDuckDB(
       String tableName,
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       List<Map<String, Object>> records,
       String fullParquetPath) throws IOException {
 
-    // Write records to temporary JSON file in cache
-    String tempJsonPath = fullParquetPath.replace(".parquet", "_temp.json");
-    String fullTempJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, tempJsonPath);
+    if (records == null || records.isEmpty()) {
+      LOGGER.warn("No records to convert for table {}", tableName);
+      return;
+    }
 
-    try {
-      // Write JSON
-      writeJsonRecords(fullTempJsonPath, records);
+    try (Connection conn = getDuckDBConnection();
+         Statement stmt = conn.createStatement()) {
 
-      // Convert using DuckDB
-      convertCachedJsonToParquetViaDuckDB(tableName, columns, null, fullTempJsonPath, fullParquetPath);
-
-      // Clean up temp file
-      cacheStorageProvider.delete(fullTempJsonPath);
-
-    } catch (IOException e) {
-      // Clean up temp file on error
-      try {
-        cacheStorageProvider.delete(fullTempJsonPath);
-      } catch (IOException cleanupError) {
-        LOGGER.warn("Failed to clean up temp JSON file: {}", fullTempJsonPath, cleanupError);
+      // Build CREATE TABLE statement from schema columns
+      StringBuilder createTable = new StringBuilder("CREATE TEMPORARY TABLE temp_data (");
+      for (int i = 0; i < columns.size(); i++) {
+        if (i > 0) createTable.append(", ");
+        org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn col = columns.get(i);
+        createTable.append(col.getName()).append(" ").append(mapToDuckDBType(col.getType()));
       }
-      throw e;
+      createTable.append(")");
+      stmt.execute(createTable.toString());
+
+      // Insert data in batches using prepared statement
+      String insertSql = buildInsertStatement(columns);
+      try (java.sql.PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+        int batchCount = 0;
+        for (Map<String, Object> row : records) {
+          for (int i = 0; i < columns.size(); i++) {
+            Object value = row.get(columns.get(i).getName());
+            pstmt.setObject(i + 1, value);
+          }
+          pstmt.addBatch();
+          batchCount++;
+
+          // Execute batch every 1000 rows for memory efficiency
+          if (batchCount >= 1000) {
+            pstmt.executeBatch();
+            batchCount = 0;
+          }
+        }
+        // Execute remaining batch
+        if (batchCount > 0) {
+          pstmt.executeBatch();
+        }
+      }
+
+      // Export to Parquet
+      String exportSql = String.format(
+          "COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
+          fullParquetPath.replace("'", "''"));
+      stmt.execute(exportSql);
+
+      LOGGER.info("Converted {} records to Parquet for table {}: {}", records.size(), tableName, fullParquetPath);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg = String.format("Failed to convert in-memory data to Parquet for table '%s': %s",
+          tableName, e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
     }
   }
 
@@ -2351,6 +2394,130 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
+  }
+
+  /**
+   * Converts a list of maps directly to Parquet using DuckDB without temporary files.
+   * Inserts data directly into DuckDB and exports to Parquet.
+   *
+   * <p>This is useful for reference tables or any data already in memory as a List of Maps.
+   * Unlike the temp-file approach, this method:
+   * <ul>
+   *   <li>Does not create intermediate JSON files</li>
+   *   <li>Loads data directly into DuckDB via batch INSERT</li>
+   *   <li>Exports to Parquet in a single operation</li>
+   * </ul>
+   *
+   * @param rows List of data rows as maps
+   * @param parquetPath Full path to output Parquet file
+   * @param tableName Table name for loading column metadata
+   * @throws IOException if conversion fails or column metadata is missing
+   */
+  protected void convertListToParquet(List<Map<String, Object>> rows, String parquetPath, String tableName)
+      throws IOException {
+
+    if (rows == null || rows.isEmpty()) {
+      LOGGER.warn("No data to convert for table {}", tableName);
+      return;
+    }
+
+    // Load column metadata from schema
+    List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+        loadTableColumnsFromMetadata(tableName);
+
+    try (Connection conn = getDuckDBConnection();
+         Statement stmt = conn.createStatement()) {
+
+      // Build CREATE TABLE statement from schema columns
+      StringBuilder createTable = new StringBuilder("CREATE TEMPORARY TABLE temp_data (");
+      for (int i = 0; i < columns.size(); i++) {
+        if (i > 0) createTable.append(", ");
+        org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn col = columns.get(i);
+        createTable.append(col.getName()).append(" ").append(mapToDuckDBType(col.getType()));
+      }
+      createTable.append(")");
+      stmt.execute(createTable.toString());
+
+      // Insert data in batches using prepared statement
+      String insertSql = buildInsertStatement(columns);
+      try (java.sql.PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+        int batchCount = 0;
+        for (Map<String, Object> row : rows) {
+          for (int i = 0; i < columns.size(); i++) {
+            Object value = row.get(columns.get(i).getName());
+            pstmt.setObject(i + 1, value);
+          }
+          pstmt.addBatch();
+          batchCount++;
+
+          // Execute batch every 1000 rows for memory efficiency
+          if (batchCount >= 1000) {
+            pstmt.executeBatch();
+            batchCount = 0;
+          }
+        }
+        // Execute remaining batch
+        if (batchCount > 0) {
+          pstmt.executeBatch();
+        }
+      }
+
+      // Export to Parquet
+      String exportSql = String.format(
+          "COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
+          parquetPath.replace("'", "''"));
+      stmt.execute(exportSql);
+
+      LOGGER.info("Converted {} rows to Parquet: {}", rows.size(), parquetPath);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg = String.format("Failed to convert list to Parquet for table '%s': %s",
+          tableName, e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Maps schema type to DuckDB type.
+   */
+  private String mapToDuckDBType(String schemaType) {
+    String upperType = schemaType.toUpperCase();
+    if (upperType.startsWith("VARCHAR") || upperType.equals("STRING")) {
+      return "VARCHAR";
+    } else if (upperType.equals("INTEGER") || upperType.equals("INT")) {
+      return "INTEGER";
+    } else if (upperType.equals("BIGINT") || upperType.equals("LONG")) {
+      return "BIGINT";
+    } else if (upperType.equals("DOUBLE") || upperType.equals("FLOAT")) {
+      return "DOUBLE";
+    } else if (upperType.equals("BOOLEAN")) {
+      return "BOOLEAN";
+    } else if (upperType.equals("DATE")) {
+      return "DATE";
+    } else if (upperType.equals("TIMESTAMP")) {
+      return "TIMESTAMP";
+    }
+    return "VARCHAR"; // Default fallback
+  }
+
+  /**
+   * Builds INSERT statement for batch insertion.
+   */
+  private String buildInsertStatement(
+      List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns) {
+    StringBuilder sb = new StringBuilder("INSERT INTO temp_data (");
+    for (int i = 0; i < columns.size(); i++) {
+      if (i > 0) sb.append(", ");
+      sb.append(columns.get(i).getName());
+    }
+    sb.append(") VALUES (");
+    for (int i = 0; i < columns.size(); i++) {
+      if (i > 0) sb.append(", ");
+      sb.append("?");
+    }
+    sb.append(")");
+    return sb.toString();
   }
 
   /**
