@@ -183,13 +183,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Regional income download: Processing {} BEA regional tables", 54);
     downloadRegionalIncomeMetadata(startYear, endYear);
 
-    LOGGER.info("Trade statistics download: Fetching Table T40205B data");
     downloadTradeStatisticsMetadata(startYear, endYear);
-
-    LOGGER.info("ITA indicators download: International transactions");
     downloadItaDataMetadata(startYear, endYear);
     if (keyIndustriesList != null) {
-      LOGGER.info("Industry GDP download: {} NAICS industry codes", keyIndustriesList.size());
       downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
     }
   }
@@ -260,7 +256,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       validCombos += tableFrequencies.getOrDefault(table, Collections.singleton("A")).size();
     }
 
-    LOGGER.info("NIPA tables download: {} tables × {} years", nipaTablesList.size(), endYear - startYear + 1);
+    int yearCount = endYear - startYear + 1;
+    LOGGER.info("National accounts download: {} NIPA tables × {} years = ~{} API calls",
+        nipaTablesList.size(), yearCount, validCombos);
 
     String tableName = "national_accounts";
 
@@ -311,8 +309,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    LOGGER.info("NIPA parquet conversion: {} table files to process",
-        nipaTablesList.size() * (endYear - startYear + 1));
+    int totalFiles = nipaTablesList.size() * (endYear - startYear + 1);
+    LOGGER.info("National accounts conversion: {} NIPA table-year files to parquet", totalFiles);
 
     String tableName = "national_accounts";
 
@@ -564,7 +562,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
     }
 
-    LOGGER.info("Regional download prepared: {} valid combinations (filtered {} geo + {} year mismatches)",
+    LOGGER.info("Regional income download: {} valid table-lineCode-geo combinations prepared (filtered {} invalid geo + {} invalid year)",
         parameterCombinations.size(), skippedGeoFipsCombinations, skippedYearCombinations);
 
     // Use custom iteration with individual parameters instead of combo strings
@@ -658,7 +656,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
     }
 
-    LOGGER.info("Regional conversion prepared: {} combinations to process (excluded {} geo + {} year mismatches)",
+    LOGGER.info("Regional income conversion: {} valid table-lineCode-geo combinations prepared (filtered {} invalid geo + {} invalid year)",
         combos.size(), skippedGeoFipsCombinations, skippedYearCombinations);
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
@@ -707,7 +705,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * This table has no iteration (single table T40205B).
    */
   public void downloadTradeStatisticsMetadata(int startYear, int endYear) {
-    LOGGER.info("Trade statistics download: {} years", endYear - startYear + 1);
+    int yearCount = endYear - startYear + 1;
+    LOGGER.info("Trade statistics download: {} years of annual trade balance data (table T40205B)",
+        yearCount);
 
     int downloadedCount = 0;
     int skippedCount = 0;
@@ -753,7 +753,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     if (downloadedCount > 0 || skippedCount > 0) {
-      LOGGER.info("Trade complete: {} new, {} cached", downloadedCount, skippedCount);
+      LOGGER.info("Trade statistics download complete: {} new downloads, {} cached",
+          downloadedCount, skippedCount);
     }
   }
 
@@ -761,7 +762,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Converts trade statistics data using metadata-driven pattern.
    */
   public void convertTradeStatisticsMetadata(int startYear, int endYear) {
-    LOGGER.info("Trade parquet conversion: Processing annual trade balance data");
+    int yearCount = endYear - startYear + 1;
+    LOGGER.info("Trade statistics conversion: {} years of annual trade balance data",
+        yearCount);
 
     int convertedCount = 0;
     int skippedCount = 0;
@@ -835,8 +838,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
     List<String> frequencies = extractApiList("ita_data", "frequencyList");
 
-    LOGGER.info("ITA indicators download: {} indicators × {} frequencies",
-        itaIndicatorsList.size(), frequencies.size());
+    int yearCount = endYear - startYear + 1;
+    int totalCombinations = itaIndicatorsList.size() * frequencies.size() * yearCount;
+    LOGGER.info("ITA download: {} indicators × {} frequencies × {} years = ~{} API calls",
+        itaIndicatorsList.size(), frequencies.size(), yearCount, totalCombinations);
 
     String tableName = "ita_data";
 
@@ -866,7 +871,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
     List<String> frequencies = extractApiList("ita_data", "frequencyList");
 
-    LOGGER.info("ITA parquet creation: Converting international transaction indicators");
+    int yearCount = endYear - startYear + 1;
+    int totalCombinations = itaIndicatorsList.size() * frequencies.size() * yearCount;
+    LOGGER.info("ITA conversion: {} indicators × {} frequencies × {} years = ~{} files",
+        itaIndicatorsList.size(), frequencies.size(), yearCount, totalCombinations);
 
     String tableName = "ita_data";
 
@@ -916,7 +924,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    LOGGER.info("Industry GDP download: {} NAICS industry codes", keyIndustriesList.size());
+    int yearCount = endYear - startYear + 1;
+    LOGGER.info("Industry GDP download: {} NAICS industry codes × {} years = ~{} API calls",
+        keyIndustriesList.size(), yearCount, keyIndustriesList.size() * yearCount);
 
     String tableName = "industry_gdp";
 
@@ -945,7 +955,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    LOGGER.info("Industry GDP parquet: Generating sector-level output files");
+    int yearCount = endYear - startYear + 1;
+    LOGGER.info("Industry GDP conversion: {} NAICS industry codes × {} years = ~{} files",
+        keyIndustriesList.size(), yearCount, keyIndustriesList.size() * yearCount);
 
     String tableName = "industry_gdp";
 
@@ -971,7 +983,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws InterruptedException if download is interrupted
    */
   public String downloadReferenceNipaTables() throws IOException, InterruptedException {
-    LOGGER.info("Downloading reference_nipa_tables catalog");
+    LOGGER.info("BEA reference: Downloading NIPA table catalog from API");
     DownloadResult result = executeDownload("reference_nipa_tables", new HashMap<>());
     return result.jsonPath;
   }
@@ -987,14 +999,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws IOException if cache file cannot be read or parsed
    */
   public Map<String, Set<String>> loadNipaTableFrequencies() throws IOException {
-    LOGGER.info("Reading NIPA frequency data from cached catalog");
+    LOGGER.info("BEA reference: Loading NIPA frequency metadata from cache");
 
     // Resolve path to cached JSON file
     String jsonPath = "type=reference/nipa_tables.json";
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
     if (!cacheStorageProvider.exists(fullJsonPath)) {
-      LOGGER.warn("NIPA cache missing at: {}", jsonPath);
+      LOGGER.warn("BEA reference: NIPA cache file not found at: {}", jsonPath);
       return new HashMap<>();
     }
 
@@ -1068,7 +1080,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws IOException if conversion fails
    */
   public void convertReferenceNipaTablesWithFrequencies() throws IOException {
-    LOGGER.info("NIPA catalog conversion starting");
+    LOGGER.info("BEA reference: Converting NIPA catalog to parquet with DuckDB enrichment");
 
     String tableName = "reference_nipa_tables";
     int year = 0;  // Sentinel value for reference tables without year dimension
@@ -1109,7 +1121,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         }
 
         LOGGER.info("NIPA partitioned by section: {}",
-            sections.stream().collect(Collectors.joining(", ")));
+            String.join(", ", sections));
 
         // Write each section partition
         for (String section : sections) {
@@ -1145,7 +1157,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           }
         }
 
-        LOGGER.info("✓ NIPA parquet conversion complete: {} tables → {} sections",
+        LOGGER.info("National accounts reference conversion complete: {} NIPA tables cataloged into {} parquet sections",
             totalTables, sections.size());
       }
     } catch (SQLException e) {
@@ -1173,17 +1185,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Downloads valid LineCodes for all 54 BEA Regional tables listed in the schema.
    */
   public void downloadRegionalLineCodeCatalog() {
-    LOGGER.info("Downloading BEA Regional LineCode catalog");
+    LOGGER.info("BEA reference: Starting regional LineCode catalog download");
 
     String tableName = "reference_regional_linecodes";
     List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
 
     if (tableNamesList == null || tableNamesList.isEmpty()) {
-      LOGGER.error("No tableNamesList found in schema for reference_regional_linecodes");
+      LOGGER.error("BEA reference: No tableNamesList found in schema for reference_regional_linecodes");
       return;
     }
 
-    LOGGER.info("Regional line codes: {} tables to process", tableNamesList.size());
+    LOGGER.info("BEA reference: Downloading LineCodes for {} regional tables", tableNamesList.size());
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
@@ -1205,13 +1217,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Uses SQL to parse table name components and enrich with metadata.
    */
   public void convertRegionalLineCodeCatalog() {
-    LOGGER.info("Regional line codes conversion starting");
+    LOGGER.info("BEA reference: Converting regional LineCode catalog to parquet");
 
     String tableName = "reference_regional_linecodes";
     List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
 
     if (tableNamesList == null || tableNamesList.isEmpty()) {
-      LOGGER.error("No tableNamesList found in schema for reference_regional_linecodes");
+      LOGGER.error("BEA reference: No tableNamesList found in schema for reference_regional_linecodes");
       return;
     }
 
