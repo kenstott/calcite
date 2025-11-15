@@ -12,11 +12,11 @@
   "partitionedTables": [
     {
       "name": "employment_statistics",
-      "pattern": "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet",
+      "pattern": "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet",
       "trend_patterns": [
         {
           "name": "employment_statistics_trend",
-          "pattern": "type=employment_statistics/frequency={frequency}/employment_statistics.parquet"
+          "pattern": "type=employment_statistics/frequency=*/employment_statistics.parquet"
         }
       ],
       "partitions": {
@@ -2202,6 +2202,108 @@
           "comment": "Data element description"
         }
       ]
+    },
+    {
+      "name": "reference_bls_geographies",
+      "pattern": "type=reference/geo_type=*/bls_geographies.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          },
+          {
+            "name": "geo_type",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "BLS geography reference table mapping state abbreviations to FIPS codes, census regions, metro areas, and BLS-specific area codes. Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES into a single catalog-driven table. Enables dynamic geography lookups without hardcoded maps.",
+      "columns": [
+        {
+          "name": "geo_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "Primary geography code (state abbreviation, metro code like 'A100', or region code)"
+        },
+        {
+          "name": "geo_name",
+          "type": "string",
+          "nullable": true,
+          "comment": "Geography name (e.g., 'California', 'New York-Newark-Jersey City, NY-NJ-PA', 'Northeast')"
+        },
+        {
+          "name": "geo_type",
+          "type": "string",
+          "nullable": false,
+          "comment": "Geography type: 'state', 'metro', 'region'"
+        },
+        {
+          "name": "state_fips",
+          "type": "string",
+          "nullable": true,
+          "comment": "2-digit state FIPS code (e.g., '06' for CA, '36' for NY). NULL for regions."
+        },
+        {
+          "name": "region_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "4-digit census region code for regions (e.g., '0100' for Northeast). NULL for states/metros."
+        },
+        {
+          "name": "metro_publication_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "BLS publication code for metro areas (e.g., 'A100' for NYC). NULL for states/regions."
+        },
+        {
+          "name": "metro_cpi_area_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "CPI area code for metro CPI series (e.g., 'S35D' for NYC). NULL if metro lacks CPI data or for states/regions."
+        },
+        {
+          "name": "metro_bls_area_code",
+          "type": "string",
+          "nullable": true,
+          "comment": "7-digit BLS area code for metro employment series (state FIPS + 5-digit area code, e.g., '3693561' for NYC). NULL for states/regions."
+        }
+      ],
+      "download": {
+        "comment": "Static reference data generated from BLS documentation. Not downloaded from API - populated by downloadReferenceData()."
+      }
+    },
+    {
+      "name": "reference_bls_naics_sectors",
+      "pattern": "type=reference/bls_naics_sectors.parquet",
+      "partitions": {
+        "style": "hive",
+        "columnDefinitions": [
+          {
+            "name": "type",
+            "type": "VARCHAR"
+          }
+        ]
+      },
+      "comment": "BLS NAICS supersector reference table mapping supersector codes to industry names. Consolidates NAICS_SUPERSECTORS hardcoded map. Used for state_industry_employment, metro_industry_employment, and other industry-based BLS series.",
+      "columns": [
+        {
+          "name": "supersector_code",
+          "type": "string",
+          "nullable": false,
+          "comment": "8-digit NAICS supersector code (e.g., '00000000' for total nonfarm, '05000000' for construction)"
+        },
+        {
+          "name": "supersector_name",
+          "type": "string",
+          "nullable": false,
+          "comment": "Industry supersector name (e.g., 'Total Nonfarm', 'Construction', 'Manufacturing')"
+        }
+      ],
+      "download": {
+        "comment": "Static reference data from BLS NAICS classification. Not downloaded from API - populated by downloadReferenceData()."
+      }
     },
     {
       "name": "reference_nipa_tables",
