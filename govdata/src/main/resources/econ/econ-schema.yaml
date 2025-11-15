@@ -899,6 +899,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "observations"
+        missingValueIndicator: "."  # FRED uses "." to indicate missing values
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
