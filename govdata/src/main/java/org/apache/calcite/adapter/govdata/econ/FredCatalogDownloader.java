@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -45,7 +44,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,28 +68,10 @@ import java.util.Set;
 public class FredCatalogDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(FredCatalogDownloader.class);
 
-  private static final String FRED_API_BASE = "https://api.stlouisfed.org/fred";
-  private static final int FRED_RATE_LIMIT_REQUESTS_PER_MINUTE = 120;
-  private static final int FRED_API_DELAY_MS = 60000 / FRED_RATE_LIMIT_REQUESTS_PER_MINUTE; // ~500ms
-  private static final int MAX_RESULTS_PER_REQUEST = 1000;
-
-  // Common search terms to get comprehensive series coverage
-  private static final List<String> COMPREHENSIVE_SEARCH_TERMS =
-      Arrays.asList("gdp", "unemployment", "inflation", "interest", "employment", "cpi", "ppi",
-      "wages", "income", "productivity", "trade", "housing", "retail", "manufacturing",
-      "services", "energy", "commodity", "stock", "bond", "treasury", "federal",
-      "state", "regional", "international", "currency", "exchange", "population",
-      "labor", "consumer", "producer", "industrial", "construction", "agriculture");
-
-  // Major FRED categories to browse systematically
-  private static final List<Integer> MAJOR_CATEGORIES =
-      Arrays.asList(1,    // National Accounts
-      10,   // Population, Employment, & Labor Markets
-      32992, // Money, Banking, & Finance
-      32455, // International Data
-      3,    // Production & Business Activity
-      32991, // Prices
-      32263);  // Academic Data
+  private static final String FRED_API_BASE = FredCatalogConfig.getApiBaseUrl();
+  private static final int FRED_API_DELAY_MS = FredCatalogConfig.getApiDelayMs();
+  private static final int MAX_RESULTS_PER_REQUEST = FredCatalogConfig.getMaxResultsPerRequest();
+  private static final List<Integer> MAJOR_CATEGORIES = FredCatalogConfig.getMajorCategoryIds();
 
   private final String fredApiKey;
   private final HttpClient httpClient;
@@ -102,7 +82,6 @@ public class FredCatalogDownloader {
   private final CacheManifest cacheManifest;
 
   private long lastRequestTime = 0;
-  private final Set<String> processedSeriesIds = new HashSet<>();
   private final Map<String, List<Map<String, Object>>> partitionedSeries = new HashMap<>();
 
   public FredCatalogDownloader(String fredApiKey, String cacheDir, String parquetDir,
@@ -128,7 +107,7 @@ public class FredCatalogDownloader {
    * @param fredCatalogForceRefresh Force refresh flag
    */
   public void downloadCatalogIfNeeded(int fredMinPopularity, boolean fredCatalogForceRefresh)
-      throws IOException, InterruptedException {
+      throws IOException {
     // Check if catalog already downloaded via cache manifest
     List<String> catalogSeries = cacheManifest.getCachedCatalogSeries(fredMinPopularity);
     boolean catalogCached = (catalogSeries != null && !catalogSeries.isEmpty());
@@ -152,7 +131,7 @@ public class FredCatalogDownloader {
    * Download comprehensive FRED series catalog directly into partitioned files.
    * Creates individual JSON/Parquet files for each category/frequency/source combination.
    */
-  public void downloadCatalog() throws IOException, InterruptedException {
+  public void downloadCatalog() throws IOException {
     LOGGER.info("Starting FRED catalog download with direct partitioning");
 
     // Use category-based approach with direct partitioning
@@ -171,7 +150,7 @@ public class FredCatalogDownloader {
    * Creates individual cache files for each category/frequency/source combination.
    */
   private void downloadAllSeriesDirectlyPartitioned()
-      throws IOException, InterruptedException {
+      throws IOException {
     Set<String> seenSeriesIds = new HashSet<>();
     long startTime = System.currentTimeMillis();
     int requestCount = 0;
@@ -285,127 +264,31 @@ public class FredCatalogDownloader {
     String title = series.get("title") != null ? series.get("title").toString() : "";
     String notes = series.get("notes") != null ? series.get("notes").toString() : "";
 
-    // Combine all text for pattern matching
     String allText = (seriesId + " " + title + " " + notes).toLowerCase();
 
-    // Bureau of Labor Statistics patterns
-    if (containsAny(allText, "bureau of labor", "bls", "current employment", "unemployment rate",
-        "labor force", "employment situation", "job openings", "layoffs", "quits")) {
-      return "Bureau of Labor Statistics";
+    Map<String, FredCatalogConfig.SourceDetector> detectors = FredCatalogConfig.getSourceDetectors();
+
+    for (FredCatalogConfig.SourceDetector detector : detectors.values()) {
+        // Check text patterns
+        for (String pattern : detector.getTextPatterns()) {
+            if (allText.contains(pattern)) {
+                return detector.getName();
     }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "unrate", "lns", "ces", "cps", "jts", "ppi", "cpi")) {
-      return "Bureau of Labor Statistics";
     }
 
-    // Bureau of Economic Analysis patterns
-    if (containsAny(allText, "bureau of economic analysis", "bea", "gross domestic product",
-        "personal income", "consumer spending", "business investment", "international trade")) {
-      return "Bureau of Economic Analysis";
+        // Check series ID patterns
+        if (seriesId != null) {
+            String lowerSeriesId = seriesId.toLowerCase();
+            for (String pattern : detector.getSeriesIdPatterns()) {
+                if (lowerSeriesId.contains(pattern)) {
+                    return detector.getName();
     }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "gdp", "pce", "bea", "nipa", "ita", "sagdp")) {
-      return "Bureau of Economic Analysis";
     }
-
-    // Federal Reserve Board patterns
-    if (containsAny(allText, "board of governors", "federal reserve board", "fed", "monetary policy",
-        "interest rate", "federal funds", "discount rate", "reserve requirements")) {
-      return "Board of Governors";
     }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "dgs", "dff", "fedfunds", "bogz", "h15", "h6")) {
-      return "Board of Governors";
     }
 
-    // U.S. Census Bureau patterns
-    if (containsAny(allText, "u.s. census bureau", "census bureau", "census", "housing starts",
-        "building permits", "construction spending", "retail sales", "manufacturing")) {
-      return "U.S. Census Bureau";
-    }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "houst", "permit", "census", "rsxfs", "ttlcons")) {
-      return "U.S. Census Bureau";
-    }
-
-    // Treasury Department patterns
-    if (containsAny(allText, "u.s. treasury", "treasury department", "treasury yields", "government debt",
-        "federal debt", "treasury securities", "bills", "notes", "bonds")) {
-      return "U.S. Treasury";
-    }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "gs", "tb", "treasury", "debt")) {
-      return "U.S. Treasury";
-    }
-
-    // Energy Information Administration patterns
-    if (containsAny(allText, "energy information administration", "eia", "crude oil", "natural gas",
-        "petroleum", "energy consumption", "electricity", "coal", "renewable energy")) {
-      return "Energy Information Administration";
-    }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "dcoilwtico", "eia", "energy")) {
-      return "Energy Information Administration";
-    }
-
-    // World Bank patterns
-    if (containsAny(allText, "world bank", "world development indicators", "international development",
-        "global economy", "developing countries", "world bank group")) {
-      return "World Bank";
-    }
-
-    // OECD patterns
-    if (containsAny(allText, "oecd", "organisation for economic", "organization for economic",
-        "developed countries", "international economic", "oecd countries")) {
-      return "OECD";
-    }
-
-    // International Monetary Fund patterns
-    if (containsAny(allText, "international monetary fund", "imf", "international finance",
-        "exchange rates", "balance of payments", "international reserves")) {
-      return "International Monetary Fund";
-    }
-
-    // University of Michigan patterns
-    if (containsAny(allText, "university of michigan", "consumer sentiment", "consumer expectations",
-        "thomson reuters", "surveys of consumers")) {
-      return "University of Michigan";
-    }
-    if (seriesId != null && containsAny(seriesId.toLowerCase(), "umcsi", "umcsent")) {
-      return "University of Michigan";
-    }
-
-    // Conference Board patterns
-    if (containsAny(allText, "conference board", "leading indicators", "coincident indicators",
-        "consumer confidence", "help wanted")) {
-      return "Conference Board";
-    }
-
-    // Institute for Supply Management patterns
-    if (containsAny(allText, "institute for supply management", "ism", "purchasing managers",
-        "manufacturing index", "non-manufacturing index", "pmi")) {
-      return "Institute for Supply Management";
-    }
-
-    // Chicago Board of Trade patterns
-    if (containsAny(allText, "chicago board of trade", "cbot", "commodity prices", "futures")) {
-      return "Chicago Board of Trade";
-    }
-
-    // National Association of Realtors patterns
-    if (containsAny(allText, "national association of realtors", "nar", "existing home sales",
-        "pending home sales", "home price index")) {
-      return "National Association of Realtors";
-    }
-
-    // Default to Federal Reserve if no specific source detected
-    return "Federal Reserve";
-  }
-
-  /**
-   * Check if text contains any of the given patterns.
-   */
-  private boolean containsAny(String text, String... patterns) {
-    for (String pattern : patterns) {
-      if (text.contains(pattern)) {
-        return true;
-      }
-    }
-    return false;
+    // Return default source
+    return detectors.get("defaultSource").getName();
   }
 
   /**
@@ -415,6 +298,10 @@ public class FredCatalogDownloader {
    * @return "active" if the series is currently active, "discontinued" if discontinued
    */
   public String detectSeriesStatus(Map<String, Object> series) {
+    FredCatalogConfig.StatusDetection statusConfig = FredCatalogConfig.getStatusDetection();
+    FredCatalogConfig.StatusDetection.DiscontinuedIndicators discontinued =
+        statusConfig.getDiscontinuedIndicators();
+
     String observationEnd = series.get("observation_end") != null ?
         series.get("observation_end").toString() : "";
     String lastUpdated = series.get("last_updated") != null ?
@@ -424,54 +311,47 @@ public class FredCatalogDownloader {
     String title = series.get("title") != null ?
         series.get("title").toString().toLowerCase() : "";
 
-    // Check for explicit discontinuation indicators in notes or title
-    if (containsAny(notes, "discontinued", "no longer", "ceased", "terminated",
-        "ended", "superseded", "replaced by", "not published", "not available")) {
+    // Check for explicit discontinuation indicators
+    for (String pattern : discontinued.getTextPatterns()) {
+        if (notes.contains(pattern)) {
       return "discontinued";
     }
-
-    if (containsAny(title, "discontinued", "obsolete", "historical only")) {
-      return "discontinued";
     }
 
-    // Check observation end date - if it's before 2020, likely discontinued
+    for (String pattern : discontinued.getTitlePatterns()) {
+        if (title.contains(pattern)) {
+      return "discontinued";
+    }
+    }
+
+    // Check observation end date
     if (!observationEnd.isEmpty()) {
       try {
         LocalDate endDate = LocalDate.parse(observationEnd);
-        LocalDate cutoffDate = LocalDate.of(2020, 1, 1);
+            LocalDate cutoffDate = LocalDate.parse(discontinued.getCutoffDate());
 
         if (endDate.isBefore(cutoffDate)) {
           return "discontinued";
         }
       } catch (Exception e) {
-        // If date parsing fails, continue with other checks
         LOGGER.debug("Failed to parse observation_end date: {}", observationEnd);
       }
     }
 
-    // Check last updated date - if very old, might be discontinued
+    // Check last updated date
     if (!lastUpdated.isEmpty()) {
       try {
-        // FRED last_updated format is typically "2024-01-15 08:31:05-06"
         String dateOnly = lastUpdated.split(" ")[0];
         LocalDate updateDate = LocalDate.parse(dateOnly);
-        LocalDate twoYearsAgo = LocalDate.now().minusYears(2);
+            LocalDate staleDate = LocalDate.now().minusYears(discontinued.getStaleDataYears());
 
-        if (updateDate.isBefore(twoYearsAgo)) {
+            if (updateDate.isBefore(staleDate)) {
           return "discontinued";
         }
       } catch (Exception e) {
-        // If date parsing fails, continue
         LOGGER.debug("Failed to parse last_updated date: {}", lastUpdated);
       }
     }
-
-    // If observation_end is "9999-12-31" or similar, it's typically active
-    if (observationEnd.contains("9999")) {
-      return "active";
-    }
-
-    // Default to active if no clear discontinuation indicators
     return "active";
   }
 
@@ -508,7 +388,7 @@ public class FredCatalogDownloader {
       JsonNode response = makeApiRequest(url);
       JsonNode categories = response.get("categories");
 
-      if (categories != null && categories.size() > 0) {
+      if (categories != null && !categories.isEmpty()) {
         String name = categories.get(0).get("name").asText();
         // Normalize category name for use as partition key
         return normalizeCategoryName(name);
@@ -528,98 +408,6 @@ public class FredCatalogDownloader {
         .replaceAll("[^a-z0-9]+", "_")  // Replace non-alphanumeric with underscore
         .replaceAll("^_+|_+$", "")      // Remove leading/trailing underscores
         .replaceAll("_+", "_");         // Collapse multiple underscores
-  }
-
-  /**
-   * Download all FRED series using comprehensive pagination.
-   * Uses the /fred/series/search endpoint with a broad search to get complete coverage.
-   */
-  private List<Map<String, Object>> downloadAllSeriesPaginated()
-      throws IOException, InterruptedException {
-    List<Map<String, Object>> allSeries = new ArrayList<>();
-    Set<String> seenSeriesIds = new HashSet<>();
-    long startTime = System.currentTimeMillis();
-    int requestCount = 0;
-
-    LOGGER.info("Beginning comprehensive FRED catalog download using search API");
-    LOGGER.info("Target: Download all 841,000+ FRED series for complete catalog coverage");
-
-    // Use comprehensive search patterns to get complete coverage
-    // Start with empty search, then use single letters and common terms
-    List<String> searchPatterns = new ArrayList<>();
-    searchPatterns.add(""); // Empty search gets popular series
-
-    // Add single letters to catch all series starting with each letter
-    for (char c = 'a'; c <= 'z'; c++) {
-      searchPatterns.add(String.valueOf(c));
-    }
-    for (char c = '0'; c <= '9'; c++) {
-      searchPatterns.add(String.valueOf(c));
-    }
-
-    // Add common economic terms for better coverage
-    searchPatterns.addAll(
-        Arrays.asList(
-        "GDP", "CPI", "unemployment", "inflation", "interest",
-        "trade", "housing", "manufacturing", "retail", "employment",
-        "income", "price", "index", "rate", "growth", "production",
-        "sales", "inventory", "debt", "credit", "loan", "mortgage"));
-
-    for (String searchText : searchPatterns) {
-      int offset = 0;
-      boolean hasMoreResults = true;
-
-      while (hasMoreResults) { // Download all available series
-        try {
-          // Use the search endpoint which supports pagination
-          String url =
-              String.format("%s/series/search?search_text=%s&api_key=%s&file_type=json&limit=%d&offset=%d", FRED_API_BASE, URLEncoder.encode(searchText, StandardCharsets.UTF_8.toString()),
-              fredApiKey, MAX_RESULTS_PER_REQUEST, offset);
-
-          JsonNode response = makeApiRequest(url);
-          JsonNode seriesArray = response.get("seriess");
-          requestCount++;
-
-          if (seriesArray != null && seriesArray.size() > 0) {
-            for (JsonNode series : seriesArray) {
-              String seriesId = series.get("id").asText();
-              if (!seenSeriesIds.contains(seriesId)) {
-                seenSeriesIds.add(seriesId);
-                Map<String, Object> seriesMap =
-                    objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
-                allSeries.add(seriesMap);
-              }
-            }
-
-            offset += seriesArray.size();
-            hasMoreResults = seriesArray.size() == MAX_RESULTS_PER_REQUEST;
-
-            // Progress logging every 10,000 series
-            if (allSeries.size() % 10000 == 0 && allSeries.size() > 0) {
-              long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
-              double seriesPerMinute = allSeries.size() / Math.max(elapsedMinutes, 1.0);
-              double estimatedTotalMinutes = 841000.0 / Math.max(seriesPerMinute, 1.0);
-              LOGGER.info("Progress: {} unique series found, {} requests made, {} series/min, elapsed: {} min, estimated total: {} min",
-                  allSeries.size(), requestCount, String.format("%.0f", seriesPerMinute),
-                  elapsedMinutes, String.format("%.0f", estimatedTotalMinutes));
-            }
-          } else {
-            hasMoreResults = false;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Error downloading series for search '{}' at offset {}: {}",
-              searchText, offset, e.getMessage());
-          // Continue with next search pattern
-          break;
-        }
-      }
-    }
-
-    long totalMinutes = (System.currentTimeMillis() - startTime) / 60000;
-    LOGGER.info("Completed FRED catalog download: {} unique series, {} requests, {} minutes",
-        allSeries.size(), requestCount, totalMinutes);
-
-    return allSeries;
   }
 
   /**
@@ -681,7 +469,7 @@ public class FredCatalogDownloader {
       JsonNode response = makeApiRequest(url);
       JsonNode seriesArray = response.get("seriess");
 
-      if (seriesArray != null && seriesArray.size() > 0) {
+      if (seriesArray != null && !seriesArray.isEmpty()) {
         for (JsonNode series : seriesArray) {
           Map<String, Object> seriesMap =
               objectMapper.convertValue(series, new TypeReference<Map<String, Object>>() {});
@@ -791,41 +579,6 @@ public class FredCatalogDownloader {
 
     // Clear memory
     partitionedSeries.clear();
-  }
-
-  /**
-   * Convert existing partition cache files to Parquet format.
-   * Uses StorageProvider for S3 compatibility.
-   */
-  private void convertExistingPartitionsToParquet() throws IOException {
-    LOGGER.info("Converting existing partition cache files to Parquet format");
-
-    String catalogPath = storageProvider.resolvePath(cacheDir, "type=reference");
-
-    try {
-      List<StorageProvider.FileEntry> files =
-          storageProvider.listFiles(catalogPath, true);
-
-      if (files == null || files.isEmpty()) {
-        LOGGER.warn("No existing partition cache files found");
-        return;
-      }
-
-      // Filter for JSON catalog files and skip macOS metadata
-      for (StorageProvider.FileEntry file : files) {
-        if (!file.isDirectory() &&
-            file.getName().equals("reference_fred_series.json") &&
-            !file.getName().startsWith(".")) {
-          try {
-            convertSinglePartitionToParquet(file.getPath());
-          } catch (IOException e) {
-            LOGGER.error("Failed to convert partition {}: {}", file.getPath(), e.getMessage());
-          }
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.error("Error listing partition cache directory: {}", e.getMessage());
-    }
   }
 
   /**

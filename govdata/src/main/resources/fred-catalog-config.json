@@ -1,0 +1,155 @@
+{
+  "api": {
+    "baseUrl": "https://api.stlouisfed.org/fred",
+    "rateLimitRequestsPerMinute": 120,
+    "maxResultsPerRequest": 1000,
+    "requestTimeoutSeconds": 30
+  },
+  "majorCategories": [
+    {
+      "id": 1,
+      "name": "National Accounts",
+      "description": "GDP, personal income, and other national economic accounts"
+    },
+    {
+      "id": 10,
+      "name": "Population, Employment, & Labor Markets",
+      "description": "Employment, unemployment, labor force, and demographic data"
+    },
+    {
+      "id": 32992,
+      "name": "Money, Banking, & Finance",
+      "description": "Money supply, interest rates, exchange rates, and financial data"
+    },
+    {
+      "id": 32455,
+      "name": "International Data",
+      "description": "International economic indicators and trade data"
+    },
+    {
+      "id": 3,
+      "name": "Production & Business Activity",
+      "description": "Industrial production, capacity utilization, and business indicators"
+    },
+    {
+      "id": 32991,
+      "name": "Prices",
+      "description": "Consumer prices, producer prices, and inflation measures"
+    },
+    {
+      "id": 32263,
+      "name": "Academic Data",
+      "description": "Research datasets and academic economic indicators"
+    }
+  ],
+  "searchPatterns": {
+    "commonTerms": [
+      "GDP", "CPI", "unemployment", "inflation", "interest",
+      "trade", "housing", "manufacturing", "retail", "employment",
+      "income", "price", "index", "rate", "growth", "production",
+      "sales", "inventory", "debt", "credit", "loan", "mortgage"
+    ]
+  },
+  "sourceDetection": {
+    "bureauOfLaborStatistics": {
+      "name": "Bureau of Labor Statistics",
+      "textPatterns": ["bureau of labor", "bls", "current employment", "unemployment rate",
+                       "labor force", "employment situation", "job openings", "layoffs", "quits"],
+      "seriesIdPatterns": ["unrate", "lns", "ces", "cps", "jts", "ppi", "cpi"]
+    },
+    "bureauOfEconomicAnalysis": {
+      "name": "Bureau of Economic Analysis",
+      "textPatterns": ["bureau of economic analysis", "bea", "gross domestic product",
+                       "personal income", "consumer spending", "business investment", "international trade"],
+      "seriesIdPatterns": ["gdp", "pce", "bea", "nipa", "ita", "sagdp"]
+    },
+    "federalReserveBoard": {
+      "name": "Board of Governors",
+      "textPatterns": ["board of governors", "federal reserve board", "fed", "monetary policy",
+                       "interest rate", "federal funds", "discount rate", "reserve requirements"],
+      "seriesIdPatterns": ["dgs", "dff", "fedfunds", "bogz", "h15", "h6"]
+    },
+    "censusBureau": {
+      "name": "U.S. Census Bureau",
+      "textPatterns": ["u.s. census bureau", "census bureau", "census", "housing starts",
+                       "building permits", "construction spending", "retail sales", "manufacturing"],
+      "seriesIdPatterns": ["houst", "permit", "census", "rsxfs", "ttlcons"]
+    },
+    "treasury": {
+      "name": "U.S. Treasury",
+      "textPatterns": ["u.s. treasury", "treasury department", "treasury yields", "government debt",
+                       "federal debt", "treasury securities", "bills", "notes", "bonds"],
+      "seriesIdPatterns": ["gs", "tb", "treasury", "debt"]
+    },
+    "energyInformationAdministration": {
+      "name": "Energy Information Administration",
+      "textPatterns": ["energy information administration", "eia", "crude oil", "natural gas",
+                       "petroleum", "energy consumption", "electricity", "coal", "renewable energy"],
+      "seriesIdPatterns": ["dcoilwtico", "eia", "energy"]
+    },
+    "worldBank": {
+      "name": "World Bank",
+      "textPatterns": ["world bank", "world development indicators", "international development",
+                       "global economy", "developing countries", "world bank group"],
+      "seriesIdPatterns": []
+    },
+    "oecd": {
+      "name": "OECD",
+      "textPatterns": ["oecd", "organisation for economic", "organization for economic",
+                       "developed countries", "international economic", "oecd countries"],
+      "seriesIdPatterns": []
+    },
+    "imf": {
+      "name": "International Monetary Fund",
+      "textPatterns": ["international monetary fund", "imf", "international finance",
+                       "exchange rates", "balance of payments", "international reserves"],
+      "seriesIdPatterns": []
+    },
+    "universityOfMichigan": {
+      "name": "University of Michigan",
+      "textPatterns": ["university of michigan", "consumer sentiment", "consumer expectations",
+                       "thomson reuters", "surveys of consumers"],
+      "seriesIdPatterns": ["umcsi", "umcsent"]
+    },
+    "conferenceBoard": {
+      "name": "Conference Board",
+      "textPatterns": ["conference board", "leading indicators", "coincident indicators",
+                       "consumer confidence", "help wanted"],
+      "seriesIdPatterns": []
+    },
+    "ism": {
+      "name": "Institute for Supply Management",
+      "textPatterns": ["institute for supply management", "ism", "purchasing managers",
+                       "manufacturing index", "non-manufacturing index", "pmi"],
+      "seriesIdPatterns": []
+    },
+    "cbot": {
+      "name": "Chicago Board of Trade",
+      "textPatterns": ["chicago board of trade", "cbot", "commodity prices", "futures"],
+      "seriesIdPatterns": []
+    },
+    "nar": {
+      "name": "National Association of Realtors",
+      "textPatterns": ["national association of realtors", "nar", "existing home sales",
+                       "pending home sales", "home price index"],
+      "seriesIdPatterns": []
+    },
+    "defaultSource": {
+      "name": "Federal Reserve",
+      "textPatterns": [],
+      "seriesIdPatterns": []
+    }
+  },
+  "statusDetection": {
+    "discontinuedIndicators": {
+      "textPatterns": ["discontinued", "no longer", "ceased", "terminated",
+                       "ended", "superseded", "replaced by", "not published", "not available"],
+      "titlePatterns": ["discontinued", "obsolete", "historical only"],
+      "cutoffDate": "2020-01-01",
+      "staleDataYears": 2
+    },
+    "activeIndicators": {
+      "observationEndPattern": "9999"
+    }
+  }
+}
