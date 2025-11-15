@@ -21,29 +21,28 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import java.util.Map;
 
 /**
  * Downloads and converts U.S. Treasury data to Parquet format.
  * Supports daily treasury yields and federal debt statistics.
  *
  * <p>Uses the Treasury Fiscal Data API which requires no authentication.
+ * All endpoint configurations are defined in econ-schema.json.
  */
 public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(TreasuryDataDownloader.class);
-  private static final String TREASURY_API_BASE = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/";
 
-  public TreasuryDataDownloader(String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
+  public TreasuryDataDownloader(String cacheDir, StorageProvider cacheStorageProvider,
+      StorageProvider storageProvider) {
     this(cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
   }
 
-  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest) {
-    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider, sharedManifest);
+  public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
+      StorageProvider cacheStorageProvider, StorageProvider storageProvider,
+      CacheManifest sharedManifest) {
+    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+        sharedManifest);
   }
 
   @Override protected String getTableName() {
@@ -58,7 +57,8 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param endYear Last year to download
    */
   public void downloadTreasuryYields(int startYear, int endYear) {
-    LOGGER.info("Downloading treasury yields for years {}-{}", startYear, endYear);
+    LOGGER.info("Treasury yields download: {} years of daily yield curve data",
+        endYear - startYear + 1);
 
     String tableName = "treasury_yields";
 
@@ -74,31 +74,10 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
-          String startDate = year + "-01-01";
-          String endDate = year + "-12-31";
+          // Use executeDownload which reads URL pattern from schema
+          DownloadResult result = executeDownload(tableName, vars);
 
-          String url = TREASURY_API_BASE + "v2/accounting/od/avg_interest_rates"
-              + "?filter=record_date:gte:" + startDate
-              + ",record_date:lte:" + endDate
-              + "&sort=-record_date&page[size]=10000";
-
-          HttpRequest request = HttpRequest.newBuilder()
-              .uri(URI.create(url))
-              .timeout(Duration.ofSeconds(30))
-              .build();
-
-          HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-          if (response.statusCode() != 200) {
-            throw new IOException("Treasury API request failed with status: " + response.statusCode());
-          }
-
-          // Write data to cache (StorageProvider handles directory creation)
-          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
-
-          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-          cacheManifest.markCached(cacheKey, fullJsonPath, fileSize,
+          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
@@ -112,7 +91,8 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param endYear Last year to download
    */
   public void downloadFederalDebt(int startYear, int endYear) {
-    LOGGER.info("Downloading federal debt for years {}-{}", startYear, endYear);
+    LOGGER.info("Federal debt download: {} years of daily debt statistics",
+        endYear - startYear + 1);
 
     String tableName = "federal_debt";
 
@@ -128,34 +108,70 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
-          String startDate = year + "-01-01";
-          String endDate = year + "-12-31";
+          // Use executeDownload which reads URL pattern from schema
+          DownloadResult result = executeDownload(tableName, vars);
 
-          String url = TREASURY_API_BASE + "v2/accounting/od/debt_to_penny"
-              + "?filter=record_date:gte:" + startDate
-              + ",record_date:lte:" + endDate
-              + "&page[size]=10000";
-
-          HttpRequest request = HttpRequest.newBuilder()
-              .uri(URI.create(url))
-              .timeout(Duration.ofSeconds(30))
-              .build();
-
-          HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-          if (response.statusCode() != 200) {
-            throw new IOException("Treasury API request failed with status: " + response.statusCode());
-          }
-
-          // Write data to cache (StorageProvider handles directory creation)
-          String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-          cacheStorageProvider.writeFile(fullJsonPath, response.body().getBytes(StandardCharsets.UTF_8));
-
-          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-          cacheManifest.markCached(cacheKey, fullJsonPath, fileSize,
+          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
         "download");
   }
 
+  /**
+   * Converts downloaded treasury yields JSON to Parquet format.
+   *
+   * @param startYear First year to convert
+   * @param endYear   Last year to convert
+   */
+  public void convertTreasuryYields(int startYear, int endYear) {
+    LOGGER.info("Treasury yields conversion: {} years to parquet", endYear - startYear + 1);
+
+    String tableName = "treasury_yields";
+
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          if ("year".equals(dimensionName)) {
+            return yearRange(startYear, endYear);
+          }
+          return null;
+        },
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+          // Execute conversion
+          convertCachedJsonToParquet(tableName, vars);
+
+          // Mark as converted
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+        },
+        "conversion");
+  }
+
+  /**
+   * Converts downloaded federal debt JSON to Parquet format.
+   *
+   * @param startYear First year to convert
+   * @param endYear   Last year to convert
+   */
+  public void convertFederalDebt(int startYear, int endYear) {
+    LOGGER.info("Federal debt conversion: {} years to parquet", endYear - startYear + 1);
+
+    String tableName = "federal_debt";
+
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          if ("year".equals(dimensionName)) {
+            return yearRange(startYear, endYear);
+          }
+          return null;
+        },
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+          // Execute conversion
+          convertCachedJsonToParquet(tableName, vars);
+
+          // Mark as converted
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+        },
+        "conversion");
+  }
 }
