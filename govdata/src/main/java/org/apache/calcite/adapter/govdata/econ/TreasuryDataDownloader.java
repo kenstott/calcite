@@ -70,10 +70,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> null, // No additional dimensions beyond year
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (dimensionName) -> {
+          if ("year".equals(dimensionName)) {
+            return yearRange(startYear, endYear);
+          }
+          return null; // No additional dimensions beyond year
+        },
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           String startDate = year + "-01-01";
@@ -123,10 +126,13 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        startYear,
-        endYear,
-        (dimensionName) -> null, // No additional dimensions beyond year
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (dimensionName) -> {
+          if ("year".equals(dimensionName)) {
+            return yearRange(startYear, endYear);
+          }
+          return null; // No additional dimensions beyond year
+        },
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           String startDate = year + "-01-01";

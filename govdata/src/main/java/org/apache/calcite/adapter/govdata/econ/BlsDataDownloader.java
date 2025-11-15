@@ -926,7 +926,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               }
               return null; // No additional dimensions beyond year
             },
-            (cacheKey, vars, jsonPath, parquetPath) -> {
+            (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
               // Add frequency variable
               Map<String, String> fullVars = new HashMap<>(vars);
               fullVars.put("frequency", "monthly");
@@ -966,14 +966,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
-          int year = Integer.parseInt(vars.get("year"));
+        // PREFETCH CALLBACK - Batch fetch all years in ONE API call
+        (context, helper) -> {
+          if ("year".equals(context.segmentDimensionName)) {
+            List<String> years = context.allDimensionValues.get("year");
+            LOGGER.info("Prefetching employment data for {} years in single API call", years.size());
 
-          // Batch fetch for this year
-          Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, List.of(year));
-          String rawJson = resultsByYear.get(year);
+            // Convert year strings to integers
+            List<Integer> yearInts = new ArrayList<>();
+            for (String year : years) {
+              yearInts.add(Integer.parseInt(year));
+            }
+
+            // ONE API CALL for all years
+            Map<Integer, String> allData = fetchAndSplitByYear(seriesIds, yearInts);
+
+            // Store in prefetch cache
+            List<Map<String, String>> partitions = new ArrayList<>();
+            List<String> jsonStrings = new ArrayList<>();
+            for (Map.Entry<Integer, String> entry : allData.entrySet()) {
+              partitions.add(java.util.Map.of("year", String.valueOf(entry.getKey()), "frequency", "monthly"));
+              jsonStrings.add(entry.getValue());
+            }
+            helper.insertJsonBatch(partitions, jsonStrings);
+
+            LOGGER.info("Prefetched {} years of employment data", allData.size());
+          }
+        },
+        // TABLE OPERATION - Retrieve from cache
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+          String rawJson = prefetchHelper.getJson(vars);
 
           if (rawJson != null) {
+            int year = Integer.parseInt(vars.get("year"));
             String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
             validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
           }
@@ -1010,7 +1035,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all regions for this year
@@ -1063,7 +1088,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all metros for this year
@@ -1114,7 +1139,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year (with large series batching)
@@ -1157,7 +1182,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Get QCEW ZIP download metadata from schema
@@ -1207,7 +1232,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Get QCEW ZIP download metadata from schema
@@ -1261,7 +1286,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Get QCEW ZIP download metadata from schema
@@ -1314,7 +1339,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year (with large series batching)
@@ -1529,7 +1554,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
@@ -1565,7 +1590,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Parse JOLTS FTP files for state data
@@ -1719,7 +1744,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year
@@ -1755,7 +1780,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year
@@ -1795,7 +1820,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath) -> {
+        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String stateFips = vars.get("state_fips");
 
