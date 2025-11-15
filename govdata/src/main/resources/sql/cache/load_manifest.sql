@@ -13,7 +13,7 @@ SELECT
 FROM read_json('{manifestPath}',
   format='unstructured',
   records='false',
-  maximum_object_size=10000000,
+  maximum_object_size=104857600,
   ignore_errors=true
 ) AS manifest,
 json_each(json_extract(manifest.json, '$.entries')) AS entries(key, value)

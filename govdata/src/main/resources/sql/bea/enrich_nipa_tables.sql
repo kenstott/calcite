@@ -45,4 +45,4 @@ SELECT
   END AS table_number,
   contains(Description, '(A)') AS annual,
   contains(Description, '(Q)') AS quarterly
-FROM read_json('{jsonPath}', format='array', maximum_object_size=10000000)
+FROM read_json('{jsonPath}', format='array', maximum_object_size=104857600)
