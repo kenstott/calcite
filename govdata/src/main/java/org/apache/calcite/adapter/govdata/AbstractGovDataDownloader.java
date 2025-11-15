@@ -1797,11 +1797,12 @@ public abstract class AbstractGovDataDownloader {
       String colType = colNode.has("type") ? colNode.get("type").asText() : "string";
       boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
       String comment = colNode.has("comment") ? colNode.get("comment").asText() : "";
+      String expression = colNode.has("expression") ? colNode.get("expression").asText() : null;
 
       if (colName != null) {
         columns.add(
             new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
-                colName, colType, nullable, comment));
+                colName, colType, nullable, comment, expression));
       }
     }
 
@@ -3689,6 +3690,122 @@ public abstract class AbstractGovDataDownloader {
       result = result.replace("{" + entry.getKey() + "}", entry.getValue());
     }
     return result;
+  }
+
+  /**
+   * Executes a SQL statement with named parameters using PreparedStatement.
+   *
+   * <p>SQL template should use {@code {paramName}} syntax which gets converted to ? placeholders.
+   * Parameters are bound in the order they appear in the SQL template.
+   *
+   * <p>This method provides automatic SQL escaping and protection against SQL injection
+   * by using JDBC PreparedStatement instead of string concatenation.
+   *
+   * @param conn Database connection
+   * @param sqlTemplate SQL with {@code {paramName}} placeholders
+   * @param params Map of parameter names to values
+   * @return true if the first result is a ResultSet object; false if it is an update count or there are no results
+   * @throws java.sql.SQLException if a database access error occurs
+   */
+  protected boolean executeWithParams(java.sql.Connection conn, String sqlTemplate, Map<String, String> params)
+      throws java.sql.SQLException {
+
+    // Track parameter order as we replace placeholders
+    List<String> paramOrder = new ArrayList<>();
+
+    // Replace {paramName} with ? and track order
+    String sql = sqlTemplate;
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      String placeholder = "\\{" + entry.getKey() + "\\}";
+      if (sql.contains("{" + entry.getKey() + "}")) {
+        sql = sql.replaceFirst(placeholder, "?");
+        paramOrder.add(entry.getKey());
+      }
+    }
+
+    // Execute with PreparedStatement
+    try (java.sql.PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      for (int i = 0; i < paramOrder.size(); i++) {
+        pstmt.setString(i + 1, params.get(paramOrder.get(i)));
+      }
+      return pstmt.execute();
+    }
+  }
+
+  /**
+   * Executes a query with named parameters using PreparedStatement and returns ResultSet.
+   *
+   * <p>SQL template should use {@code {paramName}} syntax which gets converted to ? placeholders.
+   * Parameters are bound in the order they appear in the SQL template.
+   *
+   * <p>This method provides automatic SQL escaping and protection against SQL injection
+   * by using JDBC PreparedStatement instead of string concatenation.
+   *
+   * <p><strong>IMPORTANT:</strong> The caller is responsible for closing the returned ResultSet
+   * and the underlying PreparedStatement. Consider using try-with-resources.
+   *
+   * @param conn Database connection
+   * @param sqlTemplate SQL with {@code {paramName}} placeholders
+   * @param params Map of parameter names to values
+   * @return ResultSet containing query results (caller must close)
+   * @throws java.sql.SQLException if a database access error occurs
+   */
+  protected java.sql.ResultSet queryWithParams(java.sql.Connection conn, String sqlTemplate, Map<String, String> params)
+      throws java.sql.SQLException {
+
+    // Track parameter order as we replace placeholders
+    List<String> paramOrder = new ArrayList<>();
+
+    // Replace {paramName} with ? and track order
+    String sql = sqlTemplate;
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      String placeholder = "\\{" + entry.getKey() + "\\}";
+      if (sql.contains("{" + entry.getKey() + "}")) {
+        sql = sql.replaceFirst(placeholder, "?");
+        paramOrder.add(entry.getKey());
+      }
+    }
+
+    // Execute with PreparedStatement
+    java.sql.PreparedStatement pstmt = conn.prepareStatement(sql);
+    for (int i = 0; i < paramOrder.size(); i++) {
+      pstmt.setString(i + 1, params.get(paramOrder.get(i)));
+    }
+    return pstmt.executeQuery();
+  }
+
+  /**
+   * Executes DuckDB SQL with named parameters using PreparedStatement.
+   *
+   * <p>SQL template should use {@code {paramName}} syntax which gets converted to ? placeholders.
+   * This method creates a DuckDB connection, executes the SQL, and handles cleanup automatically.
+   *
+   * <p>This method provides automatic SQL escaping and protection against SQL injection
+   * by using JDBC PreparedStatement instead of string concatenation.
+   *
+   * @param sqlTemplate SQL with {@code {paramName}} placeholders
+   * @param params Map of parameter names to values
+   * @param operationDescription Description of the operation for logging
+   * @throws IOException if SQL execution fails
+   */
+  protected void executeDuckDBSqlWithParams(String sqlTemplate, Map<String, String> params, String operationDescription)
+      throws IOException {
+    LOGGER.debug("{} - DuckDB SQL template (pre-substitution):\n{}", operationDescription, sqlTemplate);
+
+    try (java.sql.Connection conn = getDuckDBConnection()) {
+      executeWithParams(conn, sqlTemplate, params);
+      LOGGER.info("{} completed successfully", operationDescription);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg =
+          String.format("%s failed: %s (SQL State: %s, Error Code: %d)",
+          operationDescription,
+          e.getMessage(),
+          e.getSQLState(),
+          e.getErrorCode());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
   }
 
   // ===== CACHE EXPIRY HELPERS =====
