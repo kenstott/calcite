@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -198,33 +199,34 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
-   * Loads table column metadata from the econ-schema.json resource file.
+   * Loads table column metadata from the econ-schema.yaml resource file.
    * This enables metadata-driven schema generation, eliminating hardcoded type definitions.
    *
    * <p>NOTE: Consider using {@link AbstractGovDataDownloader#loadTableColumnsFromMetadata(String)} instead
    * for new code. That method is schema-agnostic and works for ECON, GEO, and SEC schemas
    * using the schemaResourceName from the instance.
    *
-   * @param tableName The name of the table (must match "name" in econ-schema.json)
+   * @param tableName The name of the table (must match "name" in econ-schema.yaml)
    * @return List of TableColumn definitions with type, nullability, and comments
    * @throws IllegalArgumentException if table not found or schema file cannot be loaded
    */
   protected static List<PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
+    ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
     try (InputStream schemaStream =
-        AbstractEconDataDownloader.class.getResourceAsStream("/econ/econ-schema.json")) {
+        AbstractEconDataDownloader.class.getResourceAsStream("/econ/econ-schema.yaml")) {
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "/econ/econ-schema.json not found in resources");
+            "/econ/econ-schema.yaml not found in resources");
       }
 
-      // Parse JSON
-      JsonNode root = MAPPER.readTree(schemaStream);
+      // Parse YAML
+      JsonNode root = yamlMapper.readTree(schemaStream);
 
-      // Find the table in the "tables" array
+      // Find the table in the "partitionedTables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         throw new IllegalArgumentException(
-            "Invalid econ-schema.json: missing 'tables' array");
+            "Invalid econ-schema.yaml: missing 'partitionedTables' array");
       }
 
       for (JsonNode tableNode : root.get("partitionedTables")) {
@@ -233,7 +235,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
           // Found the table - extract columns
           if (!tableNode.has("columns") || !tableNode.get("columns").isArray()) {
             throw new IllegalArgumentException(
-                "Table '" + tableName + "' has no 'columns' array in econ-schema.json");
+                "Table '" + tableName + "' has no 'columns' array in econ-schema.yaml");
           }
 
           List<PartitionedTableConfig.TableColumn>
@@ -258,7 +260,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
       // Table not found
       throw new IllegalArgumentException(
-          "Table '" + tableName + "' not found in econ-schema.json");
+          "Table '" + tableName + "' not found in econ-schema.yaml");
 
     } catch (IOException e) {
       throw new IllegalArgumentException(

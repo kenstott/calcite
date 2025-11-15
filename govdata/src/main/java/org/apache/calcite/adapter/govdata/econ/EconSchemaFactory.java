@@ -286,11 +286,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   @Override public String getSchemaResourceName() {
-    return "/econ/econ-schema.json";
+    return "/econ/econ-schema.yaml";
   }
 
   /**
-   * Loads bulk download configurations from the econ-schema.json resource file.
+   * Loads bulk download configurations from the econ-schema.yaml resource file.
    * Bulk downloads are large source files that feed multiple tables (e.g., QCEW ZIP file).
    *
    * @return Map of bulk download name to BulkDownloadConfig
@@ -487,15 +487,15 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Override loadTableDefinitions to add custom FRED table definitions dynamically.
-   * This combines static table definitions from econ-schema.json with dynamically
+   * This combines static table definitions from econ-schema.yaml with dynamically
    * generated table definitions for custom FRED series.
    */
   @Override public List<Map<String, Object>> loadTableDefinitions() {
-    // Start with base table definitions from econ-schema.json
+    // Start with base table definitions from econ-schema.yaml
     List<Map<String, Object>> baseTables = GovDataSubSchemaFactory.super.loadTableDefinitions();
     List<Map<String, Object>> tables = new ArrayList<>();
 
-    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.json", baseTables.size());
+    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.yaml", baseTables.size());
 
     // Filter BLS tables based on enabledBlsTables configuration
     for (Map<String, Object> table : baseTables) {
