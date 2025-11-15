@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -450,8 +451,8 @@ public abstract class AbstractGovDataDownloader {
   /** Cache manifest for tracking downloads and conversions */
   protected AbstractCacheManifest cacheManifest;
 
-  /** Shared JSON mapper for convenience */
-  protected final ObjectMapper MAPPER = new ObjectMapper();
+  /** Shared mapper for JSON/YAML (initialized in constructor based on schema format) */
+  protected final ObjectMapper MAPPER;
 
   /** HTTP client for API/HTTP requests */
   protected final HttpClient httpClient;
@@ -479,7 +480,13 @@ public abstract class AbstractGovDataDownloader {
     this.parquetDirectory = parquetDirectory;
     this.cacheStorageProvider = cacheStorageProvider;
     this.storageProvider = storageProvider;
-    this.schemaResourceName = "/" + schemaName + "-schema.json";
+    // Determine schema file extension: econ uses YAML, others still use JSON
+    String schemaExtension = "econ".equals(schemaName) ? ".yaml" : ".json";
+    this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema" + schemaExtension;
+    // Initialize appropriate mapper based on schema format
+    this.MAPPER = schemaExtension.equals(".yaml")
+        ? new ObjectMapper(new YAMLFactory())
+        : new ObjectMapper();
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(30))
         .build();
