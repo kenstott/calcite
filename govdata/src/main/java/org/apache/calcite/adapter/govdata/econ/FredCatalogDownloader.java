@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -42,12 +43,7 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Downloads and processes FRED economic data series catalog.
@@ -768,7 +764,7 @@ public class FredCatalogDownloader {
 
       // Convert using DuckDB
       String sql =
-          org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.buildDuckDBConversionSql(columns, null, fullTempJsonPath, fullParquetPath);
+          AbstractGovDataDownloader.buildDuckDBConversionSql(columns, null, fullTempJsonPath, fullParquetPath);
 
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 

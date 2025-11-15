@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
+import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -27,7 +28,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -69,7 +73,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if cached and fresh, false otherwise
    */
-  public boolean isCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
+  public boolean isCached(CacheKey cacheKey) {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
 
@@ -186,7 +190,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
    * @param refreshReason Human-readable reason for the refresh policy (e.g., "daily", "immutable")
    */
-  public void markCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+  public void markCached(CacheKey cacheKey,
                         String filePath, long fileSize, long refreshAfter, String refreshReason) {
     String key = cacheKey.asString();
     CacheEntry entry = new CacheEntry();
@@ -248,7 +252,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if parquet file exists and is up-to-date, false otherwise
    */
-  public boolean isParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
+  public boolean isParquetConverted(CacheKey cacheKey) {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
 
@@ -304,7 +308,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @param parquetPath Path to the converted parquet file
    */
-  public void markParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey, String parquetPath) {
+  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
 
@@ -363,7 +367,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param retryAfterDays Number of days before retrying (default: 7 for unreleased data)
    * @param reason Description of why unavailable (e.g., "404_not_released", "400_invalid_variables")
    */
-  public void markUnavailable(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+  public void markUnavailable(CacheKey cacheKey,
                               int retryAfterDays, String reason) {
     String key = cacheKey.asString();
     CacheEntry entry = new CacheEntry();
@@ -428,7 +432,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param errorMessage Full error message from API (e.g., JSON error object)
    * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
    */
-  public void markApiError(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
+  public void markApiError(CacheKey cacheKey,
                           String errorMessage, int retryAfterDays) {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
@@ -516,7 +520,7 @@ public class CacheManifest extends AbstractCacheManifest {
   public void markCached(String dataType, int year, Map<String, String> parameters,
                         String filePath, long fileSize) {
     // Calculate reasonable default refresh time
-    int currentYear = java.time.LocalDate.now().getYear();
+    int currentYear = LocalDate.now().getYear();
     long refreshAfter;
     String refreshReason;
 
@@ -585,7 +589,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
       // Migrate old entries that don't have refreshAfter set
       int migrated = 0;
-      int currentYear = java.time.LocalDate.now().getYear();
+      int currentYear = LocalDate.now().getYear();
       long now = System.currentTimeMillis();
 
       for (CacheEntry entry : manifest.entries.values()) {
@@ -673,7 +677,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return The ETag string, or null if not cached or no ETag available
    */
-  public String getETag(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
+  public String getETag(CacheKey cacheKey) {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
     return (entry != null) ? entry.etag : null;
@@ -704,7 +708,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param minPopularity Minimum popularity threshold used for filtering
    * @return List of series IDs, or null if not cached/expired
    */
-  public java.util.List<String> getCachedCatalogSeries(int minPopularity) {
+  public List<String> getCachedCatalogSeries(int minPopularity) {
     String key = "catalog_series:popularity=" + minPopularity;
     CatalogSeriesCache entry = catalogSeriesCache.get(key);
 
@@ -726,7 +730,7 @@ public class CacheManifest extends AbstractCacheManifest {
     LOGGER.debug("Using cached catalog series (count: {}, threshold: {}, age: {} days)",
         entry.seriesIds.size(), minPopularity, ageDays);
 
-    return new java.util.ArrayList<>(entry.seriesIds);
+    return new ArrayList<>(entry.seriesIds);
   }
 
   /**
@@ -736,11 +740,11 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param seriesIds List of series IDs that met the threshold
    * @param ttlDays Time-to-live in days (typically 365 for annual refresh)
    */
-  public void cacheCatalogSeries(int minPopularity, java.util.List<String> seriesIds, int ttlDays) {
+  public void cacheCatalogSeries(int minPopularity, List<String> seriesIds, int ttlDays) {
     String key = "catalog_series:popularity=" + minPopularity;
     CatalogSeriesCache entry = new CatalogSeriesCache();
     entry.minPopularity = minPopularity;
-    entry.seriesIds = new java.util.ArrayList<>(seriesIds);
+    entry.seriesIds = new ArrayList<>(seriesIds);
     entry.cachedAt = System.currentTimeMillis();
     entry.refreshAfter = entry.cachedAt + TimeUnit.DAYS.toMillis(ttlDays);
     entry.refreshReason = "catalog_annual_refresh";
@@ -825,7 +829,7 @@ public class CacheManifest extends AbstractCacheManifest {
     public int minPopularity;
 
     @JsonProperty("seriesIds")
-    public java.util.List<String> seriesIds;
+    public List<String> seriesIds;
 
     @JsonProperty("cachedAt")
     public long cachedAt;
