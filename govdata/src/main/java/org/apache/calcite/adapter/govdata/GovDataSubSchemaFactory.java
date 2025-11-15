@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.govdata;
 import org.apache.calcite.model.JsonTable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +54,18 @@ public interface GovDataSubSchemaFactory {
 
   Logger LOGGER = LoggerFactory.getLogger(GovDataSubSchemaFactory.class);
   ObjectMapper JSON_MAPPER = new ObjectMapper();
+  ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+
+  /**
+   * Get the appropriate ObjectMapper based on schema file extension.
+   *
+   * @param schemaResourceName Schema resource name (e.g., "/econ/econ-schema.yaml")
+   * @return YAML mapper for .yaml/.yml files, JSON mapper otherwise
+   */
+  default ObjectMapper getMapperForSchema(String schemaResourceName) {
+    return (schemaResourceName.endsWith(".yaml") || schemaResourceName.endsWith(".yml"))
+        ? YAML_MAPPER : JSON_MAPPER;
+  }
 
   /**
    * Build operand configuration for this sub-schema without creating a Schema instance.
@@ -91,20 +104,23 @@ public interface GovDataSubSchemaFactory {
   String getSchemaResourceName();
 
   /**
-   * Load table definitions from schema JSON resource file.
+   * Load table definitions from schema JSON/YAML resource file.
    * Loads both "partitionedTables" (Parquet files) and "tables" (views, etc.).
    *
    * @return List of all table definitions (partitioned tables + views)
    */
   default List<Map<String, Object>> loadTableDefinitions() {
-    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+    String schemaResourceName = getSchemaResourceName();
+    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
+
+    try (InputStream is = getClass().getResourceAsStream(schemaResourceName)) {
       if (is == null) {
         throw new IllegalStateException(
-            "Could not find " + getSchemaResourceName() + " resource file");
+            "Could not find " + schemaResourceName + " resource file");
       }
 
       @SuppressWarnings("unchecked")
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
 
       // Load partitioned tables (Parquet files)
       @SuppressWarnings("unchecked")
@@ -281,18 +297,21 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
-   * Load constraint definitions from schema JSON resource file.
+   * Load constraint definitions from schema JSON/YAML resource file.
    *
    * @return Map of table name to constraint definitions
    */
   default Map<String, Map<String, Object>> loadTableConstraints() {
-    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+    String schemaResourceName = getSchemaResourceName();
+    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
+
+    try (InputStream is = getClass().getResourceAsStream(schemaResourceName)) {
       if (is == null) {
-        throw new IllegalStateException("Could not find " + getSchemaResourceName() + " resource file");
+        throw new IllegalStateException("Could not find " + schemaResourceName + " resource file");
       }
 
       @SuppressWarnings("unchecked")
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
       @SuppressWarnings("unchecked")
       Map<String, Map<String, Object>> constraints = (Map<String, Map<String, Object>>) schema.get("constraints");
       if (constraints == null) {
