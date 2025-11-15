@@ -27,9 +27,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Downloads and converts U.S. Treasury data to Parquet format.
@@ -60,12 +57,10 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to download
    * @param endYear Last year to download
    */
-  public void downloadTreasuryYields(int startYear, int endYear) throws IOException, InterruptedException {
+  public void downloadTreasuryYields(int startYear, int endYear) {
     LOGGER.info("Downloading treasury yields for years {}-{}", startYear, endYear);
 
     String tableName = "treasury_yields";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
     // Use optimized iteration with DuckDB cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
@@ -116,12 +111,10 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to download
    * @param endYear Last year to download
    */
-  public void downloadFederalDebt(int startYear, int endYear) throws IOException, InterruptedException {
+  public void downloadFederalDebt(int startYear, int endYear) {
     LOGGER.info("Downloading federal debt for years {}-{}", startYear, endYear);
 
     String tableName = "federal_debt";
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
 
     // Use optimized iteration with DuckDB cache filtering (10-20x faster)
     iterateTableOperationsOptimized(

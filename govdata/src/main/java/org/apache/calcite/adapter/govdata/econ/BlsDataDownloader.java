@@ -45,6 +45,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -962,7 +963,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -985,7 +986,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             List<Map<String, String>> partitions = new ArrayList<>();
             List<String> jsonStrings = new ArrayList<>();
             for (Map.Entry<Integer, String> entry : allData.entrySet()) {
-              partitions.add(java.util.Map.of("year", String.valueOf(entry.getKey()), "frequency", "monthly"));
+              partitions.add(Map.of("year", String.valueOf(entry.getKey()), "frequency", "monthly"));
               jsonStrings.add(entry.getValue());
             }
             helper.insertJsonBatch(partitions, jsonStrings);
@@ -1039,13 +1040,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all regions for this year
-          List<Integer> singleYearList = java.util.Collections.singletonList(year);
+          List<Integer> singleYearList = Collections.singletonList(year);
           Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, singleYearList);
 
           String rawJson = resultsByYear.get(year);
           if (rawJson != null) {
             // Save to cache
-            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(StandardCharsets.UTF_8));
             long fileSize = cacheStorageProvider.getMetadata(jsonPath).getSize();
 
             cacheManifest.markCached(cacheKey, jsonPath, fileSize,
@@ -1092,13 +1093,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all metros for this year
-          List<Integer> singleYearList = java.util.Collections.singletonList(year);
+          List<Integer> singleYearList = Collections.singletonList(year);
           Map<Integer, String> resultsByYear = fetchAndSplitByYear(seriesIds, singleYearList);
 
           String rawJson = resultsByYear.get(year);
           if (rawJson != null) {
             // Save to cache
-            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(StandardCharsets.UTF_8));
             long fileSize = cacheStorageProvider.getMetadata(jsonPath).getSize();
 
             cacheManifest.markCached(cacheKey, jsonPath, fileSize,
@@ -1135,7 +1136,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1178,7 +1179,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(effectiveStartYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1187,8 +1188,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           // Get QCEW ZIP download metadata from schema
           Map<String, Object> metadata = loadTableMetadata(tableName);
-          com.fasterxml.jackson.databind.JsonNode downloadNode =
-              (com.fasterxml.jackson.databind.JsonNode) metadata.get("download");
+          JsonNode downloadNode =
+              (JsonNode) metadata.get("download");
           String cachePattern = downloadNode.get("cachePattern").asText();
           String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
           String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
@@ -1220,15 +1221,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    com.fasterxml.jackson.databind.JsonNode downloadNode =
-        (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
+    JsonNode downloadNode =
+        (JsonNode) stateWagesMetadata.get("download");
 
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("quarterly");
+            case "frequency": return Arrays.asList("quarterly");
             default: return null;
           }
         },
@@ -1274,15 +1275,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    com.fasterxml.jackson.databind.JsonNode downloadNode =
-        (com.fasterxml.jackson.databind.JsonNode) stateWagesMetadata.get("download");
+    JsonNode downloadNode =
+        (JsonNode) stateWagesMetadata.get("download");
 
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("quarterly");
+            case "frequency": return Arrays.asList("quarterly");
             default: return null;
           }
         },
@@ -1335,7 +1336,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1550,7 +1551,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(effectiveStartYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1586,7 +1587,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1740,7 +1741,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -1776,7 +1777,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return java.util.Arrays.asList("monthly");
+            case "frequency": return Arrays.asList("monthly");
             default: return null;
           }
         },
@@ -2673,7 +2674,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   @Override protected List<String> getVariableValues(String tableName, String varName) {
     if ("frequency".equalsIgnoreCase(varName)) {
       // BLS tables use full word "monthly" not abbreviation "M"
-      return java.util.Arrays.asList("monthly");
+      return Arrays.asList("monthly");
     }
     return super.getVariableValues(tableName, varName);
   }
@@ -2801,7 +2802,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         }
 
         // Write partitioned parquet files by geo_type
-        for (String geoType : java.util.Arrays.asList("state", "region", "metro")) {
+        for (String geoType : Arrays.asList("state", "region", "metro")) {
           String parquetPath = storageProvider.resolvePath(parquetDirectory,
               "type=reference/geo_type=" + geoType + "/bls_geographies.parquet");
 
