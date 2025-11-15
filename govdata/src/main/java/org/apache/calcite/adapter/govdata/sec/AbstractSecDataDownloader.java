@@ -37,10 +37,10 @@ public abstract class AbstractSecDataDownloader {
     try {
       // Load sec-schema.json from resources
       java.io.InputStream schemaStream =
-          AbstractSecDataDownloader.class.getResourceAsStream("/sec-schema.json");
+          AbstractSecDataDownloader.class.getResourceAsStream("/sec/sec-schema.json");
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "sec-schema.json not found in resources");
+            "/sec/sec-schema.json not found in resources");
       }
 
       // Parse JSON

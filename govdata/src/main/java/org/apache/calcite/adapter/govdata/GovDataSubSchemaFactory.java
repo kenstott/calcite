@@ -86,7 +86,7 @@ public interface GovDataSubSchemaFactory {
   /**
    * Returns the schema resource file name for this factory.
    *
-   * @return Schema resource name (e.g., "/econ-schema.json", "/geo-schema.json")
+   * @return Schema resource name (e.g., "/econ/econ-schema.json", "/geo/geo-schema.json")
    */
   String getSchemaResourceName();
 
@@ -202,7 +202,7 @@ public interface GovDataSubSchemaFactory {
 
   /**
    * Get default schema name from resource filename (lowercase stem).
-   * For example, "/econ-schema.json" -> "econ"
+   * For example, "/econ/econ-schema.json" -> "econ"
    */
   default String getDefaultSchemaName() {
     String resourceName = getSchemaResourceName();

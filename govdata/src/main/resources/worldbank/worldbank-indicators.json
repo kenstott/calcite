@@ -1,0 +1,244 @@
+{
+  "indicators": [
+    {
+      "category": "National Accounts & Growth",
+      "items": [
+        {
+          "code": "NY.GDP.MKTP.CD",
+          "name": "GDP_CURRENT_USD",
+          "description": "GDP (current US$)",
+          "unit": "current US$"
+        },
+        {
+          "code": "NY.GDP.MKTP.KD.ZG",
+          "name": "GDP_GROWTH",
+          "description": "GDP growth (annual %)",
+          "unit": "annual %"
+        },
+        {
+          "code": "NY.GDP.PCAP.CD",
+          "name": "GDP_PER_CAPITA",
+          "description": "GDP per capita (current US$)",
+          "unit": "current US$"
+        },
+        {
+          "code": "NY.GNP.PCAP.CD",
+          "name": "GNI_PER_CAPITA",
+          "description": "GNI per capita (current US$)",
+          "unit": "current US$"
+        }
+      ]
+    },
+    {
+      "category": "Prices & Markets",
+      "items": [
+        {
+          "code": "FP.CPI.TOTL.ZG",
+          "name": "INFLATION_CPI",
+          "description": "Inflation, consumer prices (annual %)",
+          "unit": "annual %"
+        }
+      ]
+    },
+    {
+      "category": "Labor Market",
+      "items": [
+        {
+          "code": "SL.UEM.TOTL.ZS",
+          "name": "UNEMPLOYMENT",
+          "description": "Unemployment, total (% of labor force)",
+          "unit": "% of labor force"
+        },
+        {
+          "code": "SL.TLF.TOTL.IN",
+          "name": "LABOR_FORCE_TOTAL",
+          "description": "Labor force, total",
+          "unit": "persons"
+        },
+        {
+          "code": "SL.TLF.CACT.ZS",
+          "name": "LABOR_FORCE_PARTICIPATION",
+          "description": "Labor force participation rate (%)",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "category": "Population",
+      "items": [
+        {
+          "code": "SP.POP.TOTL",
+          "name": "POPULATION",
+          "description": "Population, total",
+          "unit": "persons"
+        },
+        {
+          "code": "SP.DYN.LE00.IN",
+          "name": "LIFE_EXPECTANCY",
+          "description": "Life expectancy at birth (years)",
+          "unit": "years"
+        }
+      ]
+    },
+    {
+      "category": "Trade & External Sector",
+      "items": [
+        {
+          "code": "NE.RSB.GNFS.ZS",
+          "name": "TRADE_BALANCE",
+          "description": "External balance on goods and services (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "NE.EXP.GNFS.ZS",
+          "name": "EXPORTS",
+          "description": "Exports of goods and services (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "NE.IMP.GNFS.ZS",
+          "name": "IMPORTS",
+          "description": "Imports of goods and services (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "BN.CAB.XOKA.GD.ZS",
+          "name": "CURRENT_ACCOUNT",
+          "description": "Current account balance (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "BX.KLT.DINV.WD.GD.ZS",
+          "name": "FDI_NET_INFLOWS",
+          "description": "FDI net inflows (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Debt & Fiscal",
+      "items": [
+        {
+          "code": "GC.DOD.TOTL.GD.ZS",
+          "name": "GOVT_DEBT",
+          "description": "Central government debt, total (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "DT.DOD.DECT.GN.ZS",
+          "name": "EXTERNAL_DEBT",
+          "description": "External debt stocks (% of GNI)",
+          "unit": "% of GNI"
+        },
+        {
+          "code": "GC.REV.XGRT.GD.ZS",
+          "name": "GOVT_REVENUE",
+          "description": "Government revenue, excluding grants (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Financial Sector",
+      "items": [
+        {
+          "code": "FR.INR.RINR",
+          "name": "INTEREST_RATE",
+          "description": "Real interest rate (%)",
+          "unit": "%"
+        },
+        {
+          "code": "PA.NUS.FCRF",
+          "name": "EXCHANGE_RATE",
+          "description": "Official exchange rate (LCU per US$)",
+          "unit": "LCU per US$"
+        },
+        {
+          "code": "FS.AST.DOMS.GD.ZS",
+          "name": "DOMESTIC_CREDIT",
+          "description": "Domestic credit to private sector (% of GDP)",
+          "unit": "% of GDP"
+        },
+        {
+          "code": "CM.MKT.LCAP.GD.ZS",
+          "name": "MARKET_CAP",
+          "description": "Market capitalization of listed companies (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Education",
+      "items": [
+        {
+          "code": "SE.PRM.ENRR",
+          "name": "PRIMARY_ENROLLMENT",
+          "description": "Primary school enrollment (% gross)",
+          "unit": "% gross"
+        },
+        {
+          "code": "SE.SEC.ENRR",
+          "name": "SECONDARY_ENROLLMENT",
+          "description": "Secondary school enrollment (% gross)",
+          "unit": "% gross"
+        },
+        {
+          "code": "SE.XPD.TOTL.GD.ZS",
+          "name": "EDUCATION_EXPENDITURE",
+          "description": "Government expenditure on education (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Health",
+      "items": [
+        {
+          "code": "SH.XPD.CHEX.GD.ZS",
+          "name": "HEALTH_EXPENDITURE",
+          "description": "Current health expenditure (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Infrastructure & Investment",
+      "items": [
+        {
+          "code": "NE.GDI.TOTL.ZS",
+          "name": "GROSS_CAPITAL_FORMATION",
+          "description": "Gross capital formation (% of GDP)",
+          "unit": "% of GDP"
+        }
+      ]
+    },
+    {
+      "category": "Inequality",
+      "items": [
+        {
+          "code": "SI.POV.GINI",
+          "name": "GINI_INDEX",
+          "description": "GINI index (World Bank estimate)",
+          "unit": "index"
+        }
+      ]
+    },
+    {
+      "category": "Energy & Environment",
+      "items": [
+        {
+          "code": "EG.USE.PCAP.KG.OE",
+          "name": "ENERGY_USE",
+          "description": "Energy use (kg of oil equivalent per capita)",
+          "unit": "kg of oil equivalent per capita"
+        },
+        {
+          "code": "EN.ATM.CO2E.PC",
+          "name": "CO2_EMISSIONS",
+          "description": "CO2 emissions (metric tons per capita)",
+          "unit": "metric tons per capita"
+        }
+      ]
+    }
+  ]
+}

@@ -129,7 +129,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private Map<String, Map<String, Object>> tableConstraints = new HashMap<>();
 
   @Override public String getSchemaResourceName() {
-    return "/sec-schema.json";
+    return "/sec/sec-schema.json";
   }
 
   private synchronized void initializeExecutors() {
@@ -176,9 +176,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Returns null if the resource cannot be loaded.
    */
   private Map<String, Object> loadDefaults() {
-    try (InputStream is = getClass().getResourceAsStream("/sec-schema-factory.defaults.json")) {
+    try (InputStream is = getClass().getResourceAsStream("/sec/sec-schema-factory.defaults.json")) {
       if (is == null) {
-        LOGGER.debug("No defaults file found at /sec-schema-factory.defaults.json");
+        LOGGER.debug("No defaults file found at /sec/sec-schema-factory.defaults.json");
         return null;
       }
 

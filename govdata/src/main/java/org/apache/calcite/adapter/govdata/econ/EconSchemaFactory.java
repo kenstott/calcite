@@ -18,20 +18,15 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
+import org.apache.calcite.adapter.govdata.GovDataSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.InputStream;
+import java.util.*;
 
 /**
  * Schema factory for U.S. economic data sources.
@@ -67,13 +62,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
   private Map<String, Map<String, Object>> tableConstraints;
-  private java.util.Set<String> enabledBlsTables;
+  private Set<String> enabledBlsTables;
 
 /**
    * Build the operand configuration for ECON schema without creating the FileSchema.
    * This method is called by GovDataSchemaFactory to collect table definitions.
    */
-  public Map<String, Object> buildOperand(Map<String, Object> operand, org.apache.calcite.adapter.govdata.GovDataSchemaFactory parent) {
+  public Map<String, Object> buildOperand(Map<String, Object> operand, GovDataSchemaFactory parent) {
     LOGGER.debug("Building ECON schema operand configuration");
 
     // Access shared services from parent
@@ -153,7 +148,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     @SuppressWarnings("unchecked")
     List<String> enabledSources = (List<String>) operand.get("enabledSources");
     if (enabledSources == null) {
-      enabledSources = java.util.Arrays.asList("bls", "fred", "treasury", "bea", "worldbank");
+      enabledSources = Arrays.asList("bls", "fred", "treasury", "bea", "worldbank");
     }
 
     LOGGER.debug("  Enabled sources: {}", enabledSources);
@@ -291,7 +286,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   @Override public String getSchemaResourceName() {
-    return "/econ-schema.json";
+    return "/econ/econ-schema.json";
   }
 
   /**
@@ -301,7 +296,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
    * @return Map of bulk download name to BulkDownloadConfig
    */
   protected Map<String, BulkDownloadConfig> loadBulkDownloads() {
-    try (java.io.InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
       if (is == null) {
         throw new IllegalStateException(
             "Could not find " + getSchemaResourceName() + " resource file");
@@ -507,19 +502,19 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       String tableName = (String) table.get("name");
 
       // Check if this is a BLS table
-      boolean isBlsTable = tableName.equals(BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS)
-          || tableName.equals(BlsDataDownloader.TABLE_INFLATION_METRICS)
-          || tableName.equals(BlsDataDownloader.TABLE_REGIONAL_CPI)
-          || tableName.equals(BlsDataDownloader.TABLE_METRO_CPI)
-          || tableName.equals(BlsDataDownloader.TABLE_STATE_INDUSTRY)
-          || tableName.equals(BlsDataDownloader.TABLE_STATE_WAGES)
-          || tableName.equals(BlsDataDownloader.TABLE_COUNTY_WAGES)
-          || tableName.equals(BlsDataDownloader.TABLE_COUNTY_QCEW)
-          || tableName.equals(BlsDataDownloader.TABLE_METRO_INDUSTRY)
-          || tableName.equals(BlsDataDownloader.TABLE_METRO_WAGES)
-          || tableName.equals(BlsDataDownloader.TABLE_JOLTS_REGIONAL)
-          || tableName.equals(BlsDataDownloader.TABLE_WAGE_GROWTH)
-          || tableName.equals(BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT);
+      boolean isBlsTable = tableName.equals(BlsDataDownloader.BLS.tableNames.employmentStatistics)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.inflationMetrics)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.regionalCpi)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroCpi)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.stateIndustry)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.stateWages)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.countyWages)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.countyQcew)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroIndustry)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroWages)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.joltsRegional)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.wageGrowth)
+          || tableName.equals(BlsDataDownloader.BLS.tableNames.regionalEmployment);
 
       if (isBlsTable) {
         // Check if table is enabled (null means all tables enabled)
@@ -602,17 +597,17 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     Set<String> allBlsTables =
         new HashSet<>(
             Arrays.asList(
-            BlsDataDownloader.TABLE_EMPLOYMENT_STATISTICS,
-            BlsDataDownloader.TABLE_INFLATION_METRICS,
-            BlsDataDownloader.TABLE_REGIONAL_CPI,
-            BlsDataDownloader.TABLE_METRO_CPI,
-            BlsDataDownloader.TABLE_STATE_INDUSTRY,
-            BlsDataDownloader.TABLE_STATE_WAGES,
-            BlsDataDownloader.TABLE_METRO_INDUSTRY,
-            BlsDataDownloader.TABLE_METRO_WAGES,
-            BlsDataDownloader.TABLE_JOLTS_REGIONAL,
-            BlsDataDownloader.TABLE_WAGE_GROWTH,
-            BlsDataDownloader.TABLE_REGIONAL_EMPLOYMENT));
+            BlsDataDownloader.BLS.tableNames.employmentStatistics,
+            BlsDataDownloader.BLS.tableNames.inflationMetrics,
+            BlsDataDownloader.BLS.tableNames.regionalCpi,
+            BlsDataDownloader.BLS.tableNames.metroCpi,
+            BlsDataDownloader.BLS.tableNames.stateIndustry,
+            BlsDataDownloader.BLS.tableNames.stateWages,
+            BlsDataDownloader.BLS.tableNames.metroIndustry,
+            BlsDataDownloader.BLS.tableNames.metroWages,
+            BlsDataDownloader.BLS.tableNames.joltsRegional,
+            BlsDataDownloader.BLS.tableNames.wageGrowth,
+            BlsDataDownloader.BLS.tableNames.regionalEmployment));
 
     return parseIncludeExcludeFilter(operand,
         allBlsTables);

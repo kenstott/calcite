@@ -1,0 +1,73 @@
+{
+  "countryGroups": {
+    "G7": {
+      "name": "Group of Seven",
+      "description": "Major advanced economies",
+      "countries": ["USA", "JPN", "DEU", "GBR", "FRA", "ITA", "CAN"]
+    },
+    "G20": {
+      "name": "Group of Twenty",
+      "description": "Major economies representing 80% of world GDP",
+      "countries": ["USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "ITA", "BRA", "CAN",
+                    "KOR", "RUS", "AUS", "MEX", "IDN", "TUR", "SAU", "ARG", "ZAF"]
+    },
+    "MAJOR_ECONOMIES": {
+      "name": "Major World Economies",
+      "description": "Top economies by GDP",
+      "countries": ["USA", "CHN", "JPN", "DEU", "IND", "GBR", "FRA", "BRA", "ITA", "CAN",
+                    "KOR", "ESP", "AUS", "RUS", "MEX", "IDN", "NLD", "TUR", "CHE", "POL"]
+    },
+    "REGIONAL_AGGREGATES": {
+      "name": "Regional Aggregates",
+      "description": "World Bank regional classifications",
+      "regions": [
+        {"code": "EAP", "name": "East Asia & Pacific"},
+        {"code": "ECA", "name": "Europe & Central Asia"},
+        {"code": "LAC", "name": "Latin America & Caribbean"},
+        {"code": "MNA", "name": "Middle East & North Africa"},
+        {"code": "SAS", "name": "South Asia"},
+        {"code": "SSA", "name": "Sub-Saharan Africa"},
+        {"code": "EUU", "name": "European Union"}
+      ]
+    },
+    "INCOME_LEVELS": {
+      "name": "Income Level Classifications",
+      "description": "World Bank income classifications",
+      "levels": [
+        {"code": "HIC", "name": "High Income Countries"},
+        {"code": "UMC", "name": "Upper-Middle Income"},
+        {"code": "LMC", "name": "Lower-Middle Income"},
+        {"code": "LIC", "name": "Low Income"}
+      ]
+    },
+    "ADDITIONAL_COUNTRIES": {
+      "name": "Additional Major Economies",
+      "description": "Important economies beyond G20",
+      "countries": [
+        {"code": "NGA", "name": "Nigeria", "description": "Largest African economy"},
+        {"code": "EGY", "name": "Egypt", "description": "Major MENA economy"},
+        {"code": "PAK", "name": "Pakistan", "description": "South Asian economy"},
+        {"code": "BGD", "name": "Bangladesh", "description": "Fast-growing South Asian economy"},
+        {"code": "VNM", "name": "Vietnam", "description": "ASEAN manufacturing hub"},
+        {"code": "THA", "name": "Thailand", "description": "ASEAN major economy"},
+        {"code": "PHL", "name": "Philippines", "description": "ASEAN emerging market"},
+        {"code": "MYS", "name": "Malaysia", "description": "ASEAN advanced economy"},
+        {"code": "SGP", "name": "Singapore", "description": "Financial hub"},
+        {"code": "NOR", "name": "Norway", "description": "High-income oil economy"},
+        {"code": "SWE", "name": "Sweden", "description": "Nordic developed economy"}
+      ]
+    }
+  },
+  "specialCodes": {
+    "WORLD": {
+      "code": "WLD",
+      "name": "World",
+      "description": "World total/average"
+    }
+  },
+  "allCountriesComposition": {
+    "description": "Defines which groups to include in ALL_COUNTRIES",
+    "includeGroups": ["G20", "REGIONAL_AGGREGATES", "INCOME_LEVELS", "ADDITIONAL_COUNTRIES"],
+    "includeSpecial": ["WORLD"]
+  }
+}

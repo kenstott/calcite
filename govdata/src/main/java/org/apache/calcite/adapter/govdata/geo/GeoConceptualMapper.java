@@ -64,7 +64,7 @@ public class GeoConceptualMapper extends AbstractConceptualMapper {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static JsonNode mappingsConfig;
-  private static String currentMappingFile = "geo-variable-mappings.json";
+  private static String currentMappingFile = "geo/geo-variable-mappings.json";
 
   // Singleton instance
   private static final GeoConceptualMapper INSTANCE = new GeoConceptualMapper();
@@ -229,7 +229,7 @@ public class GeoConceptualMapper extends AbstractConceptualMapper {
 
   /**
    * Get Census API variable mapping for a conceptual variable name.
-   * Delegates to census-variable-mappings.json for Census API variables.
+   * Delegates to /census/census-variable-mappings.json for Census API variables.
    *
    * @param conceptualName Conceptual variable name (e.g., "total_population")
    * @param year Year of census data

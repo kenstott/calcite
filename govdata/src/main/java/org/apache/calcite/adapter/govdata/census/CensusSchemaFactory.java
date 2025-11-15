@@ -95,7 +95,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final String POPULATION_TYPE = "type=population";  // Population Estimates
 
   @Override public String getSchemaResourceName() {
-    return "/census-schema.json";
+    return "/census/census-schema.json";
   }
 
   /**

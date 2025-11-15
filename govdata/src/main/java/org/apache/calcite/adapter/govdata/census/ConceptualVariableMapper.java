@@ -48,7 +48,7 @@ public class ConceptualVariableMapper extends AbstractConceptualMapper {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static JsonNode mappingsConfig;
-  private static String currentMappingFile = "census-variable-mappings.json";
+  private static String currentMappingFile = "census/census-variable-mappings.json";
 
   // Singleton instance for interface-based usage
   private static final ConceptualVariableMapper INSTANCE = new ConceptualVariableMapper();

@@ -89,7 +89,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   private static final String CROSSWALK_TYPE = "type=crosswalk";  // HUD data
 
   @Override public String getSchemaResourceName() {
-    return "/geo-schema.json";
+    return "/geo/geo-schema.json";
   }
 
   /**
@@ -984,9 +984,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
    * Load constraint definitions from geo-schema.json resource file.
    */
   private static Map<String, Map<String, Object>> loadGeoTableConstraints() {
-    try (InputStream is = GeoSchemaFactory.class.getResourceAsStream("/geo-schema.json")) {
+    try (InputStream is = GeoSchemaFactory.class.getResourceAsStream("/geo/geo-schema.json")) {
       if (is == null) {
-        throw new IllegalStateException("Could not find geo-schema.json resource file");
+        throw new IllegalStateException("Could not find /geo/geo-schema.json resource file");
       }
 
       Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);

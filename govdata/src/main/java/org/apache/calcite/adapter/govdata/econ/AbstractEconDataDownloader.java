@@ -16,18 +16,31 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.apache.calcite.adapter.govdata.CacheKey;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Abstract base class for ECON data downloaders providing common infrastructure
@@ -158,7 +171,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
     // Save raw JSON data via cache storage provider
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
-    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
     // Create cache key with year as a partition parameter
     Map<String, String> allParams = new HashMap<>(params != null ? params : new HashMap<>());
@@ -166,11 +179,11 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     CacheKey cacheKey = new CacheKey(dataType, allParams);
 
     // Calculate reasonable default refresh time (same logic as CacheManifest.markCached)
-    int currentYear = java.time.LocalDate.now().getYear();
+    int currentYear = LocalDate.now().getYear();
     long refreshAfter;
     String refreshReason;
     if (year == currentYear) {
-      refreshAfter = System.currentTimeMillis() + java.util.concurrent.TimeUnit.HOURS.toMillis(24);
+      refreshAfter = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24);
       refreshReason = "current_year_daily";
     } else {
       refreshAfter = Long.MAX_VALUE;
@@ -196,17 +209,17 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @return List of TableColumn definitions with type, nullability, and comments
    * @throws IllegalArgumentException if table not found or schema file cannot be loaded
    */
-  protected static java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
+  protected static List<PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
-    try (java.io.InputStream schemaStream =
-        AbstractEconDataDownloader.class.getResourceAsStream("/econ-schema.json")) {
+    try (InputStream schemaStream =
+        AbstractEconDataDownloader.class.getResourceAsStream("/econ/econ-schema.json")) {
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "econ-schema.json not found in resources");
+            "/econ/econ-schema.json not found in resources");
       }
 
       // Parse JSON
-      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+      JsonNode root = MAPPER.readTree(schemaStream);
 
       // Find the table in the "tables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
@@ -214,7 +227,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
             "Invalid econ-schema.json: missing 'tables' array");
       }
 
-      for (com.fasterxml.jackson.databind.JsonNode tableNode : root.get("partitionedTables")) {
+      for (JsonNode tableNode : root.get("partitionedTables")) {
         String name = tableNode.has("name") ? tableNode.get("name").asText() : null;
         if (tableName.equals(name)) {
           // Found the table - extract columns
@@ -223,10 +236,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
                 "Table '" + tableName + "' has no 'columns' array in econ-schema.json");
           }
 
-          java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
-              columns = new java.util.ArrayList<>();
+          List<PartitionedTableConfig.TableColumn>
+              columns = new ArrayList<>();
 
-          for (com.fasterxml.jackson.databind.JsonNode colNode : tableNode.get("columns")) {
+          for (JsonNode colNode : tableNode.get("columns")) {
             String colName = colNode.has("name") ? colNode.get("name").asText() : null;
             String colType = colNode.has("type") ? colNode.get("type").asText() : "string";
             boolean nullable = colNode.has("nullable") && colNode.get("nullable").asBoolean();
@@ -234,7 +247,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
             if (colName != null) {
               columns.add(
-                  new org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn(
+                  new PartitionedTableConfig.TableColumn(
                   colName, colType, nullable, comment));
             }
           }
@@ -247,7 +260,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
       throw new IllegalArgumentException(
           "Table '" + tableName + "' not found in econ-schema.json");
 
-    } catch (java.io.IOException e) {
+    } catch (IOException e) {
       throw new IllegalArgumentException(
           "Failed to load column metadata for table '" + tableName + "': " + e.getMessage(), e);
     }
@@ -302,7 +315,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
           return true;
         }
       }
-    } catch (java.io.IOException e) {
+    } catch (IOException e) {
       LOGGER.debug("Error checking parquet file existence: {}", e.getMessage());
       // If we can't check, assume it doesn't exist
     }
@@ -319,29 +332,29 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList", "keyIndustriesList")
    * @return List of iteration values, or empty list if not found
    */
-  protected java.util.List<String> extractIterationList(String tableName, String listKey) {
+  protected List<String> extractIterationList(String tableName, String listKey) {
     try {
-      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      InputStream schemaStream = getClass().getResourceAsStream("/econ/econ-schema.json");
       if (schemaStream == null) {
-        LOGGER.warn("econ-schema.json not found, returning empty iteration list");
-        return java.util.Collections.emptyList();
+        LOGGER.warn("/econ/econ-schema.json not found, returning empty iteration list");
+        return Collections.emptyList();
       }
 
-      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+      JsonNode root = MAPPER.readTree(schemaStream);
 
       // Find the table in the partitionedTables array (not tables array which contains views)
-      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
+      JsonNode partitionedTables = root.get("partitionedTables");
       if (partitionedTables != null && partitionedTables.isArray()) {
-        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
-          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
+        for (JsonNode table : partitionedTables) {
+          JsonNode nameNode = table.get("name");
           if (nameNode != null && tableName.equals(nameNode.asText())) {
             // Found the table, extract the download config
-            com.fasterxml.jackson.databind.JsonNode download = table.get("download");
+            JsonNode download = table.get("download");
             if (download != null) {
-              com.fasterxml.jackson.databind.JsonNode listNode = download.get(listKey);
+              JsonNode listNode = download.get(listKey);
               if (listNode != null && listNode.isArray()) {
-                java.util.List<String> result = new java.util.ArrayList<>();
-                for (com.fasterxml.jackson.databind.JsonNode item : listNode) {
+                List<String> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
                   result.add(item.asText());
                 }
                 LOGGER.debug("Extracted {} items from {} for table {}", result.size(), listKey, tableName);
@@ -353,10 +366,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
       }
 
       LOGGER.warn("Iteration list '{}' not found for table '{}', returning empty list", listKey, tableName);
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     } catch (Exception e) {
       LOGGER.error("Error extracting iteration list '{}' for table '{}': {}", listKey, tableName, e.getMessage());
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     }
   }
 
@@ -382,29 +395,29 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param tableName Name of the table in econ-schema.json
    * @return List of FTP file sources, or empty list if not found
    */
-  protected java.util.List<FtpFileSource> loadFtpSourcePaths(String tableName) {
+  protected List<FtpFileSource> loadFtpSourcePaths(String tableName) {
     try {
-      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      InputStream schemaStream = getClass().getResourceAsStream("/econ/econ-schema.json");
       if (schemaStream == null) {
-        LOGGER.warn("econ-schema.json not found, returning empty FTP source list");
-        return java.util.Collections.emptyList();
+        LOGGER.warn("/econ/econ-schema.json not found, returning empty FTP source list");
+        return Collections.emptyList();
       }
 
-      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+      JsonNode root = MAPPER.readTree(schemaStream);
 
       // Find the table in the partitionedTables array
-      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
+      JsonNode partitionedTables = root.get("partitionedTables");
       if (partitionedTables != null && partitionedTables.isArray()) {
-        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
-          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
+        for (JsonNode table : partitionedTables) {
+          JsonNode nameNode = table.get("name");
           if (nameNode != null && tableName.equals(nameNode.asText())) {
             // Found the table, extract the sourcePaths.ftpFiles
-            com.fasterxml.jackson.databind.JsonNode sourcePaths = table.get("sourcePaths");
+            JsonNode sourcePaths = table.get("sourcePaths");
             if (sourcePaths != null) {
-              com.fasterxml.jackson.databind.JsonNode ftpFiles = sourcePaths.get("ftpFiles");
+              JsonNode ftpFiles = sourcePaths.get("ftpFiles");
               if (ftpFiles != null && ftpFiles.isArray()) {
-                java.util.List<FtpFileSource> result = new java.util.ArrayList<>();
-                for (com.fasterxml.jackson.databind.JsonNode ftpFile : ftpFiles) {
+                List<FtpFileSource> result = new ArrayList<>();
+                for (JsonNode ftpFile : ftpFiles) {
                   String cachePath = ftpFile.has("cachePath") ? ftpFile.get("cachePath").asText() : null;
                   String url = ftpFile.has("url") ? ftpFile.get("url").asText() : null;
                   String comment = ftpFile.has("comment") ? ftpFile.get("comment").asText() : "";
@@ -422,10 +435,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
       }
 
       LOGGER.debug("No FTP source paths found for table '{}', returning empty list", tableName);
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     } catch (Exception e) {
       LOGGER.error("Error loading FTP source paths for table '{}': {}", tableName, e.getMessage());
-      return java.util.Collections.emptyList();
+      return Collections.emptyList();
     }
   }
 
@@ -434,11 +447,10 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * Uses cache manifest for tracking and supports both local and S3 storage.
    *
    * @param ftpPath Relative cache path (e.g., "type=jolts_ftp/jt.series")
-   * @param url FTP URL to download from
-   * @return Byte array of file contents
+   * @param url     FTP URL to download from
    * @throws IOException if download fails
    */
-  protected byte[] downloadFtpFileIfNeeded(String ftpPath, String url) throws IOException {
+  protected void downloadFtpFileIfNeeded(String ftpPath, String url) throws IOException {
     // Extract the file name for a cache key (e.g., "jt.series" from "type=jolts_ftp/jt.series")
     String fileName = ftpPath.substring(ftpPath.lastIndexOf('/') + 1);
     String dataType = "jolts_ftp_" + fileName.replace(".", "_");
@@ -460,8 +472,9 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
         }
         if (size > 0) {
           LOGGER.info("Using cached FTP file: {} (from manifest, size={} bytes)", ftpPath, size);
-          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
-            return inputStream.readAllBytes();
+          try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+            inputStream.readAllBytes();
+            return;
           }
         }
       }
@@ -472,13 +485,13 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
     // Download using HttpClient
     try {
-      java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-          .uri(java.net.URI.create(url))
-          .timeout(java.time.Duration.ofMinutes(10))
+      HttpRequest request = HttpRequest.newBuilder()
+          .uri(URI.create(url))
+          .timeout(Duration.ofMinutes(10))
           .build();
 
-      java.net.http.HttpResponse<byte[]> response = httpClient.send(request,
-          java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+      HttpResponse<byte[]> response = httpClient.send(request,
+          HttpResponse.BodyHandlers.ofByteArray());
 
       if (response.statusCode() != 200) {
         throw new IOException("HTTP " + response.statusCode() + " downloading " + url);
@@ -496,7 +509,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
       cacheManifest.save(operatingDirectory);
 
       LOGGER.info("Downloaded and cached FTP file: {} (size={} bytes)", ftpPath, fileContents.length);
-      return fileContents;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Download interrupted: " + url, e);

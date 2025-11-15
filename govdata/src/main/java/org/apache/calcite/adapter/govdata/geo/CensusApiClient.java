@@ -303,10 +303,10 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     try {
       // Load census-schema.json from resources
       java.io.InputStream schemaStream =
-          CensusApiClient.class.getResourceAsStream("/census-schema.json");
+          CensusApiClient.class.getResourceAsStream("/census/census-schema.json");
       if (schemaStream == null) {
         throw new IllegalArgumentException(
-            "census-schema.json not found in resources");
+            "/census/census-schema.json not found in resources");
       }
 
       // Parse JSON
@@ -378,7 +378,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    * @param tableName Name of the table
    * @param year Year for variable resolution
    * @param tableNode JSON node containing table metadata
-   * @param conceptualMappingFile Path to the conceptual mapping file (e.g., "census-variable-mappings.json")
+   * @param conceptualMappingFile Path to the conceptual mapping file (e.g., "census/census-variable-mappings.json")
    */
   private static List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn>
       loadColumnsFromConceptualMapper(String tableName, int year,

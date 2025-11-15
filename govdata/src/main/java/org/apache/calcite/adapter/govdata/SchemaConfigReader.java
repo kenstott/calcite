@@ -159,7 +159,7 @@ public class SchemaConfigReader {
    *
    * @param schemaFile Name of schema file
    * @param tableName Name of the table
-   * @return Mapping file name (e.g., "census-variable-mappings.json") or null
+   * @return Mapping file name (e.g., "census/census-variable-mappings.json") or null
    */
   public static String getConceptualMappingFile(String schemaFile, String tableName) {
     try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
