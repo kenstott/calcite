@@ -32,6 +32,13 @@
     "0300": "South",
     "0400": "West"
   },
+  "blsRegionCodes": {
+    "comment": "BLS 2-letter region codes used in JOLTS and other regional series",
+    "NE": "Northeast",
+    "MW": "Midwest",
+    "SO": "South",
+    "WE": "West"
+  },
   "metroCpiCodes": {
     "comment": "Metro CPI area codes mapping: Publication Code → CPI Area Code. Format for CPI series: CUUR{area_code}SA0",
     "A100": { "cpiCode": "S35D", "name": "New York-Newark-Jersey City, NY-NJ-PA" },
@@ -92,6 +99,13 @@
     "A433": "1245300",
     "A440": "0211260"
   },
+  "measureCodes": {
+    "comment": "BLS measure codes (last digit of series ID) to human-readable measure names",
+    "3": "unemployment_rate",
+    "4": "unemployment",
+    "5": "employment",
+    "6": "labor_force"
+  },
   "naicsSupersectors": {
     "comment": "NAICS supersector codes for industry employment",
     "00000000": "Total Nonfarm",
@@ -148,6 +162,8 @@
     "joltsRegional": "jolts_regional",
     "joltsState": "jolts_state",
     "wageGrowth": "wage_growth",
-    "regionalEmployment": "regional_employment"
+    "regionalEmployment": "regional_employment",
+    "referenceJoltsIndustries": "reference_jolts_industries",
+    "referenceJoltsDataelements": "reference_jolts_dataelements"
   }
 }
