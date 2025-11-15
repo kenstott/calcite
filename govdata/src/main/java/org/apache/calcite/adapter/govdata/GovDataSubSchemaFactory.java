@@ -54,7 +54,9 @@ public interface GovDataSubSchemaFactory {
 
   Logger LOGGER = LoggerFactory.getLogger(GovDataSubSchemaFactory.class);
   ObjectMapper JSON_MAPPER = new ObjectMapper();
-  ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+  ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory()
+      .enable(com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.MINIMIZE_QUOTES)
+      .disable(com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
 
   /**
    * Get the appropriate ObjectMapper based on schema file extension.

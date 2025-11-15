@@ -2605,13 +2605,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String censusRegionsJson = MAPPER.writeValueAsString(BLS.censusRegions);
         String metroBlsAreaCodesJson = MAPPER.writeValueAsString(BLS.metroBlsAreaCodes);
 
-        // Load and execute SQL that creates table and loads data from JSON strings
-        executeWithParams(duckdb,
+        // Load SQL template and substitute JSON parameters (can't use PreparedStatement for json_each)
+        String loadSql = substituteSqlParameters(
             loadSqlResource("/sql/bls/load_geographies_from_json.sql"),
             ImmutableMap.of(
                 "stateFipsJson", stateFipsJson,
                 "censusRegionsJson", censusRegionsJson,
                 "metroBlsAreaCodesJson", metroBlsAreaCodesJson));
+
+        // Execute SQL with direct substitution
+        try (java.sql.Statement stmt = duckdb.createStatement()) {
+          stmt.execute(loadSql);
+        }
 
         // Write partitioned parquet files by geo_type
         for (String geoType : Arrays.asList("state", "region", "metro")) {
@@ -2619,17 +2624,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String resolvedPattern = resolveParquetPath(pattern, ImmutableMap.of("geo_type", geoType));
           String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-          // Load SQL template and execute with parameters
-          executeWithParams(duckdb,
+          // Generate parquet file for this geo_type using direct substitution (COPY TO requires literal paths)
+          String generateSql = substituteSqlParameters(
               loadSqlResource("/sql/bls/generate_geographies.sql"),
-              ImmutableMap.of(
-                  "geoType", geoType,
-                  "parquetPath", parquetPath));
+              ImmutableMap.of("geoType", geoType, "parquetPath", parquetPath));
+          try (java.sql.Statement stmt = duckdb.createStatement()) {
+            stmt.execute(generateSql);
+          }
 
-          long count = 0;
-          try (ResultSet rs = queryWithParams(duckdb,
+          // Count records using direct substitution
+          String countSql = substituteSqlParameters(
               loadSqlResource("/sql/bls/count_geographies.sql"),
-              ImmutableMap.of("geoType", geoType))) {
+              ImmutableMap.of("geoType", geoType));
+          long count = 0;
+          try (java.sql.Statement stmt = duckdb.createStatement();
+               ResultSet rs = stmt.executeQuery(countSql)) {
             if (rs.next()) {
               count = rs.getLong(1);
             }

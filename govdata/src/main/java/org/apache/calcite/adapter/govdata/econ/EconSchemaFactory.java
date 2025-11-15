@@ -302,7 +302,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
             "Could not find " + getSchemaResourceName() + " resource file");
       }
 
-      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.ObjectMapper mapper = getMapperForSchema(getSchemaResourceName());
       Map<String, Object> schema = mapper.readValue(is, Map.class);
 
       Map<String, Map<String, Object>> bulkDownloadsJson =
