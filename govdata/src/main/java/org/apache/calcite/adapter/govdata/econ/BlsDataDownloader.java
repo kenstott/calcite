@@ -2661,9 +2661,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             loadSqlResource("/sql/bls/load_naics_from_json.sql"),
             ImmutableMap.of("naicsSupersectorsJson", naicsJson));
 
-        // Ensure parent directory exists
-        ensureParentDirectory(parquetPath);
-
         // Load SQL template and execute with parameters
         executeWithParams(duckdb,
             loadSqlResource("/sql/bls/generate_naics_sectors.sql"),

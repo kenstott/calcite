@@ -1119,9 +1119,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           String parquetPath = "type=reference/section=" + section + "/nipa_tables.parquet";
           String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
 
-          // Ensure parent directory exists
-          ensureParentDirectory(fullParquetPath);
-
           String copySql =
               String.format("COPY (SELECT * FROM enriched WHERE coalesce(section, 'unknown') = '%s') "
               + "TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",

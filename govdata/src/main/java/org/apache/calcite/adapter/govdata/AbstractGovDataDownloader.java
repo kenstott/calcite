@@ -1505,9 +1505,6 @@ public abstract class AbstractGovDataDownloader {
     // Write aggregated data to JSON cache file
     // (pattern, jsonPath, fullJsonPath already resolved earlier for cache check)
 
-    // Ensure parent directory exists
-    ensureParentDirectory(fullJsonPath);
-
     // Write as JSON array - use ByteArrayOutputStream then writeFile
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     MAPPER.writeValue(baos, allData);
@@ -2343,7 +2340,6 @@ public abstract class AbstractGovDataDownloader {
    * @throws IOException if write fails
    */
   private void writeJsonRecords(String fullJsonPath, List<Map<String, Object>> records) throws IOException {
-    ensureParentDirectory(fullJsonPath);
 
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     MAPPER.writeValue(baos, records);
