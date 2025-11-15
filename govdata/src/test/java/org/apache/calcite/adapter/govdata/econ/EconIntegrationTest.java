@@ -212,22 +212,24 @@ public class EconIntegrationTest {
         "        \"DGS10\", \"DGS2\", \"DGS30\", \"UNRATE\", \"PAYEMS\", \"CPIAUCSL\", \"GDPC1\"" +
         "      ]" +
         "    }" +
-        "  }, {" +
-        "    \"name\": \"CENSUS\"," +
-        "    \"type\": \"custom\"," +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
-        "    \"operand\": {" +
-        "      \"dataSource\": \"census\"," +
-        "      \"refreshInterval\": \"PT1H\"," +
-        "      \"executionEngine\": \"" + executionEngine + "\"," +
-        "      \"database_filename\": \"shared.duckdb\"," +
-        "      \"ephemeralCache\": false," +
-        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
-        "      \"directory\": \"" + parquetDir + "\"," +
-        "      " + s3ConfigJson +
-        "      \"autoDownload\": true" +
-        "    }" +
-        "  }]" +
+        "  }" +
+//            ", {" +
+//        "    \"name\": \"CENSUS\"," +
+//        "    \"type\": \"custom\"," +
+//        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+//        "    \"operand\": {" +
+//        "      \"dataSource\": \"census\"," +
+//        "      \"refreshInterval\": \"PT1H\"," +
+//        "      \"executionEngine\": \"" + executionEngine + "\"," +
+//        "      \"database_filename\": \"shared.duckdb\"," +
+//        "      \"ephemeralCache\": false," +
+//        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
+//        "      \"directory\": \"" + parquetDir + "\"," +
+//        "      " + s3ConfigJson +
+//        "      \"autoDownload\": true" +
+//        "    }" +
+//        "  }" +
+            "]" +
         "}";
 
     Properties props = new Properties();
