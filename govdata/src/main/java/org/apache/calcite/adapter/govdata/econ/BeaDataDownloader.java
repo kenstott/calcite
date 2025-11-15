@@ -142,23 +142,23 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     try {
       String refTablePath = downloadReferenceNipaTables();
-      LOGGER.info("✓ NIPA catalog downloaded: {}",
+      LOGGER.info("BEA reference: NIPA catalog downloaded: {}",
           refTablePath.substring(refTablePath.lastIndexOf('/') + 1));
 
       convertReferenceNipaTablesWithFrequencies();
-      LOGGER.info("✓ NIPA catalog enriched with frequency data");
+      LOGGER.info("BEA reference: NIPA catalog enriched with frequency metadata");
     } catch (Exception e) {
-      LOGGER.warn("✗ NIPA catalog unavailable: {}", e.getMessage());
+      LOGGER.warn("BEA reference: NIPA catalog download failed: {}", e.getMessage());
     }
 
     try {
       downloadRegionalLineCodeCatalog();
-      LOGGER.info("✓ Regional line codes downloaded (54 tables)");
+      LOGGER.info("BEA reference: Regional LineCode catalog downloaded (54 tables)");
 
       convertRegionalLineCodeCatalog();
-      LOGGER.info("✓ Regional catalog enriched with metadata");
+      LOGGER.info("BEA reference: Regional catalog enriched with table metadata");
     } catch (Exception e) {
-      LOGGER.warn("✗ Regional catalog unavailable: {}", e.getMessage());
+      LOGGER.warn("BEA reference: Regional catalog download failed: {}", e.getMessage());
     }
   }
 
@@ -176,7 +176,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         endYear - startYear + 1, startYear, endYear);
 
     if (nipaTablesList != null) {
-      LOGGER.info("• NIPA: {} tables", nipaTablesList.size());
+      LOGGER.info("National accounts: {} NIPA tables configured", nipaTablesList.size());
       downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
     }
 
@@ -522,7 +522,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     for (String tableNameKey : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tableNameKey);
+        LOGGER.warn("Regional income download: No LineCodes available for table {} in catalog, skipping table",
+            tableNameKey);
         continue;
       }
 
@@ -620,7 +621,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     for (String tableNameKey : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("No LineCodes found in catalog for table {}, skipping", tableNameKey);
+        LOGGER.warn("Regional income conversion: No LineCodes available for table {} in catalog, skipping table",
+            tableNameKey);
         continue;
       }
 
@@ -1091,7 +1093,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     CacheKey cacheKey = new CacheKey(tableName, allParams);
 
     if (cacheManifest.isParquetConverted(cacheKey)) {
-      LOGGER.info("⚡ reference_nipa_tables already converted to parquet, skipping");
+      LOGGER.info("BEA reference: NIPA catalog already converted to parquet, skipping");
       return;
     }
 
@@ -1296,10 +1298,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // 2. Filter using DuckDB SQL query (FAST!)
     List<CacheManifestQueryHelper.DownloadRequest> needed;
     try {
-      long startMs = System.currentTimeMillis();
       String manifestPath = operatingDirectory + "/cache_manifest.json";
       needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests);
-      long elapsedMs = System.currentTimeMillis() - startMs;
 
       // After filtering
       if (needed.size() < allRequests.size()) {
@@ -1352,7 +1352,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("✓ {} {}: {} processed, {} cached",
+    LOGGER.info("{} {} complete: {} operations executed, {} cached/skipped",
         tableName, operationDescription, executed, skipped);
 
     // Save manifest
@@ -1369,7 +1369,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws IOException if catalog files cannot be read
    */
   public Map<String, Set<String>> loadRegionalLineCodeCatalog() throws IOException {
-    LOGGER.info("Querying regional line codes from parquet catalog");
+    LOGGER.info("BEA reference: Loading regional LineCode catalog from parquet");
 
     String tableName = "reference_regional_linecodes";
     Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -1399,7 +1399,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           totalLineCodes++;
         }
 
-        LOGGER.info("✓ Regional catalog: {} tables, {} unique line codes",
+        LOGGER.info("BEA reference: Regional catalog loaded: {} tables, {} total LineCodes",
             catalogMap.size(), totalLineCodes);
 
         // Show sample for verification
