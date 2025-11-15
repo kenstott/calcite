@@ -37,7 +37,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
@@ -773,14 +772,11 @@ public class FredCatalogDownloader {
 
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
-      // Execute using in-memory DuckDB connection
-      try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+      // Execute using in-memory DuckDB connection with extensions pre-loaded
+      try (Connection conn = org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.getDuckDBConnection();
            Statement stmt = conn.createStatement()) {
 
-        // Load DuckDB extensions (quackformers, spatial, etc.)
-        loadDuckDBExtensions(conn);
-
-        // Execute the COPY statement
+        // Execute the COPY statement (extensions already loaded via getDuckDBConnection)
         stmt.execute(sql);
 
         LOGGER.info("Successfully converted {} to Parquet using DuckDB", "reference_fred_series");
@@ -806,29 +802,6 @@ public class FredCatalogDownloader {
     }
   }
 
-  /**
-   * Loads DuckDB extensions for data conversion (quackformers, spatial, etc.).
-   */
-  private void loadDuckDBExtensions(Connection conn) {
-    String[][] extensions = {
-        {"quackformers", "FROM community"},
-        {"spatial", ""},
-        {"h3", "FROM community"},
-        {"excel", ""},
-        {"fts", ""}
-    };
-
-    for (String[] ext : extensions) {
-      try {
-        LOGGER.debug("Loading DuckDB extension: {}", ext[0]);
-        conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
-        conn.createStatement().execute("LOAD " + ext[0]);
-        LOGGER.debug("Successfully loaded extension: {}", ext[0]);
-      } catch (SQLException e) {
-        LOGGER.warn("Failed to load extension '{}': {}", ext[0], e.getMessage());
-      }
-    }
-  }
 
   /**
    * Writes in-memory records to a JSON file.

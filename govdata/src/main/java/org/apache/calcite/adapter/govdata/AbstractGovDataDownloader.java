@@ -812,6 +812,73 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Loads bulk download configurations from the schema resource file.
+   * Bulk downloads are shared download specifications that multiple tables can reference.
+   *
+   * <p>Schema structure:
+   * <pre>
+   * {
+   *   "bulkDownloads": {
+   *     "qcew_annual_bulk": {
+   *       "cachePattern": "type=qcew_bulk/year={year}/frequency={frequency}/qcew.zip",
+   *       "url": "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip",
+   *       "variables": ["year", "frequency"],
+   *       "comment": "QCEW bulk CSV download shared by multiple tables"
+   *     }
+   *   }
+   * }
+   * </pre>
+   *
+   * @return Map of bulk download name to BulkDownloadConfig, or empty map if no bulkDownloads section
+   * @throws RuntimeException if schema file cannot be loaded or parsed
+   */
+  protected Map<String, BulkDownloadConfig> loadBulkDownloads() {
+    try {
+      InputStream schemaStream = getClass().getResourceAsStream(schemaResourceName);
+      if (schemaStream == null) {
+        throw new IllegalStateException(
+            "Could not find " + schemaResourceName + " resource file");
+      }
+
+      JsonNode root = MAPPER.readTree(schemaStream);
+
+      if (!root.has("bulkDownloads") || root.get("bulkDownloads").isNull()) {
+        LOGGER.debug("No 'bulkDownloads' section found in schema, returning empty map");
+        return new HashMap<>();
+      }
+
+      JsonNode bulkDownloadsNode = root.get("bulkDownloads");
+      Map<String, BulkDownloadConfig> bulkDownloads = new HashMap<>();
+
+      bulkDownloadsNode.fields().forEachRemaining(entry -> {
+        String name = entry.getKey();
+        JsonNode config = entry.getValue();
+
+        String cachePattern = config.has("cachePattern") ? config.get("cachePattern").asText() : null;
+        String url = config.has("url") ? config.get("url").asText() : null;
+
+        List<String> variables = new ArrayList<>();
+        if (config.has("variables") && config.get("variables").isArray()) {
+          config.get("variables").forEach(v -> variables.add(v.asText()));
+        }
+
+        String comment = config.has("comment") ? config.get("comment").asText() : null;
+
+        BulkDownloadConfig bulkDownload = new BulkDownloadConfig(name, cachePattern, url, variables, comment);
+        bulkDownloads.put(name, bulkDownload);
+
+        LOGGER.debug("Loaded bulk download config: {}", bulkDownload);
+      });
+
+      LOGGER.info("Loaded {} bulk download configurations from {}", bulkDownloads.size(), schemaResourceName);
+      return bulkDownloads;
+
+    } catch (IOException e) {
+      throw new RuntimeException("Error loading bulk downloads from " + schemaResourceName, e);
+    }
+  }
+
+  /**
    * Extracts an API parameter list from table metadata.
    *
    * <p>Looks for a JSON array in the download configuration at the specified key.
@@ -2030,16 +2097,17 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Creates a DuckDB connection with conversion-time extensions loaded.
+   * Creates a DuckDB connection with all conversion extensions pre-loaded.
+   * This is a shared utility method that can be used by any govdata downloader.
    *
    * <p>Extensions are loaded with graceful degradation - failures are logged as warnings
    * but don't prevent connection creation. This allows the system to work even if some
    * extensions are unavailable.</p>
    *
    * @return DuckDB connection with extensions loaded
-   * @throws java.sql.SQLException if connection creation fails
+   * @throws java.sql.SQLException if connection or extension loading fails
    */
-  private Connection getDuckDBConnection() throws java.sql.SQLException {
+  public static Connection getDuckDBConnection() throws java.sql.SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     loadConversionExtensions(conn);
     return conn;
@@ -2062,7 +2130,7 @@ public abstract class AbstractGovDataDownloader {
    *
    * @param conn DuckDB connection to load extensions into
    */
-  private void loadConversionExtensions(Connection conn) {
+  private static void loadConversionExtensions(Connection conn) {
     String[][] extensions = {
         {"quackformers", "FROM community"},  // Embedding generation
         {"spatial", ""},                      // GIS operations
@@ -2114,7 +2182,7 @@ public abstract class AbstractGovDataDownloader {
    * @param conn DuckDB connection to detect version
    * @return Full GitHub URL to the quackformers binary
    */
-  private String buildQuackformersGitHubUrl(Connection conn) throws java.sql.SQLException {
+  private static String buildQuackformersGitHubUrl(Connection conn) throws java.sql.SQLException {
     // Detect DuckDB version
     String duckdbVersion = detectDuckDBVersion(conn);
 
@@ -2132,7 +2200,7 @@ public abstract class AbstractGovDataDownloader {
    * @param conn DuckDB connection
    * @return Version string (e.g., "1.4.1")
    */
-  private String detectDuckDBVersion(Connection conn) throws java.sql.SQLException {
+  private static String detectDuckDBVersion(Connection conn) throws java.sql.SQLException {
     try (java.sql.ResultSet rs = conn.createStatement().executeQuery("SELECT library_version FROM pragma_version()")) {
       if (rs.next()) {
         String fullVersion = rs.getString(1);
@@ -2152,7 +2220,7 @@ public abstract class AbstractGovDataDownloader {
    *
    * @return Platform string (e.g., "osx_arm64", "linux_amd64", "windows_amd64")
    */
-  private String detectPlatform() {
+  private static String detectPlatform() {
     String osName = System.getProperty("os.name").toLowerCase();
     String osArch = System.getProperty("os.arch").toLowerCase();
 
@@ -2380,7 +2448,32 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Extract configuration values
-    String sourcePattern = csvConversionNode.get("sourcePattern").asText();
+    String sourcePattern;
+
+    // Check if this table uses a bulkDownload reference
+    if (downloadNode.has("bulkDownload")) {
+      String bulkDownloadName = downloadNode.get("bulkDownload").asText();
+      LOGGER.debug("Resolving bulkDownload reference: {}", bulkDownloadName);
+
+      // Load bulk downloads from schema
+      Map<String, BulkDownloadConfig> bulkDownloads = loadBulkDownloads();
+      BulkDownloadConfig bulkConfig = bulkDownloads.get(bulkDownloadName);
+
+      if (bulkConfig == null) {
+        throw new IllegalArgumentException(
+            "Table '" + tableName + "' references unknown bulkDownload: '" + bulkDownloadName + "'");
+      }
+
+      sourcePattern = bulkConfig.getCachePattern();
+      LOGGER.debug("Resolved sourcePattern from bulkDownload '{}': {}", bulkDownloadName, sourcePattern);
+    } else if (csvConversionNode.has("sourcePattern")) {
+      // Fall back to explicit sourcePattern in csvConversion
+      sourcePattern = csvConversionNode.get("sourcePattern").asText();
+    } else {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' has no 'sourcePattern' in csvConversion and no 'bulkDownload' reference");
+    }
+
     String csvPath = csvConversionNode.has("csvPath") ? csvConversionNode.get("csvPath").asText() : null;
 
     // Resolve source ZIP path and target Parquet path
