@@ -279,6 +279,16 @@ public class CacheManifestQueryHelper {
       keys.add(req.buildKey());
     }
 
+    // Build array literal for DuckDB (setObject with String[] doesn't work reliably)
+    StringBuilder arrayLiteral = new StringBuilder("[");
+    for (int i = 0; i < keys.size(); i++) {
+      if (i > 0) arrayLiteral.append(", ");
+      // Escape single quotes in the key
+      String escapedKey = keys.get(i).replace("'", "''");
+      arrayLiteral.append("'").append(escapedKey).append("'");
+    }
+    arrayLiteral.append("]");
+
     // Single SQL query with IN clause
     // Uses DuckDB's unnest() to expand the key list into a table
     String sql =
@@ -290,10 +300,10 @@ public class CacheManifestQueryHelper {
             "      json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
             "      json_extract(value, '$.etag')::VARCHAR as etag " +
             "    FROM read_json(?, format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
-            "    json_each(t.entries) AS entries(key, value) " +
+            "    json_each(json_extract(t.json, '$.entries')) AS entries(key, value) " +
             "), " +
             "  needed AS ( " +
-            "    SELECT unnest(CAST(? AS VARCHAR[])) as cache_key " +
+            "    SELECT unnest(" + arrayLiteral + "::VARCHAR[]) as cache_key " +
             "  ) " +
             "SELECT n.cache_key " +
             "FROM needed n " +
@@ -306,9 +316,8 @@ public class CacheManifestQueryHelper {
          PreparedStatement query = duckdb.prepareStatement(sql)) {
 
       query.setString(1, manifestPath);
-      query.setObject(2, keys.toArray(new String[0]));
+      query.setLong(2, System.currentTimeMillis());
       query.setLong(3, System.currentTimeMillis());
-      query.setLong(4, System.currentTimeMillis());
 
       List<String> uncachedKeys = new ArrayList<>();
       try (ResultSet rs = query.executeQuery()) {
