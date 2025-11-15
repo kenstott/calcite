@@ -1221,37 +1221,43 @@
           "name": "date",
           "type": "string",
           "nullable": true,
-          "comment": "Observation date (ISO 8601 format)"
+          "comment": "Observation date (ISO 8601 format)",
+          "expression": "year || '-' || LPAD(REPLACE(period, 'M', ''), 2, '0') || '-01'"
         },
         {
-          "name": "series",
+          "name": "series_id",
           "type": "string",
           "nullable": true,
-          "comment": "BLS series identifier"
+          "comment": "BLS series identifier",
+          "expression": "seriesID"
         },
         {
           "name": "value",
           "type": "double",
           "nullable": true,
-          "comment": "Employment statistic value"
+          "comment": "Employment statistic value",
+          "expression": "CAST(value AS DOUBLE)"
         },
         {
           "name": "area_code",
           "type": "string",
           "nullable": true,
-          "comment": "BLS area code"
+          "comment": "BLS area code",
+          "expression": "'{state_fips}'"
         },
         {
           "name": "area_type",
           "type": "string",
           "nullable": true,
-          "comment": "Area type classification"
+          "comment": "Area type classification",
+          "expression": "'state'"
         },
         {
           "name": "measure",
           "type": "string",
           "nullable": true,
-          "comment": "Employment measure type"
+          "comment": "Employment measure type",
+          "expression": "CASE SUBSTRING(seriesID, LENGTH(seriesID), 1) WHEN '3' THEN 'unemployment_rate' WHEN '4' THEN 'unemployment' WHEN '5' THEN 'employment' WHEN '6' THEN 'labor_force' ELSE 'unknown' END"
         }
       ],
       "download": {

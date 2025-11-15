@@ -55,91 +55,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private final String apiKey;
   private final Set<String> enabledTables;
 
-  // Census region codes and names
-
-  // Metro CPI area codes mapping: Publication Code → CPI Area Code
-  // Format for CPI series: CUUR{area_code}SA0 where area_code is like S35E, S49G, etc.
-  private static final Map<String, String> METRO_CPI_CODES = new HashMap<>();
-  static {
-    METRO_CPI_CODES.put("A100", "S35D");  // New York-Newark-Jersey City, NY-NJ-PA
-    METRO_CPI_CODES.put("A400", "S49G");  // Los Angeles-Long Beach-Anaheim, CA
-    METRO_CPI_CODES.put("A207", "S12A");  // Chicago-Naperville-Elgin, IL-IN-WI
-    METRO_CPI_CODES.put("A425", "S37B");  // Houston-The Woodlands-Sugar Land, TX
-    METRO_CPI_CODES.put("A423", "S49B");  // Phoenix-Mesa-Scottsdale, AZ
-    METRO_CPI_CODES.put("A102", "S12B");  // Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
-    METRO_CPI_CODES.put("A426", null);    // San Antonio - No CPI data available
-    METRO_CPI_CODES.put("A421", "S49E");  // San Diego-Carlsbad, CA
-    METRO_CPI_CODES.put("A127", "S23A");  // Dallas-Fort Worth-Arlington, TX
-    METRO_CPI_CODES.put("A429", "S49A");  // San Jose-Sunnyvale-Santa Clara, CA (San Francisco-Oakland-Hayward)
-    METRO_CPI_CODES.put("A438", null);    // Austin - No CPI data available
-    METRO_CPI_CODES.put("A420", "S35C");  // Jacksonville, FL (part of Miami-Fort Lauderdale)
-    METRO_CPI_CODES.put("A103", "S35E");  // Boston-Cambridge-Newton, MA-NH
-    METRO_CPI_CODES.put("A428", "S48B");  // Seattle-Tacoma-Bellevue, WA
-    METRO_CPI_CODES.put("A427", "S48A");  // Denver-Aurora-Lakewood, CO
-    METRO_CPI_CODES.put("A101", "S35B");  // Washington-Arlington-Alexandria, DC-VA-MD-WV
-    METRO_CPI_CODES.put("A211", "S23B");  // Detroit-Warren-Dearborn, MI
-    METRO_CPI_CODES.put("A104", null);    // Cleveland - No CPI data available
-    METRO_CPI_CODES.put("A212", "S24A");  // Minneapolis-St. Paul-Bloomington, MN-WI
-    METRO_CPI_CODES.put("A422", "S35C");  // Miami-Fort Lauderdale-West Palm Beach, FL
-    METRO_CPI_CODES.put("A419", "S35A");  // Atlanta-Sandy Springs-Roswell, GA
-    METRO_CPI_CODES.put("A437", "S49C");  // Portland-Vancouver-Hillsboro, OR-WA
-    METRO_CPI_CODES.put("A424", "S49D");  // Riverside-San Bernardino-Ontario, CA
-    METRO_CPI_CODES.put("A320", "S24B");  // St. Louis, MO-IL
-    METRO_CPI_CODES.put("A319", null);    // Baltimore - No CPI data available
-    METRO_CPI_CODES.put("A433", "S35D");  // Tampa-St. Petersburg-Clearwater, FL (shares NYC code)
-    METRO_CPI_CODES.put("A440", null);    // Anchorage - No CPI data available
-  }
-
-  // Metro area codes for major metropolitan areas (Publication codes)
-  private static final Map<String, String> METRO_AREA_CODES = new HashMap<>();
-  static {
-    METRO_AREA_CODES.put("A100", "New York-Newark-Jersey City, NY-NJ-PA");
-    METRO_AREA_CODES.put("A400", "Los Angeles-Long Beach-Anaheim, CA");
-    METRO_AREA_CODES.put("A207", "Chicago-Naperville-Elgin, IL-IN-WI");
-    METRO_AREA_CODES.put("A425", "Houston-The Woodlands-Sugar Land, TX");
-    METRO_AREA_CODES.put("A423", "Phoenix-Mesa-Scottsdale, AZ");
-    METRO_AREA_CODES.put("A102", "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD");
-    METRO_AREA_CODES.put("A426", "San Antonio-New Braunfels, TX");
-    METRO_AREA_CODES.put("A421", "San Diego-Carlsbad, CA");
-    METRO_AREA_CODES.put("A127", "Dallas-Fort Worth-Arlington, TX");
-    METRO_AREA_CODES.put("A429", "San Jose-Sunnyvale-Santa Clara, CA");
-    METRO_AREA_CODES.put("A438", "Austin-Round Rock, TX");
-    METRO_AREA_CODES.put("A420", "Jacksonville, FL");
-    METRO_AREA_CODES.put("A103", "Boston-Cambridge-Newton, MA-NH");
-    METRO_AREA_CODES.put("A428", "Seattle-Tacoma-Bellevue, WA");
-    METRO_AREA_CODES.put("A427", "Denver-Aurora-Lakewood, CO");
-    METRO_AREA_CODES.put("A101", "Washington-Arlington-Alexandria, DC-VA-MD-WV");
-    METRO_AREA_CODES.put("A211", "Detroit-Warren-Dearborn, MI");
-    METRO_AREA_CODES.put("A104", "Cleveland-Elyria, OH");
-    METRO_AREA_CODES.put("A212", "Minneapolis-St. Paul-Bloomington, MN-WI");
-    METRO_AREA_CODES.put("A422", "Miami-Fort Lauderdale-West Palm Beach, FL");
-    METRO_AREA_CODES.put("A419", "Atlanta-Sandy Springs-Roswell, GA");
-    METRO_AREA_CODES.put("A437", "Portland-Vancouver-Hillsboro, OR-WA");
-    METRO_AREA_CODES.put("A424", "Riverside-San Bernardino-Ontario, CA");
-    METRO_AREA_CODES.put("A320", "St. Louis, MO-IL");
-    METRO_AREA_CODES.put("A319", "Baltimore-Columbia-Towson, MD");
-    METRO_AREA_CODES.put("A433", "Tampa-St. Petersburg-Clearwater, FL");
-    METRO_AREA_CODES.put("A440", "Anchorage, AK");
-  }
-
-
-
-  // Common BLS series IDs - loaded from bls-constants.json
+  // Helper methods for generating BLS series IDs
   public static class Series {
-    // Employment Statistics
-    public static final String UNEMPLOYMENT_RATE = BLS.seriesIds.employment.unemploymentRate;
-    public static final String EMPLOYMENT_LEVEL = BLS.seriesIds.employment.employmentLevel;
-    public static final String LABOR_FORCE_PARTICIPATION = BLS.seriesIds.employment.laborForceParticipation;
-
-    // Inflation Metrics
-    public static final String CPI_ALL_URBAN = BLS.seriesIds.inflation.cpiAllUrban;
-    public static final String CPI_CORE = BLS.seriesIds.inflation.cpiCore;
-    public static final String PPI_FINAL_DEMAND = BLS.seriesIds.inflation.ppiFinalDemand;
-
-    // Wage Growth
-    public static final String AVG_HOURLY_EARNINGS = BLS.seriesIds.wages.avgHourlyEarnings;
-    public static final String EMPLOYMENT_COST_INDEX = BLS.seriesIds.wages.employmentCostIndex;
-
     /**
      * Generates BLS regional CPI series ID.
      * Format: CUUR{REGION}SA0
@@ -209,7 +126,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
      */
     public static List<String> getAllMetroIndustryEmploymentSeriesIds() {
       List<String> seriesIds = new ArrayList<>();
-      for (String metroCode : METRO_AREA_CODES.keySet()) {
+      for (String metroCode : BLS.metroCpiCodes.keySet()) {
         for (String supersector : BLS.naicsSupersectors.keySet()) {
           seriesIds.add(getMetroIndustryEmploymentSeriesId(metroCode, supersector));
         }
@@ -260,7 +177,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Geographic codes (Jackson handles Map<String, String> automatically)
     public Map<String, String> stateFipsCodes;
     public Map<String, String> censusRegions;
+    public Map<String, String> blsRegionCodes;  // 2-letter BLS region codes (NE, MW, SO, WE)
     public Map<String, String> metroBlsAreaCodes;
+
+    // Metro CPI codes with metadata
+    public Map<String, MetroCpiCode> metroCpiCodes;
+
+    // Measure codes (last digit of series ID to human-readable name)
+    public Map<String, String> measureCodes;
 
     // Industry classifications
     public Map<String, String> naicsSupersectors;
@@ -341,6 +265,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       public String joltsState;
       public String wageGrowth;
       public String regionalEmployment;
+      public String referenceJoltsIndustries;
+      public String referenceJoltsDataelements;
     }
 
     /**
@@ -925,11 +851,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Series IDs to fetch (constant across all years)
     final List<String> seriesIds =
-        List.of(Series.UNEMPLOYMENT_RATE,
-        Series.EMPLOYMENT_LEVEL,
-        Series.LABOR_FORCE_PARTICIPATION);
+        List.of(BLS.seriesIds.employment.unemploymentRate,
+        BLS.seriesIds.employment.employmentLevel,
+        BLS.seriesIds.employment.laborForceParticipation);
 
-    String tableName = "employment_statistics";
+    String tableName = BLS.tableNames.employmentStatistics;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -987,7 +913,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses catalog-driven pattern with iterateTableOperationsOptimized() for 10-20x performance.
    */
   public void downloadRegionalCpi(int startYear, int endYear) {
-    String tableName = "regional_cpi";
+    String tableName = BLS.tableNames.regionalCpi;
 
     LOGGER.info("Downloading regional CPI for {} Census regions for years {}-{}",
         regionCodesList.size(), startYear, endYear);
@@ -1033,7 +959,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses catalog-driven pattern with iterateTableOperationsOptimized() for 10-20x performance.
    */
   public void downloadMetroCpi(int startYear, int endYear) {
-    String tableName = "metro_cpi";
+    String tableName = BLS.tableNames.metroCpi;
 
     LOGGER.info("Downloading metro area CPI for {} metros for years {}-{}",
         metroGeographiesMap.size(), startYear, endYear);
@@ -1098,7 +1024,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 seriesIds.size() > 1 ? seriesIds.get(1) : "none",
                 seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
-    String tableName = "state_industry";
+    String tableName = BLS.tableNames.stateIndustry;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1138,7 +1064,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadStateWages(int startYear, int endYear) {
     LOGGER.info("Downloading state wages from QCEW CSV files for {}-{}", startYear, endYear);
 
-    String tableName = "state_wages";
+    String tableName = BLS.tableNames.stateWages;
 
     // QCEW data only available from 1990 forward
     int effectiveStartYear = Math.max(startYear, 1990);
@@ -1186,7 +1112,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadCountyWages(int startYear, int endYear) {
     LOGGER.info("Downloading county wages from QCEW CSV files for {}-{}", startYear, endYear);
 
-    String tableName = "county_wages";
+    String tableName = BLS.tableNames.countyWages;
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
@@ -1239,7 +1165,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadCountyQcew(int startYear, int endYear) {
     LOGGER.info("Downloading county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
 
-    String tableName = "county_qcew";
+    String tableName = BLS.tableNames.countyQcew;
 
     // Get QCEW ZIP download metadata from state_wages table (shared download)
     Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
@@ -1287,8 +1213,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   public void downloadMetroIndustryEmployment(int startYear, int endYear) {
     LOGGER.info("Downloading metro industry employment for {} metros × {} sectors ({} series) for {}-{}",
-                METRO_AREA_CODES.size(), BLS.naicsSupersectors.size(),
-                METRO_AREA_CODES.size() * BLS.naicsSupersectors.size(), startYear, endYear);
+                BLS.metroCpiCodes.size(), BLS.naicsSupersectors.size(),
+                BLS.metroCpiCodes.size() * BLS.naicsSupersectors.size(), startYear, endYear);
 
     final List<String> seriesIds = Series.getAllMetroIndustryEmploymentSeriesIds();
     LOGGER.info("Generated {} metro industry employment series IDs", seriesIds.size());
@@ -1297,7 +1223,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 seriesIds.size() > 1 ? seriesIds.get(1) : "none",
                 seriesIds.size() > 2 ? seriesIds.get(2) : "none");
 
-    String tableName = "metro_industry";
+    String tableName = BLS.tableNames.metroIndustry;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1450,9 +1376,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build variables map for path/URL resolution
-    Map<String, String> variables = new HashMap<>();
-    variables.put("year", String.valueOf(year));
-    variables.put("frequency", frequency);
+    Map<String, String> variables = ImmutableMap.of(
+        "year", String.valueOf(year),
+        "frequency", frequency);
 
     // Resolve complete cache path from bulkDownload cachePattern
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory,
@@ -1488,7 +1414,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     } catch (IOException e) {
       LOGGER.error("Error downloading QCEW bulk {} file for {}: {}", frequency, year, e.getMessage());
-      throw new IOException("Failed to download QCEW bulk file for year " + year + ": " + e.getMessage(), e);
+      throw new IOException(String.format("Failed to download QCEW bulk file for year %d: %s", year, e.getMessage()), e);
     }
   }
 
@@ -1501,7 +1427,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadJoltsRegional(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", startYear, endYear);
 
-    String tableName = "jolts_regional";
+    String tableName = BLS.tableNames.joltsRegional;
 
     // Load FTP source paths from metadata
     List<FtpFileSource> ftpSources = loadFtpSourcePaths(tableName);
@@ -1551,7 +1477,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadJoltsState(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", startYear, endYear);
 
-    String tableName = "jolts_state";
+    String tableName = BLS.tableNames.joltsState;
 
     // Load FTP source paths from metadata
     List<FtpFileSource> ftpSources = loadFtpSourcePaths(tableName);
@@ -1598,7 +1524,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadJoltsIndustries() {
     LOGGER.info("Downloading JOLTS industry reference data from BLS FTP");
 
-    String tableName = "reference_jolts_industries";
+    String tableName = BLS.tableNames.referenceJoltsIndustries;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1614,7 +1540,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           Map<String, Object> metadata = loadTableMetadata(tableName);
           JsonNode sourcePaths = (JsonNode) metadata.get("sourcePaths");
           if (sourcePaths == null || !sourcePaths.has("ftpFiles")) {
-            throw new IOException("Table " + tableName + " missing sourcePaths.ftpFiles in schema");
+            throw new IOException(String.format("Table %s missing sourcePaths.ftpFiles in schema", tableName));
           }
 
           JsonNode ftpFile = sourcePaths.get("ftpFiles").get(0);
@@ -1677,7 +1603,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadJoltsDataelements() {
     LOGGER.info("Downloading JOLTS data element reference data from BLS FTP");
 
-    String tableName = "reference_jolts_dataelements";
+    String tableName = BLS.tableNames.referenceJoltsDataelements;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1693,7 +1619,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           Map<String, Object> metadata = loadTableMetadata(tableName);
           JsonNode sourcePaths = (JsonNode) metadata.get("sourcePaths");
           if (sourcePaths == null || !sourcePaths.has("ftpFiles")) {
-            throw new IOException("Table " + tableName + " missing sourcePaths.ftpFiles in schema");
+            throw new IOException(String.format("Table %s missing sourcePaths.ftpFiles in schema", tableName));
           }
 
           JsonNode ftpFile = sourcePaths.get("ftpFiles").get(0);
@@ -1721,11 +1647,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadInflationMetrics(int startYear, int endYear) {
 
     final List<String> seriesIds =
-        List.of(Series.CPI_ALL_URBAN,
-        Series.CPI_CORE,
-        Series.PPI_FINAL_DEMAND);
+        List.of(BLS.seriesIds.inflation.cpiAllUrban,
+        BLS.seriesIds.inflation.cpiCore,
+        BLS.seriesIds.inflation.ppiFinalDemand);
 
-    String tableName = "inflation_metrics";
+    String tableName = BLS.tableNames.inflationMetrics;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1758,10 +1684,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadWageGrowth(int startYear, int endYear) {
 
     final List<String> seriesIds =
-        List.of(Series.AVG_HOURLY_EARNINGS,
-        Series.EMPLOYMENT_COST_INDEX);
+        List.of(BLS.seriesIds.wages.avgHourlyEarnings,
+        BLS.seriesIds.wages.employmentCostIndex);
 
-    String tableName = "wage_growth";
+    String tableName = BLS.tableNames.wageGrowth;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1801,7 +1727,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadRegionalEmployment(int startYear, int endYear) {
     LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", startYear, endYear);
 
-    String tableName = "regional_employment";
+    String tableName = BLS.tableNames.regionalEmployment;
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1848,8 +1774,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             return;
           }
 
-          // Convert JSON response to Parquet and save
-          convertAndSaveRegionalEmployment(batchRoot, parquetPath, stateFips);
+          // Write raw JSON to temp file - DuckDB will handle flattening with JSON functions
+          String tempJsonPath = parquetPath.replace(".parquet", ".json");
+          storageProvider.writeFile(tempJsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+          // Build DuckDB SQL to flatten nested JSON and apply column expressions
+          // BLS returns: {Results: {series: [{seriesID: "...", data: [{year, period, value}, ...]}]}}
+          // DuckDB will UNNEST the nested structure and apply expression columns
+          List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
+          String sql = buildNestedJsonConversionSql(columns, tempJsonPath, parquetPath, stateFips);
+
+          // Execute conversion
+          executeDuckDBSql(sql, String.format("Regional employment conversion for state_fips %s year %d", stateFips, year));
+
+          // Clean up temp JSON file
+          storageProvider.delete(tempJsonPath);
 
           LOGGER.info("Saved state_fips {} year {} ({} series)", stateFips, year, seriesNode.size());
         },
@@ -1859,97 +1798,77 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Converts BLS LAUS JSON response to Parquet format and saves for a single state.
+   * Builds DuckDB SQL to convert nested BLS JSON to Parquet with column expressions.
    *
-   * @param jsonResponse BLS API JSON response containing series data
-   * @param fullParquetPath Full path for a Parquet file (already resolved with parquet directory)
-   * @param stateFips State FIPS code
-   * @throws IOException if conversion or write fails
+   * <p>Handles BLS API response structure:
+   * <pre>{@code
+   * {
+   *   "Results": {
+   *     "series": [
+   *       {
+   *         "seriesID": "LASST01...",
+   *         "data": [
+   *           {"year": "2020", "period": "M01", "value": "3.5"},
+   *           ...
+   *         ]
+   *       },
+   *       ...
+   *     ]
+   *   }
+   * }
+   * }</pre>
+   *
+   * <p>Uses DuckDB's UNNEST to flatten the nested arrays and applies column expressions
+   * from the schema to transform the data.
+   *
+   * @param columns Schema columns with expression definitions
+   * @param jsonPath Input JSON file path
+   * @param parquetPath Output Parquet file path
+   * @param stateFips State FIPS code to substitute in expressions
+   * @return DuckDB SQL COPY statement
    */
-  private void convertAndSaveRegionalEmployment(JsonNode jsonResponse, String fullParquetPath,
-      String stateFips) throws IOException {
+  private String buildNestedJsonConversionSql(
+      List<PartitionedTableConfig.TableColumn> columns,
+      String jsonPath,
+      String parquetPath,
+      String stateFips) {
 
-    // Build data records
-    List<Map<String, Object>> dataRecords = new ArrayList<>();
+    StringBuilder sql = new StringBuilder();
+    sql.append("COPY (\n  SELECT\n");
 
-    // Parse series from JSON response
-    JsonNode seriesArray = jsonResponse.path("Results").path("series");
-    if (!seriesArray.isArray()) {
-      throw new IOException("Invalid BLS response: no series array found");
-    }
-
-    for (JsonNode series : seriesArray) {
-      String seriesId = series.path("seriesID").asText();
-      JsonNode dataArray = series.path("data");
-
-      if (!dataArray.isArray()) {
-        continue;
+    // Build column expressions
+    boolean firstColumn = true;
+    for (PartitionedTableConfig.TableColumn column : columns) {
+      if (!firstColumn) {
+        sql.append(",\n");
       }
+      firstColumn = false;
 
-      // Extract measure from series ID (last digit: 3=rate, 4=unemployment, 5=employment, 6=labor force)
-      String measureCode = seriesId.substring(seriesId.length() - 1);
-      String measure = getMeasureFromCode(measureCode);
+      String columnName = column.getName();
+      sql.append("    ");
 
-      for (JsonNode dataPoint : dataArray) {
-        String yearStr = dataPoint.path("year").asText();
-        String period = dataPoint.path("period").asText();
-        String valueStr = dataPoint.path("value").asText();
-
-        // Parse value
-        double value;
-        try {
-          value = Double.parseDouble(valueStr);
-        } catch (NumberFormatException e) {
-          // Skip invalid values
-          continue;
-        }
-
-        // Construct date from the year and period (M01-M12 format)
-        String month = period.replace("M", "");
-        String date = String.format("%s-%02d-01", yearStr, Integer.parseInt(month));
-
-        // Create a data record
-        Map<String, Object> record = new HashMap<>();
-        record.put("date", date);
-        record.put("series_id", seriesId);
-        record.put("value", value);
-        record.put("area_code", stateFips);
-        record.put("area_type", "state");
-        record.put("measure", measure);
-
-        dataRecords.add(record);
+      if (column.hasExpression()) {
+        // Apply column expression, substituting {state_fips} placeholder
+        String expression = column.getExpression().replace("{state_fips}", "'" + stateFips + "'");
+        sql.append("(").append(expression).append(") AS ").append(columnName);
+      } else {
+        // Regular column - direct mapping
+        sql.append(columnName);
       }
     }
 
-    if (dataRecords.isEmpty()) {
-      LOGGER.warn("No records parsed from BLS response for state FIPS {}", stateFips);
-      return;
-    }
+    // FROM clause: UNNEST the nested JSON structure
+    // This flattens Results.series[*].data[*] into rows with seriesID, year, period, value
+    sql.append("\n  FROM (\n");
+    sql.append("    SELECT\n");
+    sql.append("      series.seriesID,\n");
+    sql.append("      UNNEST(series.data, recursive := true)\n");
+    sql.append("    FROM read_json('").append(jsonPath).append("', format := 'auto') AS root,\n");
+    sql.append("    UNNEST(root.Results.series) AS series\n");
+    sql.append("  )\n");
+    sql.append(") TO '").append(parquetPath).append("' (FORMAT PARQUET);");
 
-    // Load column metadata and write parquet
-    List<PartitionedTableConfig.TableColumn> columns =
-        loadTableColumns("regional_employment");
-    convertInMemoryToParquetViaDuckDB("regional_employment", columns, dataRecords, fullParquetPath);
-
-    LOGGER.debug("Wrote {} records to {}", dataRecords.size(), fullParquetPath);
-  }
-
-  /**
-   * Maps BLS measure code to human-readable measure name.
-   */
-  private String getMeasureFromCode(String code) {
-    switch (code) {
-      case "3":
-        return "unemployment_rate";
-      case "4":
-        return "unemployment";
-      case "5":
-        return "employment";
-      case "6":
-        return "labor_force";
-      default:
-        return "unknown";
-    }
+    return sql.toString();
   }
 
   /**
@@ -2008,17 +1927,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Determine CSV filename inside ZIP (format: YYYY.annual.singlefile.csv)
     String csvFilename = String.format("%d.annual.singlefile.csv", year);
 
-    // Load SQL template and substitute parameters
-    Map<String, String> params = new HashMap<>();
-    params.put("zipPath", fullZipPath.replace("'", "''"));
-    params.put("csvFilename", csvFilename.replace("'", "''"));
-    params.put("parquetPath", fullParquetPath.replace("'", "''"));
+    // Load SQL template and execute with parameters (no manual escaping needed)
+    Map<String, String> params = ImmutableMap.of(
+        "zipPath", fullZipPath,
+        "csvFilename", csvFilename,
+        "parquetPath", fullParquetPath);
 
-    String sql = substituteSqlParameters(
-        loadSqlResource("sql/qcew_county_to_parquet.sql"), params);
-
-    // Execute via DuckDB with zipfs extension
-    executeDuckDBSql(sql, "QCEW county CSV to Parquet conversion");
+    executeDuckDBSqlWithParams(
+        loadSqlResource("sql/qcew_county_to_parquet.sql"),
+        params,
+        "QCEW county CSV to Parquet conversion");
 
     LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
   }
@@ -2033,8 +1951,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   private void downloadQcewCsvIfNeeded(int year, String qcewZipPath, String downloadUrl) throws IOException {
     // Check the cache manifest first
-    Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("year", String.valueOf(year));
+    Map<String, String> cacheParams = ImmutableMap.of("year", String.valueOf(year));
 
     CacheKey cacheKey = new CacheKey("qcew_zip", cacheParams);
     if (cacheManifest.isCached(cacheKey)) {
@@ -2087,17 +2004,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String stateFipsJsonPath = requireNonNull(getClass().getResource("/geo/state_fips.json")).getPath();
 
     // Load SQL from resource and substitute parameters
-    String sql =
-        substituteSqlParameters(loadSqlResource("/sql/bls/convert_state_wages.sql"),
+    executeDuckDBSqlWithParams(
+        loadSqlResource("/sql/bls/convert_state_wages.sql"),
         ImmutableMap.of(
             "year", String.valueOf(year),
-            "zipPath", fullZipPath.replace("'", "''"),
-            "csvFilename", csvFilename.replace("'", "''"),
-            "stateFipsPath", stateFipsJsonPath.replace("'", "''"),
-            "parquetPath", fullParquetPath.replace("'", "''")));
-
-    // Execute via DuckDB with zipfs extension
-    executeDuckDBSql(sql, "QCEW state wages CSV to Parquet conversion");
+            "zipPath", fullZipPath,
+            "csvFilename", csvFilename,
+            "stateFipsPath", stateFipsJsonPath,
+            "parquetPath", fullParquetPath),
+        "QCEW state wages CSV to Parquet conversion");
 
     LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
   }
@@ -2121,18 +2036,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Get the resource path for state_fips.json
     String stateFipsJsonPath = requireNonNull(getClass().getResource("/geo/state_fips.json")).getPath();
 
-    // Load SQL from resource and substitute parameters
-    String sql =
-        substituteSqlParameters(loadSqlResource("/sql/bls/convert_county_wages.sql"),
+    // Load SQL from resource and execute with parameters
+    executeDuckDBSqlWithParams(
+        loadSqlResource("/sql/bls/convert_county_wages.sql"),
         ImmutableMap.of(
             "year", String.valueOf(year),
-            "zipPath", fullZipPath.replace("'", "''"),
-            "csvFilename", csvFilename.replace("'", "''"),
-            "stateFipsPath", stateFipsJsonPath.replace("'", "''"),
-            "parquetPath", fullParquetPath.replace("'", "''")));
-
-    // Execute via DuckDB with zipfs extension
-    executeDuckDBSql(sql, "QCEW county wages CSV to Parquet conversion");
+            "zipPath", fullZipPath,
+            "csvFilename", csvFilename,
+            "stateFipsPath", stateFipsJsonPath,
+            "parquetPath", fullParquetPath),
+        "QCEW county wages CSV to Parquet conversion");
 
     LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
   }
@@ -2147,9 +2060,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String dataType = "jolts_ftp_" + fileName.replace(".", "_");
 
     // Check the cache manifest first (use year=0 for non-year-partitioned files)
-    Map<String, String> cacheParams = new HashMap<>();
-    cacheParams.put("file", fileName);
-    cacheParams.put("year", String.valueOf(0));
+    Map<String, String> cacheParams = ImmutableMap.of(
+        "file", fileName,
+        "year", String.valueOf(0));
 
     CacheKey cacheKey = new CacheKey(dataType, cacheParams);
     if (cacheManifest.isCached(cacheKey)) {
@@ -2196,8 +2109,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   private String parseJoltsFtpForRegional(int year) throws IOException {
     // Regional series patterns (state codes in positions 10-11 of series ID)
-    String[] regionCodes = {"NE", "MW", "SO", "WE"};
-    String[] regionNames = {"Northeast", "Midwest", "South", "West"};
+    // Use BLS region codes from constants
 
     // Load FTP file metadata from schema
     Map<String, Object> metadata = loadTableMetadata("jolts_regional");
@@ -2262,16 +2174,17 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           // Check if this is a regional series and matches our target year
           if (m13) { // Use annual average (M13)
-            for (int i = 0; i < regionCodes.length; i++) {
+            for (Map.Entry<String, String> entry : BLS.blsRegionCodes.entrySet()) {
+              String regionCode = entry.getKey();
+              String regionKey = entry.getValue();
               // Regional series: JTS000000MW00000JOR - region code at positions 10-11 (state_code field, 0-indexed substring 9-11)
-              if (seriesId.length() >= 11 && seriesId.substring(9, 11).equals(regionCodes[i])) {
-                String regionKey = regionNames[i];
+              if (seriesId.length() >= 11 && seriesId.substring(9, 11).equals(regionCode)) {
 
                 regionalDataMap.putIfAbsent(regionKey, new HashMap<>());
                 Map<String, Object> regionData = regionalDataMap.get(regionKey);
 
-                regionData.put("region", regionNames[i]);
-                regionData.put("region_code", regionCodes[i]);
+                regionData.put("region", regionKey);
+                regionData.put("region_code", regionCode);
                 regionData.put("year", year);
 
                 // Extract data element type from filename
@@ -2316,7 +2229,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   private String parseJoltsFtpForState(int year) throws IOException {
     // Load FTP file metadata from schema
-    Map<String, Object> metadata = loadTableMetadata("jolts_state");
+    Map<String, Object> metadata = loadTableMetadata(BLS.tableNames.joltsState);
     JsonNode sourcePaths = (JsonNode) metadata.get("sourcePaths");
     if (sourcePaths == null || !sourcePaths.has("ftpFiles")) {
       throw new IOException("Table jolts_state missing sourcePaths.ftpFiles in schema");
@@ -2427,7 +2340,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata(tableName);
     JsonNode download = (JsonNode) metadata.get("download");
     if (download == null || !download.has("baseUrl")) {
-      throw new IOException("Table " + tableName + " does not have download.baseUrl configured");
+      throw new IOException(String.format("Table %s does not have download.baseUrl configured", tableName));
     }
     return download.get("baseUrl").asText();
   }
@@ -2611,14 +2524,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Creates MetroGeography map from hardcoded maps (fallback).
+   * Creates MetroGeography map from BLS constants.
    */
   private Map<String, MetroGeography> createMetroGeographiesFromHardcodedMaps() {
     Map<String, MetroGeography> metros = new HashMap<>();
-    for (Map.Entry<String, String> entry : METRO_AREA_CODES.entrySet()) {
+    for (Map.Entry<String, BlsConstants.MetroCpiCode> entry : BLS.metroCpiCodes.entrySet()) {
       String metroCode = entry.getKey();
-      String metroName = entry.getValue();
-      String cpiCode = METRO_CPI_CODES.get(metroCode);
+      BlsConstants.MetroCpiCode metro = entry.getValue();
+      String cpiCode = metro.cpiCode;
+      String metroName = metro.name;
       String blsCode = BLS.metroBlsAreaCodes.get(metroCode);
       metros.put(metroCode, new MetroGeography(metroCode, metroName, cpiCode, blsCode));
     }
@@ -2673,22 +2587,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      try (Statement stmt = duckdb.createStatement()) {
         // Serialize BLS constants to JSON strings for DuckDB
         String stateFipsJson = MAPPER.writeValueAsString(BLS.stateFipsCodes);
         String censusRegionsJson = MAPPER.writeValueAsString(BLS.censusRegions);
         String metroBlsAreaCodesJson = MAPPER.writeValueAsString(BLS.metroBlsAreaCodes);
 
         // Load and execute SQL that creates table and loads data from JSON strings
-        Map<String, String> jsonParams = new HashMap<>();
-        jsonParams.put("stateFipsJson", stateFipsJson.replace("'", "''"));
-        jsonParams.put("censusRegionsJson", censusRegionsJson.replace("'", "''"));
-        jsonParams.put("metroBlsAreaCodesJson", metroBlsAreaCodesJson.replace("'", "''"));
-
-        String loadSql = substituteSqlParameters(
-            loadSqlResource("/sql/bls/load_geographies_from_json.sql"), jsonParams);
-
-        stmt.execute(loadSql);
+        executeWithParams(duckdb,
+            loadSqlResource("/sql/bls/load_geographies_from_json.sql"),
+            ImmutableMap.of(
+                "stateFipsJson", stateFipsJson,
+                "censusRegionsJson", censusRegionsJson,
+                "metroBlsAreaCodesJson", metroBlsAreaCodesJson));
 
         // Write partitioned parquet files by geo_type
         for (String geoType : Arrays.asList("state", "region", "metro")) {
@@ -2696,26 +2606,17 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String resolvedPattern = resolveParquetPath(pattern, ImmutableMap.of("geo_type", geoType));
           String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-          // Ensure parent directory exists
-          ensureParentDirectory(parquetPath);
-
-          // Load SQL template and substitute parameters
-          Map<String, String> params = new HashMap<>();
-          params.put("geoType", geoType);
-          params.put("parquetPath", parquetPath.replace("'", "''"));
-
-          String copySql = substituteSqlParameters(
-              loadSqlResource("/sql/bls/generate_geographies.sql"), params);
-
-          stmt.execute(copySql);
+          // Load SQL template and execute with parameters
+          executeWithParams(duckdb,
+              loadSqlResource("/sql/bls/generate_geographies.sql"),
+              ImmutableMap.of(
+                  "geoType", geoType,
+                  "parquetPath", parquetPath));
 
           long count = 0;
-          Map<String, String> countParams = new HashMap<>();
-          countParams.put("geoType", geoType);
-          String countSql = substituteSqlParameters(
-              loadSqlResource("/sql/bls/count_geographies.sql"), countParams);
-
-          try (ResultSet rs = stmt.executeQuery(countSql)) {
+          try (ResultSet rs = queryWithParams(duckdb,
+              loadSqlResource("/sql/bls/count_geographies.sql"),
+              ImmutableMap.of("geoType", geoType))) {
             if (rs.next()) {
               count = rs.getLong(1);
             }
@@ -2723,7 +2624,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Generated {} BLS {} geographies to {}", count, geoType, parquetPath);
         }
-      }
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS geographies reference table: " + e.getMessage(), e);
     }
@@ -2744,8 +2644,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String parquetPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
     // Check if already exists
-    Map<String, String> params = new HashMap<>();
-    params.put("year", String.valueOf(-1));
+    Map<String, String> params = ImmutableMap.of();
     CacheKey cacheKey = new CacheKey("reference_bls_naics_sectors", params);
 
     if (cacheManifest.isParquetConverted(cacheKey) || storageProvider.exists(parquetPath)) {
@@ -2754,35 +2653,26 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      try (Statement stmt = duckdb.createStatement()) {
         // Serialize NAICS supersectors to JSON string for DuckDB
         String naicsJson = MAPPER.writeValueAsString(BLS.naicsSupersectors);
 
         // Load and execute SQL that creates table and loads data from JSON string
-        Map<String, String> jsonParams = new HashMap<>();
-        jsonParams.put("naicsSupersectorsJson", naicsJson.replace("'", "''"));
-
-        String loadSql = substituteSqlParameters(
-            loadSqlResource("/sql/bls/load_naics_from_json.sql"), jsonParams);
-
-        stmt.execute(loadSql);
+        executeWithParams(duckdb,
+            loadSqlResource("/sql/bls/load_naics_from_json.sql"),
+            ImmutableMap.of("naicsSupersectorsJson", naicsJson));
 
         // Ensure parent directory exists
         ensureParentDirectory(parquetPath);
 
-        // Load SQL template and substitute parameters
-        Map<String, String> sqlParams = new HashMap<>();
-        sqlParams.put("parquetPath", parquetPath.replace("'", "''"));
-
-        String copySql = substituteSqlParameters(
-            loadSqlResource("/sql/bls/generate_naics_sectors.sql"), sqlParams);
-
-        stmt.execute(copySql);
+        // Load SQL template and execute with parameters
+        executeWithParams(duckdb,
+            loadSqlResource("/sql/bls/generate_naics_sectors.sql"),
+            ImmutableMap.of("parquetPath", parquetPath));
 
         long count = 0;
-        String countSql = loadSqlResource("/sql/bls/count_naics_sectors.sql");
-
-        try (ResultSet rs = stmt.executeQuery(countSql)) {
+        try (ResultSet rs = queryWithParams(duckdb,
+            loadSqlResource("/sql/bls/count_naics_sectors.sql"),
+            ImmutableMap.of())) {
           if (rs.next()) {
             count = rs.getLong(1);
           }
@@ -2793,7 +2683,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         // Mark as converted in manifest
         cacheManifest.markParquetConverted(cacheKey, parquetPath);
         cacheManifest.save(operatingDirectory);
-      }
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS NAICS sectors reference table: " + e.getMessage(), e);
     }
