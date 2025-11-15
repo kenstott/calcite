@@ -41,5 +41,5 @@ COPY (
       WHEN ('{tableName}' LIKE 'SQ%') THEN 'quarterly'
       ELSE NULL
     END AS frequency
-  FROM read_json('{jsonPath}', format='array', maximum_object_size=10000000)
+  FROM read_json('{jsonPath}', format='array', maximum_object_size=104857600)
 ) TO '{parquetPath}' (FORMAT PARQUET, COMPRESSION ZSTD)
