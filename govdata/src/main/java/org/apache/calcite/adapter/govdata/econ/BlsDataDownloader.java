@@ -1537,11 +1537,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads JOLTS (Job Openings and Labor Turnover Survey) regional data from BLS FTP flat files.
    * Regional data is NOT available via BLS API v2 - must use download.bls.gov flat files.
    * Covers 4 Census regions (Northeast, Midwest, South, West) with 5 metrics each (20 series).
+   * Uses metadata-driven FTP source paths from econ-schema.json.
    */
   public void downloadJoltsRegional(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", startYear, endYear);
 
     String tableName = "jolts_regional";
+
+    // Load FTP source paths from metadata
+    List<FtpFileSource> ftpSources = loadFtpSourcePaths(tableName);
+    if (ftpSources.isEmpty()) {
+      LOGGER.warn("No FTP source paths found in metadata for table {}", tableName);
+      return;
+    }
+
+    // Download all required FTP files
+    LOGGER.info("Downloading {} FTP files for {}", ftpSources.size(), tableName);
+    for (FtpFileSource source : ftpSources) {
+      downloadFtpFileIfNeeded(source.cachePath, source.url);
+    }
 
     // JOLTS data only available from 2001 forward
     int effectiveStartYear = Math.max(startYear, 2001);
@@ -1558,9 +1572,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
-          String joltsFtpPath = "type=jolts_ftp/jolts_series.txt";
-          downloadJoltsFtpFileIfNeeded(joltsFtpPath, "https://download.bls.gov/pub/time.series/jt/jt.series");
-
           String joltsRegionalJson = parseJoltsFtpForRegional(year);
 
           if (joltsRegionalJson != null) {
@@ -1576,11 +1587,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads JOLTS state-level data from BLS FTP flat files and converts to Parquet.
    * Extracts data for all 51 states (including DC) for 5 metrics (job openings, hires, separations, quits, layoffs).
+   * Uses metadata-driven FTP source paths from econ-schema.json.
    */
   public void downloadJoltsState(int startYear, int endYear) throws IOException {
     LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", startYear, endYear);
 
     String tableName = "jolts_state";
+
+    // Load FTP source paths from metadata
+    List<FtpFileSource> ftpSources = loadFtpSourcePaths(tableName);
+    if (ftpSources.isEmpty()) {
+      LOGGER.warn("No FTP source paths found in metadata for table {}", tableName);
+      return;
+    }
+
+    // Download all required FTP files
+    LOGGER.info("Downloading {} FTP files for {}", ftpSources.size(), tableName);
+    for (FtpFileSource source : ftpSources) {
+      downloadFtpFileIfNeeded(source.cachePath, source.url);
+    }
 
     iterateTableOperationsOptimized(
         tableName,

@@ -360,4 +360,147 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     }
   }
 
+  /**
+   * Data class representing an FTP file source path from schema metadata.
+   */
+  public static class FtpFileSource {
+    public final String cachePath;
+    public final String url;
+    public final String comment;
+
+    public FtpFileSource(String cachePath, String url, String comment) {
+      this.cachePath = cachePath;
+      this.url = url;
+      this.comment = comment;
+    }
+  }
+
+  /**
+   * Loads FTP source paths from econ-schema.json metadata for a given table.
+   * This allows downloaders to use metadata-driven FTP file downloads.
+   *
+   * @param tableName Name of the table in econ-schema.json
+   * @return List of FTP file sources, or empty list if not found
+   */
+  protected java.util.List<FtpFileSource> loadFtpSourcePaths(String tableName) {
+    try {
+      java.io.InputStream schemaStream = getClass().getResourceAsStream("/econ-schema.json");
+      if (schemaStream == null) {
+        LOGGER.warn("econ-schema.json not found, returning empty FTP source list");
+        return java.util.Collections.emptyList();
+      }
+
+      com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(schemaStream);
+
+      // Find the table in the partitionedTables array
+      com.fasterxml.jackson.databind.JsonNode partitionedTables = root.get("partitionedTables");
+      if (partitionedTables != null && partitionedTables.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode table : partitionedTables) {
+          com.fasterxml.jackson.databind.JsonNode nameNode = table.get("name");
+          if (nameNode != null && tableName.equals(nameNode.asText())) {
+            // Found the table, extract the sourcePaths.ftpFiles
+            com.fasterxml.jackson.databind.JsonNode sourcePaths = table.get("sourcePaths");
+            if (sourcePaths != null) {
+              com.fasterxml.jackson.databind.JsonNode ftpFiles = sourcePaths.get("ftpFiles");
+              if (ftpFiles != null && ftpFiles.isArray()) {
+                java.util.List<FtpFileSource> result = new java.util.ArrayList<>();
+                for (com.fasterxml.jackson.databind.JsonNode ftpFile : ftpFiles) {
+                  String cachePath = ftpFile.has("cachePath") ? ftpFile.get("cachePath").asText() : null;
+                  String url = ftpFile.has("url") ? ftpFile.get("url").asText() : null;
+                  String comment = ftpFile.has("comment") ? ftpFile.get("comment").asText() : "";
+
+                  if (cachePath != null && url != null) {
+                    result.add(new FtpFileSource(cachePath, url, comment));
+                  }
+                }
+                LOGGER.debug("Loaded {} FTP source paths for table {}", result.size(), tableName);
+                return result;
+              }
+            }
+          }
+        }
+      }
+
+      LOGGER.debug("No FTP source paths found for table '{}', returning empty list", tableName);
+      return java.util.Collections.emptyList();
+    } catch (Exception e) {
+      LOGGER.error("Error loading FTP source paths for table '{}': {}", tableName, e.getMessage());
+      return java.util.Collections.emptyList();
+    }
+  }
+
+  /**
+   * Downloads an FTP file if not already cached.
+   * Uses cache manifest for tracking and supports both local and S3 storage.
+   *
+   * @param ftpPath Relative cache path (e.g., "type=jolts_ftp/jt.series")
+   * @param url FTP URL to download from
+   * @return Byte array of file contents
+   * @throws IOException if download fails
+   */
+  protected byte[] downloadFtpFileIfNeeded(String ftpPath, String url) throws IOException {
+    // Extract the file name for a cache key (e.g., "jt.series" from "type=jolts_ftp/jt.series")
+    String fileName = ftpPath.substring(ftpPath.lastIndexOf('/') + 1);
+    String dataType = "jolts_ftp_" + fileName.replace(".", "_");
+
+    // Check the cache manifest first (use year=0 for non-year-partitioned files)
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("file", fileName);
+    cacheParams.put("year", String.valueOf(0));
+
+    CacheKey cacheKey = new CacheKey(dataType, cacheParams);
+    if (cacheManifest.isCached(cacheKey)) {
+      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
+      if (cacheStorageProvider.exists(fullPath)) {
+        long size = 0L;
+        try {
+          size = cacheStorageProvider.getMetadata(fullPath).getSize();
+        } catch (Exception ignore) {
+          // Ignore metadata errors
+        }
+        if (size > 0) {
+          LOGGER.info("Using cached FTP file: {} (from manifest, size={} bytes)", ftpPath, size);
+          try (java.io.InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+            return inputStream.readAllBytes();
+          }
+        }
+      }
+    }
+
+    // Not cached - download it
+    LOGGER.info("Downloading FTP file: {} from {}", ftpPath, url);
+
+    // Download using HttpClient
+    try {
+      java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+          .uri(java.net.URI.create(url))
+          .timeout(java.time.Duration.ofMinutes(10))
+          .build();
+
+      java.net.http.HttpResponse<byte[]> response = httpClient.send(request,
+          java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+
+      if (response.statusCode() != 200) {
+        throw new IOException("HTTP " + response.statusCode() + " downloading " + url);
+      }
+
+      byte[] fileContents = response.body();
+
+      // Save to cache
+      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
+      cacheStorageProvider.writeFile(fullPath, fileContents);
+
+      // Mark as cached in manifest - refresh monthly (FTP data updates monthly)
+      long refreshAfter = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000); // 30 days
+      cacheManifest.markCached(cacheKey, ftpPath, fileContents.length, refreshAfter, "monthly_refresh");
+      cacheManifest.save(operatingDirectory);
+
+      LOGGER.info("Downloaded and cached FTP file: {} (size={} bytes)", ftpPath, fileContents.length);
+      return fileContents;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Download interrupted: " + url, e);
+    }
+  }
+
 }
