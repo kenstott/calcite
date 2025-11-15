@@ -939,10 +939,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
-          if (dimensionName.equals("year")) {
-            return yearRange(startYear, endYear);
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return List.of("monthly");
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
@@ -990,10 +991,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
-          if (dimensionName.equals("year")) {
-            return yearRange(startYear, endYear);
+          switch (dimensionName) {
+            case "year": return yearRange(startYear, endYear);
+            case "frequency": return List.of("monthly");
+            default: return null;
           }
-          return null;
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
