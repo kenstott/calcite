@@ -1210,8 +1210,41 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           String regionalTableName = vars.get("tablename");
 
+          // Check if JSON file has valid schema before conversion
+          // Files with [null] will have a "json" column instead of "Key"/"Desc"
+          try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+            String schemaSql = String.format(
+                "SELECT column_name FROM (DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1)",
+                jsonPath.replace("'", "''"));
+
+            boolean hasKeyColumn = false;
+            try (Statement stmt = duckdb.createStatement();
+                 ResultSet rs = stmt.executeQuery(schemaSql)) {
+              while (rs.next()) {
+                String colName = rs.getString("column_name");
+                if ("Key".equalsIgnoreCase(colName)) {
+                  hasKeyColumn = true;
+                  break;
+                }
+              }
+            } catch (Exception schemaErr) {
+              // If schema check fails, log and skip
+              LOGGER.warn("BEA reference: Cannot check schema for {} at {}: {}",
+                  regionalTableName, jsonPath, schemaErr.getMessage());
+              return;
+            }
+
+            if (!hasKeyColumn) {
+              LOGGER.info("BEA reference: Skipping conversion for {} - no valid linecodes data (no Key column)",
+                  regionalTableName);
+              return;
+            }
+          } catch (Exception connErr) {
+            LOGGER.warn("BEA reference: Cannot connect to DuckDB for pre-check: {}", connErr.getMessage());
+            return;
+          }
+
           // Convert with DuckDB doing all parsing and enrichment
-          // Note: Empty arrays (from filtered null responses) will result in empty parquet files
           try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
             String enrichSql =
                 substituteSqlParameters(loadSqlResource("/sql/bea/enrich_regional_linecodes.sql"),
@@ -1225,6 +1258,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             }
           } catch (Exception e) {
             LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
+            LOGGER.error("JSON path being read: {}", jsonPath);
 
             // Diagnostic: Log the actual JSON structure to help debug schema mismatches
             try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
