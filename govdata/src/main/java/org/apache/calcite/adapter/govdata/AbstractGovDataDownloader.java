@@ -2281,16 +2281,16 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Export to Parquet
-      String exportSql = String.format(
-          "COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
+      String exportSql =
+          String.format("COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
           fullParquetPath.replace("'", "''"));
       stmt.execute(exportSql);
 
       LOGGER.info("Converted {} records to Parquet for table {}: {}", records.size(), tableName, fullParquetPath);
 
     } catch (java.sql.SQLException e) {
-      String errorMsg = String.format("Failed to convert in-memory data to Parquet for table '%s': %s",
-          tableName, e.getMessage());
+      String errorMsg =
+          String.format("Failed to convert in-memory data to Parquet for table '%s': %s", tableName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -2408,16 +2408,16 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // Export to Parquet
-      String exportSql = String.format(
-          "COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
+      String exportSql =
+          String.format("COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
           parquetPath.replace("'", "''"));
       stmt.execute(exportSql);
 
       LOGGER.info("Converted {} rows to Parquet: {}", rows.size(), parquetPath);
 
     } catch (java.sql.SQLException e) {
-      String errorMsg = String.format("Failed to convert list to Parquet for table '%s': %s",
-          tableName, e.getMessage());
+      String errorMsg =
+          String.format("Failed to convert list to Parquet for table '%s': %s", tableName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -3242,8 +3242,8 @@ public abstract class AbstractGovDataDownloader {
       String operationDescription) {
 
     // Build dimensions from table pattern
-    List<IterationDimension> dimensions = buildDimensionsFromPattern(
-        tableName, dimensionProvider);
+    List<IterationDimension> dimensions =
+        buildDimensionsFromPattern(tableName, dimensionProvider);
 
     if (dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
@@ -3489,12 +3489,11 @@ public abstract class AbstractGovDataDownloader {
     // PREFETCH CALLBACK - Called at start of each segment
     if (prefetchCallback != null && prefetchHelper != null) {
       IterationDimension currentDim = dimensions.get(dimensionIndex);
-      PrefetchContext context = new PrefetchContext(
-          tableName,
+      PrefetchContext context =
+          new PrefetchContext(tableName,
           currentDim.variableName,
           new HashMap<>(variables),  // Ancestor values chosen so far
-          allDimensionValues         // All dimension values (mutable)
-      );
+          allDimensionValues);       // All dimension values (mutable)
 
       try {
         prefetchCallback.prefetch(context, prefetchHelper);
