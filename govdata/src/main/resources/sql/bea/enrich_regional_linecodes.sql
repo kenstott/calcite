@@ -18,8 +18,10 @@
 COPY (
   SELECT
     '{tableName}' AS TableName,
-    Key AS LineCode,
-    "Desc" AS Description,
+    -- Handle both "Key" and "key" (case variations from BEA API)
+    COALESCE("Key", key, "KEY") AS LineCode,
+    -- Handle both "Desc" and "desc" (case variations from BEA API)
+    COALESCE("Desc", "desc", "DESC") AS Description,
     substring('{tableName}', 1, 2) AS table_prefix,
     CASE
       WHEN ('{tableName}' LIKE '%INC%') THEN 'INC'
