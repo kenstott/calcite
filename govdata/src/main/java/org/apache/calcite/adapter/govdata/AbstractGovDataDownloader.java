@@ -1576,8 +1576,9 @@ public abstract class AbstractGovDataDownloader {
             + ": " + response.body());
       }
 
-      // Parse response
-      JsonNode rootNode = MAPPER.readTree(response.body());
+      // Parse response - Always use JSON_MAPPER since API responses are always JSON
+      // (regardless of schema format which might be YAML)
+      JsonNode rootNode = JSON_MAPPER.readTree(response.body());
 
       // Check for error response (HTTP 200 with error content) before extracting data
       if (downloadConfig.containsKey("response")) {
