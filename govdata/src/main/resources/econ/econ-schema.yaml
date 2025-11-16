@@ -1732,6 +1732,10 @@ partitionedTables:
         ResultFormat:
           type: constant
           value: JSON
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+        errorPath: "BEAAPI.Results.Error"
       tableNamesList:
         - "SAINC1"
         - "SAINC30"
