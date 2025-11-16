@@ -770,6 +770,17 @@ partitionedTables:
       baseUrl: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates"
       authentication:
         type: none
+      queryParams:
+        filter:
+          type: expression
+          value: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort:
+          type: constant
+          value: "-record_date"
+        page[size]:
+          type: constant
+          value: "10000"
+      cachePattern: "type=timeseries/frequency=daily/year={year}/treasury_yields.json"
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
@@ -807,6 +818,17 @@ partitionedTables:
       baseUrl: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny"
       authentication:
         type: none
+      queryParams:
+        filter:
+          type: expression
+          value: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort:
+          type: constant
+          value: "-record_date"
+        page[size]:
+          type: constant
+          value: "10000"
+      cachePattern: "type=timeseries/frequency=daily/year={year}/federal_debt.json"
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
@@ -882,6 +904,26 @@ partitionedTables:
         type: query_param
         paramName: api_key
         envVar: FRED_API_KEY  # Set API key in environment
+      queryParams:
+        api_key:
+          type: auth
+        file_type:
+          type: constant
+          value: json
+        observation_start:
+          type: expression
+          value: "startOfYear({year})"
+        observation_end:
+          type: expression
+          value: "endOfYear({year})"
+        limit:
+          type: constant
+          value: 100000
+        offset:
+          type: pagination
+        series_id:
+          type: iteration
+          source: seriesList
       seriesList:  # API series codes to fetch
         - "DFF"
         - "UNRATE"
@@ -896,6 +938,14 @@ partitionedTables:
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
+        retryDelayMs: 5000
+      pagination:
+        enabled: true
+        offsetParam: offset
+        limitParam: limit
+        maxPerRequest: 100000
+      caching:
+        usePattern: true
       response:
         format: json
         dataPath: "observations"
@@ -964,12 +1014,35 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 5
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetData
+        datasetname:
+          type: constant
+          value: NIPA
+        TableName:
+          type: expression
+          value: "{tablename}"
+        Frequency:
+          type: expression
+          value: "{frequency}"
+        Year:
+          type: expression
+          value: "{year}"
+        ResultFormat:
+          type: constant
+          value: JSON
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 5
+        retryDelayMs: 5000
 
   # --- REGIONAL INCOME ---
   - name: regional_income
@@ -1020,12 +1093,123 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetData
+        datasetname:
+          type: constant
+          value: Regional
+        TableName:
+          type: expression
+          value: "{tablename}"
+        LineCode:
+          type: expression
+          value: "{line_code}"
+        GeoFips:
+          type: expression
+          value: "{geo_fips_set}"
+        Year:
+          type: expression
+          value: "{year}"
+        ResultFormat:
+          type: constant
+          value: JSON
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
+        retryDelayMs: 5000
+      geoFipsSet:
+        STATE: "All states (50 states + District of Columbia)"
+        COUNTY: "All counties nationwide"
+        MSA: "All Metropolitan Statistical Areas"
+        MIC: "All Micropolitan Areas"
+        PORT: "All state metropolitan/nonmetropolitan portions"
+        DIV: "All Metropolitan Divisions"
+        CSA: "All Combined Statistical Areas"
+      tableNamesSet:
+        # State Annual Personal Income (SAINC*) - 12 active tables
+        SAINC1: "State annual personal income summary: personal income, population, per capita personal income"
+        SAINC30: "State annual economic profile"
+        SAINC35: "State annual personal current transfer receipts"
+        SAINC4: "State annual personal income and employment by major component"
+        SAINC40: "State annual property income"
+        SAINC50: "State annual personal current taxes"
+        SAINC51: "State annual disposable personal income"
+        SAINC5N: "State annual personal income by major component and earnings by NAICS industry"
+        SAINC6N: "State annual compensation of employees by NAICS industry"
+        SAINC70: "State annual wage and salary disbursements"
+        SAINC7N: "State annual wages and salaries by NAICS industry"
+        SAINC91: "State annual gross flow of earnings"
+        # State Quarterly Personal Income (SQINC*) - 6 active tables
+        SQINC1: "State quarterly personal income summary: personal income, population, per capita personal income"
+        SQINC35: "State quarterly personal current transfer receipts"
+        SQINC4: "State quarterly personal income and employment by major component"
+        SQINC5N: "State quarterly personal income by major component and earnings by NAICS industry"
+        SQINC6N: "State quarterly compensation of employees by NAICS industry"
+        SQINC7N: "State quarterly wages and salaries by NAICS industry"
+        # County/MSA Annual Personal Income (CAINC*) - 6 active tables
+        CAINC1: "County and MSA annual personal income summary: personal income, population, per capita personal income"
+        CAINC30: "County and MSA annual economic profile"
+        CAINC4: "County and MSA annual personal income and employment by major component"
+        CAINC5N: "County and MSA annual personal income by major component and earnings by NAICS industry"
+        CAINC6N: "County and MSA annual compensation of employees by NAICS industry"
+        CAINC91: "County and MSA annual gross flow of earnings"
+        # State Annual GDP (SAGDP*) - 10 active tables
+        SAGDP1: "State annual GDP summary"
+        SAGDP2: "State annual GDP by industry"
+        SAGDP3: "State annual GDP contributions by industry"
+        SAGDP4: "State annual components of GDP by industry"
+        SAGDP5: "State annual GDP by industry (chain-type quantity indexes)"
+        SAGDP6: "State annual GDP by industry (chain-type price indexes)"
+        SAGDP7: "State annual chain-type quantity indexes for real GDP by industry"
+        SAGDP8: "State annual chain-type price indexes for GDP by industry"
+        SAGDP9: "State annual real GDP by industry"
+        SAGDP11: "State annual real GDP contributions by industry"
+        # State Quarterly GDP (SQGDP*) - 5 active tables
+        SQGDP1: "State quarterly GDP by state"
+        SQGDP2: "State quarterly GDP by industry"
+        SQGDP8: "State quarterly chain-type price indexes for GDP"
+        SQGDP9: "State quarterly real GDP by state"
+        SQGDP11: "State quarterly industry contributions to percent change in real GDP"
+        # County/MSA Annual GDP (CAGDP*) - 5 active tables
+        CAGDP1: "County and MSA annual GDP summary"
+        CAGDP2: "County and MSA annual GDP by industry"
+        CAGDP8: "County and MSA annual chain-type price indexes for GDP"
+        CAGDP9: "County and MSA annual real GDP"
+        CAGDP11: "County and MSA annual real GDP contributions by industry"
+        # State Arts & Culture (SAAC*) - 7 active tables
+        SAACArtsComp: "State arts and culture compensation"
+        SAACArtsEmp: "State arts and culture employment"
+        SAACArtsVA: "State arts and culture value added"
+        SAACCompLQ: "State arts and culture compensation location quotient"
+        SAACCompRatio: "State arts and culture compensation ratio"
+        SAACLVALQ: "State arts and culture value added location quotient"
+        SAACVARatio: "State arts and culture value added ratio"
+        # State Outdoor Recreation (SAO*) - 4 active tables
+        SAOACTVA: "State outdoor activities value added"
+        SAOCOMP: "State outdoor recreation compensation"
+        SAOEMP: "State outdoor recreation employment"
+        SAOVA: "State outdoor recreation value added"
+        # Personal Consumption Expenditures (SAPCE*) - 4 active tables
+        SAPCE1: "State annual personal consumption expenditures (PCE) by state - level 1"
+        SAPCE2: "State annual personal consumption expenditures (PCE) by state - level 2"
+        SAPCE3: "State annual personal consumption expenditures (PCE) by state - level 3"
+        SAPCE4: "State annual personal consumption expenditures (PCE) by state - level 4"
+        # Real Personal Income (*RPP) - 3 active tables
+        SARPP: "State annual real personal income"
+        MARPP: "Metropolitan area annual real personal income"
+        PARPP: "Port area annual real personal income"
+        # Summary Statistics - 3 active tables
+        SASUMMARY: "State summary statistics"
+        TASUMMARY1: "Territory summary statistics - table 1"
+        TASUMMARY2: "Territory summary statistics - table 2"
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
 
   # --- ITA DATA ---
   - name: ita_data
@@ -1094,12 +1278,50 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 5
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetData
+        datasetname:
+          type: constant
+          value: ITA
+        Indicator:
+          type: expression
+          value: "{indicator}"
+        Frequency:
+          type: expression
+          value: "{frequency}"
+        Year:
+          type: expression
+          value: "{year}"
+        ResultFormat:
+          type: constant
+          value: JSON
+      itaIndicatorsList:
+        - "BalGds"
+        - "BalServ"
+        - "BalGdsServ"
+        - "BalCurrAcct"
+        - "BalCapAcct"
+        - "BalPrimInc"
+        - "BalSecInc"
+        - "ExpGds"
+        - "ImpGds"
+        - "ExpServ"
+        - "ImpServ"
+      frequencyList:
+        - "A"
+        - "Q"
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 5
+        retryDelayMs: 5000
 
   # --- GDP STATISTICS ---
   - name: gdp_statistics
@@ -1216,12 +1438,41 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 5
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetData
+        datasetname:
+          type: constant
+          value: GDPbyIndustry
+        Industry:
+          type: iteration
+          source: keyIndustriesList
+        Frequency:
+          type: constant
+          value: A
+        Year:
+          type: expression
+          value: "{year}"
+        ResultFormat:
+          type: constant
+          value: JSON
+      keyIndustriesList:
+        - "31G"
+        - "52"
+        - "53"
+        - "54"
+        - "GSLG"
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 5
+        retryDelayMs: 5000
 
   # --- REFERENCE JOLTS INDUSTRIES ---
   - name: reference_jolts_industries
@@ -1387,12 +1638,30 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 3
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetParameterValues
+        datasetname:
+          type: constant
+          value: NIPA
+        ParameterName:
+          type: constant
+          value: TableName
+        ResultFormat:
+          type: constant
+          value: JSON
+      cachePattern: "type=reference/nipa_tables.json"
       response:
         format: json
         dataPath: "BEAAPI.Results.ParamValue"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 3
+        retryDelayMs: 5000
+      earlyDownload: true
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: reference_regional_linecodes
@@ -1445,12 +1714,89 @@ partitionedTables:
         type: query_param
         paramName: UserID
         envVar: BEA_API_KEY  # Set API key in environment
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 3
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetParameterValuesFiltered
+        datasetname:
+          type: constant
+          value: Regional
+        TargetParameter:
+          type: constant
+          value: LineCode
+        TableName:
+          type: expression
+          value: "{tablename}"
+        ResultFormat:
+          type: constant
+          value: JSON
+      tableNamesList:
+        - "SAINC1"
+        - "SAINC30"
+        - "SAINC35"
+        - "SAINC4"
+        - "SAINC40"
+        - "SAINC50"
+        - "SAINC51"
+        - "SAINC5H"
+        - "SAINC5N"
+        - "SAINC5S"
+        - "SAINC6N"
+        - "SAINC6S"
+        - "SAINC70"
+        - "SAINC7H"
+        - "SAINC7N"
+        - "SAINC7S"
+        - "SAINC91"
+        - "SQINC1"
+        - "SQINC35"
+        - "SQINC4"
+        - "SQINC5H"
+        - "SQINC5N"
+        - "SQINC5S"
+        - "SQINC6N"
+        - "SQINC6S"
+        - "SQINC7H"
+        - "SQINC7N"
+        - "SQINC7S"
+        - "CAINC1"
+        - "CAINC30"
+        - "CAINC4"
+        - "CAINC5N"
+        - "CAINC5S"
+        - "CAINC6N"
+        - "CAINC6S"
+        - "CAINC91"
+        - "SAGDP1"
+        - "SAGDP2"
+        - "SAGDP3"
+        - "SAGDP4"
+        - "SAGDP5"
+        - "SAGDP6"
+        - "SAGDP7"
+        - "SAGDP8"
+        - "SAGDP9"
+        - "SAGDP11"
+        - "SQGDP1"
+        - "SQGDP2"
+        - "SQGDP8"
+        - "SQGDP9"
+        - "SQGDP11"
+        - "CAGDP1"
+        - "CAGDP2"
+        - "CAGDP8"
+        - "CAGDP9"
+        - "CAGDP11"
       response:
         format: json
         dataPath: "BEAAPI.Results.ParamValue"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 3
+        retryDelayMs: 5000
+      earlyDownload: true
 
   # --- REFERENCE FRED SERIES ---
   - name: reference_fred_series
