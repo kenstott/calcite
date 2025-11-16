@@ -21,18 +21,14 @@ import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.CacheManifestQueryHelper;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.sql.*;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -1001,8 +997,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
       // Query all sections and extract frequency data
-      String sql = String.format(
-          "SELECT TableName, annual, quarterly FROM read_parquet('%s')",
+      String sql =
+          String.format("SELECT TableName, annual, quarterly FROM read_parquet('%s')",
           fullParquetPattern);
 
       try (Statement stmt = duckdb.createStatement();
@@ -1231,15 +1227,37 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
             // Diagnostic: Log the actual JSON structure to help debug schema mismatches
             try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-              String diagnosticSql = String.format(
-                  "DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1",
+              // Show top-level structure
+              String schemaSql =
+                  String.format("DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1",
                   jsonPath.replace("'", "''"));
 
               try (Statement stmt = duckdb.createStatement();
-                   ResultSet rs = stmt.executeQuery(diagnosticSql)) {
-                LOGGER.error("JSON schema for {}: Columns found:", regionalTableName);
+                   ResultSet rs = stmt.executeQuery(schemaSql)) {
+                LOGGER.error("JSON schema for {}: Top-level columns found:", regionalTableName);
                 while (rs.next()) {
                   LOGGER.error("  - {} ({})", rs.getString("column_name"), rs.getString("column_type"));
+                }
+              }
+
+              // Show sample of actual data
+              String sampleSql =
+                  String.format("SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1",
+                  jsonPath.replace("'", "''"));
+
+              try (Statement stmt = duckdb.createStatement();
+                   ResultSet rs = stmt.executeQuery(sampleSql)) {
+                LOGGER.error("JSON sample for {}:", regionalTableName);
+                ResultSetMetaData meta = rs.getMetaData();
+                if (rs.next()) {
+                  for (int i = 1; i <= meta.getColumnCount(); i++) {
+                    Object value = rs.getObject(i);
+                    String preview = value != null ? value.toString() : "null";
+                    if (preview.length() > 200) {
+                      preview = preview.substring(0, 200) + "...";
+                    }
+                    LOGGER.error("  {} = {}", meta.getColumnName(i), preview);
+                  }
                 }
               }
             } catch (Exception diagErr) {
