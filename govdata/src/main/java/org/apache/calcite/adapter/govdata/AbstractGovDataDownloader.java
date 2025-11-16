@@ -1493,17 +1493,31 @@ public abstract class AbstractGovDataDownloader {
 
     LOGGER.info("Downloaded {} total records for {}", allData.size(), tableName);
 
+    // Filter out null entries - treat [null] as [] (empty array)
+    // Some APIs return [null] to indicate "no data available" which should be normalized to empty
+    List<JsonNode> filteredData = new ArrayList<>();
+    for (JsonNode node : allData) {
+      if (node != null && !node.isNull()) {
+        filteredData.add(node);
+      }
+    }
+
+    if (filteredData.size() < allData.size()) {
+      LOGGER.info("Filtered out {} null entries, keeping {} valid records",
+          allData.size() - filteredData.size(), filteredData.size());
+    }
+
     // Write aggregated data to JSON cache file
     // (pattern, jsonPath, fullJsonPath already resolved earlier for cache check)
 
     // Write as JSON array - use ByteArrayOutputStream then writeFile
     // Always use JSON_MAPPER (not MAPPER) to ensure cache files are JSON regardless of schema format
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    JSON_MAPPER.writeValue(baos, allData);
+    JSON_MAPPER.writeValue(baos, filteredData);
     byte[] data = baos.toByteArray();
     cacheStorageProvider.writeFile(fullJsonPath, data);
 
-    LOGGER.info("Wrote {} records ({} bytes) to {}", allData.size(), data.length, jsonPath);
+    LOGGER.info("Wrote {} records ({} bytes) to {}", filteredData.size(), data.length, jsonPath);
     return new DownloadResult(jsonPath, data.length);
   }
 

@@ -1211,6 +1211,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           String regionalTableName = vars.get("tablename");
 
           // Convert with DuckDB doing all parsing and enrichment
+          // Note: Empty arrays (from filtered null responses) will result in empty parquet files
           try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
             String enrichSql =
                 substituteSqlParameters(loadSqlResource("/sql/bea/enrich_regional_linecodes.sql"),
