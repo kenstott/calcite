@@ -1228,6 +1228,24 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             }
           } catch (Exception e) {
             LOGGER.error("Error converting LineCodes for table {}: {}", regionalTableName, e.getMessage());
+
+            // Diagnostic: Log the actual JSON structure to help debug schema mismatches
+            try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+              String diagnosticSql = String.format(
+                  "DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1",
+                  jsonPath.replace("'", "''"));
+
+              try (Statement stmt = duckdb.createStatement();
+                   ResultSet rs = stmt.executeQuery(diagnosticSql)) {
+                LOGGER.error("JSON schema for {}: Columns found:", regionalTableName);
+                while (rs.next()) {
+                  LOGGER.error("  - {} ({})", rs.getString("column_name"), rs.getString("column_type"));
+                }
+              }
+            } catch (Exception diagErr) {
+              LOGGER.error("Could not diagnose JSON structure: {}", diagErr.getMessage());
+            }
+
             throw new RuntimeException(e);
           }
 
