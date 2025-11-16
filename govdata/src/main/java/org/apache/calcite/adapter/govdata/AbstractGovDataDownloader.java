@@ -2016,6 +2016,14 @@ public abstract class AbstractGovDataDownloader {
    */
   private static String javaToDuckDbType(String javaType) {
     String normalized = javaType.toLowerCase();
+
+    // Handle array types (e.g., "array<double>", "array<varchar>")
+    if (normalized.startsWith("array<") && normalized.endsWith(">")) {
+      String elementType = normalized.substring(6, normalized.length() - 1);
+      String duckDbElementType = javaToDuckDbType(elementType); // Recursive call for element type
+      return duckDbElementType + "[]";
+    }
+
     switch (normalized) {
       case "string":
       case "varchar":
