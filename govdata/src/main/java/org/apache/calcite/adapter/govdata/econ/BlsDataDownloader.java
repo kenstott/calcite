@@ -1862,7 +1862,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       if (column.hasExpression()) {
         // Apply column expression, substituting {state_fips} placeholder
-        String expression = column.getExpression().replace("{state_fips}", "'" + stateFips + "'");
+        // Note: Expression may already contain quotes around placeholder (e.g., "'{state_fips}'")
+        // so substitute just the value without adding additional quotes
+        String expression = column.getExpression().replace("{state_fips}", stateFips);
         sql.append("(").append(expression).append(") AS ").append(columnName);
       } else {
         // Regular column - direct mapping
