@@ -716,6 +716,14 @@ public class CacheManifest extends AbstractCacheManifest {
       return null;
     }
 
+    // Treat empty results as cache miss (ignore TTL) - catalog extraction likely failed
+    if (entry.seriesIds == null || entry.seriesIds.isEmpty()) {
+      LOGGER.debug("Ignoring empty cached series list for popularity={} - treating as cache miss",
+          minPopularity);
+      catalogSeriesCache.remove(key);
+      return null;
+    }
+
     // Check if cache has expired
     long now = System.currentTimeMillis();
     if (now >= entry.refreshAfter) {
@@ -741,6 +749,13 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param ttlDays Time-to-live in days (typically 365 for annual refresh)
    */
   public void cacheCatalogSeries(int minPopularity, List<String> seriesIds, int ttlDays) {
+    // Don't cache empty results - they indicate catalog not yet downloaded or extraction failed
+    if (seriesIds == null || seriesIds.isEmpty()) {
+      LOGGER.debug("Skipping cache of empty series list for popularity={} - " +
+          "catalog may not be downloaded yet", minPopularity);
+      return;
+    }
+
     String key = "catalog_series:popularity=" + minPopularity;
     CatalogSeriesCache entry = new CatalogSeriesCache();
     entry.minPopularity = minPopularity;

@@ -289,8 +289,12 @@ public class CacheManifestQueryHelper {
     }
     arrayLiteral.append("]");
 
+    // Escape single quotes in manifestPath for SQL string literal
+    String escapedManifestPath = manifestPath.replace("'", "''");
+
     // Single SQL query with IN clause
     // Uses DuckDB's unnest() to expand the key list into a table
+    // NOTE: manifestPath must be embedded directly in SQL (DuckDB read_json doesn't support parameters)
     String sql =
         "WITH " +
             "  manifest AS ( " +
@@ -299,7 +303,7 @@ public class CacheManifestQueryHelper {
             "      json_extract(value, '$.refreshAfter')::BIGINT as refresh_after, " +
             "      json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
             "      json_extract(value, '$.etag')::VARCHAR as etag " +
-            "    FROM read_json(?, format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
+            "    FROM read_json('" + escapedManifestPath + "', format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
             "    json_each(json_extract(t.json, '$.entries')) AS entries(key, value) " +
             "), " +
             "  needed AS ( " +
@@ -315,9 +319,8 @@ public class CacheManifestQueryHelper {
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:");
          PreparedStatement query = duckdb.prepareStatement(sql)) {
 
-      query.setString(1, manifestPath);
+      query.setLong(1, System.currentTimeMillis());
       query.setLong(2, System.currentTimeMillis());
-      query.setLong(3, System.currentTimeMillis());
 
       List<String> uncachedKeys = new ArrayList<>();
       try (ResultSet rs = query.executeQuery()) {
