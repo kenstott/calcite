@@ -19,7 +19,7 @@ COPY (
   SELECT
     '{tableName}' AS TableName,
     Key AS LineCode,
-    Desc AS Description,
+    "Desc" AS Description,
     substring('{tableName}', 1, 2) AS table_prefix,
     CASE
       WHEN ('{tableName}' LIKE '%INC%') THEN 'INC'
