@@ -454,6 +454,9 @@ public abstract class AbstractGovDataDownloader {
   /** Shared mapper for JSON/YAML (initialized in constructor based on schema format) */
   protected final ObjectMapper MAPPER;
 
+  /** JSON mapper for writing cache files (always uses JSON format regardless of schema format) */
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
   /** HTTP client for API/HTTP requests */
   protected final HttpClient httpClient;
 
@@ -1494,8 +1497,9 @@ public abstract class AbstractGovDataDownloader {
     // (pattern, jsonPath, fullJsonPath already resolved earlier for cache check)
 
     // Write as JSON array - use ByteArrayOutputStream then writeFile
+    // Always use JSON_MAPPER (not MAPPER) to ensure cache files are JSON regardless of schema format
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    MAPPER.writeValue(baos, allData);
+    JSON_MAPPER.writeValue(baos, allData);
     byte[] data = baos.toByteArray();
     cacheStorageProvider.writeFile(fullJsonPath, data);
 
