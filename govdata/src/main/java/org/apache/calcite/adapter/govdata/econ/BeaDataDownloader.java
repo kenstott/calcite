@@ -990,50 +990,34 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @throws IOException if cache file cannot be read or parsed
    */
   public Map<String, Set<String>> loadNipaTableFrequencies() throws IOException {
-    LOGGER.info("BEA reference: Loading NIPA frequency metadata from cache");
+    LOGGER.info("BEA reference: Loading NIPA frequency metadata from parquet catalog");
 
-    // Resolve path to cached JSON file
-    String jsonPath = "type=reference/nipa_tables.json";
-    String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+    // Read from parquet files instead of JSON
+    // Pattern: type=reference/section=*/nipa_tables.parquet
+    String parquetPattern = "type=reference/section=*/nipa_tables.parquet";
+    String fullParquetPattern = storageProvider.resolvePath(parquetDirectory, parquetPattern);
 
-    if (!cacheStorageProvider.exists(fullJsonPath)) {
-      LOGGER.warn("BEA reference: NIPA cache file not found at: {}", jsonPath);
-      return new HashMap<>();
-    }
+    Map<String, Set<String>> tableFrequencies = new HashMap<>();
 
-    try {
-      // Read JSON file
-      com.fasterxml.jackson.databind.JsonNode root;
-      try (InputStream is = cacheStorageProvider.openInputStream(fullJsonPath)) {
-        root = MAPPER.readTree(is);
-      }
+    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+      // Query all sections and extract frequency data
+      String sql = String.format(
+          "SELECT TableName, annual, quarterly FROM read_parquet('%s')",
+          fullParquetPattern);
 
-      if (!root.isArray()) {
-        LOGGER.warn("reference_nipa_tables.json is not an array, returning empty map");
-        return new HashMap<>();
-      }
+      try (Statement stmt = duckdb.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          String tableName = rs.getString("TableName");
+          boolean annual = rs.getBoolean("annual");
+          boolean quarterly = rs.getBoolean("quarterly");
 
-      // Extract table codes and frequencies from ParamValue array
-      // BEA API response format: [{Key: "T10101", Desc: "Table 1.1.1... (A) (Q)"}, ...]
-      Map<String, Set<String>> tableFrequencies = new HashMap<>();
-
-      // Regex pattern to match frequency indicators: (A) or (Q)
-      Pattern frequencyPattern = Pattern.compile("\\(([AQ])\\)");
-
-      for (JsonNode item : root) {
-        JsonNode keyNode = item.get("TableName");
-        JsonNode descNode = item.get("Description");
-
-        if (keyNode != null && !keyNode.isNull() && descNode != null && !descNode.isNull()) {
-          String tableName = keyNode.asText();
-          String description = descNode.asText();
-
-          // Extract frequency indicators using regex
           Set<String> frequencies = new HashSet<>();
-          Matcher matcher = frequencyPattern.matcher(description);
-          while (matcher.find()) {
-            String freq = matcher.group(1); // Captures "A" or "Q"
-            frequencies.add(freq);
+          if (annual) {
+            frequencies.add("A");
+          }
+          if (quarterly) {
+            frequencies.add("Q");
           }
 
           // If no frequency indicators found, default to Annual
@@ -1058,8 +1042,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           tableFrequencies.size(), annualOnly, quarterlyOnly, both);
 
       return tableFrequencies;
-    } catch (Exception e) {
-      LOGGER.error("Failed to load NIPA table frequencies from catalog: {}", e.getMessage(), e);
+    } catch (SQLException e) {
+      LOGGER.error("Failed to load NIPA table frequencies from parquet catalog: {}",
+          e.getMessage(), e);
       throw new IOException("Failed to load NIPA table frequencies: " + e.getMessage(), e);
     }
   }
@@ -1176,13 +1161,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("BEA reference: Starting regional LineCode catalog download");
 
     String tableName = "reference_regional_linecodes";
-    List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
+    // Get tableNamesSet from regional_income table (where it's defined in schema)
+    Map<String, Object> tableNamesSet = extractApiSet("regional_income", "tableNamesSet");
 
-    if (tableNamesList == null || tableNamesList.isEmpty()) {
-      LOGGER.error("BEA reference: No tableNamesList found in schema for reference_regional_linecodes");
+    if (tableNamesSet == null || tableNamesSet.isEmpty()) {
+      LOGGER.error("BEA reference: No tableNamesSet found in schema for regional_income");
       return;
     }
 
+    // Derive list from set keys
+    List<String> tableNamesList = new ArrayList<>(tableNamesSet.keySet());
     LOGGER.info("BEA reference: Downloading LineCodes for {} regional tables", tableNamesList.size());
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
@@ -1208,12 +1196,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("BEA reference: Converting regional LineCode catalog to parquet");
 
     String tableName = "reference_regional_linecodes";
-    List<String> tableNamesList = extractApiList(tableName, "tableNamesList");
+    // Get tableNamesSet from regional_income table (where it's defined in schema)
+    Map<String, Object> tableNamesSet = extractApiSet("regional_income", "tableNamesSet");
 
-    if (tableNamesList == null || tableNamesList.isEmpty()) {
-      LOGGER.error("BEA reference: No tableNamesList found in schema for reference_regional_linecodes");
+    if (tableNamesSet == null || tableNamesSet.isEmpty()) {
+      LOGGER.error("BEA reference: No tableNamesSet found in schema for regional_income");
       return;
     }
+
+    // Derive list from set keys
+    List<String> tableNamesList = new ArrayList<>(tableNamesSet.keySet());
 
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
