@@ -22,18 +22,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * DuckDB-based cache manifest query utility for efficient download list generation.
@@ -83,7 +76,6 @@ public class CacheManifestQueryHelper {
    */
   public static class DownloadRequest {
     public final String dataType;
-    public final int year;
     public final Map<String, String> parameters;
 
     /**
@@ -93,9 +85,8 @@ public class CacheManifestQueryHelper {
      * @param year Year dimension for the data
      * @param parameters Additional dimension parameters (e.g., series, state, line_code)
      */
-    public DownloadRequest(String dataType, int year, Map<String, String> parameters) {
+    public DownloadRequest(String dataType, Map<String, String> parameters) {
       this.dataType = dataType;
-      this.year = year;
       this.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
     }
 
@@ -109,12 +100,6 @@ public class CacheManifestQueryHelper {
     public String buildKey() {
       StringBuilder key = new StringBuilder();
       key.append(dataType);
-
-      // Only append year if it's non-zero (modern CacheKey stores year in parameters)
-      if (year > 0) {
-        key.append(":").append(year);
-      }
-
       if (!parameters.isEmpty()) {
         parameters.entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
@@ -165,11 +150,22 @@ public class CacheManifestQueryHelper {
       return new ArrayList<>();
     }
 
+    // If manifest doesn't exist, all requests are uncached
+    if (!new java.io.File(manifestPath).exists()) {
+      LOGGER.debug("Manifest file {} does not exist - treating all {} requests as uncached",
+          manifestPath, allRequests.size());
+      return new ArrayList<>(allRequests);
+    }
+
     boolean isConversion = "conversion".equals(operationType);
 
     LOGGER.info("Filtering {} download requests using DuckDB SQL query against cache manifest: {}",
         allRequests.size(), manifestPath);
 
+    // Use in-memory manifest filtering
+    return filterUsingManifest(manifestPath, allRequests, operationType);
+
+    /* DISABLED - causes hangs
     long startMs = System.currentTimeMillis();
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
@@ -188,7 +184,7 @@ public class CacheManifestQueryHelper {
       // 2. Create temp table for all needed downloads
       try (Statement stmt = duckdb.createStatement()) {
         stmt.execute("CREATE TEMP TABLE needed_downloads (" +
-            "  cache_key VARCHAR PRIMARY KEY" +
+            "  cache_key VARCHAR" +
             ")");
         LOGGER.debug("Created temp table for needed downloads");
       }
@@ -218,14 +214,19 @@ public class CacheManifestQueryHelper {
       // This is the core optimization - single SQL query replaces thousands of HashMap lookups
       // For conversions, also check if parquet has been converted
       long now = System.currentTimeMillis();
+
+      // Load SQL from resource file
+      String parquetCheck = isConversion
+          ? " OR cf.parquet_converted_at IS NULL OR cf.parquet_converted_at = 0"
+          : "";
+
+      Map<String, String> sqlParams = new HashMap<>();
+      sqlParams.put("nowTimestamp", "?");
+      sqlParams.put("includeParquetCheck", parquetCheck);
+
       String filterSql =
-          "SELECT nd.cache_key " +
-              "FROM needed_downloads nd " +
-              "LEFT JOIN cached_files cf ON nd.cache_key = cf.key " +
-              "WHERE cf.key IS NULL " +  // Not in cache
-              "   OR cf.refresh_after < ? " +  // TTL expired
-              "   OR (cf.download_retry > 0 AND cf.download_retry < ?)" +  // Retry window elapsed
-              (isConversion ? " OR cf.parquet_converted_at IS NULL OR cf.parquet_converted_at = 0" : "");  // Not converted
+          substituteSqlParameters(loadSqlResource("/sql/cache/filter_uncached_temp_tables.sql"),
+          sqlParams);
 
       List<String> uncachedKeys = new ArrayList<>();
       try (PreparedStatement query = duckdb.prepareStatement(filterSql)) {
@@ -257,6 +258,7 @@ public class CacheManifestQueryHelper {
 
       return result;
     }
+    */ // End DISABLED block
   }
 
   /**
@@ -280,10 +282,20 @@ public class CacheManifestQueryHelper {
       return new ArrayList<>();
     }
 
-    boolean isConversion = "conversion".equals(operationType);
+    // If manifest doesn't exist, all requests are uncached
+    if (!new java.io.File(manifestPath).exists()) {
+      LOGGER.debug("Manifest file {} does not exist - treating all {} requests as uncached",
+          manifestPath, allRequests.size());
+      return new ArrayList<>(allRequests);
+    }
+
 
     LOGGER.info("Filtering {} download requests using direct DuckDB query", allRequests.size());
 
+    // Use in-memory manifest filtering
+    return filterUsingManifest(manifestPath, allRequests, operationType);
+
+    /* DISABLED - causes hangs
     long startMs = System.currentTimeMillis();
 
     // Build list of cache keys to check
@@ -305,43 +317,44 @@ public class CacheManifestQueryHelper {
     // Escape single quotes in manifestPath for SQL string literal
     String escapedManifestPath = manifestPath.replace("'", "''");
 
-    // Single SQL query with IN clause
-    // Uses DuckDB's unnest() to expand the key list into a table
-    // NOTE: manifestPath must be embedded directly in SQL (DuckDB read_json doesn't support parameters)
+    // Build parquet conversion check clause if needed
+    String parquetCheck = isConversion
+        ? " OR m.parquet_converted_at IS NULL OR m.parquet_converted_at = 0"
+        : "";
+
+    // Load SQL from resource file and substitute parameters
+    Map<String, String> sqlParams = new HashMap<>();
+    sqlParams.put("manifestPath", escapedManifestPath);
+    sqlParams.put("keysArray", arrayLiteral.toString());
+    sqlParams.put("nowTimestamp", "?");
+    sqlParams.put("includeParquetCheck", parquetCheck);
+
     String sql =
-        "WITH " +
-            "  manifest AS ( " +
-            "    SELECT " +
-            "      key, " +
-            "      json_extract(value, '$.refreshAfter')::BIGINT as refresh_after, " +
-            "      json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
-            "      json_extract(value, '$.parquetConvertedAt')::BIGINT as parquet_converted_at, " +
-            "      json_extract(value, '$.etag')::VARCHAR as etag " +
-            "    FROM read_json('" + escapedManifestPath + "', format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
-            "    json_each(json_extract(t.json, '$.entries')) AS entries(key, value) " +
-            "), " +
-            "  needed AS ( " +
-            "    SELECT unnest(" + arrayLiteral + "::VARCHAR[]) as cache_key " +
-            "  ) " +
-            "SELECT n.cache_key " +
-            "FROM needed n " +
-            "LEFT JOIN manifest m ON n.cache_key = m.key " +
-            "WHERE m.key IS NULL " +
-            "   OR m.refresh_after < ? " +
-            "   OR (m.download_retry > 0 AND m.download_retry < ?)" +
-            (isConversion ? " OR m.parquet_converted_at IS NULL OR m.parquet_converted_at = 0" : "");
+        substituteSqlParameters(loadSqlResource("/sql/cache/filter_uncached_direct.sql"),
+        sqlParams);
+
+    LOGGER.debug("Executing DuckDB direct query with {} keys", keys.size());
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:");
          PreparedStatement query = duckdb.prepareStatement(sql)) {
 
+      // Set query timeout to 30 seconds to prevent indefinite hangs
+      query.setQueryTimeout(30);
+
       query.setLong(1, System.currentTimeMillis());
       query.setLong(2, System.currentTimeMillis());
 
+      LOGGER.debug("Starting DuckDB query execution...");
       List<String> uncachedKeys = new ArrayList<>();
       try (ResultSet rs = query.executeQuery()) {
+        LOGGER.debug("DuckDB query completed, processing results...");
         while (rs.next()) {
           uncachedKeys.add(rs.getString(1));
         }
+      } catch (SQLException e) {
+        LOGGER.error("DuckDB query failed during execution. Manifest path: {}", manifestPath);
+        LOGGER.error("SQL query (first 500 chars): {}", sql.substring(0, Math.min(500, sql.length())));
+        throw e;
       }
 
       // Build result
@@ -360,6 +373,97 @@ public class CacheManifestQueryHelper {
 
       return result;
 
+    } catch (Exception e) {
+      // Fallback: If DuckDB query fails or times out, use in-memory manifest checking
+      LOGGER.warn("DuckDB query failed or timed out, falling back to in-memory manifest check: {}",
+          e.getMessage());
+      return fallbackFilterUsingManifest(manifestPath, allRequests, operationType);
+    }
+    */ // End DISABLED block
+  }
+
+  /**
+   * Filter uncached requests using in-memory manifest checking.
+   * Loads the manifest JSON via Jackson and checks each request.
+   */
+  private static List<DownloadRequest> filterUsingManifest(
+      String manifestPath,
+      List<DownloadRequest> allRequests,
+      String operationType) {
+
+    long startMs = System.currentTimeMillis();
+
+    try {
+      // Load manifest using Jackson (same way CacheManifest does it)
+      com.fasterxml.jackson.databind.ObjectMapper mapper =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      java.util.Map<String, Object> manifestData =
+          mapper.readValue(new java.io.File(manifestPath), java.util.Map.class);
+
+      @SuppressWarnings("unchecked")
+      java.util.Map<String, java.util.Map<String, Object>> entries =
+          (java.util.Map<String, java.util.Map<String, Object>>) manifestData.get("entries");
+
+      if (entries == null) {
+        LOGGER.warn("No entries found in manifest, treating all requests as uncached");
+        return new ArrayList<>(allRequests);
+      }
+
+      boolean isConversion = "conversion".equals(operationType);
+      long now = System.currentTimeMillis();
+      List<DownloadRequest> result = new ArrayList<>();
+
+      for (DownloadRequest req : allRequests) {
+        String key = req.buildKey();
+        java.util.Map<String, Object> entry = entries.get(key);
+
+        if (entry == null) {
+          // Not in manifest
+          result.add(req);
+          continue;
+        }
+
+        // Check if expired
+        Object refreshAfterObj = entry.get("refreshAfter");
+        if (refreshAfterObj != null) {
+          long refreshAfter = ((Number) refreshAfterObj).longValue();
+          if (now >= refreshAfter) {
+            result.add(req);
+            continue;
+          }
+        }
+
+        // Check retry window
+        Object downloadRetryObj = entry.get("downloadRetry");
+        if (downloadRetryObj != null) {
+          long downloadRetry = ((Number) downloadRetryObj).longValue();
+          if (downloadRetry > 0 && now >= downloadRetry) {
+            result.add(req);
+            continue;
+          }
+        }
+
+        // For conversions, check if parquet is converted
+        if (isConversion) {
+          Object parquetConvertedAtObj = entry.get("parquetConvertedAt");
+          if (parquetConvertedAtObj == null || ((Number) parquetConvertedAtObj).longValue() == 0) {
+            result.add(req);
+            continue;
+          }
+        }
+
+        // Entry is cached and valid
+      }
+
+      long elapsedMs = System.currentTimeMillis() - startMs;
+      LOGGER.info("Fallback filtering complete: {} uncached out of {} total ({}ms)",
+          result.size(), allRequests.size(), elapsedMs);
+
+      return result;
+
+    } catch (Exception e) {
+      LOGGER.error("Fallback filtering failed: {}, returning all requests as uncached", e.getMessage());
+      return new ArrayList<>(allRequests);
     }
   }
 
@@ -383,14 +487,9 @@ public class CacheManifestQueryHelper {
       return new ArrayList<>();
     }
 
-    // Use direct query for small lists, temp tables for large lists
-    if (allRequests.size() < 1000) {
-      LOGGER.debug("Using direct query strategy for {} requests", allRequests.size());
-      return filterUncachedRequestsDirect(manifestPath, allRequests, operationType);
-    } else {
-      LOGGER.debug("Using temp table strategy for {} requests", allRequests.size());
-      return filterUncachedRequests(manifestPath, allRequests, operationType);
-    }
+    LOGGER.debug("Using direct query strategy for {} requests", allRequests.size());
+    return filterUncachedRequestsDirect(manifestPath, allRequests, operationType);
+
   }
 
   // ===== SQL RESOURCE LOADING =====
