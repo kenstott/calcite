@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.econ.CacheManifest;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -62,8 +63,10 @@ public class CacheManifestPerformanceTest {
       int year = 2010 + (i % 15); // 2010-2024
       Map<String, String> params = new HashMap<>();
       params.put("series", seriesId);
+      params.put("year", String.valueOf(year));
       String cachePath = String.format("/cache/fred/%s/year=%d/data.json", seriesId, year);
-      testManifest.markCached("fred_indicators", year, params, cachePath, 1024);
+      CacheKey cacheKey = new CacheKey("fred_indicators", params);
+      testManifest.markCached(cacheKey, cachePath, 1024, Long.MAX_VALUE, "test");
     }
 
     // Save manifest
