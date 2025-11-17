@@ -108,7 +108,12 @@ public class CacheManifestQueryHelper {
      */
     public String buildKey() {
       StringBuilder key = new StringBuilder();
-      key.append(dataType).append(":").append(year);
+      key.append(dataType);
+
+      // Only append year if it's non-zero (modern CacheKey stores year in parameters)
+      if (year > 0) {
+        key.append(":").append(year);
+      }
 
       if (!parameters.isEmpty()) {
         parameters.entrySet().stream()
