@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata;
 
-import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.econ.CacheManifest;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -131,16 +130,17 @@ public class CacheManifestPerformanceTest {
       int year = 2010 + (i % 15);
       Map<String, String> params = new HashMap<>();
       params.put("series", seriesId);
-      requests.add(new CacheManifestQueryHelper.DownloadRequest("fred_indicators", year, params));
+      params.put("year", String.valueOf(year));
+      requests.add(new CacheManifestQueryHelper.DownloadRequest("fred_indicators", params));
     }
 
     LOGGER.info("Starting optimized cache filtering for {} requests", requests.size());
     long startTime = System.nanoTime();
 
     // Optimized approach: filter all requests in single SQL query
-    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.parquet";
+    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.json";
     List<CacheManifestQueryHelper.DownloadRequest> uncached =
-        CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests);
+        CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests, "download");
 
     long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
 
@@ -170,7 +170,8 @@ public class CacheManifestPerformanceTest {
       int year = 2010 + (i % 15);
       Map<String, String> params = new HashMap<>();
       params.put("series", seriesId);
-      requests.add(new CacheManifestQueryHelper.DownloadRequest("fred_indicators", year, params));
+      params.put("year", String.valueOf(year));
+      requests.add(new CacheManifestQueryHelper.DownloadRequest("fred_indicators", params));
     }
 
     // Run traditional approach
@@ -178,7 +179,6 @@ public class CacheManifestPerformanceTest {
     int traditionalCached = 0;
     for (CacheManifestQueryHelper.DownloadRequest req : requests) {
       Map<String, String> allParams = new HashMap<>(req.parameters);
-      allParams.put("year", String.valueOf(req.year));
       org.apache.calcite.adapter.govdata.CacheKey cacheKey =
           new org.apache.calcite.adapter.govdata.CacheKey(req.dataType, allParams);
       if (testManifest.isCached(cacheKey)) {
@@ -188,10 +188,10 @@ public class CacheManifestPerformanceTest {
     long traditionalMs = (System.nanoTime() - traditionalStart) / 1_000_000;
 
     // Run optimized approach
-    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.parquet";
+    String manifestPath = testOperatingDir.getAbsolutePath() + "/cache_manifest.json";
     long optimizedStart = System.nanoTime();
     List<CacheManifestQueryHelper.DownloadRequest> uncached =
-        CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests);
+        CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, requests, "download");
     long optimizedMs = (System.nanoTime() - optimizedStart) / 1_000_000;
 
     int optimizedCached = requests.size() - uncached.size();
@@ -202,7 +202,7 @@ public class CacheManifestPerformanceTest {
     LOGGER.info("=== Performance Comparison ===");
     LOGGER.info("Traditional approach: {} ms ({} cached)", traditionalMs, traditionalCached);
     LOGGER.info("Optimized approach:   {} ms ({} cached)", optimizedMs, optimizedCached);
-    LOGGER.info("Speedup factor:       {:.2f}x", speedup);
+    LOGGER.info("Speedup factor:       {}x", String.format("%.2f", speedup));
 
     // Verify results match
     assertTrue(Math.abs(traditionalCached - optimizedCached) <= 1,
