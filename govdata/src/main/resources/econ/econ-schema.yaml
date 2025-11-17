@@ -34,7 +34,7 @@ comment: >
 column_templates:
 
   # --- Time Series Common Columns ---
-  
+
   date_column: &date_column
     name: date
     type: string
@@ -54,7 +54,7 @@ column_templates:
     comment: Numeric value for the metric
 
   # --- Percentage Change Columns ---
-  
+
   percent_change_month_column: &percent_change_month
     name: percent_change_month
     type: double
@@ -68,7 +68,7 @@ column_templates:
     comment: Year-over-year percentage change
 
   # --- Geographic Columns ---
-  
+
   state_name_column: &state_name
     name: state_name
     type: string
@@ -82,7 +82,7 @@ column_templates:
     comment: State FIPS code
 
   # --- Industry Columns ---
-  
+
   industry_name_column: &industry_name
     name: industry_name
     type: string
@@ -90,7 +90,7 @@ column_templates:
     comment: Industry name
 
   # --- Partition Column Definitions ---
-  
+
   partition_type: &partition_type
     name: type
     type: VARCHAR
@@ -104,7 +104,7 @@ column_templates:
     type: INTEGER
 
   # --- Standard Hive Partition Set ---
-  
+
   standard_partitions: &standard_partitions
     style: hive
     columnDefinitions:
@@ -170,8 +170,6 @@ partitionedTables:
         type: boolean
         nullable: true
         comment: Whether data is seasonally adjusted
-      - *percent_change_month
-      - *percent_change_year
       - name: category
         type: string
         nullable: true
@@ -180,6 +178,46 @@ partitionedTables:
         type: string
         nullable: true
         comment: Employment subcategory for detailed classification
+      - name: net_change_1month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.net_changes['1'] AS DOUBLE)"
+        comment: Net change over 1 month from BLS calculations
+      - name: net_change_3month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.net_changes['3'] AS DOUBLE)"
+        comment: Net change over 3 months from BLS calculations
+      - name: net_change_6month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.net_changes['6'] AS DOUBLE)"
+        comment: Net change over 6 months from BLS calculations
+      - name: net_change_12month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.net_changes['12'] AS DOUBLE)"
+        comment: Net change over 12 months from BLS calculations
+      - name: pct_change_1month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.pct_changes['1'] AS DOUBLE)"
+        comment: Percentage change over 1 month from BLS calculations
+      - name: pct_change_3month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.pct_changes['3'] AS DOUBLE)"
+        comment: Percentage change over 3 months from BLS calculations
+      - name: pct_change_6month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.pct_changes['6'] AS DOUBLE)"
+        comment: Percentage change over 6 months from BLS calculations
+      - name: pct_change_12month
+        type: double
+        nullable: true
+        expression: "CAST(calculations.pct_changes['12'] AS DOUBLE)"
+        comment: Percentage change over 12 months from BLS calculations
       - name: series_name_embedding
         type: array<double>
         nullable: true
