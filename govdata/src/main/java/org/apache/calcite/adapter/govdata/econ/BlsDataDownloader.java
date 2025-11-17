@@ -332,12 +332,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Loaded BLS catalogs: {} states, {} regions, {} metros, {} NAICS sectors",
           tempStateFips.size(), tempRegionCodes.size(), tempMetros.size(), tempNaics.size());
     } catch (Exception e) {
-      LOGGER.warn("Failed to load BLS reference catalogs: {}. Will use hardcoded maps as fallback. "
-          + "Run downloadReferenceData() to generate catalogs.", e.getMessage());
-
-      // Fallback to hardcoded maps if catalogs not yet generated
-      tempRegionCodes = new ArrayList<>(BLS.censusRegions.keySet());
-      tempMetros = createMetroGeographiesFromHardcodedMaps();
+      throw new RuntimeException("Failed to load BLS reference catalogs from parquet files. "
+          + "This typically indicates the reference data hasn't been generated yet or cache is corrupted. "
+          + "To fix: remove .aperio cache directory and restart the application to regenerate reference data. "
+          + "Original error: " + e.getMessage(), e);
     }
 
     // Catalog-loaded geography and sector lists (replaces hardcoded maps)
@@ -507,6 +505,74 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Add final range
     ranges.add(new int[]{rangeStart, rangeEnd});
     return ranges;
+  }
+
+  /**
+   * Creates dimension provider for employment statistics table.
+   * Provides dimensions: type, year, frequency.
+   */
+  private DimensionProvider createEmploymentStatisticsDimensions(int startYear, int endYear) {
+    String tableName = BLS.tableNames.employmentStatistics;
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "type": return List.of(tableName);
+        case "year": return yearRange(startYear, endYear);
+        case "frequency": return List.of("monthly");
+        default: return null;
+      }
+    };
+  }
+
+  /**
+   * Creates dimension provider for state wages table.
+   * Provides dimensions: type, year, frequency.
+   * Note: QCEW data only available from 1990 forward.
+   */
+  private DimensionProvider createStateWagesDimensions(int startYear, int endYear) {
+    String tableName = BLS.tableNames.stateWages;
+    int effectiveStartYear = Math.max(startYear, 1990);
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "type": return List.of(tableName);
+        case "year": return yearRange(effectiveStartYear, endYear);
+        case "frequency": return List.of("monthly");
+        default: return null;
+      }
+    };
+  }
+
+  /**
+   * Creates dimension provider for JOLTS regional table.
+   * Provides dimensions: type, year, frequency.
+   * Note: JOLTS data only available from 2001 forward.
+   */
+  private DimensionProvider createJoltsRegionalDimensions(int startYear, int endYear) {
+    String tableName = BLS.tableNames.joltsRegional;
+    int effectiveStartYear = Math.max(startYear, 2001);
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "type": return List.of(tableName);
+        case "year": return yearRange(effectiveStartYear, endYear);
+        case "frequency": return List.of("monthly");
+        default: return null;
+      }
+    };
+  }
+
+  /**
+   * Creates dimension provider for JOLTS state table.
+   * Provides dimensions: type, year, frequency.
+   */
+  private DimensionProvider createJoltsStateDimensions(int startYear, int endYear) {
+    String tableName = BLS.tableNames.joltsState;
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "type": return List.of(tableName);
+        case "year": return yearRange(startYear, endYear);
+        case "frequency": return List.of("monthly");
+        default: return null;
+      }
+    };
   }
 
   /**
@@ -883,22 +949,35 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           continue;
         }
 
+        // Get dimension provider for this table
+        DimensionProvider dimensionProvider;
+        if (BLS.tableNames.employmentStatistics.equals(tableName)) {
+          dimensionProvider = createEmploymentStatisticsDimensions(startYear, endYear);
+        } else if (BLS.tableNames.stateWages.equals(tableName)) {
+          dimensionProvider = createStateWagesDimensions(startYear, endYear);
+        } else if (BLS.tableNames.joltsRegional.equals(tableName)) {
+          dimensionProvider = createJoltsRegionalDimensions(startYear, endYear);
+        } else if (BLS.tableNames.joltsState.equals(tableName)) {
+          dimensionProvider = createJoltsStateDimensions(startYear, endYear);
+        } else {
+          // Default dimension provider for tables without specific helpers
+          dimensionProvider = (dimensionName) -> {
+            if ("year".equals(dimensionName)) {
+              return yearRange(startYear, endYear);
+            }
+            if ("type".equals(dimensionName)) return List.of(tableName);
+            if ("frequency".equals(dimensionName)) return List.of("monthly");
+            return null;
+          };
+        }
+
         // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
         iterateTableOperationsOptimized(
             tableName,
-            (dimensionName) -> {
-              if ("year".equals(dimensionName)) {
-                return yearRange(startYear, endYear);
-              }
-              return null; // No additional dimensions beyond year
-            },
+            dimensionProvider,
             (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-              // Add frequency variable
-              Map<String, String> fullVars = new HashMap<>(vars);
-              fullVars.put("frequency", "monthly");
-
               // Execute conversion
-              convertCachedJsonToParquet(tableName, fullVars);
+              convertCachedJsonToParquet(tableName, vars);
 
               // Mark as converted in manifest
               cacheManifest.markParquetConverted(cacheKey, parquetPath);
@@ -923,54 +1002,122 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = BLS.tableNames.employmentStatistics;
 
-    iterateTableOperationsOptimized(
-        tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "year": return yearRange(startYear, endYear);
-            case "frequency": return List.of("monthly");
-            default: return null;
-          }
-        },
-        // PREFETCH CALLBACK - Batch fetch all years in ONE API call
-        (context, helper) -> {
-          if ("year".equals(context.segmentDimensionName)) {
-            List<String> years = context.allDimensionValues.get("year");
-            LOGGER.info("Prefetching employment data for {} years in single API call", years.size());
+    // Create persistent prefetch connection that survives both download and conversion
+    Connection prefetchDb = null;
+    PrefetchHelper prefetchHelper = null;
+    try {
+      prefetchDb = getDuckDBConnection();
 
-            // Convert year strings to integers
-            List<Integer> yearInts = new ArrayList<>();
-            for (String year : years) {
-              yearInts.add(Integer.parseInt(year));
+      // Load table metadata and extract partition keys
+      Map<String, Object> metadata = loadTableMetadata(tableName);
+      String pattern = (String) metadata.get("pattern");
+      List<String> partitionKeys = extractPartitionKeysFromPattern(pattern);
+
+      // Create prefetch cache table
+      createPrefetchCacheTable(prefetchDb, tableName, partitionKeys, metadata);
+      prefetchHelper = new PrefetchHelper(prefetchDb, tableName + "_prefetch", partitionKeys);
+
+    } catch (Exception e) {
+      LOGGER.error("Failed to initialize prefetch infrastructure for {}: {}", tableName, e.getMessage());
+      if (prefetchDb != null) {
+        try {
+          prefetchDb.close();
+        } catch (Exception closeEx) {
+          // Ignore
+        }
+      }
+      throw new RuntimeException("Failed to initialize prefetch for " + tableName, e);
+    }
+
+    final Connection finalPrefetchDb = prefetchDb;
+    final PrefetchHelper finalPrefetchHelper = prefetchHelper;
+
+    try {
+      // DOWNLOAD: Fetch data and populate prefetch cache
+      iterateTableOperationsOptimized(
+          tableName,
+          createEmploymentStatisticsDimensions(startYear, endYear),
+          // PREFETCH CALLBACK - Load cached data OR fetch from API
+          (context, helper) -> {
+            if ("year".equals(context.segmentDimensionName)) {
+              List<String> years = context.allDimensionValues.get("year");
+              LOGGER.info("Prefetching employment data for {} years (cache + API)", years.size());
+
+              // Separate years into cached vs uncached
+              List<Integer> uncachedYears = new ArrayList<>();
+              List<Map<String, String>> cachedPartitions = new ArrayList<>();
+              List<String> cachedJsons = new ArrayList<>();
+
+              for (String yearStr : years) {
+                int year = Integer.parseInt(yearStr);
+                Map<String, String> params = Map.of("year", yearStr, "frequency", "monthly");
+                CacheKey cacheKey = new CacheKey(tableName, params);
+
+                if (cacheManifest.isCached(cacheKey)) {
+                  // Load from cache
+                  String jsonPath = resolveJsonPath(tableName, params);
+                  String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+                  try (InputStream is = cacheStorageProvider.openInputStream(fullPath)) {
+                    byte[] bytes = new byte[is.available()];
+                    is.read(bytes);
+                    String jsonContent = new String(bytes, StandardCharsets.UTF_8);
+                    cachedPartitions.add(params);
+                    cachedJsons.add(jsonContent);
+                  } catch (Exception e) {
+                    LOGGER.warn("Failed to load cached JSON for year {}, will re-fetch: {}", year, e.getMessage());
+                    uncachedYears.add(year);
+                  }
+                } else {
+                  uncachedYears.add(year);
+                }
+              }
+
+              // Add cached data to prefetch table
+              if (!cachedPartitions.isEmpty()) {
+                helper.insertJsonBatch(cachedPartitions, cachedJsons);
+                LOGGER.info("Loaded {} cached years into prefetch table", cachedPartitions.size());
+              }
+
+              // Fetch uncached years from API in ONE batch call
+              if (!uncachedYears.isEmpty()) {
+                LOGGER.info("Fetching {} uncached years from BLS API", uncachedYears.size());
+                Map<Integer, String> apiData = fetchAndSplitByYear(tableName, seriesIds, uncachedYears);
+
+                List<Map<String, String>> apiPartitions = new ArrayList<>();
+                List<String> apiJsons = new ArrayList<>();
+                for (Map.Entry<Integer, String> entry : apiData.entrySet()) {
+                  apiPartitions.add(Map.of("type", tableName, "year", String.valueOf(entry.getKey()), "frequency", "monthly"));
+                  apiJsons.add(entry.getValue());
+                }
+                helper.insertJsonBatch(apiPartitions, apiJsons);
+                LOGGER.info("Fetched {} years from API into prefetch table", apiData.size());
+              }
             }
+          },
+          // TABLE OPERATION - Convert cached JSON to parquet
+          (cacheKey, vars, jsonPath, parquetPath, helper) -> {
+            String rawJson = helper.getJson(vars);
 
-            // ONE API CALL for all years
-            Map<Integer, String> allData = fetchAndSplitByYear(tableName, seriesIds, yearInts);
-
-            // Store in prefetch cache
-            List<Map<String, String>> partitions = new ArrayList<>();
-            List<String> jsonStrings = new ArrayList<>();
-            for (Map.Entry<Integer, String> entry : allData.entrySet()) {
-              partitions.add(Map.of("year", String.valueOf(entry.getKey()), "frequency", "monthly"));
-              jsonStrings.add(entry.getValue());
+            if (rawJson != null) {
+              int year = Integer.parseInt(vars.get("year"));
+              String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
+              validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
             }
-            helper.insertJsonBatch(partitions, jsonStrings);
+          },
+          "download",
+          finalPrefetchDb,
+          finalPrefetchHelper);
 
-            LOGGER.info("Prefetched {} years of employment data", allData.size());
-          }
-        },
-        // TABLE OPERATION - Retrieve from cache
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          String rawJson = prefetchHelper.getJson(vars);
-
-          if (rawJson != null) {
-            int year = Integer.parseInt(vars.get("year"));
-            String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
-            validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
-          }
-        },
-        "download");
-
+    } finally {
+      // Close prefetch DB after both download and conversion complete
+      if (prefetchDb != null) {
+        try {
+          prefetchDb.close();
+        } catch (Exception e) {
+          LOGGER.warn("Failed to close prefetch DB: {}", e.getMessage());
+        }
+      }
+    }
   }
 
   /**
@@ -994,6 +1141,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1045,6 +1193,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1095,6 +1244,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1130,9 +1280,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = BLS.tableNames.stateWages;
 
-    // QCEW data only available from 1990 forward
-    int effectiveStartYear = Math.max(startYear, 1990);
-
     // Load bulk download configuration once before iteration
     Map<String, Object> metadata = loadTableMetadata(tableName);
     JsonNode downloadNode = (JsonNode) metadata.get("download");
@@ -1143,13 +1290,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "year": return yearRange(effectiveStartYear, endYear);
-            case "frequency": return List.of("monthly");
-            default: return null;
-          }
-        },
+        createStateWagesDimensions(startYear, endYear),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
@@ -1198,6 +1339,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("quarterly");
             default: return null;
@@ -1257,6 +1399,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("quarterly");
             default: return null;
@@ -1313,6 +1456,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1410,6 +1554,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(effectiveStartYear, endYear);
             case "frequency": return List.of("annual", "qtrly");
             default: return null;
@@ -1524,18 +1669,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       downloadFtpFileIfNeeded(source.cachePath, source.url);
     }
 
-    // JOLTS data only available from 2001 forward
-    int effectiveStartYear = Math.max(startYear, 2001);
-
     iterateTableOperationsOptimized(
         tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "year": return yearRange(effectiveStartYear, endYear);
-            case "frequency": return List.of("monthly");
-            default: return null;
-          }
-        },
+        createJoltsRegionalDimensions(startYear, endYear),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -1575,13 +1711,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "year": return yearRange(startYear, endYear);
-            case "frequency": return List.of("monthly");
-            default: return null;
-          }
-        },
+        createJoltsStateDimensions(startYear, endYear),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -1735,6 +1865,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1770,6 +1901,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "frequency": return List.of("monthly");
             default: return null;
@@ -1809,6 +1941,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
             case "state_fips": return new ArrayList<>(BLS.stateFipsCodes.values());
             default: return null;
@@ -2605,14 +2738,17 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   private Map<String, MetroGeography> createMetroGeographiesFromHardcodedMaps() {
     Map<String, MetroGeography> metros = new HashMap<>();
+    LOGGER.debug("BLS.metroCpiCodes size: {}", BLS.metroCpiCodes == null ? "null" : BLS.metroCpiCodes.size());
     for (Map.Entry<String, BlsConstants.MetroCpiCode> entry : BLS.metroCpiCodes.entrySet()) {
       String metroCode = entry.getKey();
       BlsConstants.MetroCpiCode metro = entry.getValue();
       String cpiCode = metro.cpiCode;
       String metroName = metro.name;
       String blsCode = BLS.metroBlsAreaCodes.get(metroCode);
+      LOGGER.debug("Metro {}: cpiCode={}, name={}, blsCode={}", metroCode, cpiCode, metroName, blsCode);
       metros.put(metroCode, new MetroGeography(metroCode, metroName, cpiCode, blsCode));
     }
+    LOGGER.debug("Created {} metros from hardcoded maps", metros.size());
     return metros;
   }
 
@@ -2729,12 +2865,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
     String parquetPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
-    // Check if already exists
+    // Check manifest first (fast, no S3 check)
     Map<String, String> params = ImmutableMap.of();
     CacheKey cacheKey = new CacheKey("reference_bls_naics_sectors", params);
 
-    if (cacheManifest.isParquetConverted(cacheKey) || storageProvider.exists(parquetPath)) {
-      LOGGER.info("BLS NAICS sectors reference already exists, skipping");
+    if (cacheManifest.isParquetConverted(cacheKey)) {
+      LOGGER.debug("BLS NAICS sectors reference already in manifest, skipping");
+      return;
+    }
+
+    // Self-healing: manifest says not converted, check if file exists
+    if (storageProvider.exists(parquetPath)) {
+      LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", pattern);
+      cacheManifest.markParquetConverted(cacheKey, pattern);
+      try {
+        cacheManifest.save(operatingDirectory);
+        LOGGER.debug("Saved manifest after self-healing {}", pattern);
+      } catch (Exception saveEx) {
+        LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+      }
       return;
     }
 
