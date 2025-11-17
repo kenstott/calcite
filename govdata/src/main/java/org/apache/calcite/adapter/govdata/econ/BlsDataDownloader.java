@@ -425,6 +425,61 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
+   * Resolves a bulk download configuration from a table's download node.
+   * Handles both direct download configurations and bulkDownload references.
+   *
+   * @param downloadNode The download JsonNode from table metadata
+   * @return The resolved BulkDownloadConfig
+   * @throws IllegalArgumentException if bulkDownload reference cannot be resolved
+   */
+  private BulkDownloadConfig resolveBulkDownload(JsonNode downloadNode) {
+    if (downloadNode == null) {
+      throw new IllegalArgumentException("downloadNode cannot be null");
+    }
+
+    LOGGER.debug("resolveBulkDownload called with downloadNode: {}", downloadNode);
+    LOGGER.debug("downloadNode.has('bulkDownload'): {}", downloadNode.has("bulkDownload"));
+    LOGGER.debug("downloadNode.has('cachePattern'): {}", downloadNode.has("cachePattern"));
+    LOGGER.debug("downloadNode.has('url'): {}", downloadNode.has("url"));
+
+    // Check if this uses a bulkDownload reference
+    if (downloadNode.has("bulkDownload")) {
+      String bulkDownloadName = downloadNode.get("bulkDownload").asText();
+      LOGGER.debug("Resolving bulkDownload reference: {}", bulkDownloadName);
+
+      // Load bulk downloads from schema
+      Map<String, BulkDownloadConfig> bulkDownloads = loadBulkDownloads();
+      BulkDownloadConfig bulkConfig = bulkDownloads.get(bulkDownloadName);
+
+      if (bulkConfig == null) {
+        throw new IllegalArgumentException(
+            "Unknown bulkDownload reference: '" + bulkDownloadName + "'");
+      }
+
+      LOGGER.debug("Resolved bulkDownload '{}': {}", bulkDownloadName, bulkConfig);
+      return bulkConfig;
+    }
+
+    // Legacy format: direct cachePattern and url in downloadNode
+    if (downloadNode.has("cachePattern") && downloadNode.has("url")) {
+      String cachePattern = downloadNode.get("cachePattern").asText();
+      String url = downloadNode.get("url").asText();
+
+      List<String> variables = new ArrayList<>();
+      if (downloadNode.has("variables") && downloadNode.get("variables").isArray()) {
+        downloadNode.get("variables").forEach(v -> variables.add(v.asText()));
+      }
+
+      String comment = downloadNode.has("comment") ? downloadNode.get("comment").asText() : "";
+
+      return new BulkDownloadConfig("direct", cachePattern, url, variables, comment);
+    }
+
+    throw new IllegalArgumentException(
+        "downloadNode must have either 'bulkDownload' reference or 'cachePattern'+'url' fields");
+  }
+
+  /**
    * Batches a list of years into contiguous ranges of up to maxYears each.
    * Example: [2000, 2001, 2005, 2024, 2025] with max=20 → [[2000-2001], [2005], [2024-2025]]
    */
@@ -914,8 +969,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -962,8 +1016,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 getCacheExpiryForYear(year), getCachePolicyForYear(year));
           }
         },
-        "download"
-    );
+        "download");
   }
 
   /**
@@ -1014,8 +1067,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 getCacheExpiryForYear(year), getCachePolicyForYear(year));
           }
         },
-        "download"
-    );
+        "download");
   }
 
   /**
@@ -1061,8 +1113,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1082,6 +1133,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // QCEW data only available from 1990 forward
     int effectiveStartYear = Math.max(startYear, 1990);
 
+    // Load bulk download configuration once before iteration
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    JsonNode downloadNode = (JsonNode) metadata.get("download");
+    if (downloadNode == null) {
+      throw new IllegalStateException("No 'download' section found in metadata for table: " + tableName);
+    }
+    BulkDownloadConfig bulkConfig = resolveBulkDownload(downloadNode);
+
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
@@ -1093,14 +1152,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
+          String frequency = vars.get("frequency");
 
-          // Get QCEW ZIP download metadata from schema
-          Map<String, Object> metadata = loadTableMetadata(tableName);
-          JsonNode downloadNode =
-              (JsonNode) metadata.get("download");
-          String cachePattern = downloadNode.get("cachePattern").asText();
-          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Resolve variables for this iteration
+          Map<String, String> variableValues = new HashMap<>();
+          variableValues.put("year", String.valueOf(year));
+          variableValues.put("frequency", frequency);
+
+          String qcewZipPath = bulkConfig.resolveCachePath(variableValues);
+          String downloadUrl = bulkConfig.resolveUrl(variableValues);
 
           // Download QCEW CSV (reuses cache if available)
           downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
@@ -1112,8 +1172,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           parseQcewForStateWages(fullZipPath, parquetPath, year);
           LOGGER.info("Completed state wages for year {}", year);
         },
-        "convert"
-    );
+        "convert");
 
   }
 
@@ -1127,10 +1186,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = BLS.tableNames.countyWages;
 
-    // Get QCEW ZIP download metadata from state_wages table (shared download)
-    Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    JsonNode downloadNode =
-        (JsonNode) stateWagesMetadata.get("download");
+    // Load bulk download configuration once before iteration
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    JsonNode downloadNode = (JsonNode) metadata.get("download");
+    if (downloadNode == null) {
+      throw new IllegalStateException("No 'download' section found in metadata for table: " + tableName);
+    }
+    BulkDownloadConfig bulkConfig = resolveBulkDownload(downloadNode);
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1143,11 +1205,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
+          String frequency = vars.get("frequency");
 
-          // Get QCEW ZIP download metadata from schema
-          String cachePattern = downloadNode.get("cachePattern").asText();
-          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Resolve variables for this iteration
+          Map<String, String> variableValues = new HashMap<>();
+          variableValues.put("year", String.valueOf(year));
+          variableValues.put("frequency", frequency);
+
+          String qcewZipPath = bulkConfig.resolveCachePath(variableValues);
+          String downloadUrl = bulkConfig.resolveUrl(variableValues);
 
           // Download QCEW CSV (reuses cache from state_wages if available)
           downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
@@ -1159,8 +1225,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           parseQcewForCountyWages(fullZipPath, parquetPath, year);
           LOGGER.info("Completed county wages for year {}", year);
         },
-        "convert"
-    );
+        "convert");
 
   }
 
@@ -1180,10 +1245,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String tableName = BLS.tableNames.countyQcew;
 
-    // Get QCEW ZIP download metadata from state_wages table (shared download)
-    Map<String, Object> stateWagesMetadata = loadTableMetadata("state_wages");
-    JsonNode downloadNode =
-        (JsonNode) stateWagesMetadata.get("download");
+    // Load bulk download configuration once before iteration
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    JsonNode downloadNode = (JsonNode) metadata.get("download");
+    if (downloadNode == null) {
+      throw new IllegalStateException("No 'download' section found in metadata for table: " + tableName);
+    }
+    BulkDownloadConfig bulkConfig = resolveBulkDownload(downloadNode);
 
     iterateTableOperationsOptimized(
         tableName,
@@ -1196,11 +1264,15 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
+          String frequency = vars.get("frequency");
 
-          // Get QCEW ZIP download metadata from schema
-          String cachePattern = downloadNode.get("cachePattern").asText();
-          String qcewZipPath = cachePattern.replace("{year}", String.valueOf(year));
-          String downloadUrl = downloadNode.get("url").asText().replace("{year}", String.valueOf(year));
+          // Resolve variables for this iteration
+          Map<String, String> variableValues = new HashMap<>();
+          variableValues.put("year", String.valueOf(year));
+          variableValues.put("frequency", frequency);
+
+          String qcewZipPath = bulkConfig.resolveCachePath(variableValues);
+          String downloadUrl = bulkConfig.resolveUrl(variableValues);
 
           // Download QCEW CSV (reuses cache from state_wages/county_wages if available)
           downloadQcewCsvIfNeeded(year, qcewZipPath, downloadUrl);
@@ -1212,8 +1284,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           parseAndConvertQcewToParquet(fullZipPath, parquetPath, year);
           LOGGER.info("Completed county QCEW data for year {}", year);
         },
-        "convert"
-    );
+        "convert");
 
   }
 
@@ -1260,8 +1331,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1350,8 +1420,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertCsvToParquet(tableName, vars);
           LOGGER.info("Completed metro wages for year {} {}", vars.get("year"), vars.get("frequency"));
         },
-        "convert"
-    );
+        "convert");
 
     LOGGER.info("Metro wages conversion complete for years {}-{}", effectiveStartYear, endYear);
   }
@@ -1389,13 +1458,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Build variables map for path/URL resolution
-    Map<String, String> variables = ImmutableMap.of(
-        "year", String.valueOf(year),
+    Map<String, String> variables =
+        ImmutableMap.of("year", String.valueOf(year),
         "frequency", frequency);
 
     // Resolve complete cache path from bulkDownload cachePattern
-    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory,
-        bulkConfig.resolveCachePath(variables));
+    String fullPath =
+        cacheStorageProvider.resolvePath(cacheDirectory, bulkConfig.resolveCachePath(variables));
 
     // Check if file already cached
     if (cacheStorageProvider.exists(fullPath)) {
@@ -1477,8 +1546,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             LOGGER.info("Extracted {} data for year {} (4 regions × 5 metrics)", tableName, year);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1525,8 +1593,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             LOGGER.info("Extracted {} data for year {} (51 states × 5 metrics)", tableName, year);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1571,8 +1638,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertListToParquet(industries, parquetPath, tableName);
           LOGGER.info("Completed reference_jolts_industries");
         },
-        "convert"
-    );
+        "convert");
   }
 
   /**
@@ -1650,8 +1716,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertListToParquet(dataElements, parquetPath, tableName);
           LOGGER.info("Completed reference_jolts_dataelements");
         },
-        "convert"
-    );
+        "convert");
   }
 
   /**
@@ -1686,8 +1751,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1722,8 +1786,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download"
-    );
+        "download");
 
   }
 
@@ -1805,8 +1868,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Saved state_fips {} year {} ({} series)", stateFips, year, seriesNode.size());
         },
-        "convert"
-    );
+        "convert");
 
   }
 
@@ -1943,8 +2005,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String csvFilename = String.format("%d.annual.singlefile.csv", year);
 
     // Load SQL template and execute with parameters (no manual escaping needed)
-    Map<String, String> params = ImmutableMap.of(
-        "zipPath", fullZipPath,
+    Map<String, String> params =
+        ImmutableMap.of("zipPath", fullZipPath,
         "csvFilename", csvFilename,
         "parquetPath", fullParquetPath);
 
@@ -2075,8 +2137,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String dataType = "jolts_ftp_" + fileName.replace(".", "_");
 
     // Check the cache manifest first (use year=0 for non-year-partitioned files)
-    Map<String, String> cacheParams = ImmutableMap.of(
-        "file", fileName,
+    Map<String, String> cacheParams =
+        ImmutableMap.of("file", fileName,
         "year", String.valueOf(0));
 
     CacheKey cacheKey = new CacheKey(dataType, cacheParams);
@@ -2419,8 +2481,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      String query = String.format(
-          "SELECT state_fips FROM read_parquet('%s') ORDER BY state_fips", fullPath);
+      String query =
+          String.format("SELECT state_fips FROM read_parquet('%s') ORDER BY state_fips", fullPath);
 
       try (Statement stmt = duckdb.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
@@ -2452,8 +2514,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      String query = String.format(
-          "SELECT region_code FROM read_parquet('%s') ORDER BY region_code", fullPath);
+      String query =
+          String.format("SELECT region_code FROM read_parquet('%s') ORDER BY region_code", fullPath);
 
       try (Statement stmt = duckdb.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
@@ -2485,8 +2547,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      String query = String.format(
-          "SELECT metro_publication_code, geo_name, metro_cpi_area_code, metro_bls_area_code "
+      String query =
+          String.format("SELECT metro_publication_code, geo_name, metro_cpi_area_code, metro_bls_area_code "
           + "FROM read_parquet('%s') ORDER BY metro_publication_code", fullPath);
 
       try (Statement stmt = duckdb.createStatement();
@@ -2522,8 +2584,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-      String query = String.format(
-          "SELECT supersector_code FROM read_parquet('%s') ORDER BY supersector_code", fullPath);
+      String query =
+          String.format("SELECT supersector_code FROM read_parquet('%s') ORDER BY supersector_code", fullPath);
 
       try (Statement stmt = duckdb.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
@@ -2608,8 +2670,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         String metroBlsAreaCodesJson = MAPPER.writeValueAsString(BLS.metroBlsAreaCodes);
 
         // Load SQL template and substitute JSON parameters (can't use PreparedStatement for json_each)
-        String loadSql = substituteSqlParameters(
-            loadSqlResource("/sql/bls/load_geographies_from_json.sql"),
+        String loadSql =
+            substituteSqlParameters(loadSqlResource("/sql/bls/load_geographies_from_json.sql"),
             ImmutableMap.of(
                 "stateFipsJson", stateFipsJson,
                 "censusRegionsJson", censusRegionsJson,
@@ -2627,16 +2689,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
           // Generate parquet file for this geo_type using direct substitution (COPY TO requires literal paths)
-          String generateSql = substituteSqlParameters(
-              loadSqlResource("/sql/bls/generate_geographies.sql"),
+          String generateSql =
+              substituteSqlParameters(loadSqlResource("/sql/bls/generate_geographies.sql"),
               ImmutableMap.of("geoType", geoType, "parquetPath", parquetPath));
           try (java.sql.Statement stmt = duckdb.createStatement()) {
             stmt.execute(generateSql);
           }
 
           // Count records using direct substitution
-          String countSql = substituteSqlParameters(
-              loadSqlResource("/sql/bls/count_geographies.sql"),
+          String countSql =
+              substituteSqlParameters(loadSqlResource("/sql/bls/count_geographies.sql"),
               ImmutableMap.of("geoType", geoType));
           long count = 0;
           try (java.sql.Statement stmt = duckdb.createStatement();
@@ -2691,8 +2753,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             ImmutableMap.of("parquetPath", parquetPath));
 
         long count = 0;
-        try (ResultSet rs = queryWithParams(duckdb,
-            loadSqlResource("/sql/bls/count_naics_sectors.sql"),
+        try (ResultSet rs =
+            queryWithParams(duckdb, loadSqlResource("/sql/bls/count_naics_sectors.sql"),
             ImmutableMap.of())) {
           if (rs.next()) {
             count = rs.getLong(1);

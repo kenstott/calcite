@@ -1213,8 +1213,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Check if JSON file has valid schema before conversion
           // Files with [null] will have a "json" column instead of "Key"/"Desc"
           try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
-            String schemaSql = String.format(
-                "SELECT column_name FROM (DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1)",
+            String schemaSql =
+                String.format("SELECT column_name FROM (DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1)",
                 jsonPath.replace("'", "''"));
 
             boolean hasKeyColumn = false;
@@ -1348,7 +1348,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     List<CacheManifestQueryHelper.DownloadRequest> needed;
     try {
       String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests);
+      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, "download");
 
       // After filtering
       if (needed.size() < allRequests.size()) {

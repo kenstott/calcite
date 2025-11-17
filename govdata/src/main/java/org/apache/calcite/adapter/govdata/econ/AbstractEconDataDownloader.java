@@ -492,8 +492,8 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
           .timeout(Duration.ofMinutes(10))
           .build();
 
-      HttpResponse<byte[]> response = httpClient.send(request,
-          HttpResponse.BodyHandlers.ofByteArray());
+      HttpResponse<byte[]> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
 
       if (response.statusCode() != 200) {
         throw new IOException("HTTP " + response.statusCode() + " downloading " + url);

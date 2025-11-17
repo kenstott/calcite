@@ -157,12 +157,15 @@ public class CacheManifestQueryHelper {
    */
   public static List<DownloadRequest> filterUncachedRequests(
       String manifestPath,
-      List<DownloadRequest> allRequests) throws SQLException {
+      List<DownloadRequest> allRequests,
+      String operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       LOGGER.debug("No download requests to filter");
       return new ArrayList<>();
     }
+
+    boolean isConversion = "conversion".equals(operationType);
 
     LOGGER.info("Filtering {} download requests using DuckDB SQL query against cache manifest: {}",
         allRequests.size(), manifestPath);
@@ -213,6 +216,7 @@ public class CacheManifestQueryHelper {
 
       // 4. Filter: needed downloads NOT IN cached (or expired/retry-eligible)
       // This is the core optimization - single SQL query replaces thousands of HashMap lookups
+      // For conversions, also check if parquet has been converted
       long now = System.currentTimeMillis();
       String filterSql =
           "SELECT nd.cache_key " +
@@ -220,7 +224,8 @@ public class CacheManifestQueryHelper {
               "LEFT JOIN cached_files cf ON nd.cache_key = cf.key " +
               "WHERE cf.key IS NULL " +  // Not in cache
               "   OR cf.refresh_after < ? " +  // TTL expired
-              "   OR (cf.download_retry > 0 AND cf.download_retry < ?)";  // Retry window elapsed
+              "   OR (cf.download_retry > 0 AND cf.download_retry < ?)" +  // Retry window elapsed
+              (isConversion ? " OR cf.parquet_converted_at IS NULL OR cf.parquet_converted_at = 0" : "");  // Not converted
 
       List<String> uncachedKeys = new ArrayList<>();
       try (PreparedStatement query = duckdb.prepareStatement(filterSql)) {
@@ -267,12 +272,15 @@ public class CacheManifestQueryHelper {
    */
   public static List<DownloadRequest> filterUncachedRequestsDirect(
       String manifestPath,
-      List<DownloadRequest> allRequests) throws SQLException {
+      List<DownloadRequest> allRequests,
+      String operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       LOGGER.debug("No download requests to filter");
       return new ArrayList<>();
     }
+
+    boolean isConversion = "conversion".equals(operationType);
 
     LOGGER.info("Filtering {} download requests using direct DuckDB query", allRequests.size());
 
@@ -307,6 +315,7 @@ public class CacheManifestQueryHelper {
             "      key, " +
             "      json_extract(value, '$.refreshAfter')::BIGINT as refresh_after, " +
             "      json_extract(value, '$.downloadRetry')::BIGINT as download_retry, " +
+            "      json_extract(value, '$.parquetConvertedAt')::BIGINT as parquet_converted_at, " +
             "      json_extract(value, '$.etag')::VARCHAR as etag " +
             "    FROM read_json('" + escapedManifestPath + "', format='unstructured', records='false', maximum_object_size=10000000) AS t, " +
             "    json_each(json_extract(t.json, '$.entries')) AS entries(key, value) " +
@@ -319,7 +328,8 @@ public class CacheManifestQueryHelper {
             "LEFT JOIN manifest m ON n.cache_key = m.key " +
             "WHERE m.key IS NULL " +
             "   OR m.refresh_after < ? " +
-            "   OR (m.download_retry > 0 AND m.download_retry < ?)";
+            "   OR (m.download_retry > 0 AND m.download_retry < ?)" +
+            (isConversion ? " OR m.parquet_converted_at IS NULL OR m.parquet_converted_at = 0" : "");
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:");
          PreparedStatement query = duckdb.prepareStatement(sql)) {
@@ -366,7 +376,8 @@ public class CacheManifestQueryHelper {
    */
   public static List<DownloadRequest> filterUncachedRequestsOptimal(
       String manifestPath,
-      List<DownloadRequest> allRequests) throws SQLException {
+      List<DownloadRequest> allRequests,
+      String operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       return new ArrayList<>();
@@ -375,10 +386,10 @@ public class CacheManifestQueryHelper {
     // Use direct query for small lists, temp tables for large lists
     if (allRequests.size() < 1000) {
       LOGGER.debug("Using direct query strategy for {} requests", allRequests.size());
-      return filterUncachedRequestsDirect(manifestPath, allRequests);
+      return filterUncachedRequestsDirect(manifestPath, allRequests, operationType);
     } else {
       LOGGER.debug("Using temp table strategy for {} requests", allRequests.size());
-      return filterUncachedRequests(manifestPath, allRequests);
+      return filterUncachedRequests(manifestPath, allRequests, operationType);
     }
   }
 
