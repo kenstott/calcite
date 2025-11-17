@@ -1466,9 +1466,25 @@ public abstract class AbstractGovDataDownloader {
     String jsonPath = resolveJsonPath(pattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-    // Note: Cache manifest is the source of truth. If manifest says "download", we download.
-    // No defensive exists() checks - they're slow (especially on S3) and undermine manifest trust.
-    // If files exist but manifest doesn't know about them, that's a manifest bug to fix, not a normal case.
+    // Self-healing: Check if file exists but isn't in manifest
+    // If it does, add it to manifest and skip download (avoids re-downloading existing files)
+    CacheKey cacheKey = new CacheKey(tableName, variables);
+    if (!cacheManifest.isCached(cacheKey) && cacheStorageProvider.exists(fullJsonPath)) {
+      LOGGER.info("Self-healing: Found existing file {} not in manifest, adding to manifest", jsonPath);
+      try {
+        long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+        // Mark as cached with immutable policy for reference data (very long TTL)
+        cacheManifest.markCached(cacheKey, jsonPath, fileSize, Long.MAX_VALUE, "reference_immutable");
+        cacheManifest.save(operatingDirectory);
+        LOGGER.debug("Self-healed cache manifest for {}", jsonPath);
+
+        // Return the existing file path without re-downloading
+        return new DownloadResult(jsonPath, fileSize);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to self-heal manifest for {}: {}, will re-download", jsonPath, e.getMessage());
+        // Continue with download if self-healing fails
+      }
+    }
 
     // Aggregate all downloaded data
     List<JsonNode> allData = new ArrayList<>();
@@ -3363,6 +3379,44 @@ public abstract class AbstractGovDataDownloader {
       String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
       String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
+      // Self-healing: Before executing, check if files already exist
+      // This only runs for files the manifest said were needed, avoiding bulk scanning
+      boolean selfHealed = false;
+      try {
+        boolean parquetExists = storageProvider.exists(fullParquetPath);
+        if (parquetExists) {
+          // Parquet exists - mark as converted and skip operation
+          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+          LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", relativeParquetPath);
+          skipped++;
+          selfHealed = true;
+
+          // Periodically save manifest to persist self-healing discoveries
+          if (skipped % 100 == 0) {
+            try {
+              cacheManifest.save(operatingDirectory);
+              LOGGER.info("Saved manifest after {} self-healed files", skipped);
+            } catch (Exception saveEx) {
+              LOGGER.warn("Failed to save manifest during self-healing: {}", saveEx.getMessage());
+            }
+          }
+          continue;
+        }
+
+        boolean jsonExists = cacheStorageProvider.exists(fullJsonPath);
+        if (jsonExists && "conversion".equals(operationDescription)) {
+          // JSON exists but manifest doesn't know - mark as cached and skip download
+          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+          cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
+          LOGGER.info("Self-healing: Found existing JSON {}, added to manifest", relativeJsonPath);
+          selfHealed = true;
+          // Don't skip - still need to convert to parquet
+        }
+      } catch (Exception e) {
+        // If self-healing check fails, just continue with normal operation
+        LOGGER.debug("Self-healing check failed for {}: {}", cacheKey.asString(), e.getMessage());
+      }
+
       try {
         operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath, finalPrefetchHelper);
         executed++;
@@ -3402,9 +3456,11 @@ public abstract class AbstractGovDataDownloader {
       // 4. Save manifest after all operations complete
       try {
         assert cacheManifest != null;
+        LOGGER.info("Saving cache manifest to {} after {} operations", operatingDirectory, executed);
         cacheManifest.save(operatingDirectory);
+        LOGGER.info("Successfully saved cache manifest for {}", tableName);
       } catch (Exception e) {
-        LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage());
+        LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage(), e);
       }
 
       LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",

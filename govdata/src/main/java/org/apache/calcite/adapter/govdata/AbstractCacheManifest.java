@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.HashMap;
@@ -41,6 +42,7 @@ public abstract class AbstractCacheManifest {
    * Base cache entry class with fields common to all govdata schemas.
    * Subclasses extend this to add schema-specific fields.
    */
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public static class BaseCacheEntry {
     @JsonProperty("filePath")
     public String filePath;
@@ -64,6 +66,7 @@ public abstract class AbstractCacheManifest {
     public String parquetPath;  // Path to converted parquet file (avoids S3 exists checks)
 
     @JsonProperty("parquetConvertedAt")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public long parquetConvertedAt;  // Timestamp when parquet was created
 
     // API error tracking fields (for HTTP 200 responses with error content)
@@ -71,12 +74,15 @@ public abstract class AbstractCacheManifest {
     public String lastError;  // Last API error code/message (e.g., "APIErrorCode 101: Unknown error")
 
     @JsonProperty("errorCount")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public int errorCount;  // Number of consecutive API errors
 
     @JsonProperty("lastAttemptAt")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public long lastAttemptAt;  // Timestamp of last download attempt
 
     @JsonProperty("downloadRetry")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public long downloadRetry;  // Timestamp when retry should occur (0 = no retry restriction)
   }
 

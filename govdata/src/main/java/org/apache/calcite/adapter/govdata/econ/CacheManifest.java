@@ -123,63 +123,6 @@ public class CacheManifest extends AbstractCacheManifest {
     return true;
   }
 
-  /**
-   * Check if data is cached and fresh for the given parameters.
-   * Uses ETag-based caching when available, falling back to time-based TTL.
-   * Also handles API error retry cadence to prevent expensive retries.
-   *
-   * @deprecated Use {@link #isCached(org.apache.calcite.adapter.govdata.CacheKey)} instead
-   */
-  @Deprecated
-  public boolean isCached(String dataType, int year, Map<String, String> parameters) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      return false;
-    }
-
-    long now = System.currentTimeMillis();
-
-    // Check if this is an API error entry with pending retry restriction
-    if (entry.downloadRetry > 0 && now < entry.downloadRetry) {
-      // Still within retry restriction period - skip download attempt
-      long hoursUntilRetry = TimeUnit.MILLISECONDS.toHours(entry.downloadRetry - now);
-      LOGGER.debug("Skipping {} year={} due to API error retry restriction (retry in {} hours, error count: {})",
-          dataType, year, hoursUntilRetry, entry.errorCount);
-      return true;  // Return true to skip download attempt
-    }
-
-    // If retry period has passed for an API error, allow retry by removing the entry
-    if (entry.downloadRetry > 0 && now >= entry.downloadRetry) {
-      LOGGER.info("API error retry period expired for {} year={} (error count: {}), allowing retry",
-          dataType, year, entry.errorCount);
-      entries.remove(key);
-      return false;
-    }
-
-    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
-    if (entry.etag != null && !entry.etag.isEmpty()) {
-      LOGGER.debug("Using cached {} data for year {} (ETag: {})", dataType, year, entry.etag);
-      return true;
-    }
-
-    // Fallback: check if refresh time has passed for entries without ETags
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.info("Cache entry expired for {} year={} (age: {} hours, refresh policy: {})",
-          dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      return false;
-    }
-
-    // Log cache hit with time until refresh
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(entry.refreshAfter - now);
-    LOGGER.debug("Using cached {} data for year {} (refresh in {} hours, policy: {})",
-        dataType, year, hoursUntilRefresh, entry.refreshReason != null ? entry.refreshReason : "unknown");
-
-    return true;
-  }
 
   /**
    * Mark data as cached with metadata and explicit refresh timestamp.
@@ -195,7 +138,6 @@ public class CacheManifest extends AbstractCacheManifest {
     String key = cacheKey.asString();
     CacheEntry entry = new CacheEntry();
     entry.dataType = cacheKey.getTableName();
-    entry.year = 0;  // Legacy field, not used with CacheKey approach
     entry.parameters = new HashMap<>(cacheKey.getParameters());
     entry.filePath = filePath;
     entry.fileSize = fileSize;
@@ -211,39 +153,6 @@ public class CacheManifest extends AbstractCacheManifest {
         cacheKey.asString(), fileSize, hoursUntilRefresh, refreshReason);
   }
 
-  /**
-   * Mark data as cached with metadata and explicit refresh timestamp.
-   *
-   * @param dataType The type of data being cached
-   * @param year The year of the data
-   * @param parameters Additional parameters for the cache key
-   * @param filePath Path to the cached file
-   * @param fileSize Size of the cached file
-   * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
-   * @param refreshReason Human-readable reason for the refresh policy (e.g., "daily", "immutable")
-   * @deprecated Use {@link #markCached(org.apache.calcite.adapter.govdata.CacheKey, String, long, long, String)} instead
-   */
-  @Deprecated
-  public void markCached(String dataType, int year, Map<String, String> parameters,
-                        String filePath, long fileSize, long refreshAfter, String refreshReason) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = dataType;
-    entry.year = year;
-    entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-    entry.filePath = filePath;
-    entry.fileSize = fileSize;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = refreshAfter;
-    entry.refreshReason = refreshReason;
-
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
-    LOGGER.debug("Marked as cached: {} (year={}, size={}, refresh in {} hours, policy: {})",
-        dataType, year, fileSize, hoursUntilRefresh, refreshReason);
-  }
 
   /**
    * Check if parquet file has been converted for the given cache key.
@@ -273,33 +182,6 @@ public class CacheManifest extends AbstractCacheManifest {
     return true;
   }
 
-  /**
-   * Check if parquet file has been converted for the given parameters.
-   * This avoids expensive S3 exists checks on every run by tracking conversions in the manifest.
-   *
-   * @deprecated Use {@link #isParquetConverted(org.apache.calcite.adapter.govdata.CacheKey)} instead
-   */
-  @Deprecated
-  public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null || entry.parquetPath == null) {
-      return false;
-    }
-
-    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
-    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
-    if (entry.cachedAt > entry.parquetConvertedAt) {
-      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {} (year={})",
-          dataType, year);
-      return false;
-    }
-
-    // Parquet is up-to-date with raw file
-    LOGGER.info("⚡ Cached parquet, skipped conversion: {} (year={})", dataType, year);
-    return true;
-  }
 
   /**
    * Mark parquet file as converted for the given cache key.
@@ -316,7 +198,6 @@ public class CacheManifest extends AbstractCacheManifest {
       // Create new entry if it doesn't exist (shouldn't happen normally)
       entry = new CacheEntry();
       entry.dataType = cacheKey.getTableName();
-      entry.year = 0;  // Legacy field, not used with CacheKey approach
       entry.parameters = new HashMap<>(cacheKey.getParameters());
       entry.refreshAfter = Long.MAX_VALUE;  // Parquet files are immutable
       entry.refreshReason = "parquet_immutable";
@@ -330,34 +211,6 @@ public class CacheManifest extends AbstractCacheManifest {
     LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), parquetPath);
   }
 
-  /**
-   * Mark parquet file as converted for the given parameters.
-   * This is called after successful parquet conversion to avoid redundant conversions.
-   *
-   * @deprecated Use {@link #markParquetConverted(org.apache.calcite.adapter.govdata.CacheKey, String)} instead
-   */
-  @Deprecated
-  public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      // Create new entry if it doesn't exist (shouldn't happen normally)
-      entry = new CacheEntry();
-      entry.dataType = dataType;
-      entry.year = year;
-      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-      entry.refreshAfter = Long.MAX_VALUE;  // Parquet files are immutable
-      entry.refreshReason = "parquet_immutable";
-      entries.put(key, entry);
-    }
-
-    entry.parquetPath = parquetPath;
-    entry.parquetConvertedAt = System.currentTimeMillis();
-    lastUpdated = System.currentTimeMillis();
-
-    LOGGER.debug("Marked parquet as converted: {} (year={}, path={})", dataType, year, parquetPath);
-  }
 
   /**
    * Mark data as unavailable (404 or similar) with TTL for retry.
@@ -372,7 +225,6 @@ public class CacheManifest extends AbstractCacheManifest {
     String key = cacheKey.asString();
     CacheEntry entry = new CacheEntry();
     entry.dataType = cacheKey.getTableName();
-    entry.year = 0;  // Legacy field, not used with CacheKey approach
     entry.parameters = new HashMap<>(cacheKey.getParameters());
     entry.filePath = null;  // No file - unavailable
     entry.fileSize = 0;
@@ -387,37 +239,6 @@ public class CacheManifest extends AbstractCacheManifest {
         cacheKey.asString(), retryAfterDays, reason);
   }
 
-  /**
-   * Mark data as unavailable (404 or similar) with TTL for retry.
-   * Prevents repeated failed requests while allowing automatic retry once TTL expires.
-   *
-   * @param dataType Type of data that was unavailable
-   * @param year Year of the data
-   * @param parameters Additional parameters
-   * @param retryAfterDays Number of days before retrying (default: 7 for unreleased data)
-   * @param reason Description of why unavailable (e.g., "404_not_released", "400_invalid_variables")
-   * @deprecated Use {@link #markUnavailable(org.apache.calcite.adapter.govdata.CacheKey, int, String)} instead
-   */
-  @Deprecated
-  public void markUnavailable(String dataType, int year, Map<String, String> parameters,
-                              int retryAfterDays, String reason) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = dataType;
-    entry.year = year;
-    entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-    entry.filePath = null;  // No file - unavailable
-    entry.fileSize = 0;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
-    entry.refreshReason = reason;
-
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-
-    LOGGER.info("Marked {} year={} as unavailable (retry in {} days): {}",
-        dataType, year, retryAfterDays, reason);
-  }
 
   /**
    * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
@@ -441,7 +262,6 @@ public class CacheManifest extends AbstractCacheManifest {
     if (entry == null) {
       entry = new CacheEntry();
       entry.dataType = cacheKey.getTableName();
-      entry.year = 0;  // Legacy field, not used with CacheKey approach
       entry.parameters = new HashMap<>(cacheKey.getParameters());
       entry.errorCount = 0;
     }
@@ -464,76 +284,7 @@ public class CacheManifest extends AbstractCacheManifest {
         errorMessage.length() > 100 ? errorMessage.substring(0, 100) + "..." : errorMessage);
   }
 
-  /**
-   * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
-   * Prevents expensive retries on every restart while tracking error details for debugging.
-   *
-   * <p>This handles cases where the API returns HTTP 200 OK but includes error information
-   * in the response body (e.g., BEA APIErrorCode 101 "Unknown error"). Unlike HTTP errors
-   * (404, 500, etc.) which are handled elsewhere, these are successful HTTP responses that
-   * contain API-level errors.
-   *
-   * @param dataType Type of data that failed
-   * @param year Year of the data
-   * @param parameters Additional parameters
-   * @param errorMessage Full error message from API (e.g., JSON error object)
-   * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
-   * @deprecated Use {@link #markApiError(org.apache.calcite.adapter.govdata.CacheKey, String, int)} instead
-   */
-  @Deprecated
-  public void markApiError(String dataType, int year, Map<String, String> parameters,
-                          String errorMessage, int retryAfterDays) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
 
-    // Create new entry or update existing one
-    if (entry == null) {
-      entry = new CacheEntry();
-      entry.dataType = dataType;
-      entry.year = year;
-      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-      entry.errorCount = 0;
-    }
-
-    // Update error tracking fields
-    entry.filePath = null;  // No file - API error
-    entry.fileSize = 0;
-    entry.lastError = errorMessage;
-    entry.errorCount++;
-    entry.lastAttemptAt = System.currentTimeMillis();
-    entry.downloadRetry = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
-    entry.refreshAfter = entry.downloadRetry;  // Use downloadRetry as refresh time
-    entry.refreshReason = "api_error_retry";
-
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-
-    LOGGER.info("Marked {} year={} as API error (retry in {} days, error count: {}): {}",
-        dataType, year, retryAfterDays, entry.errorCount,
-        errorMessage.length() > 100 ? errorMessage.substring(0, 100) + "..." : errorMessage);
-  }
-
-  /**
-   * Mark data as cached with default 24-hour refresh for current year, infinite for historical.
-   * Consider using {@link #markCached(String, int, Map, String, long, long, String)} with explicit refresh time for more control.
-   */
-  public void markCached(String dataType, int year, Map<String, String> parameters,
-                        String filePath, long fileSize) {
-    // Calculate reasonable default refresh time
-    int currentYear = LocalDate.now().getYear();
-    long refreshAfter;
-    String refreshReason;
-
-    if (year == currentYear) {
-      refreshAfter = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24);
-      refreshReason = "current_year_daily";
-    } else {
-      refreshAfter = Long.MAX_VALUE;
-      refreshReason = "historical_immutable";
-    }
-
-    markCached(dataType, year, parameters, filePath, fileSize, refreshAfter, refreshReason);
-  }
 
   /**
    * Remove expired entries from the manifest based on refreshAfter timestamps.
@@ -552,8 +303,8 @@ public class CacheManifest extends AbstractCacheManifest {
       // Remove if refresh time has passed
       if (now >= cacheEntry.refreshAfter) {
         long ageHours = TimeUnit.MILLISECONDS.toHours(now - cacheEntry.cachedAt);
-        LOGGER.debug("Removing expired cache entry: {} year={} (age: {} hours, policy: {})",
-            cacheEntry.dataType, cacheEntry.year, ageHours, cacheEntry.refreshReason);
+        LOGGER.debug("Removing expired cache entry: {} (age: {} hours, policy: {})",
+            cacheEntry.dataType, ageHours, cacheEntry.refreshReason);
         removed[0]++;
         return true;
       }
@@ -576,41 +327,19 @@ public class CacheManifest extends AbstractCacheManifest {
     File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
 
     if (!manifestFile.exists()) {
-      LOGGER.debug("No cache manifest found, creating new one");
+      LOGGER.info("No cache manifest found at {}, creating new one", manifestFile.getAbsolutePath());
       CacheManifest manifest = new CacheManifest();
       manifest.cacheDir = cacheDir;
       return manifest;
     }
 
     try {
+      LOGGER.info("Loading cache manifest from {}", manifestFile.getAbsolutePath());
       CacheManifest manifest = MAPPER.readValue(manifestFile, CacheManifest.class);
       manifest.cacheDir = cacheDir;  // Set cache directory for path resolution
-      LOGGER.debug("Loaded cache manifest version {} with {} entries", manifest.version, manifest.entries.size());
+      LOGGER.info("Loaded cache manifest version {} with {} entries from {}",
+          manifest.version, manifest.entries.size(), manifestFile.getAbsolutePath());
 
-      // Migrate old entries that don't have refreshAfter set
-      int migrated = 0;
-      int currentYear = LocalDate.now().getYear();
-      long now = System.currentTimeMillis();
-
-      for (CacheEntry entry : manifest.entries.values()) {
-        if (entry.refreshAfter == 0 || entry.refreshAfter == Long.MAX_VALUE && entry.refreshReason == null) {
-          // Apply reasonable default based on year
-          if (entry.year == currentYear) {
-            entry.refreshAfter = now + TimeUnit.HOURS.toMillis(24);
-            entry.refreshReason = "migrated_current_year";
-          } else {
-            entry.refreshAfter = Long.MAX_VALUE;
-            entry.refreshReason = "migrated_historical";
-          }
-          migrated++;
-        }
-      }
-
-      if (migrated > 0) {
-        LOGGER.info("Migrated {} cache entries to new refresh timestamp format", migrated);
-        manifest.version = "2.0";
-        manifest.save(cacheDir);  // Save migrated manifest
-      }
 
       return manifest;
     } catch (IOException e) {
@@ -632,28 +361,16 @@ public class CacheManifest extends AbstractCacheManifest {
       // Clean up expired entries before saving
       int removed = cleanupExpiredEntries();
 
+      LOGGER.info("Saving cache manifest to {} with {} entries (removed {} expired)",
+          manifestFile.getAbsolutePath(), entries.size(), removed);
       MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
-      LOGGER.debug("Removed {} entries from manifest. Saved cache manifest with {} entries", removed, entries.size());
+      LOGGER.info("Successfully wrote cache manifest to {}", manifestFile.getAbsolutePath());
     } catch (IOException e) {
-      LOGGER.warn("Failed to save cache manifest: {}", e.getMessage());
+      LOGGER.error("Failed to save cache manifest to {}: {}", manifestFile.getAbsolutePath(),
+          e.getMessage(), e);
     }
   }
 
-  /**
-   * Build cache key from parameters.
-   */
-  private String buildKey(String dataType, int year, Map<String, String> parameters) {
-    StringBuilder key = new StringBuilder();
-    key.append(dataType).append(":").append(year);
-
-    if (parameters != null && !parameters.isEmpty()) {
-      parameters.entrySet().stream()
-          .sorted(Map.Entry.comparingByKey())
-          .forEach(entry -> key.append(":").append(entry.getKey()).append("=").append(entry.getValue()));
-    }
-
-    return key.toString();
-  }
 
   /**
    * Get cache statistics.
@@ -683,21 +400,6 @@ public class CacheManifest extends AbstractCacheManifest {
     return (entry != null) ? entry.etag : null;
   }
 
-  /**
-   * Get the ETag for a cached entry.
-   *
-   * @param dataType The type of data
-   * @param year The year
-   * @param parameters Additional parameters
-   * @return The ETag string, or null if not cached or no ETag available
-   * @deprecated Use {@link #getETag(org.apache.calcite.adapter.govdata.CacheKey)} instead
-   */
-  @Deprecated
-  public String getETag(String dataType, int year, Map<String, String> parameters) {
-    String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-    return (entry != null) ? entry.etag : null;
-  }
 
   // ===== FRED Catalog Series Cache Methods =====
 
@@ -825,9 +527,6 @@ public class CacheManifest extends AbstractCacheManifest {
   public static class CacheEntry extends BaseCacheEntry {
     @JsonProperty("dataType")
     public String dataType;
-
-    @JsonProperty("year")
-    public int year;
 
     @JsonProperty("parameters")
     public Map<String, String> parameters = new HashMap<>();
