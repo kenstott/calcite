@@ -3371,7 +3371,12 @@ public abstract class AbstractGovDataDownloader {
 
     for (CacheManifestQueryHelper.DownloadRequest req : needed) {
       // Create cache key from table name and partition parameters
-      CacheKey cacheKey = new CacheKey(tableName, req.parameters);
+      // Ensure year is in parameters map (DownloadRequest stores it separately for legacy reasons)
+      Map<String, String> allParams = new HashMap<>(req.parameters);
+      if (req.year > 0 && !allParams.containsKey("year")) {
+        allParams.put("year", String.valueOf(req.year));
+      }
+      CacheKey cacheKey = new CacheKey(tableName, allParams);
 
       // Resolve paths using pattern (fully resolved, not relative)
       String relativeJsonPath = resolveJsonPath(pattern, req.parameters);
