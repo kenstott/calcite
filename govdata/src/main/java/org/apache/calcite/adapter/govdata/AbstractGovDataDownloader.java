@@ -3348,7 +3348,7 @@ public abstract class AbstractGovDataDownloader {
     try {
       long startMs = System.currentTimeMillis();
       String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests);
+      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, operationDescription);
       long elapsedMs = System.currentTimeMillis() - startMs;
 
       LOGGER.info("DuckDB cache filtering: {} uncached out of {} total ({}ms, {}% reduction)",

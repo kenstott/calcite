@@ -29,11 +29,11 @@ import java.util.stream.Collectors;
 public class ApiUrlBuilder {
     private final String baseUrl;
     private final Map<String, String> params = new LinkedHashMap<>();
-    
+
     public ApiUrlBuilder(String baseUrl) {
         this.baseUrl = baseUrl;
     }
-    
+
     /**
      * Add a parameter to the URL.
      * Null or empty values are ignored.
@@ -48,7 +48,7 @@ public class ApiUrlBuilder {
         }
         return this;
     }
-    
+
     /**
      * Add an API key parameter.
      *
@@ -58,7 +58,7 @@ public class ApiUrlBuilder {
     public ApiUrlBuilder apiKey(String apiKey) {
         return param("api_key", apiKey);
     }
-    
+
     /**
      * Add all parameters from a map.
      *
@@ -71,7 +71,7 @@ public class ApiUrlBuilder {
         }
         return this;
     }
-    
+
     /**
      * Build the final URL with encoded parameters.
      *
@@ -81,14 +81,14 @@ public class ApiUrlBuilder {
         if (params.isEmpty()) {
             return baseUrl;
         }
-        
+
         String queryString = params.entrySet().stream()
             .map(e -> encode(e.getKey()) + "=" + encode(e.getValue()))
             .collect(Collectors.joining("&"));
-            
+
         return baseUrl + "?" + queryString;
     }
-    
+
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }

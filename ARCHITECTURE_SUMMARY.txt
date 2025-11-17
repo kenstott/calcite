@@ -1,0 +1,199 @@
+================================================================================
+GOVDATA DOWNLOAD ARCHITECTURE - QUICK REFERENCE
+================================================================================
+
+TWO COEXISTING PATTERNS:
+
+1. METADATA-DRIVEN PATTERN (Generic Infrastructure)
+   ├─ Location: AbstractGovDataDownloader.executeDownload()
+   ├─ Schema Config: "download" section in econ-schema.json
+   ├─ Features:
+   │  ├─ Reads table metadata from schema
+   │  ├─ Supports iteration via seriesList
+   │  ├─ Handles pagination automatically
+   │  ├─ Variable substitution (expressions, env vars)
+   │  └─ Returns cached JSON path
+   │
+   └─ CURRENTLY UNUSED FOR ACTUAL DOWNLOADS
+      (Available but not called by EconSchemaFactory)
+
+2. CUSTOM DOMAIN-SPECIFIC PATTERN (Implementation Reality)
+   ├─ Classes: BlsDataDownloader, BeaDataDownloader, FredDataDownloader, TreasuryDataDownloader
+   ├─ Methods: downloadAll(), downloadSeries(), etc.
+   ├─ Called by: EconSchemaFactory.downloadEconData()
+   │
+   └─ ACTIVELY USED FOR ALL REAL DOWNLOADS
+
+================================================================================
+FRED SPECIAL CASE:
+================================================================================
+
+FRED has BOTH patterns:
+  
+  Schema Level (Metadata-Driven):
+  ├─ econ-schema.json has complete "download" configuration
+  ├─ Defines API URL, parameters, pagination, response format
+  └─ Could work with executeDownload()
+
+  Implementation Level (Custom Domain-Specific):
+  ├─ FredDataDownloader.downloadSeries()
+  ├─ Explicit series iteration API
+  ├─ Per-series caching and partitioning
+  └─ ACTUALLY USED in EconSchemaFactory
+
+  Why Both?
+  ├─ Schema provides declarative specification
+  ├─ downloadSeries() provides cleaner orchestration API
+  ├─ Allows optimization per series
+  └─ Pre-dates generic mechanism
+
+================================================================================
+OTHER DOWNLOADERS:
+================================================================================
+
+BLS, BEA, Treasury:
+  ├─ No schema metadata "download" section
+  ├─ Use custom downloadAll() methods only
+  ├─ Domain-specific logic too complex for schema
+  └─ Won't use executeDownload()
+
+WHY?
+  ├─ BLS: Multiple endpoints, JOLTS filtering, special logic
+  ├─ BEA: Payload construction, table IDs, frequency detection
+  └─ Treasury: Multiple data structures, custom parsing
+
+================================================================================
+DOWNLOADALL() PATTERN (Most Common):
+================================================================================
+
+Typical Flow:
+  1. Create downloader instance
+  2. Call downloadAll(startYear, endYear)
+  3. That method:
+     ├─ Downloads raw data
+     ├─ Saves to cache directory
+     └─ Returns nothing (cache path is hardcoded)
+  4. Caller converts to Parquet explicitly
+
+Example (EconSchemaFactory lines 324-331):
+  ```
+  BlsDataDownloader blsDownloader = new BlsDataDownloader(...);
+  blsDownloader.downloadAll(startYear, endYear);
+  
+  // Then for each table:
+  for (int year = startYear; year <= endYear; year++) {
+      String cacheYearPath = cacheStorageProvider.resolvePath(cacheDir, "type=indicators/year=" + year);
+      blsDownloader.convertToParquet(employmentRawPath, employmentParquetPath);
+  }
+  ```
+
+================================================================================
+DOWNLOADSERIES() PATTERN (FRED Only):
+================================================================================
+
+Unique Flow:
+  1. Create downloader instance
+  2. FOR each series:
+     ├─ Call downloadSeries(seriesId, startYear, endYear)
+     ├─ Downloads observations for that series
+     ├─ Saves to series-specific cache path
+     └─ Returns nothing (path is derived from seriesId)
+  3. FOR each (series, year):
+     └─ Call convertCachedJsonToParquet("fred_indicators", variables)
+
+Benefits:
+  ├─ Per-series caching (can skip unchanged series)
+  ├─ Series-based partitioning explicit in code
+  ├─ Clear iteration semantics
+  └─ Can optimize future implementations
+
+Example (EconSchemaFactory lines 487-505):
+  ```
+  for (String seriesId : allSeriesIds) {
+      fredDownloader.downloadSeries(seriesId, startYear, endYear);
+      
+      for (int year = startYear; year <= endYear; year++) {
+          variables.put("series", seriesId);
+          variables.put("year", String.valueOf(year));
+          fredDownloader.convertCachedJsonToParquet("fred_indicators", variables);
+      }
+  }
+  ```
+
+================================================================================
+METADATA-DRIVEN CONVERSION (All Tables):
+================================================================================
+
+convertCachedJsonToParquet() Pattern:
+  ├─ Location: AbstractGovDataDownloader (inherited by all)
+  ├─ Signature: convertCachedJsonToParquet(tableName, variables)
+  ├─ FULLY METADATA-DRIVEN
+  ├─ Uses schema for:
+  │  ├─ File paths (pattern + variable substitution)
+  │  ├─ Column definitions and types
+  │  └─ JSON structure navigation (dataPath)
+  │
+  └─ ACTUALLY USED FOR ALL CONVERSIONS
+
+Why Only Conversion is Metadata-Driven:
+  ├─ Download formats vary too much per API
+  ├─ Conversion format is standardized (Parquet)
+  ├─ Metadata can specify column schema consistently
+  └─ File paths follow predictable patterns
+
+================================================================================
+IS DOWNLOADSERIES() REDUNDANT?
+================================================================================
+
+NO - For These Reasons:
+
+1. DIFFERENT SCOPE:
+   executeDownload() = Generic for any table
+   downloadSeries() = FRED-specific iteration
+
+2. DIFFERENT API LEVEL:
+   executeDownload() = Infrastructure (handles everything)
+   downloadSeries() = Orchestrator (domain-specific)
+
+3. DIFFERENT OPTIMIZATION:
+   executeDownload() = Generic, no per-series optimization
+   downloadSeries() = Can optimize per series
+
+4. DIFFERENT CLARITY:
+   downloadSeries(seriesId, startYear, endYear) is explicit
+   executeDownload("fred_indicators", {...variables...}) is generic
+
+5. DESIGN INTENT:
+   Both patterns exist by design, not by accident
+   Each serves a different level of abstraction
+
+================================================================================
+KEY CODE REFERENCES:
+================================================================================
+
+Schema Metadata (Download Config):
+  File: govdata/src/main/resources/econ-schema.json
+  Fred Indicators: Lines 1234-1302
+  Contains: "download" section with full specification
+
+Generic Infrastructure:
+  File: govdata/src/main/java/org/apache/calcite/adapter/govdata/AbstractGovDataDownloader.java
+  executeDownload(): Lines 666-744
+  downloadWithPagination(): Lines 759-844
+  buildDownloadUrl(): Lines 514-591
+
+Generic Conversion:
+  File: AbstractGovDataDownloader.java
+  convertCachedJsonToParquet(): Lines 930-1023
+  loadTableMetadata(): Lines 231-285
+
+FRED Custom Implementation:
+  File: govdata/src/main/java/org/apache/calcite/adapter/govdata/econ/FredDataDownloader.java
+  downloadSeries(): Lines 332-394
+
+Orchestration:
+  File: govdata/src/main/java/org/apache/calcite/adapter/govdata/econ/EconSchemaFactory.java
+  downloadEconData(): Lines 281-946
+  FRED download loop: Lines 481-522
+
+================================================================================
