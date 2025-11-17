@@ -327,7 +327,8 @@ public class CacheManifest extends AbstractCacheManifest {
     File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
 
     if (!manifestFile.exists()) {
-      LOGGER.info("No cache manifest found at {}, creating new one", manifestFile.getAbsolutePath());
+      LOGGER.warn("No cache manifest found at {}, creating new one - this will trigger full cache rebuild",
+          manifestFile.getAbsolutePath());
       CacheManifest manifest = new CacheManifest();
       manifest.cacheDir = cacheDir;
       return manifest;
@@ -363,8 +364,31 @@ public class CacheManifest extends AbstractCacheManifest {
 
       LOGGER.info("Saving cache manifest to {} with {} entries (removed {} expired)",
           manifestFile.getAbsolutePath(), entries.size(), removed);
-      MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
-      LOGGER.info("Successfully wrote cache manifest to {}", manifestFile.getAbsolutePath());
+
+      // Write to temp file first, then atomic rename to ensure consistency
+      File tempFile = new File(manifestFile.getParentFile(), MANIFEST_FILENAME + ".tmp");
+      try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
+           java.io.BufferedWriter writer = new java.io.BufferedWriter(
+               new java.io.OutputStreamWriter(fos, java.nio.charset.StandardCharsets.UTF_8))) {
+
+        // Write JSON
+        String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this);
+        writer.write(json);
+        writer.flush();
+
+        // Force OS to flush buffers to disk
+        fos.getFD().sync();
+      }
+
+      // Atomic rename
+      if (!tempFile.renameTo(manifestFile)) {
+        throw new IOException("Failed to rename temp file to " + manifestFile);
+      }
+
+      long fileSize = manifestFile.length();
+      long lastModified = manifestFile.lastModified();
+      LOGGER.info("Successfully wrote and synced cache manifest to {} (size: {} bytes, modified: {})",
+          manifestFile.getAbsolutePath(), fileSize, new java.util.Date(lastModified));
     } catch (IOException e) {
       LOGGER.error("Failed to save cache manifest to {}: {}", manifestFile.getAbsolutePath(),
           e.getMessage(), e);
