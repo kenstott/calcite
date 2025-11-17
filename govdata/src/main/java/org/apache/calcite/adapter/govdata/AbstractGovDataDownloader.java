@@ -163,7 +163,7 @@ public abstract class AbstractGovDataDownloader {
     private final String cacheTableName;
     private final List<String> partitionKeys;
 
-    PrefetchHelper(Connection duckdbConn, String cacheTableName, List<String> partitionKeys) {
+    public PrefetchHelper(Connection duckdbConn, String cacheTableName, List<String> partitionKeys) {
       this.duckdbConn = duckdbConn;
       this.cacheTableName = cacheTableName;
       this.partitionKeys = partitionKeys;
@@ -1466,10 +1466,24 @@ public abstract class AbstractGovDataDownloader {
     String jsonPath = resolveJsonPath(pattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
+    // Check if already cached - skip download if so
+    CacheKey cacheKey = new CacheKey(tableName, variables);
+    if (cacheManifest.isCached(cacheKey)) {
+      LOGGER.debug("Using cached {} data", tableName);
+      // Return the cached file path without re-downloading
+      try {
+        long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+        return new DownloadResult(jsonPath, fileSize);
+      } catch (Exception e) {
+        LOGGER.warn("Cached file {} exists in manifest but cannot read metadata: {}, will re-download",
+            jsonPath, e.getMessage());
+        // Continue with download if we can't read the cached file
+      }
+    }
+
     // Self-healing: Check if file exists but isn't in manifest
     // If it does, add it to manifest and skip download (avoids re-downloading existing files)
-    CacheKey cacheKey = new CacheKey(tableName, variables);
-    if (!cacheManifest.isCached(cacheKey) && cacheStorageProvider.exists(fullJsonPath)) {
+    if (cacheStorageProvider.exists(fullJsonPath)) {
       LOGGER.info("Self-healing: Found existing file {} not in manifest, adding to manifest", jsonPath);
       try {
         long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
@@ -3205,7 +3219,7 @@ public abstract class AbstractGovDataDownloader {
     String[] parts = pattern.split("/");
 
     for (String part : parts) {
-      if (part.contains("=*")) {
+      if (part.contains("=")) {
         String dimName = part.substring(0, part.indexOf("="));
 
         // All dimensions use provider (no special handling for year)
@@ -3270,6 +3284,52 @@ public abstract class AbstractGovDataDownloader {
       PrefetchCallback prefetchCallback,
       TableOperation operation,
       String operationDescription) {
+    iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
+        operationDescription, null, null);
+  }
+
+  /**
+   * Optimized version of table iteration with explicit prefetch connection lifecycle management.
+   * This overload accepts an existing prefetch connection and helper, allowing the caller to
+   * manage the lifecycle (e.g., to share prefetch cache between download and conversion stages).
+   *
+   * <p>When prefetch connection/helper are provided:
+   * <ul>
+   *   <li>The provided prefetch infrastructure is used instead of creating a new one</li>
+   *   <li>The connection is NOT closed when this method completes (caller manages lifecycle)</li>
+   *   <li>The prefetchCallback parameter is ignored (prefetch table already exists)</li>
+   * </ul>
+   *
+   * <p>This is used when you want to share the prefetch cache across multiple operations:
+   * <pre>
+   * Connection prefetchDb = getDuckDBConnection();
+   * PrefetchHelper helper = new PrefetchHelper(prefetchDb, ...);
+   * try {
+   *   // Download stage - populate prefetch cache
+   *   iterateTableOperationsOptimized(..., "download", prefetchDb, helper);
+   *   // Conversion stage - use same prefetch cache
+   *   iterateTableOperationsOptimized(..., "conversion", prefetchDb, helper);
+   * } finally {
+   *   prefetchDb.close();
+   * }
+   * </pre>
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
+   * @param prefetchCallback Optional callback for batching API calls (ignored if prefetch provided)
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
+   * @param prefetchHelper Existing prefetch helper (null to create new)
+   */
+  protected void iterateTableOperationsOptimized(
+      String tableName,
+      DimensionProvider dimensionProvider,
+      PrefetchCallback prefetchCallback,
+      TableOperation operation,
+      String operationDescription,
+      Connection prefetchDb,
+      PrefetchHelper prefetchHelper) {
 
     // Build dimensions from table pattern
     List<IterationDimension> dimensions =
@@ -3290,20 +3350,24 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.info("Starting {} operations for {} ({} total combinations, using DuckDB optimization)",
         operationDescription, tableName, totalOperations);
 
-    // Setup prefetch infrastructure if callback provided
-    Connection prefetchDb = null;
-    PrefetchHelper prefetchHelper = null;
+    // Build allDimensionValues map unconditionally - needed for prefetch context and other uses
     Map<String, List<String>> allDimensionValues = new HashMap<>();
+    for (IterationDimension dim : dimensions) {
+      allDimensionValues.put(dim.variableName, new ArrayList<>(dim.values));
+    }
 
-    if (prefetchCallback != null) {
+    // Setup prefetch infrastructure
+    // Use provided connection/helper if available, otherwise create new ones if callback provided
+    Connection localPrefetchDb = prefetchDb;  // Track local vs provided
+    PrefetchHelper localPrefetchHelper = prefetchHelper;
+    boolean shouldClosePrefetch = false;  // Only close if we created it
+
+    if (localPrefetchHelper == null && prefetchCallback != null) {
+      // No prefetch provided but callback exists - create new prefetch infrastructure
       try {
         // Create in-memory DuckDB connection
-        prefetchDb = getDuckDBConnection();
-
-        // Build allDimensionValues map for prefetch context
-        for (IterationDimension dim : dimensions) {
-          allDimensionValues.put(dim.variableName, new ArrayList<>(dim.values));
-        }
+        localPrefetchDb = getDuckDBConnection();
+        shouldClosePrefetch = true;  // We created it, we close it
 
         // Load table metadata and extract partition keys
         Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -3311,29 +3375,34 @@ public abstract class AbstractGovDataDownloader {
         List<String> partitionKeys = extractPartitionKeysFromPattern(pattern);
 
         // Auto-create prefetch cache table
-        createPrefetchCacheTable(prefetchDb, tableName, partitionKeys, metadata);
+        createPrefetchCacheTable(localPrefetchDb, tableName, partitionKeys, metadata);
 
         // Create helper
-        prefetchHelper = new PrefetchHelper(prefetchDb, tableName + "_prefetch", partitionKeys);
+        localPrefetchHelper = new PrefetchHelper(localPrefetchDb, tableName + "_prefetch", partitionKeys);
 
         LOGGER.info("Prefetch enabled for {} with {} partition keys", tableName, partitionKeys.size());
 
       } catch (Exception e) {
         LOGGER.warn("Failed to initialize prefetch for {}: {}", tableName, e.getMessage());
-        if (prefetchDb != null) {
+        if (localPrefetchDb != null && shouldClosePrefetch) {
           try {
-            prefetchDb.close();
+            localPrefetchDb.close();
           } catch (Exception closeEx) {
             // Ignore
           }
         }
-        prefetchDb = null;
-        prefetchHelper = null;
+        localPrefetchDb = null;
+        localPrefetchHelper = null;
+        shouldClosePrefetch = false;
       }
+    } else if (localPrefetchHelper != null) {
+      // Using provided prefetch infrastructure
+      LOGGER.info("Using provided prefetch infrastructure for {}", tableName);
     }
 
-    final Connection finalPrefetchDb = prefetchDb;
-    final PrefetchHelper finalPrefetchHelper = prefetchHelper;
+    final Connection finalPrefetchDb = localPrefetchDb;
+    final PrefetchHelper finalPrefetchHelper = localPrefetchHelper;
+    final boolean finalShouldClosePrefetch = shouldClosePrefetch;
 
     try {
       // 1. Generate all possible download combinations upfront
@@ -3351,7 +3420,7 @@ public abstract class AbstractGovDataDownloader {
       needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, operationDescription);
       long elapsedMs = System.currentTimeMillis() - startMs;
 
-      LOGGER.info("DuckDB cache filtering: {} uncached out of {} total ({}ms, {}% reduction)",
+      LOGGER.info("Cache manifest filtering: {} uncached out of {} total ({}ms, {}% reduction)",
           needed.size(), allRequests.size(), elapsedMs,
           (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100));
 
@@ -3372,11 +3441,7 @@ public abstract class AbstractGovDataDownloader {
     for (CacheManifestQueryHelper.DownloadRequest req : needed) {
       // Create cache key from table name and partition parameters
       // Ensure year is in parameters map (DownloadRequest stores it separately for legacy reasons)
-      Map<String, String> allParams = new HashMap<>(req.parameters);
-      if (req.year > 0 && !allParams.containsKey("year")) {
-        allParams.put("year", String.valueOf(req.year));
-      }
-      CacheKey cacheKey = new CacheKey(tableName, allParams);
+      CacheKey cacheKey = new CacheKey(tableName, req.parameters);
 
       // Resolve paths using pattern (fully resolved, not relative)
       String relativeJsonPath = resolveJsonPath(pattern, req.parameters);
@@ -3386,36 +3451,37 @@ public abstract class AbstractGovDataDownloader {
 
       // Self-healing: Before executing, check if files already exist
       // This only runs for files the manifest said were needed, avoiding bulk scanning
-      boolean selfHealed = false;
       try {
-        boolean parquetExists = storageProvider.exists(fullParquetPath);
-        if (parquetExists) {
-          // Parquet exists - mark as converted and skip operation
-          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
-          LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", relativeParquetPath);
-          skipped++;
-          selfHealed = true;
-
-          // Periodically save manifest to persist self-healing discoveries
-          if (skipped % 100 == 0) {
-            try {
-              cacheManifest.save(operatingDirectory);
-              LOGGER.info("Saved manifest after {} self-healed files", skipped);
-            } catch (Exception saveEx) {
-              LOGGER.warn("Failed to save manifest during self-healing: {}", saveEx.getMessage());
-            }
-          }
-          continue;
-        }
-
         boolean jsonExists = cacheStorageProvider.exists(fullJsonPath);
         if (jsonExists && "conversion".equals(operationDescription)) {
-          // JSON exists but manifest doesn't know - mark as cached and skip download
+          // JSON exists but manifest doesn't know - mark as cached and add to prefetch
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
           cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
           LOGGER.info("Self-healing: Found existing JSON {}, added to manifest", relativeJsonPath);
-          selfHealed = true;
-          // Don't skip - still need to convert to parquet
+
+          // Read JSON and add to prefetch table so conversion can find it
+          if (finalPrefetchHelper != null) {
+            try (InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath)) {
+              byte[] bytes = new byte[inputStream.available()];
+              inputStream.read(bytes);
+              String jsonContent = new String(bytes, StandardCharsets.UTF_8);
+
+              finalPrefetchHelper.insertJsonBatch(
+                  Collections.singletonList(req.parameters),
+                  Collections.singletonList(jsonContent));
+              LOGGER.debug("Added self-healed JSON to prefetch table: {}", relativeJsonPath);
+            } catch (Exception prefetchEx) {
+              LOGGER.warn("Failed to add self-healed JSON to prefetch table: {}", prefetchEx.getMessage());
+            }
+          }
+
+          // Save manifest immediately to persist self-healing discovery
+          try {
+            cacheManifest.save(operatingDirectory);
+            LOGGER.debug("Saved manifest after self-healing {}", relativeJsonPath);
+          } catch (Exception saveEx) {
+            LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+          }
         }
       } catch (Exception e) {
         // If self-healing check fails, just continue with normal operation
@@ -3425,6 +3491,11 @@ public abstract class AbstractGovDataDownloader {
       try {
         operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath, finalPrefetchHelper);
         executed++;
+
+        // Mark parquet as converted after successful operation
+        if ("conversion".equals(operationDescription)) {
+          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+        }
 
         if (executed % 10 == 0) {
           LOGGER.info("{} {}/{} operations (skipped {} cached)",
@@ -3472,8 +3543,8 @@ public abstract class AbstractGovDataDownloader {
           tableName, operationDescription, executed, skipped);
 
     } finally {
-      // Cleanup prefetch DuckDB connection
-      if (finalPrefetchDb != null) {
+      // Cleanup prefetch DuckDB connection only if we created it
+      if (finalPrefetchDb != null && finalShouldClosePrefetch) {
         try {
           finalPrefetchDb.close();
           LOGGER.debug("Closed prefetch DuckDB connection for {}", tableName);
@@ -3511,7 +3582,7 @@ public abstract class AbstractGovDataDownloader {
           LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
         }
       }
-      results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, year, variables));
+      results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, variables));
       return;
     }
 
@@ -3548,16 +3619,7 @@ public abstract class AbstractGovDataDownloader {
       Map<String, List<String>> allDimensionValues) {
 
     if (dimensionIndex >= dimensions.size()) {
-      // Base case: add to results
-      int year = 0;
-      if (variables.containsKey("year")) {
-        try {
-          year = Integer.parseInt(variables.get("year"));
-        } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid year value in variables: {}", variables.get("year"));
-        }
-      }
-      results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, year, variables));
+      results.add(new CacheManifestQueryHelper.DownloadRequest(tableName, variables));
       return;
     }
 
@@ -3595,7 +3657,7 @@ public abstract class AbstractGovDataDownloader {
    * @param pattern The partition pattern from schema
    * @return List of partition key names in order
    */
-  private List<String> extractPartitionKeysFromPattern(String pattern) {
+  protected List<String> extractPartitionKeysFromPattern(String pattern) {
     List<String> keys = new ArrayList<>();
     if (pattern == null || pattern.isEmpty()) {
       return keys;
@@ -3622,9 +3684,9 @@ public abstract class AbstractGovDataDownloader {
    * @param partitionKeys Partition key names
    * @param metadata Table metadata containing column definitions
    */
-  private void createPrefetchCacheTable(Connection connection, String tableName,
-                                        List<String> partitionKeys,
-                                        Map<String, Object> metadata) throws Exception {
+  protected void createPrefetchCacheTable(Connection connection, String tableName,
+                                          List<String> partitionKeys,
+                                          Map<String, Object> metadata) throws Exception {
     // Load column metadata
     List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
 
