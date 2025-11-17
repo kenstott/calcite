@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -165,7 +164,12 @@ public class CacheManifest extends AbstractCacheManifest {
     String key = cacheKey.asString();
     CacheEntry entry = entries.get(key);
 
-    if (entry == null || entry.parquetPath == null) {
+    if (entry == null) {
+      return false;
+    }
+
+    // If parquetConvertedAt is 0 or not set, conversion hasn't been attempted
+    if (entry.parquetConvertedAt == 0) {
       return false;
     }
 
@@ -177,7 +181,8 @@ public class CacheManifest extends AbstractCacheManifest {
       return false;
     }
 
-    // Parquet is up-to-date with raw file
+    // Parquet conversion was completed (either successfully converted or determined no data to convert)
+    // parquetPath may be null for files with [null] content (no data to convert)
     LOGGER.info("⚡ Cached parquet, skipped conversion: {}", cacheKey.asString());
     return true;
   }
@@ -195,10 +200,12 @@ public class CacheManifest extends AbstractCacheManifest {
     CacheEntry entry = entries.get(key);
 
     if (entry == null) {
-      // Create new entry if it doesn't exist (shouldn't happen normally)
+      // Create new entry if it doesn't exist (self-healing case)
+      long now = System.currentTimeMillis();
       entry = new CacheEntry();
       entry.dataType = cacheKey.getTableName();
       entry.parameters = new HashMap<>(cacheKey.getParameters());
+      entry.cachedAt = now;  // Set to current time for self-healed entries
       entry.refreshAfter = Long.MAX_VALUE;  // Parquet files are immutable
       entry.refreshReason = "parquet_immutable";
       entries.put(key, entry);
@@ -368,8 +375,8 @@ public class CacheManifest extends AbstractCacheManifest {
       // Write to temp file first, then atomic rename to ensure consistency
       File tempFile = new File(manifestFile.getParentFile(), MANIFEST_FILENAME + ".tmp");
       try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
-           java.io.BufferedWriter writer = new java.io.BufferedWriter(
-               new java.io.OutputStreamWriter(fos, java.nio.charset.StandardCharsets.UTF_8))) {
+           java.io.BufferedWriter writer =
+               new java.io.BufferedWriter(new java.io.OutputStreamWriter(fos, java.nio.charset.StandardCharsets.UTF_8))) {
 
         // Write JSON
         String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this);

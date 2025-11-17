@@ -174,10 +174,8 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     String filePath = cacheStorageProvider.resolvePath(cacheDirectory, relativePath);
     cacheStorageProvider.writeFile(filePath, jsonContent.getBytes(StandardCharsets.UTF_8));
 
-    // Create cache key with year as a partition parameter
-    Map<String, String> allParams = new HashMap<>(params != null ? params : new HashMap<>());
-    allParams.put("year", String.valueOf(year));
-    CacheKey cacheKey = new CacheKey(dataType, allParams);
+    // Create cache key
+    CacheKey cacheKey = new CacheKey(dataType, params);
 
     // Calculate reasonable default refresh time (same logic as CacheManifest.markCached)
     int currentYear = LocalDate.now().getYear();

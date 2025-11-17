@@ -201,6 +201,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
         getTableName(),
         (dimensionName) -> {
           switch (dimensionName) {
+            case "type": return List.of(getTableName());
             case "year": return yearRange(startYear, endYear);
             case "data_type": return dataTypes;
             default: return null;
