@@ -208,6 +208,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       List<String> tableNames, List<String> frequencies) {
     return (dimensionName) -> {
       switch (dimensionName) {
+        case "type":
+          return List.of("national_accounts");
         case "year":
           return yearRange(startYear, endYear);
         case "tablename":
@@ -652,7 +654,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
-            case "year":
+          case "type": return List.of(tableName);
+          case "year":
               return yearRange(startYear, endYear);
             case "combo":
               return combos;
@@ -795,10 +798,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Creates dimension provider for ITA data.
    */
-  private DimensionProvider createItaDataDimensions(int startYear, int endYear,
+  private DimensionProvider createItaDataDimensions(String tableName, int startYear, int endYear,
       List<String> itaIndicatorsList, List<String> frequencies) {
     return (dimensionName) -> {
       switch (dimensionName) {
+        case "type": return List.of(tableName);
         case "year":
           return yearRange(startYear, endYear);
         case "indicator":
@@ -835,7 +839,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        createItaDataDimensions(startYear, endYear, itaIndicatorsList, frequencies),
+        createItaDataDimensions(tableName, startYear, endYear, itaIndicatorsList, frequencies),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
@@ -868,7 +872,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        createItaDataDimensions(startYear, endYear, itaIndicatorsList, frequencies),
+        createItaDataDimensions(tableName, startYear, endYear, itaIndicatorsList, frequencies),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
           convertCachedJsonToParquet(tableName, vars);
@@ -882,10 +886,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   /**
    * Creates dimension provider for industry GDP data.
    */
-  private DimensionProvider createIndustryGdpDimensions(int startYear, int endYear,
+  private DimensionProvider createIndustryGdpDimensions(String tableName, int startYear, int endYear,
       List<String> keyIndustriesList) {
     return (dimensionName) -> {
       switch (dimensionName) {
+        case "type": return List.of(tableName);
         case "year":
           return yearRange(startYear, endYear);
         case "industry":
@@ -920,7 +925,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        createIndustryGdpDimensions(startYear, endYear, keyIndustriesList),
+        createIndustryGdpDimensions(tableName, startYear, endYear, keyIndustriesList),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
@@ -951,7 +956,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        createIndustryGdpDimensions(startYear, endYear, keyIndustriesList),
+        createIndustryGdpDimensions(tableName, startYear, endYear, keyIndustriesList),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
           convertCachedJsonToParquet(tableName, vars);
@@ -1146,7 +1151,16 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Creates dimension provider for regional LineCode catalog (no year dimension).
    */
   private DimensionProvider createRegionalLineCodeDimensions(List<String> tableNamesList) {
-    return (dimensionName) -> dimensionName.equals("tablename") ? tableNamesList : null;
+    return (dimensionName) -> {
+      switch (dimensionName) {
+        case "tablename":
+          return tableNamesList;
+        case "type":
+          return List.of("reference_regional_line_codes");
+        default:
+          return null;
+      }
+    };
   }
 
   /**
@@ -1237,6 +1251,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             if (!hasKeyColumn) {
               LOGGER.info("BEA reference: Skipping conversion for {} - no valid linecodes data (no Key column)",
                   regionalTableName);
+              // Mark as "converted" with null path to prevent repeated conversion attempts
+              cacheManifest.markParquetConverted(cacheKey, null);
               return;
             }
           } catch (Exception connErr) {
@@ -1338,7 +1354,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     List<CacheManifestQueryHelper.DownloadRequest> allRequests = new ArrayList<>();
     for (Map<String, String> params : parameterCombinations) {
       for (int year = startYear; year <= endYear; year++) {
-        allRequests.add(new CacheManifestQueryHelper.DownloadRequest(tableName, year, params));
+        Map<String, String> vars = new HashMap<>(params);
+        vars.put("year", String.valueOf(year));
+        allRequests.add(new CacheManifestQueryHelper.DownloadRequest(tableName, vars));
       }
     }
 
@@ -1375,7 +1393,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     for (CacheManifestQueryHelper.DownloadRequest req : needed) {
       try {
         Map<String, String> allParams = new HashMap<>(req.parameters);
-        allParams.put("year", String.valueOf(req.year));
         CacheKey cacheKey = new CacheKey(tableName, allParams);
 
         // Resolve paths using pattern (fully resolved, not relative)
@@ -1395,7 +1412,29 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
               tableName, percent, executed, needed.size());
         }
 
+      } catch (IOException e) {
+        // Handle API errors - mark in cache manifest to avoid retrying too soon
+        if (e.getMessage() != null && e.getMessage().contains("API returned error (HTTP 200 with error content)")) {
+          String errorMessage = e.getMessage();
+          if (errorMessage.startsWith("API returned error (HTTP 200 with error content): ")) {
+            errorMessage = errorMessage.substring("API returned error (HTTP 200 with error content): ".length());
+          }
+
+          // Reconstruct cache key from request
+          Map<String, String> allParams = new HashMap<>(req.parameters);
+          CacheKey errorCacheKey = new CacheKey(tableName, allParams);
+
+          cacheManifest.markApiError(errorCacheKey, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
+          cacheManifest.save(operatingDirectory);
+          LOGGER.info("Marked {} as API error - will retry in {} days",
+              errorCacheKey.asString(), DEFAULT_API_ERROR_RETRY_DAYS);
+        } else {
+          // Other IOException - log and continue
+          LOGGER.error("Error during {} for {} with params {}: {}",
+              operationDescription, tableName, req.parameters, e.getMessage());
+        }
       } catch (Exception e) {
+        // Other exceptions - log and continue
         LOGGER.error("Error during {} for {} with params {}: {}",
             operationDescription, tableName, req.parameters, e.getMessage());
       }

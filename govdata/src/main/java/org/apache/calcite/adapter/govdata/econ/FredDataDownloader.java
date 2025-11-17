@@ -124,10 +124,11 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
   /**
    * Creates dimension provider for FRED data.
    */
-  private DimensionProvider createFredDimensions(int startYear, int endYear,
+  private DimensionProvider createFredDimensions(String tableName, int startYear, int endYear,
       List<String> seriesIds) {
     return (dimensionName) -> {
       switch (dimensionName) {
+        case "type": return List.of(tableName);
         case "year":
           return yearRange(startYear, endYear);
         case "series":
@@ -160,7 +161,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
     iterateTableOperationsOptimized(
         tableName,
-        createFredDimensions(startYear, endYear, seriesIds),
+        createFredDimensions(tableName, startYear, endYear, seriesIds),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -207,7 +208,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     // Note: For conversion, we check parquet_converted status in manifest
     iterateTableOperationsOptimized(
         tableName,
-        createFredDimensions(startYear, endYear, seriesIds),
+        createFredDimensions(tableName, startYear, endYear, seriesIds),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Execute conversion
           convertCachedJsonToParquet(tableName, vars);
