@@ -245,6 +245,14 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       // Cache the results
       econManifest.cacheCatalogSeries(minPopularity, catalogSeries, catalogCacheTtlDays);
       LOGGER.info("Cached {} series IDs for {} days", catalogSeries.size(), catalogCacheTtlDays);
+
+      // Save manifest to persist catalog cache (self-healing)
+      try {
+        econManifest.save(operatingDirectory);
+        LOGGER.debug("Saved cache manifest with catalog series cache");
+      } catch (Exception e) {
+        LOGGER.error("Failed to save cache manifest after catalog extraction: {}", e.getMessage());
+      }
     }
 
     LOGGER.info("Found {} active popular series in FRED catalog", catalogSeries.size());
