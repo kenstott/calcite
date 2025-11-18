@@ -3639,52 +3639,93 @@ public abstract class AbstractGovDataDownloader {
       String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
       String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
-      // Self-healing: Before executing, check if files already exist
+      // Self-healing: Before executing, check if source files already exist
       // This only runs for files the manifest said were needed, avoiding bulk scanning
-      // Skip JSON checks for:
-      // 1. Tables that use bulk downloads (ZIP files) instead of JSON intermediate files
-      // 2. Tables that use FTP files (reference tables) instead of JSON intermediate files
-      boolean usesBulkDownload = metadata.containsKey("download")
-          && metadata.get("download") instanceof com.fasterxml.jackson.databind.JsonNode
-          && ((com.fasterxml.jackson.databind.JsonNode) metadata.get("download")).has("bulkDownload");
-
-      boolean usesFtpFiles = metadata.containsKey("sourcePaths")
-          && metadata.get("sourcePaths") instanceof com.fasterxml.jackson.databind.JsonNode
-          && ((com.fasterxml.jackson.databind.JsonNode) metadata.get("sourcePaths")).has("ftpFiles");
-
-      boolean skipJsonCheck = usesBulkDownload || usesFtpFiles;
-
+      // Check for the appropriate source file based on table's acquisition method:
+      // 1. Bulk download tables (ZIP files) - check for ZIP
+      // 2. FTP-based reference tables - check for FTP file
+      // 3. API-based tables (normal) - check for JSON
       try {
-        boolean jsonExists = !skipJsonCheck && cacheStorageProvider.exists(fullJsonPath);
-        if (jsonExists && "conversion".equals(operationDescription)) {
-          // JSON exists but manifest doesn't know - mark as cached and add to prefetch
-          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-          cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
-          LOGGER.info("Self-healing: Found existing JSON {}, added to manifest", relativeJsonPath);
+        String sourceFilePath = null;
+        String sourceFileType = null;
 
-          // Read JSON and add to prefetch table so conversion can find it
-          if (finalPrefetchHelper != null) {
-            try (InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath)) {
-              byte[] bytes = new byte[inputStream.available()];
-              inputStream.read(bytes);
-              String jsonContent = new String(bytes, StandardCharsets.UTF_8);
+        // Determine source file type and path
+        JsonNode downloadNode = metadata.containsKey("download")
+            ? (JsonNode) metadata.get("download")
+            : null;
 
-              finalPrefetchHelper.insertJsonBatch(
-                  Collections.singletonList(req.parameters),
-                  Collections.singletonList(jsonContent));
-              LOGGER.debug("Added self-healed JSON to prefetch table: {}", relativeJsonPath);
-            } catch (Exception prefetchEx) {
-              LOGGER.warn("Failed to add self-healed JSON to prefetch table: {}", prefetchEx.getMessage());
+        // Check for bulk download (ZIP workflow)
+        if (downloadNode != null && downloadNode.has("bulkDownload")) {
+          String bulkDownloadName = downloadNode.get("bulkDownload").asText();
+          Map<String, BulkDownloadConfig> bulkDownloads = loadBulkDownloads();
+          BulkDownloadConfig bulkConfig = bulkDownloads.get(bulkDownloadName);
+
+          if (bulkConfig != null) {
+            String zipCachePath = bulkConfig.resolveCachePath(req.parameters);
+            sourceFilePath = cacheStorageProvider.resolvePath(cacheDirectory, zipCachePath);
+            sourceFileType = "ZIP";
+          }
+        }
+        // Check for FTP-based reference table
+        else if (metadata.containsKey("sourcePaths")) {
+          JsonNode sourcePathsNode = (JsonNode) metadata.get("sourcePaths");
+          if (sourcePathsNode != null && sourcePathsNode.has("ftpFiles")
+              && sourcePathsNode.get("ftpFiles").isArray()
+              && sourcePathsNode.get("ftpFiles").size() > 0) {
+            JsonNode ftpFileNode = sourcePathsNode.get("ftpFiles").get(0);
+            if (ftpFileNode.has("cachePath")) {
+              String ftpCachePath = ftpFileNode.get("cachePath").asText();
+              // Resolve variables in the cache path
+              String resolvedPath = substitutePatternVariables(ftpCachePath, req.parameters);
+              sourceFilePath = cacheStorageProvider.resolvePath(cacheDirectory, resolvedPath);
+              sourceFileType = "FTP";
             }
           }
+        }
+        // Default: API-based workflow with JSON intermediate
+        else {
+          sourceFilePath = fullJsonPath;
+          sourceFileType = "JSON";
+        }
 
-          // Save manifest immediately to persist self-healing discovery
-          try {
-            cacheManifest.save(operatingDirectory);
-            LOGGER.debug("Saved manifest after self-healing {}", relativeJsonPath);
-          } catch (Exception saveEx) {
-            LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+        // Check if source file exists (only for conversion operations)
+        if (sourceFilePath != null && "conversion".equals(operationDescription)
+            && cacheStorageProvider.exists(sourceFilePath)) {
+
+          LOGGER.info("Self-healing: Found existing {} source file for conversion: {}",
+              sourceFileType, sourceFilePath);
+
+          // For JSON files, add to prefetch table and mark in manifest
+          if ("JSON".equals(sourceFileType)) {
+            long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+            cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
+
+            // Read JSON and add to prefetch table so conversion can find it
+            if (finalPrefetchHelper != null) {
+              try (InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath)) {
+                byte[] bytes = new byte[inputStream.available()];
+                inputStream.read(bytes);
+                String jsonContent = new String(bytes, StandardCharsets.UTF_8);
+
+                finalPrefetchHelper.insertJsonBatch(
+                    Collections.singletonList(req.parameters),
+                    Collections.singletonList(jsonContent));
+                LOGGER.debug("Added self-healed JSON to prefetch table: {}", relativeJsonPath);
+              } catch (Exception prefetchEx) {
+                LOGGER.warn("Failed to add self-healed JSON to prefetch table: {}", prefetchEx.getMessage());
+              }
+            }
+
+            // Save manifest immediately to persist self-healing discovery
+            try {
+              cacheManifest.save(operatingDirectory);
+              LOGGER.debug("Saved manifest after self-healing {}", relativeJsonPath);
+            } catch (Exception saveEx) {
+              LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+            }
           }
+          // For ZIP and FTP files, the specific downloaders handle their own caching
+          // We just log that the file exists
         }
       } catch (Exception e) {
         // If self-healing check fails, just continue with normal operation
