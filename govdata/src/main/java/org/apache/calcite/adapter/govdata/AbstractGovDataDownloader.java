@@ -2161,10 +2161,8 @@ public abstract class AbstractGovDataDownloader {
 
     for (String[] ext : extensions) {
       try {
-        LOGGER.debug("Loading conversion extension: {}", ext[0]);
         conn.createStatement().execute("INSTALL " + ext[0] + " " + ext[1]);
         conn.createStatement().execute("LOAD " + ext[0]);
-        LOGGER.debug("Successfully loaded extension: {}", ext[0]);
       } catch (java.sql.SQLException e) {
         // Special fallback for quackformers: try loading from GitHub
         if ("quackformers".equals(ext[0])) {
