@@ -3191,6 +3191,157 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Extracts fixed dimension values from a partition pattern.
+   * Fixed dimensions are those with concrete values (not wildcards).
+   *
+   * <p>Example: Given pattern "type=foo/frequency=WILDCARD/year=WILDCARD",
+   * returns map {type: ["foo"]}.
+   * Wildcards are skipped.
+   *
+   * @param pattern Partition pattern to parse
+   * @return Map of dimension name to single-value list for each fixed dimension
+   */
+  private Map<String, List<String>> extractFixedDimensionsFromPattern(String pattern) {
+    Map<String, List<String>> fixedDimensions = new HashMap<>();
+
+    if (pattern == null || pattern.isEmpty()) {
+      return fixedDimensions;
+    }
+
+    String[] parts = pattern.split("/");
+    for (String part : parts) {
+      if (part.contains("=") && !part.contains("=*")) {
+        // Fixed value, not wildcard
+        String dimName = part.substring(0, part.indexOf("="));
+        String dimValue = part.substring(part.indexOf("=") + 1);
+
+        // Remove file extension if present (e.g., "file.parquet" -> "file")
+        if (dimValue.contains(".")) {
+          dimValue = dimValue.substring(0, dimValue.indexOf("."));
+        }
+
+        fixedDimensions.put(dimName, Collections.singletonList(dimValue));
+      }
+    }
+
+    return fixedDimensions;
+  }
+
+  /**
+   * Creates a metadata-aware dimension provider that checks table metadata first,
+   * then falls back to the provided lambda provider.
+   *
+   * <p>This enables dimension values to be defined in YAML using:
+   * <ul>
+   *   <li>Inline lists: dimensions.type: [value1, value2]</li>
+   *   <li>YAML anchors: dimensions.frequency: *monthly_frequency</li>
+   *   <li>Special yearRange type: dimensions.year: {type: yearRange, minYear: 1990}</li>
+   * </ul>
+   *
+   * @param tableName Table name to load metadata for
+   * @param dimensionProvider Fallback provider for dimensions not in metadata
+   * @param startYear Start year for yearRange type (from schema config)
+   * @param endYear End year for yearRange type (from schema config)
+   * @return Dimension provider that checks metadata first
+   */
+  private DimensionProvider createMetadataDimensionProvider(
+      String tableName,
+      DimensionProvider dimensionProvider,
+      int startYear,
+      int endYear) {
+
+    // Load table metadata once
+    Map<String, Object> tableMetadata = loadTableMetadata(tableName);
+    Map<String, Object> dimensionsMetadata = (Map<String, Object>) tableMetadata.get("dimensions");
+
+    // Extract fixed dimensions from pattern (auto-generation)
+    String pattern = (String) tableMetadata.get("pattern");
+    Map<String, List<String>> fixedDimensions = extractFixedDimensionsFromPattern(pattern);
+
+    return (dimensionName) -> {
+      // Priority 1: Check explicit metadata dimensions first
+      if (dimensionsMetadata != null && dimensionsMetadata.containsKey(dimensionName)) {
+        Object dimValue = dimensionsMetadata.get(dimensionName);
+
+        // Case 1: List of string values (inline or YAML alias)
+        if (dimValue instanceof List) {
+          List<String> values = new ArrayList<>();
+          for (Object item : (List<?>) dimValue) {
+            values.add(String.valueOf(item));
+          }
+          LOGGER.debug("Dimension '{}' for table {} loaded from metadata: {} values",
+              dimensionName, tableName, values.size());
+          return values;
+        }
+
+        // Case 2: Map with special type (e.g., yearRange)
+        if (dimValue instanceof Map) {
+          Map<String, Object> dimConfig = (Map<String, Object>) dimValue;
+          String type = (String) dimConfig.get("type");
+
+          if ("yearRange".equals(type)) {
+            // Apply minYear/maxYear constraints if specified
+            int effectiveStartYear = startYear;
+            int effectiveEndYear = endYear;
+
+            if (dimConfig.containsKey("minYear")) {
+              int minYear = ((Number) dimConfig.get("minYear")).intValue();
+              effectiveStartYear = Math.max(startYear, minYear);
+            }
+
+            if (dimConfig.containsKey("maxYear")) {
+              int maxYear = ((Number) dimConfig.get("maxYear")).intValue();
+              effectiveEndYear = Math.min(endYear, maxYear);
+            }
+
+            List<String> years = yearRange(effectiveStartYear, effectiveEndYear);
+            LOGGER.debug("Dimension '{}' for table {} computed as yearRange: {}-{} ({} values)",
+                dimensionName, tableName, effectiveStartYear, effectiveEndYear, years.size());
+            return years;
+          }
+
+          LOGGER.warn("Unknown dimension type '{}' for dimension '{}' in table {}",
+              type, dimensionName, tableName);
+        }
+      }
+
+      // Priority 2: Check auto-generated fixed dimensions from pattern
+      if (fixedDimensions.containsKey(dimensionName)) {
+        List<String> values = fixedDimensions.get(dimensionName);
+        LOGGER.debug("Dimension '{}' for table {} auto-generated from pattern: {}",
+            dimensionName, tableName, values);
+        return values;
+      }
+
+      // Priority 3: Fall back to provided dimension provider
+      List<String> values = dimensionProvider.getValues(dimensionName);
+      if (values != null) {
+        LOGGER.debug("Dimension '{}' for table {} loaded from provider: {} values",
+            dimensionName, tableName, values.size());
+        return values;
+      }
+
+      // Priority 4: No values found - throw error with helpful context
+      Map<String, String> allAvailableDimensions = new HashMap<>();
+      if (dimensionsMetadata != null) {
+        for (String key : dimensionsMetadata.keySet()) {
+          allAvailableDimensions.put(key, "metadata");
+        }
+      }
+      for (String key : fixedDimensions.keySet()) {
+        allAvailableDimensions.put(key, "pattern");
+      }
+
+      throw new IllegalArgumentException(
+          "No values provided for dimension '" + dimensionName
+          + "' in table '" + tableName + "'. "
+          + "Dimension not found in metadata, pattern, or provider. "
+          + "Available dimensions: " + allAvailableDimensions.keySet()
+          + " (sources: " + allAvailableDimensions + ")");
+    };
+  }
+
+  /**
    * Builds iteration dimensions from a table's partition pattern.
    * Extracts wildcard variables (e.g., frequency=*, year=*, tablename=*) and gets their values.
    *
@@ -3283,6 +3434,47 @@ public abstract class AbstractGovDataDownloader {
       TableOperation operation,
       String operationDescription) {
     iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
+        operationDescription, null, null);
+  }
+
+  /**
+   * Optimized version of table iteration with metadata-driven dimension support.
+   * Wraps the dimension provider to check table metadata first (YAML dimensions section),
+   * then falls back to the provided lambda.
+   *
+   * <p>This enables dimension values to be defined in YAML metadata:
+   * <pre>
+   * dimensions:
+   *   type: [employment_statistics]
+   *   frequency: *monthly_frequency  # YAML anchor reference
+   *   year:
+   *     type: yearRange
+   *     minYear: 1990
+   * </pre>
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensionProvider Fallback provider for dimensions not in metadata
+   * @param prefetchCallback Optional callback for batching API calls
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging
+   * @param startYear Start year for yearRange dimensions
+   * @param endYear End year for yearRange dimensions
+   */
+  protected void iterateTableOperationsOptimized(
+      String tableName,
+      DimensionProvider dimensionProvider,
+      PrefetchCallback prefetchCallback,
+      TableOperation operation,
+      String operationDescription,
+      int startYear,
+      int endYear) {
+
+    // Wrap provider with metadata-aware version
+    DimensionProvider metadataProvider = createMetadataDimensionProvider(
+        tableName, dimensionProvider, startYear, endYear);
+
+    // Delegate to main method
+    iterateTableOperationsOptimized(tableName, metadataProvider, prefetchCallback, operation,
         operationDescription, null, null);
   }
 

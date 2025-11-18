@@ -592,8 +592,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Create downloaders (lightweight - just configuration, no download occurs)
     // Note: Pass null for config fields since these downloaders are only used for raw-to-parquet conversion registration
+    // Pass placeholder years (0, 0) since this instance is only for converter registration, not actual downloading
     BlsDataDownloader blsDownloader = blsApiKey != null
-        ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest, null)
+        ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest, null, 0, 0)
         : null;
 
     FredDataDownloader fredDownloader = fredApiKey != null

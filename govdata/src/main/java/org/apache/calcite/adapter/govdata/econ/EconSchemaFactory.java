@@ -376,7 +376,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
       BlsDataDownloader blsDownloader =
           new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-          cacheManifest, enabledBlsTables);
+          cacheManifest, enabledBlsTables, startYear, endYear);
       downloaders.add(blsDownloader);
       LOGGER.debug("Added BLS downloader to orchestration list");
     }
