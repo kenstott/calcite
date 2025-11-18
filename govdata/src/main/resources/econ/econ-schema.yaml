@@ -450,6 +450,7 @@ partitionedTables:
 
     # API Configuration
     download:
+      bulkDownload: qcew_annual_bulk
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
@@ -526,6 +527,7 @@ partitionedTables:
 
     # API Configuration
     download:
+      bulkDownload: qcew_annual_bulk
 
   # --- COUNTY QCEW ---
   - name: county_qcew
@@ -569,6 +571,7 @@ partitionedTables:
 
     # API Configuration
     download:
+      bulkDownload: qcew_annual_bulk
 
   # --- COUNTY WAGES ---
   - name: county_wages
@@ -602,6 +605,7 @@ partitionedTables:
 
     # API Configuration
     download:
+      bulkDownload: qcew_annual_bulk
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
