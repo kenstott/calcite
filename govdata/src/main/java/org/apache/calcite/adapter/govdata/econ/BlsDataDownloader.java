@@ -603,10 +603,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
       // Split series data points by year
       Set<Integer> yearsInSeries = new HashSet<>();
+      int filteredCount = 0;
       for (JsonNode dataPoint : dataArray) {
         int year = dataPoint.path("year").asInt();
-        String period = dataPoint.path("period").asText();
-        String value = dataPoint.path("value").asText();
 
         yearsInSeries.add(year);
 
@@ -615,11 +614,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                     .computeIfAbsent(seriesId, k -> MAPPER.createArrayNode())
                     .add(dataPoint);
         } else {
-          LOGGER.debug("Filtered out data point: series={}, year={}, period={}, value={} (outside range {}-{})",
-              seriesId, year, period, value, startYear, endYear);
+          filteredCount++;
         }
       }
 
+      if (filteredCount > 0) {
+        LOGGER.debug("Series {}: filtered {} data points outside range {}-{}",
+            seriesId, filteredCount, startYear, endYear);
+      }
       LOGGER.debug("Series {} contains data for years: {}", seriesId, yearsInSeries);
     }
 
