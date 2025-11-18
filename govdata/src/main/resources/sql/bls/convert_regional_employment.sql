@@ -43,5 +43,5 @@ FROM (
         UNNEST(root.Results.series)
     ) AS series,
     UNNEST(series.data_array)
-)
+) AS flattened_data
 ) TO '{parquet_path}' (FORMAT PARQUET);

@@ -2522,7 +2522,7 @@ public abstract class AbstractGovDataDownloader {
    * @throws IOException if SQL execution fails
    */
   protected void executeDuckDBSql(String sql, String operationDescription) throws IOException {
-    LOGGER.debug("{} - DuckDB SQL:\n{}", operationDescription, sql);
+    LOGGER.info("{} - Executing DuckDB SQL:\n{}", operationDescription, sql);
 
     try (Connection conn = getDuckDBConnection();
          Statement stmt = conn.createStatement()) {
