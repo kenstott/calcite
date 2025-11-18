@@ -20,22 +20,28 @@
 --   }
 -- }
 --
--- Note: DuckDB UNNEST always creates a column named "unnest" (ignores alias)
---       containing a STRUCT with the array elements
+-- Note: Using two UNNEST operations with subquery to flatten the nested structure:
+--   1. Inner subquery: UNNEST(root.Results.series) - expands the series array
+--   2. Outer query: UNNEST(series.data_array) - expands the data array within each series
+--   IMPORTANT: UNNEST always creates a column called "unnest", aliases are ignored
 
-COPY (
-  SELECT
-{column_expressions}
-  FROM (
+COPY
+(
+SELECT
+    {column_expressions}
+FROM (
     SELECT
-      series_id AS seriesID,
-      UNNEST(data_array, recursive := true)
+        unnest.year AS "year",
+        unnest.period AS "period",
+        unnest.value AS "value",
+        series.seriesID AS "seriesID"
     FROM (
-      SELECT
-        unnest.seriesID AS series_id,
-        unnest.data AS data_array
-      FROM read_json('{json_path}', format := 'auto') AS root,
-      UNNEST(root.Results.series)
-    )
-  )
+        SELECT
+            unnest.seriesID AS seriesID,
+            unnest.data AS data_array
+        FROM read_json('{json_path}', format := 'auto') AS root,
+        UNNEST(root.Results.series)
+    ) AS series,
+    UNNEST(series.data_array)
+)
 ) TO '{parquet_path}' (FORMAT PARQUET);
