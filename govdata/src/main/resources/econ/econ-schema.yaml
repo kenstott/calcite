@@ -860,20 +860,20 @@ partitionedTables:
     comment: >
       State and metropolitan area employment statistics including unemployment rates, job growth, and labor force participation by geographic region.
     columns:
-      - name: date
+      - name: observation_date
         type: string
         nullable: true
-        expression: "year || '-' || LPAD(REPLACE(period, 'M', ''), 2, '0') || '-01'"
+        expression: "\"year\" || '-' || LPAD(REPLACE(\"period\", 'M', ''), 2, '0') || '-01'"
         comment: Observation date (ISO 8601 format)
       - name: series_id
         type: string
         nullable: true
-        expression: "seriesID"
+        expression: "\"seriesID\""
         comment: BLS series identifier
       - name: value
         type: double
         nullable: true
-        expression: "CAST(value AS DOUBLE)"
+        expression: "CAST(\"value\" AS DOUBLE)"
         comment: Employment statistic value
       - name: area_code
         type: string
@@ -888,7 +888,7 @@ partitionedTables:
       - name: measure
         type: string
         nullable: true
-        expression: "CASE SUBSTRING(seriesID, LENGTH(seriesID), 1) WHEN '3' THEN 'unemployment_rate' WHEN '4' THEN 'unemployment' WHEN '5' THEN 'employment' WHEN '6' THEN 'labor_force' ELSE 'unknown' END"
+        expression: "CASE SUBSTRING(\"seriesID\", LENGTH(\"seriesID\"), 1) WHEN '3' THEN 'unemployment_rate' WHEN '4' THEN 'unemployment' WHEN '5' THEN 'employment' WHEN '6' THEN 'labor_force' ELSE 'unknown' END"
         comment: Employment measure type
 
     # API Configuration
