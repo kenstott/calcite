@@ -3641,13 +3641,21 @@ public abstract class AbstractGovDataDownloader {
 
       // Self-healing: Before executing, check if files already exist
       // This only runs for files the manifest said were needed, avoiding bulk scanning
-      // Skip for tables that use bulk downloads (ZIP files) instead of JSON intermediate files
+      // Skip JSON checks for:
+      // 1. Tables that use bulk downloads (ZIP files) instead of JSON intermediate files
+      // 2. Tables that use FTP files (reference tables) instead of JSON intermediate files
       boolean usesBulkDownload = metadata.containsKey("download")
           && metadata.get("download") instanceof com.fasterxml.jackson.databind.JsonNode
           && ((com.fasterxml.jackson.databind.JsonNode) metadata.get("download")).has("bulkDownload");
 
+      boolean usesFtpFiles = metadata.containsKey("sourcePaths")
+          && metadata.get("sourcePaths") instanceof com.fasterxml.jackson.databind.JsonNode
+          && ((com.fasterxml.jackson.databind.JsonNode) metadata.get("sourcePaths")).has("ftpFiles");
+
+      boolean skipJsonCheck = usesBulkDownload || usesFtpFiles;
+
       try {
-        boolean jsonExists = !usesBulkDownload && cacheStorageProvider.exists(fullJsonPath);
+        boolean jsonExists = !skipJsonCheck && cacheStorageProvider.exists(fullJsonPath);
         if (jsonExists && "conversion".equals(operationDescription)) {
           // JSON exists but manifest doesn't know - mark as cached and add to prefetch
           long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
