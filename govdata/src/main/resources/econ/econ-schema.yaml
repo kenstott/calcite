@@ -111,6 +111,98 @@ column_templates:
       - *partition_type
       - *partition_frequency
       - *partition_year
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+# Reusable dimension value lists using YAML anchors
+# These can be referenced in table dimension definitions using *anchor_name
+# ============================================================================
+
+dimension_values:
+
+  # --- Frequency Dimensions ---
+
+  monthly_frequency: &monthly_frequency
+    - monthly
+
+  quarterly_frequency: &quarterly_frequency
+    - quarterly
+
+  annual_frequency: &annual_frequency
+    - annual
+
+  all_frequencies: &all_frequencies
+    - monthly
+    - quarterly
+    - annual
+
+  # --- State Geographic Dimensions ---
+  # All US states + DC (51 jurisdictions)
+  # Note: Loaded from reference_bls_geographies catalog at runtime
+  # This list serves as documentation and fallback
+
+  state_fips_codes: &state_fips_codes
+    - '01'  # Alabama
+    - '02'  # Alaska
+    - '04'  # Arizona
+    - '05'  # Arkansas
+    - '06'  # California
+    - '08'  # Colorado
+    - '09'  # Connecticut
+    - '10'  # Delaware
+    - '11'  # District of Columbia
+    - '12'  # Florida
+    - '13'  # Georgia
+    - '15'  # Hawaii
+    - '16'  # Idaho
+    - '17'  # Illinois
+    - '18'  # Indiana
+    - '19'  # Iowa
+    - '20'  # Kansas
+    - '21'  # Kentucky
+    - '22'  # Louisiana
+    - '23'  # Maine
+    - '24'  # Maryland
+    - '25'  # Massachusetts
+    - '26'  # Michigan
+    - '27'  # Minnesota
+    - '28'  # Mississippi
+    - '29'  # Missouri
+    - '30'  # Montana
+    - '31'  # Nebraska
+    - '32'  # Nevada
+    - '33'  # New Hampshire
+    - '34'  # New Jersey
+    - '35'  # New Mexico
+    - '36'  # New York
+    - '37'  # North Carolina
+    - '38'  # North Dakota
+    - '39'  # Ohio
+    - '40'  # Oklahoma
+    - '41'  # Oregon
+    - '42'  # Pennsylvania
+    - '44'  # Rhode Island
+    - '45'  # South Carolina
+    - '46'  # South Dakota
+    - '47'  # Tennessee
+    - '48'  # Texas
+    - '49'  # Utah
+    - '50'  # Vermont
+    - '51'  # Virginia
+    - '53'  # Washington
+    - '54'  # West Virginia
+    - '55'  # Wisconsin
+    - '56'  # Wyoming
+
+  # --- Census Region Dimensions ---
+
+  census_regions: &census_regions
+    - '0100'  # Northeast
+    - '0200'  # Midwest
+    - '0300'  # South
+    - '0400'  # West
+
 # ============================================================================
 # BULK DOWNLOADS
 # ============================================================================
@@ -148,6 +240,15 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - employment_statistics  # Static table type
+      frequency: *monthly_frequency  # Reference YAML anchor
+      year:
+        type: yearRange  # Special: computed from startYear/endYear
+
     columns:
       - *date_column
       - name: series
@@ -434,6 +535,16 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - state_wages  # Static table type
+      frequency: *annual_frequency  # Annual QCEW data
+      year:
+        type: yearRange
+        minYear: 1990  # QCEW data only available from 1990
+
     columns:
       - *date_column
       - *series_column
@@ -613,6 +724,16 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - jolts_regional  # Static table type
+      frequency: *monthly_frequency  # Monthly JOLTS releases
+      year:
+        type: yearRange
+        minYear: 2001  # JOLTS data only available from December 2000
+
     columns:
       - *date_column
       - *series_column

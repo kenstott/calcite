@@ -56,6 +56,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   private final String apiKey;
   private final Set<String> enabledTables;
+  private final int startYear;
+  private final int endYear;
 
   // Helper methods for generating BLS series IDs
   public static class Series {
@@ -186,9 +188,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Metro CPI codes with metadata
     public Map<String, MetroCpiCode> metroCpiCodes;
 
-    // Measure codes (last digit of series ID to human-readable name)
-    public Map<String, String> measureCodes;
-
     // Industry classifications
     public Map<String, String> naicsSupersectors;
 
@@ -307,14 +306,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
-    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null);
+  public BlsDataDownloader(String apiKey, String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
+    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null, startYear, endYear);
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables) {
+  public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
+    this.startYear = startYear;
+    this.endYear = endYear;
 
     // Load geography and sector catalogs in constructor (fail fast if missing)
     // This replaces hardcoded STATE_FIPS_MAP, CENSUS_REGIONS, METRO_*_CODES, NAICS_SUPERSECTORS
@@ -508,58 +509,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Creates dimension provider for employment statistics table.
-   * Provides dimensions: type, year, frequency.
-   */
-  private DimensionProvider createEmploymentStatisticsDimensions(int startYear, int endYear) {
-    String tableName = BLS.tableNames.employmentStatistics;
-    return (dimensionName) -> {
-      switch (dimensionName) {
-        case "type": return List.of(tableName);
-        case "year": return yearRange(startYear, endYear);
-        case "frequency": return List.of("monthly");
-        default: return null;
-      }
-    };
-  }
-
-  /**
-   * Creates dimension provider for state wages table.
-   * Provides dimensions: type, year, frequency.
-   * Note: QCEW data only available from 1990 forward.
-   */
-  private DimensionProvider createStateWagesDimensions(int startYear, int endYear) {
-    String tableName = BLS.tableNames.stateWages;
-    int effectiveStartYear = Math.max(startYear, 1990);
-    return (dimensionName) -> {
-      switch (dimensionName) {
-        case "type": return List.of(tableName);
-        case "year": return yearRange(effectiveStartYear, endYear);
-        case "frequency": return List.of("qtrly", "annual");  // QCEW provides both quarterly and annual
-        default: return null;
-      }
-    };
-  }
-
-  /**
-   * Creates dimension provider for JOLTS regional table.
-   * Provides dimensions: type, year, frequency.
-   * Note: JOLTS data only available from 2001 forward.
-   */
-  private DimensionProvider createJoltsRegionalDimensions(int startYear, int endYear) {
-    String tableName = BLS.tableNames.joltsRegional;
-    int effectiveStartYear = Math.max(startYear, 2001);
-    return (dimensionName) -> {
-      switch (dimensionName) {
-        case "type": return List.of(tableName);
-        case "year": return yearRange(effectiveStartYear, endYear);
-        case "frequency": return List.of("monthly");
-        default: return null;
-      }
-    };
-  }
-
-  /**
    * Creates dimension provider for JOLTS state table.
    * Provides dimensions: type, year, frequency.
    */
@@ -634,36 +583,60 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     JsonNode seriesArray = batchResponse.path("Results").path("series");
 
     if (!seriesArray.isArray()) {
+      LOGGER.warn("BLS API response missing 'Results.series' array for years {}-{}. Full response: {}",
+          startYear, endYear, batchResponse.toPrettyString());
       return;
     }
 
     // Group series data by year
     Map<Integer, Map<String, ArrayNode>> dataByYear = new HashMap<>();
 
+    LOGGER.debug("BLS API returned {} series for years {}-{}",
+        seriesArray.size(), startYear, endYear);
+
     for (JsonNode series : seriesArray) {
       String seriesId = series.path("seriesID").asText();
       JsonNode dataArray = series.path("data");
 
       if (!dataArray.isArray()) {
+        LOGGER.debug("Series {} has no data array", seriesId);
         continue;
       }
 
+      LOGGER.debug("Series {} has {} data points", seriesId, dataArray.size());
+
       // Split series data points by year
+      Set<Integer> yearsInSeries = new HashSet<>();
       for (JsonNode dataPoint : dataArray) {
         int year = dataPoint.path("year").asInt();
+        String period = dataPoint.path("period").asText();
+        String value = dataPoint.path("value").asText();
+
+        yearsInSeries.add(year);
+
         if (year >= startYear && year <= endYear) {
           dataByYear.computeIfAbsent(year, k -> new HashMap<>())
                     .computeIfAbsent(seriesId, k -> MAPPER.createArrayNode())
                     .add(dataPoint);
+        } else {
+          LOGGER.debug("Filtered out data point: series={}, year={}, period={}, value={} (outside range {}-{})",
+              seriesId, year, period, value, startYear, endYear);
         }
       }
+
+      LOGGER.debug("Series {} contains data for years: {}", seriesId, yearsInSeries);
     }
+
+    LOGGER.debug("Data aggregated for {} years out of requested range {}-{}. Years with data: {}",
+        dataByYear.size(), startYear, endYear, dataByYear.keySet());
 
     // Create per-year JSON responses
     for (int year = startYear; year <= endYear; year++) {
       Map<String, ArrayNode> yearSeriesData = dataByYear.get(year);
       if (yearSeriesData == null || yearSeriesData.isEmpty()) {
-        LOGGER.warn("No series data returned for year {} (API returned empty/no series)", year);
+        LOGGER.warn("No series data returned for year {} (requested {}-{}). " +
+            "Years that DID have data: {}. Check if this year's data exists in BLS database.",
+            year, startYear, endYear, dataByYear.keySet());
         continue;
       }
 
@@ -797,7 +770,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @throws InterruptedException If download is interrupted
    */
   @Override public void downloadAll(int startYear, int endYear) throws IOException, InterruptedException {
-    downloadAllTables(startYear, endYear, enabledTables);
+    // Use instance variables instead of parameters for consistent year range across all tables
+    downloadAllTables(this.startYear, this.endYear, enabledTables);
   }
 
   /**
@@ -811,7 +785,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   private void downloadAllTables(int startYear, int endYear, Set<String> enabledTables) throws IOException {
     // Download employment statistics
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.employmentStatistics)) {
-      downloadEmploymentStatistics(startYear, endYear);
+      downloadEmploymentStatistics();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.employmentStatistics);
     }
@@ -923,7 +897,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param endYear Last year to convert
    */
   @Override public void convertAll(int startYear, int endYear) {
-    LOGGER.info("Converting BLS data for years {}-{}", startYear, endYear);
+    // Use instance variables instead of parameters for consistent year range
+    LOGGER.info("Converting BLS data for years {}-{}", this.startYear, this.endYear);
 
     // Define all BLS tables (12 tables)
     List<String> tablesToConvert =
@@ -945,36 +920,19 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       if (enabledTables == null || enabledTables.contains(tableName)) {
         // metro_wages uses direct CSV→Parquet conversion (no intermediate JSON)
         if (BLS.tableNames.metroWages.equals(tableName)) {
-          convertMetroWagesAll(startYear, endYear);
+          convertMetroWagesAll(this.startYear, this.endYear);
           continue;
         }
 
-        // Get dimension provider for this table
-        DimensionProvider dimensionProvider;
-        if (BLS.tableNames.employmentStatistics.equals(tableName)) {
-          dimensionProvider = createEmploymentStatisticsDimensions(startYear, endYear);
-        } else if (BLS.tableNames.stateWages.equals(tableName)) {
-          dimensionProvider = createStateWagesDimensions(startYear, endYear);
-        } else if (BLS.tableNames.joltsRegional.equals(tableName)) {
-          dimensionProvider = createJoltsRegionalDimensions(startYear, endYear);
-        } else if (BLS.tableNames.joltsState.equals(tableName)) {
-          dimensionProvider = createJoltsStateDimensions(startYear, endYear);
-        } else {
-          // Default dimension provider for tables without specific helpers
-          dimensionProvider = (dimensionName) -> {
-            if ("year".equals(dimensionName)) {
-              return yearRange(startYear, endYear);
-            }
-            if ("type".equals(dimensionName)) return List.of(tableName);
-            if ("frequency".equals(dimensionName)) return List.of("monthly");
-            return null;
-          };
-        }
+        // Dimension provider - metadata-driven tables (employment_statistics, state_wages, jolts_regional)
+        // only need fallback for dimensions not in metadata. Other tables use legacy provider.
+        DimensionProvider dimensionProvider = getDimensionProvider(tableName);
 
         // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
         iterateTableOperationsOptimized(
             tableName,
             dimensionProvider,
+            null,  // No prefetch for conversion
             (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
               // Execute conversion
               convertCachedJsonToParquet(tableName, vars);
@@ -982,17 +940,42 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               // Mark as converted in manifest
               cacheManifest.markParquetConverted(cacheKey, parquetPath);
             },
-            "conversion");
+            "conversion",
+            this.startYear,  // Pass years for metadata-driven dimensions
+            this.endYear);
       }
     }
 
     LOGGER.info("BLS conversion complete for all enabled tables");
   }
 
+  private DimensionProvider getDimensionProvider(String tableName) {
+    DimensionProvider dimensionProvider;
+    if (BLS.tableNames.employmentStatistics.equals(tableName)
+        || BLS.tableNames.stateWages.equals(tableName)
+        || BLS.tableNames.joltsRegional.equals(tableName)) {
+      // Pilot tables: dimensions defined in YAML metadata, no fallback needed
+      dimensionProvider = (dim) -> null;
+    } else if (BLS.tableNames.joltsState.equals(tableName)) {
+      dimensionProvider = createJoltsStateDimensions(this.startYear, this.endYear);
+    } else {
+      // Default dimension provider for tables without metadata
+      dimensionProvider = (dimensionName) -> {
+        if ("year".equals(dimensionName)) {
+          return yearRange(this.startYear, this.endYear);
+        }
+        if ("type".equals(dimensionName)) return List.of(tableName);
+        if ("frequency".equals(dimensionName)) return List.of("monthly");
+        return null;
+      };
+    }
+    return dimensionProvider;
+  }
+
   /**
    * Downloads employment statistics data and converts to Parquet.
    */
-  public void downloadEmploymentStatistics(int startYear, int endYear) {
+  public void downloadEmploymentStatistics() {
 
     // Series IDs to fetch (constant across all years)
     final List<String> seriesIds =
@@ -1004,7 +987,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Create persistent prefetch connection that survives both download and conversion
     Connection prefetchDb = null;
-    PrefetchHelper prefetchHelper = null;
+    PrefetchHelper prefetchHelper;
     try {
       prefetchDb = getDuckDBConnection();
 
@@ -1034,9 +1017,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     try {
       // DOWNLOAD: Fetch data and populate prefetch cache
+      // Note: employment_statistics uses metadata-driven dimensions (YAML)
       iterateTableOperationsOptimized(
           tableName,
-          createEmploymentStatisticsDimensions(startYear, endYear),
+          (dim) -> null,  // Dimensions defined in YAML metadata
           // PREFETCH CALLBACK - Load cached data OR fetch from API
           (context, helper) -> {
             if ("year".equals(context.segmentDimensionName)) {
@@ -1059,7 +1043,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                   String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
                   try (InputStream is = cacheStorageProvider.openInputStream(fullPath)) {
                     byte[] bytes = new byte[is.available()];
-                    is.read(bytes);
+                    int bytesRead = is.read(bytes);
+                    LOGGER.debug("Read {} bytes from {}", bytesRead, fullPath);
                     String jsonContent = new String(bytes, StandardCharsets.UTF_8);
                     cachedPartitions.add(params);
                     cachedJsons.add(jsonContent);
@@ -1288,9 +1273,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
     BulkDownloadConfig bulkConfig = resolveBulkDownload(downloadNode);
 
+    // Note: state_wages uses metadata-driven dimensions (YAML)
     iterateTableOperationsOptimized(
         tableName,
-        createStateWagesDimensions(startYear, endYear),
+        (dim) -> null,  // Dimensions defined in YAML metadata
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
@@ -1683,7 +1669,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        createJoltsRegionalDimensions(startYear, endYear),
+        (dim) -> null,  // Dimensions defined in YAML metadata
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -1964,12 +1950,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String stateFips = vars.get("state_fips");
 
           // Generate series IDs for this state (4 measures)
-          // Format: LASST{state_fips}0000000000{measure}
+          // Format: LAUST{state_fips}0000000000{measure}
+          // LA=Local Area, U=Unadjusted, ST=State, 08=FIPS, 0000000000=area code, 03=measure
           List<String> seriesIds = new ArrayList<>();
-          seriesIds.add("LASST" + stateFips + "0000000000003"); // unemployment rate
-          seriesIds.add("LASST" + stateFips + "0000000000004"); // unemployment level
-          seriesIds.add("LASST" + stateFips + "0000000000005"); // employment level
-          seriesIds.add("LASST" + stateFips + "0000000000006"); // labor force
+          seriesIds.add("LAUST" + stateFips + "0000000000003"); // unemployment rate
+          seriesIds.add("LAUST" + stateFips + "0000000000004"); // unemployment level
+          seriesIds.add("LAUST" + stateFips + "0000000000005"); // employment level
+          seriesIds.add("LAUST" + stateFips + "0000000000006"); // labor force
 
           // Fetch data for this state/year
           Map<Integer, String> resultsByYear = fetchAndSplitByYear(tableName, seriesIds, List.of(year));
@@ -2053,45 +2040,44 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       String parquetPath,
       String stateFips) {
 
-    StringBuilder sql = new StringBuilder();
-    sql.append("COPY (\n  SELECT\n");
-
     // Build column expressions
+    StringBuilder columnExpressions = new StringBuilder();
     boolean firstColumn = true;
     for (PartitionedTableConfig.TableColumn column : columns) {
       if (!firstColumn) {
-        sql.append(",\n");
+        columnExpressions.append(",\n");
       }
       firstColumn = false;
 
       String columnName = column.getName();
-      sql.append("    ");
+      columnExpressions.append("    ");
 
       if (column.hasExpression()) {
         // Apply column expression, substituting {state_fips} placeholder
-        // Note: Expression may already contain quotes around placeholder (e.g., "'{state_fips}'")
-        // so substitute just the value without adding additional quotes
         String expression = column.getExpression().replace("{state_fips}", stateFips);
-        sql.append("(").append(expression).append(") AS ").append(columnName);
+        columnExpressions.append("(").append(expression).append(") AS ").append(columnName);
       } else {
         // Regular column - direct mapping
-        sql.append(columnName);
+        columnExpressions.append(columnName);
       }
     }
 
-    // FROM clause: UNNEST the nested JSON structure
-    // This flattens Results.series[*].data[*] into rows with seriesID, year, period, value
-    // Note: BLS API returns "seriesID" but DuckDB may normalize to lowercase
-    sql.append("\n  FROM (\n");
-    sql.append("    SELECT\n");
-    sql.append("      COALESCE(series.seriesID, series.seriesid, series.\"seriesID\") AS seriesID,\n");
-    sql.append("      UNNEST(series.data, recursive := true)\n");
-    sql.append("    FROM read_json('").append(jsonPath).append("', format := 'auto') AS root,\n");
-    sql.append("    UNNEST(root.Results.series) AS series\n");
-    sql.append("  )\n");
-    sql.append(") TO '").append(parquetPath).append("' (FORMAT PARQUET);");
+    // Load SQL template from resource file
+    String sqlTemplate;
+    try (InputStream is = getClass().getResourceAsStream("/sql/bls/convert_regional_employment.sql")) {
+      if (is == null) {
+        throw new IllegalStateException("SQL template not found: /sql/bls/convert_regional_employment.sql");
+      }
+      sqlTemplate = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new IllegalStateException("Failed to load SQL template", e);
+    }
 
-    return sql.toString();
+    // Substitute parameters in template
+    return sqlTemplate
+        .replace("{column_expressions}", columnExpressions.toString())
+        .replace("{json_path}", jsonPath)
+        .replace("{parquet_path}", parquetPath);
   }
 
   /**
@@ -2781,25 +2767,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     return sectors;
-  }
-
-  /**
-   * Creates MetroGeography map from BLS constants.
-   */
-  private Map<String, MetroGeography> createMetroGeographiesFromHardcodedMaps() {
-    Map<String, MetroGeography> metros = new HashMap<>();
-    LOGGER.debug("BLS.metroCpiCodes size: {}", BLS.metroCpiCodes == null ? "null" : BLS.metroCpiCodes.size());
-    for (Map.Entry<String, BlsConstants.MetroCpiCode> entry : BLS.metroCpiCodes.entrySet()) {
-      String metroCode = entry.getKey();
-      BlsConstants.MetroCpiCode metro = entry.getValue();
-      String cpiCode = metro.cpiCode;
-      String metroName = metro.name;
-      String blsCode = BLS.metroBlsAreaCodes.get(metroCode);
-      LOGGER.debug("Metro {}: cpiCode={}, name={}, blsCode={}", metroCode, cpiCode, metroName, blsCode);
-      metros.put(metroCode, new MetroGeography(metroCode, metroName, cpiCode, blsCode));
-    }
-    LOGGER.debug("Created {} metros from hardcoded maps", metros.size());
-    return metros;
   }
 
   /**
