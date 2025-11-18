@@ -535,7 +535,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       switch (dimensionName) {
         case "type": return List.of(tableName);
         case "year": return yearRange(effectiveStartYear, endYear);
-        case "frequency": return List.of("monthly");
+        case "frequency": return List.of("qtrly", "annual");  // QCEW provides both quarterly and annual
         default: return null;
       }
     };
@@ -1310,7 +1310,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse CSV and convert to Parquet using DuckDB
-          parseQcewForStateWages(fullZipPath, parquetPath, year);
+          parseQcewForStateWages(fullZipPath, parquetPath, year, frequency);
+
+          // Mark as converted in manifest
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+
           LOGGER.info("Completed state wages for year {}", year);
         },
         "convert");
@@ -1341,7 +1345,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           switch (dimensionName) {
             case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return List.of("quarterly");
+            case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
         },
@@ -1364,7 +1368,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse CSV and convert to Parquet using DuckDB
-          parseQcewForCountyWages(fullZipPath, parquetPath, year);
+          parseQcewForCountyWages(fullZipPath, parquetPath, year, frequency);
+
+          // Mark as converted in manifest
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+
           LOGGER.info("Completed county wages for year {}", year);
         },
         "convert");
@@ -1401,7 +1409,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           switch (dimensionName) {
             case "type": return List.of(tableName);
             case "year": return yearRange(startYear, endYear);
-            case "frequency": return List.of("quarterly");
+            case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
         },
@@ -1424,7 +1432,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse and convert to Parquet using DuckDB
-          parseAndConvertQcewToParquet(fullZipPath, parquetPath, year);
+          parseAndConvertQcewToParquet(fullZipPath, parquetPath, year, frequency);
+
+          // Mark as converted in manifest
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+
           LOGGER.info("Completed county QCEW data for year {}", year);
         },
         "convert");
@@ -1556,7 +1568,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           switch (dimensionName) {
             case "type": return List.of(tableName);
             case "year": return yearRange(effectiveStartYear, endYear);
-            case "frequency": return List.of("annual", "qtrly");
+            case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
         },
@@ -2069,9 +2081,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // FROM clause: UNNEST the nested JSON structure
     // This flattens Results.series[*].data[*] into rows with seriesID, year, period, value
+    // Note: BLS API returns "seriesID" but DuckDB may normalize to lowercase
     sql.append("\n  FROM (\n");
     sql.append("    SELECT\n");
-    sql.append("      series.seriesID,\n");
+    sql.append("      COALESCE(series.seriesID, series.seriesid, series.\"seriesID\") AS seriesID,\n");
     sql.append("      UNNEST(series.data, recursive := true)\n");
     sql.append("    FROM read_json('").append(jsonPath).append("', format := 'auto') AS root,\n");
     sql.append("    UNNEST(root.Results.series) AS series\n");
@@ -2131,11 +2144,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param year Year (used to determine CSV filename inside ZIP)
    * @throws IOException if conversion fails
    */
-  private void parseAndConvertQcewToParquet(String fullZipPath, String fullParquetPath, int year) throws IOException {
-    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for year {}", year);
+  private void parseAndConvertQcewToParquet(String fullZipPath, String fullParquetPath, int year, String frequency) throws IOException {
+    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for year {} frequency {}", year, frequency);
 
-    // Determine CSV filename inside ZIP (format: YYYY.annual.singlefile.csv)
-    String csvFilename = String.format("%d.annual.singlefile.csv", year);
+    // Determine CSV filename inside ZIP based on frequency
+    // ZIP filename: YYYY_frequency_singlefile.zip (underscores)
+    // CSV filename inside annual: YYYY.annual.singlefile.csv
+    // CSV filename inside quarterly: YYYY.q1-q4.singlefile.csv
+    String csvFilename = frequency.equals("qtrly")
+        ? String.format("%d.q1-q4.singlefile.csv", year)
+        : String.format("%d.annual.singlefile.csv", year);
 
     // Load SQL template and execute with parameters (no manual escaping needed)
     Map<String, String> params =
@@ -2204,27 +2222,43 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param year Year of data
    * @throws IOException if conversion fails
    */
-  private void parseQcewForStateWages(String fullZipPath, String fullParquetPath, int year) throws IOException {
-    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for state wages year {}", year);
+  private void parseQcewForStateWages(String fullZipPath, String fullParquetPath, int year, String frequency) throws IOException {
+    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for state wages year {} frequency {}", year, frequency);
 
-    // Determine CSV filename inside ZIP
-    String csvFilename = String.format("%d.annual.singlefile.csv", year);
+    // Determine CSV filename inside ZIP based on frequency
+    // ZIP filename: YYYY_frequency_singlefile.zip (underscores)
+    // CSV filename inside annual: YYYY.annual.singlefile.csv
+    // CSV filename inside quarterly: YYYY.q1-q4.singlefile.csv
+    String csvFilename = frequency.equals("qtrly")
+        ? String.format("%d.q1-q4.singlefile.csv", year)
+        : String.format("%d.annual.singlefile.csv", year);
 
     // Get the resource path for state_fips.json
     String stateFipsJsonPath = requireNonNull(getClass().getResource("/geo/state_fips.json")).getPath();
 
-    // Load SQL from resource and substitute parameters
-    executeDuckDBSqlWithParams(
-        loadSqlResource("/sql/bls/convert_state_wages.sql"),
+    // Select SQL template based on frequency (annual vs quarterly have different column schemas)
+    String sqlTemplatePath = frequency.equals("qtrly")
+        ? "/sql/bls/convert_state_wages_quarterly.sql"
+        : "/sql/bls/convert_state_wages_annual.sql";
+
+    // Load SQL from resource and substitute parameters using string replacement
+    String sql =
+        substituteSqlParameters(loadSqlResource(sqlTemplatePath),
         ImmutableMap.of(
             "year", String.valueOf(year),
             "zipPath", fullZipPath,
             "csvFilename", csvFilename,
             "stateFipsPath", stateFipsJsonPath,
-            "parquetPath", fullParquetPath),
-        "QCEW state wages CSV to Parquet conversion");
+            "parquetPath", fullParquetPath));
 
-    LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
+    // Execute the SQL
+    try (Connection conn = getDuckDBConnection();
+         Statement stmt = conn.createStatement()) {
+      stmt.execute(sql);
+      LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
+    } catch (SQLException e) {
+      throw new IOException("QCEW state wages CSV to Parquet conversion failed: " + e.getMessage(), e);
+    }
   }
 
   /**
@@ -2237,27 +2271,43 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param year Year of data
    * @throws IOException if conversion fails
    */
-  private void parseQcewForCountyWages(String fullZipPath, String fullParquetPath, int year) throws IOException {
-    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for county wages year {}", year);
+  private void parseQcewForCountyWages(String fullZipPath, String fullParquetPath, int year, String frequency) throws IOException {
+    LOGGER.info("Converting QCEW CSV to Parquet via DuckDB zipfs for county wages year {} frequency {}", year, frequency);
 
-    // Determine CSV filename inside ZIP
-    String csvFilename = String.format("%d.annual.singlefile.csv", year);
+    // Determine CSV filename inside ZIP based on frequency
+    // ZIP filename: YYYY_frequency_singlefile.zip (underscores)
+    // CSV filename inside annual: YYYY.annual.singlefile.csv
+    // CSV filename inside quarterly: YYYY.q1-q4.singlefile.csv
+    String csvFilename = frequency.equals("qtrly")
+        ? String.format("%d.q1-q4.singlefile.csv", year)
+        : String.format("%d.annual.singlefile.csv", year);
 
     // Get the resource path for state_fips.json
     String stateFipsJsonPath = requireNonNull(getClass().getResource("/geo/state_fips.json")).getPath();
 
-    // Load SQL from resource and execute with parameters
-    executeDuckDBSqlWithParams(
-        loadSqlResource("/sql/bls/convert_county_wages.sql"),
+    // Select SQL template based on frequency (annual vs quarterly have different column schemas)
+    String sqlTemplatePath = frequency.equals("qtrly")
+        ? "/sql/bls/convert_county_wages_quarterly.sql"
+        : "/sql/bls/convert_county_wages_annual.sql";
+
+    // Load SQL from resource and substitute parameters using string replacement
+    String sql =
+        substituteSqlParameters(loadSqlResource(sqlTemplatePath),
         ImmutableMap.of(
             "year", String.valueOf(year),
             "zipPath", fullZipPath,
             "csvFilename", csvFilename,
             "stateFipsPath", stateFipsJsonPath,
-            "parquetPath", fullParquetPath),
-        "QCEW county wages CSV to Parquet conversion");
+            "parquetPath", fullParquetPath));
 
-    LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
+    // Execute the SQL
+    try (Connection conn = getDuckDBConnection();
+         Statement stmt = conn.createStatement()) {
+      stmt.execute(sql);
+      LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
+    } catch (SQLException e) {
+      throw new IOException("QCEW county wages CSV to Parquet conversion failed: " + e.getMessage(), e);
+    }
   }
 
   /**

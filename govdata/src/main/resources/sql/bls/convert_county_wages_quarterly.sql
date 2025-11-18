@@ -1,7 +1,8 @@
--- Convert QCEW county wages CSV to Parquet with state enrichment
+-- Convert QCEW county wages CSV to Parquet with state enrichment (QUARTERLY format)
 -- Uses DuckDB's zipfs extension to read CSV directly from ZIP archive
 -- Parameters: {year}, {zipPath}, {csvFilename}, {stateFipsPath}, {parquetPath}
 -- Filters for county-level (agglvl_code=70), all ownership (own_code=0), all industries (industry_code=10)
+-- Quarterly format averages the three monthly employment values
 
 INSTALL zipfs;
 LOAD zipfs;
@@ -11,13 +12,8 @@ COPY (
     q.area_fips AS county_fips,
     substring(q.area_fips, 1, 2) AS state_fips,
     s.state_name,
-    -- Handle both annual and quarterly formats
-    -- Annual has: annual_avg_wkly_wage
-    -- Quarterly has: avg_wkly_wage
-    TRY_CAST(COALESCE(q.annual_avg_wkly_wage, q.avg_wkly_wage) AS INTEGER) AS average_weekly_wage,
-    -- Annual has: annual_avg_emplvl
-    -- Quarterly has: month1_emplvl, month2_emplvl, month3_emplvl (average them)
-    TRY_CAST(COALESCE(q.annual_avg_emplvl, (q.month1_emplvl + q.month2_emplvl + q.month3_emplvl) / 3.0) AS INTEGER) AS total_employment,
+    TRY_CAST(q.avg_wkly_wage AS INTEGER) AS average_weekly_wage,
+    TRY_CAST((q.month1_emplvl + q.month2_emplvl + q.month3_emplvl) / 3.0 AS INTEGER) AS total_employment,
     {year} AS "year"
   FROM read_csv_auto('zip://{zipPath}/{csvFilename}') q
   LEFT JOIN read_json_auto('{stateFipsPath}') s
