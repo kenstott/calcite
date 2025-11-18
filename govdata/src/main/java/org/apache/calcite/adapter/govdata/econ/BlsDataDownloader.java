@@ -306,10 +306,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
   }
 
-  public BlsDataDownloader(String apiKey, String cacheDir, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
-    this(apiKey, cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, null, startYear, endYear);
-  }
-
   public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
     this.apiKey = apiKey;
@@ -512,12 +508,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Creates dimension provider for JOLTS state table.
    * Provides dimensions: type, year, frequency.
    */
-  private DimensionProvider createJoltsStateDimensions(int startYear, int endYear) {
+  private DimensionProvider createJoltsStateDimensions() {
     String tableName = BLS.tableNames.joltsState;
     return (dimensionName) -> {
       switch (dimensionName) {
         case "type": return List.of(tableName);
-        case "year": return yearRange(startYear, endYear);
+        case "year": return yearRange(this.startYear, this.endYear);
         case "frequency": return List.of("monthly");
         default: return null;
       }
@@ -561,7 +557,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                     seriesOffset + 1, seriesEnd, yearStart, yearEnd);
 
         // Single API call for up to 50 series × up to 20 contiguous years
-        String batchJson = fetchMultipleSeriesRaw(tableName, seriesBatch, yearStart, yearEnd);
+        String batchJson = fetchMultipleSeriesRaw(tableName, seriesBatch);
         JsonNode batchResponse = MAPPER.readTree(batchJson);
 
         // Split response by year for individual caching
@@ -730,7 +726,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         int yearStart = range[0];
         int yearEnd = range[1];
 
-        String batchJson = fetchMultipleSeriesRaw(tableName, seriesBatch, yearStart, yearEnd);
+        String batchJson = fetchMultipleSeriesRaw(tableName, seriesBatch);
         JsonNode batchResponse = MAPPER.readTree(batchJson);
 
         // Check for errors
@@ -792,7 +788,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Download inflation metrics
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.inflationMetrics)) {
-      downloadInflationMetrics(startYear, endYear);
+      downloadInflationMetrics();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.inflationMetrics);
     }
@@ -848,35 +844,35 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Download metro wages
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.metroWages)) {
-      downloadMetroWages(startYear, endYear);
+      downloadMetroWages();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.metroWages);
     }
 
     // Download JOLTS regional data
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.joltsRegional)) {
-      downloadJoltsRegional(startYear, endYear);
+      downloadJoltsRegional();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.joltsRegional);
     }
 
     // Download JOLTS state data
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.joltsState)) {
-      downloadJoltsState(startYear, endYear);
+      downloadJoltsState();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.joltsState);
     }
 
     // Download wage growth data
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.wageGrowth)) {
-      downloadWageGrowth(startYear, endYear);
+      downloadWageGrowth();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.wageGrowth);
     }
 
     // Download regional employment data
     if (enabledTables == null || enabledTables.contains(BLS.tableNames.regionalEmployment)) {
-      downloadRegionalEmployment(startYear, endYear);
+      downloadRegionalEmployment();
     } else {
       LOGGER.info("Skipping {} (filtered out)", BLS.tableNames.regionalEmployment);
     }
@@ -920,7 +916,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       if (enabledTables == null || enabledTables.contains(tableName)) {
         // metro_wages uses direct CSV→Parquet conversion (no intermediate JSON)
         if (BLS.tableNames.metroWages.equals(tableName)) {
-          convertMetroWagesAll(this.startYear, this.endYear);
+          convertMetroWagesAll();
           continue;
         }
 
@@ -957,7 +953,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // Pilot tables: dimensions defined in YAML metadata, no fallback needed
       dimensionProvider = (dim) -> null;
     } else if (BLS.tableNames.joltsState.equals(tableName)) {
-      dimensionProvider = createJoltsStateDimensions(this.startYear, this.endYear);
+      dimensionProvider = createJoltsStateDimensions();
     } else {
       // Default dimension provider for tables without metadata
       dimensionProvider = (dimensionName) -> {
@@ -1481,7 +1477,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads QCEW bulk ZIP files containing metro wage data.
    *
    * <p>Downloads both annual and quarterly bulk files from BLS QCEW.
-   * Conversion to Parquet is handled separately by {@link #convertMetroWagesAll(int, int)}
+   * Conversion to Parquet is handled separately by {@link #convertMetroWagesAll()}
    * which uses DuckDB's zipfs extension to read CSV files directly from the ZIP archives.
    *
    * <p><b>Data Source:</b>
@@ -1493,20 +1489,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <p><b>Coverage:</b>
    * 27 major metropolitan areas from 1990 to present.
    *
-   * @param startYear Start year (must be >= 1990, when QCEW data begins)
-   * @param endYear   End year
    * @see #downloadQcewBulkFile(int, String) For ZIP download implementation
-   * @see #convertMetroWagesAll(int, int) For ZIP→Parquet conversion
+   * @see #convertMetroWagesAll() For ZIP→Parquet conversion
    */
-  public void downloadMetroWages(int startYear, int endYear) {
-    LOGGER.info("Downloading QCEW bulk files for metro wages {}-{}", startYear, endYear);
+  public void downloadMetroWages() {
+    LOGGER.info("Downloading QCEW bulk files for metro wages {}-{}", this.startYear, this.endYear);
 
     // QCEW data only available from 1990 forward
-    int effectiveStartYear = Math.max(startYear, 1990);
+    int effectiveStartYear = Math.max(this.startYear, 1990);
 
     String[] frequencies = {"annual", "qtrly"};
 
-    for (int year = effectiveStartYear; year <= endYear; year++) {
+    for (int year = effectiveStartYear; year <= this.endYear; year++) {
       for (String frequency : frequencies) {
         try {
           // Download the bulk ZIP file (method checks cache internally)
@@ -1520,7 +1514,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("QCEW bulk file download complete for years {}-{}", effectiveStartYear, endYear);
+    LOGGER.info("QCEW bulk file download complete for years {}-{}", effectiveStartYear, this.endYear);
   }
 
   /**
@@ -1537,23 +1531,21 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    *   <li>Updates cache manifest after successful conversion</li>
    * </ul>
    *
-   * @param startYear First year to convert
-   * @param endYear Last year to convert
    */
-  public void convertMetroWagesAll(int startYear, int endYear) {
-    LOGGER.info("Converting metro wages from CSV (ZIP) to Parquet for years {}-{}", startYear, endYear);
+  public void convertMetroWagesAll() {
+    LOGGER.info("Converting metro wages from CSV (ZIP) to Parquet for years {}-{}", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.metroWages;
 
     // QCEW data only available from 1990 forward
-    int effectiveStartYear = Math.max(startYear, 1990);
+    int effectiveStartYear = Math.max(this.startYear, 1990);
 
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(effectiveStartYear, endYear);
+            case "year": return yearRange(effectiveStartYear, this.endYear);
             case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
@@ -1565,7 +1557,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         },
         "convert");
 
-    LOGGER.info("Metro wages conversion complete for years {}-{}", effectiveStartYear, endYear);
+    LOGGER.info("Metro wages conversion complete for years {}-{}", effectiveStartYear, this.endYear);
   }
 
   /**
@@ -1649,8 +1641,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Covers 4 Census regions (Northeast, Midwest, South, West) with 5 metrics each (20 series).
    * Uses metadata-driven FTP source paths from econ-schema.json.
    */
-  public void downloadJoltsRegional(int startYear, int endYear) throws IOException {
-    LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", startYear, endYear);
+  public void downloadJoltsRegional() throws IOException {
+    LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.joltsRegional;
 
@@ -1689,8 +1681,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Extracts data for all 51 states (including DC) for 5 metrics (job openings, hires, separations, quits, layoffs).
    * Uses metadata-driven FTP source paths from econ-schema.json.
    */
-  public void downloadJoltsState(int startYear, int endYear) throws IOException {
-    LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", startYear, endYear);
+  public void downloadJoltsState() throws IOException {
+    LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.joltsState;
 
@@ -1709,7 +1701,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        createJoltsStateDimensions(startYear, endYear),
+        createJoltsStateDimensions(),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -1850,7 +1842,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads inflation metrics data and converts to Parquet.
    */
-  public void downloadInflationMetrics(int startYear, int endYear) {
+  public void downloadInflationMetrics() {
 
     final List<String> seriesIds =
         List.of(BLS.seriesIds.inflation.cpiAllUrban,
@@ -1864,7 +1856,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
@@ -1887,7 +1879,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   /**
    * Downloads wage growth data and converts to Parquet.
    */
-  public void downloadWageGrowth(int startYear, int endYear) {
+  public void downloadWageGrowth() {
 
     final List<String> seriesIds =
         List.of(BLS.seriesIds.wages.avgHourlyEarnings,
@@ -1900,7 +1892,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
@@ -1930,8 +1922,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <p>Optimized to batch up to 20 years per API call (per state), reducing total API calls from
    * ~1,275 (51 states × 25 years) to ~102 (51 states × ~2 batches).
    */
-  public void downloadRegionalEmployment(int startYear, int endYear) {
-    LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", startYear, endYear);
+  public void downloadRegionalEmployment() {
+    LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.regionalEmployment;
 
@@ -1940,7 +1932,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "state_fips": return new ArrayList<>(BLS.stateFipsCodes.values());
             default: return null;
           }
@@ -1982,21 +1974,20 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             return;
           }
 
-          // Write raw JSON to temp file - DuckDB will handle flattening with JSON functions
-          String tempJsonPath = parquetPath.replace(".parquet", ".json");
-          storageProvider.writeFile(tempJsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          // Write raw JSON to cache directory (not parquet directory)
+          cacheStorageProvider.writeFile(jsonPath, rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
           // Build DuckDB SQL to flatten nested JSON and apply column expressions
           // BLS returns: {Results: {series: [{seriesID: "...", data: [{year, period, value}, ...]}]}}
           // DuckDB will UNNEST the nested structure and apply expression columns
           List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
-          String sql = buildNestedJsonConversionSql(columns, tempJsonPath, parquetPath, stateFips);
+          String sql = buildNestedJsonConversionSql(columns, jsonPath, parquetPath, stateFips);
 
           // Execute conversion
           executeDuckDBSql(sql, String.format("Regional employment conversion for state_fips %s year %d", stateFips, year));
 
-          // Clean up temp JSON file
-          storageProvider.delete(tempJsonPath);
+          // Clean up temp JSON file from cache
+          cacheStorageProvider.delete(jsonPath);
 
           LOGGER.info("Saved state_fips {} year {} ({} series)", stateFips, year, seriesNode.size());
         },
@@ -2055,7 +2046,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       if (column.hasExpression()) {
         // Apply column expression, substituting {state_fips} placeholder
         String expression = column.getExpression().replace("{state_fips}", stateFips);
-        columnExpressions.append("(").append(expression).append(") AS ").append(columnName);
+
+        // No parentheses needed in SELECT list - expressions already have proper structure
+        // (CAST has parens, CASE has END, concatenation has clear precedence)
+        columnExpressions.append(expression).append(" AS ").append(columnName);
       } else {
         // Regular column - direct mapping
         columnExpressions.append(columnName);
@@ -2596,8 +2590,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses the generic retry mechanism from AbstractGovDataDownloader.
    * @param tableName Table name to load API URL from schema metadata
    */
-  private String fetchMultipleSeriesRaw(
-      String tableName, List<String> seriesIds, int startYear, int endYear) throws IOException, InterruptedException {
+  private String fetchMultipleSeriesRaw(String tableName, List<String> seriesIds) throws IOException, InterruptedException {
 
     // Load API URL from table metadata
     String apiUrl = getBlsApiUrl(tableName);
@@ -2606,8 +2599,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     ArrayNode seriesArray = MAPPER.createArrayNode();
     seriesIds.forEach(seriesArray::add);
     requestBody.set("seriesid", seriesArray);
-    requestBody.put("startyear", String.valueOf(startYear));
-    requestBody.put("endyear", String.valueOf(endYear));
+    requestBody.put("startyear", String.valueOf(this.startYear));
+    requestBody.put("endyear", String.valueOf(this.endYear));
     requestBody.put("calculations", true); // Enable percent change calculations
 
     if (apiKey != null && !apiKey.isEmpty()) {
