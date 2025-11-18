@@ -488,6 +488,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
       HttpRequest request = HttpRequest.newBuilder()
           .uri(URI.create(url))
           .timeout(Duration.ofMinutes(10))
+          .header("User-Agent", "Mozilla/5.0 (compatible; Apache Calcite/1.0; +https://calcite.apache.org)")
           .build();
 
       HttpResponse<byte[]> response =
