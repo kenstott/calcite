@@ -203,6 +203,101 @@ dimension_values:
     - '0300'  # South
     - '0400'  # West
 
+  # --- BEA Regional Geographic Sets ---
+  # Geographic FIPS code sets for BEA Regional API queries
+
+  bea_geo_fips_sets: &bea_geo_fips_sets
+    - STATE    # All states (50 states + District of Columbia)
+    - COUNTY   # All counties nationwide
+    - MSA      # All Metropolitan Statistical Areas
+    - MIC      # All Micropolitan Areas
+    - PORT     # All state metropolitan/nonmetropolitan portions
+    - DIV      # All Metropolitan Divisions
+    - CSA      # All Combined Statistical Areas
+
+  # --- BEA Regional Table Names ---
+  # All active tables in BEA Regional dataset (63 tables)
+  # Organized by category: State Annual (SAINC*/SAGDP*), State Quarterly (SQINC*/SQGDP*),
+  # County/MSA Annual (CAINC*/CAGDP*), and specialty tables (SAAC*, SAO*, SAPCE*, *RPP, *SUMMARY)
+
+  bea_regional_tables: &bea_regional_tables
+    # State Annual Personal Income (SAINC*) - 12 active tables
+    - SAINC1
+    - SAINC30
+    - SAINC35
+    - SAINC4
+    - SAINC40
+    - SAINC50
+    - SAINC51
+    - SAINC5N
+    - SAINC6N
+    - SAINC70
+    - SAINC7N
+    - SAINC91
+    # State Quarterly Personal Income (SQINC*) - 6 active tables
+    - SQINC1
+    - SQINC35
+    - SQINC4
+    - SQINC5N
+    - SQINC6N
+    - SQINC7N
+    # County/MSA Annual Personal Income (CAINC*) - 6 active tables
+    - CAINC1
+    - CAINC30
+    - CAINC4
+    - CAINC5N
+    - CAINC6N
+    - CAINC91
+    # State Annual GDP (SAGDP*) - 10 active tables
+    - SAGDP1
+    - SAGDP2
+    - SAGDP3
+    - SAGDP4
+    - SAGDP5
+    - SAGDP6
+    - SAGDP7
+    - SAGDP8
+    - SAGDP9
+    - SAGDP11
+    # State Quarterly GDP (SQGDP*) - 5 active tables
+    - SQGDP1
+    - SQGDP2
+    - SQGDP8
+    - SQGDP9
+    - SQGDP11
+    # County/MSA Annual GDP (CAGDP*) - 5 active tables
+    - CAGDP1
+    - CAGDP2
+    - CAGDP8
+    - CAGDP9
+    - CAGDP11
+    # State Arts & Culture (SAAC*) - 7 active tables
+    - SAACArtsComp
+    - SAACArtsEmp
+    - SAACArtsVA
+    - SAACCompLQ
+    - SAACCompRatio
+    - SAACLVALQ
+    - SAACVARatio
+    # State Outdoor Recreation (SAO*) - 4 active tables
+    - SAOACTVA
+    - SAOCOMP
+    - SAOEMP
+    - SAOVA
+    # Personal Consumption Expenditures (SAPCE*) - 4 active tables
+    - SAPCE1
+    - SAPCE2
+    - SAPCE3
+    - SAPCE4
+    # Real Personal Income (*RPP) - 3 active tables
+    - SARPP
+    - MARPP
+    - PARPP
+    # Summary Statistics - 3 active tables
+    - SASUMMARY
+    - TASUMMARY1
+    - TASUMMARY2
+
 # ============================================================================
 # BULK DOWNLOADS
 # ============================================================================
@@ -1232,6 +1327,20 @@ partitionedTables:
           type: VARCHAR
     comment: >
       State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - regional_income  # Static table type
+      year:
+        type: yearRange  # Computed from startYear/endYear environment config
+      geo_fips_set: *bea_geo_fips_sets  # Reference YAML anchor: STATE, COUNTY, MSA, MIC, PORT, DIV, CSA
+      tablename: *bea_regional_tables  # Reference YAML anchor: All 63 BEA Regional tables
+      line_code:
+        type: reference_catalog  # Dynamic: loaded from reference_regional_linecodes table
+        table: reference_regional_linecodes
+        column: LineCode
+
     columns:
       - name: GeoName
         type: string
