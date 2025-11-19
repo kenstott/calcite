@@ -3254,6 +3254,13 @@ public abstract class AbstractGovDataDownloader {
     Map<String, Object> tableMetadata = loadTableMetadata(tableName);
     Map<String, Object> dimensionsMetadata = (Map<String, Object>) tableMetadata.get("dimensions");
 
+    // Debug: Log what was loaded
+    if (dimensionsMetadata != null) {
+      LOGGER.debug("Loaded dimension metadata for table {}: {}", tableName, dimensionsMetadata.keySet());
+    } else {
+      LOGGER.warn("No dimension metadata found for table {} in schema", tableName);
+    }
+
     // Extract fixed dimensions from pattern (auto-generation)
     String pattern = (String) tableMetadata.get("pattern");
     Map<String, List<String>> fixedDimensions = extractFixedDimensionsFromPattern(pattern);
