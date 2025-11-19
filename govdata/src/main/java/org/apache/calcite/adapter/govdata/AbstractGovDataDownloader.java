@@ -788,6 +788,10 @@ public abstract class AbstractGovDataDownloader {
             metadata.put("download", tableNode.get("download"));
           }
 
+          if (tableNode.has("dimensions")) {
+            metadata.put("dimensions", tableNode.get("dimensions"));
+          }
+
           return metadata;
         }
       }
@@ -3252,13 +3256,18 @@ public abstract class AbstractGovDataDownloader {
 
     // Load table metadata once
     Map<String, Object> tableMetadata = loadTableMetadata(tableName);
+
+    // Debug: Log what keys are in the table metadata
+    LOGGER.debug("Table metadata keys for {}: {}", tableName, tableMetadata.keySet());
+
     Map<String, Object> dimensionsMetadata = (Map<String, Object>) tableMetadata.get("dimensions");
 
     // Debug: Log what was loaded
     if (dimensionsMetadata != null) {
       LOGGER.debug("Loaded dimension metadata for table {}: {}", tableName, dimensionsMetadata.keySet());
     } else {
-      LOGGER.warn("No dimension metadata found for table {} in schema", tableName);
+      LOGGER.warn("No dimension metadata found for table {} in schema. Available keys: {}",
+          tableName, tableMetadata.keySet());
     }
 
     // Extract fixed dimensions from pattern (auto-generation)
