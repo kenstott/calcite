@@ -3274,7 +3274,7 @@ public abstract class AbstractGovDataDownloader {
           return values;
         }
 
-        // Case 2: Map with special type (e.g., yearRange)
+        // Case 2: Map with special type (e.g., yearRange, apiSet, apiList)
         if (dimValue instanceof Map) {
           Map<String, Object> dimConfig = (Map<String, Object>) dimValue;
           String type = (String) dimConfig.get("type");
@@ -3298,6 +3298,29 @@ public abstract class AbstractGovDataDownloader {
             LOGGER.debug("Dimension '{}' for table {} computed as yearRange: {}-{} ({} values)",
                 dimensionName, tableName, effectiveStartYear, effectiveEndYear, years.size());
             return years;
+          }
+
+          if ("apiSet".equals(type)) {
+            // Reference an API set from download config (returns keys as values)
+            String source = (String) dimConfig.get("source");
+            if (source != null) {
+              Map<String, Object> apiSet = extractApiSet(tableName, source);
+              List<String> values = new ArrayList<>(apiSet.keySet());
+              LOGGER.debug("Dimension '{}' for table {} loaded from API set '{}': {} values",
+                  dimensionName, tableName, source, values.size());
+              return values;
+            }
+          }
+
+          if ("apiList".equals(type)) {
+            // Reference an API list from download config
+            String source = (String) dimConfig.get("source");
+            if (source != null) {
+              List<String> values = extractApiList(tableName, source);
+              LOGGER.debug("Dimension '{}' for table {} loaded from API list '{}': {} values",
+                  dimensionName, tableName, source, values.size());
+              return values;
+            }
           }
 
           LOGGER.warn("Unknown dimension type '{}' for dimension '{}' in table {}",
@@ -3374,8 +3397,10 @@ public abstract class AbstractGovDataDownloader {
         // All dimensions use provider (no special handling for year)
         List<String> values = dimensionProvider.getValues(dimName);
         if (values == null || values.isEmpty()) {
-          LOGGER.warn("No values provided for dimension '{}' in table {}", dimName, tableName);
-          continue;
+          throw new IllegalArgumentException(
+              "No values provided for dimension '" + dimName + "' in table '" + tableName + "'. "
+              + "Pattern requires this dimension but dimensionProvider returned null/empty. "
+              + "Check that dimension values are configured in metadata or provided by downloader.");
         }
 
         dimensions.add(new IterationDimension(dimName, values));
