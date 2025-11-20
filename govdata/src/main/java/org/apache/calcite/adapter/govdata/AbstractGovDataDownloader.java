@@ -3438,8 +3438,8 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Wrap dimensionProvider with metadata-aware provider that checks YAML dimensions first
-    DimensionProvider metadataAwareProvider = createMetadataDimensionProvider(
-        tableName, dimensionProvider, startYear, endYear);
+    DimensionProvider metadataAwareProvider =
+        createMetadataDimensionProvider(tableName, dimensionProvider, startYear, endYear);
 
     // Extract dimension names from pattern (variables with wildcards)
     // Pattern format: "type=xxx/frequency=*/year=*/tablename=*/file.parquet"
@@ -3551,8 +3551,8 @@ public abstract class AbstractGovDataDownloader {
       int endYear) {
 
     // Wrap provider with metadata-aware version
-    DimensionProvider metadataProvider = createMetadataDimensionProvider(
-        tableName, dimensionProvider, startYear, endYear);
+    DimensionProvider metadataProvider =
+        createMetadataDimensionProvider(tableName, dimensionProvider, startYear, endYear);
 
     // Delegate to main method
     iterateTableOperationsOptimized(tableName, metadataProvider, prefetchCallback, operation,
