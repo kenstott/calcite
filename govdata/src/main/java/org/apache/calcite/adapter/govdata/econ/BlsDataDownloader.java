@@ -953,7 +953,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         || BLS.tableNames.stateWages.equals(tableName)
         || BLS.tableNames.joltsRegional.equals(tableName)) {
       // Pilot tables: dimensions defined in YAML metadata, no fallback needed
-      dimensionProvider = (dim) -> null;
+      dimensionProvider = createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear);
     } else if (BLS.tableNames.joltsState.equals(tableName)) {
       dimensionProvider = createJoltsStateDimensions();
     } else {
@@ -1018,7 +1018,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       // Note: employment_statistics uses metadata-driven dimensions (YAML)
       iterateTableOperationsOptimized(
           tableName,
-          (dim) -> null,  // Dimensions defined in YAML metadata
+          (dim) -> null,  // Let the method create metadata-aware provider with correct years
           // PREFETCH CALLBACK - Load cached data OR fetch from API
           (context, helper) -> {
             if ("year".equals(context.segmentDimensionName)) {
@@ -1088,6 +1088,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             }
           },
           "download",
+          this.startYear,  // Explicitly pass years from config (not hardcoded 1900!)
+          this.endYear,
           finalPrefetchDb,
           finalPrefetchHelper);
 
@@ -1274,7 +1276,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Note: state_wages uses metadata-driven dimensions (YAML)
     iterateTableOperationsOptimized(
         tableName,
-        (dim) -> null,  // Dimensions defined in YAML metadata
+        createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
@@ -1663,7 +1665,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        (dim) -> null,  // Dimensions defined in YAML metadata
+        createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
