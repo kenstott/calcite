@@ -76,9 +76,11 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
    * @param cacheDirectory Local directory for caching raw data
    * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
+   * @param startYear Start year for data downloads
+   * @param endYear End year for data downloads
    */
-  protected AbstractGeoDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
-    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null);
+  protected AbstractGeoDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
+    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear);
   }
 
   /**
@@ -91,9 +93,11 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
    * @param cacheStorageProvider Provider for raw cache file operations
    * @param storageProvider Provider for parquet file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
+   * @param startYear Start year for data downloads
+   * @param endYear End year for data downloads
    */
-  protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest);
+  protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest, int startYear, int endYear) {
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest, startYear, endYear);
   }
 
   /**

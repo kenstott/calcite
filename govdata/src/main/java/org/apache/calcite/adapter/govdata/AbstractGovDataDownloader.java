@@ -469,6 +469,12 @@ public abstract class AbstractGovDataDownloader {
   /** Cache for SQL resource files (loaded once, reused across instances) */
   private static final Map<String, String> SQL_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** Start year for data downloads (from model operands) */
+  protected final int startYear;
+
+  /** End year for data downloads (from model operands) */
+  protected final int endYear;
+
   protected AbstractGovDataDownloader(
       String cacheDirectory,
       String operatingDirectory,
@@ -476,13 +482,17 @@ public abstract class AbstractGovDataDownloader {
       StorageProvider cacheStorageProvider,
       StorageProvider storageProvider,
       String schemaName,
-      AbstractCacheManifest sharedManifest) {
+      AbstractCacheManifest sharedManifest,
+      int startYear,
+      int endYear) {
     this.cacheManifest = sharedManifest;
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
     this.parquetDirectory = parquetDirectory;
     this.cacheStorageProvider = cacheStorageProvider;
     this.storageProvider = storageProvider;
+    this.startYear = startYear;
+    this.endYear = endYear;
     // Determine schema file extension: econ uses YAML, others still use JSON
     String schemaExtension = "econ".equals(schemaName) ? ".yaml" : ".json";
     this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema" + schemaExtension;
