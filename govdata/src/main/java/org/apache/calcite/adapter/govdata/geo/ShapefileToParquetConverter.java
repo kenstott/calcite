@@ -47,7 +47,8 @@ public class ShapefileToParquetConverter extends AbstractGeoDataDownloader {
   public ShapefileToParquetConverter(org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
     // Note: ShapefileToParquetConverter doesn't use cache or HTTP features, so we pass nulls/empty strings
     // Only storageProvider is needed for writing parquet files
-    super("", storageProvider, storageProvider);
+    // Use placeholder years (2020, 2024) since this is just for conversion and doesn't use year ranges
+    super("", storageProvider, storageProvider, 2020, 2024);
   }
 
   @Override protected long getMinRequestIntervalMs() {

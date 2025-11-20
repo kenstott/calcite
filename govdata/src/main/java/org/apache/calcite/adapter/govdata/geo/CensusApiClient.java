@@ -72,26 +72,26 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   private final AtomicLong lastRequestTime;
 
   public CensusApiClient(String apiKey, String cacheDir) {
-    this(apiKey, cacheDir, new ArrayList<>(), null, null);
+    this(apiKey, cacheDir, new ArrayList<>(), null, 2020, 2024);
   }
 
   public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears) {
-    this(apiKey, cacheDir, censusYears, null, null);
+    this(apiKey, cacheDir, censusYears, null, 2020, 2024);
   }
 
   public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears,
-      StorageProvider storageProvider) {
-    this(apiKey, cacheDir, censusYears, storageProvider, null);
+      StorageProvider storageProvider, int startYear, int endYear) {
+    this(apiKey, cacheDir, censusYears, storageProvider, null, startYear, endYear);
   }
 
   public CensusApiClient(String apiKey, String cacheDir, List<Integer> censusYears,
-      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(apiKey, cacheDir, cacheDir, censusYears, storageProvider, cacheManifest);
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
+    this(apiKey, cacheDir, cacheDir, censusYears, storageProvider, cacheManifest, startYear, endYear);
   }
 
   public CensusApiClient(String apiKey, String cacheDir, String operatingDirectory, List<Integer> censusYears,
-      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest);
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear);
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
     this.censusYears = censusYears;
@@ -122,14 +122,16 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    * Backward compatibility constructor - delegates to String-based constructor.
    */
   public CensusApiClient(String apiKey, File cacheDir) {
-    this(apiKey, cacheDir.getAbsolutePath(), new ArrayList<>(), null, null);
+    this(apiKey, cacheDir.getAbsolutePath(), new ArrayList<>(), null, 2020, 2024);
   }
 
   /**
    * Backward compatibility constructor - delegates to String-based constructor.
    */
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears) {
-    this(apiKey, cacheDir.getAbsolutePath(), censusYears, null, null);
+    this(apiKey, cacheDir.getAbsolutePath(), censusYears, null,
+        censusYears.isEmpty() ? 2020 : censusYears.get(0),
+        censusYears.isEmpty() ? 2024 : censusYears.get(censusYears.size() - 1));
   }
 
   /**
@@ -137,7 +139,9 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    */
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider) {
-    this(apiKey, cacheDir.getAbsolutePath(), censusYears, storageProvider, null);
+    this(apiKey, cacheDir.getAbsolutePath(), censusYears, storageProvider, null,
+        censusYears.isEmpty() ? 2020 : censusYears.get(0),
+        censusYears.isEmpty() ? 2024 : censusYears.get(censusYears.size() - 1));
   }
 
   /**
@@ -145,7 +149,9 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    */
   public CensusApiClient(String apiKey, File cacheDir, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(apiKey, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), censusYears, storageProvider, cacheManifest);
+    this(apiKey, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), censusYears, storageProvider, cacheManifest,
+        censusYears.isEmpty() ? 2020 : censusYears.get(0),
+        censusYears.isEmpty() ? 2024 : censusYears.get(censusYears.size() - 1));
   }
 
   /**
@@ -153,7 +159,9 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
    */
   public CensusApiClient(String apiKey, File cacheDir, String operatingDirectory, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(apiKey, cacheDir.getAbsolutePath(), operatingDirectory, censusYears, storageProvider, cacheManifest);
+    this(apiKey, cacheDir.getAbsolutePath(), operatingDirectory, censusYears, storageProvider, cacheManifest,
+        censusYears.isEmpty() ? 2020 : censusYears.get(0),
+        censusYears.isEmpty() ? 2024 : censusYears.get(censusYears.size() - 1));
   }
 
   /**
