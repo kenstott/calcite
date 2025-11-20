@@ -32,15 +32,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(TreasuryDataDownloader.class);
 
   public TreasuryDataDownloader(String cacheDir, StorageProvider cacheStorageProvider,
-      StorageProvider storageProvider) {
-    this(cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null);
+      StorageProvider storageProvider, int startYear, int endYear) {
+    this(cacheDir, cacheDir, cacheDir, cacheStorageProvider, storageProvider, null, startYear, endYear);
   }
 
   public TreasuryDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
-      CacheManifest sharedManifest) {
+      CacheManifest sharedManifest, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest);
+        sharedManifest, startYear, endYear);
   }
 
   @Override protected String getTableName() {

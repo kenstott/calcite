@@ -56,8 +56,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   private final String apiKey;
   private final Set<String> enabledTables;
-  private final int startYear;
-  private final int endYear;
 
   // Helper methods for generating BLS series IDs
   public static class Series {
@@ -307,11 +305,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables, int startYear, int endYear) {
-    super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest);
+    super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest, startYear, endYear);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
-    this.startYear = startYear;
-    this.endYear = endYear;
 
     // Load geography and sector catalogs in constructor (fail fast if missing)
     // This replaces hardcoded STATE_FIPS_MAP, CENSUS_REGIONS, METRO_*_CODES, NAICS_SUPERSECTORS
@@ -1127,7 +1123,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
@@ -1179,7 +1175,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
@@ -1230,7 +1226,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
@@ -1330,7 +1326,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
@@ -1394,7 +1390,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("qtrly", "annual");
             default: return null;
           }
@@ -1455,7 +1451,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (dimensionName) -> {
           switch (dimensionName) {
             case "type": return List.of(tableName);
-            case "year": return yearRange(startYear, endYear);
+            case "year": return yearRange(this.startYear, this.endYear);
             case "frequency": return List.of("monthly");
             default: return null;
           }
