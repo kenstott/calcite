@@ -17,8 +17,6 @@
 package org.apache.calcite.adapter.govdata;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,19 +35,6 @@ import java.util.List;
  */
 public class SchemaConfigReader {
   private static final Logger LOGGER = LoggerFactory.getLogger(SchemaConfigReader.class);
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-  private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
-
-  /**
-   * Get the appropriate ObjectMapper based on file extension.
-   *
-   * @param schemaFile Name of schema file
-   * @return YAML mapper for .yaml/.yml files, JSON mapper otherwise
-   */
-  private static ObjectMapper getMapper(String schemaFile) {
-    return (schemaFile.endsWith(".yaml") || schemaFile.endsWith(".yml"))
-        ? YAML_MAPPER : JSON_MAPPER;
-  }
 
   /**
    * Get list of table names that have download configurations for a specific type/category.
@@ -62,7 +47,6 @@ public class SchemaConfigReader {
   public static List<String> getTablesWithDownloadConfig(String schemaFile,
       String filterKey, String filterValue) {
     List<String> tableNames = new ArrayList<>();
-    ObjectMapper mapper = getMapper(schemaFile);
 
     try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
       if (schemaStream == null) {
@@ -70,7 +54,7 @@ public class SchemaConfigReader {
         return tableNames;
       }
 
-      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaFile);
       JsonNode tables = root.path("partitionedTables");
 
       if (tables.isArray()) {
@@ -105,13 +89,12 @@ public class SchemaConfigReader {
    * @return Field value as string, or null if not found
    */
   public static String getDownloadConfigField(String schemaFile, String tableName, String fieldName) {
-    ObjectMapper mapper = getMapper(schemaFile);
     try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
       if (schemaStream == null) {
         return null;
       }
 
-      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaFile);
       JsonNode tables = root.path("partitionedTables");
 
       if (tables.isArray()) {
@@ -139,14 +122,13 @@ public class SchemaConfigReader {
    */
   public static List<String> getDownloadGeographies(String schemaFile, String tableName) {
     List<String> geographies = new ArrayList<>();
-    ObjectMapper mapper = getMapper(schemaFile);
 
     try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
       if (schemaStream == null) {
         return geographies;
       }
 
-      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaFile);
       JsonNode tables = root.path("partitionedTables");
 
       if (tables.isArray()) {
@@ -178,13 +160,12 @@ public class SchemaConfigReader {
    * @return Mapping file name (e.g., "census/census-variable-mappings.json") or null
    */
   public static String getConceptualMappingFile(String schemaFile, String tableName) {
-    ObjectMapper mapper = getMapper(schemaFile);
     try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
       if (schemaStream == null) {
         return null;
       }
 
-      JsonNode root = mapper.readTree(schemaStream);
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaFile);
       JsonNode tables = root.path("partitionedTables");
 
       if (tables.isArray()) {

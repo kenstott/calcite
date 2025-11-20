@@ -752,8 +752,8 @@ public abstract class AbstractGovDataDownloader {
             schemaResource + " not found in resources");
       }
 
-      // Parse JSON
-      JsonNode root = MAPPER.readTree(schemaStream);
+      // Parse YAML/JSON with proper anchor resolution
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaResource);
 
       // Find the table in the "partitionedTables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
@@ -835,7 +835,8 @@ public abstract class AbstractGovDataDownloader {
             "Could not find " + schemaResourceName + " resource file");
       }
 
-      JsonNode root = MAPPER.readTree(schemaStream);
+      // Parse YAML/JSON with proper anchor resolution
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaResourceName);
 
       if (!root.has("bulkDownloads") || root.get("bulkDownloads").isNull()) {
         LOGGER.debug("No 'bulkDownloads' section found in schema, returning empty map");
@@ -3248,7 +3249,7 @@ public abstract class AbstractGovDataDownloader {
    * @param endYear End year for yearRange type (from schema config)
    * @return Dimension provider that checks metadata first
    */
-  private DimensionProvider createMetadataDimensionProvider(
+  protected DimensionProvider createMetadataDimensionProvider(
       String tableName,
       DimensionProvider dimensionProvider,
       int startYear,
@@ -3260,7 +3261,9 @@ public abstract class AbstractGovDataDownloader {
     // Debug: Log what keys are in the table metadata
     LOGGER.debug("Table metadata keys for {}: {}", tableName, tableMetadata.keySet());
 
-    Map<String, Object> dimensionsMetadata = (Map<String, Object>) tableMetadata.get("dimensions");
+    // Convert dimensions JsonNode to Map
+    Object dimensionsObj = tableMetadata.get("dimensions");
+    Map<String, Object> dimensionsMetadata = dimensionsObj != null ? convertToMap(dimensionsObj) : null;
 
     // Debug: Log what was loaded
     if (dimensionsMetadata != null) {
@@ -3273,11 +3276,17 @@ public abstract class AbstractGovDataDownloader {
     // Extract fixed dimensions from pattern (auto-generation)
     String pattern = (String) tableMetadata.get("pattern");
     Map<String, List<String>> fixedDimensions = extractFixedDimensionsFromPattern(pattern);
-
     return (dimensionName) -> {
       // Priority 1: Check explicit metadata dimensions first
       if (dimensionsMetadata != null && dimensionsMetadata.containsKey(dimensionName)) {
         Object dimValue = dimensionsMetadata.get(dimensionName);
+
+        // Convert JsonNode to appropriate Java type if needed
+        if (dimValue instanceof com.fasterxml.jackson.databind.node.ArrayNode) {
+          dimValue = MAPPER.convertValue(dimValue, List.class);
+        } else if (dimValue instanceof com.fasterxml.jackson.databind.node.ObjectNode) {
+          dimValue = MAPPER.convertValue(dimValue, Map.class);
+        }
 
         // Case 1: List of string values (inline or YAML alias)
         if (dimValue instanceof List) {
@@ -3287,6 +3296,15 @@ public abstract class AbstractGovDataDownloader {
           }
           LOGGER.debug("Dimension '{}' for table {} loaded from metadata: {} values",
               dimensionName, tableName, values.size());
+          return values;
+        }
+
+        // Case 1b: String value (Jackson simplified single-element array)
+        if (dimValue instanceof String) {
+          List<String> values = new ArrayList<>();
+          values.add((String) dimValue);
+          LOGGER.debug("Dimension '{}' for table {} loaded from metadata (scalar): 1 value",
+              dimensionName, tableName);
           return values;
         }
 
@@ -3342,10 +3360,14 @@ public abstract class AbstractGovDataDownloader {
           LOGGER.warn("Unknown dimension type '{}' for dimension '{}' in table {}",
               type, dimensionName, tableName);
         }
+        else {
+          LOGGER.debug("Dimension '{}' for table {} has unknown dimension type: {}",
+              dimensionName, tableName, dimValue.getClass().getName());
+        }
       }
 
       // Priority 2: Check auto-generated fixed dimensions from pattern
-      if (fixedDimensions.containsKey(dimensionName)) {
+      else if (fixedDimensions.containsKey(dimensionName)) {
         List<String> values = fixedDimensions.get(dimensionName);
         LOGGER.debug("Dimension '{}' for table {} auto-generated from pattern: {}",
             dimensionName, tableName, values);
@@ -3386,11 +3408,15 @@ public abstract class AbstractGovDataDownloader {
    *
    * @param tableName Table name to load pattern from
    * @param dimensionProvider Lambda to provide values for all dimensions (including year)
+   * @param startYear Start year for yearRange type (from schema config)
+   * @param endYear End year for yearRange type (from schema config)
    * @return List of IterationDimension objects in pattern order
    */
   private List<IterationDimension> buildDimensionsFromPattern(
       String tableName,
-      DimensionProvider dimensionProvider) {
+      DimensionProvider dimensionProvider,
+      int startYear,
+      int endYear) {
 
     // Load table metadata to get pattern
     Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -3401,6 +3427,10 @@ public abstract class AbstractGovDataDownloader {
       return new ArrayList<>();
     }
 
+    // Wrap dimensionProvider with metadata-aware provider that checks YAML dimensions first
+    DimensionProvider metadataAwareProvider = createMetadataDimensionProvider(
+        tableName, dimensionProvider, startYear, endYear);
+
     // Extract dimension names from pattern (variables with wildcards)
     // Pattern format: "type=xxx/frequency=*/year=*/tablename=*/file.parquet"
     List<IterationDimension> dimensions = new ArrayList<>();
@@ -3410,8 +3440,8 @@ public abstract class AbstractGovDataDownloader {
       if (part.contains("=")) {
         String dimName = part.substring(0, part.indexOf("="));
 
-        // All dimensions use provider (no special handling for year)
-        List<String> values = dimensionProvider.getValues(dimName);
+        // Use metadata-aware provider (checks YAML dimensions first, then falls back)
+        List<String> values = metadataAwareProvider.getValues(dimName);
         if (values == null || values.isEmpty()) {
           throw new IllegalArgumentException(
               "No values provided for dimension '" + dimName + "' in table '" + tableName + "'. "
@@ -3561,10 +3591,41 @@ public abstract class AbstractGovDataDownloader {
       String operationDescription,
       Connection prefetchDb,
       PrefetchHelper prefetchHelper) {
+    // Delegate to overload with explicit year range using reasonable defaults
+    int defaultStartYear = 1900;
+    int defaultEndYear = java.time.LocalDate.now().getYear();
+    iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
+        operationDescription, defaultStartYear, defaultEndYear, prefetchDb, prefetchHelper);
+  }
+
+  /**
+   * Optimized version of table iteration with explicit year range AND prefetch lifecycle management.
+   * This is the main implementation that all other overloads delegate to.
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param dimensionProvider Lambda that provides values for dimensions not in YAML metadata
+   * @param prefetchCallback Optional callback for batching API calls
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param startYear Start year for yearRange dimensions
+   * @param endYear End year for yearRange dimensions
+   * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
+   * @param prefetchHelper Existing prefetch helper (null to create new)
+   */
+  protected void iterateTableOperationsOptimized(
+      String tableName,
+      DimensionProvider dimensionProvider,
+      PrefetchCallback prefetchCallback,
+      TableOperation operation,
+      String operationDescription,
+      int startYear,
+      int endYear,
+      Connection prefetchDb,
+      PrefetchHelper prefetchHelper) {
 
     // Build dimensions from table pattern
     List<IterationDimension> dimensions =
-        buildDimensionsFromPattern(tableName, dimensionProvider);
+        buildDimensionsFromPattern(tableName, dimensionProvider, startYear, endYear);
 
     if (dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
