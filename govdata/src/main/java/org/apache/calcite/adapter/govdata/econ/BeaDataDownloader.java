@@ -49,8 +49,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * Simple constructor without shared manifest (creates one from operatingDirectory).
    */
   public BeaDataDownloader(String cacheDir, String parquetDir,
-      StorageProvider cacheStorageProvider, StorageProvider storageProvider) {
-    this(cacheDir, cacheDir, parquetDir, cacheStorageProvider, storageProvider, null);
+      StorageProvider cacheStorageProvider, StorageProvider storageProvider,
+      int startYear, int endYear) {
+    this(cacheDir, cacheDir, parquetDir, cacheStorageProvider, storageProvider, null, startYear, endYear);
   }
 
   /**
@@ -59,9 +60,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    */
   public BeaDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
-      CacheManifest sharedManifest) {
+      CacheManifest sharedManifest, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest);
+        sharedManifest, startYear, endYear);
     this.parquetDir = parquetDir;
 
     // Extract iteration lists from schema metadata
@@ -98,10 +99,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
-  public BeaDataDownloader(String cacheDir) {
+  public BeaDataDownloader(String cacheDir, int startYear, int endYear) {
     super(cacheDir,
         StorageProviderFactory.createFromUrl(cacheDir),
-        StorageProviderFactory.createFromUrl(cacheDir));
+        StorageProviderFactory.createFromUrl(cacheDir),
+        startYear, endYear);
     this.parquetDir = cacheDir; // For compatibility, use same dir
     this.nipaTablesList = null;
     this.tableFrequencies = null;

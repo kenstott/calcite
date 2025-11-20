@@ -64,14 +64,17 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
    * @param fredMinPopularity       Minimum popularity threshold for catalog-based series
    * @param fredCatalogForceRefresh Whether to force refresh of catalog
    * @param catalogCacheTtlDays     Cache TTL for catalog series list (null for default 365 days)
+   * @param startYear               Start year for data downloads
+   * @param endYear                 End year for data downloads
    */
   public FredDataDownloader(String fredApiKey, String cacheDir, String operatingDirectory,
       String parquetDir, StorageProvider cacheStorageProvider,
       StorageProvider storageProvider,
       CacheManifest sharedManifest, List<String> customFredSeries,
-      int fredMinPopularity, boolean fredCatalogForceRefresh, Integer catalogCacheTtlDays) {
+      int fredMinPopularity, boolean fredCatalogForceRefresh, Integer catalogCacheTtlDays,
+      int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest);
+        sharedManifest, startYear, endYear);
     this.fredApiKey = fredApiKey;
     this.fredMinPopularity = fredMinPopularity;
     this.fredCatalogForceRefresh = fredCatalogForceRefresh;
