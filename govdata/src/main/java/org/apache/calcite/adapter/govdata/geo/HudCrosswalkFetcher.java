@@ -71,31 +71,31 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
   private final ObjectMapper objectMapper;
 
   public HudCrosswalkFetcher(String username, String password, String cacheDir) {
-    this(username, password, null, cacheDir, null, null);
+    this(username, password, null, cacheDir, null, null, 2020, 2024);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir) {
-    this(username, password, token, cacheDir, null, null);
+    this(username, password, token, cacheDir, null, null, 2020, 2024);
   }
 
   public HudCrosswalkFetcher(String username, String password, String cacheDir,
       StorageProvider storageProvider) {
-    this(username, password, null, cacheDir, storageProvider, null);
+    this(username, password, null, cacheDir, storageProvider, null, 2020, 2024);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
-      StorageProvider storageProvider) {
-    this(username, password, token, cacheDir, storageProvider, null);
+      StorageProvider storageProvider, int startYear, int endYear) {
+    this(username, password, token, cacheDir, storageProvider, null, startYear, endYear);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
-      StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(username, password, token, cacheDir, cacheDir, storageProvider, cacheManifest);
+      StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
+    this(username, password, token, cacheDir, cacheDir, storageProvider, cacheManifest, startYear, endYear);
   }
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
-      String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest);
+      String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear);
     this.username = username;
     this.password = password;
     this.token = token;
@@ -121,14 +121,14 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    * Backward compatibility constructor - delegates to String-based constructor.
    */
   public HudCrosswalkFetcher(String username, String password, File cacheDir) {
-    this(username, password, null, cacheDir.getAbsolutePath(), null, null);
+    this(username, password, null, cacheDir.getAbsolutePath(), null, null, 2020, 2024);
   }
 
   /**
    * Backward compatibility constructor - delegates to String-based constructor.
    */
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir) {
-    this(username, password, token, cacheDir.getAbsolutePath(), null, null);
+    this(username, password, token, cacheDir.getAbsolutePath(), null, null, 2020, 2024);
   }
 
   /**
@@ -136,7 +136,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    */
   public HudCrosswalkFetcher(String username, String password, File cacheDir,
       StorageProvider storageProvider) {
-    this(username, password, null, cacheDir.getAbsolutePath(), storageProvider, null);
+    this(username, password, null, cacheDir.getAbsolutePath(), storageProvider, null, 2020, 2024);
   }
 
   /**
@@ -144,7 +144,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    */
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
       StorageProvider storageProvider) {
-    this(username, password, token, cacheDir.getAbsolutePath(), storageProvider, null);
+    this(username, password, token, cacheDir.getAbsolutePath(), storageProvider, null, 2020, 2024);
   }
 
   /**
@@ -152,7 +152,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    */
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(username, password, token, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), storageProvider, cacheManifest);
+    this(username, password, token, cacheDir.getAbsolutePath(), cacheDir.getAbsolutePath(), storageProvider, cacheManifest, 2020, 2024);
   }
 
   /**
@@ -160,7 +160,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    */
   public HudCrosswalkFetcher(String username, String password, String token, File cacheDir,
       String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this(username, password, token, cacheDir.getAbsolutePath(), operatingDirectory, storageProvider, cacheManifest);
+    this(username, password, token, cacheDir.getAbsolutePath(), operatingDirectory, storageProvider, cacheManifest, 2020, 2024);
   }
 
   /**
