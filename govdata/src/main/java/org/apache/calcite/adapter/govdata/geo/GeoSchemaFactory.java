@@ -844,17 +844,21 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
         String hudCacheDir = storageProvider.resolvePath(cacheDir, "hud");
         HudCrosswalkFetcher hudFetcher;
 
+        // Calculate startYear/endYear before creating fetcher
+        int hudStartYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
+        int hudEndYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
+
         if (hudToken != null && !hudToken.isEmpty()) {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest, hudStartYear, hudEndYear);
         } else {
-          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest);
+          hudFetcher = new HudCrosswalkFetcher(hudUsername, hudPassword, hudToken, hudCacheDir, geoOperatingDirectory, storageProvider, cacheManifest, hudStartYear, hudEndYear);
         }
 
         try {
           LOGGER.info("Downloading HUD-USPS crosswalk data");
           // Use the new downloadAll pattern matching ECON standard
-          int startYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(0);
-          int endYear = tigerYears.isEmpty() ? 2024 : tigerYears.get(tigerYears.size() - 1);
+          int startYear = hudStartYear;
+          int endYear = hudEndYear;
           hudFetcher.downloadAll(startYear, endYear);
 
           // Convert to Parquet for each year
@@ -953,13 +957,18 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
       } else {
         // Use simple cache directory structure for raw data downloads
         String censusCacheDir = storageProvider.resolvePath(cacheDir, "census");
-        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, geoOperatingDirectory, censusYears, storageProvider, cacheManifest);
+
+        // Calculate startYear/endYear before creating client
+        int censusStartYear = censusYears.isEmpty() ? 2020 : censusYears.get(0);
+        int censusEndYear = censusYears.isEmpty() ? 2020 : censusYears.get(censusYears.size() - 1);
+
+        CensusApiClient censusClient = new CensusApiClient(censusApiKey, censusCacheDir, geoOperatingDirectory, censusYears, storageProvider, cacheManifest, censusStartYear, censusEndYear);
 
         try {
           LOGGER.info("Downloading Census demographic data for years: {}", censusYears);
           // Use the new downloadAll pattern matching ECON standard
-          int startYear = censusYears.isEmpty() ? 2020 : censusYears.get(0);
-          int endYear = censusYears.isEmpty() ? 2020 : censusYears.get(censusYears.size() - 1);
+          int startYear = censusStartYear;
+          int endYear = censusEndYear;
           censusClient.downloadAll(startYear, endYear);
 
           // Convert to Parquet using new pattern

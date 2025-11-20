@@ -391,7 +391,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
         FredDataDownloader fredDownloader =
             new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
             cacheManifest, customFredSeries, fredMinPopularity, fredCatalogForceRefresh,
-            catalogCacheTtlDays);
+            catalogCacheTtlDays, startYear, endYear);
         downloaders.add(fredDownloader);
         LOGGER.debug("Added FRED downloader to orchestration list");
       } catch (Exception e) {
@@ -402,7 +402,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Create Treasury downloader if enabled (no API key required)
     if (enabledSources.contains("treasury")) {
       TreasuryDataDownloader treasuryDownloader =
-          new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+          new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
       downloaders.add(treasuryDownloader);
       LOGGER.debug("Added Treasury downloader to orchestration list");
     }
@@ -412,7 +412,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       try {
         // BeaDataDownloader handles all BEA-specific initialization internally
         BeaDataDownloader beaDownloader =
-            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
         downloaders.add(beaDownloader);
         LOGGER.debug("Added BEA downloader to orchestration list");
       } catch (Exception e) {
@@ -423,7 +423,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Create WorldBank downloader if enabled (no API key required)
     if (enabledSources.contains("worldbank")) {
       WorldBankDataDownloader worldBankDownloader =
-          new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest);
+          new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
       downloaders.add(worldBankDownloader);
       LOGGER.debug("Added WorldBank downloader to orchestration list");
     }

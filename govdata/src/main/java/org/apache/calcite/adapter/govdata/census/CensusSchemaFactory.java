@@ -284,8 +284,11 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     long currentTime = System.currentTimeMillis();
 
     // Create CensusApiClient with String-based cache directory and manifest support
+    // Pass the configured startYear/endYear from the schema configuration
+    int clientStartYear = acsYears.isEmpty() ? 2020 : acsYears.get(0);
+    int clientEndYear = acsYears.isEmpty() ? 2024 : acsYears.get(acsYears.size() - 1);
     CensusApiClient censusClient =
-        new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory, acsYears, storageProvider, cacheManifest);
+        new CensusApiClient(censusApiKey, cacheDir, censusOperatingDirectory, acsYears, storageProvider, cacheManifest, clientStartYear, clientEndYear);
 
     // Cache directory is used via StorageProvider for both local and S3 paths
 
