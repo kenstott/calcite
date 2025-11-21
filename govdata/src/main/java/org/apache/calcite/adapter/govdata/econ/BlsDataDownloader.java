@@ -20,13 +20,13 @@ import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
@@ -168,7 +168,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    */
   @JsonIgnoreProperties(ignoreUnknown = true)
   public static final class BlsConstants {
-    private static final ObjectMapper MAPPER = new ObjectMapper(new YAMLFactory());
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static volatile BlsConstants instance = null;
 
     // Rate limiting configuration
@@ -297,7 +297,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         if (is == null) {
           throw new IOException("BLS constants resource not found: /bls/bls-constants.yaml");
         }
-        return MAPPER.readValue(is, BlsConstants.class);
+        // Parse YAML with anchor resolution using SnakeYAML, then convert to POJO
+        com.fasterxml.jackson.databind.JsonNode parsedYaml =
+            org.apache.calcite.adapter.govdata.YamlUtils.parseYamlOrJson(is, "/bls/bls-constants.yaml");
+        return MAPPER.treeToValue(parsedYaml, BlsConstants.class);
       } catch (IOException e) {
         throw new RuntimeException("Failed to load BLS constants from /bls/bls-constants.yaml", e);
       }
@@ -876,7 +879,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Download reference tables (always downloaded, not subject to filtering)
-    LOGGER.info("Downloading JOLTS reference tables (industries, data elements)");
+    LOGGER.debug("Processing JOLTS reference tables (industries, data elements)");
     downloadJoltsIndustries();
     downloadJoltsDataelements();
     LOGGER.info("BLS data download completed");
@@ -934,9 +937,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               // Mark as converted in manifest
               cacheManifest.markParquetConverted(cacheKey, parquetPath);
             },
-            "conversion",
-            this.startYear,  // Pass years for metadata-driven dimensions
-            this.endYear);
+            OperationType.CONVERSION);
       }
     }
 
@@ -1083,7 +1084,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
               validateAndSaveBlsResponse(tableName, year, vars, fullJsonPath, rawJson);
             }
           },
-          "download",
+          OperationType.DOWNLOAD,
           this.startYear,  // Explicitly pass years from config (not hardcoded 1900!)
           this.endYear,
           finalPrefetchDb,
@@ -1145,7 +1146,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 getCacheExpiryForYear(year), getCachePolicyForYear(year));
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -1197,7 +1198,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 getCacheExpiryForYear(year), getCachePolicyForYear(year));
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -1244,7 +1245,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1299,7 +1300,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Completed state wages for year {}", year);
         },
-        "convert");
+        OperationType.CONVERSION);
 
   }
 
@@ -1357,7 +1358,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Completed county wages for year {}", year);
         },
-        "convert");
+        OperationType.CONVERSION);
 
   }
 
@@ -1421,7 +1422,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Completed county QCEW data for year {}", year);
         },
-        "convert");
+        OperationType.CONVERSION);
 
   }
 
@@ -1469,7 +1470,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1555,7 +1556,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertCsvToParquet(tableName, vars);
           LOGGER.info("Completed metro wages for year {} {}", vars.get("year"), vars.get("frequency"));
         },
-        "convert");
+        OperationType.CONVERSION);
 
     LOGGER.info("Metro wages conversion complete for years {}-{}", effectiveStartYear, this.endYear);
   }
@@ -1672,7 +1673,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             LOGGER.info("Extracted {} data for year {} (4 regions × 5 metrics)", tableName, year);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1713,7 +1714,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             LOGGER.info("Extracted {} data for year {} (51 states × 5 metrics)", tableName, year);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1722,7 +1723,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Non-partitioned reference table - uses iterateTableOperationsOptimized for consistency.
    */
   public void downloadJoltsIndustries() {
-    LOGGER.info("Downloading JOLTS industry reference data from BLS FTP");
+    LOGGER.debug("Processing JOLTS industry reference data");
 
     String tableName = BLS.tableNames.referenceJoltsIndustries;
 
@@ -1758,7 +1759,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertListToParquet(industries, parquetPath, tableName);
           LOGGER.info("Completed reference_jolts_industries");
         },
-        "convert");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -1800,7 +1801,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Non-partitioned reference table - uses iterateTableOperationsOptimized for consistency.
    */
   public void downloadJoltsDataelements() {
-    LOGGER.info("Downloading JOLTS data element reference data from BLS FTP");
+    LOGGER.debug("Processing JOLTS data element reference data");
 
     String tableName = BLS.tableNames.referenceJoltsDataelements;
 
@@ -1836,7 +1837,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           convertListToParquet(dataElements, parquetPath, tableName);
           LOGGER.info("Completed reference_jolts_dataelements");
         },
-        "convert");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -1872,7 +1873,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1908,7 +1909,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             validateAndSaveBlsResponse(tableName, year, vars, jsonPath, rawJson);
           }
         },
-        "download");
+        OperationType.DOWNLOAD);
 
   }
 
@@ -1991,7 +1992,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
           LOGGER.info("Saved state_fips {} year {} ({} series)", stateFips, year, seriesNode.size());
         },
-        "convert");
+        OperationType.CONVERSION);
 
   }
 
@@ -2781,7 +2782,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Reference tables use metadata-driven approach with iterateTableOperationsOptimized.
    */
   @Override public void downloadReferenceData() throws IOException {
-    LOGGER.info("Downloading BLS reference tables");
+    LOGGER.debug("Processing BLS reference tables");
 
     // Download and convert JOLTS industries (now handles Parquet conversion internally)
     downloadJoltsIndustries();

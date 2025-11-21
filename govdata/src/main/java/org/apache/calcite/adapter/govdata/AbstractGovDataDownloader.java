@@ -21,7 +21,6 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -496,10 +495,8 @@ public abstract class AbstractGovDataDownloader {
     // Determine schema file extension: econ uses YAML, others still use JSON
     String schemaExtension = "econ".equals(schemaName) ? ".yaml" : ".json";
     this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema" + schemaExtension;
-    // Initialize appropriate mapper based on schema format
-    this.MAPPER = schemaExtension.equals(".yaml")
-        ? new ObjectMapper(new YAMLFactory())
-        : new ObjectMapper();
+    // Initialize JSON-only mapper (YAML parsing uses YamlUtils for proper anchor resolution)
+    this.MAPPER = new ObjectMapper();
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(30))
         .build();
@@ -1993,7 +1990,8 @@ public abstract class AbstractGovDataDownloader {
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       String missingValueIndicator,
       String jsonPath,
-      String parquetPath) {
+      String parquetPath,
+      String dataPath) {
     StringBuilder sql = new StringBuilder();
 
     // Start COPY statement
@@ -2013,22 +2011,32 @@ public abstract class AbstractGovDataDownloader {
       // Check if this is a computed column with an expression
       if (column.hasExpression()) {
         // Expression column: use SQL expression directly
+        // If dataPath is provided, prefix field references with row_data.
+        String expression = column.getExpression();
+        if (dataPath != null && !dataPath.isEmpty()) {
+          expression = prefixFieldReferences(expression, "row_data");
+        }
         sql.append("(");
-        sql.append(column.getExpression());
+        sql.append(expression);
         sql.append(") AS ");
         sql.append(quoteIdentifier(columnName));
       } else {
         // Regular column: CAST from JSON with type conversion
         String sqlType = javaToDuckDbType(column.getType());
 
+        // Add row_data prefix if using UNNEST
+        String columnRef = (dataPath != null && !dataPath.isEmpty())
+            ? "row_data." + quoteIdentifier(columnName)
+            : quoteIdentifier(columnName);
+
         // Handle missing value indicator with CASE expression
         if (missingValueIndicator != null && !missingValueIndicator.isEmpty()) {
           sql.append("CAST(CASE WHEN ");
-          sql.append(quoteIdentifier(columnName));
+          sql.append(columnRef);
           sql.append(" = ");
           sql.append(quoteLiteral(missingValueIndicator));
           sql.append(" THEN NULL ELSE ");
-          sql.append(quoteIdentifier(columnName));
+          sql.append(columnRef);
           sql.append(" END AS ");
           sql.append(sqlType);
           sql.append(") AS ");
@@ -2036,7 +2044,7 @@ public abstract class AbstractGovDataDownloader {
         } else {
           // Simple CAST without null handling
           sql.append("CAST(");
-          sql.append(quoteIdentifier(columnName));
+          sql.append(columnRef);
           sql.append(" AS ");
           sql.append(sqlType);
           sql.append(") AS ");
@@ -2047,11 +2055,17 @@ public abstract class AbstractGovDataDownloader {
 
     // Build column type specification for read_json() to prevent type inference
     // This forces DuckDB to read all columns as VARCHAR, preventing DATE inference issues
+    // Also collect fields referenced in expressions (e.g., "calculations" from "calculations.net_changes['1']")
     StringBuilder columnSpec = new StringBuilder();
     boolean firstColSpec = true;
+    java.util.Set<String> referencedFields = new java.util.HashSet<>();
+
+    // First pass: add regular columns and collect referenced fields from expressions
     for (org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn column : columns) {
       if (column.hasExpression()) {
-        continue; // Skip computed columns in the JSON reader
+        // Extract field references from expression (e.g., "calculations" from "calculations.net_changes['1']")
+        extractFieldReferences(column.getExpression(), referencedFields);
+        continue; // Skip computed columns in the JSON reader output
       }
       if (!firstColSpec) {
         columnSpec.append(", ");
@@ -2061,14 +2075,38 @@ public abstract class AbstractGovDataDownloader {
       columnSpec.append(": 'VARCHAR'");
     }
 
-    // FROM clause with read_json() using explicit VARCHAR types to prevent type inference
-    // This solves the issue where DuckDB infers DATE type for date-like strings,
-    // causing errors with missing value indicators like "."
+    // Second pass: add referenced fields that aren't already in regular columns
+    // These are source fields used in expressions but not output as regular columns
+    // Read these as JSON type so DuckDB preserves nested structure
+    for (String fieldName : referencedFields) {
+      if (!firstColSpec) {
+        columnSpec.append(", ");
+      }
+      firstColSpec = false;
+      columnSpec.append(quoteIdentifier(fieldName));
+      columnSpec.append(": 'JSON'"); // JSON type preserves nested object structure
+    }
+
+    // FROM clause with read_json()
+    // When dataPath is specified (nested JSON), use auto-detection to preserve full structure
+    // Otherwise, use explicit columns to prevent type inference issues
     sql.append("\n  FROM read_json(");
     sql.append(quoteLiteral(jsonPath));
-    sql.append(", columns={");
-    sql.append(columnSpec);
-    sql.append("})\n) TO ");
+    if (dataPath == null || dataPath.isEmpty()) {
+      // No nesting - use explicit column types to prevent type inference issues
+      sql.append(", columns={");
+      sql.append(columnSpec);
+      sql.append("}");
+    }
+    // When dataPath exists, let DuckDB auto-detect so nested paths are accessible
+    sql.append(")");
+
+    // Add UNNEST clauses if dataPath is specified (for nested array structures)
+    if (dataPath != null && !dataPath.isEmpty()) {
+      sql.append(buildUnnestClauses(dataPath));
+    }
+
+    sql.append("\n) TO ");
     sql.append(quoteLiteral(parquetPath));
     sql.append(" (FORMAT PARQUET);");
 
@@ -2112,6 +2150,110 @@ public abstract class AbstractGovDataDownloader {
         LOGGER.warn("Unknown type '{}', defaulting to VARCHAR", javaType);
         return "VARCHAR";
     }
+  }
+
+  /**
+   * Builds UNNEST clauses for nested JSON arrays based on dataPath.
+   *
+   * <p>For BLS data with dataPath "Results.series", generates:
+   * <pre>
+   * CROSS JOIN UNNEST(Results.series) AS series_item
+   * CROSS JOIN UNNEST(series_item.data) AS row_data
+   * </pre>
+   *
+   * @param dataPath JSON path to nested data (e.g., "Results.series")
+   * @return SQL UNNEST clauses
+   */
+  private static String buildUnnestClauses(String dataPath) {
+    StringBuilder unnest = new StringBuilder();
+
+    // Parse the dataPath (e.g., "Results.series")
+    String[] pathSegments = dataPath.split("\\.");
+
+    if (pathSegments.length == 0) {
+      return "";
+    }
+
+    // For BLS-specific pattern: Results.series[].data[]
+    // First UNNEST the dataPath array (e.g., Results.series)
+    unnest.append("\n  CROSS JOIN UNNEST(");
+    unnest.append(dataPath);
+    unnest.append(") AS series_item");
+
+    // Then UNNEST the nested 'data' array within each series
+    // This is BLS-specific but common pattern
+    unnest.append("\n  CROSS JOIN UNNEST(series_item.data) AS row_data");
+
+    return unnest.toString();
+  }
+
+  /**
+   * Prefixes field references in an expression with a table alias.
+   * For example, transforms "calculations.net_changes['1']" to "row_data.calculations.net_changes['1']".
+   *
+   * @param expression SQL expression
+   * @param prefix Table alias to prepend (e.g., "row_data")
+   * @return Expression with prefixed field references
+   */
+  private static String prefixFieldReferences(String expression, String prefix) {
+    if (expression == null || expression.isEmpty()) {
+      return expression;
+    }
+
+    // Pattern: identifier at word boundary not preceded by a dot
+    // This catches: "calculations.net_changes" but not "row_data.calculations" (already prefixed)
+    // Also avoids matching after CAST, CASE, etc.
+    java.util.regex.Pattern pattern =
+        java.util.regex.Pattern.compile("(?<![a-zA-Z0-9_.])([a-zA-Z_][a-zA-Z0-9_]*)\\.");
+    java.util.regex.Matcher matcher = pattern.matcher(expression);
+    StringBuffer result = new StringBuffer();
+
+    while (matcher.find()) {
+      String fieldName = matcher.group(1);
+      // Skip SQL keywords and already-prefixed references
+      if (!isSqlKeyword(fieldName) && !fieldName.equals(prefix)) {
+        matcher.appendReplacement(result, prefix + "." + fieldName + ".");
+      }
+    }
+    matcher.appendTail(result);
+
+    return result.toString();
+  }
+
+  /**
+   * Extracts field references from a SQL expression.
+   * For example, extracts "calculations" from "CAST(calculations.net_changes['1'] AS DOUBLE)".
+   *
+   * @param expression SQL expression
+   * @param referencedFields Set to add discovered field names to
+   */
+  private static void extractFieldReferences(String expression, java.util.Set<String> referencedFields) {
+    if (expression == null || expression.isEmpty()) {
+      return;
+    }
+
+    // Simple pattern: find identifiers followed by a dot
+    // This catches: "calculations.net_changes" -> "calculations"
+    // Pattern: word character followed by dot
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.");
+    java.util.regex.Matcher matcher = pattern.matcher(expression);
+
+    while (matcher.find()) {
+      String fieldName = matcher.group(1);
+      // Filter out SQL keywords and functions
+      if (!isSqlKeyword(fieldName)) {
+        referencedFields.add(fieldName);
+      }
+    }
+  }
+
+  /**
+   * Checks if a string is a common SQL keyword or function name.
+   */
+  private static boolean isSqlKeyword(String word) {
+    String upper = word.toUpperCase();
+    return upper.equals("CAST") || upper.equals("CASE") || upper.equals("NULL") || upper.equals("WHEN")
+        || upper.equals("THEN") || upper.equals("ELSE") || upper.equals("END");
   }
 
   /**
@@ -2371,10 +2513,11 @@ public abstract class AbstractGovDataDownloader {
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       String missingValueIndicator,
       String fullJsonPath,
-      String fullParquetPath) throws IOException {
+      String fullParquetPath,
+      String dataPath) throws IOException {
 
     // Build the SQL statement
-    String sql = buildDuckDBConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath);
+    String sql = buildDuckDBConversionSql(columns, missingValueIndicator, fullJsonPath, fullParquetPath, dataPath);
 
     LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
@@ -2871,6 +3014,7 @@ public abstract class AbstractGovDataDownloader {
     // Extract missingValueIndicator from metadata (download.response.missingValueIndicator)
     // Use JsonNode.at() with JSON Pointer notation for clean path traversal
     String missingValueIndicator = null;
+    String dataPath = null;
     if (metadata.containsKey("download")) {
       JsonNode downloadNode = (JsonNode) metadata.get("download");
       JsonNode missingValueNode = downloadNode.at("/response/missingValueIndicator");
@@ -2878,12 +3022,17 @@ public abstract class AbstractGovDataDownloader {
         missingValueIndicator = missingValueNode.asText();
         LOGGER.info("Using missingValueIndicator: '{}'", missingValueIndicator);
       }
+
+      // NOTE: dataPath is NOT used during conversion because the cached JSON
+      // is already flattened - dataPath extraction happened during download.
+      // The dataPath in response config is for extracting from API response,
+      // not for reading from cache.
     }
 
     // Use DuckDB for JSON→Parquet conversion with expression columns
     LOGGER.info("Using DuckDB for JSON to Parquet conversion with expression columns");
     convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
-        fullJsonPath, fullParquetPath);
+        fullJsonPath, fullParquetPath, dataPath);
 
     // Verify file was written
     if (storageProvider.exists(fullParquetPath)) {
@@ -2990,7 +3139,8 @@ public abstract class AbstractGovDataDownloader {
         return trendPatterns;
       }
 
-      JsonNode root = MAPPER.readTree(schemaStream);
+      // Parse YAML/JSON with proper anchor resolution
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaResourceName);
 
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         LOGGER.warn("Schema has no partitionedTables array");
@@ -3481,8 +3631,8 @@ public abstract class AbstractGovDataDownloader {
       String tableName,
       DimensionProvider dimensionProvider,
       TableOperation operation,
-      String operationDescription) {
-    iterateTableOperationsOptimized(tableName, dimensionProvider, null, operation, operationDescription);
+      OperationType operationType) {
+    iterateTableOperationsOptimized(tableName, dimensionProvider, null, operation, operationType);
   }
 
   /**
@@ -3506,16 +3656,16 @@ public abstract class AbstractGovDataDownloader {
    * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
    * @param prefetchCallback Optional callback for batching API calls (may be null)
    * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    */
   protected void iterateTableOperationsOptimized(
       String tableName,
       DimensionProvider dimensionProvider,
       PrefetchCallback prefetchCallback,
       TableOperation operation,
-      String operationDescription) {
+      OperationType operationType) {
     iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
-        operationDescription, null, null);
+        operationType, null, null);
   }
 
   /**
@@ -3537,7 +3687,7 @@ public abstract class AbstractGovDataDownloader {
    * @param dimensionProvider Fallback provider for dimensions not in metadata
    * @param prefetchCallback Optional callback for batching API calls
    * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    * @param startYear Start year for yearRange dimensions
    * @param endYear End year for yearRange dimensions
    */
@@ -3546,7 +3696,7 @@ public abstract class AbstractGovDataDownloader {
       DimensionProvider dimensionProvider,
       PrefetchCallback prefetchCallback,
       TableOperation operation,
-      String operationDescription,
+      OperationType operationType,
       int startYear,
       int endYear) {
 
@@ -3556,7 +3706,7 @@ public abstract class AbstractGovDataDownloader {
 
     // Delegate to main method
     iterateTableOperationsOptimized(tableName, metadataProvider, prefetchCallback, operation,
-        operationDescription, null, null);
+        operationType, null, null);
   }
 
   /**
@@ -3589,7 +3739,7 @@ public abstract class AbstractGovDataDownloader {
    * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
    * @param prefetchCallback Optional callback for batching API calls (ignored if prefetch provided)
    * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
    * @param prefetchHelper Existing prefetch helper (null to create new)
    */
@@ -3598,14 +3748,14 @@ public abstract class AbstractGovDataDownloader {
       DimensionProvider dimensionProvider,
       PrefetchCallback prefetchCallback,
       TableOperation operation,
-      String operationDescription,
+      OperationType operationType,
       Connection prefetchDb,
       PrefetchHelper prefetchHelper) {
     // Delegate to overload with explicit year range using reasonable defaults
     int defaultStartYear = 1900;
     int defaultEndYear = java.time.LocalDate.now().getYear();
     iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
-        operationDescription, defaultStartYear, defaultEndYear, prefetchDb, prefetchHelper);
+        operationType, defaultStartYear, defaultEndYear, prefetchDb, prefetchHelper);
   }
 
   /**
@@ -3616,7 +3766,7 @@ public abstract class AbstractGovDataDownloader {
    * @param dimensionProvider Lambda that provides values for dimensions not in YAML metadata
    * @param prefetchCallback Optional callback for batching API calls
    * @param operation Lambda to execute the operation (download or convert)
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    * @param startYear Start year for yearRange dimensions
    * @param endYear End year for yearRange dimensions
    * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
@@ -3627,7 +3777,7 @@ public abstract class AbstractGovDataDownloader {
       DimensionProvider dimensionProvider,
       PrefetchCallback prefetchCallback,
       TableOperation operation,
-      String operationDescription,
+      OperationType operationType,
       int startYear,
       int endYear,
       Connection prefetchDb,
@@ -3639,7 +3789,7 @@ public abstract class AbstractGovDataDownloader {
 
     if (dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",
-          operationDescription, tableName);
+          operationType.getValue(), tableName);
       return;
     }
 
@@ -3650,7 +3800,7 @@ public abstract class AbstractGovDataDownloader {
     }
 
     LOGGER.info("Starting {} operations for {} ({} total combinations, using DuckDB optimization)",
-        operationDescription, tableName, totalOperations);
+        operationType.getValue(), tableName, totalOperations);
 
     // Build allDimensionValues map unconditionally - needed for prefetch context and other uses
     Map<String, List<String>> allDimensionValues = new HashMap<>();
@@ -3719,7 +3869,7 @@ public abstract class AbstractGovDataDownloader {
     try {
       long startMs = System.currentTimeMillis();
       String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, operationDescription);
+      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, operationType);
       long elapsedMs = System.currentTimeMillis() - startMs;
 
       LOGGER.info("Cache manifest filtering: {} uncached out of {} total ({}ms, {}% reduction)",
@@ -3728,7 +3878,7 @@ public abstract class AbstractGovDataDownloader {
 
     } catch (Exception e) {
       LOGGER.error("DuckDB cache filtering failed for {} {}: {}",
-          tableName, operationDescription, e.getMessage());
+          tableName, operationType.getValue(), e.getMessage());
       throw new RuntimeException("Failed to filter cached operations for " + tableName, e);
     }
 
@@ -3801,7 +3951,7 @@ public abstract class AbstractGovDataDownloader {
         }
 
         // Check if source file exists (only for conversion operations)
-        if (sourceFilePath != null && "conversion".equals(operationDescription)
+        if (sourceFilePath != null && OperationType.CONVERSION.equals(operationType)
             && cacheStorageProvider.exists(sourceFilePath)) {
 
           LOGGER.info("Self-healing: Found existing {} source file for conversion: {}",
@@ -3849,18 +3999,18 @@ public abstract class AbstractGovDataDownloader {
         executed++;
 
         // Mark parquet as converted after successful operation
-        if ("conversion".equals(operationDescription)) {
+        if (OperationType.CONVERSION.equals(operationType)) {
           cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
         }
 
         if (executed % 10 == 0) {
           LOGGER.info("{} {}/{} operations (skipped {} cached)",
-              operationDescription, executed, needed.size(), skipped);
+              operationType.getValue(), executed, needed.size(), skipped);
         }
 
       } catch (Exception e) {
         LOGGER.error("Error during {} for {} with cache key {}: {}",
-            operationDescription, tableName, cacheKey.asString(), e.getMessage());
+            operationType.getValue(), tableName, cacheKey.asString(), e.getMessage());
 
         // Handle API errors (same as traditional method)
         if (e instanceof IOException && e.getMessage() != null
@@ -3896,7 +4046,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
       LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
-          tableName, operationDescription, executed, skipped);
+          tableName, operationType.getValue(), executed, skipped);
 
     } finally {
       // Cleanup prefetch DuckDB connection only if we created it
@@ -4020,6 +4170,7 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Split by / and extract key names from key=value patterns
+    // Include ALL keys (both fixed literals and wildcards) as they're all part of partitioning
     String[] parts = pattern.split("/");
     for (String part : parts) {
       int equalsIndex = part.indexOf('=');
