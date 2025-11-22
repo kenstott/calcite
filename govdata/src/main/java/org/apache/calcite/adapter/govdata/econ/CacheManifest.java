@@ -394,10 +394,11 @@ public class CacheManifest extends AbstractCacheManifest {
         fos.getFD().sync();
       }
 
-      // Atomic rename
-      if (!tempFile.renameTo(manifestFile)) {
-        throw new IOException("Failed to rename temp file to " + manifestFile);
-      }
+      // Move temp file to final location, replacing if exists
+      // Note: We don't use ATOMIC_MOVE as it can fail on some filesystems
+      // The data is already synced to disk via getFD().sync() above
+      java.nio.file.Files.move(tempFile.toPath(), manifestFile.toPath(),
+          java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
       long fileSize = manifestFile.length();
       long lastModified = manifestFile.lastModified();
