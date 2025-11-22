@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -227,7 +228,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
             cacheManifest.save(operatingDirectory);
           }
         },
-        "conversion");
+        OperationType.CONVERSION);
 
     LOGGER.info("Census JSON to Parquet conversion completed for years {} to {}", startYear, endYear);
   }
@@ -288,7 +289,8 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
             columns,
             "null",  // Missing value indicator
             firstJsonFile,
-            parquetPath);
+            parquetPath,
+            null);  // No dataPath for Census data (not nested)
 
         LOGGER.info("Successfully converted Census {} data for year {} to Parquet", dataType, year);
       }

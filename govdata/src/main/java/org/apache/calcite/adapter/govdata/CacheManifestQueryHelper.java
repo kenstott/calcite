@@ -143,7 +143,7 @@ public class CacheManifestQueryHelper {
   public static List<DownloadRequest> filterUncachedRequests(
       String manifestPath,
       List<DownloadRequest> allRequests,
-      String operationType) throws SQLException {
+      OperationType operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       LOGGER.debug("No download requests to filter");
@@ -157,7 +157,7 @@ public class CacheManifestQueryHelper {
       return new ArrayList<>(allRequests);
     }
 
-    boolean isConversion = "conversion".equals(operationType);
+    boolean isConversion = OperationType.CONVERSION.equals(operationType);
 
     LOGGER.info("Filtering {} download requests using DuckDB SQL query against cache manifest: {}",
         allRequests.size(), manifestPath);
@@ -275,7 +275,7 @@ public class CacheManifestQueryHelper {
   public static List<DownloadRequest> filterUncachedRequestsDirect(
       String manifestPath,
       List<DownloadRequest> allRequests,
-      String operationType) throws SQLException {
+      OperationType operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       LOGGER.debug("No download requests to filter");
@@ -389,7 +389,7 @@ public class CacheManifestQueryHelper {
   private static List<DownloadRequest> filterUsingManifest(
       String manifestPath,
       List<DownloadRequest> allRequests,
-      String operationType) {
+      OperationType operationType) {
 
     long startMs = System.currentTimeMillis();
 
@@ -409,7 +409,7 @@ public class CacheManifestQueryHelper {
         return new ArrayList<>(allRequests);
       }
 
-      boolean isConversion = "conversion".equals(operationType);
+      boolean isConversion = OperationType.CONVERSION.equals(operationType);
       long now = System.currentTimeMillis();
       List<DownloadRequest> result = new ArrayList<>();
 
@@ -481,7 +481,7 @@ public class CacheManifestQueryHelper {
   public static List<DownloadRequest> filterUncachedRequestsOptimal(
       String manifestPath,
       List<DownloadRequest> allRequests,
-      String operationType) throws SQLException {
+      OperationType operationType) throws SQLException {
 
     if (allRequests == null || allRequests.isEmpty()) {
       return new ArrayList<>();
