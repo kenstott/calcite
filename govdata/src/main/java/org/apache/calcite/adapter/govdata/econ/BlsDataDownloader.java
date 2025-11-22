@@ -950,7 +950,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         || BLS.tableNames.stateWages.equals(tableName)
         || BLS.tableNames.joltsRegional.equals(tableName)) {
       // Pilot tables: dimensions defined in YAML metadata, no fallback needed
-      dimensionProvider = createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear);
+      dimensionProvider = createMetadataDimensionProvider(tableName, (dim) -> null);
     } else if (BLS.tableNames.joltsState.equals(tableName)) {
       dimensionProvider = createJoltsStateDimensions();
     } else {
@@ -1085,8 +1085,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             }
           },
           OperationType.DOWNLOAD,
-          this.startYear,  // Explicitly pass years from config (not hardcoded 1900!)
-          this.endYear,
           finalPrefetchDb,
           finalPrefetchHelper);
 
@@ -1151,36 +1149,25 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Downloads CPI data for major metro areas.
-   * Uses catalog-driven pattern with iterateTableOperationsOptimized() for 10-20x performance.
+   * Uses metadata-driven pattern with series IDs from requestBody config.
    */
+  @SuppressWarnings("unchecked")
   public void downloadMetroCpi(int startYear, int endYear) {
     String tableName = BLS.tableNames.metroCpi;
 
-    LOGGER.debug("Processing metro area CPI for {} metros for years {}-{}",
-        metroGeographiesMap.size(), startYear, endYear);
+    // Get series IDs directly from requestBody config in schema metadata
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
+    Map<String, Object> requestBody = (Map<String, Object>) downloadConfig.get("requestBody");
+    List<String> seriesIds = (List<String>) requestBody.get("seriesid");
 
-    // Build list of series IDs from catalog (only metros with CPI data)
-    List<String> seriesIds = new ArrayList<>();
-    for (MetroGeography metro : metroGeographiesMap.values()) {
-      if (metro.cpiAreaCode != null) {
-        String seriesId = "CUUR" + metro.cpiAreaCode + "SA0";
-        seriesIds.add(seriesId);
-      }
-    }
+    LOGGER.debug("Processing metro area CPI for {} series for years {}-{}",
+        seriesIds.size(), startYear, endYear);
+    LOGGER.info("Found {} metro CPI series from schema metadata", seriesIds.size());
 
-    LOGGER.info("Found {} metros with CPI data", seriesIds.size());
-
-    // Use optimized iteration with DuckDB bulk cache filtering (10-20x faster)
+    // Use optimized iteration with metadata-only dimensions
     iterateTableOperationsOptimized(
         tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-            case "type": return List.of(tableName);
-            case "year": return yearRange(this.startYear, this.endYear);
-            case "frequency": return List.of("monthly");
-            default: return null;
-          }
-        },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
@@ -1273,7 +1260,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Note: state_wages uses metadata-driven dimensions (YAML)
     iterateTableOperationsOptimized(
         tableName,
-        createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear),
+        createMetadataDimensionProvider(tableName, (dim) -> null),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
@@ -1662,7 +1649,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     iterateTableOperationsOptimized(
         tableName,
-        createMetadataDimensionProvider(tableName, (dim) -> null, this.startYear, this.endYear),
+        createMetadataDimensionProvider(tableName, (dim) -> null),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 

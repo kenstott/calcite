@@ -577,28 +577,50 @@ public class FredCatalogDownloader {
   }
 
   /**
-   * Convert all in-memory partitions to Parquet format.
+   * Convert all partition JSON files on disk to Parquet format.
+   * Scans the cache directory for JSON files instead of relying on in-memory map
+   * (which is cleared after flushing to disk).
    */
   private void convertPartitionsToParquet() throws IOException {
-    LOGGER.info("Converting {} partitions to Parquet format", partitionedSeries.size());
+    // Scan disk for JSON files instead of iterating empty in-memory map
+    String referenceDir = storageProvider.resolvePath(cacheDir, "type=reference");
 
-    for (Map.Entry<String, List<Map<String, Object>>> entry : partitionedSeries.entrySet()) {
-      String[] parts = entry.getKey().split("\\|");
-      String categoryName = parts[0];
-      String frequency = parts[1];
-      String sourceName = parts[2];
-      String seriesStatus = parts[3];
+    List<String> jsonFiles = findReferenceJsonFiles(referenceDir);
+    LOGGER.info("Converting {} partition JSON files to Parquet format", jsonFiles.size());
 
-      // Create corresponding cache file path
-      String catalogCacheDir = cacheDir + "/type=reference" +
-          "/category=" + categoryName +
-          "/frequency=" + frequency +
-          "/source=" + sourceName +
-          "/status=" + seriesStatus;
-      String jsonFile = catalogCacheDir + "/reference_fred_series.json";
-
+    for (String jsonFile : jsonFiles) {
       convertSinglePartitionToParquet(jsonFile);
     }
+  }
+
+  /**
+   * Recursively find all reference_fred_series.json files in the reference directory.
+   *
+   * @param referenceDir The base directory to scan (type=reference)
+   * @return List of full paths to JSON files
+   */
+  private List<String> findReferenceJsonFiles(String referenceDir) throws IOException {
+    List<String> jsonFiles = new ArrayList<>();
+
+    if (!storageProvider.exists(referenceDir)) {
+      LOGGER.debug("Reference directory does not exist: {}", referenceDir);
+      return jsonFiles;
+    }
+
+    // Use StorageProvider to list files recursively
+    List<StorageProvider.FileEntry> entries = storageProvider.listFiles(referenceDir, true);
+
+    for (StorageProvider.FileEntry entry : entries) {
+      if (!entry.isDirectory() && entry.getName().equals("reference_fred_series.json")) {
+        // Skip macOS metadata files
+        if (!entry.getName().startsWith(".") && !entry.getName().startsWith("._")) {
+          jsonFiles.add(entry.getPath());
+        }
+      }
+    }
+
+    LOGGER.debug("Found {} reference_fred_series.json files in {}", jsonFiles.size(), referenceDir);
+    return jsonFiles;
   }
 
   /**
