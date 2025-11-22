@@ -3055,91 +3055,95 @@ public abstract class AbstractGovDataDownloader {
         .anyMatch(c -> c.getName().equals(columnName) && c.isComputed());
   }
 
-  // ===== Trend Consolidation =====
+  // ===== Alternate Partition Reorganization =====
 
   /**
-   * Represents a trend pattern configuration from schema.
-   * Trend patterns consolidate year-partitioned data into single files for faster querying.
+   * Represents an alternate partition configuration from schema.
+   * Alternate partitions reorganize data by different partition keys for optimized query access.
    */
-  protected static class TrendPattern {
+  protected static class AlternatePartitionPattern {
     final String sourceTableName;
     final String sourcePattern;
-    final String trendName;
-    final String trendPattern;
+    final String alternateName;
+    final String alternatePattern;
 
-    TrendPattern(String sourceTableName, String sourcePattern, String trendName, String trendPattern) {
+    AlternatePartitionPattern(String sourceTableName, String sourcePattern,
+        String alternateName, String alternatePattern) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
-      this.trendName = trendName;
-      this.trendPattern = trendPattern;
+      this.alternateName = alternateName;
+      this.alternatePattern = alternatePattern;
     }
   }
 
   /**
-   * Consolidates all tables with trend_patterns into consolidated parquet files.
+   * Reorganizes all tables with alternate_partitions into reorganized parquet files.
    *
    * <p>This method:
    * <ul>
-   *   <li>Scans schema for tables with trend_patterns</li>
-   *   <li>For each trend pattern, uses DuckDB to consolidate all year partitions</li>
-   *   <li>Writes consolidated files to parquet directory</li>
+   *   <li>Scans schema for tables with alternate_partitions</li>
+   *   <li>For each alternate partition, uses DuckDB to reorganize data</li>
+   *   <li>Writes reorganized files to parquet directory with new partition structure</li>
    * </ul>
    *
-   * <p>Example: Consolidates employment_statistics from:
+   * <p>Example: Reorganizes population from year-partitioned:
    * <pre>
-   *   type=employment_statistics/frequency=A/year=2020/employment_statistics.parquet
-   *   type=employment_statistics/frequency=A/year=2021/employment_statistics.parquet
+   *   type=population/year=2020/population.parquet
+   *   type=population/year=2021/population.parquet
    *   ...
    * </pre>
-   * into:
+   * into state-partitioned:
    * <pre>
-   *   type=employment_statistics/frequency=A/employment_statistics.parquet
+   *   type=population_by_state/state=01/population.parquet
+   *   type=population_by_state/state=02/population.parquet
+   *   ...
    * </pre>
    *
    */
-  public void consolidateAll() {
-    LOGGER.info("Starting trend consolidation for all tables");
+  public void reorganizeAll() {
+    LOGGER.info("Starting partition reorganization for all tables");
 
-    List<TrendPattern> trendPatterns = getTrendPatterns();
+    List<AlternatePartitionPattern> alternatePartitions = getAlternatePartitions();
 
-    if (trendPatterns.isEmpty()) {
-      LOGGER.info("No tables with trend_patterns found in schema");
+    if (alternatePartitions.isEmpty()) {
+      LOGGER.info("No tables with alternate_partitions found in schema");
       return;
     }
 
-    LOGGER.info("Found {} trend patterns to consolidate", trendPatterns.size());
+    LOGGER.info("Found {} alternate partitions to reorganize", alternatePartitions.size());
 
-    int consolidatedCount = 0;
+    int reorganizedCount = 0;
     int skippedCount = 0;
 
-    for (TrendPattern trend : trendPatterns) {
+    for (AlternatePartitionPattern alternate : alternatePartitions) {
       try {
-        consolidateTrendTable(trend);
-        consolidatedCount++;
+        reorganizePartition(alternate);
+        reorganizedCount++;
       } catch (Exception e) {
-        LOGGER.error("Failed to consolidate trend '{}': {}", trend.trendName, e.getMessage(), e);
+        LOGGER.error("Failed to reorganize alternate '{}': {}",
+            alternate.alternateName, e.getMessage(), e);
         skippedCount++;
       }
     }
 
-    LOGGER.info("Trend consolidation complete: {} consolidated, {} failed",
-        consolidatedCount, skippedCount);
+    LOGGER.info("Partition reorganization complete: {} reorganized, {} failed",
+        reorganizedCount, skippedCount);
   }
 
   /**
-   * Extracts all trend patterns from schema JSON.
+   * Extracts all alternate partition patterns from schema JSON/YAML.
    *
-   * @return List of trend patterns from all tables
+   * @return List of alternate partition patterns from all tables
    */
-  protected List<TrendPattern> getTrendPatterns() {
-    List<TrendPattern> trendPatterns = new ArrayList<>();
+  protected List<AlternatePartitionPattern> getAlternatePartitions() {
+    List<AlternatePartitionPattern> alternatePartitions = new ArrayList<>();
 
     try {
       // Load schema from resources
       InputStream schemaStream = getClass().getResourceAsStream(schemaResourceName);
       if (schemaStream == null) {
         LOGGER.warn("Schema resource not found: {}", schemaResourceName);
-        return trendPatterns;
+        return alternatePartitions;
       }
 
       // Parse YAML/JSON with proper anchor resolution
@@ -3147,10 +3151,10 @@ public abstract class AbstractGovDataDownloader {
 
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {
         LOGGER.warn("Schema has no partitionedTables array");
-        return trendPatterns;
+        return alternatePartitions;
       }
 
-      // Scan all tables for trend_patterns
+      // Scan all tables for alternate_partitions
       for (JsonNode tableNode : root.get("partitionedTables")) {
         String tableName = tableNode.has("name") ? tableNode.get("name").asText() : null;
         String sourcePattern = tableNode.has("pattern") ? tableNode.get("pattern").asText() : null;
@@ -3159,85 +3163,79 @@ public abstract class AbstractGovDataDownloader {
           continue;
         }
 
-        // Check if table has trend_patterns
-        if (tableNode.has("trend_patterns") && tableNode.get("trend_patterns").isArray()) {
-          for (JsonNode trendNode : tableNode.get("trend_patterns")) {
-            String trendName = trendNode.has("name") ? trendNode.get("name").asText() : null;
-            String trendPattern = trendNode.has("pattern") ? trendNode.get("pattern").asText() : null;
+        // Check if table has alternate_partitions
+        if (tableNode.has("alternate_partitions") && tableNode.get("alternate_partitions").isArray()) {
+          for (JsonNode alternateNode : tableNode.get("alternate_partitions")) {
+            String alternateName = alternateNode.has("name")
+                ? alternateNode.get("name").asText() : null;
+            String alternatePattern = alternateNode.has("pattern")
+                ? alternateNode.get("pattern").asText() : null;
 
-            if (trendName != null && trendPattern != null) {
-              trendPatterns.add(new TrendPattern(tableName, sourcePattern, trendName, trendPattern));
-              LOGGER.debug("Found trend pattern: {} -> {}", tableName, trendName);
+            if (alternateName != null && alternatePattern != null) {
+              alternatePartitions.add(new AlternatePartitionPattern(
+                  tableName, sourcePattern, alternateName, alternatePattern));
+              LOGGER.debug("Found alternate partition: {} -> {}", tableName, alternateName);
             }
           }
         }
       }
 
     } catch (IOException e) {
-      LOGGER.error("Failed to load trend patterns from schema: {}", e.getMessage());
+      LOGGER.error("Failed to load alternate partitions from schema: {}", e.getMessage());
     }
 
-    return trendPatterns;
+    return alternatePartitions;
   }
 
   /**
-   * Consolidates a single trend table using DuckDB.
+   * Reorganizes a single alternate partition table using DuckDB.
    *
-   * <p>Generates iteration over all non-year variables in the source pattern,
-   * then for each combination, consolidates all years into a single file.
+   * <p>Generates iteration over all variables in the source pattern,
+   * then for each combination, reorganizes data into the alternate partition structure.
    *
-   * @param trend Trend pattern configuration
-   * @throws IOException if consolidation fails
+   * @param alternate Alternate partition pattern configuration
+   * @throws IOException if reorganization fails
    */
-  protected void consolidateTrendTable(TrendPattern trend) throws IOException {
-    LOGGER.info("Consolidating trend: {} from {}", trend.trendName, trend.sourceTableName);
+  protected void reorganizePartition(AlternatePartitionPattern alternate) throws IOException {
+    LOGGER.info("Reorganizing partition: {} from {}", alternate.alternateName, alternate.sourceTableName);
 
     // Extract variables from both patterns
-    // Source: type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet
-    // Trend:  type=employment_statistics/frequency={frequency}/employment_statistics.parquet
+    // Source: type=population/year=*/population.parquet
+    // Alternate: type=population_by_state/state=*/population.parquet
 
-    // Find variables in source pattern (e.g., {frequency}, {year})
+    // Find variables in alternate pattern
     java.util.regex.Pattern varPattern = java.util.regex.Pattern.compile("\\{(\\w+)}");
 
-    // Find variables in trend pattern (e.g., {frequency})
-    java.util.regex.Matcher trendMatcher = varPattern.matcher(trend.trendPattern);
-    List<String> trendVars = new ArrayList<>();
-    while (trendMatcher.find()) {
-      trendVars.add(trendMatcher.group(1));
+    java.util.regex.Matcher alternateMatcher = varPattern.matcher(alternate.alternatePattern);
+    List<String> alternateVars = new ArrayList<>();
+    while (alternateMatcher.find()) {
+      alternateVars.add(alternateMatcher.group(1));
     }
 
-    // Variables to iterate over = trendVars (non-year dimensions)
-    // For employment_statistics: just {frequency}
-    LOGGER.debug("Trend variables to iterate: {}", trendVars);
+    LOGGER.debug("Alternate partition variables to iterate: {}", alternateVars);
 
-    // For now, handle simple case: single non-year variable (frequency)
-    // TODO: Extend to handle multiple non-year variables with Cartesian product
+    // Handle simple case: single variable or no variables
+    if (alternateVars.size() == 1) {
+      String varName = alternateVars.get(0);
 
-    if (trendVars.size() == 1) {
-      String varName = trendVars.get(0);
+      List<String> values = getVariableValues(alternate.sourceTableName, varName);
 
-      // Extract possible values from table metadata if available
-      // For frequency: typically ["A", "M", "Q"]
-      // For now, use hardcoded common values - subclasses can override
-
-      List<String> values = getVariableValues(trend.sourceTableName, varName);
-
-      LOGGER.info("Consolidating {} with {} values for {}: {}",
-          trend.trendName, values.size(), varName, values);
+      LOGGER.info("Reorganizing {} with {} values for {}: {}",
+          alternate.alternateName, values.size(), varName, values);
 
       for (String value : values) {
         Map<String, String> variables = new HashMap<>();
         variables.put(varName, value);
 
-        consolidateTrendForVariables(trend, variables);
+        reorganizeForVariables(alternate, variables);
       }
 
-    } else if (trendVars.isEmpty()) {
-      // No variables - consolidate everything
-      consolidateTrendForVariables(trend, new HashMap<>());
+    } else if (alternateVars.isEmpty()) {
+      // No variables - reorganize everything into single file
+      reorganizeForVariables(alternate, new HashMap<>());
 
     } else {
-      LOGGER.warn("Multi-variable trend patterns not yet implemented: {}", trendVars);
+      LOGGER.warn("Multi-variable alternate partitions not yet implemented: {}", alternateVars);
       // TODO: Implement Cartesian product for multiple variables
     }
   }
@@ -3259,43 +3257,43 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Consolidates trend data for a specific set of variables using DuckDB.
+   * Reorganizes data for a specific set of variables using DuckDB.
    *
-   * @param trend Trend pattern
+   * @param alternate Alternate partition pattern
    * @param variables Variables to substitute (e.g., {frequency: "A"})
-   * @throws IOException if consolidation fails
+   * @throws IOException if reorganization fails
    */
-  protected void consolidateTrendForVariables(TrendPattern trend, Map<String, String> variables)
-      throws IOException {
+  protected void reorganizeForVariables(AlternatePartitionPattern alternate,
+      Map<String, String> variables) throws IOException {
 
-    // Build source glob pattern (replaces year=* and other vars)
-    String sourceGlob = buildSourceGlob(trend.sourcePattern, variables);
+    // Build source glob pattern (replaces partition variables with wildcards)
+    String sourceGlob = buildSourceGlob(alternate.sourcePattern, variables);
 
-    // Build target path (substitutes variables, no year)
-    String targetPath = substituteVariables(trend.trendPattern, variables);
+    // Build target path (substitutes variables)
+    String targetPath = substituteVariables(alternate.alternatePattern, variables);
 
     // Resolve full paths
     String fullSourceGlob = storageProvider.resolvePath(parquetDirectory, sourceGlob);
     String fullTargetPath = storageProvider.resolvePath(parquetDirectory, targetPath);
 
-    LOGGER.info("Consolidating:\n  FROM: {}\n  TO:   {}", fullSourceGlob, fullTargetPath);
+    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {}", fullSourceGlob, fullTargetPath);
 
     // Build DuckDB SQL
-    String sql = buildTrendConsolidationSql(fullSourceGlob, fullTargetPath);
+    String sql = buildReorganizationSql(fullSourceGlob, fullTargetPath);
 
-    LOGGER.debug("Consolidation SQL:\n{}", sql);
+    LOGGER.debug("Reorganization SQL:\n{}", sql);
 
     // Execute using DuckDB
     try (Connection conn = getDuckDBConnection();
          Statement stmt = conn.createStatement()) {
 
       stmt.execute(sql);
-      LOGGER.info("Successfully consolidated trend: {}", trend.trendName);
+      LOGGER.info("Successfully reorganized alternate partition: {}", alternate.alternateName);
 
     } catch (java.sql.SQLException e) {
       String errorMsg =
-          String.format("DuckDB consolidation failed for trend '%s': %s",
-          trend.trendName,
+          String.format("DuckDB reorganization failed for alternate '%s': %s",
+          alternate.alternateName,
           e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
@@ -3303,7 +3301,7 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Builds source glob pattern by replacing variables and using * for year.
+   * Builds source glob pattern by replacing variables with wildcards.
    *
    * @param sourcePattern Source pattern from schema
    * @param variables Variables to substitute
@@ -3317,11 +3315,11 @@ public abstract class AbstractGovDataDownloader {
       result = result.replace("{" + entry.getKey() + "}", entry.getValue());
     }
 
-    // Replace {year} with * (wildcard)
-    result = result.replace("{year}", "*");
+    // Replace remaining {var} patterns with * (wildcard)
+    result = result.replaceAll("\\{\\w+}", "*");
 
-    // Also handle year= patterns
-    result = result.replaceAll("year=\\{year}", "year=*");
+    // Also handle key={var} patterns
+    result = result.replaceAll("=\\{\\w+}", "=*");
 
     return result;
   }
@@ -3342,18 +3340,16 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Builds DuckDB SQL for consolidating year partitions into a single file.
+   * Builds DuckDB SQL for reorganizing data into a single file.
    *
-   * @param sourceGlob Glob pattern for source files (with year=*)
-   * @param targetPath Target consolidated file path
+   * @param sourceGlob Glob pattern for source files
+   * @param targetPath Target reorganized file path
    * @return SQL COPY statement
    */
-  private String buildTrendConsolidationSql(String sourceGlob, String targetPath) {
+  private String buildReorganizationSql(String sourceGlob, String targetPath) {
     return "COPY (\n"
   +
-        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ")\n"
-  +
-        "  ORDER BY year\n"
+        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ", union_by_name=true)\n"
   +
         ") TO " + quoteLiteral(targetPath) + " (FORMAT PARQUET);";
   }

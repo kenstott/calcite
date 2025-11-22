@@ -241,11 +241,11 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Added {} views to 'tables' operand for FileSchema", regularTables.size());
     }
 
-    // Generate materializations from trend tables for automatic optimizer substitution
+    // Generate materializations from alternate partition tables for automatic optimizer substitution
     List<Map<String, Object>> materializations = generateMaterializations(allTables);
     if (!materializations.isEmpty()) {
       mutableOperand.put("materializations", materializations);
-      LOGGER.info("Generated {} materializations from trend patterns for automatic substitution",
+      LOGGER.info("Generated {} materializations from alternate partitions for automatic substitution",
           materializations.size());
     }
 
@@ -467,22 +467,22 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // PHASE 3: Consolidate trend tables
-    LOGGER.info("=== PHASE 3: Consolidating trend tables ===");
+    // PHASE 3: Reorganize alternate partition tables
+    LOGGER.info("=== PHASE 3: Reorganizing alternate partition tables ===");
     for (AbstractEconDataDownloader downloader : downloaders) {
       try {
         String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.info("Consolidating trends using {}", downloaderName);
-        downloader.consolidateAll();
+        LOGGER.info("Reorganizing partitions using {}", downloaderName);
+        downloader.reorganizeAll();
       } catch (Exception e) {
-        LOGGER.error("Error during trend consolidation for {}: {}",
+        LOGGER.error("Error during partition reorganization for {}: {}",
             downloader.getClass().getSimpleName(), e.getMessage(), e);
       }
     }
 
     // Save cache manifest after all downloads to operating directory
     cacheManifest.save(econOperatingDirectory);
-    LOGGER.info("=== All ECON data download, conversion, and consolidation complete ===");
+    LOGGER.info("=== All ECON data download, conversion, and partition reorganization complete ===");
   }
 
   /**
@@ -531,8 +531,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // Expand trend_patterns into additional table definitions
-    expandTrendPatterns(tables);
+    // Expand alternate_partitions into additional table definitions
+    expandAlternatePartitions(tables);
 
     LOGGER.info("[DEBUG] Total ECON table definitions: {}", tables.size());
     return tables;
@@ -622,53 +622,61 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Generate materialization definitions from trend tables.
+   * Generate materialization definitions from alternate partition tables.
    *
-   * <p>For each trend table (marked with _isTrendTable=true), creates a materialization
-   * that tells Calcite's optimizer that the trend table is equivalent to:
-   * SELECT * FROM detail_table
+   * <p>For each alternate partition table (marked with _isAlternatePartition=true),
+   * creates a materialization that tells Calcite's optimizer that the alternate table
+   * is equivalent to: SELECT * FROM source_table
    *
-   * <p>This allows the optimizer to automatically substitute trend tables when queries
-   * don't use all partition keys, reducing S3 API calls.
+   * <p>This allows the optimizer to automatically substitute alternate partition tables
+   * based on query predicates, selecting the layout with the most partition keys.
    *
-   * @param tables List of all table definitions (including trend tables)
+   * @param tables List of all table definitions (including alternate partition tables)
    * @return List of materialization definitions for FileSchema
    */
   private List<Map<String, Object>> generateMaterializations(List<Map<String, Object>> tables) {
     List<Map<String, Object>> materializations = new ArrayList<>();
 
     for (Map<String, Object> table : tables) {
-      Boolean isTrendTable = (Boolean) table.get("_isTrendTable");
-      if (isTrendTable != null && isTrendTable) {
-        String trendTableName = (String) table.get("name");
-        String detailTableName = (String) table.get("_detailTableName");
+      Boolean isAlternatePartition = (Boolean) table.get("_isAlternatePartition");
+      if (isAlternatePartition != null && isAlternatePartition) {
+        String alternateTableName = (String) table.get("name");
+        String sourceTableName = (String) table.get("_sourceTableName");
 
-        if (trendTableName == null || detailTableName == null) {
-          LOGGER.warn("Skipping materialization for trend table with missing metadata");
+        if (alternateTableName == null || sourceTableName == null) {
+          LOGGER.warn("Skipping materialization for alternate partition with missing metadata");
           continue;
         }
 
         // Create materialization definition
         // Format expected by FileSchema:
         // {
-        //   "table": "trend_table_name",
-        //   "sql": "SELECT * FROM detail_table",
+        //   "table": "alternate_table_name",
+        //   "sql": "SELECT * FROM source_table",
         //   "viewSchemaPath": ["ECON"],
-        //   "existing": true
+        //   "existing": true,
+        //   "_partitionKeyCount": N
         // }
         Map<String, Object> materialization = new HashMap<>();
-        materialization.put("table", trendTableName);
-        materialization.put("sql", "SELECT * FROM " + detailTableName);
+        materialization.put("table", alternateTableName);
+        materialization.put("sql", "SELECT * FROM " + sourceTableName);
 
         // Set the schema path for the materialized view (ECON schema)
         materialization.put("viewSchemaPath", Collections.singletonList("ECON"));
 
-        // Mark as existing (trend data files already exist, don't need to be generated)
+        // Mark as existing (alternate partition data files already exist)
         materialization.put("existing", true);
 
+        // Include partition key count for optimizer selection heuristic
+        Integer partitionKeyCount = (Integer) table.get("_partitionKeyCount");
+        if (partitionKeyCount != null) {
+          materialization.put("_partitionKeyCount", partitionKeyCount);
+        }
+
         materializations.add(materialization);
-        LOGGER.debug("Created materialization: trend table '{}' for detail table '{}'",
-            trendTableName, detailTableName);
+        LOGGER.debug("Created materialization: alternate partition '{}' for source table '{}' "
+            + "(partition keys: {})",
+            alternateTableName, sourceTableName, partitionKeyCount);
       }
     }
 

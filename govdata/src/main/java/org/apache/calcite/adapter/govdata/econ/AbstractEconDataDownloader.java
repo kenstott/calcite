@@ -23,7 +23,6 @@ import org.apache.calcite.adapter.govdata.CacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,7 +213,6 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    */
   protected static List<PartitionedTableConfig.TableColumn>
       loadTableColumns(String tableName) {
-    ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
     try (InputStream schemaStream =
         AbstractEconDataDownloader.class.getResourceAsStream("/econ/econ-schema.yaml")) {
       if (schemaStream == null) {
@@ -222,8 +220,9 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
             "/econ/econ-schema.yaml not found in resources");
       }
 
-      // Parse YAML
-      JsonNode root = yamlMapper.readTree(schemaStream);
+      // Parse YAML with anchor resolution using SnakeYAML
+      JsonNode root =
+          org.apache.calcite.adapter.govdata.YamlUtils.parseYamlOrJson(schemaStream, "/econ/econ-schema.yaml");
 
       // Find the table in the "partitionedTables" array
       if (!root.has("partitionedTables") || !root.get("partitionedTables").isArray()) {

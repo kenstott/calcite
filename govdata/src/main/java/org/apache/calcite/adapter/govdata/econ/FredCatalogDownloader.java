@@ -764,7 +764,7 @@ public class FredCatalogDownloader {
 
       // Convert using DuckDB
       String sql =
-          AbstractGovDataDownloader.buildDuckDBConversionSql(columns, null, fullTempJsonPath, fullParquetPath);
+          AbstractGovDataDownloader.buildDuckDBConversionSql(columns, null, fullTempJsonPath, fullParquetPath, null);
 
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 

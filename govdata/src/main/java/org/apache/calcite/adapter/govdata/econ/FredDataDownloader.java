@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -174,7 +175,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -219,7 +220,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted in manifest
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
