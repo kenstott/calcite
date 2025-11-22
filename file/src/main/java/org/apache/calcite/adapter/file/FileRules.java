@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.format.csv.CsvProjectTableScanRule;
+import org.apache.calcite.adapter.file.rules.AlternatePartitionSelectionRule;
 import org.apache.calcite.adapter.file.rules.HLLCountDistinctRule;
 
 /** Planner rules relating to the File adapter. */
@@ -31,4 +32,11 @@ public abstract class FileRules {
   /** Rule that replaces COUNT(DISTINCT) with HLL sketch lookups when available. */
   public static final HLLCountDistinctRule HLL_COUNT_DISTINCT =
       HLLCountDistinctRule.INSTANCE;
+
+  /** Rule that substitutes source tables with alternate partition tables
+   * when query filters match the alternate's partition keys.
+   * Implements the "fewest keys that cover the filter" heuristic:
+   * selects the most consolidated layout that still supports partition pruning. */
+  public static final AlternatePartitionSelectionRule ALTERNATE_PARTITION_SELECTION =
+      AlternatePartitionSelectionRule.INSTANCE;
 }
