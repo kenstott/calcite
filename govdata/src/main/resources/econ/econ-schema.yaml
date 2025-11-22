@@ -547,6 +547,12 @@ partitionedTables:
         comment: CPI value (base period = 100)
       - *percent_change_month
       - *percent_change_year
+    dimensions:
+      type:
+        - cpi_regional
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
 
     # API Configuration
     download:
