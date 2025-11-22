@@ -1157,9 +1157,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     // Get series IDs directly from requestBody config in schema metadata
     Map<String, Object> metadata = loadTableMetadata(tableName);
-    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
-    Map<String, Object> requestBody = (Map<String, Object>) downloadConfig.get("requestBody");
-    List<String> seriesIds = (List<String>) requestBody.get("seriesid");
+    JsonNode downloadConfig = (JsonNode) metadata.get("download");
+    JsonNode requestBody = downloadConfig.get("requestBody");
+    List<String> seriesIds = new ArrayList<>();
+    for (JsonNode seriesId : requestBody.get("seriesid")) {
+      seriesIds.add(seriesId.asText());
+    }
 
     LOGGER.debug("Processing metro area CPI for {} series for years {}-{}",
         seriesIds.size(), startYear, endYear);
