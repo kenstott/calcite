@@ -88,6 +88,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
       LOGGER.debug("Cache entry expired for {} (age: {} hours, policy: {})",
           cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -131,6 +132,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
       LOGGER.debug("Cache entry expired for {} year={} (age: {} hours, policy: {})",
           dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -180,6 +182,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
 
     entries.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
@@ -214,6 +217,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
 
     entries.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
     LOGGER.debug("Marked as cached: {} (year={}, size={}, refresh in {} hours, policy: {})",
@@ -239,6 +243,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
       LOGGER.debug("Parquet entry expired for {} (age: {} hours, policy: {})",
           cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -275,6 +280,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
       LOGGER.debug("Parquet entry expired for {} year={} (age: {} hours, policy: {})",
           dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -316,6 +322,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
     entry.parquetPath = parquetPath;
     entry.parquetConvertedAt = System.currentTimeMillis();
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.debug("Marked parquet converted: {} -> {}", cacheKey.asString(), parquetPath);
   }
@@ -348,6 +355,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
     entry.parquetPath = parquetPath;
     entry.parquetConvertedAt = System.currentTimeMillis();
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, parquetPath);
   }
@@ -393,6 +401,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
 
     if (removed[0] > 0) {
       lastUpdated = System.currentTimeMillis();
+      markDirty();
       LOGGER.debug("Cleaned up {} expired cache entries", removed[0]);
     }
 
@@ -440,6 +449,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
 
       MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
       LOGGER.debug("Saved geo cache manifest with {} entries", entries.size());
+      resetDirty();
     } catch (IOException e) {
       LOGGER.warn("Failed to save geo cache manifest: {}", e.getMessage());
     }

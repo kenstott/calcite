@@ -96,6 +96,7 @@ public class CacheManifest extends AbstractCacheManifest {
       LOGGER.info("API error retry period expired for {} (error count: {}), allowing retry",
           cacheKey.asString(), entry.errorCount);
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -111,6 +112,7 @@ public class CacheManifest extends AbstractCacheManifest {
       LOGGER.info("Cache entry expired for {} (age: {} hours, refresh policy: {})",
           cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
       entries.remove(key);
+      markDirty();
       return false;
     }
 
@@ -146,6 +148,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
     entries.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
@@ -214,6 +217,7 @@ public class CacheManifest extends AbstractCacheManifest {
     entry.parquetPath = parquetPath;
     entry.parquetConvertedAt = System.currentTimeMillis();
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), parquetPath);
   }
@@ -241,6 +245,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
     entries.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.info("Marked {} as unavailable (retry in {} days): {}",
         cacheKey.asString(), retryAfterDays, reason);
@@ -285,6 +290,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
     entries.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.info("Marked {} as API error (retry in {} days, error count: {}): {}",
         cacheKey.asString(), retryAfterDays, entry.errorCount,
@@ -321,6 +327,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
     if (removed[0] > 0) {
       lastUpdated = System.currentTimeMillis();
+      markDirty();
       LOGGER.info("Cleaned up {} expired cache entries", removed[0]);
     }
 
@@ -396,6 +403,7 @@ public class CacheManifest extends AbstractCacheManifest {
       long lastModified = manifestFile.lastModified();
       LOGGER.info("Successfully wrote and synced cache manifest to {} (size: {} bytes, modified: {})",
           manifestFile.getAbsolutePath(), fileSize, new java.util.Date(lastModified));
+      resetDirty();
     } catch (IOException e) {
       LOGGER.error("Failed to save cache manifest to {}: {}", manifestFile.getAbsolutePath(),
           e.getMessage(), e);
@@ -499,6 +507,7 @@ public class CacheManifest extends AbstractCacheManifest {
 
     catalogSeriesCache.put(key, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.info("Cached {} catalog series (threshold: {}, TTL: {} days)",
         seriesIds.size(), minPopularity, ttlDays);
@@ -535,6 +544,7 @@ public class CacheManifest extends AbstractCacheManifest {
       LOGGER.info("Invalidated catalog series cache (threshold: {}, had {} series)",
           minPopularity, removed.seriesIds.size());
       lastUpdated = System.currentTimeMillis();
+      markDirty();
     }
   }
 
@@ -548,6 +558,7 @@ public class CacheManifest extends AbstractCacheManifest {
     if (count > 0) {
       LOGGER.info("Invalidated all catalog series caches ({} thresholds)", count);
       lastUpdated = System.currentTimeMillis();
+      markDirty();
     }
   }
 

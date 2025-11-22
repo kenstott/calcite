@@ -39,6 +39,38 @@ import java.util.Map;
 public abstract class AbstractCacheManifest {
 
   /**
+   * Tracks whether the manifest has been modified since last save.
+   * Subclasses must set this to true when any mutation occurs.
+   */
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  protected transient boolean dirty = false;
+
+  /**
+   * Check if the manifest has been modified since last save.
+   *
+   * @return true if any mutation has occurred since last save
+   */
+  public boolean isDirty() {
+    return dirty;
+  }
+
+  /**
+   * Reset the dirty flag after successful save.
+   * Should be called by subclass save() implementations after writing to disk.
+   */
+  protected void resetDirty() {
+    dirty = false;
+  }
+
+  /**
+   * Mark the manifest as modified.
+   * Should be called by subclass methods when any mutation occurs.
+   */
+  protected void markDirty() {
+    dirty = true;
+  }
+
+  /**
    * Base cache entry class with fields common to all govdata schemas.
    * Subclasses extend this to add schema-specific fields.
    */
