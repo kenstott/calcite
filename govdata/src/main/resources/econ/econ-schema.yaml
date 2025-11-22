@@ -124,18 +124,18 @@ dimension_values:
   # --- Frequency Dimensions ---
 
   monthly_frequency: &monthly_frequency
-    - monthly
+    - M
 
   quarterly_frequency: &quarterly_frequency
-    - quarterly
+    - Q
 
   annual_frequency: &annual_frequency
-    - annual
+    - A
 
   all_frequencies: &all_frequencies
-    - monthly
-    - quarterly
-    - annual
+    - M
+    - Q
+    - A
 
   # --- State Geographic Dimensions ---
   # All US states + DC (51 jurisdictions)
@@ -562,8 +562,15 @@ partitionedTables:
   - name: metro_cpi
     pattern: "type=metro_cpi/frequency=*/year=*/metro_cpi.parquet"
     partitions: *standard_partitions
+
+    # Dimension definitions for iteration (frequency and year only)
+    dimensions:
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
+
     comment: >
-      Consumer Price Index for 27 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
+      Consumer Price Index for 20 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
     columns:
       - *date_column
       - *series_column
@@ -582,15 +589,41 @@ partitionedTables:
       - *percent_change_month
       - *percent_change_year
 
-    # API Configuration
+    # API Configuration - series IDs directly in request body
+    # 20 unique area codes covering 22 metros (5 of 27 metros have no CPI data)
+    # Some metros share codes (e.g., Jacksonville/Miami use S35C, NYC/Tampa use S35D)
     download:
       enabled: true
       method: POST
       baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      requestBody:
+        seriesid:
+          - CUURS12ASA0  # Chicago-Naperville-Elgin, IL-IN-WI
+          - CUURS12BSA0  # Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
+          - CUURS23ASA0  # Dallas-Fort Worth-Arlington, TX
+          - CUURS23BSA0  # Detroit-Warren-Dearborn, MI
+          - CUURS24ASA0  # Minneapolis-St. Paul-Bloomington, MN-WI
+          - CUURS24BSA0  # St. Louis, MO-IL
+          - CUURS35ASA0  # Atlanta-Sandy Springs-Roswell, GA
+          - CUURS35BSA0  # Washington-Arlington-Alexandria, DC-VA-MD-WV
+          - CUURS35CSA0  # Miami-Fort Lauderdale / Jacksonville, FL
+          - CUURS35DSA0  # New York-Newark-Jersey City / Tampa, FL
+          - CUURS35ESA0  # Boston-Cambridge-Newton, MA-NH
+          - CUURS37BSA0  # Houston-The Woodlands-Sugar Land, TX
+          - CUURS48ASA0  # Denver-Aurora-Lakewood, CO
+          - CUURS48BSA0  # Seattle-Tacoma-Bellevue, WA
+          - CUURS49ASA0  # San Jose-Sunnyvale-Santa Clara, CA
+          - CUURS49BSA0  # Phoenix-Mesa-Scottsdale, AZ
+          - CUURS49CSA0  # Portland-Vancouver-Hillsboro, OR-WA
+          - CUURS49DSA0  # Riverside-San Bernardino-Ontario, CA
+          - CUURS49ESA0  # San Diego-Carlsbad, CA
+          - CUURS49GSA0  # Los Angeles-Long Beach-Anaheim, CA
+        startyear: "{year}"
+        endyear: "{year}"
       authentication:
         type: json_body
         paramName: registrationkey
-        envVar: BLS_API_KEY  # Set BLS API key in environment
+        envVar: BLS_API_KEY
 
   # --- STATE INDUSTRY ---
   - name: state_industry
@@ -1709,6 +1742,9 @@ partitionedTables:
   - name: industry_gdp
     pattern: "type=indicators/frequency=*/year=*/industry=*/industry_gdp.parquet"
     dimensions:
+      frequency:
+        - "A"  # Annual
+        - "Q"  # Quarterly
       industry:
         - "31G"
         - "52"
@@ -1782,14 +1818,17 @@ partitionedTables:
           type: expression
           value: "{industry}"
         Frequency:
-          type: constant
-          value: A
+          type: expression
+          value: "{frequency}"
         Year:
           type: expression
           value: "{year}"
         ResultFormat:
           type: constant
           value: JSON
+        TableID:
+          type: constant
+          value: ALL
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
