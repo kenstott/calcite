@@ -107,9 +107,11 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       CacheKey cacheKey = new CacheKey("world_indicators", allParams);
 
       if (!isParquetConvertedOrExists(cacheKey, rawPath, parquetPath)) {
-        convertCachedJsonToParquet("world_indicators", variables);
-        cacheManifest.markParquetConverted(cacheKey, parquetPath);
-        convertedCount++;
+        boolean converted = convertCachedJsonToParquet("world_indicators", variables);
+        if (converted) {
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          convertedCount++;
+        }
       } else {
         skippedCount++;
       }
