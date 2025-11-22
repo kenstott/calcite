@@ -172,7 +172,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("Regional income download: Processing {} BEA regional tables", 54);
     downloadRegionalIncomeMetadata(startYear, endYear);
 
-    downloadTradeStatisticsMetadata(startYear, endYear);
+    // trade_statistics is a SQL view over national_accounts - no separate download needed
     downloadItaDataMetadata(startYear, endYear);
     if (keyIndustriesList != null) {
       downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
@@ -194,7 +194,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
     }
     convertRegionalIncomeMetadata(startYear, endYear);
-    convertTradeStatisticsMetadata(startYear, endYear);
+    // trade_statistics is a SQL view over national_accounts - no separate conversion needed
     convertItaDataMetadata(startYear, endYear);
     if (keyIndustriesList != null) {
       convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
