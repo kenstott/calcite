@@ -37,30 +37,30 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration test for automatic trend table substitution via materialized views.
+ * Integration test for automatic alternate partition table substitution via materialized views.
  *
  * <p>Tests that:
  * <ul>
- *   <li>Trend patterns are validated and expanded correctly</li>
- *   <li>Materializations are generated automatically from trend tables</li>
- *   <li>Calcite's optimizer substitutes trend tables when cost-effective</li>
- *   <li>Query results are identical between detail and trend tables</li>
+ *   <li>Alternate partition patterns are validated and expanded correctly</li>
+ *   <li>Materializations are generated automatically from alternate partition tables</li>
+ *   <li>Calcite's optimizer substitutes alternate partition tables based on predicates</li>
+ *   <li>Query results are identical between source and alternate partition tables</li>
  * </ul>
  */
 @Tag("integration")
-public class TrendTableMaterializationTest {
+public class AlternatePartitionMaterializationTest {
 
   private static final Logger LOGGER =
-      LoggerFactory.getLogger(TrendTableMaterializationTest.class);
+      LoggerFactory.getLogger(AlternatePartitionMaterializationTest.class);
 
   /**
-   * Test that trend patterns are expanded into separate table definitions.
+   * Test that alternate partition patterns are expanded into separate table definitions.
    */
   @SuppressWarnings("deprecation") // getSubSchema and getTableNames are deprecated but needed for test
-  @Test void testTrendPatternExpansion() {
-    LOGGER.info("Testing trend pattern expansion");
+  @Test void testAlternatePartitionExpansion() {
+    LOGGER.info("Testing alternate partition pattern expansion");
 
-    // Create a simple schema with trend patterns
+    // Create a simple schema with alternate partitions
     String modelJson = "{\n"
         + "  \"version\": \"1.0\",\n"
         + "  \"defaultSchema\": \"ECON\",\n"
@@ -85,83 +85,93 @@ public class TrendTableMaterializationTest {
 
       assertNotNull(econSchema, "ECON schema should exist");
 
-      // Check if employment_statistics table exists (detail table)
-      boolean hasDetailTable = econSchema.getTableNames().contains("employment_statistics");
-      LOGGER.info("Detail table exists: {}", hasDetailTable);
+      // Check if employment_statistics table exists (source table)
+      boolean hasSourceTable = econSchema.getTableNames().contains("employment_statistics");
+      LOGGER.info("Source table exists: {}", hasSourceTable);
 
-      // Check if employment_statistics_trend table exists (trend table)
-      boolean hasTrendTable = econSchema.getTableNames().contains("employment_statistics_trend");
-      LOGGER.info("Trend table exists: {}", hasTrendTable);
+      // Check if employment_statistics_trend table exists (alternate partition table)
+      boolean hasAlternateTable = econSchema.getTableNames().contains("employment_statistics_trend");
+      LOGGER.info("Alternate partition table exists: {}", hasAlternateTable);
 
-      // If we have the trend pattern defined in econ-schema.json, both should exist
-      if (hasDetailTable) {
-        assertTrue(hasTrendTable,
-            "Trend table should be automatically created from trend_patterns definition");
+      // If we have the alternate_partitions defined in econ-schema.yaml, both should exist
+      if (hasSourceTable) {
+        assertTrue(hasAlternateTable,
+            "Alternate partition table should be automatically created from alternate_partitions definition");
       }
 
     } catch (Exception e) {
       // Expected in test environment without GOVDATA_PARQUET_DIR set
-      // The test validates that the infrastructure (trend pattern expansion) is in place
+      // The test validates that the infrastructure (alternate partition expansion) is in place
       LOGGER.warn("Test encountered expected error in test environment: {}", e.getMessage());
 
-      // The important part is that trend pattern expansion logic exists and compiles
+      // The important part is that alternate partition expansion logic exists and compiles
       // Full schema creation requires environment configuration
     }
   }
 
   /**
-   * Test that materialization metadata is generated for trend tables.
+   * Test that materialization metadata is generated for alternate partition tables.
    */
   @Test void testMaterializationGeneration() {
-    LOGGER.info("Testing materialization generation from trend tables");
+    LOGGER.info("Testing materialization generation from alternate partition tables");
 
     // This test verifies the logic works at the factory level
     org.apache.calcite.adapter.govdata.econ.EconSchemaFactory factory =
         new org.apache.calcite.adapter.govdata.econ.EconSchemaFactory();
 
-    // Create a mock table definition with trend pattern
+    // Create a mock table definition with alternate partition
     java.util.List<java.util.Map<String, Object>> tables = new java.util.ArrayList<>();
 
-    java.util.Map<String, Object> detailTable = new java.util.HashMap<>();
-    detailTable.put("name", "test_detail");
-    detailTable.put("pattern", "type=test/year={year}/data.parquet");
+    java.util.Map<String, Object> sourceTable = new java.util.HashMap<>();
+    sourceTable.put("name", "test_source");
+    sourceTable.put("pattern", "type=test/year={year}/data.parquet");
 
-    java.util.List<java.util.Map<String, Object>> trendPatterns = new java.util.ArrayList<>();
-    java.util.Map<String, Object> trendPattern = new java.util.HashMap<>();
-    trendPattern.put("name", "test_trend");
-    trendPattern.put("pattern", "type=test/data.parquet");
-    trendPatterns.add(trendPattern);
+    java.util.List<java.util.Map<String, Object>> alternatePartitions = new java.util.ArrayList<>();
+    java.util.Map<String, Object> alternatePartition = new java.util.HashMap<>();
+    alternatePartition.put("name", "test_alternate");
+    alternatePartition.put("pattern", "type=test/data.parquet");
 
-    detailTable.put("trend_patterns", trendPatterns);
-    tables.add(detailTable);
+    // Add partition config
+    java.util.Map<String, Object> partition = new java.util.HashMap<>();
+    java.util.List<java.util.Map<String, Object>> columnDefs = new java.util.ArrayList<>();
+    // No partition columns for consolidated alternate
+    partition.put("columnDefinitions", columnDefs);
+    alternatePartition.put("partition", partition);
 
-    // Expand trend patterns
-    factory.expandTrendPatterns(tables);
+    alternatePartitions.add(alternatePartition);
 
-    // Should now have 2 tables: detail + trend
-    assertEquals(2, tables.size(), "Should have detail table + trend table");
+    sourceTable.put("alternate_partitions", alternatePartitions);
+    tables.add(sourceTable);
 
-    // Find the trend table
-    java.util.Map<String, Object> trendTable = tables.stream()
-        .filter(t -> "test_trend".equals(t.get("name")))
+    // Expand alternate partitions
+    factory.expandAlternatePartitions(tables);
+
+    // Should now have 2 tables: source + alternate
+    assertEquals(2, tables.size(), "Should have source table + alternate partition table");
+
+    // Find the alternate partition table
+    java.util.Map<String, Object> altTable = tables.stream()
+        .filter(t -> "test_alternate".equals(t.get("name")))
         .findFirst()
         .orElse(null);
 
-    assertNotNull(trendTable, "Trend table should exist");
+    assertNotNull(altTable, "Alternate partition table should exist");
 
     // Verify metadata
-    assertEquals(Boolean.TRUE, trendTable.get("_isTrendTable"),
-        "Trend table should be marked with _isTrendTable");
-    assertEquals("test_detail", trendTable.get("_detailTableName"),
-        "Trend table should link to detail table");
-    assertEquals("type=test/year={year}/data.parquet", trendTable.get("_detailTablePattern"),
-        "Trend table should reference detail pattern");
+    assertEquals(Boolean.TRUE, altTable.get("_isAlternatePartition"),
+        "Alternate table should be marked with _isAlternatePartition");
+    assertEquals("test_source", altTable.get("_sourceTableName"),
+        "Alternate table should link to source table");
+    assertEquals("type=test/year={year}/data.parquet", altTable.get("_sourceTablePattern"),
+        "Alternate table should reference source pattern");
+    assertNotNull(altTable.get("_partitionKeyCount"),
+        "Alternate table should have partition key count");
 
-    LOGGER.info("Trend table metadata validated successfully");
+    LOGGER.info("Alternate partition table metadata validated successfully");
   }
 
   /**
-   * Test that queries against detail tables can be executed.
+   * Test that queries against source tables can be executed.
    * Note: Actual materialized view substitution requires:
    * - Real data files
    * - Materialization service registration
@@ -295,12 +305,12 @@ public class TrendTableMaterializationTest {
   }
 
   /**
-   * Test that MaterializationService is populated with trend table registrations.
+   * Test that MaterializationService is populated with alternate partition table registrations.
    * This verifies that the FileSchemaFactory properly registers materializations
    * with Calcite's optimizer framework.
    */
   @Test void testMaterializationServiceRegistration() {
-    LOGGER.info("Testing MaterializationService registration for trend tables");
+    LOGGER.info("Testing MaterializationService registration for alternate partition tables");
 
     String modelJson = "{\n"
         + "  \"version\": \"1.0\",\n"
