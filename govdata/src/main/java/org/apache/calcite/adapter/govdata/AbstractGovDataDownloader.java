@@ -818,6 +818,78 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
+   * Extracts dimension values from schema metadata for a given table and dimension.
+   * This is the preferred way to get iteration values, replacing deprecated
+   * extractIterationList methods.
+   *
+   * <p>Schema structure example:
+   * <pre>
+   * partitionedTables:
+   *   - name: industry_gdp
+   *     dimensions:
+   *       industry:
+   *         - "31G"
+   *         - "52"
+   *         - "53"
+   * </pre>
+   *
+   * @param tableName Name of the table in schema
+   * @param dimensionName Name of the dimension (e.g., "industry", "frequency")
+   * @return List of dimension values, or empty list if dimension not found
+   */
+  protected List<String> extractDimensionValues(String tableName, String dimensionName) {
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+    Object dimensions = metadata.get("dimensions");
+
+    if (dimensions == null) {
+      LOGGER.warn("No dimensions found for table '{}', returning empty list", tableName);
+      return Collections.emptyList();
+    }
+
+    if (dimensions instanceof JsonNode) {
+      JsonNode dimensionsNode = (JsonNode) dimensions;
+      JsonNode dimensionNode = dimensionsNode.get(dimensionName);
+
+      if (dimensionNode == null) {
+        LOGGER.warn("Dimension '{}' not found in table '{}', returning empty list",
+            dimensionName, tableName);
+        return Collections.emptyList();
+      }
+
+      // Handle array of values
+      if (dimensionNode.isArray()) {
+        List<String> result = new ArrayList<>();
+        for (JsonNode item : dimensionNode) {
+          result.add(item.asText());
+        }
+        LOGGER.debug("Extracted {} values from dimension '{}' for table '{}'",
+            result.size(), dimensionName, tableName);
+        return result;
+      }
+
+      // Handle object with "type" specifier (e.g., yearRange)
+      if (dimensionNode.isObject() && dimensionNode.has("type")) {
+        String dimType = dimensionNode.get("type").asText();
+        if ("yearRange".equals(dimType)) {
+          // Year range is computed from instance variables, return empty
+          // (caller should use yearRange() method instead)
+          LOGGER.debug("Dimension '{}' is type 'yearRange' - use yearRange() method instead",
+              dimensionName);
+          return Collections.emptyList();
+        }
+      }
+
+      LOGGER.warn("Dimension '{}' in table '{}' has unexpected format: {}",
+          dimensionName, tableName, dimensionNode.getNodeType());
+      return Collections.emptyList();
+    }
+
+    LOGGER.warn("Dimensions for table '{}' has unexpected type: {}",
+        tableName, dimensions.getClass().getName());
+    return Collections.emptyList();
+  }
+
+  /**
    * Loads bulk download configurations from the schema resource file.
    * Bulk downloads are shared download specifications that multiple tables can reference.
    *
@@ -1380,6 +1452,59 @@ public abstract class AbstractGovDataDownloader {
       // Add to body data if we have a value
       if (fieldValue != null) {
         bodyData.put(fieldName, fieldValue);
+      }
+    }
+
+    // Convert to JSON string
+    try {
+      return MAPPER.writeValueAsString(bodyData);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to serialize request body to JSON", e);
+    }
+  }
+
+  /**
+   * Builds JSON request body for POST requests using body configuration.
+   * Supports direct arrays and simple variable substitution.
+   *
+   * @param bodyConfig Body configuration from download config
+   * @param variables Variables for expression evaluation
+   * @return JSON string for POST request body
+   */
+  @SuppressWarnings("unchecked")
+  protected String buildRequestBodyFromConfig(Map<String, Object> bodyConfig,
+      Map<String, String> variables) {
+    Map<String, Object> bodyData = new java.util.LinkedHashMap<>();
+
+    for (Map.Entry<String, Object> fieldEntry : bodyConfig.entrySet()) {
+      String fieldName = fieldEntry.getKey();
+      Object fieldValue = fieldEntry.getValue();
+
+      if (fieldValue instanceof List) {
+        // Direct array value - pass through as-is
+        bodyData.put(fieldName, fieldValue);
+      } else if (fieldValue instanceof Map) {
+        Map<String, Object> fieldConfig = (Map<String, Object>) fieldValue;
+        String type = fieldConfig.get("type").toString();
+
+        switch (type) {
+          case "constant":
+            bodyData.put(fieldName, fieldConfig.get("value"));
+            break;
+          case "expression":
+            String expression = fieldConfig.get("value").toString();
+            bodyData.put(fieldName, evaluateExpression(expression, variables));
+            break;
+          case "auth":
+            // Auth is handled separately by the caller
+            break;
+          default:
+            throw new IllegalArgumentException("Unknown field type: " + type);
+        }
+      } else {
+        // Simple string value - treat as expression for variable substitution
+        String expression = fieldValue.toString();
+        bodyData.put(fieldName, evaluateExpression(expression, variables));
       }
     }
 
@@ -3402,17 +3527,15 @@ public abstract class AbstractGovDataDownloader {
    *   <li>Special yearRange type: dimensions.year: {type: yearRange, minYear: 1990}</li>
    * </ul>
    *
+   * <p>Year ranges use the configured startYear/endYear from the downloader instance.
+   *
    * @param tableName Table name to load metadata for
    * @param dimensionProvider Fallback provider for dimensions not in metadata
-   * @param startYear Start year for yearRange type (from schema config)
-   * @param endYear End year for yearRange type (from schema config)
    * @return Dimension provider that checks metadata first
    */
   protected DimensionProvider createMetadataDimensionProvider(
       String tableName,
-      DimensionProvider dimensionProvider,
-      int startYear,
-      int endYear) {
+      DimensionProvider dimensionProvider) {
 
     // Load table metadata once
     Map<String, Object> tableMetadata = loadTableMetadata(tableName);
@@ -3473,18 +3596,18 @@ public abstract class AbstractGovDataDownloader {
           String type = (String) dimConfig.get("type");
 
           if ("yearRange".equals(type)) {
-            // Apply minYear/maxYear constraints if specified
-            int effectiveStartYear = startYear;
-            int effectiveEndYear = endYear;
+            // Use instance startYear/endYear, apply minYear/maxYear constraints if specified
+            int effectiveStartYear = this.startYear;
+            int effectiveEndYear = this.endYear;
 
             if (dimConfig.containsKey("minYear")) {
               int minYear = ((Number) dimConfig.get("minYear")).intValue();
-              effectiveStartYear = Math.max(startYear, minYear);
+              effectiveStartYear = Math.max(this.startYear, minYear);
             }
 
             if (dimConfig.containsKey("maxYear")) {
               int maxYear = ((Number) dimConfig.get("maxYear")).intValue();
-              effectiveEndYear = Math.min(endYear, maxYear);
+              effectiveEndYear = Math.min(this.endYear, maxYear);
             }
 
             List<String> years = yearRange(effectiveStartYear, effectiveEndYear);
@@ -3565,17 +3688,15 @@ public abstract class AbstractGovDataDownloader {
    * Builds iteration dimensions from a table's partition pattern.
    * Extracts wildcard variables (e.g., frequency=*, year=*, tablename=*) and gets their values.
    *
+   * <p>Year ranges use the configured startYear/endYear from the downloader instance.
+   *
    * @param tableName Table name to load pattern from
    * @param dimensionProvider Lambda to provide values for all dimensions (including year)
-   * @param startYear Start year for yearRange type (from schema config)
-   * @param endYear End year for yearRange type (from schema config)
    * @return List of IterationDimension objects in pattern order
    */
   private List<IterationDimension> buildDimensionsFromPattern(
       String tableName,
-      DimensionProvider dimensionProvider,
-      int startYear,
-      int endYear) {
+      DimensionProvider dimensionProvider) {
 
     // Load table metadata to get pattern
     Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -3588,7 +3709,7 @@ public abstract class AbstractGovDataDownloader {
 
     // Wrap dimensionProvider with metadata-aware provider that checks YAML dimensions first
     DimensionProvider metadataAwareProvider =
-        createMetadataDimensionProvider(tableName, dimensionProvider, startYear, endYear);
+        createMetadataDimensionProvider(tableName, dimensionProvider);
 
     // Extract dimension names from pattern (variables with wildcards)
     // Pattern format: "type=xxx/frequency=*/year=*/tablename=*/file.parquet"
@@ -3615,6 +3736,23 @@ public abstract class AbstractGovDataDownloader {
     }
 
     return dimensions;
+  }
+
+  /**
+   * Optimized version of table iteration using metadata-only dimensions.
+   * Use this when ALL dimension values are defined in schema metadata
+   * (no custom dimension provider needed).
+   *
+   * @param tableName Table name for logging and manifest operations
+   * @param operation Lambda to execute the operation (download or convert)
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
+   */
+  protected void iterateTableOperationsOptimized(
+      String tableName,
+      TableOperation operation,
+      OperationType operationType) {
+    // Use null-returning provider - metadata dimensions will be used automatically
+    iterateTableOperationsOptimized(tableName, (dim) -> null, null, operation, operationType);
   }
 
   /**
@@ -3668,50 +3806,8 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Optimized version of table iteration with metadata-driven dimension support.
-   * Wraps the dimension provider to check table metadata first (YAML dimensions section),
-   * then falls back to the provided lambda.
-   *
-   * <p>This enables dimension values to be defined in YAML metadata:
-   * <pre>
-   * dimensions:
-   *   type: [employment_statistics]
-   *   frequency: *monthly_frequency  # YAML anchor reference
-   *   year:
-   *     type: yearRange
-   *     minYear: 1990
-   * </pre>
-   *
-   * @param tableName Table name for logging and manifest operations
-   * @param dimensionProvider Fallback provider for dimensions not in metadata
-   * @param prefetchCallback Optional callback for batching API calls
-   * @param operation Lambda to execute the operation (download or convert)
-   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
-   * @param startYear Start year for yearRange dimensions
-   * @param endYear End year for yearRange dimensions
-   */
-  protected void iterateTableOperationsOptimized(
-      String tableName,
-      DimensionProvider dimensionProvider,
-      PrefetchCallback prefetchCallback,
-      TableOperation operation,
-      OperationType operationType,
-      int startYear,
-      int endYear) {
-
-    // Wrap provider with metadata-aware version
-    DimensionProvider metadataProvider =
-        createMetadataDimensionProvider(tableName, dimensionProvider, startYear, endYear);
-
-    // Delegate to main method
-    iterateTableOperationsOptimized(tableName, metadataProvider, prefetchCallback, operation,
-        operationType, null, null);
-  }
-
-  /**
-   * Optimized version of table iteration with explicit prefetch connection lifecycle management.
-   * This overload accepts an existing prefetch connection and helper, allowing the caller to
-   * manage the lifecycle (e.g., to share prefetch cache between download and conversion stages).
+   * Optimized version of table iteration with explicit prefetch lifecycle management.
+   * This is the main implementation that all other overloads delegate to.
    *
    * <p>When prefetch connection/helper are provided:
    * <ul>
@@ -3720,54 +3816,13 @@ public abstract class AbstractGovDataDownloader {
    *   <li>The prefetchCallback parameter is ignored (prefetch table already exists)</li>
    * </ul>
    *
-   * <p>This is used when you want to share the prefetch cache across multiple operations:
-   * <pre>
-   * Connection prefetchDb = getDuckDBConnection();
-   * PrefetchHelper helper = new PrefetchHelper(prefetchDb, ...);
-   * try {
-   *   // Download stage - populate prefetch cache
-   *   iterateTableOperationsOptimized(..., "download", prefetchDb, helper);
-   *   // Conversion stage - use same prefetch cache
-   *   iterateTableOperationsOptimized(..., "conversion", prefetchDb, helper);
-   * } finally {
-   *   prefetchDb.close();
-   * }
-   * </pre>
-   *
-   * @param tableName Table name for logging and manifest operations
-   * @param dimensionProvider Lambda that provides values for ALL dimensions (including year)
-   * @param prefetchCallback Optional callback for batching API calls (ignored if prefetch provided)
-   * @param operation Lambda to execute the operation (download or convert)
-   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
-   * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
-   * @param prefetchHelper Existing prefetch helper (null to create new)
-   */
-  protected void iterateTableOperationsOptimized(
-      String tableName,
-      DimensionProvider dimensionProvider,
-      PrefetchCallback prefetchCallback,
-      TableOperation operation,
-      OperationType operationType,
-      Connection prefetchDb,
-      PrefetchHelper prefetchHelper) {
-    // Delegate to overload with explicit year range using reasonable defaults
-    int defaultStartYear = 1900;
-    int defaultEndYear = java.time.LocalDate.now().getYear();
-    iterateTableOperationsOptimized(tableName, dimensionProvider, prefetchCallback, operation,
-        operationType, defaultStartYear, defaultEndYear, prefetchDb, prefetchHelper);
-  }
-
-  /**
-   * Optimized version of table iteration with explicit year range AND prefetch lifecycle management.
-   * This is the main implementation that all other overloads delegate to.
+   * <p>Year ranges use the configured startYear/endYear from the downloader instance.
    *
    * @param tableName Table name for logging and manifest operations
    * @param dimensionProvider Lambda that provides values for dimensions not in YAML metadata
    * @param prefetchCallback Optional callback for batching API calls
    * @param operation Lambda to execute the operation (download or convert)
    * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
-   * @param startYear Start year for yearRange dimensions
-   * @param endYear End year for yearRange dimensions
    * @param prefetchDb Existing prefetch DuckDB connection (null to create new)
    * @param prefetchHelper Existing prefetch helper (null to create new)
    */
@@ -3777,14 +3832,12 @@ public abstract class AbstractGovDataDownloader {
       PrefetchCallback prefetchCallback,
       TableOperation operation,
       OperationType operationType,
-      int startYear,
-      int endYear,
       Connection prefetchDb,
       PrefetchHelper prefetchHelper) {
 
     // Build dimensions from table pattern
     List<IterationDimension> dimensions =
-        buildDimensionsFromPattern(tableName, dimensionProvider, startYear, endYear);
+        buildDimensionsFromPattern(tableName, dimensionProvider);
 
     if (dimensions.isEmpty()) {
       LOGGER.warn("No dimensions extracted from pattern for {} operations on {}",

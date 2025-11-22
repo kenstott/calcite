@@ -334,7 +334,11 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param tableName Name of the table in econ-schema.json
    * @param listKey Key of the iteration list (e.g., "nipaTablesList", "lineCodesList", "keyIndustriesList")
    * @return List of iteration values, or empty list if not found
+   * @deprecated Use {@link #extractDimensionValues(String, String)} instead, which reads from
+   *     schema dimensions metadata rather than download config iteration lists. Dimension metadata
+   *     is the preferred approach as it co-locates dimension values with table definitions.
    */
+  @Deprecated
   protected List<String> extractIterationList(String tableName, String listKey) {
     try {
       InputStream schemaStream = getClass().getResourceAsStream("/econ/econ-schema.json");
