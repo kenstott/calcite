@@ -428,12 +428,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.debug("Added WorldBank downloader to orchestration list");
     }
 
-    // PHASE 0: Download all reference data
-    LOGGER.info("=== PHASE 0: Downloading all reference data ===");
+    // PHASE 0: Process all reference data (download if not cached)
+    LOGGER.info("=== PHASE 0: Processing reference data ===");
     for (AbstractEconDataDownloader downloader : downloaders) {
       try {
         String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.info("Downloading reference data using {}", downloaderName);
+        LOGGER.debug("Processing reference data using {}", downloaderName);
         downloader.downloadReferenceData();
       } catch (Exception e) {
         LOGGER.error("Error during reference data download for {}: {}",
@@ -441,12 +441,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // PHASE 1: Download all time-series data
-    LOGGER.info("=== PHASE 1: Downloading all time-series data ===");
+    // PHASE 1: Process all time-series data (download if not cached)
+    LOGGER.info("=== PHASE 1: Processing time-series data ===");
     for (AbstractEconDataDownloader downloader : downloaders) {
       try {
         String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.info("Downloading data using {}", downloaderName);
+        LOGGER.debug("Processing data using {}", downloaderName);
         downloader.downloadAll(startYear, endYear);
       } catch (Exception e) {
         LOGGER.error("Error during download phase for {}: {}",
@@ -454,12 +454,12 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // PHASE 2: Convert all data to Parquet
-    LOGGER.info("=== PHASE 2: Converting all data to Parquet ===");
+    // PHASE 2: Convert all data to Parquet (convert if not cached)
+    LOGGER.info("=== PHASE 2: Converting data to Parquet ===");
     for (AbstractEconDataDownloader downloader : downloaders) {
       try {
         String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.info("Converting data using {}", downloaderName);
+        LOGGER.debug("Converting data using {}", downloaderName);
         downloader.convertAll(startYear, endYear);
       } catch (Exception e) {
         LOGGER.error("Error during conversion phase for {}: {}",
