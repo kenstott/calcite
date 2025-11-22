@@ -45,7 +45,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private final String parquetDir;
   private final List<String> nipaTablesList;
   private final Map<String, Set<String>> tableFrequencies;
-  private final List<String> keyIndustriesList;
 
   /**
    * Simple constructor without shared manifest (creates one from operatingDirectory).
@@ -66,9 +65,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
         sharedManifest, startYear, endYear);
     this.parquetDir = parquetDir;
-
-    // Extract iteration lists from schema metadata
-    List<String> keyIndustriesListFromSchema = extractIterationList("industry_gdp", "keyIndustriesList");
 
     // Load active NIPA tables from catalog - this is the ONLY source of truth
     Map<String, Set<String>> loadedTableFrequencies;
@@ -97,7 +93,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     this.nipaTablesList = new ArrayList<>(loadedTableFrequencies.keySet());
     this.tableFrequencies = loadedTableFrequencies;
-    this.keyIndustriesList = keyIndustriesListFromSchema;
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
@@ -109,7 +104,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     this.parquetDir = cacheDir; // For compatibility, use same dir
     this.nipaTablesList = null;
     this.tableFrequencies = null;
-    this.keyIndustriesList = null;
   }
 
   @Override protected String getTableName() {
@@ -174,9 +168,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // trade_statistics is a SQL view over national_accounts - no separate download needed
     downloadItaDataMetadata(startYear, endYear);
-    if (keyIndustriesList != null) {
-      downloadIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
-    }
+    downloadIndustryGdpMetadata();
   }
 
   /**
@@ -196,9 +188,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     convertRegionalIncomeMetadata(startYear, endYear);
     // trade_statistics is a SQL view over national_accounts - no separate conversion needed
     convertItaDataMetadata(startYear, endYear);
-    if (keyIndustriesList != null) {
-      convertIndustryGdpMetadata(startYear, endYear, keyIndustriesList);
-    }
+    convertIndustryGdpMetadata();
   }
 
   // ===== METADATA-DRIVEN DOWNLOAD/CONVERSION METHODS =====
@@ -504,12 +494,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
 
-    // Build flat list of all (tablename, line_code, geo_fips) combinations with individual parameters
-    // Filter GeoFips based on table type and years based on industry classification
-    // to avoid invalid API parameter combinations
-    List<Map<String, String>> parameterCombinations = new ArrayList<>();
-    int skippedGeoFipsCombinations = 0;
-    int skippedYearCombinations = 0;
+    // Build sets of valid dimensions for iteration
+    // Filter based on table type and collect unique values for each dimension
+    Set<String> validTableNames = new HashSet<>();
+    Set<String> allLineCodes = new HashSet<>();
+    Set<String> allGeoFipsCodes = new HashSet<>();
+    // Track valid combinations for filtering in the operation lambda
+    Set<String> validCombinations = new HashSet<>();
+
     for (String tableNameKey : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
@@ -521,49 +513,60 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
       Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
 
+      // Track unique dimension values
+      validTableNames.add(tableNameKey);
+      allLineCodes.addAll(lineCodesForTable);
+      allGeoFipsCodes.addAll(validGeoFipsForTable);
+
+      // Build valid combinations lookup for filtering during iteration
       for (String lineCode : lineCodesForTable) {
         for (String geoFipsCode : validGeoFipsForTable) {
-          Map<String, String> params = new HashMap<>();
-          params.put("tablename", tableNameKey);
-          params.put("line_code", lineCode);
-          params.put("geo_fips_set", geoFipsCode);
-          parameterCombinations.add(params);
-        }
-      }
-
-      // Log how many invalid geo combinations we avoided
-      int totalLineCodes = lineCodesForTable.size();
-      Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
-      int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
-      skippedGeoFipsCombinations += totalLineCodes * invalidGeoCount;
-
-      // Count how many year combinations we'll skip based on industry classification
-      for (int year = startYear; year <= endYear; year++) {
-        if (!isTableValidForYear(tableNameKey, year)) {
-          skippedYearCombinations += lineCodesForTable.size() * validGeoFipsForTable.size();
+          validCombinations.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
         }
       }
     }
 
-    if (skippedGeoFipsCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
-          skippedGeoFipsCombinations);
-    }
-    if (skippedYearCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-year combinations based on industry classification " +
-          "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
-    }
+    // Convert to lists for dimension provider
+    List<String> tableNamesList = new ArrayList<>(validTableNames);
+    List<String> lineCodesList = new ArrayList<>(allLineCodes);
+    List<String> geoFipsCodesList = new ArrayList<>(allGeoFipsCodes);
 
-    LOGGER.info("Regional income download: {} valid table-lineCode-geo combinations prepared (filtered {} invalid geo + {} invalid year)",
-        parameterCombinations.size(), skippedGeoFipsCombinations, skippedYearCombinations);
+    LOGGER.info("Regional income download: {} tables × {} line codes × {} geo sets × {} years (filtering invalid combinations during iteration)",
+        tableNamesList.size(), lineCodesList.size(), geoFipsCodesList.size(), endYear - startYear + 1);
 
-    // Use custom iteration with individual parameters instead of combo strings
-    iterateWithParameters(tableName, parameterCombinations, startYear, endYear,
+    // Use optimized iteration with DuckDB-based cache filtering
+    // Pattern: type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet
+    iterateTableOperationsOptimized(
+        tableName,
+        (dimensionName) -> {
+          switch (dimensionName) {
+          case "type":
+            return List.of(tableName);
+          case "year":
+            return yearRange(startYear, endYear);
+          case "geo_fips_set":
+            return geoFipsCodesList;
+          case "tablename":
+            return tableNamesList;
+          case "line_code":
+            return lineCodesList;
+          default:
+            return null;
+          }
+        },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
+          String tableNameKey = vars.get("tablename");
+          String lineCode = vars.get("line_code");
+          String geoFipsCode = vars.get("geo_fips_set");
+
+          // Skip invalid table-lineCode-geoFips combinations
+          String combo = tableNameKey + ":" + lineCode + ":" + geoFipsCode;
+          if (!validCombinations.contains(combo)) {
+            return;  // Skip invalid combination
+          }
 
           // Skip this combination if table is not valid for this year
-          String tableNameKey = vars.get("tablename");
           if (!isTableValidForYear(tableNameKey, year)) {
             return;  // Skip download
           }
@@ -603,12 +606,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
 
-    // Build flat list of all (tablename, line_code, geo_fips_set) combinations
-    // Filter GeoFips based on table type and years based on industry classification
-    // to avoid invalid API parameter combinations
-    List<String> combos = new ArrayList<>();
-    int skippedGeoFipsCombinations = 0;
-    int skippedYearCombinations = 0;
+    // Build sets of valid dimensions for iteration
+    // Filter based on table type and collect unique values for each dimension
+    Set<String> validTableNames = new HashSet<>();
+    Set<String> allLineCodes = new HashSet<>();
+    Set<String> allGeoFipsCodes = new HashSet<>();
+    // Track valid combinations for filtering in the operation lambda
+    Set<String> validCombinations = new HashSet<>();
+
     for (String tableNameKey : tablenames.keySet()) {
       Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
       if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
@@ -620,73 +625,66 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
       Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
 
+      // Track unique dimension values
+      validTableNames.add(tableNameKey);
+      allLineCodes.addAll(lineCodesForTable);
+      allGeoFipsCodes.addAll(validGeoFipsForTable);
+
+      // Build valid combinations lookup for filtering during iteration
       for (String lineCode : lineCodesForTable) {
         for (String geoFipsCode : validGeoFipsForTable) {
-          combos.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
-        }
-      }
-
-      // Log how many invalid geo combinations we avoided
-      int totalLineCodes = lineCodesForTable.size();
-      Map<String, Object> allGeoFips = extractApiSet(tableName, "geoFipsSet");
-      int invalidGeoCount = allGeoFips.size() - validGeoFipsForTable.size();
-      skippedGeoFipsCombinations += totalLineCodes * invalidGeoCount;
-
-      // Count how many year combinations we'll skip based on industry classification
-      for (int year = startYear; year <= endYear; year++) {
-        if (!isTableValidForYear(tableNameKey, year)) {
-          skippedYearCombinations += lineCodesForTable.size() * validGeoFipsForTable.size();
+          validCombinations.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
         }
       }
     }
 
-    if (skippedGeoFipsCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-GeoFips combinations based on table type constraints",
-          skippedGeoFipsCombinations);
-    }
-    if (skippedYearCombinations > 0) {
-      LOGGER.info("Filtered out {} invalid table-year combinations based on industry classification " +
-          "(SIC tables: <=2000, NAICS tables: >=2001, Historical tables: <=2005)", skippedYearCombinations);
-    }
+    // Convert to lists for dimension provider
+    List<String> tableNamesList = new ArrayList<>(validTableNames);
+    List<String> lineCodesList = new ArrayList<>(allLineCodes);
+    List<String> geoFipsCodesList = new ArrayList<>(allGeoFipsCodes);
 
-    LOGGER.info("Regional income conversion: {} valid table-lineCode-geo combinations prepared (filtered {} invalid geo + {} invalid year)",
-        combos.size(), skippedGeoFipsCombinations, skippedYearCombinations);
+    LOGGER.info("Regional income conversion: {} tables × {} line codes × {} geo sets × {} years (filtering invalid combinations during iteration)",
+        tableNamesList.size(), lineCodesList.size(), geoFipsCodesList.size(), endYear - startYear + 1);
 
-    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
-    // Note: Year filtering happens in the operation lambda
+    // Use optimized iteration with DuckDB-based cache filtering
+    // Pattern: type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet
     iterateTableOperationsOptimized(
         tableName,
         (dimensionName) -> {
           switch (dimensionName) {
-          case "type": return List.of(tableName);
+          case "type":
+            return List.of(tableName);
           case "year":
-              return yearRange(startYear, endYear);
-            case "combo":
-              return combos;
-            default:
-              return null;
+            return yearRange(startYear, endYear);
+          case "geo_fips_set":
+            return geoFipsCodesList;
+          case "tablename":
+            return tableNamesList;
+          case "line_code":
+            return lineCodesList;
+          default:
+            return null;
           }
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
+          String tableNameKey = vars.get("tablename");
+          String lineCode = vars.get("line_code");
+          String geoFipsCode = vars.get("geo_fips_set");
 
-          // Parse combo and execute conversion
-          String[] parts = vars.get("combo").split(":", 3);
-          String tableNameKey = parts[0];
+          // Skip invalid table-lineCode-geoFips combinations
+          String combo = tableNameKey + ":" + lineCode + ":" + geoFipsCode;
+          if (!validCombinations.contains(combo)) {
+            return;  // Skip invalid combination
+          }
 
           // Skip this combination if table is not valid for this year
           if (!isTableValidForYear(tableNameKey, year)) {
             return;  // Skip conversion
           }
 
-          Map<String, String> fullVars = new HashMap<>();
-          fullVars.put("year", vars.get("year"));
-          fullVars.put("tablename", tableNameKey);
-          fullVars.put("line_code", parts[1]);
-          fullVars.put("geo_fips_set", parts[2]);
-
           // Convert
-          convertCachedJsonToParquet(tableName, fullVars);
+          convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
@@ -888,48 +886,24 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Creates dimension provider for industry GDP data.
-   */
-  private DimensionProvider createIndustryGdpDimensions(String tableName, int startYear, int endYear,
-      List<String> keyIndustriesList) {
-    return (dimensionName) -> {
-      switch (dimensionName) {
-        case "type": return List.of(tableName);
-        case "year":
-          return yearRange(startYear, endYear);
-        case "industry":
-          return keyIndustriesList;
-        case "frequency":
-          return Collections.singletonList("A");  // Industry GDP is Annual only
-        default:
-          return null;
-      }
-    };
-  }
-
-  /**
    * Downloads industry GDP data using metadata-driven pattern.
-   *
-   * @param startYear         First year to download
-   * @param endYear           Last year to download
-   * @param keyIndustriesList List of industry codes to download
+   * Uses instance variables for year range and reads all dimensions from schema metadata.
    */
-  public void downloadIndustryGdpMetadata(int startYear, int endYear,
-      List<String> keyIndustriesList) {
-    if (!validateListParameter(keyIndustriesList, "industries", "download")) {
+  public void downloadIndustryGdpMetadata() {
+    String tableName = "industry_gdp";
+    List<String> industries = extractDimensionValues(tableName, "industry");
+
+    if (!validateListParameter(industries, "industries", "download")) {
       return;
     }
 
     int yearCount = endYear - startYear + 1;
     LOGGER.info("Industry GDP download: {} NAICS industry codes × {} years = ~{} API calls",
-        keyIndustriesList.size(), yearCount, keyIndustriesList.size() * yearCount);
+        industries.size(), yearCount, industries.size() * yearCount);
 
-    String tableName = "industry_gdp";
-
-    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    // Use optimized iteration with metadata-only dimensions (no custom provider needed)
     iterateTableOperationsOptimized(
         tableName,
-        createIndustryGdpDimensions(tableName, startYear, endYear, keyIndustriesList),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
@@ -944,23 +918,23 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
   /**
    * Converts industry GDP data using metadata-driven pattern.
+   * Uses instance variables for year range and reads all dimensions from schema metadata.
    */
-  public void convertIndustryGdpMetadata(int startYear, int endYear,
-      List<String> keyIndustriesList) {
-    if (!validateListParameter(keyIndustriesList, "industries", "conversion")) {
+  public void convertIndustryGdpMetadata() {
+    String tableName = "industry_gdp";
+    List<String> industries = extractDimensionValues(tableName, "industry");
+
+    if (!validateListParameter(industries, "industries", "conversion")) {
       return;
     }
 
     int yearCount = endYear - startYear + 1;
     LOGGER.info("Industry GDP conversion: {} NAICS industry codes × {} years = ~{} files",
-        keyIndustriesList.size(), yearCount, keyIndustriesList.size() * yearCount);
+        industries.size(), yearCount, industries.size() * yearCount);
 
-    String tableName = "industry_gdp";
-
-    // Use optimized iteration with DuckDB-based cache filtering (10-20x faster)
+    // Use optimized iteration with metadata-only dimensions (no custom provider needed)
     iterateTableOperationsOptimized(
         tableName,
-        createIndustryGdpDimensions(tableName, startYear, endYear, keyIndustriesList),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
           convertCachedJsonToParquet(tableName, vars);
@@ -1326,130 +1300,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
         OperationType.CONVERSION);
-  }
-
-  /**
-   * Custom iteration helper for parameter combinations.
-   * Generates DownloadRequests with individual parameters instead of combo strings,
-   * then uses DuckDB bulk cache filtering.
-   *
-   * @param tableName Table name for cache manifest
-   * @param parameterCombinations List of parameter maps (one per combination)
-   * @param startYear First year to process
-   * @param endYear Last year to process
-   * @param operation Operation to execute for uncached combinations
-   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
-   */
-  private void iterateWithParameters(
-      String tableName,
-      List<Map<String, String>> parameterCombinations,
-      int startYear,
-      int endYear,
-      TableOperation operation,
-      OperationType operationType) {
-
-    int totalOps = parameterCombinations.size() * (endYear - startYear + 1);
-
-    String operationDesc = operationType.getValue();
-    LOGGER.info("{} {}: {} combinations × {} years = {} operations",
-        operationDesc.substring(0, 1).toUpperCase() + operationDesc.substring(1),
-        tableName, parameterCombinations.size(), endYear - startYear + 1, totalOps);
-
-    // 1. Generate all DownloadRequests with individual parameters
-    List<CacheManifestQueryHelper.DownloadRequest> allRequests = new ArrayList<>();
-    for (Map<String, String> params : parameterCombinations) {
-      for (int year = startYear; year <= endYear; year++) {
-        Map<String, String> vars = new HashMap<>(params);
-        vars.put("year", String.valueOf(year));
-        allRequests.add(new CacheManifestQueryHelper.DownloadRequest(tableName, vars));
-      }
-    }
-
-    LOGGER.debug("Generated {} download request combinations", allRequests.size());
-
-    // 2. Filter using DuckDB SQL query (FAST!)
-    List<CacheManifestQueryHelper.DownloadRequest> needed;
-    try {
-      String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, OperationType.DOWNLOAD);
-
-      // After filtering
-      if (needed.size() < allRequests.size()) {
-        LOGGER.info("Cache hit: {}% ({}/{} already processed)",
-            (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100),
-            allRequests.size() - needed.size(), allRequests.size());
-      }
-
-    } catch (Exception e) {
-      LOGGER.warn("DuckDB cache filtering failed: {}", e.getMessage());
-      LOGGER.debug("Fallback details: ", e);
-      // Execute all requests without filtering
-      needed = allRequests;
-    }
-
-    // 3. Execute only the needed operations
-    int executed = 0;
-    int skipped = allRequests.size() - needed.size();
-
-    // Load table metadata once for path resolution
-    Map<String, Object> metadata = loadTableMetadata(tableName);
-    String pattern = (String) metadata.get("pattern");
-
-    for (CacheManifestQueryHelper.DownloadRequest req : needed) {
-      try {
-        Map<String, String> allParams = new HashMap<>(req.parameters);
-        CacheKey cacheKey = new CacheKey(tableName, allParams);
-
-        // Resolve paths using pattern (fully resolved, not relative)
-        String relativeJsonPath = resolveJsonPath(pattern, allParams);
-        String relativeParquetPath = resolveParquetPath(pattern, allParams);
-        String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
-        String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
-
-        operation.execute(cacheKey, allParams, fullJsonPath, fullParquetPath, null);
-        executed++;
-
-        // Progress updates - less frequent
-        int progressInterval = Math.max(100, needed.size() / 10); // 10 updates max
-        if ((executed % progressInterval == 0 || executed == needed.size()) && executed > 0) {
-          int percent = (executed * 100) / needed.size();
-          LOGGER.info("{}: {}% ({}/{})",
-              tableName, percent, executed, needed.size());
-        }
-
-      } catch (IOException e) {
-        // Handle API errors - mark in cache manifest to avoid retrying too soon
-        if (e.getMessage() != null && e.getMessage().contains("API returned error (HTTP 200 with error content)")) {
-          String errorMessage = e.getMessage();
-          if (errorMessage.startsWith("API returned error (HTTP 200 with error content): ")) {
-            errorMessage = errorMessage.substring("API returned error (HTTP 200 with error content): ".length());
-          }
-
-          // Reconstruct cache key from request
-          Map<String, String> allParams = new HashMap<>(req.parameters);
-          CacheKey errorCacheKey = new CacheKey(tableName, allParams);
-
-          cacheManifest.markApiError(errorCacheKey, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
-          cacheManifest.save(operatingDirectory);
-          LOGGER.info("Marked {} as API error - will retry in {} days",
-              errorCacheKey.asString(), DEFAULT_API_ERROR_RETRY_DAYS);
-        } else {
-          // Other IOException - log and continue
-          LOGGER.error("Error during {} for {} with params {}: {}",
-              operationType.getValue(), tableName, req.parameters, e.getMessage());
-        }
-      } catch (Exception e) {
-        // Other exceptions - log and continue
-        LOGGER.error("Error during {} for {} with params {}: {}",
-            operationType.getValue(), tableName, req.parameters, e.getMessage());
-      }
-    }
-
-    LOGGER.info("{} {} complete: {} operations executed, {} cached/skipped",
-        tableName, operationType.getValue(), executed, skipped);
-
-    // Save manifest
-    cacheManifest.save(operatingDirectory);
   }
 
   /**
