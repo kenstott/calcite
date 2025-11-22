@@ -215,10 +215,12 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
         createFredDimensions(tableName, startYear, endYear, seriesIds),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Execute conversion
-          convertCachedJsonToParquet(tableName, vars);
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted in manifest
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          // Mark as converted in manifest only if conversion succeeded
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          }
         },
         OperationType.CONVERSION);
   }

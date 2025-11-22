@@ -317,10 +317,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Convert
-          convertCachedJsonToParquet(tableName, vars);
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          // Mark as converted only if conversion succeeded
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          }
         },
         OperationType.CONVERSION);
   }
@@ -684,10 +686,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Convert
-          convertCachedJsonToParquet(tableName, vars);
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          // Mark as converted only if conversion succeeded
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          }
         },
         OperationType.CONVERSION);
   }
@@ -784,9 +788,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       }
 
       try {
-        convertCachedJsonToParquet(tableName, variables);
-        cacheManifest.markParquetConverted(cacheKey, parquetPath);
-        convertedCount++;
+        boolean converted = convertCachedJsonToParquet(tableName, variables);
+        if (converted) {
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          convertedCount++;
+        }
       } catch (Exception e) {
         LOGGER.error("Error converting trade statistics for year {}: {}", year, e.getMessage());
       }
@@ -877,10 +883,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         createItaDataDimensions(tableName, startYear, endYear, itaIndicatorsList, frequencies),
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
-          convertCachedJsonToParquet(tableName, vars);
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          // Mark as converted only if conversion succeeded
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          }
         },
         OperationType.CONVERSION);
   }
@@ -937,10 +945,12 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         tableName,
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Convert
-          convertCachedJsonToParquet(tableName, vars);
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          // Mark as converted only if conversion succeeded
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          }
         },
         OperationType.CONVERSION);
   }

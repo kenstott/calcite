@@ -3079,11 +3079,12 @@ public abstract class AbstractGovDataDownloader {
    *
    * @param tableName Name of table in schema
    * @param variables Variables for path resolution (e.g., {year: "2020"})
+   * @return true if conversion succeeded, false if source JSON was not found
    * @throws IOException if file operations fail
    */
-  public void convertCachedJsonToParquet(String tableName, Map<String, String> variables)
+  public boolean convertCachedJsonToParquet(String tableName, Map<String, String> variables)
       throws IOException {
-    convertCachedJsonToParquet(tableName, variables, null);
+    return convertCachedJsonToParquet(tableName, variables, null);
   }
 
   /**
@@ -3106,11 +3107,12 @@ public abstract class AbstractGovDataDownloader {
    * @param tableName Name of table in schema
    * @param variables Variables for path resolution (e.g., {year: "2020"})
    * @param transformer Deprecated - use expression columns in schema instead
+   * @return true if conversion succeeded, false if source JSON was not found
    * @throws IOException if file operations fail
    * @deprecated Use expression columns in schema instead of runtime transformations
    */
   @Deprecated
-  public void convertCachedJsonToParquet(String tableName, Map<String, String> variables,
+  public boolean convertCachedJsonToParquet(String tableName, Map<String, String> variables,
       RecordTransformer transformer) throws IOException {
     LOGGER.info("Converting cached JSON to Parquet for table: {}", tableName);
 
@@ -3132,7 +3134,7 @@ public abstract class AbstractGovDataDownloader {
     // Check if source exists
     if (!cacheStorageProvider.exists(fullJsonPath)) {
       LOGGER.warn("Source JSON file not found: {}", fullJsonPath);
-      return;
+      return false;
     }
 
     // Load column metadata first to enable type-aware conversion
@@ -3165,6 +3167,7 @@ public abstract class AbstractGovDataDownloader {
     // Verify file was written
     if (storageProvider.exists(fullParquetPath)) {
       LOGGER.info("Successfully converted {} to Parquet: {}", tableName, fullParquetPath);
+      return true;
     } else {
       LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
       throw new IOException("Parquet file not found after write: " + fullParquetPath);
