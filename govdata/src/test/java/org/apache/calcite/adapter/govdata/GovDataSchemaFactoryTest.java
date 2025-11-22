@@ -100,84 +100,56 @@ public class GovDataSchemaFactoryTest {
     assertTrue((Boolean) operand.get("testMode"));
   }
 
-  @Test void testValidTrendPattern() {
-    LOGGER.debug("Testing valid trend pattern validation");
+  @Test void testValidAlternatePattern() {
+    LOGGER.debug("Testing valid alternate partition pattern validation");
 
     GovDataSubSchemaFactory factory = new EconSchemaFactory();
 
-    // Valid: trend pattern is detail pattern with year removed
-    String detailPattern = "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet";
-    String trendPattern = "type=employment_statistics/frequency={frequency}/employment_statistics.parquet";
+    // Valid: alternate pattern has same file name
+    String sourcePattern = "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet";
+    String alternatePattern = "type=employment_statistics/frequency=*/employment_statistics.parquet";
 
-    assertTrue(factory.validateTrendPattern(detailPattern, trendPattern, "employment_statistics"),
-        "Valid trend pattern should pass validation");
+    assertTrue(factory.validateAlternatePattern(sourcePattern, alternatePattern, "employment_statistics"),
+        "Valid alternate pattern should pass validation");
   }
 
-  @Test void testValidTrendPatternMultipleKeysRemoved() {
-    LOGGER.debug("Testing trend pattern with multiple partition keys removed");
+  @Test void testValidAlternatePatternDifferentKeys() {
+    LOGGER.debug("Testing alternate partition pattern with different partition keys");
 
     GovDataSubSchemaFactory factory = new EconSchemaFactory();
 
-    // Valid: trend pattern removes multiple partition keys
-    String detailPattern = "type=regional_income/year={year}/geo_fips_set={geo}/tablename={table}/line_code={line}/regional_income.parquet";
-    String trendPattern = "type=regional_income/tablename={table}/line_code={line}/regional_income.parquet";
+    // Valid: alternate pattern with completely different partition scheme
+    String sourcePattern = "type=population/year=*/population.parquet";
+    String alternatePattern = "type=population_by_state/state=*/population.parquet";
 
-    assertTrue(factory.validateTrendPattern(detailPattern, trendPattern, "regional_income"),
-        "Trend pattern with multiple keys removed should be valid");
+    assertTrue(factory.validateAlternatePattern(sourcePattern, alternatePattern, "population"),
+        "Alternate pattern with different partition keys should be valid");
   }
 
-  @Test void testInvalidTrendPatternDifferentFileName() {
-    LOGGER.debug("Testing invalid trend pattern with different file name");
+  @Test void testInvalidAlternatePatternDifferentFileName() {
+    LOGGER.debug("Testing invalid alternate pattern with different file name");
 
     GovDataSubSchemaFactory factory = new EconSchemaFactory();
 
     // Invalid: different file name
-    String detailPattern = "type=employment/frequency={frequency}/year={year}/employment.parquet";
-    String trendPattern = "type=employment/frequency={frequency}/trend.parquet";
+    String sourcePattern = "type=employment/frequency=*/year=*/employment.parquet";
+    String alternatePattern = "type=employment/frequency=*/alternate.parquet";
 
-    assertFalse(factory.validateTrendPattern(detailPattern, trendPattern, "employment"),
-        "Trend pattern with different file name should be invalid");
+    assertFalse(factory.validateAlternatePattern(sourcePattern, alternatePattern, "employment"),
+        "Alternate pattern with different file name should be invalid");
   }
 
-  @Test void testInvalidTrendPatternMoreSegments() {
-    LOGGER.debug("Testing invalid trend pattern with more segments than detail");
+  @Test void testCountPartitionKeys() {
+    LOGGER.debug("Testing partition key counting");
 
     GovDataSubSchemaFactory factory = new EconSchemaFactory();
 
-    // Invalid: trend has more segments
-    String detailPattern = "type=employment/employment.parquet";
-    String trendPattern = "type=employment/frequency={frequency}/year={year}/employment.parquet";
-
-    assertFalse(factory.validateTrendPattern(detailPattern, trendPattern, "employment"),
-        "Trend pattern with more segments should be invalid");
-  }
-
-  @Test void testInvalidTrendPatternWrongKey() {
-    LOGGER.debug("Testing invalid trend pattern with non-existent partition key");
-
-    GovDataSubSchemaFactory factory = new EconSchemaFactory();
-
-    // Invalid: trend contains partition key not in detail
-    String detailPattern = "type=employment/year={year}/employment.parquet";
-    String trendPattern = "type=employment/frequency={frequency}/employment.parquet";
-
-    assertFalse(factory.validateTrendPattern(detailPattern, trendPattern, "employment"),
-        "Trend pattern with non-existent partition key should be invalid");
-  }
-
-  @Test void testInvalidTrendPatternOutOfOrder() {
-    LOGGER.debug("Testing invalid trend pattern with out-of-order segments");
-
-    GovDataSubSchemaFactory factory = new EconSchemaFactory();
-
-    // Invalid: trend has segments in wrong order
-    String detailPattern = "type=employment/frequency={frequency}/year={year}/employment.parquet";
-    String trendPattern = "type=employment/year={year}/employment.parquet";
-
-    // This should succeed because year comes after frequency in detail pattern
-    // and we're just skipping frequency
-    assertTrue(factory.validateTrendPattern(detailPattern, trendPattern, "employment"),
-        "Trend pattern that skips middle segment should be valid");
+    // Test various patterns
+    assertEquals(2, factory.countPartitionKeys("type=employment/year=*/employment.parquet"));
+    assertEquals(3, factory.countPartitionKeys("type=X/year=*/state=*/data.parquet"));
+    assertEquals(1, factory.countPartitionKeys("type=data/data.parquet"));
+    assertEquals(0, factory.countPartitionKeys("data.parquet"));
+    assertEquals(0, factory.countPartitionKeys(null));
   }
 
   @Test void testExtractPartitionKey() {
