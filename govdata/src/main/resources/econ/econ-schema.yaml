@@ -329,9 +329,12 @@ partitionedTables:
   # --- EMPLOYMENT STATISTICS ---
   - name: employment_statistics
     pattern: "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet"
-    trend_patterns:
+    alternate_partitions:
       - name: employment_statistics_trend
         pattern: "type=employment_statistics/frequency=*/employment_statistics.parquet"
+        partition:
+          columnDefinitions:
+            - {name: frequency, type: VARCHAR}
     partitions: *standard_partitions
     comment: >
       U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments.
@@ -1705,6 +1708,15 @@ partitionedTables:
   # --- INDUSTRY GDP ---
   - name: industry_gdp
     pattern: "type=indicators/frequency=*/year=*/industry=*/industry_gdp.parquet"
+    dimensions:
+      industry:
+        - "31G"
+        - "52"
+        - "53"
+        - "54"
+        - "GSLG"
+      year:
+        type: yearRange  # Special: computed from startYear/endYear
     partitions:
       style: hive
       columnDefinitions:
@@ -1767,8 +1779,8 @@ partitionedTables:
           type: constant
           value: GDPbyIndustry
         Industry:
-          type: iteration
-          source: keyIndustriesList
+          type: expression
+          value: "{industry}"
         Frequency:
           type: constant
           value: A
@@ -1778,12 +1790,6 @@ partitionedTables:
         ResultFormat:
           type: constant
           value: JSON
-      keyIndustriesList:
-        - "31G"
-        - "52"
-        - "53"
-        - "54"
-        - "GSLG"
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"

@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.OperationType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -112,7 +113,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -141,7 +142,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -170,6 +171,6 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 }

@@ -109,11 +109,14 @@ public interface GovDataSubSchemaFactory {
    * Load table definitions from schema JSON/YAML resource file.
    * Loads both "partitionedTables" (Parquet files) and "tables" (views, etc.).
    *
+   * <p>For YAML files, uses SnakeYAML via {@link YamlUtils} to properly resolve
+   * YAML anchors and aliases. Jackson's YAML parser does not correctly resolve
+   * anchors for complex structures.
+   *
    * @return List of all table definitions (partitioned tables + views)
    */
   default List<Map<String, Object>> loadTableDefinitions() {
     String schemaResourceName = getSchemaResourceName();
-    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
 
     try (InputStream is = getClass().getResourceAsStream(schemaResourceName)) {
       if (is == null) {
@@ -121,8 +124,12 @@ public interface GovDataSubSchemaFactory {
             "Could not find " + schemaResourceName + " resource file");
       }
 
+      // Use YamlUtils for proper YAML anchor/alias resolution
+      // Jackson YAML doesn't resolve anchors correctly for complex structures
+      com.fasterxml.jackson.databind.JsonNode schemaNode =
+          YamlUtils.parseYamlOrJson(is, schemaResourceName);
       @SuppressWarnings("unchecked")
-      Map<String, Object> schema = mapper.readValue(is, Map.class);
+      Map<String, Object> schema = JSON_MAPPER.convertValue(schemaNode, Map.class);
 
       // Load partitioned tables (Parquet files)
       @SuppressWarnings("unchecked")
@@ -574,89 +581,42 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
-   * Validates that a trend pattern is properly derived from a detail pattern.
+   * Validates that an alternate partition pattern is properly related to the source pattern.
    *
-   * <p>A valid trend pattern must:
+   * <p>A valid alternate partition pattern must:
    * <ul>
-   *   <li>Have the same base structure as the detail pattern</li>
-   *   <li>Only differ by having fewer partition key segments (e.g., key=value/ removed)</li>
-   *   <li>Keep the same file name at the end</li>
+   *   <li>Have a valid pattern structure</li>
+   *   <li>Reference the same logical data (same file name at the end)</li>
    * </ul>
    *
-   * <p>Example valid trend pattern:
-   * <pre>
-   * Detail:  "type=employment/frequency={frequency}/year={year}/data.parquet"
-   * Trend:   "type=employment/frequency={frequency}/data.parquet"
-   * </pre>
+   * <p>Example valid alternate partition:
+   * <pre>{@code
+   * Source:    type=population/year=* /population.parquet
+   * Alternate: type=population_by_state/state=* /population.parquet
+   * }</pre>
    *
-   * @param detailPattern The detail table pattern (with all partition keys)
-   * @param trendPattern The trend table pattern (with subset of partition keys)
+   * @param sourcePattern The source table pattern
+   * @param alternatePattern The alternate partition pattern
    * @param tableName The table name (for logging)
-   * @return true if trend pattern is valid, false otherwise
+   * @return true if alternate pattern is valid, false otherwise
    */
-  default boolean validateTrendPattern(String detailPattern, String trendPattern,
+  default boolean validateAlternatePattern(String sourcePattern, String alternatePattern,
       String tableName) {
     // Split patterns by '/' to analyze path segments
-    String[] detailSegments = detailPattern.split("/");
-    String[] trendSegments = trendPattern.split("/");
-
-    // Trend pattern must have fewer or equal segments
-    if (trendSegments.length > detailSegments.length) {
-      LOGGER.warn("Trend pattern for '{}' has more path segments than detail pattern",
-          tableName);
-      return false;
-    }
+    String[] sourceSegments = sourcePattern.split("/");
+    String[] alternateSegments = alternatePattern.split("/");
 
     // Last segment (file name) must match exactly
-    String detailFileName = detailSegments[detailSegments.length - 1];
-    String trendFileName = trendSegments[trendSegments.length - 1];
-    if (!detailFileName.equals(trendFileName)) {
-      LOGGER.warn("Trend pattern for '{}' has different file name: '{}' vs '{}'",
-          tableName, trendFileName, detailFileName);
+    String sourceFileName = sourceSegments[sourceSegments.length - 1];
+    String alternateFileName = alternateSegments[alternateSegments.length - 1];
+    if (!sourceFileName.equals(alternateFileName)) {
+      LOGGER.warn("Alternate pattern for '{}' has different file name: '{}' vs '{}'",
+          tableName, alternateFileName, sourceFileName);
       return false;
     }
 
-    // Check that all trend segments exist in detail pattern in the same order
-    int detailIdx = 0;
-    for (int trendIdx = 0; trendIdx < trendSegments.length; trendIdx++) {
-      String trendSeg = trendSegments[trendIdx];
-      boolean found = false;
-
-      // Search for matching segment in remaining detail segments
-      while (detailIdx < detailSegments.length) {
-        String detailSeg = detailSegments[detailIdx];
-
-        // Extract partition key name (before '=') for comparison
-        String trendKey = extractPartitionKey(trendSeg);
-        String detailKey = extractPartitionKey(detailSeg);
-
-        if (trendKey != null && detailKey != null) {
-          // Both are partition segments - compare keys
-          if (trendKey.equals(detailKey)) {
-            found = true;
-            detailIdx++;
-            break;
-          }
-        } else if (trendKey == null && detailKey == null) {
-          // Both are non-partition segments - must match exactly
-          if (trendSeg.equals(detailSeg)) {
-            found = true;
-            detailIdx++;
-            break;
-          }
-        }
-        detailIdx++;
-      }
-
-      if (!found) {
-        LOGGER.warn("Trend pattern for '{}' contains segment '{}' not found in detail pattern",
-            tableName, trendSeg);
-        return false;
-      }
-    }
-
-    LOGGER.debug("Validated trend pattern for '{}': removed {} partition key(s)",
-        tableName, detailSegments.length - trendSegments.length);
+    LOGGER.debug("Validated alternate pattern for '{}': source has {} segments, alternate has {}",
+        tableName, sourceSegments.length, alternateSegments.length);
     return true;
   }
 
@@ -673,95 +633,122 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
-   * Expands trend_patterns from table definitions into standalone table definitions.
+   * Counts the number of partition keys in a pattern.
    *
-   * <p>For each table with a "trend_patterns" array, creates additional table definitions
-   * for the consolidated trend tables. These trend tables consolidate year-partitioned data
-   * into single files for faster time-series queries and trend analysis across periods.
-   *
-   * <p>Example: employment_statistics with pattern
-   * "type=employment_statistics/frequency={frequency}/year={year}/employment_statistics.parquet"
-   * and trend_pattern "type=employment_statistics/frequency={frequency}/employment_statistics.parquet"
-   * will create a new table definition for the consolidated table.
-   *
-   * @param tables List of table definitions (will be modified in-place to add trend tables)
+   * @param pattern The file pattern (e.g., type=X/year=star/state=star/data.parquet)
+   * @return Number of partition key segments (key equals value pairs)
    */
-  default void expandTrendPatterns(List<Map<String, Object>> tables) {
-    java.util.List<Map<String, Object>> trendTables = new ArrayList<>();
+  default int countPartitionKeys(String pattern) {
+    if (pattern == null) {
+      return 0;
+    }
+    int count = 0;
+    for (String segment : pattern.split("/")) {
+      if (segment.contains("=")) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Expands alternate_partitions from table definitions into standalone table definitions.
+   *
+   * <p>For each table with an alternate_partitions array, creates additional table definitions
+   * for each alternate partition scheme. These alternate tables provide different physical
+   * layouts of the same logical data, allowing the query optimizer to select the best layout
+   * based on query predicates.
+   *
+   * <p>Example: population with pattern type=population/year=star/population.parquet
+   * and alternate_partition type=population_by_state/state=star/population.parquet
+   * will create a new table definition for the state-partitioned table.
+   *
+   * @param tables List of table definitions (will be modified in-place to add alternate tables)
+   */
+  default void expandAlternatePartitions(List<Map<String, Object>> tables) {
+    java.util.List<Map<String, Object>> alternateTables = new ArrayList<>();
 
     for (Map<String, Object> table : tables) {
-      // Check if table has trend_patterns
+      // Check if table has alternate_partitions
       @SuppressWarnings("unchecked")
-      java.util.List<Map<String, Object>> trendPatterns =
-          (java.util.List<Map<String, Object>>) table.get("trend_patterns");
+      java.util.List<Map<String, Object>> alternatePartitions =
+          (java.util.List<Map<String, Object>>) table.get("alternate_partitions");
 
-      if (trendPatterns == null || trendPatterns.isEmpty()) {
+      if (alternatePartitions == null || alternatePartitions.isEmpty()) {
         continue;
       }
 
-      // Get detail table pattern for validation
-      String detailPattern = (String) table.get("pattern");
+      // Get source table info
+      String sourcePattern = (String) table.get("pattern");
       String tableName = (String) table.get("name");
+      int sourcePartitionKeyCount = countPartitionKeys(sourcePattern);
 
-      // For each trend pattern, create a new table definition
-      for (Map<String, Object> trendPattern : trendPatterns) {
-        String trendName = (String) trendPattern.get("name");
-        String trendPatternStr = (String) trendPattern.get("pattern");
+      // Store partition key count on source table for optimizer
+      table.put("_partitionKeyCount", sourcePartitionKeyCount);
 
-        if (trendName == null || trendPatternStr == null) {
-          LOGGER.warn("Skipping trend pattern with missing name or pattern in table '{}'",
+      // For each alternate partition, create a new table definition
+      for (Map<String, Object> alternatePartition : alternatePartitions) {
+        String alternateName = (String) alternatePartition.get("name");
+        String alternatePatternStr = (String) alternatePartition.get("pattern");
+
+        if (alternateName == null || alternatePatternStr == null) {
+          LOGGER.warn("Skipping alternate partition with missing name or pattern in table '{}'",
               tableName);
           continue;
         }
 
-        // Validate that trend pattern is derived from detail pattern
-        if (!validateTrendPattern(detailPattern, trendPatternStr, tableName)) {
-          LOGGER.error("Invalid trend pattern '{}' for table '{}': "
-              + "trend pattern must be detail pattern with partition keys removed. "
-              + "Detail: '{}', Trend: '{}'",
-              trendName, tableName, detailPattern, trendPatternStr);
+        // Validate alternate pattern
+        if (!validateAlternatePattern(sourcePattern, alternatePatternStr, tableName)) {
+          LOGGER.error("Invalid alternate partition '{}' for table '{}': "
+              + "Source: '{}', Alternate: '{}'",
+              alternateName, tableName, sourcePattern, alternatePatternStr);
           continue;
         }
 
-        // Create new table definition for the trend
-        Map<String, Object> trendTable = new java.util.HashMap<>();
-        trendTable.put("name", trendName);
-        trendTable.put("pattern", trendPatternStr);
+        // Create new table definition for the alternate
+        Map<String, Object> alternateTable = new java.util.HashMap<>();
+        alternateTable.put("name", alternateName);
+        alternateTable.put("pattern", alternatePatternStr);
 
-        // Mark this as a trend table and link to its detail table for materialization registration
-        trendTable.put("_isTrendTable", true);
-        trendTable.put("_detailTableName", tableName);
-        trendTable.put("_detailTablePattern", detailPattern);
+        // Mark as alternate partition and link to source table
+        alternateTable.put("_isAlternatePartition", true);
+        alternateTable.put("_sourceTableName", tableName);
+        alternateTable.put("_sourceTablePattern", sourcePattern);
+
+        // Count and store partition keys for optimizer selection
+        int alternatePartitionKeyCount = countPartitionKeys(alternatePatternStr);
+        alternateTable.put("_partitionKeyCount", alternatePartitionKeyCount);
+
+        // Copy partition config from alternate definition
+        if (alternatePartition.containsKey("partition")) {
+          alternateTable.put("partitions", alternatePartition.get("partition"));
+        }
 
         // Copy column definitions from source table (same schema)
         if (table.containsKey("columns")) {
-          trendTable.put("columns", table.get("columns"));
+          alternateTable.put("columns", table.get("columns"));
         }
 
         // Copy comment if present, or create descriptive comment
-        String comment = (String) trendPattern.get("comment");
+        String comment = (String) alternatePartition.get("comment");
         if (comment == null) {
-          comment = "Consolidated trend data from " + table.get("name");
+          comment = "Alternate partition of " + tableName + " with "
+              + alternatePartitionKeyCount + " partition keys";
         }
-        trendTable.put("comment", comment);
+        alternateTable.put("comment", comment);
 
-        // Copy partitions configuration (minus year dimension)
-        // Note: Trend tables don't have year partitions, but may have other dimensions like frequency
-        if (table.containsKey("partitions")) {
-          trendTable.put("partitions", table.get("partitions"));
-        }
-
-        // Add to trend tables list
-        trendTables.add(trendTable);
-        LOGGER.debug("Expanded trend pattern '{}' from detail table '{}' for materialized view registration",
-            trendName, tableName);
+        // Add to alternate tables list
+        alternateTables.add(alternateTable);
+        LOGGER.debug("Expanded alternate partition '{}' from source table '{}' "
+            + "(source keys: {}, alternate keys: {})",
+            alternateName, tableName, sourcePartitionKeyCount, alternatePartitionKeyCount);
       }
     }
 
-    // Add all trend tables to the main tables list
-    if (!trendTables.isEmpty()) {
-      tables.addAll(trendTables);
-      LOGGER.info("Expanded {} trend patterns into table definitions", trendTables.size());
+    // Add all alternate tables to the main tables list
+    if (!alternateTables.isEmpty()) {
+      tables.addAll(alternateTables);
+      LOGGER.info("Expanded {} alternate partitions into table definitions", alternateTables.size());
     }
   }
 }

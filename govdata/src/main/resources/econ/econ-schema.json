@@ -13,10 +13,15 @@
     {
       "name": "employment_statistics",
       "pattern": "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet",
-      "trend_patterns": [
+      "alternate_partitions": [
         {
           "name": "employment_statistics_trend",
-          "pattern": "type=employment_statistics/frequency=*/employment_statistics.parquet"
+          "pattern": "type=employment_statistics/frequency=*/employment_statistics.parquet",
+          "partition": {
+            "columnDefinitions": [
+              {"name": "frequency", "type": "VARCHAR"}
+            ]
+          }
         }
       ],
       "partitions": {
