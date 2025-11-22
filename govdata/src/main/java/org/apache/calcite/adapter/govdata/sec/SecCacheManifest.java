@@ -104,6 +104,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
     entry.fullyProcessedAt = System.currentTimeMillis();
     entry.totalFilingsWhenProcessed = totalFilings;
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     LOGGER.info("Marked CIK {} as fully processed ({} filings)", cik, totalFilings);
   }
@@ -120,6 +121,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
       entry.fullyProcessedAt = null;
       entry.totalFilingsWhenProcessed = null;
       lastUpdated = System.currentTimeMillis();
+      markDirty();
       LOGGER.debug("Invalidated fully_processed flag for CIK {}", cik);
     }
   }
@@ -154,6 +156,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
       LOGGER.info("Cache entry expired for CIK {} (age: {} hours, no ETag available)",
           cik, ageHours);
       entries.remove(cik);
+      markDirty();
       return false;
     }
 
@@ -209,6 +212,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
 
     entries.put(cik, entry);
     lastUpdated = System.currentTimeMillis();
+    markDirty();
 
     if (etag != null && !etag.isEmpty()) {
       LOGGER.debug("Marked as cached: CIK {} (size={}, ETag={})", cik, fileSize, etag);
@@ -270,6 +274,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
 
     if (removed[0] > 0) {
       lastUpdated = System.currentTimeMillis();
+      markDirty();
       LOGGER.info("Cleaned up {} expired SEC cache entries", removed[0]);
     }
 
@@ -318,6 +323,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
 
       MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
       LOGGER.debug("Saved SEC cache manifest with {} submissions, {} filings", entries.size(), filings.size());
+      resetDirty();
     } catch (IOException e) {
       LOGGER.warn("Failed to save SEC cache manifest: {}", e.getMessage());
     }
@@ -496,6 +502,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
     FilingCacheEntry entry = new FilingCacheEntry(cik, accession, fileName, "downloaded", null);
     filings.put(key, entry);
     this.lastUpdated = System.currentTimeMillis();
+    markDirty();
   }
 
   /**
@@ -525,6 +532,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
     FilingCacheEntry entry = new FilingCacheEntry(cik, accession, fileName, "not_found", reason);
     filings.put(key, entry);
     this.lastUpdated = System.currentTimeMillis();
+    markDirty();
   }
 
 
@@ -537,8 +545,11 @@ public class SecCacheManifest extends AbstractCacheManifest {
    */
   public void removeFilingEntry(String cik, String accession, String fileName) {
     String key = buildFilingKey(cik, accession, fileName);
-    filings.remove(key);
-    this.lastUpdated = System.currentTimeMillis();
+    FilingCacheEntry removed = filings.remove(key);
+    if (removed != null) {
+      this.lastUpdated = System.currentTimeMillis();
+      markDirty();
+    }
   }
 
   /**
@@ -553,6 +564,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
     FilingCacheEntry entry = new FilingCacheEntry(cik, accession, xbrlInstanceFilename, "xbrl_filename_cached", "parsed_from_FilingSummary");
     filings.put(key, entry);
     this.lastUpdated = System.currentTimeMillis();
+    markDirty();
   }
 
   /**

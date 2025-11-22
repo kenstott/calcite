@@ -4038,12 +4038,16 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
-      // 4. Save manifest after all operations complete
+      // 4. Save manifest after all operations complete (only if modified)
       try {
         assert cacheManifest != null;
-        LOGGER.info("Saving cache manifest to {} after {} operations", operatingDirectory, executed);
-        cacheManifest.save(operatingDirectory);
-        LOGGER.info("Successfully saved cache manifest for {}", tableName);
+        if (cacheManifest.isDirty()) {
+          LOGGER.info("Saving cache manifest to {} after {} operations", operatingDirectory, executed);
+          cacheManifest.save(operatingDirectory);
+          LOGGER.info("Successfully saved cache manifest for {}", tableName);
+        } else {
+          LOGGER.debug("Cache manifest unchanged, skipping save for {}", tableName);
+        }
       } catch (Exception e) {
         LOGGER.error("Failed to save cache manifest for {}: {}", tableName, e.getMessage(), e);
       }
