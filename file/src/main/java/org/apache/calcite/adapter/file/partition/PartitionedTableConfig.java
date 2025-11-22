@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
@@ -30,21 +33,30 @@ public class PartitionedTableConfig {
   private final String comment;
   private final Map<String, String> columnComments;
   private final List<TableColumn> columns;
+  private final List<AlternatePartitionConfig> alternatePartitions;
+  private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedTableConfig.class);
 
   public PartitionedTableConfig(String name, String pattern, String type,
                                 PartitionConfig partitions) {
-    this(name, pattern, type, partitions, null, null, null);
+    this(name, pattern, type, partitions, null, null, null, null);
   }
 
   public PartitionedTableConfig(String name, String pattern, String type,
                                 PartitionConfig partitions, String comment,
                                 Map<String, String> columnComments) {
-    this(name, pattern, type, partitions, comment, columnComments, null);
+    this(name, pattern, type, partitions, comment, columnComments, null, null);
   }
 
   public PartitionedTableConfig(String name, String pattern, String type,
                                 PartitionConfig partitions, String comment,
                                 Map<String, String> columnComments, List<TableColumn> columns) {
+    this(name, pattern, type, partitions, comment, columnComments, columns, null);
+  }
+
+  public PartitionedTableConfig(String name, String pattern, String type,
+                                PartitionConfig partitions, String comment,
+                                Map<String, String> columnComments, List<TableColumn> columns,
+                                List<AlternatePartitionConfig> alternatePartitions) {
     this.name = name;
     this.pattern = pattern;
     this.type = type != null ? type : "partitioned";
@@ -52,6 +64,7 @@ public class PartitionedTableConfig {
     this.comment = comment;
     this.columnComments = columnComments;
     this.columns = columns;
+    this.alternatePartitions = alternatePartitions;
   }
 
   public String getName() {
@@ -80,6 +93,10 @@ public class PartitionedTableConfig {
 
   public List<TableColumn> getColumns() {
     return columns;
+  }
+
+  public List<AlternatePartitionConfig> getAlternatePartitions() {
+    return alternatePartitions;
   }
 
   /**
@@ -168,6 +185,53 @@ public class PartitionedTableConfig {
 
     public String getType() {
       return type;
+    }
+  }
+
+  /**
+   * Configuration for an alternate partition scheme.
+   * Alternate partitions provide different physical layouts of the same logical data,
+   * allowing the query optimizer to select the best layout based on query predicates.
+   */
+  public static class AlternatePartitionConfig {
+    private final String name;
+    private final String pattern;
+    private final PartitionConfig partition;
+    private final String comment;
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment) {
+      this.name = name;
+      this.pattern = pattern;
+      this.partition = partition;
+      this.comment = comment;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public String getPattern() {
+      return pattern;
+    }
+
+    public PartitionConfig getPartition() {
+      return partition;
+    }
+
+    public String getComment() {
+      return comment;
+    }
+
+    /**
+     * Returns the number of partition keys in this alternate partition scheme.
+     * Used by the optimizer to select the scheme with the most keys.
+     */
+    public int getPartitionKeyCount() {
+      if (partition == null || partition.getColumnDefinitions() == null) {
+        return 0;
+      }
+      return partition.getColumnDefinitions().size();
     }
   }
 
@@ -358,7 +422,74 @@ public class PartitionedTableConfig {
               columnDefinitions, regex, columnMappings);
     }
 
-    return new PartitionedTableConfig(name, pattern, type, partitionConfig, comment, columnComments, columns);
+    // Parse alternate_partitions
+    List<AlternatePartitionConfig> alternatePartitions = parseAlternatePartitions(
+        map.get("alternate_partitions"));
+
+    return new PartitionedTableConfig(name, pattern, type, partitionConfig, comment,
+        columnComments, columns, alternatePartitions);
+  }
+
+  /**
+   * Parses alternate_partitions from JSON format.
+   * Expects: [{"name": "alt_name", "pattern": "path/pattern", "partition": {...}, "comment": "..."}, ...]
+   */
+  @SuppressWarnings("unchecked")
+  private static List<AlternatePartitionConfig> parseAlternatePartitions(Object obj) {
+    if (!(obj instanceof List)) {
+      return null;
+    }
+
+    List<AlternatePartitionConfig> result = new java.util.ArrayList<>();
+    List<?> list = (List<?>) obj;
+
+    for (Object item : list) {
+      if (!(item instanceof Map)) {
+        continue;
+      }
+
+      Map<String, Object> m = (Map<String, Object>) item;
+      String altName = (String) m.get("name");
+      String altPattern = (String) m.get("pattern");
+      String altComment = (String) m.get("comment");
+
+      if (altName == null || altPattern == null) {
+        continue;
+      }
+
+      // Parse partition config for alternate
+      PartitionConfig altPartition = null;
+      Map<String, Object> partitionMap = (Map<String, Object>) m.get("partition");
+      if (partitionMap != null) {
+        String style = (String) partitionMap.get("style");
+        List<ColumnDefinition> columnDefs = null;
+        List<String> simpleColumns = null;
+
+        Object columnDefsObj = partitionMap.get("columnDefinitions");
+        if (columnDefsObj instanceof List) {
+          List<?> defsList = (List<?>) columnDefsObj;
+          if (!defsList.isEmpty()) {
+            Object firstElem = defsList.get(0);
+            if (firstElem instanceof Map) {
+              columnDefs = ((List<Map<String, Object>>) defsList).stream()
+                  .map(cm -> new ColumnDefinition(
+                      (String) cm.get("name"),
+                      (String) cm.get("type")))
+                  .collect(java.util.stream.Collectors.toList());
+              simpleColumns = columnDefs.stream()
+                  .map(ColumnDefinition::getName)
+                  .collect(java.util.stream.Collectors.toList());
+            }
+          }
+        }
+
+        altPartition = new PartitionConfig(style, simpleColumns, columnDefs, null, null);
+      }
+
+      result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment));
+    }
+
+    return result.isEmpty() ? null : result;
   }
 
   /**
