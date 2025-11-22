@@ -799,6 +799,10 @@ public abstract class AbstractGovDataDownloader {
             metadata.put("dimensions", tableNode.get("dimensions"));
           }
 
+          if (tableNode.has("sourcePaths")) {
+            metadata.put("sourcePaths", tableNode.get("sourcePaths"));
+          }
+
           return metadata;
         }
       }
@@ -987,8 +991,7 @@ public abstract class AbstractGovDataDownloader {
     if (resolvedPath.endsWith(".parquet")) {
       resolvedPath = resolvedPath.substring(0, resolvedPath.length() - 8) + ".json";
     } else {
-      // Pattern doesn't end with .parquet - append .json anyway
-      LOGGER.warn("Pattern does not end with .parquet: {}", pattern);
+      // Pattern doesn't end with .parquet - expected for reference tables with cachePattern
       if (!resolvedPath.endsWith(".json")) {
         resolvedPath = resolvedPath + ".json";
       }

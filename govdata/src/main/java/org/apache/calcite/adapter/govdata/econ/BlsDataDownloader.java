@@ -1109,7 +1109,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadRegionalCpi(int startYear, int endYear) {
     String tableName = BLS.tableNames.regionalCpi;
 
-    LOGGER.info("Downloading regional CPI for {} Census regions for years {}-{}",
+    LOGGER.debug("Processing regional CPI for {} Census regions for years {}-{}",
         regionCodesList.size(), startYear, endYear);
 
     // Build list of series IDs from catalog
@@ -1156,7 +1156,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   public void downloadMetroCpi(int startYear, int endYear) {
     String tableName = BLS.tableNames.metroCpi;
 
-    LOGGER.info("Downloading metro area CPI for {} metros for years {}-{}",
+    LOGGER.debug("Processing metro area CPI for {} metros for years {}-{}",
         metroGeographiesMap.size(), startYear, endYear);
 
     // Build list of series IDs from catalog (only metros with CPI data)
@@ -1209,7 +1209,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * to ~46 (23 batches × 2-year-batches).
    */
   public void downloadStateIndustryEmployment(int startYear, int endYear) {
-    LOGGER.info("Downloading state industry employment for {} states × {} sectors ({} series) for {}-{}",
+    LOGGER.debug("Processing state industry employment for {} states × {} sectors ({} series) for {}-{}",
                 BLS.stateFipsCodes.size(), BLS.naicsSupersectors.size(),
                 BLS.stateFipsCodes.size() * BLS.naicsSupersectors.size(), startYear, endYear);
 
@@ -1258,7 +1258,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses agglvl_code 50 for state-level aggregation.
    */
   public void downloadStateWages(int startYear, int endYear) {
-    LOGGER.info("Downloading state wages from QCEW CSV files for {}-{}", startYear, endYear);
+    LOGGER.debug("Processing state wages from QCEW CSV files for {}-{}", startYear, endYear);
 
     String tableName = BLS.tableNames.stateWages;
 
@@ -1310,7 +1310,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Reuses the same QCEW CSV files already downloaded for state wages.
    */
   public void downloadCountyWages(int startYear, int endYear) {
-    LOGGER.info("Downloading county wages from QCEW CSV files for {}-{}", startYear, endYear);
+    LOGGER.debug("Processing county wages from QCEW CSV files for {}-{}", startYear, endYear);
 
     String tableName = BLS.tableNames.countyWages;
 
@@ -1374,7 +1374,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @param endYear   End year (inclusive)
    */
   public void downloadCountyQcew(int startYear, int endYear) {
-    LOGGER.info("Downloading county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
+    LOGGER.debug("Processing county QCEW data from BLS CSV files for {}-{}", startYear, endYear);
 
     String tableName = BLS.tableNames.countyQcew;
 
@@ -1434,7 +1434,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * to ~24 (12 batches × 2-year-batches).
    */
   public void downloadMetroIndustryEmployment(int startYear, int endYear) {
-    LOGGER.info("Downloading metro industry employment for {} metros × {} sectors ({} series) for {}-{}",
+    LOGGER.debug("Processing metro industry employment for {} metros × {} sectors ({} series) for {}-{}",
                 BLS.metroCpiCodes.size(), BLS.naicsSupersectors.size(),
                 BLS.metroCpiCodes.size() * BLS.naicsSupersectors.size(), startYear, endYear);
 
@@ -1494,7 +1494,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * @see #convertMetroWagesAll() For ZIP→Parquet conversion
    */
   public void downloadMetroWages() {
-    LOGGER.info("Downloading QCEW bulk files for metro wages {}-{}", this.startYear, this.endYear);
+    LOGGER.debug("Processing QCEW bulk files for metro wages {}-{}", this.startYear, this.endYear);
 
     // QCEW data only available from 1990 forward
     int effectiveStartYear = Math.max(this.startYear, 1990);
@@ -1643,7 +1643,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses metadata-driven FTP source paths from econ-schema.json.
    */
   public void downloadJoltsRegional() throws IOException {
-    LOGGER.info("Downloading JOLTS regional data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
+    LOGGER.debug("Processing JOLTS regional data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.joltsRegional;
 
@@ -1655,7 +1655,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Download all required FTP files
-    LOGGER.info("Downloading {} FTP files for {}", ftpSources.size(), tableName);
+    LOGGER.debug("Processing {} FTP files for {}", ftpSources.size(), tableName);
     for (FtpFileSource source : ftpSources) {
       downloadFtpFileIfNeeded(source.cachePath, source.url);
     }
@@ -1683,7 +1683,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses metadata-driven FTP source paths from econ-schema.json.
    */
   public void downloadJoltsState() throws IOException {
-    LOGGER.info("Downloading JOLTS state data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
+    LOGGER.debug("Processing JOLTS state data from BLS FTP flat files for {}-{}", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.joltsState;
 
@@ -1695,7 +1695,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     // Download all required FTP files
-    LOGGER.info("Downloading {} FTP files for {}", ftpSources.size(), tableName);
+    LOGGER.debug("Processing {} FTP files for {}", ftpSources.size(), tableName);
     for (FtpFileSource source : ftpSources) {
       downloadFtpFileIfNeeded(source.cachePath, source.url);
     }
@@ -1924,7 +1924,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * ~1,275 (51 states × 25 years) to ~102 (51 states × ~2 batches).
    */
   public void downloadRegionalEmployment() {
-    LOGGER.info("Downloading regional employment data for all 51 states/jurisdictions (years {}-{})", this.startYear, this.endYear);
+    LOGGER.debug("Processing regional employment data for all 51 states/jurisdictions (years {}-{})", this.startYear, this.endYear);
 
     String tableName = BLS.tableNames.regionalEmployment;
 
@@ -2306,13 +2306,19 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         "year", String.valueOf(0));
 
     CacheKey cacheKey = new CacheKey(dataType, cacheParams);
-    if (cacheManifest.isCached(cacheKey)) {
-      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
-      if (cacheStorageProvider.exists(fullPath)) {
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
+
+    // Check both manifest and file existence (self-healing may have found file without manifest entry)
+    boolean inManifest = cacheManifest.isCached(cacheKey);
+    boolean fileExists = cacheStorageProvider.exists(fullPath);
+
+    if (inManifest || fileExists) {
+      if (fileExists) {
         long size = 0L;
         try { size = cacheStorageProvider.getMetadata(fullPath).getSize(); } catch (Exception ignore) {}
         if (size > 0) {
-          LOGGER.info("Using cached JOLTS FTP file: {} (from manifest, size={} bytes)", ftpPath, size);
+          LOGGER.debug("Using cached JOLTS FTP file: {} (manifest={}, size={} bytes)",
+              ftpPath, inManifest, size);
           try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
             return inputStream.readAllBytes();
           }
@@ -2324,11 +2330,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       }
     }
 
-    LOGGER.info("Downloading JOLTS FTP file from {}", url);
+    LOGGER.debug("Downloading JOLTS FTP file from {}", url);
     byte[] data = blsDownloadFile(url);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
-    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
     cacheStorageProvider.writeFile(fullPath, data);
 
     // Mark in cache manifest - refresh monthly (JOLTS data updates monthly with ~2-month lag)

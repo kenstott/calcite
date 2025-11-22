@@ -20,7 +20,9 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.CacheManifestQueryHelper;
+import org.apache.calcite.adapter.govdata.OperationType;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
@@ -280,7 +282,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -330,7 +332,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -572,7 +574,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -689,7 +691,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -851,7 +853,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -882,7 +884,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -937,7 +939,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               getCacheExpiryForYear(year), getCachePolicyForYear(year));
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -966,7 +968,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -1076,8 +1078,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     // Load pattern from schema and resolve paths
     Map<String, Object> metadata = loadTableMetadata(tableName);
-    Map<String, Object> downloadConfig = (Map<String, Object>) metadata.get("download");
-    String cachePattern = (String) downloadConfig.get("cachePattern");
+    JsonNode downloadConfig = (JsonNode) metadata.get("download");
+    String cachePattern = downloadConfig.get("cachePattern").asText();
     String jsonPath = resolveJsonPath(cachePattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
@@ -1197,7 +1199,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
               Long.MAX_VALUE, "reference_immutable");
         },
-        "download");
+        OperationType.DOWNLOAD);
   }
 
   /**
@@ -1323,7 +1325,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           // Mark as converted
           cacheManifest.markParquetConverted(cacheKey, parquetPath);
         },
-        "conversion");
+        OperationType.CONVERSION);
   }
 
   /**
@@ -1336,7 +1338,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @param startYear First year to process
    * @param endYear Last year to process
    * @param operation Operation to execute for uncached combinations
-   * @param operationDescription Description for logging (e.g., "download", "conversion")
+   * @param operationType Type of operation (DOWNLOAD, CONVERSION, or DOWNLOAD_AND_CONVERT)
    */
   private void iterateWithParameters(
       String tableName,
@@ -1344,12 +1346,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       int startYear,
       int endYear,
       TableOperation operation,
-      String operationDescription) {
+      OperationType operationType) {
 
     int totalOps = parameterCombinations.size() * (endYear - startYear + 1);
 
+    String operationDesc = operationType.getValue();
     LOGGER.info("{} {}: {} combinations × {} years = {} operations",
-        operationDescription.substring(0, 1).toUpperCase() + operationDescription.substring(1),
+        operationDesc.substring(0, 1).toUpperCase() + operationDesc.substring(1),
         tableName, parameterCombinations.size(), endYear - startYear + 1, totalOps);
 
     // 1. Generate all DownloadRequests with individual parameters
@@ -1368,7 +1371,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     List<CacheManifestQueryHelper.DownloadRequest> needed;
     try {
       String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, "download");
+      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, OperationType.DOWNLOAD);
 
       // After filtering
       if (needed.size() < allRequests.size()) {
@@ -1433,17 +1436,17 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         } else {
           // Other IOException - log and continue
           LOGGER.error("Error during {} for {} with params {}: {}",
-              operationDescription, tableName, req.parameters, e.getMessage());
+              operationType.getValue(), tableName, req.parameters, e.getMessage());
         }
       } catch (Exception e) {
         // Other exceptions - log and continue
         LOGGER.error("Error during {} for {} with params {}: {}",
-            operationDescription, tableName, req.parameters, e.getMessage());
+            operationType.getValue(), tableName, req.parameters, e.getMessage());
       }
     }
 
     LOGGER.info("{} {} complete: {} operations executed, {} cached/skipped",
-        tableName, operationDescription, executed, skipped);
+        tableName, operationType.getValue(), executed, skipped);
 
     // Save manifest
     cacheManifest.save(operatingDirectory);
