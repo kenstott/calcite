@@ -1589,12 +1589,32 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         "frequency", frequency);
 
     // Resolve complete cache path from bulkDownload cachePattern
-    String fullPath =
-        cacheStorageProvider.resolvePath(cacheDirectory, bulkConfig.resolveCachePath(variables));
+    String relativeCachePath = bulkConfig.resolveCachePath(variables);
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeCachePath);
 
-    // Check if file already cached
+    // Build cache key for manifest lookup
+    Map<String, String> cacheParams = new HashMap<>();
+    cacheParams.put("year", String.valueOf(year));
+    cacheParams.put("frequency", frequency);
+    CacheKey cacheKey = new CacheKey("qcew_bulk", cacheParams);
+
+    // Trust manifest first to avoid expensive S3 exists checks
+    if (cacheManifest.isCached(cacheKey)) {
+      LOGGER.debug("Using cached QCEW bulk {} file for {} (from manifest): {}", frequency, year, fullPath);
+      return fullPath;
+    }
+
+    // Not in manifest - check file existence for self-healing
     if (cacheStorageProvider.exists(fullPath)) {
-      LOGGER.info("Using cached QCEW bulk {} file for {}: {}", frequency, year, fullPath);
+      LOGGER.info("Self-healing: Found existing QCEW bulk {} file for {}: {}", frequency, year, fullPath);
+      try {
+        long fileSize = cacheStorageProvider.getMetadata(fullPath).getSize();
+        // Mark in manifest so future calls skip the exists check
+        long refreshAfter = System.currentTimeMillis() + (365L * 24 * 60 * 60 * 1000); // 1 year for bulk files
+        cacheManifest.markCached(cacheKey, relativeCachePath, fileSize, refreshAfter, "self_healed");
+      } catch (Exception e) {
+        LOGGER.warn("Failed to update manifest for self-healed QCEW bulk file: {}", e.getMessage());
+      }
       return fullPath;
     }
 
@@ -2177,7 +2197,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     allParams.put("year", String.valueOf(year));
     CacheKey qcewCacheKey = new CacheKey("qcew_zip", allParams);
     cacheManifest.markCached(qcewCacheKey, qcewZipPath, zipData.length, refreshAfter, "immutable_historical");
-    cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached QCEW CSV for year {} ({} MB)", year, zipData.length / (1024 * 1024));
 
@@ -2298,25 +2317,39 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     CacheKey cacheKey = new CacheKey(dataType, cacheParams);
     String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
 
-    // Check both manifest and file existence (self-healing may have found file without manifest entry)
+    // Trust manifest first to avoid expensive S3 exists checks
     boolean inManifest = cacheManifest.isCached(cacheKey);
-    boolean fileExists = cacheStorageProvider.exists(fullPath);
 
-    if (inManifest || fileExists) {
-      if (fileExists) {
-        long size = 0L;
-        try { size = cacheStorageProvider.getMetadata(fullPath).getSize(); } catch (Exception ignore) {}
-        if (size > 0) {
-          LOGGER.debug("Using cached JOLTS FTP file: {} (manifest={}, size={} bytes)",
-              ftpPath, inManifest, size);
-          try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
-            return inputStream.readAllBytes();
-          }
-        } else {
-          LOGGER.warn("Cached JOLTS FTP file {} is zero-byte (size=0). Re-downloading.", fullPath);
+    if (inManifest) {
+      // Manifest says cached - try to read directly (avoids S3 exists check)
+      try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+        byte[] data = inputStream.readAllBytes();
+        if (data.length > 0) {
+          LOGGER.debug("Using cached JOLTS FTP file: {} (from manifest, {} bytes)", ftpPath, data.length);
+          return data;
         }
-      } else {
-        LOGGER.warn("Cache manifest lists JOLTS FTP file {} but file not found - re-downloading", fileName);
+        LOGGER.warn("Cached JOLTS FTP file {} is zero-byte. Re-downloading.", fullPath);
+      } catch (Exception e) {
+        LOGGER.warn("Cache manifest lists JOLTS FTP file {} but read failed: {} - re-downloading",
+            fileName, e.getMessage());
+      }
+    } else {
+      // Not in manifest - check file existence for self-healing (S3 exists check only when needed)
+      if (cacheStorageProvider.exists(fullPath)) {
+        try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
+          byte[] data = inputStream.readAllBytes();
+          if (data.length > 0) {
+            LOGGER.debug("Using cached JOLTS FTP file: {} (self-healed, {} bytes)", ftpPath, data.length);
+            // Mark in manifest so future calls skip the exists check
+            long refreshAfter = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000);
+            cacheManifest.markCached(cacheKey, ftpPath, data.length, refreshAfter, "self_healed");
+            return data;
+          }
+          LOGGER.warn("Cached JOLTS FTP file {} is zero-byte. Re-downloading.", fullPath);
+        } catch (Exception e) {
+          LOGGER.warn("JOLTS FTP file {} exists but read failed: {} - re-downloading",
+              fullPath, e.getMessage());
+        }
       }
     }
 
@@ -2332,7 +2365,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     allParams.put("year", String.valueOf(0));
     CacheKey joltsFtpCacheKey = new CacheKey(dataType, allParams);
     cacheManifest.markCached(joltsFtpCacheKey, ftpPath, data.length, refreshAfter, "monthly_refresh");
-    cacheManifest.save(operatingDirectory);
 
     LOGGER.info("Downloaded and cached JOLTS FTP file ({} KB)", data.length / 1024);
 
@@ -2884,12 +2916,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     if (storageProvider.exists(parquetPath)) {
       LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", pattern);
       cacheManifest.markParquetConverted(cacheKey, pattern);
-      try {
-        cacheManifest.save(operatingDirectory);
-        LOGGER.debug("Saved manifest after self-healing {}", pattern);
-      } catch (Exception saveEx) {
-        LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
-      }
       return;
     }
 
@@ -2920,7 +2946,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
         // Mark as converted in manifest
         cacheManifest.markParquetConverted(cacheKey, parquetPath);
-        cacheManifest.save(operatingDirectory);
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS NAICS sectors reference table: " + e.getMessage(), e);
     }

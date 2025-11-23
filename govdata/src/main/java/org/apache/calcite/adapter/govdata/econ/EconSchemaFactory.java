@@ -61,8 +61,16 @@ import java.util.*;
 public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
+  /** BEA regional data is typically 2 years behind current year. */
+  private static final int DATA_LAG_YEARS = 2;
+
   private Map<String, Map<String, Object>> tableConstraints;
   private Set<String> enabledBlsTables;
+
+  @Override
+  public int getDataLagYears() {
+    return DATA_LAG_YEARS;
+  }
 
 /**
    * Build the operand configuration for ECON schema without creating the FileSchema.
