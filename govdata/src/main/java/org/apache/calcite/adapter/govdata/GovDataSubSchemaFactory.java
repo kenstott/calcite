@@ -487,10 +487,22 @@ public interface GovDataSubSchemaFactory {
   }
 
   /**
+   * Get data lag in years for this subschema.
+   * Some data sources publish data with a delay (e.g., BEA regional data is
+   * typically 2 years behind, Census ACS is 1 year behind).
+   *
+   * @return Number of years behind current year that data is available (default: 0)
+   */
+  default int getDataLagYears() {
+    return 0;
+  }
+
+  /**
    * Get configured end year from operand or environment.
+   * Applies dataLagYears to ensure we don't request data that isn't available yet.
    *
    * @param operand Configuration map
-   * @return End year or default (current year)
+   * @return End year or default (current year minus data lag)
    */
   default Integer getConfiguredEndYear(Map<String, Object> operand) {
     Integer year = (Integer) operand.get("endYear");
@@ -505,8 +517,10 @@ public interface GovDataSubSchemaFactory {
       }
     }
 
-    // Default to current year
-    return java.time.Year.now().getValue();
+    // Default to current year minus data lag
+    int currentYear = java.time.Year.now().getValue();
+    int dataLag = getDataLagYears();
+    return currentYear - dataLag;
   }
 
   /**

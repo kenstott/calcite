@@ -83,12 +83,20 @@ import java.util.Map;
 public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusSchemaFactory.class);
 
+  /** Census ACS data is typically 1 year behind current year. */
+  private static final int DATA_LAG_YEARS = 1;
+
   // Store constraint metadata from model files
   private Map<String, Map<String, Object>> tableConstraints;
   private List<JsonTable> tableDefinitions;
 
   // Hive-partitioned structure for Census data
   private static final String CENSUS_SOURCE_PARTITION = "source=census";
+
+  @Override
+  public int getDataLagYears() {
+    return DATA_LAG_YEARS;
+  }
   private static final String ACS_TYPE = "type=acs";  // American Community Survey
   private static final String DECENNIAL_TYPE = "type=decennial";  // Decennial Census
   private static final String ECONOMIC_TYPE = "type=economic";  // Economic Census
