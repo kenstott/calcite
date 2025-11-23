@@ -18,9 +18,8 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
@@ -29,40 +28,39 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Cache manifest for tracking downloaded economic data to improve startup performance.
  * Maintains metadata about cached files to avoid redundant downloads.
  *
+ * <p>Uses DuckDB for persistent storage, providing proper ACID guarantees and
+ * thread-safe concurrent access. Replaces the previous JSON-based implementation.
+ *
  * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
  * including ETag support, TTL-based expiration, and parquet conversion tracking.
- *
- * <p>Uses explicit refresh timestamps stored in each entry, allowing different refresh
- * policies per data type (e.g., current year vs historical, daily vs immutable).
  */
 public class CacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String MANIFEST_FILENAME = "cache_manifest.json";
+  private static final String LEGACY_MANIFEST_FILENAME = "cache_manifest.json";
 
-  @JsonProperty("entries")
-  private Map<String, CacheEntry> entries = new HashMap<>();
+  /** DuckDB-based cache store. */
+  private final DuckDBCacheStore store;
 
-  @JsonProperty("catalogSeriesCache")
-  private Map<String, CatalogSeriesCache> catalogSeriesCache = new HashMap<>();
+  /** Cache directory path. */
+  private final String cacheDir;
 
-  @JsonProperty("version")
-  private String version = "2.0";  // Bumped for refreshAfter field addition
-
-  @JsonProperty("lastUpdated")
-  private long lastUpdated = System.currentTimeMillis();
-
-  @JsonIgnore
-  private String cacheDir;  // Cache directory for resolving relative paths
+  /**
+   * Private constructor - use {@link #load(String)} to get an instance.
+   */
+  private CacheManifest(String cacheDir) {
+    this.cacheDir = cacheDir;
+    this.store = DuckDBCacheStore.getInstance("econ", cacheDir);
+  }
 
   /**
    * Check if data is cached and fresh for the given cache key.
@@ -72,58 +70,10 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if cached and fresh, false otherwise
    */
+  @Override
   public boolean isCached(CacheKey cacheKey) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      return false;
-    }
-
-    long now = System.currentTimeMillis();
-
-    // Check if this is an API error entry with pending retry restriction
-    if (entry.downloadRetry > 0 && now < entry.downloadRetry) {
-      // Still within retry restriction period - skip download attempt
-      long hoursUntilRetry = TimeUnit.MILLISECONDS.toHours(entry.downloadRetry - now);
-      LOGGER.debug("Skipping {} due to API error retry restriction (retry in {} hours, error count: {})",
-          cacheKey.asString(), hoursUntilRetry, entry.errorCount);
-      return true;  // Return true to skip download attempt
-    }
-
-    // If retry period has passed for an API error, allow retry by removing the entry
-    if (entry.downloadRetry > 0 && now >= entry.downloadRetry) {
-      LOGGER.info("API error retry period expired for {} (error count: {}), allowing retry",
-          cacheKey.asString(), entry.errorCount);
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
-    if (entry.etag != null && !entry.etag.isEmpty()) {
-      LOGGER.debug("Using cached {} data (ETag: {})", cacheKey.asString(), entry.etag);
-      return true;
-    }
-
-    // Fallback: check if refresh time has passed for entries without ETags
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.info("Cache entry expired for {} (age: {} hours, refresh policy: {})",
-          cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // Log cache hit with time until refresh
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(entry.refreshAfter - now);
-    LOGGER.debug("Using cached {} data (refresh in {} hours, policy: {})",
-        cacheKey.asString(), hoursUntilRefresh, entry.refreshReason != null ? entry.refreshReason : "unknown");
-
-    return true;
+    return store.isCached(cacheKey.asString());
   }
-
 
   /**
    * Mark data as cached with metadata and explicit refresh timestamp.
@@ -134,27 +84,30 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
    * @param refreshReason Human-readable reason for the refresh policy (e.g., "daily", "immutable")
    */
+  @Override
   public void markCached(CacheKey cacheKey,
                         String filePath, long fileSize, long refreshAfter, String refreshReason) {
-    String key = cacheKey.asString();
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = cacheKey.getTableName();
-    entry.parameters = new HashMap<>(cacheKey.getParameters());
-    entry.filePath = filePath;
-    entry.fileSize = fileSize;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = refreshAfter;
-    entry.refreshReason = refreshReason;
+    String parametersJson = null;
+    try {
+      parametersJson = MAPPER.writeValueAsString(cacheKey.getParameters());
+    } catch (IOException e) {
+      LOGGER.warn("Failed to serialize parameters for {}: {}", cacheKey.asString(), e.getMessage());
+    }
 
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
+    store.upsertEntry(
+        cacheKey.asString(),
+        cacheKey.getTableName(),
+        parametersJson,
+        filePath,
+        fileSize,
+        refreshAfter,
+        refreshReason
+    );
 
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
+    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - System.currentTimeMillis());
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
         cacheKey.asString(), fileSize, hoursUntilRefresh, refreshReason);
   }
-
 
   /**
    * Check if parquet file has been converted for the given cache key.
@@ -163,33 +116,14 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if parquet file exists and is up-to-date, false otherwise
    */
+  @Override
   public boolean isParquetConverted(CacheKey cacheKey) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      return false;
+    boolean converted = store.isParquetConverted(cacheKey.asString());
+    if (converted) {
+      LOGGER.info("Cached parquet, skipped conversion: {}", cacheKey.asString());
     }
-
-    // If parquetConvertedAt is 0 or not set, conversion hasn't been attempted
-    if (entry.parquetConvertedAt == 0) {
-      return false;
-    }
-
-    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
-    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
-    if (entry.cachedAt > entry.parquetConvertedAt) {
-      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {}",
-          cacheKey.asString());
-      return false;
-    }
-
-    // Parquet conversion was completed (either successfully converted or determined no data to convert)
-    // parquetPath may be null for files with [null] content (no data to convert)
-    LOGGER.info("⚡ Cached parquet, skipped conversion: {}", cacheKey.asString());
-    return true;
+    return converted;
   }
-
 
   /**
    * Mark parquet file as converted for the given cache key.
@@ -198,30 +132,11 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @param parquetPath Path to the converted parquet file
    */
+  @Override
   public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      // Create new entry if it doesn't exist (self-healing case)
-      long now = System.currentTimeMillis();
-      entry = new CacheEntry();
-      entry.dataType = cacheKey.getTableName();
-      entry.parameters = new HashMap<>(cacheKey.getParameters());
-      entry.cachedAt = now;  // Set to current time for self-healed entries
-      entry.refreshAfter = Long.MAX_VALUE;  // Parquet files are immutable
-      entry.refreshReason = "parquet_immutable";
-      entries.put(key, entry);
-    }
-
-    entry.parquetPath = parquetPath;
-    entry.parquetConvertedAt = System.currentTimeMillis();
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
+    store.markParquetConverted(cacheKey.asString(), parquetPath);
     LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), parquetPath);
   }
-
 
   /**
    * Mark data as unavailable (404 or similar) with TTL for retry.
@@ -231,201 +146,162 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param retryAfterDays Number of days before retrying (default: 7 for unreleased data)
    * @param reason Description of why unavailable (e.g., "404_not_released", "400_invalid_variables")
    */
-  public void markUnavailable(CacheKey cacheKey,
-                              int retryAfterDays, String reason) {
-    String key = cacheKey.asString();
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = cacheKey.getTableName();
-    entry.parameters = new HashMap<>(cacheKey.getParameters());
-    entry.filePath = null;  // No file - unavailable
-    entry.fileSize = 0;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
-    entry.refreshReason = reason;
-
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
+  public void markUnavailable(CacheKey cacheKey, int retryAfterDays, String reason) {
+    long refreshAfter = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
+    store.upsertEntry(
+        cacheKey.asString(),
+        cacheKey.getTableName(),
+        null,  // No parameters needed for unavailable entries
+        null,  // No file path
+        0,     // No file size
+        refreshAfter,
+        reason
+    );
     LOGGER.info("Marked {} as unavailable (retry in {} days): {}",
         cacheKey.asString(), retryAfterDays, reason);
   }
 
-
   /**
    * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
-   * Prevents expensive retries on every restart while tracking error details for debugging.
-   *
-   * <p>This handles cases where the API returns HTTP 200 OK but includes error information
-   * in the response body (e.g., BEA APIErrorCode 101 "Unknown error"). Unlike HTTP errors
-   * (404, 500, etc.) which are handled elsewhere, these are successful HTTP responses that
-   * contain API-level errors.
    *
    * @param cacheKey The cache key identifying the data
    * @param errorMessage Full error message from API (e.g., JSON error object)
    * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
    */
-  public void markApiError(CacheKey cacheKey,
-                          String errorMessage, int retryAfterDays) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    // Create new entry or update existing one
-    if (entry == null) {
-      entry = new CacheEntry();
-      entry.dataType = cacheKey.getTableName();
-      entry.parameters = new HashMap<>(cacheKey.getParameters());
-      entry.errorCount = 0;
-    }
-
-    // Update error tracking fields
-    entry.filePath = null;  // No file - API error
-    entry.fileSize = 0;
-    entry.lastError = errorMessage;
-    entry.errorCount++;
-    entry.lastAttemptAt = System.currentTimeMillis();
-    entry.downloadRetry = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
-    entry.refreshAfter = entry.downloadRetry;  // Use downloadRetry as refresh time
-    entry.refreshReason = "api_error_retry";
-
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
-    LOGGER.info("Marked {} as API error (retry in {} days, error count: {}): {}",
-        cacheKey.asString(), retryAfterDays, entry.errorCount,
-        errorMessage.length() > 100 ? errorMessage.substring(0, 100) + "..." : errorMessage);
+  @Override
+  public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
+    store.markApiError(cacheKey.asString(), cacheKey.getTableName(), errorMessage, retryAfterDays);
+    String truncatedMsg = errorMessage.length() > 100
+        ? errorMessage.substring(0, 100) + "..."
+        : errorMessage;
+    LOGGER.info("Marked {} as API error (retry in {} days): {}",
+        cacheKey.asString(), retryAfterDays, truncatedMsg);
   }
-
-
 
   /**
    * Remove expired entries from the manifest based on refreshAfter timestamps.
    */
   public int cleanupExpiredEntries() {
-    long now = System.currentTimeMillis();
-    int[] removed = {0};
-
-    entries.entrySet().removeIf(entry -> {
-      CacheEntry cacheEntry = entry.getValue();
-
-      // NOTE: File existence check removed - would fail for S3 cache URIs.
-      // Callers (AbstractEconDataDownloader) handle file existence checks using StorageProvider.
-      // Manifest focuses on time-based refresh policies only.
-
-      // Remove if refresh time has passed
-      if (now >= cacheEntry.refreshAfter) {
-        long ageHours = TimeUnit.MILLISECONDS.toHours(now - cacheEntry.cachedAt);
-        LOGGER.debug("Removing expired cache entry: {} (age: {} hours, policy: {})",
-            cacheEntry.dataType, ageHours, cacheEntry.refreshReason);
-        removed[0]++;
-        return true;
-      }
-
-      return false;
-    });
-
-    if (removed[0] > 0) {
-      lastUpdated = System.currentTimeMillis();
-      markDirty();
-      LOGGER.info("Cleaned up {} expired cache entries", removed[0]);
-    }
-
-    return removed[0];
+    return store.cleanupExpiredEntries();
   }
 
   /**
-   * Load manifest from file with automatic migration from old format.
+   * Load manifest from DuckDB cache store.
+   * Automatically migrates from JSON if a legacy manifest exists.
+   *
+   * @param cacheDir Cache directory path
+   * @return CacheManifest instance backed by DuckDB
    */
   public static CacheManifest load(String cacheDir) {
-    File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
+    CacheManifest manifest = new CacheManifest(cacheDir);
 
-    if (!manifestFile.exists()) {
-      LOGGER.warn("No cache manifest found at {}, creating new one - this will trigger full cache rebuild",
-          manifestFile.getAbsolutePath());
-      CacheManifest manifest = new CacheManifest();
-      manifest.cacheDir = cacheDir;
-      return manifest;
+    // Check for legacy JSON manifest and migrate if present
+    File legacyFile = new File(cacheDir, LEGACY_MANIFEST_FILENAME);
+    if (legacyFile.exists()) {
+      manifest.migrateFromJson(legacyFile);
     }
 
+    int[] stats = manifest.store.getStats();
+    LOGGER.info("Loaded ECON cache manifest from DuckDB with {} entries ({} fresh, {} expired)",
+        stats[0], stats[1], stats[2]);
+
+    return manifest;
+  }
+
+  /**
+   * Migrate data from legacy JSON manifest to DuckDB.
+   */
+  private void migrateFromJson(File legacyFile) {
+    LOGGER.info("Found legacy JSON manifest at {}, migrating to DuckDB...", legacyFile.getAbsolutePath());
+
     try {
-      LOGGER.info("Loading cache manifest from {}", manifestFile.getAbsolutePath());
-      CacheManifest manifest = MAPPER.readValue(manifestFile, CacheManifest.class);
-      manifest.cacheDir = cacheDir;  // Set cache directory for path resolution
-      LOGGER.info("Loaded cache manifest version {} with {} entries from {}",
-          manifest.version, manifest.entries.size(), manifestFile.getAbsolutePath());
+      LegacyManifest legacy = MAPPER.readValue(legacyFile, LegacyManifest.class);
 
+      // Migrate cache entries
+      int migratedEntries = 0;
+      if (legacy.entries != null) {
+        for (java.util.Map.Entry<String, LegacyCacheEntry> entry : legacy.entries.entrySet()) {
+          String cacheKey = entry.getKey();
+          LegacyCacheEntry cacheEntry = entry.getValue();
 
-      return manifest;
+          String parametersJson = null;
+          if (cacheEntry.parameters != null) {
+            parametersJson = MAPPER.writeValueAsString(cacheEntry.parameters);
+          }
+
+          store.upsertEntry(
+              cacheKey,
+              cacheEntry.dataType != null ? cacheEntry.dataType : "unknown",
+              parametersJson,
+              cacheEntry.filePath,
+              cacheEntry.fileSize,
+              cacheEntry.refreshAfter,
+              cacheEntry.refreshReason
+          );
+
+          // Migrate parquet conversion status
+          if (cacheEntry.parquetConvertedAt > 0) {
+            store.markParquetConverted(cacheKey, cacheEntry.parquetPath);
+          }
+
+          migratedEntries++;
+        }
+      }
+
+      // Migrate catalog series cache
+      int migratedSeries = 0;
+      if (legacy.catalogSeriesCache != null) {
+        for (java.util.Map.Entry<String, LegacyCatalogSeriesCache> entry : legacy.catalogSeriesCache.entrySet()) {
+          LegacyCatalogSeriesCache seriesCache = entry.getValue();
+          if (seriesCache.seriesIds != null && !seriesCache.seriesIds.isEmpty()) {
+            String seriesIdsStr = String.join(",", seriesCache.seriesIds);
+            int ttlDays = (int) TimeUnit.MILLISECONDS.toDays(
+                seriesCache.refreshAfter - seriesCache.cachedAt);
+            store.cacheCatalogSeries(seriesCache.minPopularity, seriesIdsStr, ttlDays);
+            migratedSeries++;
+          }
+        }
+      }
+
+      LOGGER.info("Migrated {} cache entries and {} catalog series caches from JSON to DuckDB",
+          migratedEntries, migratedSeries);
+
+      // Rename legacy file to indicate migration completed
+      File backupFile = new File(legacyFile.getParent(), LEGACY_MANIFEST_FILENAME + ".migrated");
+      if (legacyFile.renameTo(backupFile)) {
+        LOGGER.info("Renamed legacy manifest to {}", backupFile.getName());
+      } else {
+        LOGGER.warn("Failed to rename legacy manifest file");
+      }
+
     } catch (IOException e) {
-      LOGGER.warn("Failed to load cache manifest, creating new one: {}", e.getMessage());
-      return new CacheManifest();
+      LOGGER.error("Failed to migrate legacy JSON manifest: {}", e.getMessage());
+      // Don't delete the file if migration failed - leave it for manual inspection
     }
   }
 
   /**
-   * Save manifest to file.
+   * Save manifest to DuckDB.
+   * This is now a no-op as DuckDB persists changes immediately.
+   * Kept for API compatibility.
    */
-  public void save(String cacheDir) {
-    File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
-
-    try {
-      // Ensure directory exists
-      manifestFile.getParentFile().mkdirs();
-
-      // Clean up expired entries before saving
-      int removed = cleanupExpiredEntries();
-
-      LOGGER.info("Saving cache manifest to {} with {} entries (removed {} expired)",
-          manifestFile.getAbsolutePath(), entries.size(), removed);
-
-      // Write to temp file first, then atomic rename to ensure consistency
-      File tempFile = new File(manifestFile.getParentFile(), MANIFEST_FILENAME + ".tmp");
-      try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
-           java.io.BufferedWriter writer =
-               new java.io.BufferedWriter(new java.io.OutputStreamWriter(fos, java.nio.charset.StandardCharsets.UTF_8))) {
-
-        // Write JSON
-        String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this);
-        writer.write(json);
-        writer.flush();
-
-        // Force OS to flush buffers to disk
-        fos.getFD().sync();
-      }
-
-      // Move temp file to final location, replacing if exists
-      // Note: We don't use ATOMIC_MOVE as it can fail on some filesystems
-      // The data is already synced to disk via getFD().sync() above
-      java.nio.file.Files.move(tempFile.toPath(), manifestFile.toPath(),
-          java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-      long fileSize = manifestFile.length();
-      long lastModified = manifestFile.lastModified();
-      LOGGER.info("Successfully wrote and synced cache manifest to {} (size: {} bytes, modified: {})",
-          manifestFile.getAbsolutePath(), fileSize, new java.util.Date(lastModified));
-      resetDirty();
-    } catch (IOException e) {
-      LOGGER.error("Failed to save cache manifest to {}: {}", manifestFile.getAbsolutePath(),
-          e.getMessage(), e);
-    }
+  @Override
+  public void save(String directory) {
+    // DuckDB persists changes immediately, no explicit save needed
+    store.touchLastUpdated();
+    LOGGER.debug("Cache manifest changes persisted to DuckDB");
   }
-
 
   /**
    * Get cache statistics.
    */
-  @JsonIgnore
   public CacheStats getStats() {
-    long now = System.currentTimeMillis();
-    CacheStats stats = new CacheStats();
-    stats.totalEntries = entries.size();
-    stats.freshEntries = (int) entries.values().stream()
-        .filter(entry -> now < entry.refreshAfter)
-        .count();
-    stats.expiredEntries = stats.totalEntries - stats.freshEntries;
-
-    return stats;
+    int[] stats = store.getStats();
+    CacheStats cacheStats = new CacheStats();
+    cacheStats.totalEntries = stats[0];
+    cacheStats.freshEntries = stats[1];
+    cacheStats.expiredEntries = stats[2];
+    return cacheStats;
   }
 
   /**
@@ -435,11 +311,8 @@ public class CacheManifest extends AbstractCacheManifest {
    * @return The ETag string, or null if not cached or no ETag available
    */
   public String getETag(CacheKey cacheKey) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-    return (entry != null) ? entry.etag : null;
+    return store.getETag(cacheKey.asString());
   }
-
 
   // ===== FRED Catalog Series Cache Methods =====
 
@@ -451,36 +324,11 @@ public class CacheManifest extends AbstractCacheManifest {
    * @return List of series IDs, or null if not cached/expired
    */
   public List<String> getCachedCatalogSeries(int minPopularity) {
-    String key = "catalog_series:popularity=" + minPopularity;
-    CatalogSeriesCache entry = catalogSeriesCache.get(key);
-
-    if (entry == null) {
+    String seriesIdsStr = store.getCachedCatalogSeries(minPopularity);
+    if (seriesIdsStr == null || seriesIdsStr.isEmpty()) {
       return null;
     }
-
-    // Treat empty results as cache miss (ignore TTL) - catalog extraction likely failed
-    if (entry.seriesIds == null || entry.seriesIds.isEmpty()) {
-      LOGGER.debug("Ignoring empty cached series list for popularity={} - treating as cache miss",
-          minPopularity);
-      catalogSeriesCache.remove(key);
-      return null;
-    }
-
-    // Check if cache has expired
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageDays = TimeUnit.MILLISECONDS.toDays(now - entry.cachedAt);
-      LOGGER.info("Catalog series cache expired (age: {} days, threshold: {})",
-          ageDays, minPopularity);
-      catalogSeriesCache.remove(key);
-      return null;
-    }
-
-    long ageDays = TimeUnit.MILLISECONDS.toDays(now - entry.cachedAt);
-    LOGGER.debug("Using cached catalog series (count: {}, threshold: {}, age: {} days)",
-        entry.seriesIds.size(), minPopularity, ageDays);
-
-    return new ArrayList<>(entry.seriesIds);
+    return new ArrayList<>(Arrays.asList(seriesIdsStr.split(",")));
   }
 
   /**
@@ -491,25 +339,12 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param ttlDays Time-to-live in days (typically 365 for annual refresh)
    */
   public void cacheCatalogSeries(int minPopularity, List<String> seriesIds, int ttlDays) {
-    // Don't cache empty results - they indicate catalog not yet downloaded or extraction failed
     if (seriesIds == null || seriesIds.isEmpty()) {
-      LOGGER.debug("Skipping cache of empty series list for popularity={} - " +
-          "catalog may not be downloaded yet", minPopularity);
+      LOGGER.debug("Skipping cache of empty series list for popularity={}", minPopularity);
       return;
     }
-
-    String key = "catalog_series:popularity=" + minPopularity;
-    CatalogSeriesCache entry = new CatalogSeriesCache();
-    entry.minPopularity = minPopularity;
-    entry.seriesIds = new ArrayList<>(seriesIds);
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = entry.cachedAt + TimeUnit.DAYS.toMillis(ttlDays);
-    entry.refreshReason = "catalog_annual_refresh";
-
-    catalogSeriesCache.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
+    String seriesIdsStr = String.join(",", seriesIds);
+    store.cacheCatalogSeries(minPopularity, seriesIdsStr, ttlDays);
     LOGGER.info("Cached {} catalog series (threshold: {}, TTL: {} days)",
         seriesIds.size(), minPopularity, ttlDays);
   }
@@ -521,15 +356,8 @@ public class CacheManifest extends AbstractCacheManifest {
    * @return true if cache exists and has not expired
    */
   public boolean isCatalogSeriesCached(int minPopularity) {
-    String key = "catalog_series:popularity=" + minPopularity;
-    CatalogSeriesCache entry = catalogSeriesCache.get(key);
-
-    if (entry == null) {
-      return false;
-    }
-
-    long now = System.currentTimeMillis();
-    return now < entry.refreshAfter;
+    String cached = store.getCachedCatalogSeries(minPopularity);
+    return cached != null && !cached.isEmpty();
   }
 
   /**
@@ -539,14 +367,8 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param minPopularity Popularity threshold to invalidate
    */
   public void invalidateCatalogSeriesCache(int minPopularity) {
-    String key = "catalog_series:popularity=" + minPopularity;
-    CatalogSeriesCache removed = catalogSeriesCache.remove(key);
-    if (removed != null) {
-      LOGGER.info("Invalidated catalog series cache (threshold: {}, had {} series)",
-          minPopularity, removed.seriesIds.size());
-      lastUpdated = System.currentTimeMillis();
-      markDirty();
-    }
+    store.deleteCatalogSeriesCache(minPopularity);
+    LOGGER.info("Invalidated catalog series cache (threshold: {})", minPopularity);
   }
 
   /**
@@ -554,48 +376,8 @@ public class CacheManifest extends AbstractCacheManifest {
    * Forces re-extraction for all thresholds on next access.
    */
   public void invalidateAllCatalogSeriesCache() {
-    int count = catalogSeriesCache.size();
-    catalogSeriesCache.clear();
-    if (count > 0) {
-      LOGGER.info("Invalidated all catalog series caches ({} thresholds)", count);
-      lastUpdated = System.currentTimeMillis();
-      markDirty();
-    }
-  }
-
-  /**
-   * Cache entry metadata with explicit refresh timestamp.
-   * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add ECON-specific fields.
-   */
-  public static class CacheEntry extends BaseCacheEntry {
-    @JsonProperty("dataType")
-    public String dataType;
-
-    @JsonProperty("parameters")
-    public Map<String, String> parameters = new HashMap<>();
-  }
-
-  /**
-   * Cache entry for extracted FRED catalog series lists.
-   * Caches expensive catalog extraction results (listing/parsing JSON files)
-   * with configurable TTL since catalog changes slowly.
-   * Keyed by minPopularity threshold since different thresholds yield different results.
-   */
-  public static class CatalogSeriesCache {
-    @JsonProperty("minPopularity")
-    public int minPopularity;
-
-    @JsonProperty("seriesIds")
-    public List<String> seriesIds;
-
-    @JsonProperty("cachedAt")
-    public long cachedAt;
-
-    @JsonProperty("refreshAfter")
-    public long refreshAfter;
-
-    @JsonProperty("refreshReason")
-    public String refreshReason;
+    store.deleteAllCatalogSeriesCache();
+    LOGGER.info("Invalidated all catalog series caches");
   }
 
   /**
@@ -610,5 +392,42 @@ public class CacheManifest extends AbstractCacheManifest {
       return String.format("Cache stats: %d total, %d fresh, %d expired",
                           totalEntries, freshEntries, expiredEntries);
     }
+  }
+
+  // ===== Legacy JSON classes for migration =====
+
+  /** Legacy JSON manifest structure for migration. */
+  private static class LegacyManifest {
+    public java.util.Map<String, LegacyCacheEntry> entries;
+    public java.util.Map<String, LegacyCatalogSeriesCache> catalogSeriesCache;
+    public String version;
+    public long lastUpdated;
+  }
+
+  /** Legacy cache entry for migration. */
+  private static class LegacyCacheEntry {
+    public String dataType;
+    public java.util.Map<String, String> parameters;
+    public String filePath;
+    public long fileSize;
+    public long cachedAt;
+    public long refreshAfter;
+    public String refreshReason;
+    public String etag;
+    public String parquetPath;
+    public long parquetConvertedAt;
+    public String lastError;
+    public int errorCount;
+    public long lastAttemptAt;
+    public long downloadRetry;
+  }
+
+  /** Legacy catalog series cache for migration. */
+  private static class LegacyCatalogSeriesCache {
+    public int minPopularity;
+    public List<String> seriesIds;
+    public long cachedAt;
+    public long refreshAfter;
+    public String refreshReason;
   }
 }

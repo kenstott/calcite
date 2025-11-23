@@ -3919,23 +3919,15 @@ public abstract class AbstractGovDataDownloader {
 
     LOGGER.debug("Generated {} download request combinations", allRequests.size());
 
-    // 2. Filter using DuckDB SQL query (FAST!)
-    List<CacheManifestQueryHelper.DownloadRequest> needed;
-    try {
-      long startMs = System.currentTimeMillis();
-      String manifestPath = operatingDirectory + "/cache_manifest.json";
-      needed = CacheManifestQueryHelper.filterUncachedRequestsOptimal(manifestPath, allRequests, operationType);
-      long elapsedMs = System.currentTimeMillis() - startMs;
+    // 2. Filter using cache manifest (DuckDB-backed)
+    long startMs = System.currentTimeMillis();
+    List<CacheManifestQueryHelper.DownloadRequest> needed =
+        CacheManifestQueryHelper.filterUncachedRequestsOptimal(cacheManifest, allRequests, operationType);
+    long elapsedMs = System.currentTimeMillis() - startMs;
 
-      LOGGER.info("Cache manifest filtering: {} uncached out of {} total ({}ms, {}% reduction)",
-          needed.size(), allRequests.size(), elapsedMs,
-          (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100));
-
-    } catch (Exception e) {
-      LOGGER.error("DuckDB cache filtering failed for {} {}: {}",
-          tableName, operationType.getValue(), e.getMessage());
-      throw new RuntimeException("Failed to filter cached operations for " + tableName, e);
-    }
+    LOGGER.info("Cache manifest filtering: {} uncached out of {} total ({}ms, {}% reduction)",
+        needed.size(), allRequests.size(), elapsedMs,
+        allRequests.isEmpty() ? 0 : (int) ((1.0 - (double) needed.size() / allRequests.size()) * 100));
 
     // 3. Execute only the needed operations
     int executed = 0;
@@ -4005,44 +3997,42 @@ public abstract class AbstractGovDataDownloader {
           sourceFileType = "JSON";
         }
 
-        // Check if source file exists (only for conversion operations)
+        // Check if source file exists (only for conversion operations with JSON files)
+        // FTP/ZIP files handle their own self-healing in their respective downloaders
+        // to avoid duplicate S3 exists checks
         if (sourceFilePath != null && OperationType.CONVERSION.equals(operationType)
+            && "JSON".equals(sourceFileType)
             && cacheStorageProvider.exists(sourceFilePath)) {
 
           LOGGER.info("Self-healing: Found existing {} source file for conversion: {}",
               sourceFileType, sourceFilePath);
 
-          // For JSON files, add to prefetch table and mark in manifest
-          if ("JSON".equals(sourceFileType)) {
-            long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
-            cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
+          long fileSize = cacheStorageProvider.getMetadata(fullJsonPath).getSize();
+          cacheManifest.markCached(cacheKey, relativeJsonPath, fileSize, Long.MAX_VALUE, "self_healed");
 
-            // Read JSON and add to prefetch table so conversion can find it
-            if (finalPrefetchHelper != null) {
-              try (InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath)) {
-                byte[] bytes = new byte[inputStream.available()];
-                inputStream.read(bytes);
-                String jsonContent = new String(bytes, StandardCharsets.UTF_8);
+          // Read JSON and add to prefetch table so conversion can find it
+          if (finalPrefetchHelper != null) {
+            try (InputStream inputStream = cacheStorageProvider.openInputStream(fullJsonPath)) {
+              byte[] bytes = new byte[inputStream.available()];
+              inputStream.read(bytes);
+              String jsonContent = new String(bytes, StandardCharsets.UTF_8);
 
-                finalPrefetchHelper.insertJsonBatch(
-                    Collections.singletonList(req.parameters),
-                    Collections.singletonList(jsonContent));
-                LOGGER.debug("Added self-healed JSON to prefetch table: {}", relativeJsonPath);
-              } catch (Exception prefetchEx) {
-                LOGGER.warn("Failed to add self-healed JSON to prefetch table: {}", prefetchEx.getMessage());
-              }
-            }
-
-            // Save manifest immediately to persist self-healing discovery
-            try {
-              cacheManifest.save(operatingDirectory);
-              LOGGER.debug("Saved manifest after self-healing {}", relativeJsonPath);
-            } catch (Exception saveEx) {
-              LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+              finalPrefetchHelper.insertJsonBatch(
+                  Collections.singletonList(req.parameters),
+                  Collections.singletonList(jsonContent));
+              LOGGER.debug("Added self-healed JSON to prefetch table: {}", relativeJsonPath);
+            } catch (Exception prefetchEx) {
+              LOGGER.warn("Failed to add self-healed JSON to prefetch table: {}", prefetchEx.getMessage());
             }
           }
-          // For ZIP and FTP files, the specific downloaders handle their own caching
-          // We just log that the file exists
+
+          // Save manifest immediately to persist self-healing discovery
+          try {
+            cacheManifest.save(operatingDirectory);
+            LOGGER.debug("Saved manifest after self-healing {}", relativeJsonPath);
+          } catch (Exception saveEx) {
+            LOGGER.warn("Failed to save manifest after self-healing: {}", saveEx.getMessage());
+          }
         }
       } catch (Exception e) {
         // If self-healing check fails, just continue with normal operation

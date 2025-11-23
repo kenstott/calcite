@@ -17,9 +17,9 @@
 package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.govdata.AbstractCacheManifest;
+import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -35,113 +36,49 @@ import java.util.concurrent.TimeUnit;
  * Cache manifest for tracking downloaded geographic data to improve startup performance.
  * Maintains metadata about cached files to avoid redundant downloads and S3 existence checks.
  *
+ * <p>Uses DuckDB for persistent storage, providing proper ACID guarantees and
+ * thread-safe concurrent access. Replaces the previous JSON-based implementation.
+ *
  * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
  * including ETag support, TTL-based expiration, and parquet conversion tracking.
- *
- * <p>Uses explicit refresh timestamps stored in each entry, allowing different refresh
- * policies per data type (e.g., current year vs historical, TIGER boundaries vs Census API data).
  */
 public class GeoCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoCacheManifest.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String MANIFEST_FILENAME = "cache_manifest.json";
+  private static final String LEGACY_MANIFEST_FILENAME = "cache_manifest.json";
 
-  @JsonProperty("entries")
-  private Map<String, CacheEntry> entries = new HashMap<>();
+  /** DuckDB-based cache store. */
+  private final DuckDBCacheStore store;
 
-  @JsonProperty("version")
-  private String version = "1.0";
+  /** Cache directory path. */
+  private final String cacheDir;
 
-  @JsonProperty("lastUpdated")
-  private long lastUpdated = System.currentTimeMillis();
-
-  @JsonIgnore
-  private String cacheDir;  // Cache directory for resolving relative paths
+  /**
+   * Private constructor - use {@link #load(String)} to get an instance.
+   */
+  private GeoCacheManifest(String cacheDir) {
+    this.cacheDir = cacheDir;
+    this.store = DuckDBCacheStore.getInstance("geo", cacheDir);
+  }
 
   /**
    * Check if data is cached and fresh for the given cache key.
    * Uses ETag-based caching when available, falling back to time-based TTL.
    */
-  @Override public boolean isCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      return false;
-    }
-
-    // NOTE: File existence check removed - would fail for S3 cache URIs.
-    // Callers (TigerDataDownloader, CensusApiClient, HudCrosswalkFetcher) handle file existence
-    // checks using StorageProvider which supports both local and S3 storage.
-    // Manifest focuses on ETag-based and time-based refresh policies only.
-
-    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
-    if (entry.etag != null && !entry.etag.isEmpty()) {
-      LOGGER.debug("Using cached {} data (ETag: {})", cacheKey.asString(), entry.etag);
-      return true;
-    }
-
-    // Fallback: check if refresh time has passed for entries without ETags
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.debug("Cache entry expired for {} (age: {} hours, policy: {})",
-          cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // Log cache hit with time until refresh
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(entry.refreshAfter - now);
-    LOGGER.debug("Using cached {} data (refresh in {} hours, policy: {})",
-        cacheKey.asString(), hoursUntilRefresh, entry.refreshReason != null ? entry.refreshReason : "unknown");
-
-    return true;
+  @Override
+  public boolean isCached(CacheKey cacheKey) {
+    return store.isCached(cacheKey.asString());
   }
 
   /**
    * Check if data is cached and fresh for the given parameters.
    * Uses ETag-based caching when available, falling back to time-based TTL.
-   * @deprecated Use {@link #isCached(org.apache.calcite.adapter.govdata.CacheKey)} instead
+   * @deprecated Use {@link #isCached(CacheKey)} instead
    */
   @Deprecated
   public boolean isCached(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      return false;
-    }
-
-    // NOTE: File existence check removed - would fail for S3 cache URIs.
-    // Callers (TigerDataDownloader, CensusApiClient, HudCrosswalkFetcher) handle file existence
-    // checks using StorageProvider which supports both local and S3 storage.
-    // Manifest focuses on ETag-based and time-based refresh policies only.
-
-    // If we have an ETag, cache is always valid until server says otherwise (304 vs 200)
-    if (entry.etag != null && !entry.etag.isEmpty()) {
-      LOGGER.debug("Using cached {} data for year {} (ETag: {})", dataType, year, entry.etag);
-      return true;
-    }
-
-    // Fallback: check if refresh time has passed for entries without ETags
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.debug("Cache entry expired for {} year={} (age: {} hours, policy: {})",
-          dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // Log cache hit with time until refresh
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(entry.refreshAfter - now);
-    LOGGER.debug("Using cached {} data for year {} (refresh in {} hours, policy: {})",
-        dataType, year, hoursUntilRefresh, entry.refreshReason != null ? entry.refreshReason : "unknown");
-
-    return true;
+    return store.isCached(key);
   }
 
   /**
@@ -154,8 +91,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    */
   public String getETag(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-    return (entry != null) ? entry.etag : null;
+    return store.getETag(key);
   }
 
   /**
@@ -167,292 +103,205 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
    * @param refreshReason Human-readable reason for the refresh policy
    */
-  @Override public void markCached(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
-                        String filePath, long fileSize, long refreshAfter, String refreshReason) {
-    String key = cacheKey.asString();
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = cacheKey.getTableName();
-    entry.year = 0;  // Legacy field, not used with CacheKey approach
-    entry.parameters = new HashMap<>(cacheKey.getParameters());
-    entry.filePath = filePath;
-    entry.fileSize = fileSize;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = refreshAfter;
-    entry.refreshReason = refreshReason;
+  @Override
+  public void markCached(CacheKey cacheKey, String filePath, long fileSize,
+      long refreshAfter, String refreshReason) {
+    String parametersJson = null;
+    try {
+      parametersJson = MAPPER.writeValueAsString(cacheKey.getParameters());
+    } catch (IOException e) {
+      LOGGER.warn("Failed to serialize parameters for {}: {}", cacheKey.asString(), e.getMessage());
+    }
 
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
+    store.upsertEntry(
+        cacheKey.asString(),
+        cacheKey.getTableName(),
+        parametersJson,
+        filePath,
+        fileSize,
+        refreshAfter,
+        refreshReason
+    );
 
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
+    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - System.currentTimeMillis());
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
         cacheKey.asString(), fileSize, hoursUntilRefresh, refreshReason);
   }
 
   /**
    * Mark data as cached with metadata and explicit refresh timestamp.
-   *
-   * @param dataType The type of data being cached
-   * @param year The year of the data
-   * @param parameters Additional parameters for the cache key
-   * @param filePath Path to the cached file
-   * @param fileSize Size of the cached file
-   * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
-   * @param refreshReason Human-readable reason for the refresh policy
-   * @deprecated Use {@link #markCached(org.apache.calcite.adapter.govdata.CacheKey, String, long, long, String)} instead
+   * @deprecated Use {@link #markCached(CacheKey, String, long, long, String)} instead
    */
   @Deprecated
   public void markCached(String dataType, int year, Map<String, String> parameters,
                         String filePath, long fileSize, long refreshAfter, String refreshReason) {
     String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = new CacheEntry();
-    entry.dataType = dataType;
-    entry.year = year;
-    entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-    entry.filePath = filePath;
-    entry.fileSize = fileSize;
-    entry.cachedAt = System.currentTimeMillis();
-    entry.refreshAfter = refreshAfter;
-    entry.refreshReason = refreshReason;
+    String parametersJson = null;
+    try {
+      Map<String, String> allParams = new HashMap<>();
+      if (parameters != null) {
+        allParams.putAll(parameters);
+      }
+      allParams.put("year", String.valueOf(year));
+      parametersJson = MAPPER.writeValueAsString(allParams);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to serialize parameters: {}", e.getMessage());
+    }
 
-    entries.put(key, entry);
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
+    store.upsertEntry(key, dataType, parametersJson, filePath, fileSize, refreshAfter, refreshReason);
 
-    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - entry.cachedAt);
+    long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - System.currentTimeMillis());
     LOGGER.debug("Marked as cached: {} (year={}, size={}, refresh in {} hours, policy: {})",
         dataType, year, fileSize, hoursUntilRefresh, refreshReason);
   }
 
   /**
-   * Check if parquet conversion is complete for the given data.
-   * Respects TTL - returns false if entry has expired.
+   * Mark data as cached with default refresh for TIGER boundaries (immutable).
    */
-  @Override public boolean isParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null || entry.parquetPath == null || entry.parquetConvertedAt == 0) {
-      return false;
-    }
-
-    // Check if entry has expired based on TTL
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.debug("Parquet entry expired for {} (age: {} hours, policy: {})",
-          cacheKey.asString(), ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
-    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
-    if (entry.cachedAt > entry.parquetConvertedAt) {
-      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {}",
-          cacheKey.asString());
-      return false;
-    }
-
-    LOGGER.debug("Parquet already converted for {}: {}", cacheKey.asString(), entry.parquetPath);
-    return true;
+  public void markCached(String dataType, int year, Map<String, String> parameters,
+                        String filePath, long fileSize) {
+    long refreshAfter = Long.MAX_VALUE;
+    String refreshReason = "geographic_boundary_immutable";
+    markCached(dataType, year, parameters, filePath, fileSize, refreshAfter, refreshReason);
   }
 
   /**
    * Check if parquet conversion is complete for the given data.
-   * Respects TTL - returns false if entry has expired.
-   * @deprecated Use {@link #isParquetConverted(org.apache.calcite.adapter.govdata.CacheKey)} instead
+   */
+  @Override
+  public boolean isParquetConverted(CacheKey cacheKey) {
+    boolean converted = store.isParquetConverted(cacheKey.asString());
+    if (converted) {
+      LOGGER.debug("Parquet already converted for {}", cacheKey.asString());
+    }
+    return converted;
+  }
+
+  /**
+   * Check if parquet conversion is complete for the given data.
+   * @deprecated Use {@link #isParquetConverted(CacheKey)} instead
    */
   @Deprecated
   public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null || entry.parquetPath == null || entry.parquetConvertedAt == 0) {
-      return false;
-    }
-
-    // Check if entry has expired based on TTL
-    long now = System.currentTimeMillis();
-    if (now >= entry.refreshAfter) {
-      long ageHours = TimeUnit.MILLISECONDS.toHours(now - entry.cachedAt);
-      LOGGER.debug("Parquet entry expired for {} year={} (age: {} hours, policy: {})",
-          dataType, year, ageHours, entry.refreshReason != null ? entry.refreshReason : "unknown");
-      entries.remove(key);
-      markDirty();
-      return false;
-    }
-
-    // Check if raw file was updated AFTER parquet conversion (e.g., via ETag change detection)
-    // If cachedAt > parquetConvertedAt, the raw file is newer and needs reconversion
-    if (entry.cachedAt > entry.parquetConvertedAt) {
-      LOGGER.info("Raw file updated after parquet conversion - reconversion needed: {} (year={})",
-          dataType, year);
-      return false;
-    }
-
-    LOGGER.debug("Parquet already converted for {} year={}: {}", dataType, year, entry.parquetPath);
-    return true;
+    return store.isParquetConverted(key);
   }
 
   /**
    * Mark parquet conversion as complete for cached data.
-   * Creates a stub cache entry if no raw download entry exists (handles legacy data).
    */
-  @Override public void markParquetConverted(org.apache.calcite.adapter.govdata.CacheKey cacheKey, String parquetPath) {
-    String key = cacheKey.asString();
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      // Create stub entry for parquet-only data (no raw download tracked)
-      LOGGER.debug("Creating stub cache entry for parquet-only data: {}", cacheKey.asString());
-      entry = new CacheEntry();
-      entry.dataType = cacheKey.getTableName();
-      entry.year = 0;  // Legacy field, not used with CacheKey approach
-      entry.parameters = new HashMap<>(cacheKey.getParameters());
-      entry.filePath = null;  // No raw download
-      entry.fileSize = 0;
-      entry.cachedAt = System.currentTimeMillis();
-      entry.refreshAfter = Long.MAX_VALUE;  // Never refresh (historical data)
-      entry.refreshReason = "parquet_only";
-      entries.put(key, entry);
-    }
-
-    entry.parquetPath = parquetPath;
-    entry.parquetConvertedAt = System.currentTimeMillis();
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
+  @Override
+  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
+    store.markParquetConverted(cacheKey.asString(), parquetPath);
     LOGGER.debug("Marked parquet converted: {} -> {}", cacheKey.asString(), parquetPath);
   }
 
   /**
    * Mark parquet conversion as complete for cached data.
-   * Creates a stub cache entry if no raw download entry exists (handles legacy data).
-   * @deprecated Use {@link #markParquetConverted(org.apache.calcite.adapter.govdata.CacheKey, String)} instead
+   * @deprecated Use {@link #markParquetConverted(CacheKey, String)} instead
    */
   @Deprecated
-  public void markParquetConverted(String dataType, int year, Map<String, String> parameters, String parquetPath) {
+  public void markParquetConverted(String dataType, int year, Map<String, String> parameters,
+      String parquetPath) {
     String key = buildKey(dataType, year, parameters);
-    CacheEntry entry = entries.get(key);
-
-    if (entry == null) {
-      // Create stub entry for parquet-only data (no raw download tracked)
-      LOGGER.debug("Creating stub cache entry for parquet-only data: {} year={}", dataType, year);
-      entry = new CacheEntry();
-      entry.dataType = dataType;
-      entry.year = year;
-      entry.parameters = new HashMap<>(parameters != null ? parameters : new HashMap<>());
-      entry.filePath = null;  // No raw download
-      entry.fileSize = 0;
-      entry.cachedAt = System.currentTimeMillis();
-      entry.refreshAfter = Long.MAX_VALUE;  // Never refresh (historical data)
-      entry.refreshReason = "parquet_only";
-      entries.put(key, entry);
-    }
-
-    entry.parquetPath = parquetPath;
-    entry.parquetConvertedAt = System.currentTimeMillis();
-    lastUpdated = System.currentTimeMillis();
-    markDirty();
-
+    store.markParquetConverted(key, parquetPath);
     LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, parquetPath);
   }
 
   /**
-   * Mark data as cached with default refresh for TIGER boundaries (immutable) and Census API data (annual refresh).
+   * Mark data as having API error - stub implementation for GEO adapter.
    */
-  public void markCached(String dataType, int year, Map<String, String> parameters,
-                        String filePath, long fileSize) {
-    // TIGER boundary data is immutable once published
-    // Census API demographic data refreshes annually
-    long refreshAfter = Long.MAX_VALUE;
-    String refreshReason = "geographic_boundary_immutable";
-
-    markCached(dataType, year, parameters, filePath, fileSize, refreshAfter, refreshReason);
+  @Override
+  public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
+    // GEO adapter does not use the generic table operations framework that triggers API errors
+    LOGGER.warn("markApiError called on GeoCacheManifest - not implemented for GEO adapter");
   }
 
   /**
    * Remove expired entries from the manifest based on refreshAfter timestamps.
    */
   public int cleanupExpiredEntries() {
-    long now = System.currentTimeMillis();
-    int[] removed = {0};
-
-    entries.entrySet().removeIf(entry -> {
-      CacheEntry cacheEntry = entry.getValue();
-
-      // NOTE: File existence check removed - would fail for S3 cache URIs.
-      // Callers handle file existence checks using StorageProvider.
-      // Manifest focuses on time-based refresh policies only.
-
-      // Remove if refresh time has passed
-      if (now >= cacheEntry.refreshAfter) {
-        long ageHours = TimeUnit.MILLISECONDS.toHours(now - cacheEntry.cachedAt);
-        LOGGER.debug("Removing expired cache entry: {} year={} (age: {} hours, policy: {})",
-            cacheEntry.dataType, cacheEntry.year, ageHours, cacheEntry.refreshReason);
-        removed[0]++;
-        return true;
-      }
-
-      return false;
-    });
-
-    if (removed[0] > 0) {
-      lastUpdated = System.currentTimeMillis();
-      markDirty();
-      LOGGER.debug("Cleaned up {} expired cache entries", removed[0]);
-    }
-
-    return removed[0];
+    return store.cleanupExpiredEntries();
   }
 
   /**
-   * Load manifest from file.
+   * Load manifest from DuckDB cache store.
+   * Automatically migrates from JSON if a legacy manifest exists.
    */
   public static GeoCacheManifest load(String cacheDir) {
-    File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
+    GeoCacheManifest manifest = new GeoCacheManifest(cacheDir);
 
-    if (!manifestFile.exists()) {
-      LOGGER.debug("No geo cache manifest found, creating new one");
-      GeoCacheManifest manifest = new GeoCacheManifest();
-      manifest.cacheDir = cacheDir;
-      return manifest;
+    // Check for legacy JSON manifest and migrate if present
+    File legacyFile = new File(cacheDir, LEGACY_MANIFEST_FILENAME);
+    if (legacyFile.exists()) {
+      manifest.migrateFromJson(legacyFile);
     }
 
+    int[] stats = manifest.store.getStats();
+    LOGGER.info("Loaded GEO cache manifest from DuckDB with {} entries ({} fresh, {} expired)",
+        stats[0], stats[1], stats[2]);
+
+    return manifest;
+  }
+
+  /**
+   * Migrate data from legacy JSON manifest to DuckDB.
+   */
+  private void migrateFromJson(File legacyFile) {
+    LOGGER.info("Found legacy JSON manifest at {}, migrating to DuckDB...", legacyFile.getAbsolutePath());
+
     try {
-      GeoCacheManifest manifest = MAPPER.readValue(manifestFile, GeoCacheManifest.class);
-      manifest.cacheDir = cacheDir;  // Set cache directory for path resolution
-      LOGGER.debug("Loaded geo cache manifest version {} with {} entries", manifest.version, manifest.entries.size());
-      return manifest;
+      LegacyManifest legacy = MAPPER.readValue(legacyFile, LegacyManifest.class);
+
+      int migratedEntries = 0;
+      if (legacy.entries != null) {
+        for (java.util.Map.Entry<String, LegacyCacheEntry> entry : legacy.entries.entrySet()) {
+          String cacheKey = entry.getKey();
+          LegacyCacheEntry cacheEntry = entry.getValue();
+
+          String parametersJson = null;
+          if (cacheEntry.parameters != null) {
+            parametersJson = MAPPER.writeValueAsString(cacheEntry.parameters);
+          }
+
+          store.upsertEntry(
+              cacheKey,
+              cacheEntry.dataType != null ? cacheEntry.dataType : "unknown",
+              parametersJson,
+              cacheEntry.filePath,
+              cacheEntry.fileSize,
+              cacheEntry.refreshAfter,
+              cacheEntry.refreshReason
+          );
+
+          if (cacheEntry.parquetConvertedAt > 0) {
+            store.markParquetConverted(cacheKey, cacheEntry.parquetPath);
+          }
+
+          migratedEntries++;
+        }
+      }
+
+      LOGGER.info("Migrated {} cache entries from JSON to DuckDB", migratedEntries);
+
+      File backupFile = new File(legacyFile.getParent(), LEGACY_MANIFEST_FILENAME + ".migrated");
+      if (legacyFile.renameTo(backupFile)) {
+        LOGGER.info("Renamed legacy manifest to {}", backupFile.getName());
+      }
+
     } catch (IOException e) {
-      LOGGER.warn("Failed to load geo cache manifest, creating new one: {}", e.getMessage());
-      GeoCacheManifest manifest = new GeoCacheManifest();
-      manifest.cacheDir = cacheDir;
-      return manifest;
+      LOGGER.error("Failed to migrate legacy JSON manifest: {}", e.getMessage());
     }
   }
 
   /**
-   * Save manifest to file.
+   * Save manifest to DuckDB.
+   * This is now a no-op as DuckDB persists changes immediately.
    */
-  public void save(String cacheDir) {
-    File manifestFile = new File(cacheDir, MANIFEST_FILENAME);
-
-    try {
-      // Ensure directory exists
-      manifestFile.getParentFile().mkdirs();
-
-      // Clean up expired entries before saving
-      cleanupExpiredEntries();
-
-      MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestFile, this);
-      LOGGER.debug("Saved geo cache manifest with {} entries", entries.size());
-      resetDirty();
-    } catch (IOException e) {
-      LOGGER.warn("Failed to save geo cache manifest: {}", e.getMessage());
-    }
+  @Override
+  public void save(String directory) {
+    store.touchLastUpdated();
+    LOGGER.debug("Cache manifest changes persisted to DuckDB");
   }
 
   /**
@@ -464,36 +313,32 @@ public class GeoCacheManifest extends AbstractCacheManifest {
 
     if (parameters != null && !parameters.isEmpty()) {
       parameters.entrySet().stream()
-          .sorted(Map.Entry.comparingByKey())
+          .sorted(java.util.Map.Entry.comparingByKey())
           .forEach(entry -> key.append(":").append(entry.getKey()).append("=").append(entry.getValue()));
     }
 
     return key.toString();
   }
 
-  /**
-   * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.
-   * Note: GEO adapter does not currently use this method as it has different error handling patterns.
-   * This is a stub implementation to satisfy AbstractCacheManifest contract.
-   */
-  @Override public void markApiError(org.apache.calcite.adapter.govdata.CacheKey cacheKey,
-                          String errorMessage, int retryAfterDays) {
-    // GEO adapter does not use the generic table operations framework that triggers API errors
-    LOGGER.warn("markApiError called on GeoCacheManifest - not implemented for GEO adapter");
+  // ===== Legacy JSON classes for migration =====
+
+  private static class LegacyManifest {
+    public java.util.Map<String, LegacyCacheEntry> entries;
+    public String version;
+    public long lastUpdated;
   }
 
-  /**
-   * Cache entry metadata with explicit refresh timestamp.
-   * Extends {@link AbstractCacheManifest.BaseCacheEntry} to add GEO-specific fields.
-   */
-  public static class CacheEntry extends BaseCacheEntry {
-    @JsonProperty("dataType")
+  private static class LegacyCacheEntry {
     public String dataType;
-
-    @JsonProperty("year")
     public int year;
-
-    @JsonProperty("parameters")
-    public Map<String, String> parameters = new HashMap<>();
+    public java.util.Map<String, String> parameters;
+    public String filePath;
+    public long fileSize;
+    public long cachedAt;
+    public long refreshAfter;
+    public String refreshReason;
+    public String etag;
+    public String parquetPath;
+    public long parquetConvertedAt;
   }
 }
