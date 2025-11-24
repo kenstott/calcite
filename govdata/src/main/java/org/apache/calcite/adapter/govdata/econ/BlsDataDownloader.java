@@ -2155,13 +2155,23 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> cacheParams = ImmutableMap.of("year", String.valueOf(year));
 
     CacheKey cacheKey = new CacheKey("qcew_zip", cacheParams);
+    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
+
     if (cacheManifest.isCached(cacheKey)) {
-      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
       if (cacheStorageProvider.exists(fullPath)) {
         LOGGER.info("Using cached QCEW CSV for year {} (from manifest)", year);
         return;
       } else {
         LOGGER.warn("Cache manifest lists QCEW ZIP for year {} but file not found - re-downloading", year);
+      }
+    } else {
+      // Self-healing: cache manifest doesn't have entry, but file might exist
+      if (cacheStorageProvider.exists(fullPath)) {
+        LOGGER.info("Self-healing: Found QCEW ZIP for year {} in cache storage (not in manifest)", year);
+        // Mark in manifest so we don't check again
+        long refreshAfter = Long.MAX_VALUE;
+        cacheManifest.markCached(cacheKey, qcewZipPath, -1, refreshAfter, "immutable_historical");
+        return;
       }
     }
 
@@ -2170,7 +2180,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     byte[] zipData = blsDownloadFile(downloadUrl);
 
     // Cache for reuse - use cacheStorageProvider for intermediate files
-    String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
     cacheStorageProvider.writeFile(fullPath, zipData);
 
     // Mark in cache manifest - QCEW data is immutable (historical), never refresh
