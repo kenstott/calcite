@@ -2633,7 +2633,7 @@ tables:
 
   - name: state_gdp
     type: view
-    sql: "SELECT GeoFips AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM econ.regional_income WHERE tablename LIKE 'SAGDP%'"
+    sql: "SELECT geo_fips_set AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM econ.regional_income WHERE tablename LIKE 'SAGDP%'"
     comment: >
       State-level GDP statistics from BEA Regional Economic Accounts (SAGDP tables). This is a convenience view filtering regional_income to just the State Annual GDP tables (SAGDP1-SAGDP11). Columns: geo_fips (2-digit state FIPS code), geo_name (state name), tablename (specific SAGDP table), line_code (BEA line code), year, metric (GDP component description), value (GDP value), units (unit multiplier). For quarterly state GDP, filter regional_income for SQGDP* tables.
 
