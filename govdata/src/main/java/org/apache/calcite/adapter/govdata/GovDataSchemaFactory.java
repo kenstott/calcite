@@ -131,6 +131,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Build the unified operand for FileSchemaFactory
     Map<String, Object> unifiedOperand = buildUnifiedOperand(dataSource, enrichedOperand);
 
+    // Add canonical schema name for consistent .aperio directory naming
+    // This ensures the operating cache directory uses the canonical name (e.g., "econ")
+    // regardless of the user-assigned schema name (e.g., "ECON", "Econ", etc.)
+    unifiedOperand.put("canonicalSchemaName", dataSource.toLowerCase());
+
     // Add storageType and storageConfig to unifiedOperand if storage provider was initialized
     // This ensures FileSchemaFactory can properly configure DuckDB with S3 endpoint and credentials
     if (operand.containsKey("storageType")) {

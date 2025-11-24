@@ -66,7 +66,10 @@ public class DuckDBCacheStore implements AutoCloseable {
 
   private DuckDBCacheStore(String schemaName, String cacheDir) {
     this.schemaName = schemaName;
-    this.dbPath = new File(cacheDir, "cache.duckdb").getAbsolutePath();
+    // Use schema-specific filename to avoid DuckDB database name conflicts
+    // DuckDB tracks databases by filename, so "cache.duckdb" in different directories
+    // would conflict. Using "cache_econ.duckdb" etc. avoids this.
+    this.dbPath = new File(cacheDir, "cache_" + schemaName + ".duckdb").getAbsolutePath();
   }
 
   /**
@@ -78,7 +81,8 @@ public class DuckDBCacheStore implements AutoCloseable {
    * @return DuckDBCacheStore instance
    */
   public static DuckDBCacheStore getInstance(String schemaName, String cacheDir) {
-    String key = new File(cacheDir, "cache.duckdb").getAbsolutePath();
+    // Use schema-specific filename to match constructor
+    String key = new File(cacheDir, "cache_" + schemaName + ".duckdb").getAbsolutePath();
     return OPEN_STORES.computeIfAbsent(key, k -> {
       DuckDBCacheStore store = new DuckDBCacheStore(schemaName, cacheDir);
       store.initialize();

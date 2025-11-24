@@ -294,6 +294,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
             ? (Boolean) operand.get("prime_cache")
             : Boolean.TRUE;  // Default to true
 
+    // Get canonical schema name for consistent .aperio directory naming
+    // This is set by GovDataSchemaFactory to ensure paths like .aperio/econ are used
+    // regardless of the user-assigned schema name (e.g., "ECON", "Econ")
+    final String canonicalSchemaName = (String) operand.get("canonicalSchemaName");
+
     // All paths are strings - StorageProvider handles both local and cloud storage
     String directoryPath = null;
 
@@ -375,10 +380,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Create internal FileSchema for DuckDB processing
       // Pass null for File parameters - all file access goes through StorageProvider with directoryPath
+      // Pass canonicalSchemaName for consistent .aperio directory naming (e.g., "econ" vs "ECON")
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
       // Set constraint metadata on FileSchema if available
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
@@ -470,10 +476,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Pass user-configured baseDirectory or null to let FileSchema use its default
     // FileSchema will default to {working_directory}/.aperio/<schema_name> if null
     // Pass null for File parameter - all file access goes through StorageProvider with directoryPath
+    // Pass canonicalSchemaName for consistent .aperio directory naming (e.g., "econ" vs "ECON")
     FileSchema fileSchema =
         new FileSchema(parentSchema, name, null, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
-        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment);
+        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
     // Pass constraint metadata to FileSchema BEFORE table discovery
     // This ensures tables are created with constraint configuration available
