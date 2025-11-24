@@ -432,9 +432,6 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     LOGGER.debug("resolveBulkDownload called with downloadNode: {}", downloadNode);
-    LOGGER.debug("downloadNode.has('bulkDownload'): {}", downloadNode.has("bulkDownload"));
-    LOGGER.debug("downloadNode.has('cachePattern'): {}", downloadNode.has("cachePattern"));
-    LOGGER.debug("downloadNode.has('url'): {}", downloadNode.has("url"));
 
     // Check if this uses a bulkDownload reference
     if (downloadNode.has("bulkDownload")) {
@@ -454,23 +451,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       return bulkConfig;
     }
 
-    // Legacy format: direct cachePattern and url in downloadNode
-    if (downloadNode.has("cachePattern") && downloadNode.has("url")) {
-      String cachePattern = downloadNode.get("cachePattern").asText();
-      String url = downloadNode.get("url").asText();
-
-      List<String> variables = new ArrayList<>();
-      if (downloadNode.has("variables") && downloadNode.get("variables").isArray()) {
-        downloadNode.get("variables").forEach(v -> variables.add(v.asText()));
-      }
-
-      String comment = downloadNode.has("comment") ? downloadNode.get("comment").asText() : "";
-
-      return new BulkDownloadConfig("direct", cachePattern, url, variables, comment);
-    }
-
     throw new IllegalArgumentException(
-        "downloadNode must have either 'bulkDownload' reference or 'cachePattern'+'url' fields");
+        "downloadNode must have a 'bulkDownload' reference field");
   }
 
   /**
