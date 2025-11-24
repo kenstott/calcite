@@ -296,18 +296,18 @@ erDiagram
     %% GEO SCHEMA (Geographic Data)
     %% =============================
 
-    %% GEO.tiger_states (bridges FIPS and 2-letter codes)
-    tiger_states {
+    %% GEO.states (bridges FIPS and 2-letter codes)
+    states {
         string state_fips PK
-        string state_code UK
+        string state_abbr UK
         string state_name
         geometry boundary
         decimal land_area
         decimal water_area
     }
 
-    %% GEO.tiger_counties
-    tiger_counties {
+    %% GEO.counties
+    counties {
         string county_fips PK
         string state_fips FK
         string county_name
@@ -316,20 +316,18 @@ erDiagram
         decimal water_area
     }
 
-    %% GEO.census_places
-    census_places {
-        string place_code PK
-        string state_code PK,FK
+    %% GEO.places
+    places {
+        string place_fips PK
+        string state_fips FK
         string place_name
-        int population
-        decimal median_income
+        string place_type
         geometry boundary
     }
 
-    %% GEO.hud_zip_county
-    hud_zip_county {
+    %% GEO.zip_county_crosswalk
+    zip_county_crosswalk {
         string zip PK
-        string state_fips FK
         string county_fips FK
         decimal res_ratio
         decimal bus_ratio
@@ -337,24 +335,20 @@ erDiagram
         decimal tot_ratio
     }
 
-    %% GEO.hud_zip_tract
-    hud_zip_tract {
+    %% GEO.tract_zip_crosswalk
+    tract_zip_crosswalk {
+        string tract_fips PK
         string zip PK
-        string state_fips FK
-        string tract PK
-        string county_fips FK
         decimal res_ratio
         decimal bus_ratio
         decimal oth_ratio
         decimal tot_ratio
     }
 
-    %% GEO.hud_zip_cbsa
-    hud_zip_cbsa {
+    %% GEO.zip_cbsa_crosswalk
+    zip_cbsa_crosswalk {
         string zip PK
-        string state_fips FK
-        string cbsa_code PK
-        string cbsa_title
+        string cbsa_code PK,FK
         decimal res_ratio
         decimal bus_ratio
         decimal oth_ratio
@@ -383,22 +377,20 @@ erDiagram
     gdp_components }o--|| fred_indicators : "table_id → series_id (GDP series temporal)"
 
     %% Relationships within GEO domain
-    tiger_counties }o--|| tiger_states : "belongs to"
-    census_places }o--|| tiger_states : "located in"
-    hud_zip_county }o--|| tiger_counties : "maps to"
-    hud_zip_county }o--|| tiger_states : "zip in state"
-    hud_zip_tract }o--|| tiger_counties : "within"
-    hud_zip_tract }o--|| tiger_states : "zip in state"
-    hud_zip_cbsa }o--|| tiger_states : "zip in state"
+    counties }o--|| states : "belongs to"
+    places }o--|| states : "located in"
+    zip_county_crosswalk }o--|| counties : "maps to"
+    tract_zip_crosswalk }o--|| counties : "within"
+    zip_cbsa_crosswalk }o--|| cbsa : "metro area"
 
-    %% Cross-schema relationships (using tiger_states.state_code)
-    filing_metadata }o--|| tiger_states : "state_of_incorporation → state_code"
-    regional_employment }o--|| tiger_states : "state_code → state_code"
-    regional_income }o--|| tiger_states : "geo_fips → state_fips (2-digit state FIPS)"
+    %% Cross-schema relationships (using states.state_abbr)
+    filing_metadata }o--|| states : "state_of_incorporation → state_abbr"
+    regional_employment }o--|| states : "state_code → state_abbr"
+    regional_income }o--|| states : "geo_fips → state_fips (2-digit state FIPS)"
 
     %% Other cross-schema relationships
     stock_prices }o--|| filing_metadata : "belongs to company"
-    inflation_metrics }o--o{ tiger_counties : "regional inflation"
+    inflation_metrics }o--o{ counties : "regional inflation"
 
     %% Cross-domain relationships (SEC to ECON)
     financial_line_items ||--o{ employment_statistics : "correlates with economy"
@@ -408,9 +400,9 @@ erDiagram
 ## Cross-Schema Relationships
 
 ### State Code Bridge Solution
-The **GEO.tiger_states** table serves as the bridge between different state code formats:
+The **GEO.states** table serves as the bridge between different state code formats:
 - `state_fips`: FIPS codes (e.g., "06" for California) - used internally in GEO schema
-- `state_code`: 2-letter codes (e.g., "CA") - enables FKs from SEC and ECON schemas
+- `state_abbr`: 2-letter codes (e.g., "CA") - enables FKs from SEC and ECON schemas
 - Both columns exist in the same table, providing the mapping
 
 This allows true referential integrity without requiring data transformation.
@@ -418,15 +410,15 @@ This allows true referential integrity without requiring data transformation.
 ### Foreign Key Implementation Status
 
 #### Implemented Cross-Schema FKs (in GovDataSchemaFactory)
-1. **filing_metadata.state_of_incorporation → tiger_states.state_code**
+1. **filing_metadata.state_of_incorporation → states.state_abbr**
    - Format: 2-letter state codes (e.g., "CA", "TX")
    - Implementation: `defineCrossDomainConstraintsForSec()`
 
-2. **regional_employment.state_code → tiger_states.state_code**
+2. **regional_employment.state_code → states.state_abbr**
    - Format: 2-letter state codes
    - Implementation: `defineCrossDomainConstraintsForEcon()`
 
-3. **regional_income.geo_fips → tiger_states.state_fips**
+3. **regional_income.geo_fips → states.state_fips**
    - Format: FIPS codes (partial - state-level only)
    - Note: Only works for 2-digit state FIPS, not 5-digit county FIPS
    - Implementation: `defineCrossDomainConstraintsForEcon()`
@@ -449,26 +441,24 @@ This allows true referential integrity without requiring data transformation.
 3. **gdp_components.table_id** → **fred_indicators.series_id** (GDP series temporal)
 
 **GEO Schema Internal FKs (Geographic Hierarchy)**:
-1. **tiger_counties.state_fips** → **tiger_states.state_fips**
-2. **census_places.state_code** → **tiger_states.state_code**
-3. **hud_zip_county.county_fips** → **tiger_counties.county_fips**
-4. **hud_zip_county.state_fips** → **tiger_states.state_fips**
-5. **hud_zip_tract.county_fips** → **tiger_counties.county_fips**
-6. **hud_zip_tract.state_fips** → **tiger_states.state_fips**
-7. **hud_zip_cbsa.state_fips** → **tiger_states.state_fips**
-8. **tiger_census_tracts.county_fips** → **tiger_counties.county_fips**
-9. **tiger_block_groups.tract_code** → **tiger_census_tracts.tract_code**
-10. **hud_zip_cbsa_div.cbsa** → **tiger_cbsa.cbsa_code**
-11. **hud_zip_congressional.state_code** → **tiger_states.state_code**
+1. **counties.state_fips** → **states.state_fips**
+2. **places.state_fips** → **states.state_fips**
+3. **zip_county_crosswalk.county_fips** → **counties.county_fips**
+4. **tract_zip_crosswalk.tract_fips** → **census_tracts.tract_fips**
+5. **zip_cbsa_crosswalk.cbsa_code** → **cbsa.cbsa_fips**
+6. **census_tracts.county_fips** → **counties.county_fips**
+7. **block_groups.tract_fips** → **census_tracts.tract_fips**
+8. **congressional_districts.state_fips** → **states.state_fips**
+9. **school_districts.state_fips** → **states.state_fips**
 
 ### Conceptual Relationships (Require data extraction/parsing)
 
-1. **filing_metadata.business_address → hud_zip_county.zip**
+1. **filing_metadata.business_address → zip_county_crosswalk.zip**
    - Business addresses contain ZIP codes
    - Would require parsing address field to extract ZIP
    - Enables geographic analysis of company headquarters
 
-2. **insider_transactions → census_places**
+2. **insider_transactions → places**
    - If insider addresses were captured, could link to cities
    - Enables analysis of insider trading patterns by geography
 
@@ -491,12 +481,18 @@ This allows true referential integrity without requiring data transformation.
 - **vectorized_blobs**: Text embeddings for semantic search (vectorizes content from mda_sections, footnotes, and earnings_transcripts)
 
 ### GEO Tables (Static or slowly changing)
-- **tiger_states**: State boundaries and metadata
-- **tiger_counties**: County boundaries and metadata
-- **census_places**: City/town data with demographics
-- **hud_zip_county**: ZIP to county mapping
-- **hud_zip_tract**: ZIP to census tract mapping
-- **hud_zip_cbsa**: ZIP to metro area mapping
+- **states**: State boundaries and metadata
+- **counties**: County boundaries and metadata
+- **places**: City/town data with demographics
+- **census_tracts**: Census tract boundaries
+- **block_groups**: Census block group boundaries
+- **zctas**: ZIP Code Tabulation Areas
+- **cbsa**: Core Based Statistical Areas (metros)
+- **congressional_districts**: Congressional district boundaries
+- **school_districts**: School district boundaries
+- **zip_county_crosswalk**: ZIP to county mapping
+- **tract_zip_crosswalk**: ZIP to census tract mapping
+- **zip_cbsa_crosswalk**: ZIP to metro area mapping
 
 ### ECON Tables (Multi-source - Partitioned by date/series)
 - **employment_statistics**: BLS national employment and unemployment data
@@ -521,7 +517,7 @@ SELECT
     s.state_name,
     AVG(p.close) as avg_stock_price
 FROM sec.filing_metadata m
-JOIN geo.tiger_states s ON m.state_of_incorporation = s.state_code
+JOIN geo.states s ON m.state_of_incorporation = s.state_abbr
 JOIN sec.stock_prices p ON m.cik = p.cik
 WHERE s.state_name = 'California'
 GROUP BY m.company_name, m.state_of_incorporation, s.state_name;
@@ -535,7 +531,7 @@ FROM financial_line_items f
 JOIN filing_metadata m ON f.cik = m.cik
     AND f.filing_type = m.filing_type
     AND f.year = m.year
-JOIN tiger_states s ON m.state_of_incorporation = s.state_code
+JOIN geo.states s ON m.state_of_incorporation = s.state_abbr
 WHERE f.concept = 'NetIncomeLoss'
 GROUP BY s.state_name
 ORDER BY avg_net_income DESC;
@@ -545,7 +541,7 @@ SELECT
     s.state_name,
     COUNT(DISTINCT m.cik) as tech_company_count
 FROM filing_metadata m
-JOIN tiger_states s ON m.state_of_incorporation = s.state_code
+JOIN geo.states s ON m.state_of_incorporation = s.state_abbr
 WHERE m.sic_code BETWEEN '7370' AND '7379' -- Computer services
 GROUP BY s.state_name
 ORDER BY tech_company_count DESC;
@@ -585,8 +581,8 @@ SELECT
     COUNT(DISTINCT m.cik) as company_count,
     AVG(sp.close) as avg_stock_price
 FROM regional_employment re
-JOIN tiger_states s ON re.state_code = s.state_code
-JOIN filing_metadata m ON m.state_of_incorporation = s.state_code
+JOIN geo.states s ON re.state_code = s.state_abbr
+JOIN filing_metadata m ON m.state_of_incorporation = s.state_abbr
 LEFT JOIN stock_prices sp ON m.cik = sp.cik
     AND YEAR(sp.trade_date) = YEAR(re.date)
 WHERE re.area_type = 'state'

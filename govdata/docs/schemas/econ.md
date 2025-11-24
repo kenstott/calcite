@@ -52,7 +52,7 @@ State-level employment statistics from BLS LAUS (Local Area Unemployment Statist
 Primary key: `(date, area_code)`
 
 Foreign keys:
-- `state_code` → `geo.tiger_states.state_code` (links to geographic/demographic data)
+- `state_code` → `geo.states.state_abbr` (links to geographic/demographic data)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -233,7 +233,7 @@ County-level employment and wages from BLS QCEW (Quarterly Census of Employment 
 Primary key: `(area_fips, own_code, industry_code, agglvl_code)`
 
 Foreign keys:
-- `area_fips` → `geo.tiger_counties.county_fips` (links to county geographic data)
+- `area_fips` → `geo.counties.county_fips` (links to county geographic data)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -366,38 +366,38 @@ Common FRED Series:
 - **UMCSENT**: Consumer Sentiment
 - Plus 12 additional indicators for banking, real estate, and consumer sentiment
 
-#### `fred_data_series_catalog`
+#### `reference_fred_series`
 Complete FRED economic data series catalog with 841,000+ series for data discovery and programmatic access.
 
-Primary key: `(series_id)`
+Primary key: `(series)`
 
 Partitions: `(type, category, frequency, source, status)` - Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series
 
-Indexes: `title`, `category_id`, `units`, `frequency`, `seasonal_adjustment`, `source_name`
+Indexes: `title`, `units`, `frequency`, `seasonal_adjustment`
 
 | Column | Type | Description |
 |--------|------|-------------|
-| series_id | VARCHAR | FRED series identifier (e.g., 'GDP', 'UNRATE') |
+| series | VARCHAR | FRED series identifier (e.g., 'GDP', 'UNRATE') |
 | title | VARCHAR | Human-readable series title |
-| observation_start | DATE | First available observation date |
-| observation_end | DATE | Most recent observation date |
+| observation_start | VARCHAR | First available observation date |
+| observation_end | VARCHAR | Most recent observation date |
 | frequency | VARCHAR | Data frequency (Daily, Weekly, Monthly, Quarterly, Annual) |
+| frequency_short | VARCHAR | Frequency code (D, W, M, Q, A) |
 | units | VARCHAR | Unit of measurement |
+| units_short | VARCHAR | Units code |
 | seasonal_adjustment | VARCHAR | Seasonal adjustment status |
-| last_updated | TIMESTAMP | Last update timestamp |
+| seasonal_adjustment_short | VARCHAR | Adjustment code |
 | popularity | INTEGER | Series popularity ranking |
+| group_popularity | INTEGER | Category popularity |
 | notes | VARCHAR | Series description and methodology |
-| category_id | INTEGER | FRED category classification |
-| source_name | VARCHAR | Data source organization |
 
-**Usage**: Query this table to discover available economic data series before downloading observations.
+**Usage**: Query this table to discover available economic data series before downloading observations. JOIN with `fred_indicators` to get actual observation values.
 
 **Example - Find all GDP-related series**:
 ```sql
-SELECT series_id, title, frequency, observation_start, observation_end
-FROM fred_data_series_catalog
-WHERE title LIKE '%GDP%'
-  AND status = 'active'
+SELECT series, title, frequency, observation_start, observation_end
+FROM reference_fred_series
+WHERE title ILIKE '%GDP%'
   AND frequency = 'Quarterly'
 ORDER BY popularity DESC
 LIMIT 20;
@@ -405,10 +405,9 @@ LIMIT 20;
 
 **Example - Discover housing market indicators**:
 ```sql
-SELECT series_id, title, units, last_updated
-FROM fred_data_series_catalog
-WHERE category = 'housing'
-  AND status = 'active'
+SELECT series, title, units, observation_end
+FROM reference_fred_series
+WHERE title ILIKE '%housing%'
   AND frequency IN ('Monthly', 'Quarterly')
 ORDER BY popularity DESC;
 ```
@@ -547,10 +546,12 @@ Primary key: `(country_code, indicator_code, year)`
 - `gdp_components.table_id` → `fred_indicators.series_id` (GDP series)
 
 ### Cross-Domain Relationships
-- `regional_employment.state_code` → `geo.tiger_states.state_code`
-- `regional_income.geo_fips` → `geo.tiger_states.state_fips` (state-level only)
+- `regional_employment.state_code` → `geo.states.state_abbr`
+- `regional_income.geo_fips` → `geo.states.state_fips` (state-level only)
 - `state_industry.state_fips` → `geo.states.state_fips` (enables state-level industry analysis with geographic/demographic data)
 - `state_wages.state_fips` → `geo.states.state_fips` (enables regional wage comparisons with cost-of-living data)
+- `county_qcew.area_fips` → `geo.counties.county_fips` (links to county geographic data)
+- `county_wages.county_fips` → `geo.counties.county_fips` (links to county geographic data)
 
 ### Complete Reference
 For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.

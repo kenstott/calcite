@@ -61,12 +61,12 @@ Connection conn = DriverManager.getConnection("jdbc:calcite:model=" + modelPath)
 
 // Query across domains - e.g., companies by state with economic context
 ResultSet rs = conn.createStatement().executeQuery(
-    "SELECT s.name as state_name, COUNT(DISTINCT f.cik) as companies, " +
+    "SELECT s.state_name, COUNT(DISTINCT f.cik) as companies, " +
     "       AVG(fo.value) as avg_metric " +
-    "FROM sec.facts f " +
-    "JOIN geo.census_states s ON f.state_of_incorporation = s.statefp " +
-    "JOIN econ.fred_indicators fo ON fo.series_id = 'GDP' " +
-    "GROUP BY s.name"
+    "FROM sec.filing_metadata f " +
+    "JOIN geo.states s ON f.state_of_incorporation = s.state_abbr " +
+    "JOIN econ.fred_indicators fo ON fo.series = 'GDP' " +
+    "GROUP BY s.state_name"
 );
 ```
 
@@ -89,17 +89,17 @@ Views combine data from multiple tables and provide ready-to-query metrics for m
 | Schema | Domain | Key Tables | Data Sources |
 |--------|--------|------------|--------------|
 | **SEC** | Financial Data | `facts`, `insider`, `text_blocks`, `stock_prices` | SEC EDGAR, Yahoo Finance |
-| **ECON** | Economic Data | `fred_data_series_catalog` (841K+ series), `fred_indicators`, employment/wages tables, analytical views | BLS, FRED, Treasury, BEA, World Bank |
+| **ECON** | Economic Data | `reference_fred_series` (841K+ series), `fred_indicators`, employment/wages tables | BLS, FRED, Treasury, BEA, World Bank |
 | **GEO** | Geographic Boundaries | `states`, `counties`, `places`, `zctas`, `census_tracts`, `cbsa`, `congressional_districts` | Census TIGER/Line, HUD |
 | **CENSUS** | Demographics & Population | `acs_population`, `acs_demographics`, `acs_income`, `acs_education`, `acs_housing` | Census Bureau ACS, Decennial Census |
 
 ### Future Planned
-- **LEG**: Congressional bills, votes, committees, nominations, hearings - legislative process data (planning stage - see [LEG/POL Implementation Plan](LEG_POL_SCHEMAS_PLAN.md))
-- **POL**: Political offices (Presidents, Governors, Cabinet, SCOTUS), campaigns, executive orders (planning stage - see [LEG/POL Implementation Plan](LEG_POL_SCHEMAS_PLAN.md))
-- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters (not yet implemented)
-- **PUB**: NIH grants, NASA projects, NSF research, PTO patents (not yet implemented)
-- **HEALTH**: FDA approvals/recalls, CDC health statistics (not yet implemented)
-- **WEATHER**: NOAA weather data, climate indicators (not yet implemented)
+- **LEG**: Congressional bills, votes, committees, nominations, hearings
+- **POL**: Political offices (Presidents, Governors, Cabinet, SCOTUS), campaigns, executive orders
+- **SAFETY**: FBI crime, NHTSA crashes, FEMA disasters
+- **PUB**: NIH grants, NASA projects, NSF research, PTO patents
+- **HEALTH**: FDA approvals/recalls, CDC health statistics
+- **WEATHER**: NOAA weather data, climate indicators
 
 ## 🔧 Installation
 
@@ -187,7 +187,7 @@ export CENSUS_API_KEY=your_census_api_key  # Optional for enhanced access
 
 ### Cross-Domain Relationships
 - **Automatic Foreign Key Detection** - Cross-schema constraints when multiple schemas are configured
-- **Geographic Integration** - Companies linked to states via `state_of_incorporation` → `statefp`
+- **Geographic Integration** - Companies linked to states via `state_of_incorporation` → `state_abbr`
 - **Temporal Analysis** - Join financial filings with contemporary economic indicators by date ranges
 
 ### Performance Optimization
@@ -205,32 +205,18 @@ export CENSUS_API_KEY=your_census_api_key  # Optional for enhanced access
 
 ## 📖 Documentation
 
-### Getting Started
-- [Installation Guide](docs/installation.md)
-- [Configuration Reference](docs/configuration/)
-- [Quick Start Tutorial](docs/tutorials/quick-start.md)
-
 ### Schema Documentation
 - [SEC Schema Guide](docs/schemas/sec.md) - Financial filings and XBRL data
 - [ECON Schema Guide](docs/schemas/econ.md) - Economic indicators and statistics
 - [GEO Schema Guide](docs/schemas/geo.md) - Geographic boundaries and mappings
+- [CENSUS Schema Guide](docs/schemas/census.md) - Demographics and population data
 - [**Schema Relationships**](docs/schemas/relationships.md) - Complete ERD, foreign keys, and cross-domain query examples
 
-### Advanced Topics
-- [Cross-Domain Queries](docs/tutorials/cross-domain-queries.md)
-- [Performance Tuning](docs/architecture/performance.md)
-- [Storage Providers](docs/configuration/storage-providers.md)
-- [API Integration](docs/api-integration/)
-
-### Development
-- [Architecture Overview](docs/architecture/overview.md)
-- [Contributing Guide](docs/development/contributing.md)
-- [Testing Guide](docs/development/testing.md)
-- [API Documentation](docs/api/)
+### Configuration & Architecture
+- [Configuration Reference](docs/configuration/) - Model configuration options
+- [Architecture Overview](docs/architecture/overview.md) - System design and components
 
 ## 🔮 Roadmap
-
-See our [Implementation Plan](implementation_plan_phase_2.md) for detailed roadmap.
 
 ### Near Term
 - ✅ Cross-domain foreign key constraints
@@ -248,7 +234,7 @@ See our [Implementation Plan](implementation_plan_phase_2.md) for detailed roadm
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/development/contributing.md) for details.
+We welcome contributions!
 
 ### Key Areas for Contribution
 - Additional government data sources
