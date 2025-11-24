@@ -374,13 +374,25 @@ public class DuckDBJdbcSchemaFactory {
         @Override public Connection getConnection() throws SQLException {
           // Create a new connection to the named in-memory database
           Connection conn = DriverManager.getConnection(finalJdbcUrl);
-          // Apply critical settings to new connections
+          // Apply critical settings and load extensions for new connections
+          // Extensions must be loaded per-connection in DuckDB (secrets are database-level but extensions are not)
           try (Statement stmt = conn.createStatement()) {
             stmt.execute("SET scalar_subquery_error_on_multiple_rows = false");
 
-            // Note: S3 secrets are database-level in DuckDB, not connection-level
-            // The secret created during setup should persist and be available to all connections
-            // No need to recreate it for each connection
+            // Load extensions - these are required for S3 access and advanced query features
+            // httpfs: Required for S3/HTTP parquet access
+            // vss: Vector similarity search for embeddings
+            // fts: Full-text search
+            // spatial: Geospatial functions
+            String[] extensions = {"httpfs", "vss", "fts", "spatial"};
+            for (String ext : extensions) {
+              try {
+                stmt.execute("LOAD " + ext);
+              } catch (SQLException e) {
+                // Graceful degradation - extension may not be installed, continue
+                LOGGER.debug("Could not load extension {} on new connection: {}", ext, e.getMessage());
+              }
+            }
           }
           return conn;
         }
