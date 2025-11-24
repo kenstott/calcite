@@ -4077,6 +4077,28 @@ public abstract class AbstractGovDataDownloader {
       String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, relativeJsonPath);
       String fullParquetPath = storageProvider.resolvePath(parquetDirectory, relativeParquetPath);
 
+      // Self-healing for CONVERSION: Check if parquet already exists in S3
+      // This handles the case where parquet was uploaded but cache manifest was lost
+      if (OperationType.CONVERSION.equals(operationType)) {
+        try {
+          LOGGER.debug("Self-healing check: checking if parquet exists at {}", fullParquetPath);
+          if (storageProvider.exists(fullParquetPath)) {
+            LOGGER.info("Self-healing: Found existing parquet in S3, skipping conversion: {}",
+                relativeParquetPath);
+            // Mark as converted in manifest so we don't check again
+            cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+            skipped++;
+            continue;
+          } else {
+            LOGGER.debug("Self-healing: parquet not found, will proceed with conversion: {}",
+                fullParquetPath);
+          }
+        } catch (IOException e) {
+          LOGGER.warn("Self-healing check failed for {}: {}", fullParquetPath, e.getMessage());
+          // Continue with normal conversion flow
+        }
+      }
+
       // Self-healing: Before executing, check if source files already exist
       // This only runs for files the manifest said were needed, avoiding bulk scanning
       // Check for the appropriate source file based on table's acquisition method:
