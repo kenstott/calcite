@@ -93,7 +93,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
     for (int year = startYear; year <= endYear; year++) {
       Map<String, String> variables = new HashMap<>();
       variables.put("year", String.valueOf(year));
-      variables.put("frequency", "annual");
+      variables.put("frequency", "A");
 
       Map<String, Object> metadata = loadTableMetadata("world_indicators");
       String pattern = (String) metadata.get("pattern");
@@ -133,7 +133,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, String> variables = new HashMap<>();
     variables.put("type", "indicators");
-    variables.put("frequency", "annual");
+    variables.put("frequency", "A");
     variables.put("year", String.valueOf(year));
 
     String relativePath = resolveJsonPath(pattern, variables);
