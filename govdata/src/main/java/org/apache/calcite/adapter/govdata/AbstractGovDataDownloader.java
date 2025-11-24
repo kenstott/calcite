@@ -434,6 +434,33 @@ public abstract class AbstractGovDataDownloader {
 
   }
 
+  /**
+   * Computes a dimension signature from a list of iteration dimensions.
+   * The signature captures dimension names and their value counts in sorted order,
+   * creating a stable identifier that changes when dimension configuration changes.
+   *
+   * <p>Format: "dim1:count1|dim2:count2|..." (sorted alphabetically by dimension name)
+   *
+   * <p>Example: "frequency:4|tablename:30|year:25"
+   *
+   * @param dimensions List of iteration dimensions
+   * @return Dimension signature string
+   */
+  public static String computeDimensionSignature(List<IterationDimension> dimensions) {
+    if (dimensions == null || dimensions.isEmpty()) {
+      return "";
+    }
+
+    // Sort dimensions by name for consistent ordering
+    List<String> parts = new ArrayList<>();
+    for (IterationDimension dim : dimensions) {
+      parts.add(dim.variableName + ":" + dim.values.size());
+    }
+    Collections.sort(parts);
+
+    return String.join("|", parts);
+  }
+
   /** Cache directory for storing downloaded raw data (e.g., $GOVDATA_CACHE_DIR/...) */
   protected final String cacheDirectory;
   /** Operating directory for storing operational metadata (e.g., .aperio/<schema>/) */
@@ -3854,6 +3881,25 @@ public abstract class AbstractGovDataDownloader {
       totalOperations *= dim.values.size();
     }
 
+    // Compute dimension signature for table-level completion tracking
+    String dimensionSignature = computeDimensionSignature(dimensions);
+
+    // Check if table was already fully processed with same dimensions
+    // This allows skipping the entire iteration when nothing has changed
+    if (cacheManifest != null
+        && cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
+      org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
+          (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
+
+      if (econManifest.isTableComplete(tableName, dimensionSignature)
+          && econManifest.areAllEntriesFresh(tableName)
+          && !econManifest.hasTableErrors(tableName)) {
+        LOGGER.info("Table {} is complete with {} combinations - skipping {} (signature: {})",
+            tableName, totalOperations, operationType.getValue(), dimensionSignature);
+        return;
+      }
+    }
+
     LOGGER.info("Starting {} operations for {} ({} total combinations, using DuckDB optimization)",
         operationType.getValue(), tableName, totalOperations);
 
@@ -4068,6 +4114,13 @@ public abstract class AbstractGovDataDownloader {
           if (cacheManifest != null) {
             try {
               cacheManifest.markApiError(cacheKey, errorMessage, DEFAULT_API_ERROR_RETRY_DAYS);
+
+              // Invalidate table completion since we have an error
+              if (cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
+                ((org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest)
+                    .invalidateTableCompletion(tableName);
+              }
+
               cacheManifest.save(operatingDirectory);
               LOGGER.info("Marked {} as API error - will retry in {} days",
                   cacheKey.asString(), DEFAULT_API_ERROR_RETRY_DAYS);
@@ -4096,6 +4149,22 @@ public abstract class AbstractGovDataDownloader {
 
       LOGGER.info("{} {} complete: executed {} operations, skipped {} (cached)",
           tableName, operationType.getValue(), executed, skipped);
+
+      // Mark table as complete if all operations succeeded without errors
+      // This enables fast-path skipping on subsequent runs
+      if (cacheManifest != null
+          && cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
+        org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
+            (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
+
+        // Only mark complete if no errors exist for this table
+        if (!econManifest.hasTableErrors(tableName)) {
+          econManifest.markTableComplete(tableName, dimensionSignature);
+          LOGGER.info("Marked table {} as complete with signature: {}", tableName, dimensionSignature);
+        } else {
+          LOGGER.debug("Not marking table {} as complete due to errors", tableName);
+        }
+      }
 
     } finally {
       // Cleanup prefetch DuckDB connection only if we created it
