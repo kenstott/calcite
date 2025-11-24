@@ -199,6 +199,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
   private final boolean primeCache;
   private final @Nullable String comment;
+  private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
   // Cache directories use schema name for stable, predictable paths
 
   // Track refreshable tables for periodic refresh (needed for DUCKDB)
@@ -394,9 +395,64 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       @Nullable Map<String, Object> csvTypeInference,
       boolean primeCache,
       @Nullable String comment) {
+    this(parentSchema, name, sourceDirectory, userConfiguredBaseDirectory, directoryPath,
+        directoryPattern, tables, engineConfig, recursive, materializations, views,
+        partitionedTables, refreshInterval, tableNameCasing, columnNameCasing, storageType,
+        storageConfig, flatten, csvTypeInference, primeCache, comment, null);
+  }
+
+  /**
+   * Creates a file schema with all features including storage provider support, schema comment, and canonical schema name.
+   * This is the full constructor that accepts all parameters including canonicalSchemaName for consistent .aperio directory naming.
+   *
+   * @param parentSchema    Parent schema
+   * @param name            Schema name (user-assigned name for the schema)
+   * @param sourceDirectory Source directory to look for files (for local storage), or null
+   * @param userConfiguredBaseDirectory User-configured base directory for .aperio location from model.json, or null
+   * @param directoryPath   Directory path as String (for cloud storage URIs like s3://), takes precedence over sourceDirectory when storageType is set
+   * @param directoryPattern Directory pattern for file discovery, or null
+   * @param tables          List containing table identifiers, or null
+   * @param engineConfig    Execution engine configuration
+   * @param recursive       Whether to recursively scan subdirectories
+   * @param materializations List of materialized view definitions, or null
+   * @param views           List of view definitions, or null
+   * @param partitionedTables List of partitioned table definitions, or null
+   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
+   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
+   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
+   * @param storageConfig   Storage-specific configuration, or null
+   * @param flatten         Whether to flatten JSON/YAML structures, or null
+   * @param csvTypeInference CSV type inference configuration, or null
+   * @param primeCache      Whether to prime statistics cache on initialization (default true)
+   * @param comment         Schema comment for documentation, or null
+   * @param canonicalSchemaName Canonical schema name for .aperio directory (e.g., "econ" regardless of user name "ECON"), or null to use name
+   */
+  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
+      @Nullable File userConfiguredBaseDirectory,
+      @Nullable String directoryPath,
+      @Nullable String directoryPattern,
+      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
+      boolean recursive,
+      @Nullable List<Map<String, Object>> materializations,
+      @Nullable List<Map<String, Object>> views,
+      @Nullable List<Map<String, Object>> partitionedTables,
+      @Nullable String refreshInterval,
+      String tableNameCasing,
+      String columnNameCasing,
+      @Nullable String storageType,
+      @Nullable Map<String, Object> storageConfig,
+      @Nullable Boolean flatten,
+      @Nullable Map<String, Object> csvTypeInference,
+      boolean primeCache,
+      @Nullable String comment,
+      @Nullable String canonicalSchemaName) {
     this.tables =
         tables == null ? ImmutableList.of()
             : ImmutableList.copyOf(tables);
+
+    // Store canonical schema name for .aperio directory naming
+    this.canonicalSchemaName = canonicalSchemaName;
 
     // Handle sourceDirectory - convert to fully qualified path
     if (sourceDirectory != null) {
@@ -433,7 +489,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     }
 
     // Operating cache is ALWAYS .aperio/<schema> on local filesystem for metadata and locks
-    this.operatingCacheDirectory = new File(operatingCacheRoot, "." + BRAND + "/" + name);
+    // Use canonicalSchemaName if provided (for consistent paths like .aperio/econ regardless of user name ECON)
+    String schemaNameForCache = canonicalSchemaName != null ? canonicalSchemaName : name;
+    this.operatingCacheDirectory = new File(operatingCacheRoot, "." + BRAND + "/" + schemaNameForCache);
     if (!this.operatingCacheDirectory.exists()) {
       this.operatingCacheDirectory.mkdirs();
       LOGGER.info("Created operating cache directory (always local): {}", this.operatingCacheDirectory.getAbsolutePath());
