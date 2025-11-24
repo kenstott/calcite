@@ -3269,9 +3269,18 @@ public abstract class AbstractGovDataDownloader {
 
     int reorganizedCount = 0;
     int skippedCount = 0;
+    int cachedCount = 0;
 
     for (AlternatePartitionPattern alternate : alternatePartitions) {
       try {
+        // Check if source table is complete and alternate already exists
+        if (isAlternatePartitionCached(alternate)) {
+          LOGGER.info("Skipping alternate partition '{}' - source table complete and target exists",
+              alternate.alternateName);
+          cachedCount++;
+          continue;
+        }
+
         reorganizePartition(alternate);
         reorganizedCount++;
       } catch (Exception e) {
@@ -3281,8 +3290,82 @@ public abstract class AbstractGovDataDownloader {
       }
     }
 
-    LOGGER.info("Partition reorganization complete: {} reorganized, {} failed",
-        reorganizedCount, skippedCount);
+    LOGGER.info("Partition reorganization complete: {} reorganized, {} cached (skipped), {} failed",
+        reorganizedCount, cachedCount, skippedCount);
+  }
+
+  /**
+   * Checks if an alternate partition can be skipped because:
+   * 1. The source table is marked complete in cache manifest
+   * 2. The alternate partition target file(s) already exist
+   *
+   * @param alternate Alternate partition pattern to check
+   * @return true if reorganization can be skipped
+   */
+  protected boolean isAlternatePartitionCached(AlternatePartitionPattern alternate) {
+    // Check if we have a cache manifest that supports table completion tracking
+    if (cacheManifest == null) {
+      return false;
+    }
+
+    // Check source table completion
+    if (cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
+      org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
+          (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
+
+      // Get signature for source table - we use empty signature since we just need
+      // to check if the source table was modified at all this run
+      String sourceTable = alternate.sourceTableName;
+
+      // Check if source table has any stale entries or errors
+      if (!econManifest.areAllEntriesFresh(sourceTable)
+          || econManifest.hasTableErrors(sourceTable)) {
+        LOGGER.debug("Source table '{}' has stale or error entries - must reorganize",
+            sourceTable);
+        return false;
+      }
+    }
+
+    // Check if alternate partition target files exist
+    // For simple patterns without variables, check if the target file exists
+    String targetPattern = alternate.alternatePattern;
+
+    try {
+      // If pattern has no variables, check directly
+      if (!targetPattern.contains("{")) {
+        String fullTargetPath = storageProvider.resolvePath(parquetDirectory, targetPattern);
+        boolean exists = storageProvider.exists(fullTargetPath);
+        LOGGER.debug("Alternate partition target '{}' exists: {}", fullTargetPath, exists);
+        return exists;
+      }
+
+      // For patterns with variables, check by trying to list the base directory
+      // This is a heuristic - if we find the alternate partition directory structure, assume it exists
+      // Extract the base directory from the pattern (up to the first variable)
+      int firstVarIndex = targetPattern.indexOf("{");
+      if (firstVarIndex > 0) {
+        String baseDir = targetPattern.substring(0, firstVarIndex);
+        // Remove trailing slash or equals
+        if (baseDir.endsWith("/") || baseDir.endsWith("=")) {
+          baseDir = baseDir.substring(0, baseDir.length() - 1);
+        }
+        String fullBaseDir = storageProvider.resolvePath(parquetDirectory, baseDir);
+
+        // Check if the base directory exists and has files
+        if (storageProvider.exists(fullBaseDir) && storageProvider.isDirectory(fullBaseDir)) {
+          List<StorageProvider.FileEntry> files =
+              storageProvider.listFiles(fullBaseDir, false);
+          boolean hasFiles = !files.isEmpty();
+          LOGGER.debug("Alternate partition base dir '{}' has {} entries",
+              fullBaseDir, files.size());
+          return hasFiles;
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Error checking alternate partition files: {}", e.getMessage());
+    }
+
+    return false;
   }
 
   /**
