@@ -3380,7 +3380,7 @@
     {
       "name": "trade_statistics",
       "type": "view",
-      "sql": "SELECT table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM econ.national_accounts WHERE table_id = 'T40205B'",
+      "sql": "SELECT tablename AS table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM econ.national_accounts WHERE tablename = 'T40205B'",
       "comment": "U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services with computed columns: quarter (1-4 extracted from time_period for quarterly data, NULL for annual), trade_type (exports/imports/trade_balance derived from line_description). This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'."
     }
   ]
