@@ -189,6 +189,18 @@
           "comment": "WKT representation of place boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/PLACE/",
+        "filePattern": "tl_{year}_{state_fips}_place.zip",
+        "perState": true,
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -232,6 +244,17 @@
           "comment": "WKT representation of ZCTA boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA520/",
+        "filePattern": "tl_{year}_us_zcta520.zip",
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -293,6 +316,18 @@
           "comment": "WKT representation of census tract boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/TRACT/",
+        "filePattern": "tl_{year}_{state_fips}_tract.zip",
+        "perState": true,
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -354,6 +389,18 @@
           "comment": "WKT representation of block group boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/BG/",
+        "filePattern": "tl_{year}_{state_fips}_bg.zip",
+        "perState": true,
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -409,6 +456,17 @@
           "comment": "WKT representation of CBSA boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/CBSA/",
+        "filePattern": "tl_{year}_us_cbsa.zip",
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -464,6 +522,17 @@
           "comment": "WKT representation of congressional district boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/CD/",
+        "filePattern": "tl_{year}_us_cd{congress}.zip",
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
@@ -525,6 +594,18 @@
           "comment": "WKT representation of school district boundary polygon"
         }
       ],
+      "download": {
+        "enabled": true,
+        "dataSource": "tiger",
+        "baseUrl": "https://www2.census.gov/geo/tiger/TIGER{year}/UNSD/",
+        "filePattern": "tl_{year}_{state_fips}_unsd.zip",
+        "perState": true,
+        "conversion": {
+          "type": "shapefile_to_parquet",
+          "method": "duckdb_spatial",
+          "geometryColumn": "geometry"
+        }
+      },
       "partitions": {
         "columnDefinitions": [
           {
