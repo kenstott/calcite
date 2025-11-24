@@ -33,7 +33,7 @@ Primary key: `(cik, filing_type, year, accession_number)`
 | accession_number | VARCHAR | Unique EDGAR accession number |
 | company_name | VARCHAR | Company legal name |
 | sic_code | VARCHAR | Standard Industrial Classification code |
-| state_of_incorporation | VARCHAR | 2-letter state code (FK → geo.tiger_states.state_code) |
+| state_of_incorporation | VARCHAR | 2-letter state code (FK → geo.states.state_abbr) |
 | fiscal_year_end | VARCHAR | Fiscal year end date (MMDD format) |
 | business_address | VARCHAR | Principal business address |
 | business_phone | VARCHAR | Business contact phone |
@@ -91,22 +91,6 @@ Primary key: `(cik, filing_type, year, accession_number, section_id)`
 | section_id | VARCHAR | Section identifier |
 | section_text | TEXT | Extracted text content |
 | section_order | INTEGER | Order in document |
-
-#### `footnotes`
-Financial statement footnotes with detailed explanations.
-
-Primary key: `(cik, filing_type, year, accession_number, footnote_id)`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| cik | VARCHAR | Central Index Key (FK → filing_metadata) |
-| filing_type | VARCHAR | Type of filing |
-| year | INTEGER | Filing year |
-| accession_number | VARCHAR | EDGAR accession |
-| footnote_id | VARCHAR | Footnote identifier |
-| footnote_text | TEXT | Footnote content |
-| referenced_concept | VARCHAR | XBRL concept being explained |
-| footnote_number | INTEGER | Footnote number |
 
 #### `earnings_transcripts`
 Earnings call transcripts from 8-K filings.
@@ -207,7 +191,7 @@ Primary key: `(cik, filing_type, year, accession_number, blob_id)`
 All SEC tables (except `stock_prices`) have foreign key relationships to `filing_metadata` using the composite key `(cik, filing_type, year, accession_number)`.
 
 ### Cross-Domain Relationships
-- `filing_metadata.state_of_incorporation` → `geo.tiger_states.state_code`
+- `filing_metadata.state_of_incorporation` → `geo.states.state_abbr`
 
 ### Complete Reference
 For a comprehensive view of all relationships including the complete ERD diagram, cross-schema query examples, and detailed FK implementation status, see the **[Schema Relationships Guide](relationships.md)**.
@@ -246,7 +230,7 @@ SELECT
     COUNT(DISTINCT f.cik) as company_count,
     AVG(l.value) as avg_revenue
 FROM filing_metadata f
-JOIN geo.tiger_states s ON f.state_of_incorporation = s.state_code
+JOIN geo.states s ON f.state_of_incorporation = s.state_abbr
 JOIN financial_line_items l USING (cik, filing_type, year, accession_number)
 WHERE l.concept = 'Revenues' AND l.filing_type = '10-K'
 GROUP BY s.state_name
