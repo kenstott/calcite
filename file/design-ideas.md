@@ -405,6 +405,8 @@ implementation("io.delta:delta-storage:3.1.0")
 
 ## Text Similarity Search
 
+**Status**: ⚡ **PARTIALLY IMPLEMENTED** (Core functionality complete, optimizations pending)
+
 **Problem**: Traditional SQL queries rely on exact matching or pattern matching (LIKE, REGEXP), which miss semantically similar content. Users need the ability to find documents, records, or text fields that are conceptually similar rather than literally matching.
 
 **Proposed Solution**: Add vector-based text similarity search capabilities to the file adapter, enabling semantic search across text columns in various file formats.
@@ -556,6 +558,109 @@ implementation("org.apache.lucene:lucene-core:9.10.0")
 // Optional: External vector stores
 implementation("io.pinecone:pinecone-client:1.0.0")
 implementation("io.weaviate:client:4.5.0")
+```
+
+### Implementation Status:
+
+#### ✅ Completed:
+1. **Core Similarity Functions** (`file/src/main/java/org/apache/calcite/adapter/file/similarity/SimilarityFunctions.java`)
+   - `COSINE_SIMILARITY(text1, text2)` - Cosine similarity between vectors
+   - `COSINE_DISTANCE(text1, text2)` - Distance metric (1 - cosine similarity)
+   - `EUCLIDEAN_DISTANCE(text1, text2)` - Euclidean distance calculation
+   - `DOT_PRODUCT(text1, text2)` - Dot product between vectors
+   - `VECTOR_NORM(vector)` - L2 norm calculation
+   - `NORMALIZE_VECTOR(vector)` - Unit vector normalization
+   - `TEXT_SIMILARITY(text1, text2)` - Jaccard similarity for text comparison
+   - `VECTORS_SIMILAR(vec1, vec2, threshold)` - Boolean similarity check
+
+2. **DuckDB Integration** (`file/src/main/java/org/apache/calcite/adapter/file/duckdb/DuckDBJdbcSchemaFactory.java`)
+   - Automatic quackformers extension loading for `embed()` function
+   - Native DuckDB similarity macros using `list_cosine_similarity()`
+   - VSS (Vector Similarity Search) extension support for HNSW indexes
+   - Full-text search (FTS) extension integration
+
+3. **Auto-Generated Embedding Columns**
+   - Expression columns support via quackformers: `embed(text)::FLOAT[384]`
+   - Automatic embedding generation during parquet conversion
+   - 384-dimensional sentence embeddings (all-MiniLM-L6-v2 model)
+
+4. **Embedding Service Interface** (`govdata/src/main/java/org/apache/calcite/adapter/govdata/sec/EmbeddingService.java`)
+   - Pluggable embedding provider abstraction
+   - Sync/async embedding generation
+   - Batch processing support
+   - Configurable dimensions and input length limits
+
+5. **SEC Financial Document Vectorization** (`govdata/src/main/java/org/apache/calcite/adapter/govdata/sec/SecTextVectorizer.java`)
+   - Contextual chunk creation from XBRL documents
+   - Relationship-based vectorization (footnotes, MD&A, earnings calls)
+   - Financial concept extraction and enrichment
+   - Token management for context windows
+   - Fallback hash-based embeddings
+
+6. **Test Coverage**
+   - `QuackformersExtensionTest.java` - DuckDB quackformers integration tests
+   - `SimilarityFunctionsTest.java` - Similarity function validation
+   - `TableColumnTest.java` - Auto-generated embedding column tests
+
+#### 🚧 Pending Implementation:
+1. **Configuration via model.json**
+   - `textSimilarity` operand block not yet wired up
+   - Need to expose embedding model selection and indexing options
+
+2. **Vector Index Automation**
+   - VSS extension loaded but HNSW index creation not automated
+   - No automatic index refresh on data changes
+
+3. **Persistent Vector Cache**
+   - No dedicated cache for pre-computed embeddings
+   - Embeddings regenerated on each query (inefficient for large datasets)
+
+4. **Additional SQL Functions**
+   - `KNN(column, query, k)` - K-nearest neighbor search operator
+   - `SEMANTIC_JOIN` - Similarity-based join operator
+   - Missing pushdown optimization for these operations
+
+5. **External Vector Store Integration**
+   - No Pinecone/Weaviate/Chroma pushdown support
+   - All similarity computation happens in DuckDB
+
+6. **Performance Optimizations**
+   - No GPU acceleration support
+   - No quantization for memory efficiency
+   - No incremental indexing strategy
+
+7. **Advanced Features**
+   - Multi-modal embeddings (image/audio)
+   - Fine-tuning support for domain-specific models
+   - Streaming similarity for real-time data
+   - Federated search across multiple sources
+
+### Usage Example (Current Implementation):
+
+```sql
+-- Using DuckDB with quackformers extension
+SELECT
+  title,
+  content,
+  COSINE_SIMILARITY(
+    embed(content)::VARCHAR,
+    embed('machine learning algorithms')::VARCHAR
+  ) AS similarity_score
+FROM documents
+WHERE COSINE_SIMILARITY(
+  embed(content)::VARCHAR,
+  embed('machine learning algorithms')::VARCHAR
+) > 0.7
+ORDER BY similarity_score DESC
+LIMIT 10;
+
+-- Using pre-computed embedding columns (if configured)
+SELECT
+  title,
+  COSINE_SIMILARITY(content_embedding, query_embedding) AS score
+FROM documents
+WHERE COSINE_SIMILARITY(content_embedding, query_embedding) > 0.7
+ORDER BY score DESC;
 ```
 
 ### Future Enhancements:
