@@ -990,6 +990,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
       // Query all sections and extract frequency data
+      // Column names: 'annual' and 'quarterly' are the boolean frequency columns in reference data
       String sql =
           String.format("SELECT TableName, annual, quarterly FROM read_parquet('%s')",
           fullParquetPattern);
@@ -998,8 +999,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
            ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {
           String tableName = rs.getString("TableName");
-          boolean annual = rs.getBoolean("A");
-          boolean quarterly = rs.getBoolean("Q");
+          boolean annual = rs.getBoolean("annual");
+          boolean quarterly = rs.getBoolean("quarterly");
 
           Set<String> frequencies = new HashSet<>();
           if (annual) {
