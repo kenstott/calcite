@@ -469,22 +469,9 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
 
     CacheKey cacheKey = new CacheKey(dataType, cacheParams);
     if (cacheManifest.isCached(cacheKey)) {
-      String fullPath = cacheStorageProvider.resolvePath(cacheDirectory, ftpPath);
-      if (cacheStorageProvider.exists(fullPath)) {
-        long size = 0L;
-        try {
-          size = cacheStorageProvider.getMetadata(fullPath).getSize();
-        } catch (Exception ignore) {
-          // Ignore metadata errors
-        }
-        if (size > 0) {
-          LOGGER.info("Using cached FTP file: {} (from manifest, size={} bytes)", ftpPath, size);
-          try (InputStream inputStream = cacheStorageProvider.openInputStream(fullPath)) {
-            inputStream.readAllBytes();
-            return;
-          }
-        }
-      }
+      // Trust manifest - no need for expensive S3 exists check
+      LOGGER.info("Using cached FTP file: {} (from manifest)", ftpPath);
+      return;
     }
 
     // Not cached - download it
