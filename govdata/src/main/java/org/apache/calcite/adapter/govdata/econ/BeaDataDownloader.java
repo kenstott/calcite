@@ -998,8 +998,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
            ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {
           String tableName = rs.getString("TableName");
-          boolean annual = rs.getBoolean("annual");
-          boolean quarterly = rs.getBoolean("quarterly");
+          boolean annual = rs.getBoolean("A");
+          boolean quarterly = rs.getBoolean("Q");
 
           Set<String> frequencies = new HashSet<>();
           if (annual) {

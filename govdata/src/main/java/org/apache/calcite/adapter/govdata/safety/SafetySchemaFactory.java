@@ -79,7 +79,7 @@ public class SafetySchemaFactory implements ConstraintCapableSchemaFactory {
     String fbiApiKey = (String) operand.get("fbiApiKey");
     String femaApiKey = (String) operand.get("femaApiKey");
     String nhtsaApiKey = (String) operand.get("nhtsaApiKey");
-    String updateFrequency = (String) operand.getOrDefault("updateFrequency", "monthly");
+    String updateFrequency = (String) operand.getOrDefault("updateFrequency", "M");
     String historicalDepth = (String) operand.getOrDefault("historicalDepth", "5 years");
     String cacheDirectory = (String) operand.get("cacheDirectory");
 
