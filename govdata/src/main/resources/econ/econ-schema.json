@@ -2182,57 +2182,9 @@
     },
     {
       "name": "state_gdp",
-      "pattern": "type=state_gdp/frequency=*/year=*/state_gdp.parquet",
-      "partitions": {
-        "style": "hive",
-        "columnDefinitions": [
-          {
-            "name": "type",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "frequency",
-            "type": "VARCHAR"
-          },
-          {
-            "name": "year",
-            "type": "INTEGER"
-          }
-        ]
-      },
-      "comment": "State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table). Provides both total GDP and per capita real GDP by state across all NAICS industry sectors.",
-      "columns": [
-        {
-          "name": "geo_fips",
-          "type": "string",
-          "nullable": true,
-          "comment": "State FIPS code (2 digits)"
-        },
-        {
-          "name": "geo_name",
-          "type": "string",
-          "nullable": true,
-          "comment": "State name"
-        },
-        {
-          "name": "metric",
-          "type": "string",
-          "nullable": true,
-          "comment": "GDP metric or component description"
-        },
-        {
-          "name": "value",
-          "type": "double",
-          "nullable": true,
-          "comment": "GDP value in millions of dollars"
-        },
-        {
-          "name": "units",
-          "type": "string",
-          "nullable": true,
-          "comment": "Units of measurement (e.g., 'Millions of Dollars')"
-        }
-      ]
+      "type": "view",
+      "sql": "SELECT GeoFips AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM econ.regional_income WHERE tablename LIKE 'SAGDP%'",
+      "comment": "State-level GDP statistics from BEA Regional Economic Accounts (SAGDP tables). This is a convenience view filtering regional_income to just the State Annual GDP tables (SAGDP1-SAGDP11). Columns: geo_fips (2-digit state FIPS code), geo_name (state name), tablename (specific SAGDP table), line_code (BEA line code), year, metric (GDP component description), value (GDP value), units (unit multiplier). For quarterly state GDP, filter regional_income for SQGDP* tables."
     },
     {
       "name": "industry_gdp",
