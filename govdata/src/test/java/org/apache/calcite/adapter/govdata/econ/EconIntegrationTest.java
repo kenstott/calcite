@@ -203,7 +203,7 @@ public class EconIntegrationTest {
         "      \"startYear\": " + startYear + "," +
         "      \"endYear\": " + endYear + "," +
         "      \"autoDownload\": true," +
-        "      \"enabledSources\": [\"fred\", \"bls\", \"treasury\", \"bea\", \"bls_jolts_regional\", \"bls_metro_cpi\", \"bea_regional_income\", \"bea_state_gdp\"]," +
+        "      \"enabledSources\": [\"fred\", \"bls\", \"treasury\", \"bea\"]," +
         "      \"fredApiKey\": \"" + fredApiKey + "\"," +
         "      \"blsApiKey\": \"" + blsApiKey + "\"," +
         "      \"beaApiKey\": \"" + beaApiKey + "\"," +

@@ -1716,33 +1716,9 @@ partitionedTables:
         nullable: true
         comment: Whether the data is seasonally adjusted ('Yes' or 'No')
 
-  # --- STATE GDP ---
-  - name: state_gdp
-    pattern: "type=state_gdp/frequency=*/year=*/state_gdp.parquet"
-    partitions: *standard_partitions
-    comment: >
-      State-level GDP statistics from BEA Regional Economic Accounts (SAGDP2N table). Provides both total GDP and per capita real GDP by state across all NAICS industry sectors.
-    columns:
-      - name: geo_fips
-        type: string
-        nullable: true
-        comment: State FIPS code (2 digits)
-      - name: geo_name
-        type: string
-        nullable: true
-        comment: State name
-      - name: metric
-        type: string
-        nullable: true
-        comment: GDP metric or component description
-      - name: value
-        type: double
-        nullable: true
-        comment: GDP value in millions of dollars
-      - name: units
-        type: string
-        nullable: true
-        comment: Units of measurement (e.g., 'Millions of Dollars')
+  # --- STATE GDP (View over regional_income) ---
+  # Note: State GDP data is downloaded as part of regional_income (SAGDP* tables).
+  # This view filters regional_income to just the SAGDP tables for convenience.
 
   # --- INDUSTRY GDP ---
   - name: industry_gdp
@@ -2655,18 +2631,24 @@ tables:
     comment: >
       U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services with computed columns: quarter (1-4 extracted from time_period for quarterly data, NULL for annual), trade_type (exports/imports/trade_balance derived from line_description). This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'.
 
+  - name: state_gdp
+    type: view
+    sql: "SELECT GeoFips AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM econ.regional_income WHERE tablename LIKE 'SAGDP%'"
+    comment: >
+      State-level GDP statistics from BEA Regional Economic Accounts (SAGDP tables). This is a convenience view filtering regional_income to just the State Annual GDP tables (SAGDP1-SAGDP11). Columns: geo_fips (2-digit state FIPS code), geo_name (state name), tablename (specific SAGDP table), line_code (BEA line code), year, metric (GDP component description), value (GDP value), units (unit multiplier). For quarterly state GDP, filter regional_income for SQGDP* tables.
+
 # ============================================================================
 # END OF SCHEMA
 # ============================================================================
 # STATISTICS:
-#   - 31 partitioned tables
+#   - 30 partitioned tables
 #   - 225 total columns
 #   - 11 reusable column templates (anchors)
 #   - 42 anchor references (reducing duplication)
 #   - 18 tables use standard partitioning scheme
 #   - 1 bulk download configuration (QCEW data ~80-323MB)
 #   - 28 table constraints (primary keys + foreign keys)
-#   - 9 SQL views for enriched data and analytics
+#   - 10 SQL views for enriched data and analytics
 #
 # ANCHOR USAGE:
 #   - *date_column: 12 uses
