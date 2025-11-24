@@ -863,16 +863,23 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
-   * Check if any entries for a table have errors.
+   * Check if any entries for a table have actionable errors.
+   *
+   * <p>Only returns true if there are entries with errors whose retry period has expired.
+   * Entries with errors that are still within their retry window (e.g., "retry in 7 days"
+   * for unreleased data) are considered handled and don't block table-level caching.
    *
    * @param tableName The table name prefix to check
-   * @return true if any entries have error_count > 0
+   * @return true if any entries have errors that need retry (refresh_after expired)
    */
   public boolean hasTableErrors(String tableName) {
+    // Only consider errors where the retry period has expired
+    // If refresh_after > now, the error is being handled (waiting for retry)
     String sql = "SELECT COUNT(*) FROM cache_entries "
-        + "WHERE cache_key LIKE ? AND error_count > 0";
+        + "WHERE cache_key LIKE ? AND error_count > 0 AND refresh_after <= ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, tableName + ":%");
+      stmt.setLong(2, System.currentTimeMillis());
       try (ResultSet rs = stmt.executeQuery()) {
         if (rs.next()) {
           return rs.getInt(1) > 0;
