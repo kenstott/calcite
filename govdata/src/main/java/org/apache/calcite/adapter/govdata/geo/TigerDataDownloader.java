@@ -31,6 +31,10 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -54,10 +58,21 @@ import java.util.zip.ZipInputStream;
  *
  * <p>Data is available from: https://www2.census.gov/geo/tiger/
  */
-public class TigerDataDownloader {
+public class TigerDataDownloader extends AbstractGeoDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(TigerDataDownloader.class);
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
+  /** Fallback URL if schema config not available. */
   private static final String TIGER_BASE_URL = "https://www2.census.gov/geo/tiger";
+
+  /** Cached schema configuration for download URLs. */
+  private static JsonNode geoSchemaConfig = null;
+
+  /** TIGER dataset types for download/conversion. */
+  private static final String[] TIGER_TABLES = {
+      "states", "counties", "places", "zctas", "census_tracts",
+      "block_groups", "cbsa", "congressional_districts", "school_districts"
+  };
 
   /**
    * TIGER/Line Shapefile Support:
@@ -93,15 +108,154 @@ public class TigerDataDownloader {
     return type;
   }
 
-  private final String cacheDir;
-  private final List<Integer> dataYears;
-  private final boolean autoDownload;
-  private final StorageProvider storageProvider;
-  private final GeoCacheManifest cacheManifest;
-  private final String operatingDirectory;
+  // ===== SCHEMA-DRIVEN URL CONFIGURATION =====
 
   /**
-   * Constructor with year list and StorageProvider (matching ECON pattern).
+   * Load geo-schema.json configuration lazily.
+   * Configuration is cached after first load.
+   */
+  private static synchronized JsonNode loadGeoSchemaConfig() {
+    if (geoSchemaConfig != null) {
+      return geoSchemaConfig;
+    }
+
+    try (InputStream is = TigerDataDownloader.class.getResourceAsStream("/geo/geo-schema.json")) {
+      if (is == null) {
+        LOGGER.warn("Could not find /geo/geo-schema.json - using hardcoded URLs");
+        return null;
+      }
+      geoSchemaConfig = JSON_MAPPER.readTree(is);
+      LOGGER.debug("Loaded geo-schema.json configuration");
+      return geoSchemaConfig;
+    } catch (Exception e) {
+      LOGGER.warn("Failed to load geo-schema.json: {} - using hardcoded URLs", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Get download configuration for a table from geo-schema.json.
+   *
+   * @param tableName Table name (e.g., "states", "counties")
+   * @return JsonNode with download config, or null if not found
+   */
+  private static JsonNode getTableDownloadConfig(String tableName) {
+    JsonNode schema = loadGeoSchemaConfig();
+    if (schema == null) {
+      return null;
+    }
+
+    JsonNode tables = schema.get("partitionedTables");
+    if (tables == null || !tables.isArray()) {
+      return null;
+    }
+
+    for (JsonNode table : tables) {
+      JsonNode nameNode = table.get("name");
+      if (nameNode != null && tableName.equals(nameNode.asText())) {
+        return table.get("download");
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Build download URL from schema configuration with variable substitution.
+   * Falls back to hardcoded URL if schema config not available.
+   *
+   * @param tableName Table name (e.g., "states", "counties")
+   * @param year Year for the data
+   * @param vars Additional variables for substitution (e.g., state_fips)
+   * @return Download URL
+   */
+  private String buildDownloadUrlFromSchema(String tableName, int year, java.util.Map<String, String> vars) {
+    JsonNode downloadConfig = getTableDownloadConfig(tableName);
+
+    if (downloadConfig == null) {
+      LOGGER.debug("No download config for table {}, using hardcoded URL", tableName);
+      return null; // Caller will use hardcoded URL
+    }
+
+    JsonNode baseUrlNode = downloadConfig.get("baseUrl");
+    JsonNode filePatternNode = downloadConfig.get("filePattern");
+
+    if (baseUrlNode == null || filePatternNode == null) {
+      LOGGER.debug("Incomplete download config for table {}, using hardcoded URL", tableName);
+      return null;
+    }
+
+    String baseUrl = baseUrlNode.asText();
+    String filePattern = filePatternNode.asText();
+
+    // Substitute variables
+    String url = baseUrl + filePattern;
+    url = url.replace("{year}", String.valueOf(year));
+
+    // Substitute additional variables
+    if (vars != null) {
+      for (java.util.Map.Entry<String, String> entry : vars.entrySet()) {
+        url = url.replace("{" + entry.getKey() + "}", entry.getValue());
+      }
+    }
+
+    // Handle 2010 special case - TIGER2010 has different directory structure
+    if (year == 2010) {
+      // For 2010, need to add /2010/ subdirectory for some paths
+      // Also need to handle different file suffixes (e.g., state10 instead of state)
+      // The schema baseUrl should handle most of this, but we may need adjustments
+      url = url.replace("TIGER{year}", "TIGER2010");
+    }
+
+    LOGGER.debug("Built URL from schema for {}: {}", tableName, url);
+    return url;
+  }
+
+  /** Local list of data years for backward compatibility methods. */
+  private final List<Integer> dataYears;
+  /** Auto-download flag for backward compatibility methods. */
+  private final boolean autoDownload;
+
+  /**
+   * Create a List of Integer years from a range.
+   * Unlike parent's yearRange() which returns List<String>, this returns List<Integer>.
+   */
+  private static List<Integer> intYearRange(int startYear, int endYear) {
+    java.util.List<Integer> years = new java.util.ArrayList<>();
+    for (int year = startYear; year <= endYear; year++) {
+      years.add(year);
+    }
+    return years;
+  }
+
+  // ===== CONSTRUCTORS =====
+
+  /**
+   * Primary constructor matching BEA/ECON pattern with all required parameters.
+   *
+   * @param cacheDir Cache directory for raw shapefile downloads
+   * @param operatingDirectory Operating directory for metadata (.aperio/geo/)
+   * @param parquetDir Parquet output directory
+   * @param cacheStorageProvider Provider for cache file operations
+   * @param storageProvider Provider for parquet file operations
+   * @param sharedManifest Shared cache manifest
+   * @param startYear First year for downloads
+   * @param endYear Last year for downloads
+   */
+  public TigerDataDownloader(String cacheDir, String operatingDirectory, String parquetDir,
+      StorageProvider cacheStorageProvider, StorageProvider storageProvider,
+      GeoCacheManifest sharedManifest, int startYear, int endYear) {
+    super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
+        sharedManifest, startYear, endYear);
+    this.dataYears = intYearRange(startYear, endYear);
+    this.autoDownload = true;
+
+    LOGGER.info("TIGER data downloader initialized for years {}-{} in directory: {}",
+        startYear, endYear, cacheDir);
+  }
+
+  /**
+   * Constructor with year list and StorageProvider (legacy pattern).
    */
   public TigerDataDownloader(String cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider) {
@@ -109,7 +263,7 @@ public class TigerDataDownloader {
   }
 
   /**
-   * Constructor with year list, StorageProvider, and cacheManifest.
+   * Constructor with year list, StorageProvider, and cacheManifest (legacy pattern).
    */
   public TigerDataDownloader(String cacheDir, List<Integer> dataYears, boolean autoDownload,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
@@ -117,16 +271,18 @@ public class TigerDataDownloader {
   }
 
   /**
-   * Constructor with separate cache and operating directories (standardized naming).
+   * Constructor with separate cache and operating directories (legacy pattern).
    */
   public TigerDataDownloader(String cacheDir, String operatingDirectory, List<Integer> dataYears,
       boolean autoDownload, StorageProvider storageProvider, GeoCacheManifest cacheManifest) {
-    this.cacheDir = cacheDir;
-    this.operatingDirectory = operatingDirectory;
+    super(cacheDir, operatingDirectory, cacheDir,
+        storageProvider != null ? storageProvider : org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir),
+        storageProvider != null ? storageProvider : org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir),
+        cacheManifest,
+        dataYears.isEmpty() ? 2020 : dataYears.get(0),
+        dataYears.isEmpty() ? 2020 : dataYears.get(dataYears.size() - 1));
     this.dataYears = dataYears;
     this.autoDownload = autoDownload;
-    this.storageProvider = storageProvider;
-    this.cacheManifest = cacheManifest;
 
     LOGGER.info("TIGER data downloader initialized for years {} in directory: {}",
         dataYears, cacheDir);
@@ -170,6 +326,18 @@ public class TigerDataDownloader {
     this(cacheDir.getAbsolutePath(), Arrays.asList(dataYear), autoDownload, null);
   }
 
+  // ===== ACCESSOR METHODS =====
+
+  /**
+   * Get the cache manifest as GeoCacheManifest for convenience methods.
+   * The parent class stores it as AbstractCacheManifest, but GEO adapters use GeoCacheManifest.
+   *
+   * @return Cache manifest cast to GeoCacheManifest
+   */
+  private GeoCacheManifest getGeoManifest() {
+    return (GeoCacheManifest) cacheManifest;
+  }
+
   /**
    * Get the cache manifest for this downloader.
    * Used by GeoSchemaFactory for metadata-driven downloads.
@@ -177,7 +345,7 @@ public class TigerDataDownloader {
    * @return Cache manifest instance
    */
   public GeoCacheManifest getCacheManifest() {
-    return cacheManifest;
+    return getGeoManifest();
   }
 
   /**
@@ -192,7 +360,12 @@ public class TigerDataDownloader {
 
   /**
    * Download all TIGER data for the specified year range (matching ECON pattern).
+   *
+   * @param startYear First year to download
+   * @param endYear Last year to download
+   * @throws IOException If download or file I/O fails
    */
+  @Override
   public void downloadAll(int startYear, int endYear) throws IOException {
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
@@ -239,6 +412,118 @@ public class TigerDataDownloader {
   }
 
   /**
+   * Convert all downloaded TIGER shapefiles to Parquet format (matching ECON pattern).
+   * Uses iterateTableOperationsOptimized for efficient cache checking.
+   *
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   * @throws IOException If conversion or file I/O fails
+   */
+  @Override
+  public void convertAll(int startYear, int endYear) throws IOException {
+    LOGGER.info("TIGER conversion phase: {} years ({}-{}), {} tables",
+        endYear - startYear + 1, startYear, endYear, TIGER_TABLES.length);
+
+    // Convert each table type
+    for (String tableName : TIGER_TABLES) {
+      convertTableForYears(tableName, startYear, endYear);
+    }
+
+    LOGGER.info("TIGER data conversion completed for years {} to {}", startYear, endYear);
+  }
+
+  /**
+   * Convert a specific table type for all years in range.
+   *
+   * @param tableName The table name (e.g., "states", "counties")
+   * @param startYear First year to convert
+   * @param endYear Last year to convert
+   */
+  private void convertTableForYears(String tableName, int startYear, int endYear) throws IOException {
+    LOGGER.debug("Converting {} for years {}-{}", tableName, startYear, endYear);
+
+    for (int year = startYear; year <= endYear; year++) {
+      // Build paths
+      String yearPath = String.format("year=%d", year);
+
+      // Determine if this is a per-state table or national
+      boolean perState = isPerStateTable(tableName);
+
+      if (perState) {
+        // Per-state tables need to iterate over states
+        String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
+        for (String state : stateFips) {
+          convertSingleDataset(tableName, year, state);
+        }
+      } else {
+        // National tables - single conversion per year
+        convertSingleDataset(tableName, year, null);
+      }
+    }
+  }
+
+  /**
+   * Convert a single shapefile dataset to Parquet.
+   *
+   * @param tableName Table type
+   * @param year Year
+   * @param stateFips State FIPS code (null for national datasets)
+   */
+  private void convertSingleDataset(String tableName, int year, String stateFips) throws IOException {
+    // Build cache path where shapefile is stored
+    String yearPath = String.format("year=%d", year);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
+    cachePath = storageProvider.resolvePath(cachePath, tableName);
+    if (stateFips != null) {
+      cachePath = storageProvider.resolvePath(cachePath, stateFips);
+    }
+
+    // Build parquet target path
+    String parquetPath = storageProvider.resolvePath(parquetDirectory,
+        "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
+
+    // Build cache key params
+    java.util.Map<String, String> params = new java.util.HashMap<>();
+    params.put("year", String.valueOf(year));
+    if (stateFips != null) {
+      params.put("state", stateFips);
+    }
+
+    // Check if already converted
+    if (isParquetConvertedOrExists(tableName, year, params, cachePath, parquetPath)) {
+      LOGGER.debug("Parquet already exists or converted: {} year={} state={}",
+          tableName, year, stateFips);
+      return;
+    }
+
+    // Find shapefile in cache
+    File cacheFile = new File(cachePath);
+    if (!cacheFile.exists() || !cacheFile.isDirectory()) {
+      LOGGER.debug("No cached shapefile found for {} year={} state={}", tableName, year, stateFips);
+      return;
+    }
+
+    // Convert using existing method
+    LOGGER.info("Converting {} to Parquet: year={} state={}", tableName, year, stateFips);
+    convertToParquet(cacheFile, parquetPath);
+  }
+
+  /**
+   * Determine if a table is per-state or national.
+   */
+  private boolean isPerStateTable(String tableName) {
+    switch (tableName) {
+      case "places":
+      case "census_tracts":
+      case "block_groups":
+      case "school_districts":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
    * Download state boundary shapefiles for all configured years.
    */
   public void downloadStates() throws IOException {
@@ -264,11 +549,16 @@ public class TigerDataDownloader {
   public File downloadStatesForYear(int year) throws IOException {
     String fileSuffix = getTigerFileSuffix(year, "state");
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
-    String url = String.format("%s/%s/STATE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+    // Try schema-driven URL first, fall back to hardcoded
+    String url = buildDownloadUrlFromSchema("states", year, null);
+    if (url == null) {
+      url = String.format("%s/%s/STATE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+    }
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -296,7 +586,7 @@ public class TigerDataDownloader {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           // Estimate file size from shapefile
           long totalSize = files.stream().mapToLong(FileEntry::getSize).sum();
-          cacheManifest.markCached("states", year, params, cachePath, totalSize);
+          getGeoManifest().markCached("states", year, params, cachePath, totalSize);
           cacheManifest.save(this.operatingDirectory);
         }
         return downloadCacheToTemp(cachePath, "states_" + year);
@@ -327,7 +617,7 @@ public class TigerDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markCached("states", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("states", year, params, cachePath, zipFile.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -369,11 +659,16 @@ public class TigerDataDownloader {
   public File downloadCountiesForYear(int year) throws IOException {
     String fileSuffix = getTigerFileSuffix(year, "county");
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
-    String url = String.format("%s/%s/COUNTY%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+    // Try schema-driven URL first, fall back to hardcoded
+    String url = buildDownloadUrlFromSchema("counties", year, null);
+    if (url == null) {
+      url = String.format("%s/%s/COUNTY%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+    }
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "counties");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -420,7 +715,7 @@ public class TigerDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markCached("counties", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("counties", year, params, cachePath, zipFile.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -452,11 +747,18 @@ public class TigerDataDownloader {
   public File downloadPlacesForYear(int year, String stateFips) throws IOException {
     String fileSuffix = getTigerFileSuffix(year, "place");
     String filename = String.format("tl_%d_%s_%s.zip", year, stateFips, fileSuffix);
-    String url = String.format("%s/%s/PLACE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+    // Try schema-driven URL first
+    java.util.Map<String, String> vars = new java.util.HashMap<>();
+    vars.put("state_fips", stateFips);
+    String url = buildDownloadUrlFromSchema("places", year, vars);
+    if (url == null) {
+      url = String.format("%s/%s/PLACE%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+    }
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "places");
     cachePath = storageProvider.resolvePath(cachePath, stateFips);
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
@@ -506,7 +808,7 @@ public class TigerDataDownloader {
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("state", stateFips);
-      cacheManifest.markCached("places", year, params, cachePath, zipFile.length());
+      getGeoManifest().markCached("places", year, params, cachePath, zipFile.length());
       cacheManifest.save(this.operatingDirectory);
     }
 
@@ -554,11 +856,16 @@ public class TigerDataDownloader {
     String zctaType = (year == 2010) ? "ZCTA5" : "ZCTA520";
     String fileSuffix = (year == 2010) ? "zcta510" : "zcta520";
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
-    String url = String.format("%s/%s/%s%s/%s", TIGER_BASE_URL, getTigerYearPath(year), zctaType, getTiger2010Subdir(year), filename);
+
+    // Try schema-driven URL first, fall back to hardcoded
+    String url = buildDownloadUrlFromSchema("zctas", year, null);
+    if (url == null) {
+      url = String.format("%s/%s/%s%s/%s", TIGER_BASE_URL, getTigerYearPath(year), zctaType, getTiger2010Subdir(year), filename);
+    }
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "zctas");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -606,7 +913,7 @@ public class TigerDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markCached("zctas", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("zctas", year, params, cachePath, zipFile.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -637,7 +944,7 @@ public class TigerDataDownloader {
   public File downloadCongressionalDistrictsForYear(int year) throws IOException {
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "congressional_districts");
 
     // Calculate correct Congress number: ((year - 1789) / 2) + 1
@@ -672,12 +979,19 @@ public class TigerDataDownloader {
       return null;
     }
 
-    // 2010 has a different directory structure with congress subdirectory
-    String url;
-    if (year == 2010) {
-      url = String.format("%s/%s/CD/%d/%s", TIGER_BASE_URL, getTigerYearPath(year), congressNum, filename);
-    } else {
-      url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+    // Try schema-driven URL first
+    java.util.Map<String, String> vars = new java.util.HashMap<>();
+    vars.put("congress", String.valueOf(congressNum));
+    String url = buildDownloadUrlFromSchema("congressional_districts", year, vars);
+
+    // Fall back to hardcoded URL if schema not available
+    if (url == null) {
+      // 2010 has a different directory structure with congress subdirectory
+      if (year == 2010) {
+        url = String.format("%s/%s/CD/%d/%s", TIGER_BASE_URL, getTigerYearPath(year), congressNum, filename);
+      } else {
+        url = String.format("%s/%s/CD/%s", TIGER_BASE_URL, getTigerYearPath(year), filename);
+      }
     }
 
     try {
@@ -696,7 +1010,7 @@ public class TigerDataDownloader {
       // Mark as cached in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
-        cacheManifest.markCached("congressional_districts", year, params, cachePath, zipFile.length());
+        getGeoManifest().markCached("congressional_districts", year, params, cachePath, zipFile.length());
         cacheManifest.save(this.operatingDirectory);
       }
 
@@ -747,7 +1061,7 @@ public class TigerDataDownloader {
    */
   private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
     // For local filesystem cache, just return the path directly
-    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
+    if (cacheDirectory != null && !cacheDirectory.startsWith("s3://")) {
       // Local path - can use directly
       File localPath = new File(cachePath);
       if (localPath.exists()) {
@@ -901,7 +1215,7 @@ public class TigerDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "census_tracts");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
@@ -947,7 +1261,14 @@ public class TigerDataDownloader {
 
       String fileSuffix = getTigerFileSuffix(year, "tract");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
-      String url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+      // Try schema-driven URL first
+      java.util.Map<String, String> vars = new java.util.HashMap<>();
+      vars.put("state_fips", fips);
+      String url = buildDownloadUrlFromSchema("census_tracts", year, vars);
+      if (url == null) {
+        url = String.format("%s/%s/TRACT%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+      }
 
       File stateDir = new File(tempDir, fips);
       File zipFile = new File(stateDir, filename);
@@ -967,7 +1288,7 @@ public class TigerDataDownloader {
         if (cacheManifest != null) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", fips);
-          cacheManifest.markCached("census_tracts", year, params, cachePath, zipFile.length());
+          getGeoManifest().markCached("census_tracts", year, params, cachePath, zipFile.length());
           cacheManifest.save(this.operatingDirectory);
         }
       } catch (IOException e) {
@@ -1010,7 +1331,7 @@ public class TigerDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "block_groups");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
@@ -1056,7 +1377,14 @@ public class TigerDataDownloader {
 
       String fileSuffix = getTigerFileSuffix(year, "bg");
       String filename = String.format("tl_%d_%s_%s.zip", year, fips, fileSuffix);
-      String url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+      // Try schema-driven URL first
+      java.util.Map<String, String> vars = new java.util.HashMap<>();
+      vars.put("state_fips", fips);
+      String url = buildDownloadUrlFromSchema("block_groups", year, vars);
+      if (url == null) {
+        url = String.format("%s/%s/BG%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+      }
 
       File stateDir = new File(tempDir, fips);
       File zipFile = new File(stateDir, filename);
@@ -1076,7 +1404,7 @@ public class TigerDataDownloader {
         if (cacheManifest != null) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", fips);
-          cacheManifest.markCached("block_groups", year, params, cachePath, zipFile.length());
+          getGeoManifest().markCached("block_groups", year, params, cachePath, zipFile.length());
           cacheManifest.save(this.operatingDirectory);
         }
       } catch (IOException e) {
@@ -1113,11 +1441,16 @@ public class TigerDataDownloader {
     // 2010 has special naming: cbsa10 instead of cbsa
     String cbsaSuffix = (year == 2010) ? "10" : "";
     String filename = String.format("tl_%d_us_cbsa%s.zip", year, cbsaSuffix);
-    String url = String.format("%s/%s/CBSA%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+
+    // Try schema-driven URL first, fall back to hardcoded
+    String url = buildDownloadUrlFromSchema("cbsa", year, null);
+    if (url == null) {
+      url = String.format("%s/%s/CBSA%s/%s", TIGER_BASE_URL, getTigerYearPath(year), getTiger2010Subdir(year), filename);
+    }
 
     // Build target path in cache storage
     String yearPath = String.format("year=%d", year);
-    String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+    String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
     cachePath = storageProvider.resolvePath(cachePath, "cbsa");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
@@ -1163,7 +1496,7 @@ public class TigerDataDownloader {
     // Mark as cached in manifest
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
-      cacheManifest.markCached("cbsa", year, params, cachePath, zipFile.length());
+      getGeoManifest().markCached("cbsa", year, params, cachePath, zipFile.length());
       cacheManifest.save(this.operatingDirectory);
     }
 
@@ -1175,7 +1508,7 @@ public class TigerDataDownloader {
    * Get the cache directory.
    */
   public String getCacheDir() {
-    return cacheDir;
+    return cacheDirectory;
   }
 
   /**
@@ -1215,7 +1548,7 @@ public class TigerDataDownloader {
     for (String fips : stateFips) {
       // Build target path in cache storage for this state
       String yearPath = String.format("year=%d", year);
-      String cachePath = storageProvider.resolvePath(cacheDir, yearPath);
+      String cachePath = storageProvider.resolvePath(cacheDirectory, yearPath);
       cachePath = storageProvider.resolvePath(cachePath, "school_districts");
       cachePath = storageProvider.resolvePath(cachePath, fips);
 
@@ -1309,7 +1642,7 @@ public class TigerDataDownloader {
         if (cacheManifest != null) {
           java.util.Map<String, String> params = new java.util.HashMap<>();
           params.put("state", fips);
-          cacheManifest.markCached("school_districts", year, params, cachePath, 0);
+          getGeoManifest().markCached("school_districts", year, params, cachePath, 0);
           cacheManifest.save(this.operatingDirectory);
         }
       }
@@ -1565,18 +1898,6 @@ public class TigerDataDownloader {
   }
 
   /**
-   * Extract year from path containing year=YYYY pattern.
-   */
-  private int extractYearFromPath(String path) {
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("year=(\\d{4})");
-    java.util.regex.Matcher matcher = pattern.matcher(path);
-    if (matcher.find()) {
-      return Integer.parseInt(matcher.group(1));
-    }
-    throw new IllegalArgumentException("Could not extract year from path: " + path);
-  }
-
-  /**
    * Find the ZIP file in a directory (for DuckDB spatial conversion).
    * TIGER downloads are typically stored as ZIP files in the cache.
    *
@@ -1601,8 +1922,8 @@ public class TigerDataDownloader {
    */
   public boolean isShapefileAvailable(String category) {
     // For local filesystem cache
-    if (cacheDir != null && !cacheDir.startsWith("s3://")) {
-      File dir = new File(cacheDir, category);
+    if (cacheDirectory != null && !cacheDirectory.startsWith("s3://")) {
+      File dir = new File(cacheDirectory, category);
       if (!dir.exists()) {
         return false;
       }
@@ -1611,7 +1932,7 @@ public class TigerDataDownloader {
     }
 
     // For remote storage, check if any .shp files exist in the category path
-    String categoryPath = storageProvider.resolvePath(cacheDir, category);
+    String categoryPath = storageProvider.resolvePath(cacheDirectory, category);
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(categoryPath, true);
       return files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
