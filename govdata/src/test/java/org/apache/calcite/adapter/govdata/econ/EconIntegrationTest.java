@@ -213,22 +213,22 @@ public class EconIntegrationTest {
         "      ]" +
         "    }" +
         "  }" +
-//            ", {" +
-//        "    \"name\": \"CENSUS\"," +
-//        "    \"type\": \"custom\"," +
-//        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
-//        "    \"operand\": {" +
-//        "      \"dataSource\": \"census\"," +
-//        "      \"refreshInterval\": \"PT1H\"," +
-//        "      \"executionEngine\": \"" + executionEngine + "\"," +
-//        "      \"database_filename\": \"shared.duckdb\"," +
-//        "      \"ephemeralCache\": false," +
-//        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
-//        "      \"directory\": \"" + parquetDir + "\"," +
-//        "      " + s3ConfigJson +
-//        "      \"autoDownload\": true" +
-//        "    }" +
-//        "  }" +
+            ", {" +
+        "    \"name\": \"CENSUS\"," +
+        "    \"type\": \"custom\"," +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "    \"operand\": {" +
+        "      \"dataSource\": \"census\"," +
+        "      \"refreshInterval\": \"PT1H\"," +
+        "      \"executionEngine\": \"" + executionEngine + "\"," +
+        "      \"database_filename\": \"shared.duckdb\"," +
+        "      \"ephemeralCache\": false," +
+        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
+        "      \"directory\": \"" + parquetDir + "\"," +
+        "      " + s3ConfigJson +
+        "      \"autoDownload\": true" +
+        "    }" +
+        "  }" +
             "]" +
         "}";
 
