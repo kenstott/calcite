@@ -677,7 +677,8 @@ partitionedTables:
     dimensions:
       type:
         - state_wages  # Static table type
-      frequency: *annual_frequency  # Annual QCEW data
+      frequency:
+        - annual
       year:
         type: yearRange
         minYear: 1990  # QCEW data only available from 1990
