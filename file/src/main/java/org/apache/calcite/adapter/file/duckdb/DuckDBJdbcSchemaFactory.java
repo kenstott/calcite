@@ -1486,6 +1486,20 @@ public class DuckDBJdbcSchemaFactory {
       }
 
       try {
+        // Pre-check if view already exists to avoid expensive validation
+        String checkViewSql = String.format(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' "
+                + "AND table_name = '%s' AND table_type = 'VIEW'",
+            duckdbSchema, viewName);
+        try (Statement checkStmt = conn.createStatement();
+             ResultSet rs = checkStmt.executeQuery(checkViewSql)) {
+          if (rs.next()) {
+            LOGGER.debug("View {}.{} already exists, skipping creation", duckdbSchema, viewName);
+            viewCount++;
+            continue;
+          }
+        }
+
         // Rewrite schema references if needed
         String rewrittenViewDef = viewDef;
         if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(duckdbSchema)) {
