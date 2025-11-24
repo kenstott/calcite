@@ -782,6 +782,108 @@ public class DuckDBCacheStore implements AutoCloseable {
     }
   }
 
+  // ===== Table-Level Completion Tracking =====
+
+  /**
+   * Check if a table iteration is complete (all dimension combinations cached).
+   * This allows skipping the entire dimension iteration loop for subsequent runs.
+   *
+   * @param tableName The table name (e.g., "national_accounts", "regional_income")
+   * @param dimensionSignature Hash of dimension names and value counts
+   * @return true if table was fully cached with same dimension signature
+   */
+  public boolean isTableComplete(String tableName, String dimensionSignature) {
+    String key = "table_complete:" + tableName;
+    String stored = getMetadata(key);
+    if (stored == null) {
+      return false;
+    }
+    // Format: "signature|timestamp"
+    String[] parts = stored.split("\\|");
+    if (parts.length < 2) {
+      return false;
+    }
+    return parts[0].equals(dimensionSignature);
+  }
+
+  /**
+   * Mark a table as complete after all dimension combinations were processed.
+   *
+   * @param tableName The table name
+   * @param dimensionSignature Hash of dimension names and value counts
+   */
+  public void markTableComplete(String tableName, String dimensionSignature) {
+    String key = "table_complete:" + tableName;
+    String value = dimensionSignature + "|" + System.currentTimeMillis();
+    setMetadata(key, value);
+    LOGGER.debug("Marked table {} complete with signature {}", tableName, dimensionSignature);
+  }
+
+  /**
+   * Invalidate table completion when cache entries change.
+   *
+   * @param tableName The table name to invalidate
+   */
+  public void invalidateTableCompletion(String tableName) {
+    String key = "table_complete:" + tableName;
+    String sql = "DELETE FROM manifest_metadata WHERE key = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, key);
+      int deleted = stmt.executeUpdate();
+      if (deleted > 0) {
+        LOGGER.debug("Invalidated table completion for {}", tableName);
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error invalidating table completion for {}: {}", tableName, e.getMessage());
+    }
+  }
+
+  /**
+   * Check if all entries for a table are fresh (not expired).
+   * Used in conjunction with isTableComplete to validate cached state.
+   *
+   * @param tableName The table name prefix to check
+   * @return true if all entries for this table have refresh_after > now
+   */
+  public boolean areAllEntriesFresh(String tableName) {
+    String sql = "SELECT COUNT(*) FROM cache_entries "
+        + "WHERE cache_key LIKE ? AND refresh_after <= ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      stmt.setLong(2, System.currentTimeMillis());
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1) == 0;  // No expired entries
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking entry freshness for {}: {}", tableName, e.getMessage());
+    }
+    return false;  // Assume not fresh on error
+  }
+
+  /**
+   * Check if any entries for a table have errors.
+   *
+   * @param tableName The table name prefix to check
+   * @return true if any entries have error_count > 0
+   */
+  public boolean hasTableErrors(String tableName) {
+    String sql = "SELECT COUNT(*) FROM cache_entries "
+        + "WHERE cache_key LIKE ? AND error_count > 0";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1) > 0;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking table errors for {}: {}", tableName, e.getMessage());
+    }
+    return true;  // Assume has errors on error
+  }
+
   @Override
   public void close() {
     synchronized (connectionLock) {

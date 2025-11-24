@@ -380,6 +380,60 @@ public class CacheManifest extends AbstractCacheManifest {
     LOGGER.info("Invalidated all catalog series caches");
   }
 
+  // ===== Table-Level Completion Tracking =====
+
+  /**
+   * Check if a table iteration was fully completed with the given dimension signature.
+   * This allows skipping the entire dimension iteration loop for subsequent runs
+   * when nothing has changed.
+   *
+   * @param tableName The table name (e.g., "national_accounts", "regional_income")
+   * @param dimensionSignature Hash of dimension names and value counts
+   * @return true if table was fully cached with same dimension signature
+   */
+  public boolean isTableComplete(String tableName, String dimensionSignature) {
+    return store.isTableComplete(tableName, dimensionSignature);
+  }
+
+  /**
+   * Mark a table as complete after all dimension combinations were processed.
+   *
+   * @param tableName The table name
+   * @param dimensionSignature Hash of dimension names and value counts
+   */
+  public void markTableComplete(String tableName, String dimensionSignature) {
+    store.markTableComplete(tableName, dimensionSignature);
+  }
+
+  /**
+   * Invalidate table completion when cache entries change.
+   *
+   * @param tableName The table name to invalidate
+   */
+  public void invalidateTableCompletion(String tableName) {
+    store.invalidateTableCompletion(tableName);
+  }
+
+  /**
+   * Check if all entries for a table are fresh (not expired).
+   *
+   * @param tableName The table name prefix to check
+   * @return true if all entries for this table have refresh_after > now
+   */
+  public boolean areAllEntriesFresh(String tableName) {
+    return store.areAllEntriesFresh(tableName);
+  }
+
+  /**
+   * Check if any entries for a table have errors.
+   *
+   * @param tableName The table name prefix to check
+   * @return true if any entries have error_count > 0
+   */
+  public boolean hasTableErrors(String tableName) {
+    return store.hasTableErrors(tableName);
+  }
+
   /**
    * Cache statistics.
    */
