@@ -120,7 +120,7 @@ public class CacheManifest extends AbstractCacheManifest {
   public boolean isParquetConverted(CacheKey cacheKey) {
     boolean converted = store.isParquetConverted(cacheKey.asString());
     if (converted) {
-      LOGGER.info("Cached parquet, skipped conversion: {}", cacheKey.asString());
+      LOGGER.debug("Cached parquet, skipped conversion: {}", cacheKey.asString());
     }
     return converted;
   }
