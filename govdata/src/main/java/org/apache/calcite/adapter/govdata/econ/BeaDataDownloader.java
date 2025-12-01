@@ -43,8 +43,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaDataDownloader.class);
 
   private final String parquetDir;
-  private final List<String> nipaTablesList;
-  private final Map<String, Set<String>> tableFrequencies;
+  // Lazily loaded from parquet catalogs - populated after downloadReferenceData() is called
+  private volatile List<String> nipaTablesList;
+  private volatile Map<String, Set<String>> tableFrequencies;
+  private volatile boolean catalogsLoaded = false;
 
   /**
    * Simple constructor without shared manifest (creates one from operatingDirectory).
@@ -65,11 +67,20 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
         sharedManifest, startYear, endYear);
     this.parquetDir = parquetDir;
+    // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them
+  }
 
-    // Load active NIPA tables from catalog - this is the ONLY source of truth
-    Map<String, Set<String>> loadedTableFrequencies;
+  /**
+   * Ensures catalogs are loaded from parquet files.
+   * Called lazily when catalog data is first needed.
+   * By this point, downloadReferenceData() should have already generated the parquet files.
+   */
+  private synchronized void ensureCatalogsLoaded() {
+    if (catalogsLoaded) {
+      return;
+    }
     try {
-      loadedTableFrequencies = loadNipaTableFrequencies();
+      Map<String, Set<String>> loadedTableFrequencies = loadNipaTableFrequencies();
       if (loadedTableFrequencies.isEmpty()) {
         throw new IllegalStateException("reference_nipa_tables catalog is empty - cannot proceed");
       }
@@ -84,15 +95,32 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
       LOGGER.info("BEA initialized with {} NIPA tables: {} annual-only, {} quarterly-only, {} both A+Q",
           loadedTableFrequencies.size(), annualOnly, quarterlyOnly, both);
+
+      this.nipaTablesList = new ArrayList<>(loadedTableFrequencies.keySet());
+      this.tableFrequencies = loadedTableFrequencies;
+      this.catalogsLoaded = true;
     } catch (Exception e) {
-      throw new IllegalStateException(
+      throw new RuntimeException(
           "Failed to load reference_nipa_tables catalog. This is required for NIPA data downloads. "
-          + "Ensure reference data has been downloaded first via downloadReferenceData(). "
+          + "Ensure downloadReferenceData() is called before accessing catalog data. "
           + "Error: " + e.getMessage(), e);
     }
+  }
 
-    this.nipaTablesList = new ArrayList<>(loadedTableFrequencies.keySet());
-    this.tableFrequencies = loadedTableFrequencies;
+  /**
+   * Gets list of NIPA tables, loading from parquet if needed.
+   */
+  private List<String> getNipaTablesList() {
+    ensureCatalogsLoaded();
+    return nipaTablesList;
+  }
+
+  /**
+   * Gets table frequencies map, loading from parquet if needed.
+   */
+  private Map<String, Set<String>> getTableFrequencies() {
+    ensureCatalogsLoaded();
+    return tableFrequencies;
   }
 
   // Temporary compatibility constructor - creates LocalFileStorageProvider internally
@@ -158,9 +186,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("BEA download phase: {} years ({}-{})",
         endYear - startYear + 1, startYear, endYear);
 
-    if (nipaTablesList != null) {
-      LOGGER.info("National accounts: {} NIPA tables configured", nipaTablesList.size());
-      downloadNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
+    List<String> tables = getNipaTablesList();
+    if (tables != null && !tables.isEmpty()) {
+      LOGGER.info("National accounts: {} NIPA tables configured", tables.size());
+      downloadNationalAccountsMetadata(startYear, endYear, tables, getTableFrequencies());
     }
 
     LOGGER.info("Regional income download: Processing {} BEA regional tables", 54);
@@ -182,8 +211,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     LOGGER.info("BEA conversion phase: {} years ({}-{})",
         endYear - startYear + 1, startYear, endYear);
 
-    if (nipaTablesList != null) {
-      convertNationalAccountsMetadata(startYear, endYear, nipaTablesList, tableFrequencies);
+    List<String> tables = getNipaTablesList();
+    if (tables != null && !tables.isEmpty()) {
+      convertNationalAccountsMetadata(startYear, endYear, tables, getTableFrequencies());
     }
     convertRegionalIncomeMetadata(startYear, endYear);
     // trade_statistics is a SQL view over national_accounts - no separate conversion needed
@@ -435,7 +465,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @return true if the combination is valid, false otherwise
    */
   private boolean isValidTableFrequency(String tableName, String frequency) {
-    Set<String> validFreqs = tableFrequencies.getOrDefault(tableName, Collections.singleton("A"));
+    Set<String> validFreqs = getTableFrequencies().getOrDefault(tableName, Collections.singleton("A"));
     return validFreqs.contains(frequency);
   }
 
@@ -988,7 +1018,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Set<String>> tableFrequencies = new HashMap<>();
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       // Query all sections and extract frequency data
       // Column names: 'annual' and 'quarterly' are the boolean frequency columns in reference data
       String sql =
@@ -1068,7 +1098,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     String jsonPath = resolveJsonPath(cachePattern, variables);
     String fullJsonPath = cacheStorageProvider.resolvePath(cacheDirectory, jsonPath);
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(cacheStorageProvider)) {
       // Load JSON and enrich in one SQL query
       String enrichSql =
           substituteSqlParameters(loadSqlResource("/sql/bea/enrich_nipa_tables.sql"),
@@ -1215,7 +1245,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
           // Check if JSON file has valid schema before conversion
           // Files with [null] will have a "json" column instead of "Key"/"Desc"
-          try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+          try (Connection duckdb = getDuckDBConnection(cacheStorageProvider)) {
             String schemaSql =
                 String.format("SELECT column_name FROM (DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1)",
                 jsonPath.replace("'", "''"));
@@ -1250,7 +1280,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Convert with DuckDB doing all parsing and enrichment
-          try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+          try (Connection duckdb = getDuckDBConnection(cacheStorageProvider)) {
             String enrichSql =
                 substituteSqlParameters(loadSqlResource("/sql/bea/enrich_regional_linecodes.sql"),
                 ImmutableMap.of(
@@ -1266,7 +1296,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             LOGGER.error("JSON path being read: {}", jsonPath);
 
             // Diagnostic: Log the actual JSON structure to help debug schema mismatches
-            try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (Connection duckdb = getDuckDBConnection(cacheStorageProvider)) {
               // Show top-level structure
               String schemaSql =
                   String.format("DESCRIBE SELECT * FROM read_json('%s', format='array', maximum_object_size=104857600) LIMIT 1",
@@ -1335,7 +1365,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
     Map<String, Set<String>> catalogMap = new HashMap<>();
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       // Single query to read all parquet files and group LineCodes by TableName
       String query =
           substituteSqlParameters(loadSqlResource("/sql/bea/load_regional_catalog.sql"),
