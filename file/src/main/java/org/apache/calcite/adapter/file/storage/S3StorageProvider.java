@@ -69,6 +69,9 @@ public class S3StorageProvider implements StorageProvider {
   // Base S3 path from directory operand (e.g., "s3://bucket/prefix/")
   private final String baseS3Path;
 
+  // S3 configuration for DuckDB access (credentials, endpoint, region)
+  private final java.util.Map<String, String> s3Config;
+
   public S3StorageProvider() {
     this((AmazonS3) null, null);
   }
@@ -188,6 +191,26 @@ public class S3StorageProvider implements StorageProvider {
       // Cache manager not initialized, persistent cache will be null
     }
     this.persistentCache = cache;
+
+    // Store S3 config for DuckDB access
+    if (config != null) {
+      java.util.Map<String, String> s3ConfigMap = new java.util.HashMap<>();
+      if (config.get("accessKeyId") != null) {
+        s3ConfigMap.put("accessKeyId", (String) config.get("accessKeyId"));
+      }
+      if (config.get("secretAccessKey") != null) {
+        s3ConfigMap.put("secretAccessKey", (String) config.get("secretAccessKey"));
+      }
+      if (config.get("region") != null) {
+        s3ConfigMap.put("region", (String) config.get("region"));
+      }
+      if (config.get("endpoint") != null) {
+        s3ConfigMap.put("endpoint", (String) config.get("endpoint"));
+      }
+      this.s3Config = s3ConfigMap.isEmpty() ? null : s3ConfigMap;
+    } else {
+      this.s3Config = null;
+    }
   }
 
   /**
@@ -353,6 +376,10 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public String getStorageType() {
     return "s3";
+  }
+
+  @Override public java.util.Map<String, String> getS3Config() {
+    return s3Config;
   }
 
   @Override public String resolvePath(String basePath, String relativePath) {

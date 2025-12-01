@@ -591,6 +591,23 @@ public interface StorageProvider {
   }
 
   /**
+   * Returns S3 configuration for DuckDB access, if this is an S3-based storage provider.
+   *
+   * <p>The returned map may contain:
+   * <ul>
+   *   <li>accessKeyId - S3 access key</li>
+   *   <li>secretAccessKey - S3 secret key</li>
+   *   <li>region - AWS region</li>
+   *   <li>endpoint - Custom S3 endpoint (for R2, MinIO, etc.)</li>
+   * </ul>
+   *
+   * @return S3 configuration map, or null if not an S3 provider or no credentials available
+   */
+  default java.util.Map<String, String> getS3Config() {
+    return null;
+  }
+
+  /**
    * File entry representing a file in a directory listing.
    */
   class FileEntry {
