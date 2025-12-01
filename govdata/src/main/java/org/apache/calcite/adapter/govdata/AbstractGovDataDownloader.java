@@ -2682,7 +2682,7 @@ public abstract class AbstractGovDataDownloader {
       return;
     }
 
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
       // Build CREATE TABLE statement from schema columns
@@ -2762,7 +2762,7 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
     // Execute using in-memory DuckDB connection with extensions loaded
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
       // Execute the COPY statement
@@ -2810,7 +2810,7 @@ public abstract class AbstractGovDataDownloader {
     List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         loadTableColumnsFromMetadata(tableName);
 
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
       // Build CREATE TABLE statement from schema columns
@@ -2922,7 +2922,7 @@ public abstract class AbstractGovDataDownloader {
   protected void executeDuckDBSql(String sql, String operationDescription) throws IOException {
     LOGGER.info("{} - Executing DuckDB SQL:\n{}", operationDescription, sql);
 
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
       // Execute the SQL statement
@@ -3607,7 +3607,7 @@ public abstract class AbstractGovDataDownloader {
     LOGGER.debug("Reorganization SQL:\n{}", sql);
 
     // Execute using DuckDB
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
       stmt.execute(sql);
@@ -4087,7 +4087,7 @@ public abstract class AbstractGovDataDownloader {
       // No prefetch provided but callback exists - create new prefetch infrastructure
       try {
         // Create in-memory DuckDB connection
-        localPrefetchDb = getDuckDBConnection();
+        localPrefetchDb = getDuckDBConnection(storageProvider);
         shouldClosePrefetch = true;  // We created it, we close it
 
         // Load table metadata and extract partition keys
@@ -4682,7 +4682,7 @@ public abstract class AbstractGovDataDownloader {
       throws IOException {
     LOGGER.debug("{} - DuckDB SQL template (pre-substitution):\n{}", operationDescription, sqlTemplate);
 
-    try (java.sql.Connection conn = getDuckDBConnection()) {
+    try (java.sql.Connection conn = getDuckDBConnection(storageProvider)) {
       executeWithParams(conn, sqlTemplate, params);
       LOGGER.info("{} completed successfully", operationDescription);
 

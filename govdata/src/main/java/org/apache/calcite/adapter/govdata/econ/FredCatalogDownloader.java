@@ -791,7 +791,7 @@ public class FredCatalogDownloader {
       LOGGER.debug("DuckDB conversion SQL:\n{}", sql);
 
       // Execute using in-memory DuckDB connection with extensions pre-loaded
-      try (Connection conn = org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.getDuckDBConnection();
+      try (Connection conn = org.apache.calcite.adapter.govdata.AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
            Statement stmt = conn.createStatement()) {
 
         // Execute the COPY statement (extensions already loaded via getDuckDBConnection)
