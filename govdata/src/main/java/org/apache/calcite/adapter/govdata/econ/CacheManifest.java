@@ -425,6 +425,38 @@ public class CacheManifest extends AbstractCacheManifest {
   }
 
   /**
+   * Check if all entries for a table have been converted to parquet.
+   * This is faster than areAllEntriesFresh for conversion operations -
+   * if parquet exists, we don't need to re-convert regardless of refresh_after.
+   *
+   * @param tableName The table name prefix to check
+   * @return true if all entries for this table have parquet_converted_at > 0
+   */
+  public boolean areAllParquetConverted(String tableName) {
+    return store.areAllParquetConverted(tableName);
+  }
+
+  /**
+   * Fast database-level check to determine if a table can be skipped entirely.
+   * This is the primary method for meta-level caching - it uses a single efficient
+   * database query instead of iterating through all combinations.
+   *
+   * <p>Returns true if:
+   * <ul>
+   *   <li>We have at least expectedCount entries for this table</li>
+   *   <li>All entries have been converted to parquet</li>
+   *   <li>No entries need raw file refresh (raw file newer than parquet)</li>
+   * </ul>
+   *
+   * @param tableName The table name prefix
+   * @param expectedCount The expected number of dimension combinations
+   * @return true if table can be skipped entirely
+   */
+  public boolean isTableFullyCached(String tableName, int expectedCount) {
+    return store.isTableFullyCached(tableName, expectedCount);
+  }
+
+  /**
    * Check if any entries for a table have errors.
    *
    * @param tableName The table name prefix to check
