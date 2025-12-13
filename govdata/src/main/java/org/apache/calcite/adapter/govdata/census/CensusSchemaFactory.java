@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.govdata.census;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.SchemaConfigReader;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
 import org.apache.calcite.model.JsonTable;
 
@@ -88,6 +89,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
   /** Census ACS data is typically 1 year behind current year. */
   private static final int DATA_LAG_YEARS = 1;
+
+  /** Schema file containing data availability rules. */
+  private static final String SCHEMA_FILE = "census/census-schema.json";
+
+  /** Cached data availability rules, loaded lazily from schema file. */
+  private static final java.util.Map<String, SchemaConfigReader.DataAvailabilityRule> availabilityRules =
+      new java.util.concurrent.ConcurrentHashMap<>();
 
   // Store constraint metadata from model files
   private Map<String, Map<String, Object>> tableConstraints;
@@ -376,12 +384,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         int endYear = acsYears.isEmpty() ? 2023 : acsYears.get(acsYears.size() - 1);
 
         // Download comprehensive ACS data
-        downloadAcsData(censusClient, startYear, endYear, censusParquetDir, storageProvider);
+        downloadAcsData(censusClient, startYear, endYear, censusParquetDir, storageProvider, cacheManifest);
 
         // Convert to Parquet format
         LOGGER.info("Converting ACS data to Parquet for years: {}", acsYears);
         for (int year : acsYears) {
-          convertAcsDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
+          convertAcsDataToParquet(cacheDir, censusParquetDir, year, storageProvider, cacheManifest);
         }
 
       } catch (Exception e) {
@@ -425,7 +433,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
           for (int year : decennialYears) {
             downloadDecennialData(censusClient, year);
-            convertDecennialDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
+            convertDecennialDataToParquet(cacheDir, censusParquetDir, year, storageProvider, cacheManifest);
           }
 
         } catch (Exception e) {
@@ -448,7 +456,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         for (int year : economicYears) {
           try {
             downloadEconomicData(censusClient, year);
-            convertEconomicDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
+            convertEconomicDataToParquet(cacheDir, censusParquetDir, year, storageProvider, cacheManifest);
           } catch (Exception e) {
             // Check if this is a "no data" error (404, dataset not available) vs actual API error
             String errorMsg = e.getMessage();
@@ -495,7 +503,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       for (int year : acsYears) {
         try {
           downloadPopulationEstimatesData(censusClient, year);
-          convertPopulationEstimatesDataToParquet(cacheDir, censusParquetDir, year, storageProvider);
+          convertPopulationEstimatesDataToParquet(cacheDir, censusParquetDir, year, storageProvider, cacheManifest);
         } catch (Exception e) {
           // Check if this is a "no data" error (404, dataset not available) vs actual API error
           String errorMsg = e.getMessage();
@@ -534,7 +542,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Download comprehensive ACS data for all table types.
    */
   private void downloadAcsData(CensusApiClient censusClient, int startYear, int endYear,
-      String censusParquetDir, StorageProvider storageProvider) throws IOException, InterruptedException {
+      String censusParquetDir, StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException, InterruptedException {
     LOGGER.info("Downloading comprehensive ACS data for years {} to {}", startYear, endYear);
 
     // The CensusApiClient.downloadAll already handles the core demographics, housing, and economic data
@@ -548,7 +557,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       try {
         // Download data for each ACS table using schema-driven approach
         for (String tableName : acsTableNames) {
-          downloadTableData(censusClient, year, tableName, censusParquetDir, storageProvider);
+          downloadTableData(censusClient, year, tableName, censusParquetDir, storageProvider, cacheManifest);
         }
 
         LOGGER.info("Downloaded comprehensive ACS data for year {}", year);
@@ -570,13 +579,32 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   /**
    * Download Census data for a specific table using conceptual variable mapping.
    * Works for any census type (ACS, decennial, economic, population).
+   * Uses error caching to avoid repeated failed requests.
    */
   private void downloadTableData(CensusApiClient censusClient, int year, String tableName,
-      String censusParquetDir, StorageProvider storageProvider) throws IOException {
-    // Determine census type from the table's download config in schema
+      String censusParquetDir, StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
+    // Determine census type FIRST (needed for availability check)
     String censusType = getCensusTypeForTable(tableName);
     if (censusType == null) {
       LOGGER.warn("No census type found for table {}, skipping", tableName);
+      return;
+    }
+
+    // Check if data is expected to be available based on metadata (schema rules)
+    // This avoids making API requests we KNOW will fail
+    if (!isDataExpectedToBeAvailable(year, censusType)) {
+      LOGGER.debug("Skipping {} year {} - data not expected to be available per schema rules",
+          tableName, year);
+      return;
+    }
+
+    // Build cache key for error checking
+    CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+
+    // Check if this request previously failed and is still in retry window
+    if (cacheManifest.isUnavailable(cacheKey)) {
+      LOGGER.debug("Skipping {} year {} - previously failed, still in retry window", tableName, year);
       return;
     }
 
@@ -618,21 +646,27 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       String errorMsg = e.getMessage();
       if (errorMsg != null && errorMsg.contains("404")) {
         LOGGER.warn("Census data not available for {} year {} (404 - not released yet)", tableName, year);
+        // Mark as unavailable with 7-day retry (data may be released later)
+        cacheManifest.markUnavailable(cacheKey, 7, "404_not_released");
         // Create zero-row marker so we don't keep retrying
         try {
           String typeDir = censusType;
           String parquetPath =
               storageProvider.resolvePath(censusParquetDir, "type=" + typeDir + "/year=" + year + "/" + tableName + ".parquet");
           createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, censusType);
-          LOGGER.info("Created zero-row marker for {} year {} (will recheck based on TTL)", tableName, year);
+          LOGGER.info("Created zero-row marker for {} year {} (will recheck in 7 days)", tableName, year);
         } catch (Exception markerEx) {
           LOGGER.error("Failed to create zero-row marker for {} year {}: {}",
               tableName, year, markerEx.getMessage());
         }
       } else if (errorMsg != null && errorMsg.contains("400")) {
         LOGGER.debug("Census data not available for {} year {} (400 - variables unavailable)", tableName, year);
+        // Mark as unavailable with 30-day retry (400 usually means data doesn't exist for this year)
+        cacheManifest.markUnavailable(cacheKey, 30, "400_variables_unavailable");
       } else {
         LOGGER.error("Error downloading {} data for year {}: {}", tableName, year, errorMsg);
+        // Mark as API error with 1-day retry for transient errors
+        cacheManifest.markApiError(cacheKey, errorMsg != null ? errorMsg : "Unknown error", 1);
       }
     }
   }
@@ -651,6 +685,37 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private List<String> getGeographiesForTable(String tableName) {
     return org.apache.calcite.adapter.govdata.SchemaConfigReader.getDownloadGeographies(
         "census-schema.json", tableName);
+  }
+
+  /**
+   * Check if census data is expected to be available for a given year and census type.
+   * Uses data availability rules defined in census-schema.json to avoid making requests
+   * that we know will fail.
+   *
+   * @param year The data year
+   * @param censusType The census type (acs, decennial, economic, population)
+   * @return true if data is expected to be available, false if we know it won't exist
+   */
+  private boolean isDataExpectedToBeAvailable(int year, String censusType) {
+    int currentYear = java.time.Year.now().getValue();
+
+    // Load availability rule from schema (cached)
+    SchemaConfigReader.DataAvailabilityRule rule = availabilityRules.computeIfAbsent(
+        censusType,
+        key -> SchemaConfigReader.getDataAvailabilityRule(SCHEMA_FILE, key));
+
+    if (rule == null) {
+      // No availability rule defined - allow the request (fail open)
+      LOGGER.debug("No availability rule for census type {}, allowing request for year {}", censusType, year);
+      return true;
+    }
+
+    boolean available = rule.isYearAvailable(year, currentYear);
+    if (!available) {
+      LOGGER.debug("Data not expected to be available for {} year {} per schema rules: {}",
+          censusType, year, rule.description);
+    }
+    return available;
   }
 
   /**
@@ -702,7 +767,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Convert ACS data to Parquet format for all table types.
    */
   private void convertAcsDataToParquet(String cacheDir, String parquetDir, int year,
-      StorageProvider storageProvider) throws IOException {
+      StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
     LOGGER.info("Converting ACS data to Parquet for year {}", year);
 
     // List all ACS table types to convert
@@ -716,10 +782,17 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     // Convert each table type
     for (String tableName : acsTableNames) {
       try {
+        // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
+        CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+        if (cacheManifest.isParquetConverted(cacheKey)) {
+          LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
+          continue;
+        }
+
         String parquetPath =
             storageProvider.resolvePath(parquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "acs");
+        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "acs", cacheManifest);
 
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
@@ -762,7 +835,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Convert Decennial Census data to Parquet format.
    */
   private void convertDecennialDataToParquet(String cacheDir, String parquetDir, int year,
-      StorageProvider storageProvider) throws IOException {
+      StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
     LOGGER.info("Converting Decennial Census data to Parquet for year {}", year);
 
     String[] decennialTableNames = {
@@ -772,10 +846,17 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     // Convert each table type
     for (String tableName : decennialTableNames) {
       try {
+        // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
+        CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+        if (cacheManifest.isParquetConverted(cacheKey)) {
+          LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
+          continue;
+        }
+
         String parquetPath =
             storageProvider.resolvePath(parquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "decennial");
+        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "decennial", cacheManifest);
 
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
@@ -818,20 +899,11 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Convert Census table data to Parquet with friendly column names.
    */
   private void convertTableDataToParquet(String cacheDir, String targetPath, String tableName,
-      int year, StorageProvider storageProvider, String censusType) throws IOException {
+      int year, StorageProvider storageProvider, String censusType,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
 
-    // Check if target already exists and is current
-    if (storageProvider.exists(targetPath)) {
-      try {
-        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(targetPath);
-        if (metadata.getSize() > 0) {
-          LOGGER.debug("Parquet file already exists with data, skipping: {}", targetPath);
-          return;
-        }
-      } catch (IOException e) {
-        LOGGER.warn("Could not check existing file: {}", targetPath);
-      }
-    }
+    // Note: Callers check the manifest before calling this method, so we skip the S3 exists check
+    // that was previously here. This avoids expensive S3 roundtrips on every startup.
 
     LOGGER.info("Converting Census data to Parquet: {} for year {}", tableName, year);
 
@@ -915,6 +987,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       transformer.transformToParquet(jsonFilePaths.toArray(new String[0]), targetPath, tableName, year, variableMap, storageProvider, censusType);
 
       LOGGER.info("Successfully converted {} data to Parquet: {}", tableName, targetPath);
+
+      // Mark as converted in manifest so we skip S3 exists checks on future runs
+      CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+      String relativePath = censusType.equals("acs") ? ACS_TYPE : (censusType.equals("decennial") ? DECENNIAL_TYPE : censusType);
+      relativePath = relativePath + "/year=" + year + "/" + tableName + ".parquet";
+      cacheManifest.markParquetConverted(cacheKey, relativePath);
+      LOGGER.debug("Marked {} year {} as converted in manifest", tableName, year);
 
     } catch (Exception e) {
       LOGGER.error("Error converting {} data to Parquet for year {}: {}",
@@ -1173,15 +1252,23 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Convert Economic Census data to Parquet format.
    */
   private void convertEconomicDataToParquet(String cacheDir, String parquetDir, int year,
-      StorageProvider storageProvider) throws IOException {
+      StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
     LOGGER.info("Converting Economic Census data to Parquet for year {}", year);
     String[] economicTableNames = {"economic_census", "county_business_patterns"};
 
     for (String tableName : economicTableNames) {
       try {
+        // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
+        CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+        if (cacheManifest.isParquetConverted(cacheKey)) {
+          LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
+          continue;
+        }
+
         String parquetPath =
             storageProvider.resolvePath(parquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "economic");
+        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "economic", cacheManifest);
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
         LOGGER.error("Error converting {} to Parquet for year {} (requires investigation): {}",
@@ -1194,13 +1281,23 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
    * Convert Population Estimates data to Parquet format.
    */
   private void convertPopulationEstimatesDataToParquet(String cacheDir, String parquetDir, int year,
-      StorageProvider storageProvider) throws IOException {
+      StorageProvider storageProvider,
+      org.apache.calcite.adapter.govdata.geo.GeoCacheManifest cacheManifest) throws IOException {
     LOGGER.info("Converting Population Estimates data to Parquet for year {}", year);
+
+    String tableName = "population_estimates";
+
+    // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
+    CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+    if (cacheManifest.isParquetConverted(cacheKey)) {
+      LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
+      return;
+    }
 
     try {
       String parquetPath =
           storageProvider.resolvePath(parquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
-      convertTableDataToParquet(cacheDir, parquetPath, "population_estimates", year, storageProvider, "population");
+      convertTableDataToParquet(cacheDir, parquetPath, "population_estimates", year, storageProvider, "population", cacheManifest);
       LOGGER.info("Successfully converted population_estimates to Parquet for year {}", year);
     } catch (Exception e) {
       LOGGER.error("Error converting population_estimates to Parquet for year {}: {}",

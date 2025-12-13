@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.format.csv.CsvProjectTableScanRule;
 import org.apache.calcite.adapter.file.rules.AlternatePartitionSelectionRule;
+import org.apache.calcite.adapter.file.rules.CountStarStatisticsRule;
 import org.apache.calcite.adapter.file.rules.HLLCountDistinctRule;
 
 /** Planner rules relating to the File adapter. */
@@ -39,4 +40,10 @@ public abstract class FileRules {
    * selects the most consolidated layout that still supports partition pruning. */
   public static final AlternatePartitionSelectionRule ALTERNATE_PARTITION_SELECTION =
       AlternatePartitionSelectionRule.INSTANCE;
+
+  /** Rule that replaces COUNT(*) with row count from table statistics.
+   * Provides instant results for tables with statistics, avoiding expensive
+   * S3 file listing for hive-partitioned tables with many files. */
+  public static final CountStarStatisticsRule COUNT_STAR_STATISTICS =
+      CountStarStatisticsRule.INSTANCE;
 }

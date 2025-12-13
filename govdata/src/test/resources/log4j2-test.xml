@@ -16,16 +16,30 @@
   ~ limitations under the License.
   -->
 <Configuration>
+  <Properties>
+    <!-- Log file goes to test-logs under working directory (which is build/) -->
+    <Property name="logDir">${sys:user.dir}/test-logs</Property>
+  </Properties>
   <Appenders>
     <Console name="A1" target="SYSTEM_OUT">
       <PatternLayout
           pattern="%d [%t] %-5p %c - %m%n"/>
     </Console>
+    <!-- File appender for persistent test logs -->
+    <RollingFile name="TestLog" fileName="${logDir}/govdata-test.log"
+                 filePattern="${logDir}/govdata-test-%d{yyyy-MM-dd}-%i.log.gz">
+      <PatternLayout pattern="%d [%t] %-5p %c - %m%n"/>
+      <Policies>
+        <SizeBasedTriggeringPolicy size="50MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="3"/>
+    </RollingFile>
   </Appenders>
 
   <Loggers>
     <Root level="INFO">
       <AppenderRef ref="A1"/>
+      <AppenderRef ref="TestLog"/>
     </Root>
     <!-- Silence ERROR logs from CalciteException, SqlValidatorException during tests -->
     <logger name="org.apache.calcite.runtime.CalciteException" level="FATAL"/>

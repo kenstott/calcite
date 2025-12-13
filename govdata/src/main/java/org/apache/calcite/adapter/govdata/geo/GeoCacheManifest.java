@@ -210,12 +210,54 @@ public class GeoCacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Mark data as having API error - stub implementation for GEO adapter.
+   * Mark data as having API error with configurable retry cadence.
+   * Prevents repeated failed requests while allowing automatic retry once TTL expires.
+   *
+   * @param cacheKey The cache key identifying the data
+   * @param errorMessage Full error message from API
+   * @param retryAfterDays Number of days before retrying
    */
   @Override
   public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
-    // GEO adapter does not use the generic table operations framework that triggers API errors
-    LOGGER.warn("markApiError called on GeoCacheManifest - not implemented for GEO adapter");
+    store.markApiError(cacheKey.asString(), cacheKey.getTableName(), errorMessage, retryAfterDays);
+    String truncatedMsg = errorMessage.length() > 100
+        ? errorMessage.substring(0, 100) + "..."
+        : errorMessage;
+    LOGGER.info("Marked {} as API error (retry in {} days): {}",
+        cacheKey.asString(), retryAfterDays, truncatedMsg);
+  }
+
+  /**
+   * Mark data as unavailable (404 or similar) with TTL for retry.
+   * Prevents repeated failed requests while allowing automatic retry once TTL expires.
+   *
+   * @param cacheKey The cache key identifying the data
+   * @param retryAfterDays Number of days before retrying
+   * @param reason Description of why unavailable
+   */
+  public void markUnavailable(CacheKey cacheKey, int retryAfterDays, String reason) {
+    long refreshAfter = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(retryAfterDays);
+    store.upsertEntry(
+        cacheKey.asString(),
+        cacheKey.getTableName(),
+        null,  // No parameters needed for unavailable entries
+        null,  // No file path
+        0,     // No file size
+        refreshAfter,
+        reason
+    );
+    LOGGER.info("Marked {} as unavailable (retry in {} days): {}",
+        cacheKey.asString(), retryAfterDays, reason);
+  }
+
+  /**
+   * Check if data is marked as unavailable and still within retry window.
+   *
+   * @param cacheKey The cache key to check
+   * @return true if data is unavailable and should not be retried yet
+   */
+  public boolean isUnavailable(CacheKey cacheKey) {
+    return store.isUnavailable(cacheKey.asString());
   }
 
   /**

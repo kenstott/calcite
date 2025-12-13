@@ -1165,21 +1165,8 @@ public class DuckDBJdbcSchemaFactory {
                 conn.createStatement().execute(sql);
                 viewCount++;
                 LOGGER.info("✅ SUCCESS: Created DuckDB view: {}.{}", duckdbSchema, tableName);
-
-                // Add diagnostic logging to see what DuckDB interprets from the Parquet file
-                try (Statement debugStmt = conn.createStatement();
-                     ResultSet schemaInfo =
-                       debugStmt.executeQuery(String.format("DESCRIBE \"%s\".\"%s\"", duckdbSchema, tableName))) {
-                  LOGGER.debug("=== DuckDB Schema for {}.{} ===", duckdbSchema, tableName);
-                  while (schemaInfo.next()) {
-                    String colName = schemaInfo.getString("column_name");
-                    String colType = schemaInfo.getString("column_type");
-                    String nullable = schemaInfo.getString("null");
-                    LOGGER.debug("  Column: {} | Type: {} | Nullable: {}", colName, colType, nullable);
-                  }
-                } catch (SQLException debugE) {
-                  LOGGER.warn("Failed to get schema info for table '{}': {}", tableName, debugE.getMessage());
-                }
+                // Note: Removed DESCRIBE debug call - it forces expensive S3 file listing
+                // for hive-partitioned tables with many files (e.g., regional_income with ~20K files)
               } catch (SQLException e) {
               // Check if this is a "No files found" error for glob patterns
               // This is expected when table definitions exist but data hasn't been downloaded yet
