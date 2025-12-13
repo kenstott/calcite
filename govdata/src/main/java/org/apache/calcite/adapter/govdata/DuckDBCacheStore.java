@@ -863,6 +863,110 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
+   * Check if all entries for a table have been converted to parquet.
+   * This is a faster check than areAllEntriesFresh for conversion operations -
+   * if parquet exists, we don't need to re-convert regardless of refresh_after.
+   *
+   * @param tableName The table name prefix to check
+   * @return true if all entries for this table have parquet_converted_at > 0
+   */
+  public boolean areAllParquetConverted(String tableName) {
+    // First check if there are any entries at all
+    String countSql = "SELECT COUNT(*) FROM cache_entries WHERE cache_key LIKE ?";
+    String unconvertedSql = "SELECT COUNT(*) FROM cache_entries "
+        + "WHERE cache_key LIKE ? AND (parquet_converted_at IS NULL OR parquet_converted_at = 0)";
+    try (PreparedStatement countStmt = getConnection().prepareStatement(countSql);
+         PreparedStatement unconvertedStmt = getConnection().prepareStatement(unconvertedSql)) {
+      countStmt.setString(1, tableName + ":%");
+      unconvertedStmt.setString(1, tableName + ":%");
+      try (ResultSet countRs = countStmt.executeQuery()) {
+        if (countRs.next() && countRs.getInt(1) == 0) {
+          return false;  // No entries at all
+        }
+      }
+      try (ResultSet unconvertedRs = unconvertedStmt.executeQuery()) {
+        if (unconvertedRs.next()) {
+          return unconvertedRs.getInt(1) == 0;  // No unconverted entries
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking parquet conversion for {}: {}", tableName, e.getMessage());
+    }
+    return false;  // Assume not converted on error
+  }
+
+  /**
+   * Fast database-level check to determine if a table can be skipped entirely.
+   * This combines multiple checks into a single efficient database query.
+   *
+   * <p>Returns true if:
+   * <ul>
+   *   <li>We have at least expectedCount entries for this table</li>
+   *   <li>All entries have been converted to parquet (parquet_converted_at > 0)</li>
+   *   <li>No entries need raw file refresh (all have cachedAt > 0 and no raw refresh needed)</li>
+   * </ul>
+   *
+   * @param tableName The table name prefix
+   * @param expectedCount The expected number of dimension combinations
+   * @return true if table can be skipped entirely
+   */
+  public boolean isTableFullyCached(String tableName, int expectedCount) {
+    // Single query to get all relevant counts efficiently
+    String sql = "SELECT "
+        + "COUNT(*) as total, "
+        + "SUM(CASE WHEN parquet_converted_at IS NULL OR parquet_converted_at = 0 THEN 1 ELSE 0 END) as unconverted, "
+        + "SUM(CASE WHEN cached_at > parquet_converted_at THEN 1 ELSE 0 END) as needs_reconversion, "
+        + "SUM(CASE WHEN file_size IS NULL OR file_size = 0 THEN 1 ELSE 0 END) as invalid_entries "
+        + "FROM cache_entries WHERE cache_key LIKE ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          int total = rs.getInt("total");
+          int unconverted = rs.getInt("unconverted");
+          int needsReconversion = rs.getInt("needs_reconversion");
+          int invalidEntries = rs.getInt("invalid_entries");
+
+          // Must have at least expected entries
+          if (total < expectedCount) {
+            LOGGER.debug("Table {} has {} entries but expected {}, needs processing",
+                tableName, total, expectedCount);
+            return false;
+          }
+
+          // No entries should have file_size=0 (corrupted/invalid)
+          if (invalidEntries > 0) {
+            LOGGER.debug("Table {} has {} invalid entries (file_size=0), needs re-download",
+                tableName, invalidEntries);
+            return false;
+          }
+
+          // All entries must be converted to parquet
+          if (unconverted > 0) {
+            LOGGER.debug("Table {} has {} unconverted entries, needs processing",
+                tableName, unconverted);
+            return false;
+          }
+
+          // No entries should need reconversion (raw file newer than parquet)
+          if (needsReconversion > 0) {
+            LOGGER.debug("Table {} has {} entries needing reconversion",
+                tableName, needsReconversion);
+            return false;
+          }
+
+          LOGGER.debug("Table {} is fully cached with {} entries (expected {})",
+              tableName, total, expectedCount);
+          return true;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking full cache status for {}: {}", tableName, e.getMessage());
+    }
+    return false;  // Assume not fully cached on error
+  }
+
+  /**
    * Check if any entries for a table have actionable errors.
    *
    * <p>Only returns true if there are entries with errors whose retry period has expired.

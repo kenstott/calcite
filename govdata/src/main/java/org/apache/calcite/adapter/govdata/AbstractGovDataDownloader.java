@@ -4052,19 +4052,37 @@ public abstract class AbstractGovDataDownloader {
     // Compute dimension signature for table-level completion tracking
     String dimensionSignature = computeDimensionSignature(dimensions);
 
-    // Check if table was already fully processed with same dimensions
-    // This allows skipping the entire iteration when nothing has changed
+    // Fast database-level check: can we skip this table entirely?
+    // This uses a single efficient database query instead of iterating through combinations
     if (cacheManifest != null
         && cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
       org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
           (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
 
-      if (econManifest.isTableComplete(tableName, dimensionSignature)
-          && econManifest.areAllEntriesFresh(tableName)
-          && !econManifest.hasTableErrors(tableName)) {
-        LOGGER.info("Table {} is complete with {} combinations - skipping {} (signature: {})",
-            tableName, totalOperations, operationType.getValue(), dimensionSignature);
+      // Use the new fast database check - single query to check all conditions
+      if (econManifest.isTableFullyCached(tableName, totalOperations)) {
+        LOGGER.info("Table {} is fully cached with {} entries - skipping {} (fast DB check)",
+            tableName, totalOperations, operationType.getValue());
         return;
+      }
+
+      // Fallback: Check using table completion metadata if database check failed
+      // (this handles the case where we have more entries than expected but all are valid)
+      if (econManifest.isTableComplete(tableName, dimensionSignature)
+          && !econManifest.hasTableErrors(tableName)) {
+        // For both operations: if parquet exists, we can skip entirely
+        // (parquet implies download was also successful)
+        if (econManifest.areAllParquetConverted(tableName)) {
+          LOGGER.info("Table {} is complete with {} combinations - skipping {} (signature: {})",
+              tableName, totalOperations, operationType.getValue(), dimensionSignature);
+          return;
+        }
+        // For downloads only: also skip if entries are fresh (not yet converted to parquet)
+        if (OperationType.DOWNLOAD.equals(operationType) && econManifest.areAllEntriesFresh(tableName)) {
+          LOGGER.info("Table {} is complete with {} combinations - skipping {} (signature: {})",
+              tableName, totalOperations, operationType.getValue(), dimensionSignature);
+          return;
+        }
       }
     }
 
