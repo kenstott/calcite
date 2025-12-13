@@ -315,7 +315,7 @@ public class DuckDBCacheStore implements AutoCloseable {
    * @return true if entry exists and refresh_after > now
    */
   public boolean isCached(String cacheKey) {
-    String sql = "SELECT refresh_after, download_retry, etag FROM cache_entries WHERE cache_key = ?";
+    String sql = "SELECT refresh_after, download_retry, etag, file_size FROM cache_entries WHERE cache_key = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, cacheKey);
       try (ResultSet rs = stmt.executeQuery()) {
@@ -327,6 +327,12 @@ public class DuckDBCacheStore implements AutoCloseable {
         long downloadRetry = rs.getLong("download_retry");
         String etag = rs.getString("etag");
         long refreshAfter = rs.getLong("refresh_after");
+        long fileSize = rs.getLong("file_size");
+
+        // Invalid entry (file_size=0 means corrupted/incomplete) - needs re-download
+        if (fileSize <= 0) {
+          return false;
+        }
 
         // Check API error retry restriction
         if (downloadRetry > 0 && now < downloadRetry) {
@@ -430,7 +436,7 @@ public class DuckDBCacheStore implements AutoCloseable {
    * @return true if parquet_converted_at > 0 and parquet is up-to-date
    */
   public boolean isParquetConverted(String cacheKey) {
-    String sql = "SELECT parquet_converted_at, cached_at FROM cache_entries WHERE cache_key = ?";
+    String sql = "SELECT parquet_converted_at, cached_at, file_size FROM cache_entries WHERE cache_key = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, cacheKey);
       try (ResultSet rs = stmt.executeQuery()) {
@@ -439,6 +445,12 @@ public class DuckDBCacheStore implements AutoCloseable {
         }
         long parquetConvertedAt = rs.getLong("parquet_converted_at");
         long cachedAt = rs.getLong("cached_at");
+        long fileSize = rs.getLong("file_size");
+
+        // Invalid entry (file_size=0 means corrupted/incomplete) - not converted
+        if (fileSize <= 0) {
+          return false;
+        }
 
         // Not converted if timestamp is 0
         if (parquetConvertedAt == 0) {
