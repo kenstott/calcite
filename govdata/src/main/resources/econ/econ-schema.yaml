@@ -1425,6 +1425,10 @@ partitionedTables:
         column: LineCode
 
     columns:
+      - name: GeoFips
+        type: string
+        nullable: true
+        comment: FIPS code for the geographic area (e.g., '01000' for Alabama)
       - name: GeoName
         type: string
         nullable: true
