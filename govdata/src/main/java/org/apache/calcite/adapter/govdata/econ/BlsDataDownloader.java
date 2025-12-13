@@ -1547,6 +1547,9 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
           // Use metadata-driven CSV→Parquet conversion
           convertCsvToParquet(tableName, vars);
+
+          // Mark as converted in manifest so isTableFullyCached() works on next run
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
           LOGGER.info("Completed metro wages for year {} {}", vars.get("year"), vars.get("frequency"));
         },
         OperationType.CONVERSION);
