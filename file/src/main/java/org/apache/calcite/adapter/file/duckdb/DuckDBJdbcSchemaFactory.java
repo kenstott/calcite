@@ -256,11 +256,12 @@ public class DuckDBJdbcSchemaFactory {
         // Configure S3 credentials - check operands first, then environment variables
 
         // Try to get from FileSchema's storage config first
+        // Uses same key names as S3StorageProvider: accessKeyId, secretAccessKey, region
         if (fileSchema != null && fileSchema.getStorageConfig() != null) {
           Map<String, Object> storageConfig = fileSchema.getStorageConfig();
-          s3Region = (String) storageConfig.get("awsRegion");
-          s3AccessKey = (String) storageConfig.get("awsAccessKeyId");
-          s3SecretKey = (String) storageConfig.get("awsSecretAccessKey");
+          s3Region = (String) storageConfig.get("region");
+          s3AccessKey = (String) storageConfig.get("accessKeyId");
+          s3SecretKey = (String) storageConfig.get("secretAccessKey");
           s3Endpoint = (String) storageConfig.get("endpoint");
           if (s3AccessKey != null && s3SecretKey != null) {
             LOGGER.info("Using S3 credentials from schema operands");
