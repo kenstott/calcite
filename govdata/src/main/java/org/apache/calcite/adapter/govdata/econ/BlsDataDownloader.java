@@ -982,7 +982,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Connection prefetchDb = null;
     PrefetchHelper prefetchHelper;
     try {
-      prefetchDb = getDuckDBConnection();
+      prefetchDb = getDuckDBConnection(storageProvider);
 
       // Load table metadata and extract partition keys
       Map<String, Object> metadata = loadTableMetadata(tableName);
@@ -2151,7 +2151,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         "parquetPath", fullParquetPath);
 
     executeDuckDBSqlWithParams(
-        loadSqlResource("sql/qcew_county_to_parquet.sql"),
+        loadSqlResource("/sql/qcew_county_to_parquet.sql"),
         params,
         "QCEW county CSV to Parquet conversion");
 
@@ -2249,7 +2249,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             "parquetPath", fullParquetPath));
 
     // Execute the SQL
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
       stmt.execute(sql);
       LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
@@ -2298,7 +2298,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             "parquetPath", fullParquetPath));
 
     // Execute the SQL
-    try (Connection conn = getDuckDBConnection();
+    try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
       stmt.execute(sql);
       LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
