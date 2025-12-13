@@ -425,33 +425,50 @@ public class ParquetReorganizer {
    * Gets distinct values for a partition column by listing directories.
    * This is much faster than querying parquet files since values are in directory names.
    *
-   * <p>For pattern "type=income/year=*\/geo_fips_set=*\/*.parquet" and column "geo_fips_set",
+   * <p>For pattern "type=income/year=STAR/geo_fips_set=STAR/STAR.parquet" and column "geo_fips_set",
    * lists directories and extracts values like STATE, COUNTY from "geo_fips_set=STATE".
    */
   private List<String> getDistinctPartitionValues(Connection conn, String sourceGlobTemplate,
       String partitionColumn) {
     java.util.Set<String> values = new java.util.TreeSet<String>();
 
-    // Build directory pattern to list (up to and including the partition column)
-    // E.g., "type=income/year=*/geo_fips_set=*/*.parquet" -> "type=income/"
+    // Build directory pattern to list
+    // E.g., "type=income/year=*/geo_fips_set=*/*.parquet" -> need to find geo_fips_set values
     String columnPattern = partitionColumn + "=";
-    String dirPattern = sourceGlobTemplate;
 
     // Find where this partition column appears in the pattern
-    int colIdx = dirPattern.indexOf(columnPattern);
+    int colIdx = sourceGlobTemplate.indexOf(columnPattern);
     if (colIdx < 0) {
       LOGGER.warn("Partition column '{}' not found in pattern '{}'", partitionColumn, sourceGlobTemplate);
       return new ArrayList<String>(values);
     }
 
     // Get the prefix up to but not including this partition level
-    String prefix = dirPattern.substring(0, colIdx);
+    String prefix = sourceGlobTemplate.substring(0, colIdx);
     if (prefix.endsWith("/")) {
       prefix = prefix.substring(0, prefix.length() - 1);
     }
 
-    String fullPrefix = storageProvider.resolvePath(baseDirectory, prefix);
-    LOGGER.debug("Listing directories under '{}' to find {} values", fullPrefix, partitionColumn);
+    // Check if prefix contains wildcards (e.g., "type=income/year=*")
+    // If so, we need to list from a higher level that has no wildcards
+    String listPrefix = prefix;
+    if (prefix.contains("*")) {
+      // Find the last path segment before any wildcard
+      int wildcardIdx = prefix.indexOf("*");
+      int lastSlashBeforeWildcard = prefix.lastIndexOf("/", wildcardIdx);
+      if (lastSlashBeforeWildcard > 0) {
+        listPrefix = prefix.substring(0, lastSlashBeforeWildcard);
+      } else {
+        // Wildcard is in the first segment, list from base
+        listPrefix = "";
+      }
+    }
+
+    String fullPrefix = listPrefix.isEmpty()
+        ? baseDirectory
+        : storageProvider.resolvePath(baseDirectory, listPrefix);
+    LOGGER.debug("Listing directories under '{}' to find {} values (prefix had wildcards: {})",
+        fullPrefix, partitionColumn, prefix.contains("*"));
 
     try {
       // List files/directories under the prefix

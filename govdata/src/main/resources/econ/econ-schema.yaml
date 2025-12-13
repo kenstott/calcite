@@ -1593,6 +1593,7 @@ partitionedTables:
         batch_partition_columns:
           - year
           - geo_fips_set
+        threads: 4
 
       # Consolidated by year - one file per year with all states/indicators
       - name: regional_income_by_year
@@ -1606,6 +1607,7 @@ partitionedTables:
         batch_partition_columns:
           - year
           - geo_fips_set
+        threads: 4
 
       # Consolidated by indicator table - one file per BEA table
       - name: regional_income_by_indicator
@@ -1616,6 +1618,7 @@ partitionedTables:
             - name: tablename
               type: VARCHAR
         # Batch by year and geo_fips_set for large datasets
+        threads: 4
         batch_partition_columns:
           - year
           - geo_fips_set
