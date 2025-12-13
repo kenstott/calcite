@@ -2439,9 +2439,94 @@ public abstract class AbstractGovDataDownloader {
    * @throws java.sql.SQLException if connection or extension loading fails
    */
   public static Connection getDuckDBConnection() throws java.sql.SQLException {
+    return getDuckDBConnection(null);
+  }
+
+  /**
+   * Creates a DuckDB connection with S3 access configured from a StorageProvider.
+   *
+   * <p>If the storage provider is an S3StorageProvider with credentials,
+   * those credentials will be used to configure DuckDB's S3 access.</p>
+   *
+   * @param storageProvider Storage provider to get S3 config from (may be null)
+   * @return DuckDB connection with extensions and S3 access configured
+   * @throws java.sql.SQLException if connection fails
+   */
+  public static Connection getDuckDBConnection(StorageProvider storageProvider)
+      throws java.sql.SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     loadConversionExtensions(conn);
+    configureS3Access(conn, storageProvider);
     return conn;
+  }
+
+  /**
+   * Configures S3 access credentials for DuckDB connection.
+   *
+   * <p>Credentials are obtained from the StorageProvider's S3 config if available.
+   * This allows DuckDB to read parquet files directly from S3.</p>
+   *
+   * @param conn DuckDB connection to configure
+   * @param storageProvider Storage provider to get S3 config from (may be null)
+   */
+  private static void configureS3Access(Connection conn, StorageProvider storageProvider) {
+    try {
+      // Install and load httpfs extension for S3 support
+      conn.createStatement().execute("INSTALL httpfs");
+      conn.createStatement().execute("LOAD httpfs");
+
+      // Get S3 config from storage provider
+      Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
+
+      String s3AccessKey = s3Config != null ? s3Config.get("accessKeyId") : null;
+      String s3SecretKey = s3Config != null ? s3Config.get("secretAccessKey") : null;
+      String s3Region = s3Config != null ? s3Config.get("region") : null;
+      String s3Endpoint = s3Config != null ? s3Config.get("endpoint") : null;
+
+      if (s3AccessKey != null && s3SecretKey != null) {
+        // Process endpoint to extract host:port and determine SSL
+        String endpointHostPort = null;
+        boolean useSSL = true;
+        if (s3Endpoint != null) {
+          if (s3Endpoint.startsWith("http://")) {
+            endpointHostPort = s3Endpoint.substring("http://".length());
+            useSSL = false;
+          } else if (s3Endpoint.startsWith("https://")) {
+            endpointHostPort = s3Endpoint.substring("https://".length());
+            useSSL = true;
+          } else {
+            endpointHostPort = s3Endpoint;
+          }
+        }
+
+        // Use CREATE SECRET for S3 credentials (modern DuckDB approach)
+        StringBuilder secretSQL = new StringBuilder();
+        secretSQL.append("CREATE OR REPLACE SECRET govdata_s3_secret (");
+        secretSQL.append("TYPE s3, ");
+        secretSQL.append("PROVIDER config, ");
+        secretSQL.append("KEY_ID '").append(s3AccessKey).append("', ");
+        secretSQL.append("SECRET '").append(s3SecretKey).append("'");
+
+        if (s3Region != null) {
+          secretSQL.append(", REGION '").append(s3Region).append("'");
+        }
+
+        if (endpointHostPort != null) {
+          secretSQL.append(", ENDPOINT '").append(endpointHostPort).append("'");
+          secretSQL.append(", URL_STYLE 'path'");
+          secretSQL.append(", USE_SSL ").append(useSSL);
+        }
+
+        secretSQL.append(")");
+
+        conn.createStatement().execute(secretSQL.toString());
+        LOGGER.debug("Configured DuckDB S3 access for endpoint: {}",
+            endpointHostPort != null ? endpointHostPort : "default AWS");
+      }
+    } catch (java.sql.SQLException e) {
+      LOGGER.warn("Failed to configure S3 access for DuckDB: {} - S3 URIs may not work",
+          e.getMessage());
+    }
   }
 
   /**
