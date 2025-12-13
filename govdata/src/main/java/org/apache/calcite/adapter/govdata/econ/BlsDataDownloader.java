@@ -138,8 +138,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
   }
 
-  private final List<String> regionCodesList;
-  private final Map<String, MetroGeography> metroGeographiesMap;
+  // Lazily loaded from parquet catalogs - populated after downloadReferenceData() is called
+  private volatile List<String> regionCodesList;
+  private volatile Map<String, MetroGeography> metroGeographiesMap;
+  private volatile boolean catalogsLoaded = false;
 
   /**
    * Metro geography data loaded from catalog.
@@ -311,32 +313,46 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest, startYear, endYear);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
+    // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them
+  }
 
-    // Load geography and sector catalogs in constructor (fail fast if missing)
-    // This replaces hardcoded STATE_FIPS_MAP, CENSUS_REGIONS, METRO_*_CODES, NAICS_SUPERSECTORS
-    List<String> tempStateFips;
-    List<String> tempRegionCodes;
-    Map<String, MetroGeography> tempMetros;
-    List<String> tempNaics;
-
+  /**
+   * Ensures catalogs are loaded from parquet files.
+   * Called lazily when catalog data is first needed.
+   * By this point, downloadReferenceData() should have already generated the parquet files.
+   */
+  private synchronized void ensureCatalogsLoaded() {
+    if (catalogsLoaded) {
+      return;
+    }
     try {
-      tempStateFips = loadStateFipsFromCatalog();
-      tempRegionCodes = loadRegionCodesFromCatalog();
-      tempMetros = loadMetroGeographiesFromCatalog();
-      tempNaics = loadNaicsSectorsFromCatalog();
-
-      LOGGER.info("Loaded BLS catalogs: {} states, {} regions, {} metros, {} NAICS sectors",
-          tempStateFips.size(), tempRegionCodes.size(), tempMetros.size(), tempNaics.size());
+      this.regionCodesList = loadRegionCodesFromCatalog();
+      this.metroGeographiesMap = loadMetroGeographiesFromCatalog();
+      this.catalogsLoaded = true;
+      LOGGER.info("Loaded BLS catalogs: {} regions, {} metros",
+          regionCodesList.size(), metroGeographiesMap.size());
     } catch (Exception e) {
       throw new RuntimeException("Failed to load BLS reference catalogs from parquet files. "
-          + "This typically indicates the reference data hasn't been generated yet or cache is corrupted. "
-          + "To fix: remove .aperio cache directory and restart the application to regenerate reference data. "
+          + "This typically indicates the reference data hasn't been generated yet. "
+          + "Ensure downloadReferenceData() is called before accessing catalog data. "
           + "Original error: " + e.getMessage(), e);
     }
+  }
 
-    // Catalog-loaded geography and sector lists (replaces hardcoded maps)
-    this.regionCodesList = tempRegionCodes;
-    this.metroGeographiesMap = tempMetros;
+  /**
+   * Gets region codes list, loading from parquet if needed.
+   */
+  private List<String> getRegionCodesList() {
+    ensureCatalogsLoaded();
+    return regionCodesList;
+  }
+
+  /**
+   * Gets metro geographies map, loading from parquet if needed.
+   */
+  private Map<String, MetroGeography> getMetroGeographiesMap() {
+    ensureCatalogsLoaded();
+    return metroGeographiesMap;
   }
 
   // BLS constants loaded from JSON resource
@@ -465,8 +481,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     }
 
     List<int[]> ranges = new ArrayList<>();
-    int rangeStart = years.getFirst();
-    int rangeEnd = years.getFirst();
+    int rangeStart = years.get(0);
+    int rangeEnd = years.get(0);
 
     for (int i = 1; i < years.size(); i++) {
       int year = years.get(i);
@@ -1090,11 +1106,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String tableName = BLS.tableNames.regionalCpi;
 
     LOGGER.debug("Processing regional CPI for {} Census regions for years {}-{}",
-        regionCodesList.size(), startYear, endYear);
+        getRegionCodesList().size(), startYear, endYear);
 
     // Build list of series IDs from catalog
     List<String> seriesIds = new ArrayList<>();
-    for (String regionCode : regionCodesList) {
+    for (String regionCode : getRegionCodesList()) {
       seriesIds.add(Series.getRegionalCpiSeriesId(regionCode));
     }
 
@@ -2661,7 +2677,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       String query =
           String.format("SELECT state_fips FROM read_parquet('%s') ORDER BY state_fips", fullPath);
 
@@ -2694,7 +2710,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       String query =
           String.format("SELECT region_code FROM read_parquet('%s') ORDER BY region_code", fullPath);
 
@@ -2727,7 +2743,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
     String fullPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       String query =
           String.format("SELECT metro_publication_code, geo_name, metro_cpi_area_code, metro_bls_area_code "
           + "FROM read_parquet('%s') ORDER BY metro_publication_code", fullPath);
@@ -2764,7 +2780,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // No variables needed - non-partitioned reference table
     String fullPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
       String query =
           String.format("SELECT supersector_code FROM read_parquet('%s') ORDER BY supersector_code", fullPath);
 
@@ -2828,7 +2844,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     Map<String, Object> metadata = loadTableMetadata("reference_bls_geographies");
     String pattern = (String) metadata.get("pattern");
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
         // Serialize BLS constants to JSON strings for DuckDB
         String stateFipsJson = MAPPER.writeValueAsString(BLS.stateFipsCodes);
         String censusRegionsJson = MAPPER.writeValueAsString(BLS.censusRegions);
@@ -2910,24 +2926,32 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       return;
     }
 
-    try (Connection duckdb = DriverManager.getConnection("jdbc:duckdb:")) {
+    try (Connection duckdb = getDuckDBConnection(storageProvider)) {
         // Serialize NAICS supersectors to JSON string for DuckDB
         String naicsJson = MAPPER.writeValueAsString(BLS.naicsSupersectors);
 
-        // Load and execute SQL that creates table and loads data from JSON string
-        executeWithParams(duckdb,
-            loadSqlResource("/sql/bls/load_naics_from_json.sql"),
+        // Load SQL template and substitute JSON parameter (can't use PreparedStatement for json_each)
+        String loadSql =
+            substituteSqlParameters(loadSqlResource("/sql/bls/load_naics_from_json.sql"),
             ImmutableMap.of("naicsSupersectorsJson", naicsJson));
 
-        // Load SQL template and execute with parameters
-        executeWithParams(duckdb,
-            loadSqlResource("/sql/bls/generate_naics_sectors.sql"),
-            ImmutableMap.of("parquetPath", parquetPath));
+        // Execute SQL with direct substitution
+        try (java.sql.Statement stmt = duckdb.createStatement()) {
+          stmt.execute(loadSql);
+        }
 
+        // Generate parquet file using direct substitution (COPY TO requires literal paths)
+        String generateSql =
+            substituteSqlParameters(loadSqlResource("/sql/bls/generate_naics_sectors.sql"),
+            ImmutableMap.of("parquetPath", parquetPath));
+        try (java.sql.Statement stmt = duckdb.createStatement()) {
+          stmt.execute(generateSql);
+        }
+
+        // Count records
         long count = 0;
-        try (ResultSet rs =
-            queryWithParams(duckdb, loadSqlResource("/sql/bls/count_naics_sectors.sql"),
-            ImmutableMap.of())) {
+        try (java.sql.Statement stmt = duckdb.createStatement();
+             ResultSet rs = stmt.executeQuery(loadSqlResource("/sql/bls/count_naics_sectors.sql"))) {
           if (rs.next()) {
             count = rs.getLong(1);
           }
