@@ -1570,7 +1570,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
               supportsPort = true;
             }
           }
-          // MSA/MIC/DIV/CSA: 5-digit codes >= 10000 or detect from description
+          // MSA/MIC detection from description
+          // NOTE: DIV and CSA are NOT detected from descriptions because the BEA API
+          // returns these in the geo list but doesn't support querying with GeoFips=DIV/CSA.
+          // Metropolitan Divisions and CSAs are included in MSA query results instead.
           if (desc != null) {
             if (desc.contains("Metropolitan Statistical Area")) {
               supportsMsa = true;
@@ -1578,12 +1581,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
             if (desc.contains("Micropolitan Statistical Area")) {
               supportsMic = true;
             }
-            if (desc.contains("Metropolitan Division")) {
-              supportsDiv = true;
-            }
-            if (desc.contains("Combined Statistical Area")) {
-              supportsCsa = true;
-            }
+            // DIV and CSA intentionally NOT detected - they cause API errors
+            // when used as GeoFips parameter on most tables
           }
         }
       }
