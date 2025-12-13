@@ -48,6 +48,20 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
     return "treasury_yields";
   }
 
+  @Override
+  public void downloadAll(int startYear, int endYear) {
+    LOGGER.info("Downloading Treasury data for years {}-{}", startYear, endYear);
+    downloadTreasuryYields(startYear, endYear);
+    downloadFederalDebt(startYear, endYear);
+  }
+
+  @Override
+  public void convertAll(int startYear, int endYear) {
+    LOGGER.info("Converting Treasury data for years {}-{}", startYear, endYear);
+    convertTreasuryYields(startYear, endYear);
+    convertFederalDebt(startYear, endYear);
+  }
+
   /**
    * Downloads daily treasury yield curve data using metadata-driven pattern.
    * Uses IterationDimension pattern for declarative multi-dimensional iteration.
@@ -136,11 +150,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           return null;
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          // Execute conversion
-          convertCachedJsonToParquet(tableName, vars);
+          // Execute conversion - only mark as converted if successful
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          } else {
+            LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
+                tableName, cacheKey);
+          }
         },
         OperationType.CONVERSION);
   }
@@ -165,11 +183,15 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           return null;
         },
         (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          // Execute conversion
-          convertCachedJsonToParquet(tableName, vars);
+          // Execute conversion - only mark as converted if successful
+          boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-          // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          if (converted) {
+            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          } else {
+            LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
+                tableName, cacheKey);
+          }
         },
         OperationType.CONVERSION);
   }

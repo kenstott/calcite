@@ -1128,7 +1128,7 @@ partitionedTables:
         page[size]:
           type: constant
           value: "10000"
-      cachePattern: "type=timeseries/frequency=daily/year={year}/treasury_yields.json"
+      cachePattern: "type=timeseries/frequency=daily/year=*/treasury_yields.json"
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
@@ -1176,7 +1176,7 @@ partitionedTables:
         page[size]:
           type: constant
           value: "10000"
-      cachePattern: "type=timeseries/frequency=daily/year={year}/federal_debt.json"
+      cachePattern: "type=timeseries/frequency=daily/year=*/federal_debt.json"
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
