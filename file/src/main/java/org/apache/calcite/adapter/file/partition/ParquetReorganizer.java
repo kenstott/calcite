@@ -294,10 +294,13 @@ public class ParquetReorganizer {
           config.getPartitionColumns(), config.getColumnMappings(), "year_" + year + "_{i}");
 
       LOGGER.debug("Phase 1 SQL (year={}):\n{}", year, sql);
+      LOGGER.info("  Starting year {}/{}: {}", year - startYear + 1, endYear - startYear + 1, year);
 
       try (Statement stmt = conn.createStatement()) {
+        long startTime = System.currentTimeMillis();
         stmt.execute(sql);
-        LOGGER.info("  Processed year {} for {}", year, config.getName());
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("    Completed year {} in {}ms for {}", year, elapsed, config.getName());
       } catch (java.sql.SQLException e) {
         LOGGER.warn("  Skipped year {} (no data or error): {}", year, e.getMessage());
       }
@@ -336,13 +339,14 @@ public class ParquetReorganizer {
           config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
 
       LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
+      LOGGER.info("  Starting batch {}/{}: {}", processed + 1, batchCombinations.size(), batch);
 
       try (Statement stmt = conn.createStatement()) {
+        long startTime = System.currentTimeMillis();
         stmt.execute(sql);
+        long elapsed = System.currentTimeMillis() - startTime;
         processed++;
-        if (processed % 10 == 0) {
-          LOGGER.info("  Processed {}/{} batches...", processed, batchCombinations.size());
-        }
+        LOGGER.info("    Completed batch {} in {}ms", batch, elapsed);
       } catch (java.sql.SQLException e) {
         // Log but continue - some combinations may not have data
         LOGGER.debug("  Skipped batch {} (no data): {}", batch, e.getMessage());
