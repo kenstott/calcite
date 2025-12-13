@@ -436,7 +436,10 @@ public class DuckDBCacheStore implements AutoCloseable {
    * @return true if parquet_converted_at > 0 and parquet is up-to-date
    */
   public boolean isParquetConverted(String cacheKey) {
-    String sql = "SELECT parquet_converted_at, cached_at, file_size FROM cache_entries WHERE cache_key = ?";
+    // Note: Don't check file_size here. This method answers "is parquet converted?"
+    // not "is source JSON valid?". Parquet-only entries (from self-healing) have
+    // file_size=0 but are legitimately converted.
+    String sql = "SELECT parquet_converted_at, cached_at FROM cache_entries WHERE cache_key = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, cacheKey);
       try (ResultSet rs = stmt.executeQuery()) {
@@ -445,12 +448,6 @@ public class DuckDBCacheStore implements AutoCloseable {
         }
         long parquetConvertedAt = rs.getLong("parquet_converted_at");
         long cachedAt = rs.getLong("cached_at");
-        long fileSize = rs.getLong("file_size");
-
-        // Invalid entry (file_size=0 means corrupted/incomplete) - not converted
-        if (fileSize <= 0) {
-          return false;
-        }
 
         // Not converted if timestamp is 0
         if (parquetConvertedAt == 0) {
