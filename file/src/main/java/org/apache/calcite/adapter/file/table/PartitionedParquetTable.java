@@ -198,6 +198,12 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     // Eagerly initialize the row type to ensure it's available for SQL validation
     // This is critical for JOIN queries where the validator needs to resolve column references
     initializeRowType();
+
+    // Register in PartitionInfoRegistry so JDBC/DuckDB rules can look up partition info
+    if (schemaName != null && tableName != null && !partitionColumns.isEmpty()) {
+      org.apache.calcite.adapter.file.partition.PartitionInfoRegistry.getInstance()
+          .register(schemaName, tableName, this);
+    }
   }
 
   /**
@@ -825,7 +831,13 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       }
 
       // Convert expectedValue to string for comparison
-      String expectedStr = expectedValue.toString();
+      // Handle NlsString (which has charset prefix like _ISO-8859-1'value')
+      String expectedStr;
+      if (expectedValue instanceof org.apache.calcite.util.NlsString) {
+        expectedStr = ((org.apache.calcite.util.NlsString) expectedValue).getValue();
+      } else {
+        expectedStr = expectedValue.toString();
+      }
 
       if (!fileValue.equals(expectedStr)) {
         return false;  // Value doesn't match

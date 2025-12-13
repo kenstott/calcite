@@ -21,11 +21,14 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
+import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.materialize.MaterializationService;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.model.ModelHandler;
+import org.apache.calcite.plan.RelOptPlanner;
+import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -40,6 +43,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Factory that creates a {@link FileSchema}.
@@ -53,6 +57,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
   static {
     LOGGER.debug("[FileSchemaFactory] Class loaded and static initializer running");
+
+    // Register PartitionDistinctRule globally via Hook.PLANNER
+    // This enables partition column optimization for PartitionedParquetTable
+    // which doesn't implement TranslatableTable
+    if (!"false".equals(System.getProperty("calcite.file.partition.distinct.enabled"))) {
+      @SuppressWarnings("deprecation")
+      Hook.Closeable ignored = Hook.PLANNER.add((Consumer<RelOptPlanner>) planner ->
+          planner.addRule(PartitionDistinctRule.INSTANCE));
+      LOGGER.debug("[FileSchemaFactory] Registered PartitionDistinctRule via Hook.PLANNER");
+    }
   }
 
   /** Public singleton, per factory contract. */

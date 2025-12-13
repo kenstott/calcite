@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.file.rules;
 
 import org.apache.calcite.adapter.enumerable.EnumerableConvention;
 import org.apache.calcite.adapter.enumerable.EnumerableValues;
+import org.apache.calcite.adapter.file.partition.PartitionInfoRegistry;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -72,30 +73,50 @@ public class PartitionDistinctRule extends RelRule<PartitionDistinctRule.Config>
   }
 
   @Override public void onMatch(RelOptRuleCall call) {
+    LOGGER.debug("[PartitionDistinct] onMatch called");
     final Aggregate aggregate = call.rel(0);
     final RelNode input = aggregate.getInput();
 
     // Must have GROUP BY (which is how DISTINCT is represented)
     ImmutableBitSet groupSet = aggregate.getGroupSet();
     if (groupSet.isEmpty()) {
+      LOGGER.debug("[PartitionDistinct] Skipping: empty group set");
       return;
     }
 
     // Must not have any aggregate functions (pure DISTINCT/GROUP BY)
     if (!aggregate.getAggCallList().isEmpty()) {
+      LOGGER.debug("[PartitionDistinct] Skipping: has aggregate functions");
       return;
     }
 
     // Find the underlying TableScan
     TableScan tableScan = findTableScan(input);
     if (tableScan == null) {
+      LOGGER.debug("[PartitionDistinct] Skipping: no TableScan found in input: {}", input.getClass().getName());
       return;
     }
 
-    // Must be a PartitionedParquetTable
+    // Try to get PartitionedParquetTable - either directly or via registry
     RelOptTable relOptTable = tableScan.getTable();
     PartitionedParquetTable table = relOptTable.unwrap(PartitionedParquetTable.class);
+
+    // Extract schema/table names for registry lookup
+    List<String> qualifiedName = relOptTable.getQualifiedName();
+    String schemaName = qualifiedName.size() >= 2 ? qualifiedName.get(qualifiedName.size() - 2) : null;
+    String tableName = qualifiedName.get(qualifiedName.size() - 1);
+
+    // If direct unwrap failed, try the registry (for JDBC/DuckDB tables)
+    if (table == null && schemaName != null) {
+      table = PartitionInfoRegistry.getInstance().lookup(schemaName, tableName);
+      if (table != null) {
+        LOGGER.debug("[PartitionDistinct] Found partition info via registry for {}.{}", schemaName, tableName);
+      }
+    }
+
     if (table == null) {
+      LOGGER.debug("[PartitionDistinct] Skipping: no partition info for table {}.{}, got: {}",
+          schemaName, tableName, relOptTable.unwrap(Object.class).getClass().getName());
       return;
     }
 
