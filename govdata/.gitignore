@@ -55,3 +55,4 @@ build/test-data/
 sec-cache/
 *.parquet.crc
 _SUCCESS*.env*
+*.duckdb*
