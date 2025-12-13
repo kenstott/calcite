@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.CacheManifestQueryHelper;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -497,233 +498,133 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Downloads regional income data using metadata-driven pattern.
-   * Loads valid LineCodes from the reference_regional_linecodes catalog.
-   * Automatically filters tables by valid year ranges based on industry classification
-   * (SIC vs NAICS).
+   * Downloads regional income data using valid combinations only.
+   * Builds the set of valid table/year/geo/linecode combinations once,
+   * then iterates only over those combinations.
    *
-   * @param startYear     First year to download
-   * @param endYear       Last year to download
+   * @param startYear First year to download
+   * @param endYear   Last year to download
    */
   public void downloadRegionalIncomeMetadata(int startYear, int endYear) {
-
     String tableName = "regional_income";
 
-    // Load LineCodes from reference_regional_linecodes catalog
-    Map<String, Set<String>> lineCodeCatalog;
-    try {
-      lineCodeCatalog = loadRegionalLineCodeCatalog();
-      if (lineCodeCatalog.isEmpty()) {
-        LOGGER.error("Regional LineCode catalog is empty. Cannot download regional_income data. " +
-            "Ensure reference_regional_linecodes has been downloaded and converted first.");
-        return;
-      }
-    } catch (IOException e) {
-      LOGGER.error("Failed to load Regional LineCode catalog: {}. Cannot download regional_income data.",
-          e.getMessage());
+    // Build valid combinations using shared helper
+    List<RegionalCombination> validCombinations = buildValidRegionalCombinations(startYear, endYear);
+    if (validCombinations.isEmpty()) {
+      LOGGER.warn("No valid regional income combinations to download");
       return;
     }
 
-    Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
+    LOGGER.info("Starting regional income download: {} valid combinations", validCombinations.size());
 
-    // Build sets of valid dimensions for iteration
-    // Filter based on table type and collect unique values for each dimension
-    Set<String> validTableNames = new HashSet<>();
-    Set<String> allLineCodes = new HashSet<>();
-    Set<String> allGeoFipsCodes = new HashSet<>();
-    // Track valid combinations for filtering in the operation lambda
-    Set<String> validCombinations = new HashSet<>();
+    // Filter out already-cached combinations
+    List<RegionalCombination> uncached = filterUncachedCombinations(tableName, validCombinations, OperationType.DOWNLOAD);
+    LOGGER.info("Regional income download: {} uncached of {} valid combinations",
+        uncached.size(), validCombinations.size());
 
-    for (String tableNameKey : tablenames.keySet()) {
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
-      if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("Regional income download: No LineCodes available for table {} in catalog, skipping table",
-            tableNameKey);
-        continue;
-      }
+    if (uncached.isEmpty()) {
+      LOGGER.info("All {} regional income combinations already cached", validCombinations.size());
+      return;
+    }
 
-      // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
-      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
+    // Process uncached combinations
+    int processed = 0;
+    int errors = 0;
+    for (RegionalCombination combo : uncached) {
+      try {
+        Map<String, String> vars = combo.toVariables();
+        vars.put("type", tableName);
 
-      // Track unique dimension values
-      validTableNames.add(tableNameKey);
-      allLineCodes.addAll(lineCodesForTable);
-      allGeoFipsCodes.addAll(validGeoFipsForTable);
+        // Download to cache
+        DownloadResult result = executeDownload(tableName, vars);
 
-      // Build valid combinations lookup for filtering during iteration
-      for (String lineCode : lineCodesForTable) {
-        for (String geoFipsCode : validGeoFipsForTable) {
-          validCombinations.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
+        // Build cache key
+        CacheKey cacheKey = new CacheKey(tableName, vars);
+        String jsonPath = resolveJsonPath(loadTableMetadata(tableName).get("pattern").toString(), vars);
+
+        cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
+            getCacheExpiryForYear(combo.year), getCachePolicyForYear(combo.year));
+
+        processed++;
+        if (processed % 1000 == 0) {
+          LOGGER.info("Regional income download progress: {}/{} ({} errors)",
+              processed, uncached.size(), errors);
         }
+      } catch (Exception e) {
+        errors++;
+        LOGGER.warn("Failed to download regional income {}: {}",
+            combo.toCacheKeyPart(), e.getMessage());
       }
     }
 
-    // Convert to lists for dimension provider
-    List<String> tableNamesList = new ArrayList<>(validTableNames);
-    List<String> lineCodesList = new ArrayList<>(allLineCodes);
-    List<String> geoFipsCodesList = new ArrayList<>(allGeoFipsCodes);
-
-    LOGGER.info("Regional income download: {} tables × {} line codes × {} geo sets × {} years (filtering invalid combinations during iteration)",
-        tableNamesList.size(), lineCodesList.size(), geoFipsCodesList.size(), endYear - startYear + 1);
-
-    // Use optimized iteration with DuckDB-based cache filtering
-    // Pattern: type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet
-    iterateTableOperationsOptimized(
-        tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-          case "type":
-            return List.of(tableName);
-          case "year":
-            return yearRange(startYear, endYear);
-          case "geo_fips_set":
-            return geoFipsCodesList;
-          case "tablename":
-            return tableNamesList;
-          case "line_code":
-            return lineCodesList;
-          default:
-            return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          int year = extractYear(vars);
-          String tableNameKey = vars.get("tablename");
-          String lineCode = vars.get("line_code");
-          String geoFipsCode = vars.get("geo_fips_set");
-
-          // Skip invalid table-lineCode-geoFips combinations
-          String combo = tableNameKey + ":" + lineCode + ":" + geoFipsCode;
-          if (!validCombinations.contains(combo)) {
-            return;  // Skip invalid combination
-          }
-
-          // Skip this combination if table is not valid for this year
-          if (!isTableValidForYear(tableNameKey, year)) {
-            return;  // Skip download
-          }
-
-          // Download to cache
-          DownloadResult result = executeDownload(tableName, vars);
-
-          cacheManifest.markCached(cacheKey, jsonPath, result.fileSize,
-              getCacheExpiryForYear(year), getCachePolicyForYear(year));
-        },
-        OperationType.DOWNLOAD);
+    LOGGER.info("Regional income download complete: {} processed, {} errors", processed, errors);
   }
 
   /**
-   * Converts regional income data using metadata-driven pattern.
-   * Loads valid LineCodes from the reference_regional_linecodes catalog.
-   * Automatically filters tables by valid year ranges based on industry classification
-   * (SIC vs NAICS).
+   * Converts regional income data using valid combinations only.
+   * Uses the same buildValidRegionalCombinations helper as download.
    */
   public void convertRegionalIncomeMetadata(int startYear, int endYear) {
     String tableName = "regional_income";
 
-    // Load LineCodes from reference_regional_linecodes catalog
-    Map<String, Set<String>> lineCodeCatalog;
-    try {
-      lineCodeCatalog = loadRegionalLineCodeCatalog();
-      if (lineCodeCatalog.isEmpty()) {
-        LOGGER.error("Regional LineCode catalog is empty. Cannot convert regional_income data. " +
-            "Ensure reference_regional_linecodes has been downloaded and converted first.");
-        return;
-      }
-    } catch (IOException e) {
-      LOGGER.error("Failed to load Regional LineCode catalog: {}. Cannot convert regional_income data.",
-          e.getMessage());
+    // Build valid combinations using shared helper (same as download)
+    List<RegionalCombination> validCombinations = buildValidRegionalCombinations(startYear, endYear);
+    if (validCombinations.isEmpty()) {
+      LOGGER.warn("No valid regional income combinations to convert");
       return;
     }
 
-    Map<String, Object> tablenames = extractApiSet(tableName, "tableNamesSet");
+    LOGGER.info("Starting regional income conversion: {} valid combinations", validCombinations.size());
 
-    // Build sets of valid dimensions for iteration
-    // Filter based on table type and collect unique values for each dimension
-    Set<String> validTableNames = new HashSet<>();
-    Set<String> allLineCodes = new HashSet<>();
-    Set<String> allGeoFipsCodes = new HashSet<>();
-    // Track valid combinations for filtering in the operation lambda
-    Set<String> validCombinations = new HashSet<>();
+    // Filter out already-converted combinations
+    List<RegionalCombination> unconverted = filterUncachedCombinations(tableName, validCombinations, OperationType.CONVERSION);
+    LOGGER.info("Regional income conversion: {} unconverted of {} valid combinations",
+        unconverted.size(), validCombinations.size());
 
-    for (String tableNameKey : tablenames.keySet()) {
-      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
-      if (lineCodesForTable == null || lineCodesForTable.isEmpty()) {
-        LOGGER.warn("Regional income conversion: No LineCodes available for table {} in catalog, skipping table",
-            tableNameKey);
-        continue;
-      }
+    if (unconverted.isEmpty()) {
+      LOGGER.info("All {} regional income combinations already converted", validCombinations.size());
+      return;
+    }
 
-      // Get valid GeoFips codes for this table type (e.g., STATE for SA* tables)
-      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
+    // Load table metadata once for parquet path resolution
+    Map<String, Object> tableMetadata = loadTableMetadata(tableName);
+    String parquetPattern = tableMetadata.get("parquet_pattern") != null
+        ? tableMetadata.get("parquet_pattern").toString()
+        : tableMetadata.get("pattern").toString().replace(".json", ".parquet");
 
-      // Track unique dimension values
-      validTableNames.add(tableNameKey);
-      allLineCodes.addAll(lineCodesForTable);
-      allGeoFipsCodes.addAll(validGeoFipsForTable);
+    // Process unconverted combinations
+    int converted = 0;
+    int errors = 0;
+    for (RegionalCombination combo : unconverted) {
+      try {
+        Map<String, String> vars = combo.toVariables();
+        vars.put("type", tableName);
 
-      // Build valid combinations lookup for filtering during iteration
-      for (String lineCode : lineCodesForTable) {
-        for (String geoFipsCode : validGeoFipsForTable) {
-          validCombinations.add(tableNameKey + ":" + lineCode + ":" + geoFipsCode);
+        // Convert JSON to Parquet
+        boolean success = convertCachedJsonToParquet(tableName, vars);
+
+        if (success) {
+          // Build cache key and mark as converted
+          CacheKey cacheKey = new CacheKey(tableName, vars);
+          String parquetPath = resolveJsonPath(parquetPattern, vars);
+          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          converted++;
+        } else {
+          errors++;
         }
+
+        if ((converted + errors) % 1000 == 0) {
+          LOGGER.info("Regional income conversion progress: {}/{} ({} errors)",
+              converted + errors, unconverted.size(), errors);
+        }
+      } catch (Exception e) {
+        errors++;
+        LOGGER.warn("Failed to convert regional income {}: {}",
+            combo.toCacheKeyPart(), e.getMessage());
       }
     }
 
-    // Convert to lists for dimension provider
-    List<String> tableNamesList = new ArrayList<>(validTableNames);
-    List<String> lineCodesList = new ArrayList<>(allLineCodes);
-    List<String> geoFipsCodesList = new ArrayList<>(allGeoFipsCodes);
-
-    LOGGER.info("Regional income conversion: {} tables × {} line codes × {} geo sets × {} years (filtering invalid combinations during iteration)",
-        tableNamesList.size(), lineCodesList.size(), geoFipsCodesList.size(), endYear - startYear + 1);
-
-    // Use optimized iteration with DuckDB-based cache filtering
-    // Pattern: type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet
-    iterateTableOperationsOptimized(
-        tableName,
-        (dimensionName) -> {
-          switch (dimensionName) {
-          case "type":
-            return List.of(tableName);
-          case "year":
-            return yearRange(startYear, endYear);
-          case "geo_fips_set":
-            return geoFipsCodesList;
-          case "tablename":
-            return tableNamesList;
-          case "line_code":
-            return lineCodesList;
-          default:
-            return null;
-          }
-        },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          int year = extractYear(vars);
-          String tableNameKey = vars.get("tablename");
-          String lineCode = vars.get("line_code");
-          String geoFipsCode = vars.get("geo_fips_set");
-
-          // Skip invalid table-lineCode-geoFips combinations
-          String combo = tableNameKey + ":" + lineCode + ":" + geoFipsCode;
-          if (!validCombinations.contains(combo)) {
-            return;  // Skip invalid combination
-          }
-
-          // Skip this combination if table is not valid for this year
-          if (!isTableValidForYear(tableNameKey, year)) {
-            return;  // Skip conversion
-          }
-
-          // Convert
-          boolean converted = convertCachedJsonToParquet(tableName, vars);
-
-          // Mark as converted only if conversion succeeded
-          if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
-          }
-        },
-        OperationType.CONVERSION);
+    LOGGER.info("Regional income conversion complete: {} converted, {} errors", converted, errors);
   }
 
   /**
@@ -1401,6 +1302,327 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     return catalogMap;
+  }
+
+  // ===== YEAR AVAILABILITY OPTIMIZATION =====
+
+  /**
+   * Load available years for all specified BEA Regional tables.
+   * Uses cached data from DuckDB when available, otherwise fetches from BEA API.
+   *
+   * <p>This optimization prevents thousands of wasted API calls by determining
+   * which years have data for each table BEFORE iterating through linecode combinations.
+   *
+   * @param tableNames Set of BEA Regional table names to check
+   * @return Map of tableName to Set of available years
+   */
+  public Map<String, Set<Integer>> loadTableYearAvailability(Set<String> tableNames) {
+    Map<String, Set<Integer>> result = new HashMap<>();
+    // Cast to CacheManifest to access DuckDB store for year availability caching
+    CacheManifest econManifest = (CacheManifest) cacheManifest;
+    DuckDBCacheStore store = econManifest.getStore();
+
+    int cached = 0;
+    int fetched = 0;
+
+    for (String tableName : tableNames) {
+      // Check cache first
+      Set<Integer> cachedYears = store.getAvailableYearsForTable("bea_regional", tableName);
+      if (!cachedYears.isEmpty()) {
+        result.put(tableName, cachedYears);
+        cached++;
+        continue;
+      }
+
+      // Fetch from BEA API
+      try {
+        Set<Integer> years = fetchYearAvailabilityFromApi(tableName);
+        if (!years.isEmpty()) {
+          // Cache for 30 days (BEA releases data annually, check monthly)
+          store.setAvailableYearsForTable("bea_regional", tableName, years, 30);
+          result.put(tableName, years);
+          fetched++;
+        } else {
+          // No years returned - use full year range as fallback
+          LOGGER.warn("No year availability from API for table {}, using full range", tableName);
+          Set<Integer> fallbackYears = new HashSet<>();
+          for (int y = startYear; y <= endYear; y++) {
+            fallbackYears.add(y);
+          }
+          result.put(tableName, fallbackYears);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to fetch year availability for {}: {}, using full range",
+            tableName, e.getMessage());
+        // Fallback to full range on error
+        Set<Integer> fallbackYears = new HashSet<>();
+        for (int y = startYear; y <= endYear; y++) {
+          fallbackYears.add(y);
+        }
+        result.put(tableName, fallbackYears);
+      }
+    }
+
+    LOGGER.info("Year availability loaded for {} tables: {} from cache, {} fetched from API",
+        tableNames.size(), cached, fetched);
+
+    return result;
+  }
+
+  /**
+   * Fetch available years for a BEA Regional table from the API.
+   *
+   * <p>Calls: GET https://apps.bea.gov/api/data
+   * ?method=GetParameterValuesFiltered
+   * &datasetname=Regional
+   * &TargetParameter=Year
+   * &TableName={tableName}
+   * &ResultFormat=JSON
+   *
+   * @param tableName The BEA table name (e.g., "SAINC1", "SAGDP5")
+   * @return Set of available years, or empty set if call fails
+   */
+  private Set<Integer> fetchYearAvailabilityFromApi(String tableName) throws IOException, InterruptedException {
+    String beaApiKey = System.getProperty("BEA_API_KEY");
+    if (beaApiKey == null || beaApiKey.isEmpty()) {
+      beaApiKey = System.getenv("BEA_API_KEY");
+    }
+    if (beaApiKey == null || beaApiKey.isEmpty()) {
+      LOGGER.warn("BEA_API_KEY not set, cannot fetch year availability");
+      return Collections.emptySet();
+    }
+
+    String url = String.format(
+        "https://apps.bea.gov/api/data?method=GetParameterValuesFiltered"
+            + "&datasetname=Regional&TargetParameter=Year&TableName=%s"
+            + "&ResultFormat=JSON&UserID=%s",
+        tableName, beaApiKey);
+
+    java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+        .uri(java.net.URI.create(url))
+        .GET()
+        .timeout(java.time.Duration.ofSeconds(30))
+        .build();
+
+    enforceRateLimit();
+    java.net.http.HttpResponse<String> response =
+        httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() != 200) {
+      LOGGER.warn("BEA API returned status {} for year availability of {}",
+          response.statusCode(), tableName);
+      return Collections.emptySet();
+    }
+
+    // Parse response: {"BEAAPI":{"Results":{"ParamValue":[{"Key":"2020"},{"Key":"2021"},...]}}}
+    Set<Integer> years = new HashSet<>();
+    try {
+      JsonNode root = MAPPER.readTree(response.body());
+      JsonNode paramValues = root.path("BEAAPI").path("Results").path("ParamValue");
+
+      // Check for error in response
+      JsonNode error = root.path("BEAAPI").path("Results").path("Error");
+      if (!error.isMissingNode()) {
+        LOGGER.warn("BEA API error for {}: {}", tableName, error.toString());
+        return Collections.emptySet();
+      }
+
+      if (paramValues.isArray()) {
+        for (JsonNode yearNode : paramValues) {
+          String yearKey = yearNode.path("Key").asText();
+          if (yearKey != null && !yearKey.isEmpty() && !"ALL".equalsIgnoreCase(yearKey)) {
+            try {
+              years.add(Integer.parseInt(yearKey));
+            } catch (NumberFormatException e) {
+              // Skip non-numeric year values like "LAST5", "LAST10"
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to parse year availability response for {}: {}",
+          tableName, e.getMessage());
+    }
+
+    LOGGER.debug("Year availability for {}: {} years (min={}, max={})",
+        tableName, years.size(),
+        years.isEmpty() ? "N/A" : Collections.min(years),
+        years.isEmpty() ? "N/A" : Collections.max(years));
+
+    return years;
+  }
+
+  // ========== Regional Income Valid Combinations ==========
+
+  /**
+   * Represents a valid regional income data combination.
+   * Used to iterate only over valid table/year/geo/linecode combinations,
+   * avoiding the Cartesian product explosion.
+   */
+  public static class RegionalCombination {
+    public final String tableName;
+    public final String lineCode;
+    public final String geoFipsSet;
+    public final int year;
+
+    public RegionalCombination(String tableName, String lineCode, String geoFipsSet, int year) {
+      this.tableName = tableName;
+      this.lineCode = lineCode;
+      this.geoFipsSet = geoFipsSet;
+      this.year = year;
+    }
+
+    /** Returns cache key format: tablename:linecode:geo:year */
+    public String toCacheKeyPart() {
+      return tableName + ":" + lineCode + ":" + geoFipsSet + ":" + year;
+    }
+
+    /** Returns variables map for use with download/convert operations. */
+    public Map<String, String> toVariables() {
+      Map<String, String> vars = new HashMap<>();
+      vars.put("tablename", tableName);
+      vars.put("line_code", lineCode);
+      vars.put("geo_fips_set", geoFipsSet);
+      vars.put("year", String.valueOf(year));
+      return vars;
+    }
+  }
+
+  /**
+   * Build list of valid regional income combinations based on:
+   * - Available tables from schema
+   * - LineCodes from reference catalog
+   * - GeoFips sets appropriate for each table type
+   * - Year availability from BEA API (cached)
+   * - SIC/NAICS industry classification year rules
+   *
+   * @param startYear First year to include
+   * @param endYear   Last year to include
+   * @return List of valid combinations, or empty list if catalogs unavailable
+   */
+  public List<RegionalCombination> buildValidRegionalCombinations(int startYear, int endYear) {
+    // Load LineCodes from reference_regional_linecodes catalog
+    Map<String, Set<String>> lineCodeCatalog;
+    try {
+      lineCodeCatalog = loadRegionalLineCodeCatalog();
+      if (lineCodeCatalog.isEmpty()) {
+        LOGGER.error("Regional LineCode catalog is empty. Cannot build valid combinations.");
+        return Collections.emptyList();
+      }
+    } catch (IOException e) {
+      LOGGER.error("Failed to load Regional LineCode catalog: {}", e.getMessage());
+      return Collections.emptyList();
+    }
+
+    Map<String, Object> tablenames = extractApiSet("regional_income", "tableNamesSet");
+    if (tablenames == null || tablenames.isEmpty()) {
+      LOGGER.error("No tableNamesSet found in schema for regional_income");
+      return Collections.emptyList();
+    }
+
+    // Collect valid table names that have linecodes
+    Set<String> validTableNames = new HashSet<>();
+    for (String tableNameKey : tablenames.keySet()) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
+      if (lineCodesForTable != null && !lineCodesForTable.isEmpty()) {
+        validTableNames.add(tableNameKey);
+      }
+    }
+
+    // Load year availability for all valid tables
+    LOGGER.info("Loading year availability for {} BEA regional tables...", validTableNames.size());
+    Map<String, Set<Integer>> tableYearAvailability = loadTableYearAvailability(validTableNames);
+
+    // Build full year range as safe fallback (used when year availability is unknown)
+    Set<Integer> fullYearRange = new HashSet<>();
+    for (int y = startYear; y <= endYear; y++) {
+      fullYearRange.add(y);
+    }
+
+    // Build valid combinations
+    List<RegionalCombination> validCombinations = new ArrayList<>();
+    int totalPossible = 0;
+    int skipped = 0;
+    int tablesUsingFallback = 0;
+
+    for (String tableNameKey : validTableNames) {
+      Set<String> lineCodesForTable = lineCodeCatalog.get(tableNameKey);
+      Set<String> validGeoFipsForTable = getValidGeoFipsForTable(tableNameKey);
+
+      // Safe fallback: if year availability is unknown, include all years rather than skip all
+      Set<Integer> availableYears = tableYearAvailability.get(tableNameKey);
+      if (availableYears == null || availableYears.isEmpty()) {
+        LOGGER.debug("Table {} has no year availability data, using full range {}-{}",
+            tableNameKey, startYear, endYear);
+        availableYears = fullYearRange;
+        tablesUsingFallback++;
+      }
+
+      for (int year = startYear; year <= endYear; year++) {
+        int combosForYear = lineCodesForTable.size() * validGeoFipsForTable.size();
+        totalPossible += combosForYear;
+
+        // Skip years not available for this table (from API, or full range if unknown)
+        if (!availableYears.contains(year)) {
+          skipped += combosForYear;
+          continue;
+        }
+
+        // Skip based on SIC/NAICS rules
+        if (!isTableValidForYear(tableNameKey, year)) {
+          skipped += combosForYear;
+          continue;
+        }
+
+        // Add valid combinations for this table-year
+        for (String lineCode : lineCodesForTable) {
+          for (String geoFipsCode : validGeoFipsForTable) {
+            validCombinations.add(new RegionalCombination(tableNameKey, lineCode, geoFipsCode, year));
+          }
+        }
+      }
+    }
+
+    double reductionPct = totalPossible > 0 ? (100.0 * skipped / totalPossible) : 0;
+    LOGGER.info("Regional income combinations: {} valid of {} possible ({} skipped, {:.1f}% reduction, {} tables used fallback)",
+        validCombinations.size(), totalPossible, skipped, reductionPct, tablesUsingFallback);
+
+    return validCombinations;
+  }
+
+  /**
+   * Filter combinations to only those not yet cached.
+   * Uses the cache manifest to check which combinations need processing.
+   *
+   * @param tableName The table name for cache key construction
+   * @param combinations List of combinations to filter
+   * @param operationType DOWNLOAD or CONVERSION
+   * @return List of combinations that need processing
+   */
+  private List<RegionalCombination> filterUncachedCombinations(
+      String tableName,
+      List<RegionalCombination> combinations,
+      OperationType operationType) {
+
+    List<RegionalCombination> uncached = new ArrayList<>();
+
+    for (RegionalCombination combo : combinations) {
+      Map<String, String> vars = combo.toVariables();
+      vars.put("type", tableName);
+      CacheKey cacheKey = new CacheKey(tableName, vars);
+
+      if (operationType == OperationType.DOWNLOAD) {
+        if (!cacheManifest.isCached(cacheKey)) {
+          uncached.add(combo);
+        }
+      } else if (operationType == OperationType.CONVERSION) {
+        if (!cacheManifest.isParquetConverted(cacheKey)) {
+          uncached.add(combo);
+        }
+      }
+    }
+
+    return uncached;
   }
 
 }

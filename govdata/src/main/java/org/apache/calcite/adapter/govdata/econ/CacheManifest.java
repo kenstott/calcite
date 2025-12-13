@@ -55,6 +55,16 @@ public class CacheManifest extends AbstractCacheManifest {
   private final String cacheDir;
 
   /**
+   * Get the underlying DuckDB cache store for direct access.
+   * Used for year availability caching and other advanced operations.
+   *
+   * @return The DuckDB cache store
+   */
+  public DuckDBCacheStore getStore() {
+    return store;
+  }
+
+  /**
    * Private constructor - use {@link #load(String)} to get an instance.
    */
   private CacheManifest(String cacheDir) {

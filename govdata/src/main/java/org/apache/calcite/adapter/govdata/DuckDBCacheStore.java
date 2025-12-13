@@ -31,7 +31,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -225,6 +230,7 @@ public class DuckDBCacheStore implements AutoCloseable {
     // Schema-specific tables
     if ("econ".equals(schemaName)) {
       executeSqlResource("create_catalog_series_cache.sql");
+      executeSqlResource("create_table_year_availability.sql");
     } else if ("sec".equals(schemaName)) {
       executeSqlResource("create_sec_filings.sql");
     }
@@ -993,6 +999,167 @@ public class DuckDBCacheStore implements AutoCloseable {
       LOGGER.warn("Error checking table errors for {}: {}", tableName, e.getMessage());
     }
     return true;  // Assume has errors on error
+  }
+
+  /**
+   * Delete invalid cache entries for a table.
+   * Entries are considered invalid if they have file_size=0 or file_size IS NULL,
+   * which indicates a failed or incomplete download.
+   *
+   * <p>This is used to clean up stale entries from previous runs that attempted
+   * to download data for invalid combinations (e.g., years not available for a table).
+   *
+   * @param tableName The table name prefix to clean
+   * @return Number of entries deleted
+   */
+  public int deleteInvalidCacheEntries(String tableName) {
+    String sql = "DELETE FROM cache_entries WHERE cache_key LIKE ? AND (file_size IS NULL OR file_size = 0)";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      int deleted = stmt.executeUpdate();
+      if (deleted > 0) {
+        LOGGER.info("Deleted {} invalid cache entries (file_size=0) for table {}", deleted, tableName);
+      }
+      return deleted;
+    } catch (SQLException e) {
+      LOGGER.warn("Error deleting invalid cache entries for {}: {}", tableName, e.getMessage());
+      return 0;
+    }
+  }
+
+  // ========== Table Year Availability Methods ==========
+
+  /**
+   * Get available years for a table from the cache.
+   * Returns empty set if not cached or expired.
+   *
+   * @param dataSource The data source (e.g., "bea_regional")
+   * @param tableName The table name (e.g., "SAINC1")
+   * @return Set of available years, or empty set if not cached/expired
+   */
+  public Set<Integer> getAvailableYearsForTable(String dataSource, String tableName) {
+    String sql = "SELECT available_years FROM table_year_availability "
+        + "WHERE data_source = ? AND table_name = ? AND refresh_after > ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, dataSource);
+      stmt.setString(2, tableName);
+      stmt.setLong(3, System.currentTimeMillis());
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          String yearsJson = rs.getString("available_years");
+          return parseYearsJson(yearsJson);
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error getting available years for {}/{}: {}", dataSource, tableName, e.getMessage());
+    }
+    return Collections.emptySet();
+  }
+
+  /**
+   * Store available years for a table in the cache.
+   *
+   * @param dataSource The data source (e.g., "bea_regional")
+   * @param tableName The table name (e.g., "SAINC1")
+   * @param years Set of available years
+   * @param ttlDays TTL in days before refresh
+   */
+  public void setAvailableYearsForTable(String dataSource, String tableName,
+      Set<Integer> years, int ttlDays) {
+    String yearsJson = formatYearsJson(years);
+    int maxYear = years.stream().mapToInt(Integer::intValue).max().orElse(0);
+    int minYear = years.stream().mapToInt(Integer::intValue).min().orElse(0);
+    long now = System.currentTimeMillis();
+    long refreshAfter = now + (ttlDays * 24L * 60L * 60L * 1000L);
+
+    String sql = "INSERT INTO table_year_availability "
+        + "(data_source, table_name, available_years, max_year, min_year, cached_at, refresh_after) "
+        + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+        + "ON CONFLICT (data_source, table_name) DO UPDATE SET "
+        + "available_years = EXCLUDED.available_years, "
+        + "max_year = EXCLUDED.max_year, "
+        + "min_year = EXCLUDED.min_year, "
+        + "cached_at = EXCLUDED.cached_at, "
+        + "refresh_after = EXCLUDED.refresh_after";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, dataSource);
+      stmt.setString(2, tableName);
+      stmt.setString(3, yearsJson);
+      stmt.setInt(4, maxYear);
+      stmt.setInt(5, minYear);
+      stmt.setLong(6, now);
+      stmt.setLong(7, refreshAfter);
+      stmt.executeUpdate();
+      LOGGER.debug("Cached year availability for {}/{}: {} years (min={}, max={})",
+          dataSource, tableName, years.size(), minYear, maxYear);
+    } catch (SQLException e) {
+      LOGGER.warn("Error caching available years for {}/{}: {}", dataSource, tableName, e.getMessage());
+    }
+  }
+
+  /**
+   * Get max available year for a table from the cache (quick lookup).
+   *
+   * @param dataSource The data source
+   * @param tableName The table name
+   * @return Max year, or -1 if not cached/expired
+   */
+  public int getMaxYearForTable(String dataSource, String tableName) {
+    String sql = "SELECT max_year FROM table_year_availability "
+        + "WHERE data_source = ? AND table_name = ? AND refresh_after > ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, dataSource);
+      stmt.setString(2, tableName);
+      stmt.setLong(3, System.currentTimeMillis());
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt("max_year");
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error getting max year for {}/{}: {}", dataSource, tableName, e.getMessage());
+    }
+    return -1;
+  }
+
+  /**
+   * Parse JSON array of years into a Set.
+   */
+  private Set<Integer> parseYearsJson(String json) {
+    Set<Integer> years = new HashSet<>();
+    if (json == null || json.isEmpty()) {
+      return years;
+    }
+    // Simple JSON array parsing: "[2010,2011,2012]"
+    String cleaned = json.replace("[", "").replace("]", "").trim();
+    if (cleaned.isEmpty()) {
+      return years;
+    }
+    for (String yearStr : cleaned.split(",")) {
+      try {
+        years.add(Integer.parseInt(yearStr.trim()));
+      } catch (NumberFormatException e) {
+        // Skip invalid year
+      }
+    }
+    return years;
+  }
+
+  /**
+   * Format a Set of years as JSON array.
+   */
+  private String formatYearsJson(Set<Integer> years) {
+    List<Integer> sorted = new ArrayList<>(years);
+    Collections.sort(sorted);
+    StringBuilder sb = new StringBuilder("[");
+    for (int i = 0; i < sorted.size(); i++) {
+      if (i > 0) {
+        sb.append(",");
+      }
+      sb.append(sorted.get(i));
+    }
+    sb.append("]");
+    return sb.toString();
   }
 
   @Override
