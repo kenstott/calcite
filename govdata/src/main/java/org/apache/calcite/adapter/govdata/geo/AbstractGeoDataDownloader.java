@@ -80,7 +80,7 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
    * @param endYear End year for data downloads
    */
   protected AbstractGeoDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
-    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear);
+    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear, null);
   }
 
   /**
@@ -95,9 +95,10 @@ public abstract class AbstractGeoDataDownloader extends AbstractGovDataDownloade
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    * @param startYear Start year for data downloads
    * @param endYear End year for data downloads
+   * @param defaultParquetFilename Default filename for parquet files (null for default "data_0")
    */
-  protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest, int startYear, int endYear) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest, startYear, endYear);
+  protected AbstractGeoDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, GeoCacheManifest sharedManifest, int startYear, int endYear, String defaultParquetFilename) {
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "geo", sharedManifest, startYear, endYear, defaultParquetFilename);
   }
 
   /**

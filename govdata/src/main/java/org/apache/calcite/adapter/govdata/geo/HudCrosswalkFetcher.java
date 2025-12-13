@@ -95,7 +95,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
   public HudCrosswalkFetcher(String username, String password, String token, String cacheDir,
       String operatingDirectory, StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
-    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear);
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear, null);
     this.username = username;
     this.password = password;
     this.token = token;

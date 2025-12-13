@@ -92,7 +92,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
   public CensusApiClient(String apiKey, String cacheDir, String operatingDirectory, List<Integer> censusYears,
       StorageProvider storageProvider, GeoCacheManifest cacheManifest, int startYear, int endYear) {
-    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear);
+    super(cacheDir, operatingDirectory, cacheDir, storageProvider, storageProvider, cacheManifest, startYear, endYear, null);
     this.apiKey = apiKey;
     this.cacheDir = cacheDir;
     this.censusYears = censusYears;

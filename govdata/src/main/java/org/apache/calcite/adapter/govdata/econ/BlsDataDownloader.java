@@ -310,7 +310,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   }
 
   public BlsDataDownloader(String apiKey, String cacheDir, String operatingDirectory, String parquetDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, CacheManifest sharedManifest, Set<String> enabledTables, int startYear, int endYear) {
-    super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest, startYear, endYear);
+    super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest, startYear, endYear, null);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
     // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them

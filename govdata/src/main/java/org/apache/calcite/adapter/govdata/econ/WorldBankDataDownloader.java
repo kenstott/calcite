@@ -63,7 +63,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       StorageProvider storageProvider,
       CacheManifest sharedManifest, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest, startYear, endYear);
+        sharedManifest, startYear, endYear, null);
   }
 
   @Override protected String getTableName() {
