@@ -3725,11 +3725,14 @@ public abstract class AbstractGovDataDownloader {
     String targetBase = extractTargetBaseDirectory(targetPath, alternate.partitionColumns);
     String fullTargetBase = storageProvider.resolvePath(parquetDirectory, targetBase);
 
-    // Temp location for intermediate files
-    String tempBase = fullTargetBase + "/_temp_reorg";
+    // Temp location with timestamp to isolate each run
+    // Format: _temp_reorg/{timestamp}/ - each run gets unique directory
+    String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss")
+        .format(new java.util.Date());
+    String tempBase = fullTargetBase + "/_temp_reorg/" + timestamp;
 
     // Ensure lifecycle rule exists for auto-cleanup of temp files (1 day expiration)
-    // This avoids manual deletion of thousands of temp files
+    // Rule applies to entire _temp_reorg/ prefix - all timestamped runs auto-expire
     String tempPrefix = targetBase + "/_temp_reorg/";
     try {
       storageProvider.ensureLifecycleRule(tempPrefix, 1);
@@ -3966,49 +3969,6 @@ public abstract class AbstractGovDataDownloader {
     sql.append(");");
 
     return sql.toString();
-  }
-
-  /**
-   * Cleans up temporary reorganization files.
-   */
-  private void cleanupTempFiles(Connection conn, String tempBase) throws java.sql.SQLException {
-    // List and delete all files in temp directory
-    // For S3, we need to delete each file individually
-    String listSql = "SELECT file FROM glob(" + quoteLiteral(tempBase + "/**/*.parquet") + ")";
-
-    List<String> filesToDelete = new ArrayList<>();
-    try (Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery(listSql)) {
-      while (rs.next()) {
-        filesToDelete.add(rs.getString("file"));
-      }
-    }
-
-    LOGGER.info("  Deleting {} temp files...", filesToDelete.size());
-
-    // Use batch delete for efficiency (1000 files per request vs 1 per request)
-    if (storageProvider != null && filesToDelete.size() > 0) {
-      try {
-        int deleted = storageProvider.deleteBatch(filesToDelete);
-        LOGGER.info("  Batch deleted {} files", deleted);
-      } catch (IOException e) {
-        LOGGER.warn("  Batch delete failed, falling back to individual deletes: {}", e.getMessage());
-        // Fallback to individual deletes
-        int deleted = 0;
-        for (String file : filesToDelete) {
-          try {
-            storageProvider.delete(file);
-            deleted++;
-            if (deleted % 1000 == 0) {
-              LOGGER.info("    Deleted {}/{} temp files...", deleted, filesToDelete.size());
-            }
-          } catch (Exception ex) {
-            // Continue on individual failures
-          }
-        }
-      }
-    }
-    LOGGER.info("  Temp cleanup complete");
   }
 
   /**
