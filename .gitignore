@@ -109,3 +109,4 @@ geo-credentials.properties
 djia-production-env.sh
 govdata-production-cache/
 govdata/src/test/java/org/apache/calcite/adapter/govdata/econ/EconDataValidationTest.java
+*.deb
