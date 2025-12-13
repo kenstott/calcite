@@ -103,6 +103,11 @@ public class CsvTableScan extends TableScan implements EnumerableRel {
     if (!"false".equals(System.getProperty("calcite.file.statistics.column.pruning.enabled"))) {
       planner.addRule(org.apache.calcite.adapter.file.rules.SimpleFileColumnPruningRule.INSTANCE);
     }
+
+    // COUNT(*) optimization using table statistics for instant row count
+    if (!"false".equals(System.getProperty("calcite.file.statistics.count.star.enabled"))) {
+      planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
+    }
   }
 
   @Override public @Nullable RelOptCost computeSelfCost(RelOptPlanner planner,

@@ -551,6 +551,44 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
+   * Check if data is marked as unavailable and still within retry window.
+   * Returns true if the cache entry has a download_retry timestamp in the future.
+   *
+   * @param cacheKey Cache key to check
+   * @return true if data is unavailable and should not be retried yet
+   */
+  public boolean isUnavailable(String cacheKey) {
+    String sql = "SELECT download_retry, refresh_after FROM cache_entries WHERE cache_key = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, cacheKey);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (!rs.next()) {
+          return false;  // No entry means not marked as unavailable
+        }
+
+        long now = System.currentTimeMillis();
+        long downloadRetry = rs.getLong("download_retry");
+        long refreshAfter = rs.getLong("refresh_after");
+
+        // Check if we're still in the retry window
+        // download_retry > 0 means there was an error, and if it's > now, we should skip
+        if (downloadRetry > 0 && downloadRetry > now) {
+          LOGGER.debug("Data {} is unavailable, retry after {} (in {} hours)",
+              cacheKey, downloadRetry, (downloadRetry - now) / (1000 * 60 * 60));
+          return true;
+        }
+
+        // Also check refresh_after if it indicates unavailability (no file path, file_size=0)
+        // This handles the markUnavailable case
+        return false;
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking unavailable status for {}: {}", cacheKey, e.getMessage());
+      return false;
+    }
+  }
+
+  /**
    * Delete a cache entry.
    *
    * @param cacheKey Cache key to delete

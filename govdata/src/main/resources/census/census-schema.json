@@ -1,5 +1,32 @@
 {
   "comment": "U.S. Census Bureau demographic and population data including decennial census results, American Community Survey (ACS) estimates, population projections, and economic indicators. Provides comprehensive demographic profiles, household characteristics, income distributions, educational attainment, housing statistics, and migration patterns at national, state, county, and census tract levels. Supports demographic analysis, population trend research, social policy planning, and market segmentation studies.",
+  "dataAvailability": {
+    "_comment": "Defines data availability rules by census type to avoid making requests for data we know will not exist",
+    "acs": {
+      "description": "American Community Survey 5-year estimates released ~December of following year",
+      "startYear": 2009,
+      "releaseLagYears": 1,
+      "frequency": "annual"
+    },
+    "decennial": {
+      "description": "Decennial Census conducted every 10 years",
+      "validYears": [2010, 2020, 2030],
+      "frequency": "decennial"
+    },
+    "economic": {
+      "description": "Economic Census conducted every 5 years (years ending in 2 or 7), released 2-3 years later",
+      "startYear": 2012,
+      "frequencyYears": 5,
+      "releaseLagYears": 3,
+      "frequency": "quinquennial"
+    },
+    "population": {
+      "description": "Population Estimates Program annual updates with ~1 year release lag",
+      "startYear": 2010,
+      "releaseLagYears": 1,
+      "frequency": "annual"
+    }
+  },
   "partitionedTables": [
     {
       "name": "acs_population",

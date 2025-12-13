@@ -183,4 +183,127 @@ public class SchemaConfigReader {
 
     return null;
   }
+
+  /**
+   * Get data availability rules for a specific data type from schema file.
+   *
+   * @param schemaFile Name of schema file (e.g., "census-schema.json")
+   * @param dataType Data type key (e.g., "acs", "decennial", "economic", "population")
+   * @return DataAvailabilityRule or null if not defined
+   */
+  public static DataAvailabilityRule getDataAvailabilityRule(String schemaFile, String dataType) {
+    try (InputStream schemaStream = SchemaConfigReader.class.getResourceAsStream("/" + schemaFile)) {
+      if (schemaStream == null) {
+        LOGGER.warn("{} not found in resources", schemaFile);
+        return null;
+      }
+
+      JsonNode root = YamlUtils.parseYamlOrJson(schemaStream, schemaFile);
+      JsonNode availabilityNode = root.path("dataAvailability").path(dataType);
+
+      if (availabilityNode.isMissingNode()) {
+        LOGGER.debug("No dataAvailability rule for {} in {}", dataType, schemaFile);
+        return null;
+      }
+
+      DataAvailabilityRule rule = new DataAvailabilityRule();
+      rule.description = availabilityNode.path("description").asText(null);
+      rule.frequency = availabilityNode.path("frequency").asText("annual");
+
+      if (availabilityNode.has("startYear")) {
+        rule.startYear = availabilityNode.path("startYear").asInt();
+      }
+      if (availabilityNode.has("releaseLagYears")) {
+        rule.releaseLagYears = availabilityNode.path("releaseLagYears").asInt();
+      }
+      if (availabilityNode.has("frequencyYears")) {
+        rule.frequencyYears = availabilityNode.path("frequencyYears").asInt();
+      }
+
+      JsonNode validYearsNode = availabilityNode.path("validYears");
+      if (validYearsNode.isArray()) {
+        rule.validYears = new int[validYearsNode.size()];
+        for (int i = 0; i < validYearsNode.size(); i++) {
+          rule.validYears[i] = validYearsNode.get(i).asInt();
+        }
+      }
+
+      LOGGER.debug("Loaded data availability rule for {}: startYear={}, releaseLag={}, frequency={}",
+          dataType, rule.startYear, rule.releaseLagYears, rule.frequency);
+
+      return rule;
+
+    } catch (IOException e) {
+      LOGGER.error("Error loading data availability for {} from {}: {}", dataType, schemaFile, e.getMessage());
+    }
+
+    return null;
+  }
+
+  /**
+   * Data availability rule parsed from schema file.
+   * Defines when data is expected to be available for a census type.
+   */
+  public static class DataAvailabilityRule {
+    /** Description of the data availability pattern. */
+    public String description;
+
+    /** Earliest year with available data. */
+    public Integer startYear;
+
+    /** Number of years after the reference year before data is released. */
+    public Integer releaseLagYears;
+
+    /** Frequency in years for periodic data (e.g., 5 for quinquennial). */
+    public Integer frequencyYears;
+
+    /** Explicit list of valid years (for decennial-style data). */
+    public int[] validYears;
+
+    /** Frequency type: "annual", "decennial", "quinquennial", etc. */
+    public String frequency;
+
+    /**
+     * Check if data is expected to be available for the given year.
+     *
+     * @param year The data year to check
+     * @param currentYear The current calendar year
+     * @return true if data is expected to be available, false if we know it won't exist
+     */
+    public boolean isYearAvailable(int year, int currentYear) {
+      // Check against explicit valid years if defined
+      if (validYears != null && validYears.length > 0) {
+        for (int validYear : validYears) {
+          if (year == validYear && validYear <= currentYear) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Check start year constraint
+      if (startYear != null && year < startYear) {
+        return false;
+      }
+
+      // Check release lag (data must be old enough to have been released)
+      if (releaseLagYears != null) {
+        int latestAvailableYear = currentYear - releaseLagYears;
+        if (year > latestAvailableYear) {
+          return false;
+        }
+      }
+
+      // Check frequency constraint (for quinquennial data like economic census)
+      if (frequencyYears != null && startYear != null) {
+        // Year must be aligned with the frequency starting from startYear
+        int yearsSinceStart = year - startYear;
+        if (yearsSinceStart < 0 || yearsSinceStart % frequencyYears != 0) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+  }
 }

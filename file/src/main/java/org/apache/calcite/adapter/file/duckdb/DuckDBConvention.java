@@ -87,6 +87,12 @@ public class DuckDBConvention extends JdbcConvention {
       planner.addRule(org.apache.calcite.adapter.file.rules.SimpleFileColumnPruningRule.INSTANCE);
     }
 
+    // 4. COUNT(*) optimization using table statistics for instant row count
+    // This avoids expensive S3 file listing for hive-partitioned tables
+    if (!"false".equals(System.getProperty("calcite.file.statistics.count.star.enabled"))) {
+      planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
+    }
+
     // Register all standard JDBC rules for comprehensive pushdown
     // These will only apply to queries that weren't optimized by statistics-based rules
     for (RelOptRule rule : JdbcRules.rules(this)) {
