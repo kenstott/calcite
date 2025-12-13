@@ -43,6 +43,9 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
+import com.amazonaws.services.s3.model.lifecycle.LifecycleFilter;
+import com.amazonaws.services.s3.model.lifecycle.LifecyclePrefixPredicate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -669,6 +672,69 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     return totalDeleted;
+  }
+
+  /**
+   * Ensures a lifecycle rule exists for auto-expiring objects with a given prefix.
+   * Used to auto-clean temp files without manual deletion.
+   *
+   * @param prefix The S3 key prefix (e.g., "source=econ/type=regional_income/_temp_reorg/")
+   * @param expirationDays Number of days after which objects expire (minimum 1)
+   */
+  @Override public void ensureLifecycleRule(String prefix, int expirationDays) throws IOException {
+    if (baseS3Path == null || baseS3Path.isEmpty()) {
+      LOGGER.warn("Cannot set lifecycle rule: no base S3 path configured");
+      return;
+    }
+
+    S3Uri baseUri = parseS3Uri(baseS3Path);
+    String bucket = baseUri.bucket;
+    String fullPrefix = baseUri.key.isEmpty() ? prefix : baseUri.key + "/" + prefix;
+    String ruleId = "auto-expire-" + prefix.replace("/", "-").replaceAll("[^a-zA-Z0-9-]", "");
+    if (ruleId.length() > 255) {
+      ruleId = ruleId.substring(0, 255);
+    }
+
+    try {
+      // Get existing lifecycle configuration
+      BucketLifecycleConfiguration config = s3Client.getBucketLifecycleConfiguration(bucket);
+      List<BucketLifecycleConfiguration.Rule> rules;
+
+      if (config == null || config.getRules() == null) {
+        rules = new ArrayList<>();
+      } else {
+        rules = new ArrayList<>(config.getRules());
+      }
+
+      // Check if rule already exists
+      boolean ruleExists = false;
+      for (BucketLifecycleConfiguration.Rule rule : rules) {
+        if (ruleId.equals(rule.getId())) {
+          ruleExists = true;
+          LOGGER.debug("Lifecycle rule '{}' already exists for prefix '{}'", ruleId, fullPrefix);
+          break;
+        }
+      }
+
+      if (!ruleExists) {
+        // Create new rule
+        BucketLifecycleConfiguration.Rule newRule = new BucketLifecycleConfiguration.Rule()
+            .withId(ruleId)
+            .withFilter(new LifecycleFilter(new LifecyclePrefixPredicate(fullPrefix)))
+            .withExpirationInDays(expirationDays)
+            .withStatus(BucketLifecycleConfiguration.ENABLED);
+
+        rules.add(newRule);
+
+        BucketLifecycleConfiguration newConfig = new BucketLifecycleConfiguration().withRules(rules);
+        s3Client.setBucketLifecycleConfiguration(bucket, newConfig);
+        LOGGER.info("Created lifecycle rule '{}': prefix='{}' expires in {} days",
+            ruleId, fullPrefix, expirationDays);
+      }
+    } catch (AmazonServiceException e) {
+      // Log warning but don't fail - lifecycle is a cleanup optimization, not critical
+      LOGGER.warn("Failed to set lifecycle rule for prefix '{}': {}", fullPrefix, e.getMessage());
+    }
   }
 
   @Override public void copyFile(String source, String destination) throws IOException {
