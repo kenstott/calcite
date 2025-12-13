@@ -172,6 +172,19 @@ public interface StorageProvider {
   }
 
   /**
+   * Ensures a lifecycle rule exists for auto-expiring objects with a given prefix.
+   * For S3-compatible storage, this creates a lifecycle rule that auto-deletes objects.
+   * Default implementation does nothing (local filesystem doesn't support lifecycle).
+   *
+   * @param prefix The key prefix for the lifecycle rule
+   * @param expirationDays Number of days after which objects expire
+   * @throws IOException If an I/O error occurs
+   */
+  default void ensureLifecycleRule(String prefix, int expirationDays) throws IOException {
+    // Default: no-op for non-S3 storage providers
+  }
+
+  /**
    * Copies a file from source to destination.
    *
    * @param source The source file path

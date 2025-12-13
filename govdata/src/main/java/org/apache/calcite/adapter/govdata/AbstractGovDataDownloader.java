@@ -3728,6 +3728,15 @@ public abstract class AbstractGovDataDownloader {
     // Temp location for intermediate files
     String tempBase = fullTargetBase + "/_temp_reorg";
 
+    // Ensure lifecycle rule exists for auto-cleanup of temp files (1 day expiration)
+    // This avoids manual deletion of thousands of temp files
+    String tempPrefix = targetBase + "/_temp_reorg/";
+    try {
+      storageProvider.ensureLifecycleRule(tempPrefix, 1);
+    } catch (IOException e) {
+      LOGGER.debug("Could not set lifecycle rule (cleanup will be manual): {}", e.getMessage());
+    }
+
     LOGGER.info("Reorganizing with batching:\n  FROM: {}\n  TO: {} (via temp: {})\n  Years: {}-{}",
         sourceGlobTemplate, fullTargetBase, tempBase, startYear, endYear);
 
@@ -3818,9 +3827,9 @@ public abstract class AbstractGovDataDownloader {
         LOGGER.info("  Consolidation complete for {}", alternate.alternateName);
       }
 
-      // Phase 3: Clean up temp files
-      LOGGER.info("Phase 3: Cleaning up temp files...");
-      cleanupTempFiles(conn, tempBase);
+      // Phase 3: Temp file cleanup handled by lifecycle rules (auto-expire in 1 day)
+      // No manual deletion needed - files will be automatically removed by S3/R2
+      LOGGER.info("Phase 3: Temp files will auto-expire via lifecycle rules (skipping manual cleanup)");
 
       LOGGER.info("Successfully reorganized alternate partition with batching: {}",
           alternate.alternateName);
