@@ -54,4 +54,4 @@ build/test-data/
 # SEC adapter specific
 sec-cache/
 *.parquet.crc
-_SUCCESS
+_SUCCESS*.env*
