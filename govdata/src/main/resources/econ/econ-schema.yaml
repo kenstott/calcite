@@ -1589,6 +1589,10 @@ partitionedTables:
             - name: geo_fips
               type: VARCHAR
               sourceColumn: GeoFips
+        # Batch reorganization by year and geo_fips_set to avoid OOM on 700K+ files
+        batch_partition_columns:
+          - year
+          - geo_fips_set
 
       # Consolidated by year - one file per year with all states/indicators
       - name: regional_income_by_year
@@ -1598,6 +1602,10 @@ partitionedTables:
           columnDefinitions:
             - name: year
               type: INTEGER
+        # Batch by geo_fips_set to reduce memory usage
+        batch_partition_columns:
+          - year
+          - geo_fips_set
 
       # Consolidated by indicator table - one file per BEA table
       - name: regional_income_by_indicator
@@ -1607,6 +1615,10 @@ partitionedTables:
           columnDefinitions:
             - name: tablename
               type: VARCHAR
+        # Batch by year and geo_fips_set for large datasets
+        batch_partition_columns:
+          - year
+          - geo_fips_set
 
   # --- ITA DATA ---
   - name: ita_data

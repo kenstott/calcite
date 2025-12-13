@@ -3331,16 +3331,20 @@ public abstract class AbstractGovDataDownloader {
     final List<String> partitionColumns;
     /** Maps target column name -> source column name for columns that need aliasing */
     final Map<String, String> columnMappings;
+    /** Source partition columns to batch on during reorganization (e.g., [year, geo_fips_set]) */
+    final List<String> batchPartitionColumns;
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
         String alternateName, String alternatePattern, List<String> partitionColumns,
-        Map<String, String> columnMappings) {
+        Map<String, String> columnMappings, List<String> batchPartitionColumns) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
       this.alternateName = alternateName;
       this.alternatePattern = alternatePattern;
       this.partitionColumns = partitionColumns != null ? partitionColumns : Collections.emptyList();
       this.columnMappings = columnMappings != null ? columnMappings : Collections.emptyMap();
+      this.batchPartitionColumns = batchPartitionColumns != null
+          ? batchPartitionColumns : Collections.emptyList();
     }
   }
 
@@ -3542,12 +3546,21 @@ public abstract class AbstractGovDataDownloader {
               }
             }
 
+            // Parse batch_partition_columns for metadata-driven batching
+            List<String> batchPartitionColumns = new ArrayList<>();
+            if (alternateNode.has("batch_partition_columns")
+                && alternateNode.get("batch_partition_columns").isArray()) {
+              for (JsonNode colNode : alternateNode.get("batch_partition_columns")) {
+                batchPartitionColumns.add(colNode.asText());
+              }
+            }
+
             if (alternateName != null && alternatePattern != null) {
               alternatePartitions.add(new AlternatePartitionPattern(
                   tableName, sourcePattern, alternateName, alternatePattern,
-                  partitionColumns, columnMappings));
-              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {})",
-                  tableName, alternateName, partitionColumns);
+                  partitionColumns, columnMappings, batchPartitionColumns));
+              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {})",
+                  tableName, alternateName, partitionColumns, batchPartitionColumns);
             }
           }
         }
@@ -3631,6 +3644,7 @@ public abstract class AbstractGovDataDownloader {
 
   /**
    * Reorganizes data for a specific set of variables using DuckDB.
+   * Uses batched processing when source pattern contains year=* to avoid OOM.
    *
    * @param alternate Alternate partition pattern
    * @param variables Variables to substitute (e.g., {frequency: "A"})
@@ -3642,6 +3656,22 @@ public abstract class AbstractGovDataDownloader {
     // Build source glob pattern (replaces partition variables with wildcards)
     String sourceGlob = buildSourceGlob(alternate.sourcePattern, variables);
 
+    // Check if batching is needed (source has year=* and we're reorganizing by a data column)
+    boolean needsBatching = sourceGlob.contains("year=*") && !alternate.columnMappings.isEmpty();
+
+    if (needsBatching) {
+      reorganizeWithBatching(alternate, variables, sourceGlob);
+    } else {
+      reorganizeDirectly(alternate, variables, sourceGlob);
+    }
+  }
+
+  /**
+   * Direct reorganization without batching (for smaller datasets).
+   */
+  private void reorganizeDirectly(AlternatePartitionPattern alternate,
+      Map<String, String> variables, String sourceGlob) throws IOException {
+
     // Build target BASE path (strip partition wildcards - PARTITION_BY will create them)
     String targetPath = substituteVariables(alternate.alternatePattern, variables);
     String targetBase = extractTargetBaseDirectory(targetPath, alternate.partitionColumns);
@@ -3650,18 +3680,23 @@ public abstract class AbstractGovDataDownloader {
     String fullSourceGlob = storageProvider.resolvePath(parquetDirectory, sourceGlob);
     String fullTargetBase = storageProvider.resolvePath(parquetDirectory, targetBase);
 
-    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {} (PARTITION_BY: {}, columnMappings: {})",
+    LOGGER.info("Reorganizing (direct):\n  FROM: {}\n  TO:   {} (PARTITION_BY: {}, columnMappings: {})",
         fullSourceGlob, fullTargetBase, alternate.partitionColumns, alternate.columnMappings);
 
     // Build DuckDB SQL with PARTITION_BY and column mappings
     String sql = buildReorganizationSql(fullSourceGlob, fullTargetBase,
-        alternate.partitionColumns, alternate.columnMappings);
+        alternate.partitionColumns, alternate.columnMappings, null);
 
     LOGGER.debug("Reorganization SQL:\n{}", sql);
 
     // Execute using DuckDB
     try (Connection conn = getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
+
+      // Apply memory-optimizing settings
+      stmt.execute("SET threads=2");
+      stmt.execute("SET preserve_insertion_order=false");
+      LOGGER.debug("Applied DuckDB memory settings: threads=2, preserve_insertion_order=false");
 
       stmt.execute(sql);
       LOGGER.info("Successfully reorganized alternate partition: {}", alternate.alternateName);
@@ -3674,6 +3709,286 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
+  }
+
+  /**
+   * Batched reorganization for large datasets.
+   * Phase 1: Process each year separately, write to temp location
+   * Phase 2: Consolidate temp files into final single-file partitions
+   * Phase 3: Clean up temp files
+   */
+  private void reorganizeWithBatching(AlternatePartitionPattern alternate,
+      Map<String, String> variables, String sourceGlobTemplate) throws IOException {
+
+    // Build target paths
+    String targetPath = substituteVariables(alternate.alternatePattern, variables);
+    String targetBase = extractTargetBaseDirectory(targetPath, alternate.partitionColumns);
+    String fullTargetBase = storageProvider.resolvePath(parquetDirectory, targetBase);
+
+    // Temp location for intermediate files
+    String tempBase = fullTargetBase + "/_temp_reorg";
+
+    LOGGER.info("Reorganizing with batching:\n  FROM: {}\n  TO: {} (via temp: {})\n  Years: {}-{}",
+        sourceGlobTemplate, fullTargetBase, tempBase, startYear, endYear);
+
+    try (Connection conn = getDuckDBConnection(storageProvider)) {
+
+      // Apply memory-optimizing settings to avoid OOM on large datasets
+      try (Statement setupStmt = conn.createStatement()) {
+        setupStmt.execute("SET threads=2");
+        setupStmt.execute("SET preserve_insertion_order=false");
+        LOGGER.debug("Applied DuckDB memory settings: threads=2, preserve_insertion_order=false");
+      }
+
+      // Phase 1: Process data in batches using metadata-driven batch_partition_columns
+      // Build batch combinations from batchPartitionColumns (e.g., [year, geo_fips_set])
+      List<Map<String, String>> batchCombinations =
+          buildBatchCombinations(conn, sourceGlobTemplate, alternate.batchPartitionColumns);
+
+      if (batchCombinations.isEmpty()) {
+        // No batching configured - fall back to year-only batching
+        LOGGER.info("Phase 1: Processing {} years individually (no batch_partition_columns)...",
+            (endYear - startYear + 1));
+        for (int year = startYear; year <= endYear; year++) {
+          String yearSourceGlob = sourceGlobTemplate.replace("year=*", "year=" + year);
+          String fullYearSourceGlob = storageProvider.resolvePath(parquetDirectory, yearSourceGlob);
+
+          String sql = buildReorganizationSql(fullYearSourceGlob, tempBase,
+              alternate.partitionColumns, alternate.columnMappings, "year_" + year + "_{i}");
+
+          LOGGER.debug("Phase 1 SQL (year={}):\n{}", year, sql);
+
+          try (Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            LOGGER.info("  Processed year {} for {}", year, alternate.alternateName);
+          } catch (java.sql.SQLException e) {
+            LOGGER.warn("  Skipped year {} (no data or error): {}", year, e.getMessage());
+          }
+        }
+      } else {
+        LOGGER.info("Phase 1: Processing {} batch combinations (batch by: {})...",
+            batchCombinations.size(), alternate.batchPartitionColumns);
+
+        int processed = 0;
+        for (Map<String, String> batch : batchCombinations) {
+          // Build source glob with batch filters applied
+          String batchSourceGlob = sourceGlobTemplate;
+          StringBuilder filenamePattern = new StringBuilder();
+          for (Map.Entry<String, String> entry : batch.entrySet()) {
+            String col = entry.getKey();
+            String val = entry.getValue();
+            batchSourceGlob = batchSourceGlob.replace(col + "=*", col + "=" + val);
+            if (filenamePattern.length() > 0) {
+              filenamePattern.append("_");
+            }
+            filenamePattern.append(col).append("_").append(val);
+          }
+          filenamePattern.append("_{i}");
+
+          String fullBatchSourceGlob = storageProvider.resolvePath(parquetDirectory, batchSourceGlob);
+
+          String sql = buildReorganizationSql(fullBatchSourceGlob, tempBase,
+              alternate.partitionColumns, alternate.columnMappings, filenamePattern.toString());
+
+          LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
+
+          try (Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            processed++;
+            if (processed % 10 == 0) {
+              LOGGER.info("  Processed {}/{} batches...", processed, batchCombinations.size());
+            }
+          } catch (java.sql.SQLException e) {
+            // Log but continue - some combinations may not have data
+            LOGGER.debug("  Skipped batch {} (no data): {}", batch, e.getMessage());
+          }
+        }
+        LOGGER.info("  Completed {} batches for {}", processed, alternate.alternateName);
+      }
+
+      // Phase 2: Consolidate temp files into final location
+      LOGGER.info("Phase 2: Consolidating temp files to final location...");
+      String consolidateSql = buildConsolidationSql(tempBase, fullTargetBase,
+          alternate.partitionColumns);
+
+      LOGGER.debug("Phase 2 SQL:\n{}", consolidateSql);
+
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute(consolidateSql);
+        LOGGER.info("  Consolidation complete for {}", alternate.alternateName);
+      }
+
+      // Phase 3: Clean up temp files
+      LOGGER.info("Phase 3: Cleaning up temp files...");
+      cleanupTempFiles(conn, tempBase);
+
+      LOGGER.info("Successfully reorganized alternate partition with batching: {}",
+          alternate.alternateName);
+
+    } catch (java.sql.SQLException e) {
+      String errorMsg =
+          String.format("DuckDB batched reorganization failed for alternate '%s': %s",
+          alternate.alternateName,
+          e.getMessage());
+      LOGGER.error(errorMsg, e);
+      throw new IOException(errorMsg, e);
+    }
+  }
+
+  /**
+   * Builds all batch combinations from the configured batch_partition_columns.
+   * For example, if batch_partition_columns = [year, geo_fips_set], this returns
+   * all combinations like [{year=2020, geo_fips_set=STATE}, {year=2020, geo_fips_set=COUNTY}, ...].
+   *
+   * <p>Special handling for 'year': uses startYear/endYear range instead of querying data.
+   */
+  private List<Map<String, String>> buildBatchCombinations(Connection conn,
+      String sourceGlobTemplate, List<String> batchPartitionColumns) {
+
+    if (batchPartitionColumns == null || batchPartitionColumns.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    // Build values for each batch column
+    List<List<String>> columnValues = new ArrayList<>();
+    List<String> columnNames = new ArrayList<>();
+
+    for (String col : batchPartitionColumns) {
+      List<String> values;
+      if ("year".equalsIgnoreCase(col)) {
+        // Use configured year range
+        values = new ArrayList<>();
+        for (int y = startYear; y <= endYear; y++) {
+          values.add(String.valueOf(y));
+        }
+      } else {
+        // Query distinct values from data
+        values = getDistinctPartitionValues(conn, sourceGlobTemplate, col);
+      }
+
+      if (values.isEmpty()) {
+        LOGGER.warn("No values found for batch column '{}', skipping batching", col);
+        return Collections.emptyList();
+      }
+
+      columnNames.add(col);
+      columnValues.add(values);
+    }
+
+    // Build cartesian product of all column values
+    List<Map<String, String>> combinations = new ArrayList<>();
+    buildCombinationsRecursive(columnNames, columnValues, 0, new LinkedHashMap<String, String>(),
+        combinations);
+
+    LOGGER.debug("Built {} batch combinations from {} columns",
+        combinations.size(), batchPartitionColumns);
+    return combinations;
+  }
+
+  /**
+   * Recursively builds cartesian product of column values.
+   */
+  private void buildCombinationsRecursive(List<String> columnNames, List<List<String>> columnValues,
+      int depth, Map<String, String> current, List<Map<String, String>> result) {
+    if (depth == columnNames.size()) {
+      result.add(new LinkedHashMap<>(current));
+      return;
+    }
+
+    String colName = columnNames.get(depth);
+    for (String value : columnValues.get(depth)) {
+      current.put(colName, value);
+      buildCombinationsRecursive(columnNames, columnValues, depth + 1, current, result);
+    }
+    current.remove(colName);
+  }
+
+  /**
+   * Gets distinct values for a partition column from existing parquet files.
+   * Uses glob to find partition directories rather than reading file contents.
+   */
+  private List<String> getDistinctPartitionValues(Connection conn, String sourceGlobTemplate,
+      String partitionColumn) {
+    List<String> values = new ArrayList<>();
+
+    // Build a glob pattern to find the partition directories
+    // E.g., for geo_fips_set, find all directories like "geo_fips_set=*"
+    String globPattern = storageProvider.resolvePath(parquetDirectory, sourceGlobTemplate);
+
+    String sql = "SELECT DISTINCT " + partitionColumn + " FROM read_parquet("
+        + quoteLiteral(globPattern) + ", hive_partitioning=true) ORDER BY " + partitionColumn;
+
+    LOGGER.debug("Getting distinct {} values with SQL: {}", partitionColumn, sql);
+
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        String value = rs.getString(1);
+        if (value != null) {
+          values.add(value);
+        }
+      }
+      LOGGER.debug("Found {} distinct {} values", values.size(), partitionColumn);
+    } catch (java.sql.SQLException e) {
+      LOGGER.warn("Failed to get distinct {} values: {}", partitionColumn, e.getMessage());
+      // Return empty list - will fall back to year-only batching
+    }
+
+    return values;
+  }
+
+  /**
+   * Builds SQL for consolidation phase - reads all temp files and writes to final location.
+   */
+  private String buildConsolidationSql(String tempBase, String finalBase,
+      List<String> partitionColumns) {
+    StringBuilder sql = new StringBuilder();
+    sql.append("COPY (\n");
+    sql.append("  SELECT * FROM read_parquet(").append(quoteLiteral(tempBase + "/**/*.parquet"))
+       .append(", hive_partitioning=true, union_by_name=true)\n");
+    sql.append(") TO ").append(quoteLiteral(finalBase));
+
+    sql.append(" (FORMAT PARQUET");
+    if (partitionColumns != null && !partitionColumns.isEmpty()) {
+      sql.append(", PARTITION_BY (");
+      sql.append(String.join(", ", partitionColumns));
+      sql.append("), OVERWRITE_OR_IGNORE");
+    }
+    sql.append(");");
+
+    return sql.toString();
+  }
+
+  /**
+   * Cleans up temporary reorganization files.
+   */
+  private void cleanupTempFiles(Connection conn, String tempBase) throws java.sql.SQLException {
+    // List and delete all files in temp directory
+    // For S3, we need to delete each file individually
+    String listSql = "SELECT file FROM glob(" + quoteLiteral(tempBase + "/**/*.parquet") + ")";
+
+    List<String> filesToDelete = new ArrayList<>();
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(listSql)) {
+      while (rs.next()) {
+        filesToDelete.add(rs.getString("file"));
+      }
+    }
+
+    LOGGER.info("  Deleting {} temp files...", filesToDelete.size());
+
+    // Delete files using DuckDB's COPY to /dev/null trick won't work for S3
+    // Instead, we'll use the storage provider if available, or log a warning
+    if (storageProvider != null && filesToDelete.size() > 0) {
+      for (String file : filesToDelete) {
+        try {
+          storageProvider.delete(file);
+        } catch (Exception e) {
+          LOGGER.warn("  Failed to delete temp file {}: {}", file, e.getMessage());
+        }
+      }
+    }
+    LOGGER.info("  Temp cleanup complete");
   }
 
   /**
@@ -3716,16 +4031,18 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Builds DuckDB SQL for reorganizing data into a single file.
+   * Builds DuckDB SQL for reorganizing data into partitioned files.
    *
    * @param sourceGlob Glob pattern for source files
    * @param targetBase Target base directory path
    * @param partitionColumns Columns to partition by
    * @param columnMappings Maps target column name -> source column name for aliasing
+   * @param filenamePattern Optional filename pattern (e.g., "year_2020_{i}") for batched writes
    * @return SQL COPY statement
    */
   private String buildReorganizationSql(String sourceGlob, String targetBase,
-      List<String> partitionColumns, Map<String, String> columnMappings) {
+      List<String> partitionColumns, Map<String, String> columnMappings,
+      String filenamePattern) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");
 
@@ -3753,8 +4070,14 @@ public abstract class AbstractGovDataDownloader {
     if (partitionColumns != null && !partitionColumns.isEmpty()) {
       sql.append(", PARTITION_BY (");
       sql.append(String.join(", ", partitionColumns));
-      sql.append("), OVERWRITE_OR_IGNORE");
+      sql.append(")");
     }
+    // Add filename pattern for batched writes
+    if (filenamePattern != null && !filenamePattern.isEmpty()) {
+      sql.append(", FILENAME_PATTERN ").append(quoteLiteral(filenamePattern));
+    }
+    // Use OVERWRITE_OR_IGNORE to handle existing files
+    sql.append(", OVERWRITE_OR_IGNORE");
     sql.append(");");
 
     return sql.toString();
