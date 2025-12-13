@@ -1980,7 +1980,8 @@
             "columnDefinitions": [
               {"name": "geo_fips", "type": "VARCHAR", "sourceColumn": "GeoFips"}
             ]
-          }
+          },
+          "batch_partition_columns": ["year", "geo_fips_set"]
         },
         {
           "name": "regional_income_by_year",
@@ -1990,7 +1991,8 @@
             "columnDefinitions": [
               {"name": "year", "type": "INTEGER"}
             ]
-          }
+          },
+          "batch_partition_columns": ["year", "geo_fips_set"]
         },
         {
           "name": "regional_income_by_indicator",
@@ -2000,7 +2002,8 @@
             "columnDefinitions": [
               {"name": "tablename", "type": "VARCHAR"}
             ]
-          }
+          },
+          "batch_partition_columns": ["year", "geo_fips_set"]
         }
       ]
     },
