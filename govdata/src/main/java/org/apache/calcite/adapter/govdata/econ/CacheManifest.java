@@ -129,8 +129,9 @@ public class CacheManifest extends AbstractCacheManifest {
   @Override
   public boolean isParquetConverted(CacheKey cacheKey) {
     boolean converted = store.isParquetConverted(cacheKey.asString());
-    if (converted) {
-      LOGGER.debug("Cached parquet, skipped conversion: {}", cacheKey.asString());
+    // Use TRACE for per-item logging to avoid flooding DEBUG logs with 700K+ entries
+    if (converted && LOGGER.isTraceEnabled()) {
+      LOGGER.trace("Cached parquet, skipped conversion: {}", cacheKey.asString());
     }
     return converted;
   }

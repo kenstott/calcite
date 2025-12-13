@@ -171,8 +171,9 @@ public class GeoCacheManifest extends AbstractCacheManifest {
   @Override
   public boolean isParquetConverted(CacheKey cacheKey) {
     boolean converted = store.isParquetConverted(cacheKey.asString());
-    if (converted) {
-      LOGGER.debug("Parquet already converted for {}", cacheKey.asString());
+    // Use TRACE for per-item logging to avoid flooding DEBUG logs in high-cardinality loops
+    if (converted && LOGGER.isTraceEnabled()) {
+      LOGGER.trace("Parquet already converted for {}", cacheKey.asString());
     }
     return converted;
   }
