@@ -501,6 +501,9 @@ public abstract class AbstractGovDataDownloader {
   /** End year for data downloads (from model operands) */
   protected final int endYear;
 
+  /** Default filename for parquet files when pattern uses wildcard (from model operands) */
+  protected final String defaultParquetFilename;
+
   protected AbstractGovDataDownloader(
       String cacheDirectory,
       String operatingDirectory,
@@ -510,7 +513,8 @@ public abstract class AbstractGovDataDownloader {
       String schemaName,
       AbstractCacheManifest sharedManifest,
       int startYear,
-      int endYear) {
+      int endYear,
+      String defaultParquetFilename) {
     this.cacheManifest = sharedManifest;
     this.cacheDirectory = cacheDirectory;
     this.operatingDirectory = operatingDirectory;
@@ -519,6 +523,7 @@ public abstract class AbstractGovDataDownloader {
     this.storageProvider = storageProvider;
     this.startYear = startYear;
     this.endYear = endYear;
+    this.defaultParquetFilename = defaultParquetFilename != null ? defaultParquetFilename : "data_0";
     // Determine schema file extension: econ uses YAML, others still use JSON
     String schemaExtension = "econ".equals(schemaName) ? ".yaml" : ".json";
     this.schemaResourceName = "/" + schemaName + "/" + schemaName + "-schema" + schemaExtension;
@@ -1170,7 +1175,24 @@ public abstract class AbstractGovDataDownloader {
       result = result.replaceAll(key + "=\\*", key + "=" + value);
     }
 
+    // Replace filename wildcard (/*.parquet) with default filename (/data_0.parquet)
+    // This allows patterns like "section=*/*.parquet" to work with both:
+    // - PARTITION_BY writes (which generate data_0.parquet)
+    // - Individual file writes (which use this substitution)
+    result = result.replaceAll("/\\*\\.", "/" + getDefaultParquetFilename() + ".");
+
     return result;
+  }
+
+  /**
+   * Returns the default filename to use when writing parquet files.
+   * This matches the naming convention used by DuckDB's PARTITION_BY.
+   * Can be configured via model operand "defaultParquetFilename".
+   *
+   * @return Default parquet filename without extension (default: "data_0")
+   */
+  protected String getDefaultParquetFilename() {
+    return defaultParquetFilename;
   }
 
   // ===== Schema-Driven Download Infrastructure =====
@@ -3307,14 +3329,18 @@ public abstract class AbstractGovDataDownloader {
     final String alternateName;
     final String alternatePattern;
     final List<String> partitionColumns;
+    /** Maps target column name -> source column name for columns that need aliasing */
+    final Map<String, String> columnMappings;
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
-        String alternateName, String alternatePattern, List<String> partitionColumns) {
+        String alternateName, String alternatePattern, List<String> partitionColumns,
+        Map<String, String> columnMappings) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
       this.alternateName = alternateName;
       this.alternatePattern = alternatePattern;
       this.partitionColumns = partitionColumns != null ? partitionColumns : Collections.emptyList();
+      this.columnMappings = columnMappings != null ? columnMappings : Collections.emptyMap();
     }
   }
 
@@ -3496,14 +3522,21 @@ public abstract class AbstractGovDataDownloader {
             String alternatePattern = alternateNode.has("pattern")
                 ? alternateNode.get("pattern").asText() : null;
 
-            // Extract partition columns from partition.columnDefinitions
+            // Extract partition columns and column mappings from partition.columnDefinitions
             List<String> partitionColumns = new ArrayList<>();
+            Map<String, String> columnMappings = new HashMap<>();
             if (alternateNode.has("partition")) {
               JsonNode partitionNode = alternateNode.get("partition");
               if (partitionNode.has("columnDefinitions") && partitionNode.get("columnDefinitions").isArray()) {
                 for (JsonNode colDef : partitionNode.get("columnDefinitions")) {
                   if (colDef.has("name")) {
-                    partitionColumns.add(colDef.get("name").asText());
+                    String targetColName = colDef.get("name").asText();
+                    partitionColumns.add(targetColName);
+                    // Check for sourceColumn mapping (e.g., GeoFips -> geo_fips)
+                    if (colDef.has("sourceColumn")) {
+                      String sourceColName = colDef.get("sourceColumn").asText();
+                      columnMappings.put(targetColName, sourceColName);
+                    }
                   }
                 }
               }
@@ -3511,7 +3544,8 @@ public abstract class AbstractGovDataDownloader {
 
             if (alternateName != null && alternatePattern != null) {
               alternatePartitions.add(new AlternatePartitionPattern(
-                  tableName, sourcePattern, alternateName, alternatePattern, partitionColumns));
+                  tableName, sourcePattern, alternateName, alternatePattern,
+                  partitionColumns, columnMappings));
               LOGGER.debug("Found alternate partition: {} -> {} (partition by: {})",
                   tableName, alternateName, partitionColumns);
             }
@@ -3616,11 +3650,12 @@ public abstract class AbstractGovDataDownloader {
     String fullSourceGlob = storageProvider.resolvePath(parquetDirectory, sourceGlob);
     String fullTargetBase = storageProvider.resolvePath(parquetDirectory, targetBase);
 
-    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {} (PARTITION_BY: {})",
-        fullSourceGlob, fullTargetBase, alternate.partitionColumns);
+    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {} (PARTITION_BY: {}, columnMappings: {})",
+        fullSourceGlob, fullTargetBase, alternate.partitionColumns, alternate.columnMappings);
 
-    // Build DuckDB SQL with PARTITION_BY
-    String sql = buildReorganizationSql(fullSourceGlob, fullTargetBase, alternate.partitionColumns);
+    // Build DuckDB SQL with PARTITION_BY and column mappings
+    String sql = buildReorganizationSql(fullSourceGlob, fullTargetBase,
+        alternate.partitionColumns, alternate.columnMappings);
 
     LOGGER.debug("Reorganization SQL:\n{}", sql);
 
@@ -3684,14 +3719,31 @@ public abstract class AbstractGovDataDownloader {
    * Builds DuckDB SQL for reorganizing data into a single file.
    *
    * @param sourceGlob Glob pattern for source files
-   * @param targetPath Target reorganized file path
+   * @param targetBase Target base directory path
+   * @param partitionColumns Columns to partition by
+   * @param columnMappings Maps target column name -> source column name for aliasing
    * @return SQL COPY statement
    */
   private String buildReorganizationSql(String sourceGlob, String targetBase,
-      List<String> partitionColumns) {
+      List<String> partitionColumns, Map<String, String> columnMappings) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");
-    sql.append("  SELECT * FROM read_parquet(").append(quoteLiteral(sourceGlob))
+
+    // Build SELECT clause with column aliases if mappings exist
+    if (columnMappings != null && !columnMappings.isEmpty()) {
+      // Generate: SELECT *, SourceCol AS target_col, ...
+      StringBuilder selectClause = new StringBuilder("  SELECT *");
+      for (Map.Entry<String, String> mapping : columnMappings.entrySet()) {
+        String targetCol = mapping.getKey();
+        String sourceCol = mapping.getValue();
+        selectClause.append(", ").append(sourceCol).append(" AS ").append(targetCol);
+      }
+      sql.append(selectClause).append(" FROM read_parquet(");
+    } else {
+      sql.append("  SELECT * FROM read_parquet(");
+    }
+
+    sql.append(quoteLiteral(sourceGlob))
        .append(", hive_partitioning=true, union_by_name=true)\n");
     sql.append(") TO ").append(quoteLiteral(targetBase));
 

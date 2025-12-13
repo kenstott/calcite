@@ -1574,47 +1574,35 @@ partitionedTables:
         errorPath: "BEAAPI.Results.Error"
 
     # Alternate partition layouts for optimized query patterns
-    # These provide consolidated data layouts for common access patterns,
-    # allowing the optimizer to select the best layout based on query filters
+    # Consolidated files use different partition keys within type=regional_income.
     alternate_partitions:
       # Consolidated by state - one file per state with all years/indicators
-      # Good for: "Show me all data for California" queries
       - name: regional_income_by_state
-        pattern: "type=regional_income_by_state/geo_fips=*/regional_income.parquet"
+        pattern: "type=regional_income/geo_fips=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
-            - name: type
-              type: VARCHAR
             - name: geo_fips
               type: VARCHAR
-        comment: "Consolidated by state FIPS - one file per state with all years, tables, and line codes"
+              sourceColumn: GeoFips
 
       # Consolidated by year - one file per year with all states/indicators
-      # Good for: "Compare all states for 2023" queries
       - name: regional_income_by_year
-        pattern: "type=regional_income_by_year/year=*/regional_income.parquet"
+        pattern: "type=regional_income/year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
-            - name: type
-              type: VARCHAR
             - name: year
               type: INTEGER
-        comment: "Consolidated by year - one file per year with all states, tables, and line codes"
 
       # Consolidated by indicator table - one file per BEA table
-      # Good for: "Show me all SAGDP1 data across states/years" queries
       - name: regional_income_by_indicator
-        pattern: "type=regional_income_by_indicator/tablename=*/regional_income.parquet"
+        pattern: "type=regional_income/tablename=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
-            - name: type
-              type: VARCHAR
             - name: tablename
               type: VARCHAR
-        comment: "Consolidated by indicator - one file per BEA table with all states, years, and line codes"
 
   # --- ITA DATA ---
   - name: ita_data
@@ -1985,7 +1973,7 @@ partitionedTables:
 
   # --- REFERENCE NIPA TABLES ---
   - name: reference_nipa_tables
-    pattern: "type=reference/section=*/nipa_tables.parquet"
+    pattern: "type=reference/section=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:

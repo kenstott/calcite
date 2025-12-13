@@ -1964,7 +1964,39 @@
           "maxRetries": 5,
           "retryDelayMs": 5000
         }
-      }
+      },
+      "alternate_partitions": [
+        {
+          "name": "regional_income_by_state",
+          "pattern": "type=regional_income/geo_fips=*/*.parquet",
+          "partition": {
+            "style": "hive",
+            "columnDefinitions": [
+              {"name": "geo_fips", "type": "VARCHAR", "sourceColumn": "GeoFips"}
+            ]
+          }
+        },
+        {
+          "name": "regional_income_by_year",
+          "pattern": "type=regional_income/year=*/*.parquet",
+          "partition": {
+            "style": "hive",
+            "columnDefinitions": [
+              {"name": "year", "type": "INTEGER"}
+            ]
+          }
+        },
+        {
+          "name": "regional_income_by_indicator",
+          "pattern": "type=regional_income/tablename=*/*.parquet",
+          "partition": {
+            "style": "hive",
+            "columnDefinitions": [
+              {"name": "tablename", "type": "VARCHAR"}
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "ita_data",
@@ -2490,7 +2522,7 @@
     },
     {
       "name": "reference_nipa_tables",
-      "pattern": "type=reference/section=*/nipa_tables.parquet",
+      "pattern": "type=reference/section=*/*.parquet",
       "partitions": {
         "style": "hive",
         "columnDefinitions": [
