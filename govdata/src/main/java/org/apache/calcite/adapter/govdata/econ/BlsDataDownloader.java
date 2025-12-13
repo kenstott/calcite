@@ -2859,11 +2859,41 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Uses metadata-driven patterns from schema for output paths.
    */
   private void generateBlsGeographiesReference() throws IOException {
-    LOGGER.info("Generating BLS geographies reference table");
-
     // Load pattern from schema
     Map<String, Object> metadata = loadTableMetadata("reference_bls_geographies");
     String pattern = (String) metadata.get("pattern");
+
+    // Check if all 3 geo_type partitions are already cached
+    List<String> geoTypes = Arrays.asList("state", "region", "metro");
+    List<String> needsGeneration = new ArrayList<>();
+
+    for (String geoType : geoTypes) {
+      Map<String, String> params = ImmutableMap.of("geo_type", geoType);
+      CacheKey cacheKey = new CacheKey("reference_bls_geographies", params);
+
+      if (cacheManifest.isParquetConverted(cacheKey)) {
+        continue;  // Already in manifest
+      }
+
+      // Self-healing: check if file exists
+      String resolvedPattern = resolveParquetPath(pattern, params);
+      String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
+      if (storageProvider.exists(parquetPath)) {
+        LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", resolvedPattern);
+        cacheManifest.markParquetConverted(cacheKey, resolvedPattern);
+        continue;
+      }
+
+      needsGeneration.add(geoType);
+    }
+
+    if (needsGeneration.isEmpty()) {
+      LOGGER.debug("BLS geographies reference already cached for all geo_types, skipping");
+      return;
+    }
+
+    LOGGER.info("Generating BLS geographies reference table for {} geo_types: {}",
+        needsGeneration.size(), needsGeneration);
 
     try (Connection duckdb = getDuckDBConnection(storageProvider)) {
         // Serialize BLS constants to JSON strings for DuckDB
@@ -2884,10 +2914,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           stmt.execute(loadSql);
         }
 
-        // Write partitioned parquet files by geo_type
-        for (String geoType : Arrays.asList("state", "region", "metro")) {
+        // Write partitioned parquet files only for geo_types that need generation
+        for (String geoType : needsGeneration) {
           // Resolve path from schema pattern
-          String resolvedPattern = resolveParquetPath(pattern, ImmutableMap.of("geo_type", geoType));
+          Map<String, String> params = ImmutableMap.of("geo_type", geoType);
+          String resolvedPattern = resolveParquetPath(pattern, params);
           String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
           // Generate parquet file for this geo_type using direct substitution (COPY TO requires literal paths)
@@ -2911,6 +2942,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
 
           LOGGER.info("Generated {} BLS {} geographies to {}", count, geoType, parquetPath);
+
+          // Mark as converted in manifest
+          CacheKey cacheKey = new CacheKey("reference_bls_geographies", params);
+          cacheManifest.markParquetConverted(cacheKey, resolvedPattern);
         }
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS geographies reference table: " + e.getMessage(), e);
