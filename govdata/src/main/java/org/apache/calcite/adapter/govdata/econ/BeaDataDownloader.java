@@ -389,7 +389,15 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     // County-level tables (CA* = County Annual)
+    // Most CA* tables support both COUNTY and MSA, but some tables only support COUNTY:
+    // - CAINC91: "Gross flow of earnings" tracks inter-county commuting patterns
+    //   which don't aggregate meaningfully to MSA level
     if (tableName.startsWith("CA")) {
+      // County-only tables (data that tracks inter-area flows, not aggregatable to MSA)
+      if ("CAINC91".equals(tableName)) {
+        return Collections.singleton("COUNTY");
+      }
+      // Most CA* tables support both COUNTY and MSA
       return new HashSet<>(Arrays.asList("COUNTY", "MSA"));
     }
 

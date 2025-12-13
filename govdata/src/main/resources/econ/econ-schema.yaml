@@ -1518,7 +1518,7 @@ partitionedTables:
         CAINC4: "County and MSA annual personal income and employment by major component"
         CAINC5N: "County and MSA annual personal income by major component and earnings by NAICS industry"
         CAINC6N: "County and MSA annual compensation of employees by NAICS industry"
-        CAINC91: "County and MSA annual gross flow of earnings"
+        CAINC91: "County annual gross flow of earnings (inter-county commuting, county-level only)"
         # State Annual GDP (SAGDP*) - 10 active tables
         SAGDP1: "State annual GDP summary"
         SAGDP2: "State annual GDP by industry"
