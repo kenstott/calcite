@@ -2144,13 +2144,24 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         ? String.format("%d.q1-q4.singlefile.csv", year)
         : String.format("%d.annual.singlefile.csv", year);
 
+    // Get the resource path for state_fips.json
+    String stateFipsJsonPath = requireNonNull(getClass().getResource("/geo/state_fips.json")).getPath();
+
+    // Select SQL template based on frequency (annual vs quarterly have different column schemas)
+    String sqlTemplatePath = frequency.equals("qtrly")
+        ? "/sql/bls/convert_county_wages_quarterly.sql"
+        : "/sql/bls/convert_county_wages_annual.sql";
+
     // Load SQL template and substitute parameters using string replacement
     // Note: DuckDB doesn't support PreparedStatement parameters in file paths,
     // so we must use direct string substitution for read_csv_auto() and COPY TO
     String sql =
-        substituteSqlParameters(loadSqlResource("/sql/qcew_county_to_parquet.sql"),
-        ImmutableMap.of("zipPath", fullZipPath,
+        substituteSqlParameters(loadSqlResource(sqlTemplatePath),
+        ImmutableMap.of(
+            "year", String.valueOf(year),
+            "zipPath", fullZipPath,
             "csvFilename", csvFilename,
+            "stateFipsPath", stateFipsJsonPath,
             "parquetPath", fullParquetPath));
 
     // Execute the SQL
