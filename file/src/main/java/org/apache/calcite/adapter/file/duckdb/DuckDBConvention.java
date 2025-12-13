@@ -93,6 +93,12 @@ public class DuckDBConvention extends JdbcConvention {
       planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
     }
 
+    // 5. DISTINCT on partition columns optimization using directory listing
+    // This avoids scanning parquet files to get distinct partition values
+    if (!"false".equals(System.getProperty("calcite.file.partition.distinct.enabled"))) {
+      planner.addRule(org.apache.calcite.adapter.file.rules.PartitionDistinctRule.INSTANCE);
+    }
+
     // Register all standard JDBC rules for comprehensive pushdown
     // These will only apply to queries that weren't optimized by statistics-based rules
     for (RelOptRule rule : JdbcRules.rules(this)) {

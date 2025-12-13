@@ -538,6 +538,11 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
       if (!"false".equals(System.getProperty("calcite.file.statistics.count.star.enabled"))) {
         planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
       }
+
+      // DISTINCT on partition columns optimization using directory listing
+      if (!"false".equals(System.getProperty("calcite.file.partition.distinct.enabled"))) {
+        planner.addRule(org.apache.calcite.adapter.file.rules.PartitionDistinctRule.INSTANCE);
+      }
     }
 
     @Override public Result implement(EnumerableRelImplementor implementor, Prefer pref) {

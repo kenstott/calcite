@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvProjectTableScanRule;
 import org.apache.calcite.adapter.file.rules.AlternatePartitionSelectionRule;
 import org.apache.calcite.adapter.file.rules.CountStarStatisticsRule;
 import org.apache.calcite.adapter.file.rules.HLLCountDistinctRule;
+import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
 
 /** Planner rules relating to the File adapter. */
 public abstract class FileRules {
@@ -46,4 +47,10 @@ public abstract class FileRules {
    * S3 file listing for hive-partitioned tables with many files. */
   public static final CountStarStatisticsRule COUNT_STAR_STATISTICS =
       CountStarStatisticsRule.INSTANCE;
+
+  /** Rule that replaces SELECT DISTINCT on partition columns with directory listing.
+   * For hive-partitioned tables, partition values are encoded in directory names,
+   * so we can retrieve them via fast directory listing instead of scanning parquet files. */
+  public static final PartitionDistinctRule PARTITION_DISTINCT =
+      PartitionDistinctRule.INSTANCE;
 }

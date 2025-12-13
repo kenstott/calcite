@@ -1260,6 +1260,147 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
   }
 
   /**
+   * Returns the list of partition columns for this table.
+   */
+  public List<String> getPartitionColumns() {
+    return partitionColumns != null ? partitionColumns : new ArrayList<>();
+  }
+
+  /**
+   * Checks if the given column is a partition column.
+   */
+  public boolean isPartitionColumn(String columnName) {
+    return partitionColumns != null && partitionColumns.contains(columnName);
+  }
+
+  /**
+   * Gets distinct values for a partition column by listing directories.
+   * This is much faster than scanning parquet files since values are encoded in directory names.
+   *
+   * @param columnName The partition column name
+   * @return List of distinct values, or empty list if column is not a partition column
+   */
+  public List<String> getDistinctPartitionValues(String columnName) {
+    if (!isPartitionColumn(columnName)) {
+      LOGGER.debug("Column '{}' is not a partition column for table '{}'", columnName, tableName);
+      return new ArrayList<>();
+    }
+
+    java.util.Set<String> values = new java.util.TreeSet<>();
+
+    // Determine base path for listing
+    String basePath = getBasePathForPartitionListing();
+    if (basePath == null) {
+      LOGGER.debug("Could not determine base path for partition listing in table '{}'", tableName);
+      return new ArrayList<>();
+    }
+
+    LOGGER.debug("Getting distinct {} values via directory listing from: {}", columnName, basePath);
+
+    try {
+      // List files/directories under the base path
+      List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> entries;
+      if (storageProvider != null) {
+        entries = storageProvider.listFiles(basePath, true);
+      } else {
+        // Local file system fallback
+        entries = listLocalFiles(basePath);
+      }
+
+      // Extract partition values from paths
+      // Look for paths like ".../{columnName}={value}/..."
+      java.util.regex.Pattern valuePattern =
+          java.util.regex.Pattern.compile(columnName + "=([^/]+)");
+
+      for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry entry : entries) {
+        java.util.regex.Matcher matcher = valuePattern.matcher(entry.getPath());
+        if (matcher.find()) {
+          values.add(matcher.group(1));
+        }
+      }
+
+      LOGGER.debug("Found {} distinct {} values via directory listing: {}",
+          values.size(), columnName, values);
+
+    } catch (IOException e) {
+      LOGGER.warn("Failed to list directories for partition column {}: {}", columnName, e.getMessage());
+    }
+
+    return new ArrayList<>(values);
+  }
+
+  /**
+   * Gets the base path for partition listing by finding the directory containing partition columns.
+   */
+  private String getBasePathForPartitionListing() {
+    // Use configured pattern if available
+    if (config != null && config.getPattern() != null && !filePaths.isEmpty()) {
+      String firstFile = filePaths.get(0);
+      // Find common base directory (up to type=)
+      int typeIndex = firstFile.indexOf("type=");
+      if (typeIndex > 0) {
+        return firstFile.substring(0, typeIndex);
+      }
+    }
+
+    // Fallback to first file's directory structure
+    if (!filePaths.isEmpty()) {
+      String firstFile = filePaths.get(0);
+      // Find the first partition column in the path
+      if (partitionColumns != null && !partitionColumns.isEmpty()) {
+        String firstPartCol = partitionColumns.get(0);
+        int partIndex = firstFile.indexOf(firstPartCol + "=");
+        if (partIndex > 0) {
+          return firstFile.substring(0, partIndex);
+        }
+      }
+      // Just use parent directory
+      int lastSlash = firstFile.lastIndexOf('/');
+      if (lastSlash > 0) {
+        return firstFile.substring(0, lastSlash);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Lists files in a local directory (fallback when no StorageProvider).
+   */
+  private List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> listLocalFiles(
+      String basePath) throws IOException {
+    List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> entries = new ArrayList<>();
+    java.nio.file.Path base = java.nio.file.Paths.get(basePath);
+
+    if (java.nio.file.Files.exists(base) && java.nio.file.Files.isDirectory(base)) {
+      java.nio.file.Files.walkFileTree(base, new java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+        @Override
+        public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file,
+            java.nio.file.attribute.BasicFileAttributes attrs) {
+          String filePath = file.toString();
+          String fileName = file.getFileName().toString();
+          entries.add(new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
+              filePath, fileName, false, attrs.size(), attrs.lastModifiedTime().toMillis()));
+          return java.nio.file.FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public java.nio.file.FileVisitResult preVisitDirectory(java.nio.file.Path dir,
+            java.nio.file.attribute.BasicFileAttributes attrs) {
+          // Also capture directories for partition value extraction
+          String dirPath = dir.toString();
+          String dirName = dir.getFileName() != null ? dir.getFileName().toString() : "";
+          entries.add(new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
+              dirPath, dirName, true, 0, attrs.lastModifiedTime().toMillis()));
+          return java.nio.file.FileVisitResult.CONTINUE;
+        }
+      });
+    }
+
+    return entries;
+  }
+
+  /**
    * Build parquet glob pattern from file paths or config.
    */
   private String buildParquetPattern() {
