@@ -198,13 +198,22 @@ public class PartitionedTableConfig {
     private final String pattern;
     private final PartitionConfig partition;
     private final String comment;
+    private final List<String> batchPartitionColumns;
+    private final Map<String, String> columnMappings;
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment) {
+      this(name, pattern, partition, comment, null, null);
+    }
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings) {
       this.name = name;
       this.pattern = pattern;
       this.partition = partition;
       this.comment = comment;
+      this.batchPartitionColumns = batchPartitionColumns;
+      this.columnMappings = columnMappings;
     }
 
     public String getName() {
@@ -221,6 +230,22 @@ public class PartitionedTableConfig {
 
     public String getComment() {
       return comment;
+    }
+
+    /**
+     * Returns columns used for batching during reorganization (e.g., [year, geo_fips_set]).
+     * This helps process large datasets in manageable chunks to avoid OOM.
+     */
+    public List<String> getBatchPartitionColumns() {
+      return batchPartitionColumns;
+    }
+
+    /**
+     * Returns column mappings from target column name to source column name.
+     * Used when source data has different column names than the alternate's partition keys.
+     */
+    public Map<String, String> getColumnMappings() {
+      return columnMappings;
     }
 
     /**
@@ -486,7 +511,33 @@ public class PartitionedTableConfig {
         altPartition = new PartitionConfig(style, simpleColumns, columnDefs, null, null);
       }
 
-      result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment));
+      // Parse batch_partition_columns
+      List<String> batchPartitionColumns = null;
+      Object batchColsObj = m.get("batch_partition_columns");
+      if (batchColsObj instanceof List) {
+        batchPartitionColumns = new java.util.ArrayList<>();
+        for (Object col : (List<?>) batchColsObj) {
+          if (col instanceof String) {
+            batchPartitionColumns.add((String) col);
+          }
+        }
+      }
+
+      // Parse column_mappings: {target_col: source_col, ...}
+      Map<String, String> columnMappings = null;
+      Object mappingsObj = m.get("column_mappings");
+      if (mappingsObj instanceof Map) {
+        columnMappings = new java.util.LinkedHashMap<>();
+        Map<?, ?> mappingsMap = (Map<?, ?>) mappingsObj;
+        for (Map.Entry<?, ?> entry : mappingsMap.entrySet()) {
+          if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+            columnMappings.put((String) entry.getKey(), (String) entry.getValue());
+          }
+        }
+      }
+
+      result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
+          batchPartitionColumns, columnMappings));
     }
 
     return result.isEmpty() ? null : result;
