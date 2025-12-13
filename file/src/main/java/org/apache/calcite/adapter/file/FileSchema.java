@@ -3664,6 +3664,48 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Materialize alternate partition layouts for all tables that have them configured.
+   *
+   * <p>This reads alternate_partitions from each table's config and uses DuckDB's
+   * COPY with PARTITION_BY to create consolidated data layouts. This enables the
+   * query optimizer to select the most efficient layout based on query predicates.
+   */
+  private void materializeAlternatePartitions() {
+    if (partitionedTables == null || baseDirectory == null) {
+      return;
+    }
+
+    // Parse configs and filter to those with alternates
+    List<PartitionedTableConfig> tablesWithAlternates = new java.util.ArrayList<>();
+    for (Map<String, Object> partTableConfig : partitionedTables) {
+      try {
+        PartitionedTableConfig config = PartitionedTableConfig.fromMap(partTableConfig);
+        if (config.getAlternatePartitions() != null && !config.getAlternatePartitions().isEmpty()) {
+          tablesWithAlternates.add(config);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error parsing partitioned table config: {}", e.getMessage());
+      }
+    }
+
+    if (tablesWithAlternates.isEmpty()) {
+      LOGGER.debug("No tables with alternate_partitions found");
+      return;
+    }
+
+    LOGGER.info("Found {} table(s) with alternate_partitions to materialize", tablesWithAlternates.size());
+
+    // Use the AlternatePartitionMaterializer to create the data files
+    org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer materializer =
+        org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer.create(baseDirectory);
+
+    int total = materializer.materializeAll(tablesWithAlternates);
+    if (total > 0) {
+      LOGGER.info("Materialized {} alternate partition layout(s)", total);
+    }
+  }
+
+  /**
    * Process partitioned table configurations.
    */
   private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder) {
@@ -3675,6 +3717,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       LOGGER.warn("Early return from processPartitionedTables - partitionedTables: {}, baseDirectory: {}",
                   partitionedTables != null ? "present" : "null", baseDirectory != null ? "present" : "null");
       return;
+    }
+
+    // Materialize alternate partitions if configured and system property enables it
+    if (!"false".equals(System.getProperty("calcite.file.alternatePartitions.materialize.enabled"))) {
+      materializeAlternatePartitions();
     }
 
     // Track which tables have already been added to avoid duplicates
