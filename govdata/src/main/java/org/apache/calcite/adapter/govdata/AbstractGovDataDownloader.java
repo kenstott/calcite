@@ -4297,9 +4297,15 @@ public abstract class AbstractGovDataDownloader {
         operation.execute(cacheKey, req.parameters, fullJsonPath, fullParquetPath, finalPrefetchHelper);
         executed++;
 
-        // Mark parquet as converted after successful operation
+        // Mark parquet as converted only if parquet was actually created
         if (OperationType.CONVERSION.equals(operationType)) {
-          cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+          // Verify parquet was created before marking - prevents false positives when source is missing
+          if (storageProvider.exists(fullParquetPath)) {
+            cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+          } else {
+            LOGGER.debug("Conversion completed but parquet not created (missing source?): {}",
+                relativeParquetPath);
+          }
         }
 
         if (executed % 10 == 0) {
