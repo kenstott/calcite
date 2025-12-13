@@ -3306,13 +3306,15 @@ public abstract class AbstractGovDataDownloader {
     final String sourcePattern;
     final String alternateName;
     final String alternatePattern;
+    final List<String> partitionColumns;
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
-        String alternateName, String alternatePattern) {
+        String alternateName, String alternatePattern, List<String> partitionColumns) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
       this.alternateName = alternateName;
       this.alternatePattern = alternatePattern;
+      this.partitionColumns = partitionColumns != null ? partitionColumns : Collections.emptyList();
     }
   }
 
@@ -3494,10 +3496,24 @@ public abstract class AbstractGovDataDownloader {
             String alternatePattern = alternateNode.has("pattern")
                 ? alternateNode.get("pattern").asText() : null;
 
+            // Extract partition columns from partition.columnDefinitions
+            List<String> partitionColumns = new ArrayList<>();
+            if (alternateNode.has("partition")) {
+              JsonNode partitionNode = alternateNode.get("partition");
+              if (partitionNode.has("columnDefinitions") && partitionNode.get("columnDefinitions").isArray()) {
+                for (JsonNode colDef : partitionNode.get("columnDefinitions")) {
+                  if (colDef.has("name")) {
+                    partitionColumns.add(colDef.get("name").asText());
+                  }
+                }
+              }
+            }
+
             if (alternateName != null && alternatePattern != null) {
               alternatePartitions.add(new AlternatePartitionPattern(
-                  tableName, sourcePattern, alternateName, alternatePattern));
-              LOGGER.debug("Found alternate partition: {} -> {}", tableName, alternateName);
+                  tableName, sourcePattern, alternateName, alternatePattern, partitionColumns));
+              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {})",
+                  tableName, alternateName, partitionColumns);
             }
           }
         }
@@ -3592,17 +3608,19 @@ public abstract class AbstractGovDataDownloader {
     // Build source glob pattern (replaces partition variables with wildcards)
     String sourceGlob = buildSourceGlob(alternate.sourcePattern, variables);
 
-    // Build target path (substitutes variables)
+    // Build target BASE path (strip partition wildcards - PARTITION_BY will create them)
     String targetPath = substituteVariables(alternate.alternatePattern, variables);
+    String targetBase = extractTargetBaseDirectory(targetPath, alternate.partitionColumns);
 
     // Resolve full paths
     String fullSourceGlob = storageProvider.resolvePath(parquetDirectory, sourceGlob);
-    String fullTargetPath = storageProvider.resolvePath(parquetDirectory, targetPath);
+    String fullTargetBase = storageProvider.resolvePath(parquetDirectory, targetBase);
 
-    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {}", fullSourceGlob, fullTargetPath);
+    LOGGER.info("Reorganizing:\n  FROM: {}\n  TO:   {} (PARTITION_BY: {})",
+        fullSourceGlob, fullTargetBase, alternate.partitionColumns);
 
-    // Build DuckDB SQL
-    String sql = buildReorganizationSql(fullSourceGlob, fullTargetPath);
+    // Build DuckDB SQL with PARTITION_BY
+    String sql = buildReorganizationSql(fullSourceGlob, fullTargetBase, alternate.partitionColumns);
 
     LOGGER.debug("Reorganization SQL:\n{}", sql);
 
@@ -3669,12 +3687,62 @@ public abstract class AbstractGovDataDownloader {
    * @param targetPath Target reorganized file path
    * @return SQL COPY statement
    */
-  private String buildReorganizationSql(String sourceGlob, String targetPath) {
-    return "COPY (\n"
-  +
-        "  SELECT * FROM read_parquet(" + quoteLiteral(sourceGlob) + ", union_by_name=true)\n"
-  +
-        ") TO " + quoteLiteral(targetPath) + " (FORMAT PARQUET);";
+  private String buildReorganizationSql(String sourceGlob, String targetBase,
+      List<String> partitionColumns) {
+    StringBuilder sql = new StringBuilder();
+    sql.append("COPY (\n");
+    sql.append("  SELECT * FROM read_parquet(").append(quoteLiteral(sourceGlob))
+       .append(", hive_partitioning=true, union_by_name=true)\n");
+    sql.append(") TO ").append(quoteLiteral(targetBase));
+
+    // Add format and partition options
+    sql.append(" (FORMAT PARQUET");
+    if (partitionColumns != null && !partitionColumns.isEmpty()) {
+      sql.append(", PARTITION_BY (");
+      sql.append(String.join(", ", partitionColumns));
+      sql.append("), OVERWRITE_OR_IGNORE");
+    }
+    sql.append(");");
+
+    return sql.toString();
+  }
+
+  /**
+   * Extracts the base directory from a target path, removing partition key patterns.
+   * For example: "type=foo/geo_fips=*\/data.parquet" -> "type=foo"
+   */
+  private String extractTargetBaseDirectory(String targetPath, List<String> partitionColumns) {
+    if (partitionColumns == null || partitionColumns.isEmpty()) {
+      // No partitioning - return path without filename
+      int lastSlash = targetPath.lastIndexOf('/');
+      return lastSlash > 0 ? targetPath.substring(0, lastSlash) : targetPath;
+    }
+
+    // Find the first partition column in the path and truncate there
+    for (String col : partitionColumns) {
+      String pattern = col + "=";
+      int idx = targetPath.indexOf(pattern);
+      if (idx > 0) {
+        // Return everything before this partition key
+        String base = targetPath.substring(0, idx);
+        // Remove trailing slash
+        if (base.endsWith("/")) {
+          base = base.substring(0, base.length() - 1);
+        }
+        return base;
+      }
+    }
+
+    // Fallback: remove filename and any wildcard patterns
+    String result = targetPath;
+    // Remove filename
+    int lastSlash = result.lastIndexOf('/');
+    if (lastSlash > 0) {
+      result = result.substring(0, lastSlash);
+    }
+    // Remove any *=* patterns
+    result = result.replaceAll("/[^/]+=\\*$", "");
+    return result;
   }
 
   /**
