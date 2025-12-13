@@ -1629,7 +1629,9 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           uncached.add(combo);
         }
       } else if (operationType == OperationType.CONVERSION) {
-        if (!cacheManifest.isParquetConverted(cacheKey)) {
+        // Only convert if source JSON is cached AND parquet hasn't been converted
+        // This prevents conversion attempts for entries that were never downloaded
+        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isParquetConverted(cacheKey)) {
           uncached.add(combo);
         }
       }

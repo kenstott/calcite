@@ -138,7 +138,9 @@ public class CacheManifestQueryHelper {
 
       // For conversions, check parquet conversion status
       if (isConversion) {
-        if (!cacheManifest.isParquetConverted(cacheKey)) {
+        // Only convert if source is cached AND parquet hasn't been converted
+        // This prevents conversion attempts for entries that were never downloaded
+        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isParquetConverted(cacheKey)) {
           result.add(req);
         }
       } else {
