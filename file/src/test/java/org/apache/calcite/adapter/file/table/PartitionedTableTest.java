@@ -120,6 +120,7 @@ public class PartitionedTableTest {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
     operand.put("executionEngine", "parquet");
+    operand.put("ephemeralCache", true);  // Use temp cache directory for test isolation
     operand.put(
         "partitionedTables", java.util.Arrays.asList(
         createPartitionedTableConfig("sales", "sales/**/*.parquet", null)));

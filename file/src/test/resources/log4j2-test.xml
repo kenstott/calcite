@@ -59,6 +59,9 @@
     <logger name="org.apache.calcite.adapter.file.table.RefreshableParquetCacheTable" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.table.RefreshableJsonTable" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory" level="INFO"/>
+    <logger name="org.apache.calcite.adapter.file.partition.PartitionDetector" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.table.PartitionedParquetTable" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.rules.PartitionDistinctRule" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file" level="WARN"/>
   </Loggers>
 </Configuration>

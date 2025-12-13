@@ -138,10 +138,17 @@ public class SimpleFileFilterPushdownRule extends RelRule<SimpleFileFilterPushdo
       return false;
     }
 
+    // Unwrap NlsString to get the actual string value for comparison
+    // NlsString.toString() returns "_ISO-8859-1'value'" which won't match parquet statistics
+    Object unwrappedFilter = filterValue;
+    if (filterValue instanceof org.apache.calcite.util.NlsString) {
+      unwrappedFilter = ((org.apache.calcite.util.NlsString) filterValue).getValue();
+    }
+
     try {
-      if (filterValue instanceof Comparable && minValue instanceof Comparable && maxValue instanceof Comparable) {
+      if (unwrappedFilter instanceof Comparable && minValue instanceof Comparable && maxValue instanceof Comparable) {
         @SuppressWarnings("unchecked")
-        Comparable<Object> filter = (Comparable<Object>) filterValue;
+        Comparable<Object> filter = (Comparable<Object>) unwrappedFilter;
         @SuppressWarnings("unchecked")
         Comparable<Object> min = (Comparable<Object>) minValue;
         @SuppressWarnings("unchecked")
