@@ -173,14 +173,17 @@ public interface GovDataSubSchemaFactory {
    * @return Schema comment, or null if not defined
    */
   default String loadSchemaComment() {
-    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+    String schemaResourceName = getSchemaResourceName();
+    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
+
+    try (InputStream is = getClass().getResourceAsStream(schemaResourceName)) {
       if (is == null) {
-        LOGGER.warn("Could not find {} resource file for loading comment", getSchemaResourceName());
+        LOGGER.warn("Could not find {} resource file for loading comment", schemaResourceName);
         return null;
       }
 
       @SuppressWarnings("unchecked")
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
       String comment = (String) schema.get("comment");
       if (comment != null) {
         LOGGER.debug("Loaded schema comment from {}: {}", getSchemaResourceName(),
@@ -201,26 +204,29 @@ public interface GovDataSubSchemaFactory {
    * @return Declared schema name
    */
   default String loadDeclaredSchemaName() {
-    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
+    String schemaResourceName = getSchemaResourceName();
+    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
+
+    try (InputStream is = getClass().getResourceAsStream(schemaResourceName)) {
       if (is == null) {
-        LOGGER.warn("Could not find {} resource file for loading schema name", getSchemaResourceName());
+        LOGGER.warn("Could not find {} resource file for loading schema name", schemaResourceName);
         return getDefaultSchemaName();
       }
 
       @SuppressWarnings("unchecked")
-      Map<String, Object> schema = JSON_MAPPER.readValue(is, Map.class);
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
       String schemaName = (String) schema.get("schemaName");
       if (schemaName != null) {
-        LOGGER.debug("Loaded declared schema name from {}: {}", getSchemaResourceName(), schemaName);
+        LOGGER.debug("Loaded declared schema name from {}: {}", schemaResourceName, schemaName);
         return schemaName;
       } else {
         // Default to lowercase filename stem
         String defaultName = getDefaultSchemaName();
-        LOGGER.debug("No schemaName in {}, using default: {}", getSchemaResourceName(), defaultName);
+        LOGGER.debug("No schemaName in {}, using default: {}", schemaResourceName, defaultName);
         return defaultName;
       }
     } catch (IOException e) {
-      LOGGER.warn("Error loading schema name from {}: {}", getSchemaResourceName(), e.getMessage());
+      LOGGER.warn("Error loading schema name from {}: {}", schemaResourceName, e.getMessage());
       return getDefaultSchemaName();
     }
   }
