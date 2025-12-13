@@ -372,71 +372,6 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   }
 
   /**
-   * Returns the valid GeoFips codes for a given BEA Regional table.
-   * Each table type only works with specific geography levels based on its prefix.
-   *
-   * @param tableName BEA Regional table name (e.g., "SAINC7N", "CAINC1")
-   * @return Set of valid GeoFips codes for this table (e.g., {"STATE"}, {"COUNTY", "MSA"})
-   */
-  private Set<String> getValidGeoFipsForTable(String tableName) {
-    if (tableName == null || tableName.isEmpty()) {
-      return Collections.emptySet();
-    }
-
-    // State-level tables (SA* = State Annual, SQ* = State Quarterly)
-    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
-      return Collections.singleton("STATE");
-    }
-
-    // County-level tables (CA* = County Annual)
-    // Most CA* tables support both COUNTY and MSA, but some tables only support COUNTY:
-    // - CAINC91: "Gross flow of earnings" tracks inter-county commuting patterns
-    //   which don't aggregate meaningfully to MSA level
-    if (tableName.startsWith("CA")) {
-      // County-only tables (data that tracks inter-area flows, not aggregatable to MSA)
-      if ("CAINC91".equals(tableName)) {
-        return Collections.singleton("COUNTY");
-      }
-      // Most CA* tables support both COUNTY and MSA
-      return new HashSet<>(Arrays.asList("COUNTY", "MSA"));
-    }
-
-    // Metropolitan area tables (MA* = Metro Annual)
-    if (tableName.startsWith("MA")) {
-      return Collections.singleton("MSA");
-    }
-
-    // Micropolitan area tables (MI*)
-    if (tableName.startsWith("MI")) {
-      return Collections.singleton("MIC");
-    }
-
-    // Port area tables (PARPP, etc.)
-    if (tableName.startsWith("PARPP") || tableName.startsWith("PORT")) {
-      return Collections.singleton("PORT");
-    }
-
-    // Metropolitan division tables
-    if (tableName.contains("DIV")) {
-      return Collections.singleton("DIV");
-    }
-
-    // Combined statistical area tables
-    if (tableName.contains("CSA")) {
-      return Collections.singleton("CSA");
-    }
-
-    // Territory tables (TA*)
-    if (tableName.startsWith("TA")) {
-      return Collections.singleton("STATE");  // Territories use STATE code
-    }
-
-    // Default: STATE (most common case)
-    LOGGER.warn("Unknown table prefix for {}, defaulting to STATE geography", tableName);
-    return Collections.singleton("STATE");
-  }
-
-  /**
    * Determines if a BEA Regional table is valid for a given year based on industry
    * classification system.
    *
@@ -1473,6 +1408,306 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return years;
   }
 
+  // ========== Table Geography Support ==========
+
+  /**
+   * Load geo support for tables, checking cache first then fetching from API.
+   * Similar pattern to loadTableYearAvailability.
+   *
+   * @param tableNames Set of table names to check
+   * @return Map of tableName to GeoSupport
+   */
+  public Map<String, DuckDBCacheStore.GeoSupport> loadTableGeoSupport(Set<String> tableNames) {
+    Map<String, DuckDBCacheStore.GeoSupport> result = new HashMap<>();
+    CacheManifest econManifest = (CacheManifest) cacheManifest;
+    DuckDBCacheStore store = econManifest.getStore();
+
+    int cached = 0;
+    int fetched = 0;
+
+    for (String tableName : tableNames) {
+      // Check cache first
+      DuckDBCacheStore.GeoSupport cachedSupport = store.getGeoSupportForTable("bea_regional", tableName);
+      if (cachedSupport != null) {
+        result.put(tableName, cachedSupport);
+        cached++;
+        continue;
+      }
+
+      // Fetch from BEA API
+      try {
+        DuckDBCacheStore.GeoSupport geoSupport = fetchGeoSupportFromApi(tableName);
+        if (geoSupport != null) {
+          // Cache for 90 days (geo support rarely changes)
+          store.setGeoSupportForTable("bea_regional", tableName, geoSupport, 90);
+          result.put(tableName, geoSupport);
+          fetched++;
+        } else {
+          // No geo support determined - use pattern-based fallback
+          LOGGER.warn("No geo support from API for table {}, using pattern-based fallback", tableName);
+          result.put(tableName, getPatternBasedGeoSupport(tableName));
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to fetch geo support for {}: {}, using pattern-based fallback",
+            tableName, e.getMessage());
+        result.put(tableName, getPatternBasedGeoSupport(tableName));
+      }
+    }
+
+    LOGGER.info("Geo support loaded for {} tables: {} from cache, {} fetched from API",
+        tableNames.size(), cached, fetched);
+
+    return result;
+  }
+
+  /**
+   * Fetch geo support for a BEA Regional table from the API.
+   *
+   * <p>Calls: GET https://apps.bea.gov/api/data
+   * ?method=GetParameterValuesFiltered
+   * &datasetname=Regional
+   * &TargetParameter=GeoFips
+   * &TableName={tableName}
+   * &ResultFormat=JSON
+   *
+   * <p>Detects supported geo types by looking at the GeoFips codes returned:
+   * - STATE: codes like "01000" (state FIPS ending in 000)
+   * - COUNTY: codes like "01001" (5-digit county FIPS)
+   * - MSA: codes >= 10000 with descriptions containing "Metropolitan Statistical Area"
+   * - MIC: codes >= 10000 with descriptions containing "Micropolitan Statistical Area"
+   * - PORT: codes ending in 998/999 (state metro/nonmetro portions)
+   * - DIV: codes with descriptions containing "Metropolitan Division"
+   * - CSA: codes with descriptions containing "Combined Statistical Area"
+   *
+   * @param tableName The BEA table name
+   * @return GeoSupport object, or null if call fails
+   */
+  private DuckDBCacheStore.GeoSupport fetchGeoSupportFromApi(String tableName)
+      throws IOException, InterruptedException {
+    String beaApiKey = System.getProperty("BEA_API_KEY");
+    if (beaApiKey == null || beaApiKey.isEmpty()) {
+      beaApiKey = System.getenv("BEA_API_KEY");
+    }
+    if (beaApiKey == null || beaApiKey.isEmpty()) {
+      LOGGER.warn("BEA_API_KEY not set, cannot fetch geo support");
+      return null;
+    }
+
+    String url = String.format(
+        "https://apps.bea.gov/api/data?method=GetParameterValuesFiltered"
+            + "&datasetname=Regional&TargetParameter=GeoFips&TableName=%s"
+            + "&ResultFormat=JSON&UserID=%s",
+        tableName, beaApiKey);
+
+    java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+        .uri(java.net.URI.create(url))
+        .GET()
+        .timeout(java.time.Duration.ofSeconds(30))
+        .build();
+
+    enforceRateLimit();
+    java.net.http.HttpResponse<String> response =
+        httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() != 200) {
+      LOGGER.warn("BEA API returned status {} for geo support of {}",
+          response.statusCode(), tableName);
+      return null;
+    }
+
+    // Parse response to detect geo types
+    boolean supportsState = false;
+    boolean supportsCounty = false;
+    boolean supportsMsa = false;
+    boolean supportsMic = false;
+    boolean supportsPort = false;
+    boolean supportsDiv = false;
+    boolean supportsCsa = false;
+
+    try {
+      JsonNode root = MAPPER.readTree(response.body());
+      JsonNode paramValues = root.path("BEAAPI").path("Results").path("ParamValue");
+
+      // Check for error in response
+      JsonNode error = root.path("BEAAPI").path("Results").path("Error");
+      if (!error.isMissingNode()) {
+        LOGGER.warn("BEA API error for {}: {}", tableName, error.toString());
+        return null;
+      }
+
+      if (paramValues.isArray()) {
+        for (JsonNode geoNode : paramValues) {
+          String key = geoNode.path("Key").asText();
+          String desc = geoNode.path("Desc").asText();
+
+          if (key == null || key.isEmpty()) {
+            continue;
+          }
+
+          // Detect geo type from key/description patterns
+          // STATE: "00000" (US), "01000" (Alabama), etc - codes ending in 000
+          // Special: "00000" = United States
+          if ("00000".equals(key) || (key.length() == 5 && key.endsWith("000"))) {
+            supportsState = true;
+          }
+          // COUNTY: 5-digit codes not ending in 000, 998, or 999
+          else if (key.length() == 5 && !key.endsWith("000")
+              && !key.endsWith("998") && !key.endsWith("999")) {
+            int keyNum;
+            try {
+              keyNum = Integer.parseInt(key);
+              // County codes < 10000 (real county FIPS are 01001-56999)
+              if (keyNum < 10000) {
+                supportsCounty = true;
+              }
+            } catch (NumberFormatException e) {
+              // Skip non-numeric
+            }
+          }
+          // PORT: codes ending in 998/999 (metro/nonmetro portions)
+          if (key.endsWith("998") || key.endsWith("999")) {
+            if (desc.contains("Metropolitan Portion") || desc.contains("Nonmetropolitan Portion")) {
+              supportsPort = true;
+            }
+          }
+          // MSA/MIC/DIV/CSA: 5-digit codes >= 10000 or detect from description
+          if (desc != null) {
+            if (desc.contains("Metropolitan Statistical Area")) {
+              supportsMsa = true;
+            }
+            if (desc.contains("Micropolitan Statistical Area")) {
+              supportsMic = true;
+            }
+            if (desc.contains("Metropolitan Division")) {
+              supportsDiv = true;
+            }
+            if (desc.contains("Combined Statistical Area")) {
+              supportsCsa = true;
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to parse geo support response for {}: {}",
+          tableName, e.getMessage());
+      return null;
+    }
+
+    DuckDBCacheStore.GeoSupport geoSupport = new DuckDBCacheStore.GeoSupport(
+        supportsState, supportsCounty, supportsMsa, supportsMic, supportsPort, supportsDiv, supportsCsa);
+
+    LOGGER.debug("Geo support for {}: {}", tableName, geoSupport.getSupportedGeoTypes());
+
+    return geoSupport;
+  }
+
+  /**
+   * Get pattern-based geo support as fallback when API unavailable.
+   * Uses table name prefix to determine likely geo support.
+   */
+  private DuckDBCacheStore.GeoSupport getPatternBasedGeoSupport(String tableName) {
+    if (tableName == null || tableName.isEmpty()) {
+      return new DuckDBCacheStore.GeoSupport(true, false, false, false, false, false, false);
+    }
+
+    // State tables
+    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
+      return new DuckDBCacheStore.GeoSupport(true, false, false, false, false, false, false);
+    }
+    // County tables (conservative - assume county only)
+    if (tableName.startsWith("CA")) {
+      return new DuckDBCacheStore.GeoSupport(false, true, false, false, false, false, false);
+    }
+    // Metro tables
+    if (tableName.startsWith("MA")) {
+      return new DuckDBCacheStore.GeoSupport(false, false, true, false, false, false, false);
+    }
+    // Micropolitan tables
+    if (tableName.startsWith("MI")) {
+      return new DuckDBCacheStore.GeoSupport(false, false, false, true, false, false, false);
+    }
+    // Default to state
+    return new DuckDBCacheStore.GeoSupport(true, false, false, false, false, false, false);
+  }
+
+  /** Cached geo support map, loaded once per session. */
+  private Map<String, DuckDBCacheStore.GeoSupport> geoSupportCache = null;
+
+  /**
+   * Get valid geo fips types for a table, using cached API data.
+   * Falls back to pattern-based logic if cache is not loaded.
+   */
+  private Set<String> getValidGeoFipsForTable(String tableName) {
+    // First try to use cached API data
+    if (geoSupportCache != null) {
+      DuckDBCacheStore.GeoSupport cached = geoSupportCache.get(tableName);
+      if (cached != null) {
+        Set<String> types = cached.getSupportedGeoTypes();
+        if (!types.isEmpty()) {
+          return types;
+        }
+      }
+    }
+
+    // Fall back to pattern-based logic
+    return getPatternBasedGeoFipsForTable(tableName);
+  }
+
+  /**
+   * Pattern-based geo fips determination (original logic).
+   * Used as fallback when API data is not available.
+   */
+  private Set<String> getPatternBasedGeoFipsForTable(String tableName) {
+    if (tableName == null || tableName.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    // State-level tables (SA* = State Annual, SQ* = State Quarterly)
+    if (tableName.startsWith("SA") || tableName.startsWith("SQ")) {
+      return Collections.singleton("STATE");
+    }
+
+    // County-level tables (CA* = County Annual)
+    // Conservative fallback: assume county only (API will tell us if MSA is supported)
+    if (tableName.startsWith("CA")) {
+      return Collections.singleton("COUNTY");
+    }
+
+    // Metropolitan area tables (MA* = Metro Annual)
+    if (tableName.startsWith("MA")) {
+      return Collections.singleton("MSA");
+    }
+
+    // Micropolitan area tables (MI*)
+    if (tableName.startsWith("MI")) {
+      return Collections.singleton("MIC");
+    }
+
+    // Port area tables (PARPP, etc.)
+    if (tableName.startsWith("PARPP") || tableName.startsWith("PORT")) {
+      return Collections.singleton("PORT");
+    }
+
+    // Metropolitan division tables
+    if (tableName.contains("DIV")) {
+      return Collections.singleton("DIV");
+    }
+
+    // Combined statistical area tables
+    if (tableName.contains("CSA")) {
+      return Collections.singleton("CSA");
+    }
+
+    // Territory tables (TA*)
+    if (tableName.startsWith("TA")) {
+      return Collections.singleton("STATE");
+    }
+
+    // Default: STATE (most common case)
+    LOGGER.warn("Unknown table prefix for {}, defaulting to STATE geography", tableName);
+    return Collections.singleton("STATE");
+  }
+
   // ========== Regional Income Valid Combinations ==========
 
   /**
@@ -1553,6 +1788,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Load year availability for all valid tables
     LOGGER.info("Loading year availability for {} BEA regional tables...", validTableNames.size());
     Map<String, Set<Integer>> tableYearAvailability = loadTableYearAvailability(validTableNames);
+
+    // Load geo support for all valid tables (cached API data)
+    LOGGER.info("Loading geo support for {} BEA regional tables...", validTableNames.size());
+    geoSupportCache = loadTableGeoSupport(validTableNames);
 
     // Build full year range as safe fallback (used when year availability is unknown)
     Set<Integer> fullYearRange = new HashSet<>();

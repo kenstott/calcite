@@ -231,6 +231,7 @@ public class DuckDBCacheStore implements AutoCloseable {
     if ("econ".equals(schemaName)) {
       executeSqlResource("create_catalog_series_cache.sql");
       executeSqlResource("create_table_year_availability.sql");
+      executeSqlResource("create_table_geo_support.sql");
     } else if ("sec".equals(schemaName)) {
       executeSqlResource("create_sec_filings.sql");
     }
@@ -1193,6 +1194,144 @@ public class DuckDBCacheStore implements AutoCloseable {
     }
     sb.append("]");
     return sb.toString();
+  }
+
+  // ========== Table Geo Support Cache Methods ==========
+
+  /**
+   * Data class for table geography support.
+   */
+  public static class GeoSupport {
+    public final boolean supportsState;
+    public final boolean supportsCounty;
+    public final boolean supportsMsa;
+    public final boolean supportsMic;
+    public final boolean supportsPort;
+    public final boolean supportsDiv;
+    public final boolean supportsCsa;
+
+    public GeoSupport(boolean supportsState, boolean supportsCounty, boolean supportsMsa,
+        boolean supportsMic, boolean supportsPort, boolean supportsDiv, boolean supportsCsa) {
+      this.supportsState = supportsState;
+      this.supportsCounty = supportsCounty;
+      this.supportsMsa = supportsMsa;
+      this.supportsMic = supportsMic;
+      this.supportsPort = supportsPort;
+      this.supportsDiv = supportsDiv;
+      this.supportsCsa = supportsCsa;
+    }
+
+    /**
+     * Get supported geo types as a set of strings.
+     */
+    public Set<String> getSupportedGeoTypes() {
+      Set<String> types = new HashSet<>();
+      if (supportsState) {
+        types.add("STATE");
+      }
+      if (supportsCounty) {
+        types.add("COUNTY");
+      }
+      if (supportsMsa) {
+        types.add("MSA");
+      }
+      if (supportsMic) {
+        types.add("MIC");
+      }
+      if (supportsPort) {
+        types.add("PORT");
+      }
+      if (supportsDiv) {
+        types.add("DIV");
+      }
+      if (supportsCsa) {
+        types.add("CSA");
+      }
+      return types;
+    }
+  }
+
+  /**
+   * Get cached geo support for a table.
+   *
+   * @param dataSource The data source (e.g., "bea_regional")
+   * @param tableName The table name (e.g., "CAINC91")
+   * @return GeoSupport object, or null if not cached/expired
+   */
+  public GeoSupport getGeoSupportForTable(String dataSource, String tableName) {
+    String sql = "SELECT supports_state, supports_county, supports_msa, supports_mic, "
+        + "supports_port, supports_div, supports_csa "
+        + "FROM table_geo_support "
+        + "WHERE data_source = ? AND table_name = ? AND refresh_after > ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, dataSource);
+      stmt.setString(2, tableName);
+      stmt.setLong(3, System.currentTimeMillis());
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return new GeoSupport(
+              rs.getBoolean("supports_state"),
+              rs.getBoolean("supports_county"),
+              rs.getBoolean("supports_msa"),
+              rs.getBoolean("supports_mic"),
+              rs.getBoolean("supports_port"),
+              rs.getBoolean("supports_div"),
+              rs.getBoolean("supports_csa")
+          );
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error getting geo support for {}/{}: {}", dataSource, tableName, e.getMessage());
+    }
+    return null;
+  }
+
+  /**
+   * Cache geo support for a table.
+   *
+   * @param dataSource The data source (e.g., "bea_regional")
+   * @param tableName The table name (e.g., "CAINC91")
+   * @param geoSupport The geo support flags
+   * @param ttlDays Cache TTL in days
+   */
+  public void setGeoSupportForTable(String dataSource, String tableName,
+      GeoSupport geoSupport, int ttlDays) {
+    long now = System.currentTimeMillis();
+    long refreshAfter = now + (ttlDays * 24L * 60L * 60L * 1000L);
+
+    String sql = "INSERT INTO table_geo_support "
+        + "(data_source, table_name, supports_state, supports_county, supports_msa, "
+        + "supports_mic, supports_port, supports_div, supports_csa, cached_at, refresh_after) "
+        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        + "ON CONFLICT (data_source, table_name) DO UPDATE SET "
+        + "supports_state = EXCLUDED.supports_state, "
+        + "supports_county = EXCLUDED.supports_county, "
+        + "supports_msa = EXCLUDED.supports_msa, "
+        + "supports_mic = EXCLUDED.supports_mic, "
+        + "supports_port = EXCLUDED.supports_port, "
+        + "supports_div = EXCLUDED.supports_div, "
+        + "supports_csa = EXCLUDED.supports_csa, "
+        + "cached_at = EXCLUDED.cached_at, "
+        + "refresh_after = EXCLUDED.refresh_after";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, dataSource);
+      stmt.setString(2, tableName);
+      stmt.setBoolean(3, geoSupport.supportsState);
+      stmt.setBoolean(4, geoSupport.supportsCounty);
+      stmt.setBoolean(5, geoSupport.supportsMsa);
+      stmt.setBoolean(6, geoSupport.supportsMic);
+      stmt.setBoolean(7, geoSupport.supportsPort);
+      stmt.setBoolean(8, geoSupport.supportsDiv);
+      stmt.setBoolean(9, geoSupport.supportsCsa);
+      stmt.setLong(10, now);
+      stmt.setLong(11, refreshAfter);
+      stmt.executeUpdate();
+      LOGGER.debug("Cached geo support for {}/{}: {}",
+          dataSource, tableName, geoSupport.getSupportedGeoTypes());
+    } catch (SQLException e) {
+      LOGGER.warn("Error caching geo support for {}/{}: {}", dataSource, tableName, e.getMessage());
+    }
   }
 
   @Override
