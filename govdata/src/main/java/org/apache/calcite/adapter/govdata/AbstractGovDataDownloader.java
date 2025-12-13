@@ -3731,12 +3731,13 @@ public abstract class AbstractGovDataDownloader {
 
     // Build SELECT clause with column aliases if mappings exist
     if (columnMappings != null && !columnMappings.isEmpty()) {
-      // Generate: SELECT *, SourceCol AS target_col, ...
+      // Generate: SELECT *, "SourceCol" AS target_col, ...
+      // Quote source column for case-sensitivity in DuckDB
       StringBuilder selectClause = new StringBuilder("  SELECT *");
       for (Map.Entry<String, String> mapping : columnMappings.entrySet()) {
         String targetCol = mapping.getKey();
         String sourceCol = mapping.getValue();
-        selectClause.append(", ").append(sourceCol).append(" AS ").append(targetCol);
+        selectClause.append(", \"").append(sourceCol).append("\" AS ").append(targetCol);
       }
       sql.append(selectClause).append(" FROM read_parquet(");
     } else {
