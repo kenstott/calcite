@@ -3977,15 +3977,41 @@ public abstract class AbstractGovDataDownloader {
 
     LOGGER.info("  Deleting {} temp files...", filesToDelete.size());
 
-    // Delete files using DuckDB's COPY to /dev/null trick won't work for S3
-    // Instead, we'll use the storage provider if available, or log a warning
+    // Delete files in parallel for better performance on S3/R2
     if (storageProvider != null && filesToDelete.size() > 0) {
+      int numThreads = Math.min(10, filesToDelete.size() / 100 + 1);
+      java.util.concurrent.ExecutorService executor =
+          java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+      java.util.concurrent.atomic.AtomicInteger deleted =
+          new java.util.concurrent.atomic.AtomicInteger(0);
+      java.util.concurrent.atomic.AtomicInteger failed =
+          new java.util.concurrent.atomic.AtomicInteger(0);
+      int total = filesToDelete.size();
+
       for (String file : filesToDelete) {
-        try {
-          storageProvider.delete(file);
-        } catch (Exception e) {
-          LOGGER.warn("  Failed to delete temp file {}: {}", file, e.getMessage());
-        }
+        executor.submit(() -> {
+          try {
+            storageProvider.delete(file);
+            int count = deleted.incrementAndGet();
+            if (count % 1000 == 0) {
+              LOGGER.info("    Deleted {}/{} temp files...", count, total);
+            }
+          } catch (Exception e) {
+            failed.incrementAndGet();
+          }
+        });
+      }
+
+      executor.shutdown();
+      try {
+        executor.awaitTermination(30, java.util.concurrent.TimeUnit.MINUTES);
+      } catch (InterruptedException e) {
+        LOGGER.warn("  Temp cleanup interrupted");
+        Thread.currentThread().interrupt();
+      }
+
+      if (failed.get() > 0) {
+        LOGGER.warn("  Failed to delete {} temp files", failed.get());
       }
     }
     LOGGER.info("  Temp cleanup complete");
