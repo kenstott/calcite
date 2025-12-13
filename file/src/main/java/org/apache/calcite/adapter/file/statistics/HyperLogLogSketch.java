@@ -43,6 +43,33 @@ public class HyperLogLogSketch implements Serializable {
   private final double alpha;
   private transient MessageDigest hasher;
 
+  // Pre-computed estimate for sketches created from external sources (e.g., DuckDB)
+  private final Long precomputedEstimate;
+
+  /**
+   * Create a HyperLogLog sketch from a pre-computed estimate.
+   * This is used when the cardinality was computed by an external system
+   * (e.g., DuckDB's approx_count_distinct) and we want to use it for optimization.
+   *
+   * @param estimate The pre-computed cardinality estimate
+   * @return A HyperLogLogSketch that returns the given estimate
+   */
+  public static HyperLogLogSketch fromEstimate(long estimate) {
+    return new HyperLogLogSketch(estimate);
+  }
+
+  /**
+   * Private constructor for pre-computed estimate mode.
+   */
+  private HyperLogLogSketch(long precomputedEstimate) {
+    this.precision = 14; // Default
+    this.numBuckets = 1 << precision;
+    this.buckets = new byte[numBuckets];
+    this.alpha = calculateAlpha(numBuckets);
+    this.precomputedEstimate = precomputedEstimate;
+    this.hasher = null; // Not needed in precomputed mode
+  }
+
   /**
    * Create a new HyperLogLog sketch with default precision (14 bits).
    * This gives ~0.8% standard error with 16KB memory usage.
@@ -66,6 +93,7 @@ public class HyperLogLogSketch implements Serializable {
     this.numBuckets = 1 << precision; // 2^precision
     this.buckets = new byte[numBuckets];
     this.alpha = calculateAlpha(numBuckets);
+    this.precomputedEstimate = null;
     initHasher();
   }
 
@@ -77,6 +105,7 @@ public class HyperLogLogSketch implements Serializable {
     this.numBuckets = 1 << precision;
     this.buckets = Arrays.copyOf(buckets, buckets.length);
     this.alpha = calculateAlpha(numBuckets);
+    this.precomputedEstimate = null;
     initHasher();
   }
 
@@ -130,6 +159,11 @@ public class HyperLogLogSketch implements Serializable {
    * Get the estimated cardinality (distinct count).
    */
   public long getEstimate() {
+    // Return pre-computed estimate if available (from external source like DuckDB)
+    if (precomputedEstimate != null) {
+      return precomputedEstimate;
+    }
+
     double rawEstimate = alpha * numBuckets * numBuckets / sumOfPowersOfTwo();
 
     // Apply bias correction and range adjustments

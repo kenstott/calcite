@@ -75,7 +75,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Table implementation for partitioned Parquet datasets.
  * Represents multiple Parquet files as a single logical table.
  */
-public class PartitionedParquetTable extends AbstractTable implements ScannableTable, FilterableTable, CommentableTable {
+public class PartitionedParquetTable extends AbstractTable implements ScannableTable, FilterableTable, CommentableTable, org.apache.calcite.adapter.file.statistics.StatisticsProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedParquetTable.class);
 
   private final List<String> filePaths;
@@ -1125,5 +1125,197 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       return null;
     }
     return columnComments.get(columnName);
+  }
+
+  // StatisticsProvider implementation
+
+  // Cached table statistics
+  private org.apache.calcite.adapter.file.statistics.TableStatistics cachedStatistics;
+  private volatile boolean statisticsLoaded = false;
+
+  @Override public org.apache.calcite.adapter.file.statistics.TableStatistics getTableStatistics(
+      org.apache.calcite.plan.RelOptTable table) {
+    if (!statisticsLoaded) {
+      synchronized (this) {
+        if (!statisticsLoaded) {
+          cachedStatistics = computeStatistics();
+          statisticsLoaded = true;
+        }
+      }
+    }
+    return cachedStatistics;
+  }
+
+  @Override public org.apache.calcite.adapter.file.statistics.ColumnStatistics getColumnStatistics(
+      org.apache.calcite.plan.RelOptTable table, String columnName) {
+    org.apache.calcite.adapter.file.statistics.TableStatistics stats = getTableStatistics(table);
+    if (stats == null || stats.getColumnStatistics() == null) {
+      return null;
+    }
+    return stats.getColumnStatistics().get(columnName);
+  }
+
+  @Override public double getSelectivity(org.apache.calcite.plan.RelOptTable table,
+      org.apache.calcite.rex.RexNode predicate) {
+    // Default selectivity estimate
+    return 0.25;
+  }
+
+  @Override public long getDistinctCount(org.apache.calcite.plan.RelOptTable table, String columnName) {
+    org.apache.calcite.adapter.file.statistics.ColumnStatistics colStats = getColumnStatistics(table, columnName);
+    if (colStats != null && colStats.getHllSketch() != null) {
+      return colStats.getHllSketch().getEstimate();
+    }
+    return -1;
+  }
+
+  @Override public boolean hasStatistics(org.apache.calcite.plan.RelOptTable table) {
+    return getTableStatistics(table) != null;
+  }
+
+  @Override public void scheduleStatisticsGeneration(org.apache.calcite.plan.RelOptTable table) {
+    // Compute statistics synchronously for now
+    getTableStatistics(table);
+  }
+
+  /**
+   * Compute statistics for this partitioned table using DuckDB.
+   * Uses approx_count_distinct for efficient HLL sketch generation.
+   */
+  private org.apache.calcite.adapter.file.statistics.TableStatistics computeStatistics() {
+    if (filePaths == null || filePaths.isEmpty()) {
+      LOGGER.debug("No files to compute statistics for table {}", tableName);
+      return null;
+    }
+
+    // Build the parquet pattern for DuckDB
+    String pattern = buildParquetPattern();
+    if (pattern == null) {
+      LOGGER.debug("Could not build parquet pattern for table {}", tableName);
+      return null;
+    }
+
+    LOGGER.debug("Computing statistics for partitioned table {} using pattern: {}", tableName, pattern);
+
+    try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
+      java.sql.Statement stmt = conn.createStatement();
+
+      // Get column names from the first file or use stored column names
+      List<String> columns = getColumnsForStatistics();
+      if (columns.isEmpty()) {
+        LOGGER.debug("No columns found for statistics computation in table {}", tableName);
+        return null;
+      }
+
+      // Compute row count
+      long rowCount = 0;
+      try (java.sql.ResultSet rs = stmt.executeQuery(
+          "SELECT COUNT(*) FROM read_parquet('" + pattern + "', hive_partitioning=true)")) {
+        if (rs.next()) {
+          rowCount = rs.getLong(1);
+        }
+      }
+
+      // Build column statistics with HLL sketches
+      java.util.Map<String, org.apache.calcite.adapter.file.statistics.ColumnStatistics> columnStats =
+          new java.util.HashMap<>();
+
+      for (String column : columns) {
+        try {
+          // Compute approx_count_distinct using DuckDB's HLL implementation
+          String sql = "SELECT approx_count_distinct(\"" + column + "\") FROM read_parquet('"
+              + pattern + "', hive_partitioning=true)";
+          try (java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) {
+              long distinctCount = rs.getLong(1);
+              if (distinctCount > 0) {
+                // Create HLL sketch from pre-computed estimate
+                org.apache.calcite.adapter.file.statistics.HyperLogLogSketch hll =
+                    org.apache.calcite.adapter.file.statistics.HyperLogLogSketch.fromEstimate(distinctCount);
+
+                org.apache.calcite.adapter.file.statistics.ColumnStatistics colStats =
+                    new org.apache.calcite.adapter.file.statistics.ColumnStatistics(
+                        column, null, null, 0, rowCount, hll);
+                columnStats.put(column, colStats);
+
+                LOGGER.debug("Computed HLL for {}.{}: distinct={}", tableName, column, distinctCount);
+              }
+            }
+          }
+        } catch (Exception e) {
+          LOGGER.debug("Failed to compute distinct count for column {}: {}", column, e.getMessage());
+        }
+      }
+
+      LOGGER.info("Statistics computed for table {}: rowCount={}, columns={}",
+          tableName, rowCount, columnStats.size());
+
+      return new org.apache.calcite.adapter.file.statistics.TableStatistics(
+          rowCount, 0, columnStats, null);
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to compute statistics for table {}: {}", tableName, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Build parquet glob pattern from file paths or config.
+   */
+  private String buildParquetPattern() {
+    if (config != null && config.getPattern() != null) {
+      // Use the configured pattern, converting wildcards to DuckDB glob syntax
+      String pattern = config.getPattern();
+      // If we have a base directory from the first file path, use it
+      if (!filePaths.isEmpty()) {
+        String firstFile = filePaths.get(0);
+        // Find common base directory
+        int typeIndex = firstFile.indexOf("type=");
+        if (typeIndex > 0) {
+          String baseDir = firstFile.substring(0, typeIndex);
+          return baseDir + pattern.replace("*", "**");
+        }
+      }
+    }
+
+    // Fallback: use first file's directory with glob
+    if (!filePaths.isEmpty()) {
+      String firstFile = filePaths.get(0);
+      int lastSlash = firstFile.lastIndexOf('/');
+      if (lastSlash > 0) {
+        String dir = firstFile.substring(0, lastSlash);
+        // Go up to find type= directory for proper partitioning
+        int typeIndex = dir.indexOf("type=");
+        if (typeIndex > 0) {
+          return dir.substring(0, typeIndex) + "type=*/**/*.parquet";
+        }
+        return dir + "/**/*.parquet";
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get column names for statistics computation.
+   */
+  private List<String> getColumnsForStatistics() {
+    List<String> columns = new ArrayList<>();
+
+    // Use parquet column names if available
+    if (parquetColumnNames != null && !parquetColumnNames.isEmpty()) {
+      columns.addAll(parquetColumnNames);
+    }
+
+    // Add partition columns
+    if (partitionColumns != null) {
+      for (String partCol : partitionColumns) {
+        if (!columns.contains(partCol)) {
+          columns.add(partCol);
+        }
+      }
+    }
+
+    return columns;
   }
 }
