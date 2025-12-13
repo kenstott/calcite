@@ -153,6 +153,25 @@ public interface StorageProvider {
   }
 
   /**
+   * Deletes multiple files in a single batch operation.
+   * For S3-compatible storage, this uses the DeleteObjects API (up to 1000 per request).
+   * Default implementation falls back to individual deletes.
+   *
+   * @param paths The paths to delete
+   * @return number of files successfully deleted
+   * @throws IOException If an I/O error occurs
+   */
+  default int deleteBatch(java.util.List<String> paths) throws IOException {
+    int deleted = 0;
+    for (String path : paths) {
+      if (delete(path)) {
+        deleted++;
+      }
+    }
+    return deleted;
+  }
+
+  /**
    * Copies a file from source to destination.
    *
    * @param source The source file path

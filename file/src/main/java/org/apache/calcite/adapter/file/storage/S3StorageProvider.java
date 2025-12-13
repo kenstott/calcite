@@ -30,6 +30,8 @@ import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest;
+import com.amazonaws.services.s3.model.DeleteObjectsResult;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
@@ -619,6 +621,54 @@ public class S3StorageProvider implements StorageProvider {
     } catch (AmazonServiceException e) {
       throw new IOException("Failed to delete S3 object: " + path, e);
     }
+  }
+
+  /**
+   * Batch delete using S3 DeleteObjects API (up to 1000 objects per request).
+   * Much more efficient than individual deletes for large numbers of files.
+   */
+  @Override public int deleteBatch(List<String> paths) throws IOException {
+    if (paths == null || paths.isEmpty()) {
+      return 0;
+    }
+
+    int totalDeleted = 0;
+
+    // Group paths by bucket (all should be same bucket, but be safe)
+    java.util.Map<String, List<DeleteObjectsRequest.KeyVersion>> bucketKeys =
+        new java.util.HashMap<>();
+
+    for (String path : paths) {
+      S3Uri s3Uri = parseS3Uri(path);
+      bucketKeys.computeIfAbsent(s3Uri.bucket, k -> new ArrayList<>())
+          .add(new DeleteObjectsRequest.KeyVersion(s3Uri.key));
+    }
+
+    // Delete in batches of 1000 (S3 limit)
+    for (java.util.Map.Entry<String, List<DeleteObjectsRequest.KeyVersion>> entry
+        : bucketKeys.entrySet()) {
+      String bucket = entry.getKey();
+      List<DeleteObjectsRequest.KeyVersion> keys = entry.getValue();
+
+      for (int i = 0; i < keys.size(); i += 1000) {
+        int end = Math.min(i + 1000, keys.size());
+        List<DeleteObjectsRequest.KeyVersion> batch = keys.subList(i, end);
+
+        try {
+          DeleteObjectsRequest request = new DeleteObjectsRequest(bucket)
+              .withKeys(batch)
+              .withQuiet(true);  // Don't return list of deleted objects
+          DeleteObjectsResult result = s3Client.deleteObjects(request);
+          totalDeleted += batch.size() - (result.getDeletedObjects() == null ? 0
+              : batch.size() - result.getDeletedObjects().size());
+        } catch (AmazonServiceException e) {
+          LOGGER.warn("Batch delete partially failed for bucket {}: {}", bucket, e.getMessage());
+          // Continue with remaining batches
+        }
+      }
+    }
+
+    return totalDeleted;
   }
 
   @Override public void copyFile(String source, String destination) throws IOException {
