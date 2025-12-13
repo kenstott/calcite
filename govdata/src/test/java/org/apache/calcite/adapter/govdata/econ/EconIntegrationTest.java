@@ -630,48 +630,48 @@ public class EconIntegrationTest {
     LOGGER.info(" PHASE 5: FRED Data Series Catalog Test");
     LOGGER.info("================================================================================");
     LOGGER.info("This test validates Phase 5 objective from problem_resolution_plan.md:");
-    LOGGER.info("  - Objective 5.1-5.3: fred_data_series_catalog table is queryable");
-    LOGGER.info("Expected: fred_data_series_catalog table with 254 partitions");
+    LOGGER.info("  - Objective 5.1-5.3: reference_fred_series table is queryable");
+    LOGGER.info("Expected: reference_fred_series table with partitions by category/frequency/source/status");
     LOGGER.info("================================================================================");
 
     try (Connection conn = createConnection()) {
       try (Statement stmt = conn.createStatement()) {
         // Test 1: Verify table is queryable
-        String query = "SELECT * FROM \"ECON\".fred_data_series_catalog LIMIT 1";
+        String query = "SELECT * FROM \"ECON\".reference_fred_series LIMIT 1";
         try (ResultSet rs = stmt.executeQuery(query)) {
           if (rs.next()) {
-            LOGGER.info("  ✅ fred_data_series_catalog - table is queryable");
+            LOGGER.info("  ✅ reference_fred_series - table is queryable");
 
             // Test 2: Verify table has data
-            String countQuery = "SELECT COUNT(*) as row_count FROM \"ECON\".fred_data_series_catalog";
+            String countQuery = "SELECT COUNT(*) as row_count FROM \"ECON\".reference_fred_series";
             try (ResultSet countRs = stmt.executeQuery(countQuery)) {
               if (countRs.next()) {
                 long rowCount = countRs.getLong("row_count");
-                LOGGER.info("  ✅ fred_data_series_catalog - {} rows found", rowCount);
+                LOGGER.info("  ✅ reference_fred_series - {} rows found", rowCount);
                 assertTrue(rowCount > 0, "FRED catalog should have data");
               }
             }
 
             // Test 3: Verify partition columns exist
             String partitionQuery = "SELECT DISTINCT type, category, frequency, source, status " +
-                "FROM \"ECON\".fred_data_series_catalog LIMIT 5";
+                "FROM \"ECON\".reference_fred_series LIMIT 5";
             try (ResultSet partRs = stmt.executeQuery(partitionQuery)) {
-              LOGGER.info("  ✅ fred_data_series_catalog - partition columns accessible");
+              LOGGER.info("  ✅ reference_fred_series - partition columns accessible");
               int partCount = 0;
               while (partRs.next()) {
                 partCount++;
               }
-              LOGGER.info("  ✅ fred_data_series_catalog - verified {} partition combinations", partCount);
+              LOGGER.info("  ✅ reference_fred_series - verified {} partition combinations", partCount);
             }
 
             LOGGER.info("\n================================================================================");
-            LOGGER.info(" PHASE 5 COMPLETE: fred_data_series_catalog is fully functional");
+            LOGGER.info(" PHASE 5 COMPLETE: reference_fred_series is fully functional");
             LOGGER.info("================================================================================");
           } else {
-            fail("fred_data_series_catalog table is empty");
+            fail("reference_fred_series table is empty");
           }
         } catch (SQLException e) {
-          LOGGER.error("  ❌ fred_data_series_catalog - FAILED: {}", e.getMessage());
+          LOGGER.error("  ❌ reference_fred_series - FAILED: {}", e.getMessage());
           throw e;
         }
       }

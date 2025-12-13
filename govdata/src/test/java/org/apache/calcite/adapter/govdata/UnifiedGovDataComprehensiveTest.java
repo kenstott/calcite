@@ -88,7 +88,7 @@ public class UnifiedGovDataComprehensiveTest {
       "ita_data",
       "industry_gdp",
       // FRED catalog table
-      "fred_data_series_catalog"));
+      "reference_fred_series"));
 
   /**
    * GEO schema expected tables (15 total).

@@ -1843,8 +1843,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     }
 
     double reductionPct = totalPossible > 0 ? (100.0 * skipped / totalPossible) : 0;
-    LOGGER.info("Regional income combinations: {} valid of {} possible ({} skipped, {:.1f}% reduction, {} tables used fallback)",
-        validCombinations.size(), totalPossible, skipped, reductionPct, tablesUsingFallback);
+    LOGGER.info("Regional income combinations: {} valid of {} possible ({} skipped, {}% reduction, {} tables used fallback)",
+        validCombinations.size(), totalPossible, skipped, String.format("%.1f", reductionPct), tablesUsingFallback);
 
     return validCombinations;
   }

@@ -17,9 +17,12 @@
 package org.apache.calcite.adapter.govdata.census;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
 import org.apache.calcite.model.JsonTable;
+
+import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -300,69 +303,58 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     // Cache directory is used via StorageProvider for both local and S3 paths
 
-    // Check if ACS data needs updating
+    // Check if ACS data needs updating using cache manifest (fast local check)
     boolean needsAcsUpdate = false;
-    for (int year : acsYears) {
-      // Check core ACS tables
-      String[] acsFiles = {
-        "acs_population.parquet",
-        "acs_demographics.parquet",
-        "acs_income.parquet",
-        "acs_poverty.parquet",
-        "acs_employment.parquet",
-        "acs_education.parquet",
-        "acs_housing.parquet",
-        "acs_housing_costs.parquet",
-        "acs_commuting.parquet",
-        "acs_health_insurance.parquet",
-        "acs_language.parquet",
-        "acs_disability.parquet",
-        "acs_veterans.parquet",
-        "acs_migration.parquet",
-        "acs_occupation.parquet"
-      };
+    String[] acsTableNames = {
+      "acs_population",
+      "acs_demographics",
+      "acs_income",
+      "acs_poverty",
+      "acs_employment",
+      "acs_education",
+      "acs_housing",
+      "acs_housing_costs",
+      "acs_commuting",
+      "acs_health_insurance",
+      "acs_language",
+      "acs_disability",
+      "acs_veterans",
+      "acs_migration",
+      "acs_occupation"
+    };
 
-      for (String filename : acsFiles) {
+    for (int year : acsYears) {
+      for (String tableName : acsTableNames) {
+        // Build cache key matching the format used by Census data
+        CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
+
+        // Fast path: Check manifest first (local DuckDB query)
+        if (cacheManifest.isParquetConverted(cacheKey)) {
+          // Check TTL expiry from manifest
+          if (!cacheManifest.isCached(cacheKey)) {
+            needsAcsUpdate = true;
+            LOGGER.info("ACS cache expired (manifest TTL): {} year={}", tableName, year);
+            break;
+          }
+          continue;  // Cached and fresh, skip S3 check
+        }
+
+        // Self-healing: Manifest says not converted, check if file exists on storage
+        String filename = tableName + ".parquet";
         String parquetPath =
             storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + filename);
-        LOGGER.debug("Checking ACS cache file: {}", parquetPath);
+
         try {
-          if (!storageProvider.exists(parquetPath)) {
+          if (storageProvider.exists(parquetPath)) {
+            // File exists but not in manifest - add it (self-healing)
+            String relativePath = ACS_TYPE + "/year=" + year + "/" + filename;
+            LOGGER.info("Self-healing: Found existing ACS parquet {}, adding to manifest", relativePath);
+            cacheManifest.markParquetConverted(cacheKey, relativePath);
+          } else {
+            // File truly missing
             needsAcsUpdate = true;
             LOGGER.info("Missing ACS parquet file: {}", parquetPath);
             break;
-          } else {
-            StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
-            long fileAge = currentTime - metadata.getLastModified();
-
-            if (metadata.getSize() == 0) {
-              // Zero-row marker - use different TTL based on year
-              int currentYear = java.time.Year.now().getValue();
-              boolean isRecentYear = year >= (currentYear - 2) && year <= currentYear;
-
-              if (isRecentYear) {
-                // Recent year (within 2-year window): use 1-week TTL
-                // Data might be published soon, recheck weekly
-                long oneWeekMillis = 7 * 24 * 60 * 60 * 1000L;
-                if (fileAge > oneWeekMillis) {
-                  needsAcsUpdate = true;
-                  LOGGER.info("Expired zero-row ACS marker (age: {} days, rechecking for year {}): {}",
-                      fileAge / (24 * 60 * 60 * 1000), year, parquetPath);
-                  break;
-                }
-              }
-              // Old year (outside 2-year window): permanent TTL
-              // Data truly unavailable, never recheck
-              // (No expiry check - marker stays valid forever)
-            } else {
-              // Real data - use normal TTL
-              if (fileAge > censusDataTtlMillis) {
-                needsAcsUpdate = true;
-                LOGGER.info("Expired ACS parquet file (age: {} days): {}",
-                    fileAge / (24 * 60 * 60 * 1000), parquetPath);
-                break;
-              }
-            }
           }
         } catch (IOException e) {
           needsAcsUpdate = true;
