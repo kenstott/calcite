@@ -115,17 +115,6 @@ public class FredCatalogDownloader {
       catalogCached = false;
     }
 
-    // Also verify actual parquet files exist (catalog_series_cache only stores extracted series IDs)
-    // The parquet files may have been deleted or never created
-    if (catalogCached) {
-      String referenceDir = storageProvider.resolvePath(parquetDir, "type=reference");
-      boolean parquetFilesExist = storageProvider.exists(referenceDir);
-      if (!parquetFilesExist) {
-        LOGGER.warn("catalog_series_cache has data but reference_fred_series parquet files missing - redownloading");
-        catalogCached = false;
-      }
-    }
-
     if (!catalogCached) {
       LOGGER.info("Downloading FRED reference_fred_series catalog");
       downloadCatalog();
