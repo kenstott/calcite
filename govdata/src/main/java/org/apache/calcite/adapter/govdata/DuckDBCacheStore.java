@@ -882,26 +882,43 @@ public class DuckDBCacheStore implements AutoCloseable {
    * This is a faster check than areAllEntriesFresh for conversion operations -
    * if parquet exists, we don't need to re-convert regardless of refresh_after.
    *
+   * <p>Also checks for invalid entries (file_size=0 from failed downloads, but NOT
+   * parquet_only entries which are legitimate). Returns false if any invalid entries exist.
+   *
    * @param tableName The table name prefix to check
-   * @return true if all entries for this table have parquet_converted_at > 0
+   * @return true if all entries for this table have parquet_converted_at > 0 and no invalid entries
    */
   public boolean areAllParquetConverted(String tableName) {
-    // First check if there are any entries at all
-    String countSql = "SELECT COUNT(*) FROM cache_entries WHERE cache_key LIKE ?";
-    String unconvertedSql = "SELECT COUNT(*) FROM cache_entries "
-        + "WHERE cache_key LIKE ? AND (parquet_converted_at IS NULL OR parquet_converted_at = 0)";
-    try (PreparedStatement countStmt = getConnection().prepareStatement(countSql);
-         PreparedStatement unconvertedStmt = getConnection().prepareStatement(unconvertedSql)) {
-      countStmt.setString(1, tableName + ":%");
-      unconvertedStmt.setString(1, tableName + ":%");
-      try (ResultSet countRs = countStmt.executeQuery()) {
-        if (countRs.next() && countRs.getInt(1) == 0) {
-          return false;  // No entries at all
-        }
-      }
-      try (ResultSet unconvertedRs = unconvertedStmt.executeQuery()) {
-        if (unconvertedRs.next()) {
-          return unconvertedRs.getInt(1) == 0;  // No unconverted entries
+    // Single query to get counts efficiently
+    // An entry is considered "invalid" (needs re-download) only if ALL of:
+    // 1. file_size=0 (no source JSON)
+    // 2. Not a parquet_only entry (those are legitimate - parquet found via self-healing)
+    // 3. parquet_converted_at=0 (no parquet exists either)
+    // If parquet exists (parquet_converted_at > 0), entry is usable regardless of file_size
+    String sql = "SELECT "
+        + "COUNT(*) as total, "
+        + "SUM(CASE WHEN parquet_converted_at IS NULL OR parquet_converted_at = 0 THEN 1 ELSE 0 END) as unconverted, "
+        + "SUM(CASE WHEN (file_size IS NULL OR file_size = 0) "
+        + "AND (refresh_reason IS NULL OR refresh_reason != 'parquet_only') "
+        + "AND (parquet_converted_at IS NULL OR parquet_converted_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
+        + "FROM cache_entries WHERE cache_key LIKE ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          int total = rs.getInt("total");
+          int unconverted = rs.getInt("unconverted");
+          int invalidEntries = rs.getInt("invalid_entries");
+
+          if (total == 0) {
+            return false;  // No entries at all
+          }
+          if (invalidEntries > 0) {
+            LOGGER.debug("Table {} has {} invalid entries (no source and no parquet), cannot skip",
+                tableName, invalidEntries);
+            return false;  // Invalid entries need re-download
+          }
+          return unconverted == 0;  // All converted if no unconverted entries
         }
       }
     } catch (SQLException e) {
@@ -927,11 +944,18 @@ public class DuckDBCacheStore implements AutoCloseable {
    */
   public boolean isTableFullyCached(String tableName, int expectedCount) {
     // Single query to get all relevant counts efficiently
+    // An entry is considered "invalid" (needs re-download) only if ALL of:
+    // 1. file_size=0 (no source JSON)
+    // 2. Not a parquet_only entry (those are legitimate - parquet found via self-healing)
+    // 3. parquet_converted_at=0 (no parquet exists either)
+    // If parquet exists (parquet_converted_at > 0), entry is usable regardless of file_size
     String sql = "SELECT "
         + "COUNT(*) as total, "
         + "SUM(CASE WHEN parquet_converted_at IS NULL OR parquet_converted_at = 0 THEN 1 ELSE 0 END) as unconverted, "
         + "SUM(CASE WHEN cached_at > parquet_converted_at THEN 1 ELSE 0 END) as needs_reconversion, "
-        + "SUM(CASE WHEN file_size IS NULL OR file_size = 0 THEN 1 ELSE 0 END) as invalid_entries "
+        + "SUM(CASE WHEN (file_size IS NULL OR file_size = 0) "
+        + "AND (refresh_reason IS NULL OR refresh_reason != 'parquet_only') "
+        + "AND (parquet_converted_at IS NULL OR parquet_converted_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
         + "FROM cache_entries WHERE cache_key LIKE ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, tableName + ":%");
@@ -949,9 +973,9 @@ public class DuckDBCacheStore implements AutoCloseable {
             return false;
           }
 
-          // No entries should have file_size=0 (corrupted/invalid)
+          // No entries should be invalid (no source JSON AND no parquet)
           if (invalidEntries > 0) {
-            LOGGER.debug("Table {} has {} invalid entries (file_size=0), needs re-download",
+            LOGGER.debug("Table {} has {} invalid entries (no source and no parquet), needs re-download",
                 tableName, invalidEntries);
             return false;
           }
