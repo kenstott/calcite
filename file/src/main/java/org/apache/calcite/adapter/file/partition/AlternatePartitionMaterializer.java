@@ -161,6 +161,7 @@ public class AlternatePartitionMaterializer {
           .columnMappings(columnMappings)
           .batchPartitionColumns(batchColumns)
           .yearRange(startYear, endYear)
+          .threads(alternate.getThreads())
           .build();
 
       reorganizer.reorganize(reorgConfig);

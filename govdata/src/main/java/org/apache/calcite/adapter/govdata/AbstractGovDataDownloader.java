@@ -3333,10 +3333,19 @@ public abstract class AbstractGovDataDownloader {
     final Map<String, String> columnMappings;
     /** Source partition columns to batch on during reorganization (e.g., [year, geo_fips_set]) */
     final List<String> batchPartitionColumns;
+    /** Number of DuckDB threads to use for reorganization */
+    final int threads;
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
         String alternateName, String alternatePattern, List<String> partitionColumns,
         Map<String, String> columnMappings, List<String> batchPartitionColumns) {
+      this(sourceTableName, sourcePattern, alternateName, alternatePattern, partitionColumns,
+          columnMappings, batchPartitionColumns, 0);
+    }
+
+    AlternatePartitionPattern(String sourceTableName, String sourcePattern,
+        String alternateName, String alternatePattern, List<String> partitionColumns,
+        Map<String, String> columnMappings, List<String> batchPartitionColumns, int threads) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
       this.alternateName = alternateName;
@@ -3345,6 +3354,7 @@ public abstract class AbstractGovDataDownloader {
       this.columnMappings = columnMappings != null ? columnMappings : Collections.emptyMap();
       this.batchPartitionColumns = batchPartitionColumns != null
           ? batchPartitionColumns : Collections.emptyList();
+      this.threads = threads;
     }
   }
 
@@ -3555,12 +3565,16 @@ public abstract class AbstractGovDataDownloader {
               }
             }
 
+            // Parse threads (optional, defaults to 2)
+            int threads = alternateNode.has("threads") ? alternateNode.get("threads").asInt() : 0;
+
             if (alternateName != null && alternatePattern != null) {
               alternatePartitions.add(new AlternatePartitionPattern(
                   tableName, sourcePattern, alternateName, alternatePattern,
-                  partitionColumns, columnMappings, batchPartitionColumns));
-              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {})",
-                  tableName, alternateName, partitionColumns, batchPartitionColumns);
+                  partitionColumns, columnMappings, batchPartitionColumns, threads));
+              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {}, threads: {})",
+                  tableName, alternateName, partitionColumns, batchPartitionColumns,
+                  threads > 0 ? threads : "default");
             }
           }
         }
@@ -3691,6 +3705,7 @@ public abstract class AbstractGovDataDownloader {
             .columnMappings(alternate.columnMappings)
             // No batch columns = no batching
             .yearRange(startYear, endYear)
+            .threads(alternate.threads)
             .build();
 
     reorganizer.reorganize(config);
@@ -3721,6 +3736,7 @@ public abstract class AbstractGovDataDownloader {
             .columnMappings(alternate.columnMappings)
             .batchPartitionColumns(alternate.batchPartitionColumns)
             .yearRange(startYear, endYear)
+            .threads(alternate.threads)
             .build();
 
     reorganizer.reorganize(config);

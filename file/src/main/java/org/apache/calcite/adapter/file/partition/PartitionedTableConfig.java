@@ -200,20 +200,28 @@ public class PartitionedTableConfig {
     private final String comment;
     private final List<String> batchPartitionColumns;
     private final Map<String, String> columnMappings;
+    private final int threads;
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment) {
-      this(name, pattern, partition, comment, null, null);
+      this(name, pattern, partition, comment, null, null, 0);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings) {
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, 0);
+    }
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
+        int threads) {
       this.name = name;
       this.pattern = pattern;
       this.partition = partition;
       this.comment = comment;
       this.batchPartitionColumns = batchPartitionColumns;
       this.columnMappings = columnMappings;
+      this.threads = threads;
     }
 
     public String getName() {
@@ -246,6 +254,15 @@ public class PartitionedTableConfig {
      */
     public Map<String, String> getColumnMappings() {
       return columnMappings;
+    }
+
+    /**
+     * Returns the number of DuckDB threads to use for this reorganization.
+     * Higher values may speed up I/O-bound operations but use more memory.
+     * Default is 2 if not specified.
+     */
+    public int getThreads() {
+      return threads;
     }
 
     /**
@@ -536,8 +553,15 @@ public class PartitionedTableConfig {
         }
       }
 
+      // Parse threads (optional, defaults to 2)
+      int threads = 0;
+      Object threadsObj = m.get("threads");
+      if (threadsObj instanceof Number) {
+        threads = ((Number) threadsObj).intValue();
+      }
+
       result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
-          batchPartitionColumns, columnMappings));
+          batchPartitionColumns, columnMappings, threads));
     }
 
     return result.isEmpty() ? null : result;

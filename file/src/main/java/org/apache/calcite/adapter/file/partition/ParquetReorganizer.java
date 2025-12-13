@@ -72,6 +72,8 @@ public class ParquetReorganizer {
    * Configuration for a reorganization job.
    */
   public static class ReorgConfig {
+    private static final int DEFAULT_THREADS = 2;
+
     private final String sourcePattern;
     private final String targetBase;
     private final List<String> partitionColumns;
@@ -80,6 +82,7 @@ public class ParquetReorganizer {
     private final int startYear;
     private final int endYear;
     private final String name;
+    private final int threads;
 
     private ReorgConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -93,6 +96,7 @@ public class ParquetReorganizer {
       this.startYear = builder.startYear;
       this.endYear = builder.endYear;
       this.name = builder.name;
+      this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
     }
 
     public String getSourcePattern() {
@@ -127,6 +131,10 @@ public class ParquetReorganizer {
       return name;
     }
 
+    public int getThreads() {
+      return threads;
+    }
+
     public static Builder builder() {
       return new Builder();
     }
@@ -143,6 +151,7 @@ public class ParquetReorganizer {
       private int startYear;
       private int endYear;
       private String name;
+      private int threads;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -180,6 +189,11 @@ public class ParquetReorganizer {
         return this;
       }
 
+      public Builder threads(int threads) {
+        this.threads = threads;
+        return this;
+      }
+
       public ReorgConfig build() {
         if (sourcePattern == null || sourcePattern.isEmpty()) {
           throw new IllegalArgumentException("sourcePattern is required");
@@ -213,9 +227,10 @@ public class ParquetReorganizer {
     try (Connection conn = getDuckDBConnection()) {
       // Apply memory-optimizing settings to avoid OOM on large datasets
       try (Statement setupStmt = conn.createStatement()) {
-        setupStmt.execute("SET threads=2");
+        setupStmt.execute("SET threads=" + config.getThreads());
         setupStmt.execute("SET preserve_insertion_order=false");
-        LOGGER.debug("Applied DuckDB memory settings: threads=2, preserve_insertion_order=false");
+        LOGGER.debug("Applied DuckDB settings: threads={}, preserve_insertion_order=false",
+            config.getThreads());
       }
 
       // Phase 1: Process data in batches
