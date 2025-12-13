@@ -78,6 +78,8 @@ public class FredCatalogDownloader {
 
   private long lastRequestTime = 0;
   private final Map<String, List<Map<String, Object>>> partitionedSeries = new HashMap<>();
+  // Track partitions already flushed this session to avoid redundant S3 exists checks
+  private final Set<String> flushedPartitions = new HashSet<>();
 
   public FredCatalogDownloader(String fredApiKey, String cacheDir, String parquetDir,
                                StorageProvider storageProvider,
@@ -566,12 +568,25 @@ public class FredCatalogDownloader {
       String jsonFile = storageProvider.resolvePath(cacheDir, relativePath);
 
       // If file already exists, merge with existing data
+      // Use flushedPartitions set to avoid redundant S3 exists checks within same session
       List<Map<String, Object>> existingData = new ArrayList<>();
-      if (storageProvider.exists(jsonFile)) {
+      String partitionKey = entry.getKey();
+      if (flushedPartitions.contains(partitionKey)) {
+        // Already flushed this session - file exists, read and merge
         try (InputStream inputStream = storageProvider.openInputStream(jsonFile);
              InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
           existingData = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
         }
+      } else if (storageProvider.exists(jsonFile)) {
+        // First flush for this partition - check S3 once
+        try (InputStream inputStream = storageProvider.openInputStream(jsonFile);
+             InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+          existingData = objectMapper.readValue(reader, new TypeReference<List<Map<String, Object>>>() {});
+        }
+        flushedPartitions.add(partitionKey);
+      } else {
+        // New partition - mark as flushed
+        flushedPartitions.add(partitionKey);
       }
 
       existingData.addAll(partitionData);
