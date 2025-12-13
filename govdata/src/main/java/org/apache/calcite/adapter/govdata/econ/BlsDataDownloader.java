@@ -2144,18 +2144,23 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         ? String.format("%d.q1-q4.singlefile.csv", year)
         : String.format("%d.annual.singlefile.csv", year);
 
-    // Load SQL template and execute with parameters (no manual escaping needed)
-    Map<String, String> params =
+    // Load SQL template and substitute parameters using string replacement
+    // Note: DuckDB doesn't support PreparedStatement parameters in file paths,
+    // so we must use direct string substitution for read_csv_auto() and COPY TO
+    String sql =
+        substituteSqlParameters(loadSqlResource("/sql/qcew_county_to_parquet.sql"),
         ImmutableMap.of("zipPath", fullZipPath,
-        "csvFilename", csvFilename,
-        "parquetPath", fullParquetPath);
+            "csvFilename", csvFilename,
+            "parquetPath", fullParquetPath));
 
-    executeDuckDBSqlWithParams(
-        loadSqlResource("/sql/qcew_county_to_parquet.sql"),
-        params,
-        "QCEW county CSV to Parquet conversion");
-
-    LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
+    // Execute the SQL
+    try (Connection conn = getDuckDBConnection(storageProvider);
+         Statement stmt = conn.createStatement()) {
+      stmt.execute(sql);
+      LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
+    } catch (SQLException e) {
+      throw new IOException("QCEW county CSV to Parquet conversion failed: " + e.getMessage(), e);
+    }
   }
 
   /**
