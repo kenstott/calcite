@@ -929,11 +929,16 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             dimensionProvider,
             null,  // No prefetch for conversion
             (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-              // Execute conversion
-              convertCachedJsonToParquet(tableName, vars);
+              // Execute conversion - only mark as converted if successful
+              boolean converted = convertCachedJsonToParquet(tableName, vars);
 
-              // Mark as converted in manifest
-              cacheManifest.markParquetConverted(cacheKey, parquetPath);
+              if (converted) {
+                // Mark as converted in manifest
+                cacheManifest.markParquetConverted(cacheKey, parquetPath);
+              } else {
+                LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
+                    tableName, cacheKey);
+              }
             },
             OperationType.CONVERSION);
       }
@@ -1027,7 +1032,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
 
               for (String yearStr : years) {
                 int year = Integer.parseInt(yearStr);
-                Map<String, String> params = Map.of("year", yearStr, "frequency", "monthly");
+                Map<String, String> params = Map.of("year", yearStr, "frequency", "M");
                 CacheKey cacheKey = new CacheKey(tableName, params);
 
                 if (cacheManifest.isCached(cacheKey)) {
@@ -1064,7 +1069,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
                 List<Map<String, String>> apiPartitions = new ArrayList<>();
                 List<String> apiJsons = new ArrayList<>();
                 for (Map.Entry<Integer, String> entry : apiData.entrySet()) {
-                  apiPartitions.add(Map.of("type", tableName, "year", String.valueOf(entry.getKey()), "frequency", "monthly"));
+                  apiPartitions.add(Map.of("type", tableName, "year", String.valueOf(entry.getKey()), "frequency", "M"));
                   apiJsons.add(entry.getValue());
                 }
                 helper.insertJsonBatch(apiPartitions, apiJsons);
