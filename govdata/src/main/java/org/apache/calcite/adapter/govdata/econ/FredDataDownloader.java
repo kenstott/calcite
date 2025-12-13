@@ -75,7 +75,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
       int fredMinPopularity, boolean fredCatalogForceRefresh, Integer catalogCacheTtlDays,
       int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest, startYear, endYear);
+        sharedManifest, startYear, endYear, null);
     this.fredApiKey = fredApiKey;
     this.fredMinPopularity = fredMinPopularity;
     this.fredCatalogForceRefresh = fredCatalogForceRefresh;

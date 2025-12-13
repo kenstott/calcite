@@ -66,7 +66,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
       CacheManifest sharedManifest, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest, startYear, endYear);
+        sharedManifest, startYear, endYear, null);
     this.parquetDir = parquetDir;
     // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them
   }
@@ -964,7 +964,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       try (Statement stmt = duckdb.createStatement()) {
         stmt.execute(enrichSql);
 
-        // Get distinct sections for partitioned writing
+        // Get total count and distinct sections for logging
+        long totalTables = 0;
+        try (ResultSet countRs = stmt.executeQuery("SELECT count(*) FROM enriched")) {
+          if (countRs.next()) {
+            totalTables = countRs.getLong(1);
+          }
+        }
+
         List<String> sections = new ArrayList<>();
         try (ResultSet rs =
             stmt.executeQuery("SELECT DISTINCT coalesce(section, 'unknown') AS section FROM enriched ORDER BY section")) {
@@ -976,38 +983,18 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         LOGGER.info("NIPA partitioned by section: {}",
             String.join(", ", sections));
 
-        // Write each section partition
-        for (String section : sections) {
-          String parquetPath = "type=reference/section=" + section + "/nipa_tables.parquet";
-          String fullParquetPath = storageProvider.resolvePath(parquetDirectory, parquetPath);
+        // Use PARTITION_BY to write all sections in one efficient operation
+        // Schema pattern uses wildcard (section=*/*.parquet) so DuckDB-generated filenames work
+        String baseParquetPath = storageProvider.resolvePath(parquetDirectory, "type=reference");
 
-          String copySql =
-              String.format("COPY (SELECT * FROM enriched WHERE coalesce(section, 'unknown') = '%s') "
-              + "TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD)",
-              section, fullParquetPath);
+        String copySql =
+            String.format("COPY (SELECT * REPLACE (coalesce(section, 'unknown') AS section) FROM enriched) "
+            + "TO '%s' (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (section), OVERWRITE_OR_IGNORE)",
+            baseParquetPath);
 
-          stmt.execute(copySql);
+        stmt.execute(copySql);
 
-          long count = 0;
-          try (ResultSet countRs =
-              stmt.executeQuery(String.format("SELECT count(*) FROM enriched WHERE coalesce(section, 'unknown') = '%s'", section))) {
-            if (countRs.next()) {
-              count = countRs.getLong(1);
-            }
-          }
-
-          LOGGER.info("Wrote {} tables for section {} to {}", count, section, parquetPath);
-        }
-
-        // Get total count for completion message
-        long totalTables = 0;
-        try (ResultSet countRs = stmt.executeQuery("SELECT count(*) FROM enriched")) {
-          if (countRs.next()) {
-            totalTables = countRs.getLong(1);
-          }
-        }
-
-        LOGGER.info("National accounts reference conversion complete: {} NIPA tables cataloged into {} parquet sections",
+        LOGGER.info("National accounts reference conversion complete: {} NIPA tables cataloged into {} sections using PARTITION_BY",
             totalTables, sections.size());
       }
     } catch (SQLException e) {

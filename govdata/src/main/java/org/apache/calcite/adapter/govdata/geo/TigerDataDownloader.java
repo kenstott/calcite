@@ -246,7 +246,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       StorageProvider cacheStorageProvider, StorageProvider storageProvider,
       GeoCacheManifest sharedManifest, int startYear, int endYear) {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-        sharedManifest, startYear, endYear);
+        sharedManifest, startYear, endYear, null);
     this.dataYears = intYearRange(startYear, endYear);
     this.autoDownload = true;
 
@@ -280,7 +280,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         storageProvider != null ? storageProvider : org.apache.calcite.adapter.file.storage.StorageProviderFactory.createFromUrl(cacheDir),
         cacheManifest,
         dataYears.isEmpty() ? 2020 : dataYears.get(0),
-        dataYears.isEmpty() ? 2020 : dataYears.get(dataYears.size() - 1));
+        dataYears.isEmpty() ? 2020 : dataYears.get(dataYears.size() - 1),
+        null);
     this.dataYears = dataYears;
     this.autoDownload = autoDownload;
 

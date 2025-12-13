@@ -96,7 +96,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param storageProvider Provider for parquet file operations
    */
   protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
-    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear);
+    this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear, null);
   }
 
   /**
@@ -111,14 +111,16 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    * @param startYear Start year for data downloads (from model operands)
    * @param endYear End year for data downloads (from model operands)
+   * @param defaultParquetFilename Default filename for parquet files (null for default "data_0")
    */
   public AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory,
       StorageProvider cacheStorageProvider,
       StorageProvider storageProvider,
       CacheManifest sharedManifest,
       int startYear,
-      int endYear) {
-    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ", sharedManifest, startYear, endYear);
+      int endYear,
+      String defaultParquetFilename) {
+    super(cacheDirectory, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, "econ", sharedManifest, startYear, endYear, defaultParquetFilename);
   }
 
   /**
