@@ -1883,7 +1883,7 @@
           "CAINC5S": "County and MSA annual personal income by major component and earnings by SIC industry",
           "CAINC6N": "County and MSA annual compensation of employees by NAICS industry",
           "CAINC6S": "County and MSA annual compensation of employees by SIC industry",
-          "CAINC91": "County and MSA annual gross flow of earnings",
+          "CAINC91": "County annual gross flow of earnings (inter-county commuting, county-level only)",
           "SAGDP1": "State annual GDP summary",
           "SAGDP2": "State annual GDP by industry",
           "SAGDP3": "State annual GDP contributions by industry",
