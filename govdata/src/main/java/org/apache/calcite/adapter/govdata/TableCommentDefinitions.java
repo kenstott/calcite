@@ -1406,34 +1406,34 @@ public final class TableCommentDefinitions {
     gdpStatisticsCols.put("seasonally_adjusted", "Whether data is seasonally adjusted ('Yes' or 'No')");
     ECON_COLUMN_COMMENTS.put("gdp_statistics", gdpStatisticsCols);
 
-    // fred_data_series_catalog table
-    ECON_TABLE_COMMENTS.put("fred_data_series_catalog",
+    // reference_fred_series table (FRED data series catalog)
+    ECON_TABLE_COMMENTS.put("reference_fred_series",
         "Comprehensive catalog of all 800,000+ economic data series available from Federal Reserve Economic Data (FRED). "
         + "Contains metadata for each series including title, description, units, frequency, source agency, and category. "
         + "Enables discovery of economic indicators across national accounts, labor markets, prices, international data, "
         + "banking, and regional statistics. Essential for identifying relevant time series for research and analysis.");
 
-    Map<String, String> fredDataSeriesCatalogCols = new HashMap<>();
-    fredDataSeriesCatalogCols.put("series_id", "Unique FRED series identifier (e.g., 'UNRATE' for unemployment rate, 'GDP' for gross domestic product)");
-    fredDataSeriesCatalogCols.put("title", "Full descriptive title of the economic data series");
-    fredDataSeriesCatalogCols.put("observation_start", "Date of first available observation in ISO 8601 format (YYYY-MM-DD)");
-    fredDataSeriesCatalogCols.put("observation_end", "Date of most recent observation in ISO 8601 format (YYYY-MM-DD)");
-    fredDataSeriesCatalogCols.put("frequency", "Data frequency: 'Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'Semiannual', 'Annual'");
-    fredDataSeriesCatalogCols.put("frequency_short", "Abbreviated frequency code: 'D' (Daily), 'W' (Weekly), 'BW' (Biweekly), 'M' (Monthly), 'Q' (Quarterly), 'SA' (Semiannual), 'A' (Annual)");
-    fredDataSeriesCatalogCols.put("units", "Units of measurement (e.g., 'Percent', 'Billions of Dollars', 'Index 1982-1984=100', 'Thousands of Persons')");
-    fredDataSeriesCatalogCols.put("units_short", "Abbreviated units code");
-    fredDataSeriesCatalogCols.put("seasonal_adjustment", "Seasonal adjustment status: 'Seasonally Adjusted', 'Not Seasonally Adjusted'");
-    fredDataSeriesCatalogCols.put("seasonal_adjustment_short", "Abbreviated seasonal adjustment code: 'SA' (Seasonally Adjusted), 'NSA' (Not Seasonally Adjusted)");
-    fredDataSeriesCatalogCols.put("last_updated", "Timestamp of last data update in ISO 8601 format");
-    fredDataSeriesCatalogCols.put("popularity", "FRED popularity score indicating relative usage and interest level (higher = more popular)");
-    fredDataSeriesCatalogCols.put("group_popularity", "Popularity score within the series' category group");
-    fredDataSeriesCatalogCols.put("notes", "Detailed description including methodology, calculation details, source information, and important caveats");
-    fredDataSeriesCatalogCols.put("category_id", "FRED category identifier for hierarchical classification (e.g., 32992 for 'Money, Banking, & Finance')");
-    fredDataSeriesCatalogCols.put("category_name", "Human-readable category name (e.g., 'National Accounts', 'Labor Markets', 'Population, Employment, & Labor Markets')");
-    fredDataSeriesCatalogCols.put("source_id", "Identifier for the originating data source agency or organization");
-    fredDataSeriesCatalogCols.put("source_name", "Name of originating agency (e.g., 'U.S. Bureau of Labor Statistics', 'Board of Governors of the Federal Reserve System')");
-    fredDataSeriesCatalogCols.put("series_status", "Series status: 'active' (currently updated with new observations) or 'discontinued' (no longer maintained)");
-    ECON_COLUMN_COMMENTS.put("fred_data_series_catalog", fredDataSeriesCatalogCols);
+    Map<String, String> referenceFredSeriesCols = new HashMap<>();
+    referenceFredSeriesCols.put("series", "Unique FRED series identifier (e.g., 'UNRATE' for unemployment rate, 'GDP' for gross domestic product)");
+    referenceFredSeriesCols.put("title", "Full descriptive title of the economic data series");
+    referenceFredSeriesCols.put("observation_start", "Date of first available observation in ISO 8601 format (YYYY-MM-DD)");
+    referenceFredSeriesCols.put("observation_end", "Date of most recent observation in ISO 8601 format (YYYY-MM-DD)");
+    referenceFredSeriesCols.put("frequency", "Data frequency: 'Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'Semiannual', 'Annual'");
+    referenceFredSeriesCols.put("frequency_short", "Abbreviated frequency code: 'D' (Daily), 'W' (Weekly), 'BW' (Biweekly), 'M' (Monthly), 'Q' (Quarterly), 'SA' (Semiannual), 'A' (Annual)");
+    referenceFredSeriesCols.put("units", "Units of measurement (e.g., 'Percent', 'Billions of Dollars', 'Index 1982-1984=100', 'Thousands of Persons')");
+    referenceFredSeriesCols.put("units_short", "Abbreviated units code");
+    referenceFredSeriesCols.put("seasonal_adjustment", "Seasonal adjustment status: 'Seasonally Adjusted', 'Not Seasonally Adjusted'");
+    referenceFredSeriesCols.put("seasonal_adjustment_short", "Abbreviated seasonal adjustment code: 'SA' (Seasonally Adjusted), 'NSA' (Not Seasonally Adjusted)");
+    referenceFredSeriesCols.put("last_updated", "Timestamp of last data update in ISO 8601 format");
+    referenceFredSeriesCols.put("popularity", "FRED popularity score indicating relative usage and interest level (higher = more popular)");
+    referenceFredSeriesCols.put("group_popularity", "Popularity score within the series' category group");
+    referenceFredSeriesCols.put("notes", "Detailed description including methodology, calculation details, source information, and important caveats");
+    referenceFredSeriesCols.put("category_id", "FRED category identifier for hierarchical classification (e.g., 32992 for 'Money, Banking, & Finance')");
+    referenceFredSeriesCols.put("category_name", "Human-readable category name (e.g., 'National Accounts', 'Labor Markets', 'Population, Employment, & Labor Markets')");
+    referenceFredSeriesCols.put("source_id", "Identifier for the originating data source agency or organization");
+    referenceFredSeriesCols.put("source_name", "Name of originating agency (e.g., 'U.S. Bureau of Labor Statistics', 'Board of Governors of the Federal Reserve System')");
+    referenceFredSeriesCols.put("series_status", "Series status: 'active' (currently updated with new observations) or 'discontinued' (no longer maintained)");
+    ECON_COLUMN_COMMENTS.put("reference_fred_series", referenceFredSeriesCols);
   }
 
   // =========================== PUBLIC API METHODS ===========================

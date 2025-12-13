@@ -122,7 +122,7 @@ public class EconDataIntegrationTest {
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test key ECON tables are available
       String[] expectedTables = {
-          "fred_data_series_catalog",
+          "reference_fred_series",
           "gdp_components",
           "regional_employment",
           "regional_income",
@@ -156,22 +156,22 @@ public class EconDataIntegrationTest {
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", props)) {
       // Test FRED series catalog structure and basic data
       try (PreparedStatement stmt =
-          connection.prepareStatement("SELECT series_id, title, units FROM fred_data_series_catalog " +
-          "WHERE series_id LIKE 'GDP%' LIMIT 5")) {
+          connection.prepareStatement("SELECT series, title, units FROM reference_fred_series " +
+          "WHERE series LIKE 'GDP%' LIMIT 5")) {
         try (ResultSet rs = stmt.executeQuery()) {
           boolean hasResults = false;
           while (rs.next()) {
             hasResults = true;
-            String seriesId = rs.getString("series_id");
+            String series = rs.getString("series");
             String title = rs.getString("title");
             String units = rs.getString("units");
 
-            assertNotNull(seriesId, "Series ID should not be null");
-            assertTrue(seriesId.startsWith("GDP"), "Series ID should match filter");
+            assertNotNull(series, "Series should not be null");
+            assertTrue(series.startsWith("GDP"), "Series should match filter");
             assertNotNull(title, "Title should not be null");
 
             LOGGER.debug("Found FRED series: ID={}, Title={}, Units={}",
-                seriesId, title, units);
+                series, title, units);
           }
 
           LOGGER.info("FRED catalog query completed. Has results: {}", hasResults);

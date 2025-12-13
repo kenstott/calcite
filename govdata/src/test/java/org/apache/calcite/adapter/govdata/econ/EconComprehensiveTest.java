@@ -74,7 +74,7 @@ public class EconComprehensiveTest {
       "ita_data",
       "industry_gdp",
       // FRED catalog table
-      "fred_data_series_catalog"));
+      "reference_fred_series"));
 
   @BeforeAll
   public static void setup() {
@@ -266,9 +266,9 @@ public class EconComprehensiveTest {
     }
 
     // Check FRED catalog table
-    if (result.queryableTables.contains("fred_data_series_catalog")) {
+    if (result.queryableTables.contains("reference_fred_series")) {
       try {
-        String query = "SELECT COUNT(*) as total_series FROM econ.fred_data_series_catalog";
+        String query = "SELECT COUNT(*) as total_series FROM econ.reference_fred_series";
         try (ResultSet rs = stmt.executeQuery(query)) {
           if (rs.next()) {
             long totalSeries = rs.getLong("total_series");
