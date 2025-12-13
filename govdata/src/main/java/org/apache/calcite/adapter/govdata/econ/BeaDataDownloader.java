@@ -139,6 +139,19 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     return "national_accounts";
   }
 
+  // BEA API allows 100 requests/minute. Use 650ms to stay safely under limit.
+  @Override protected long getMinRequestIntervalMs() {
+    return 650;
+  }
+
+  @Override protected int getMaxRetries() {
+    return 3;
+  }
+
+  @Override protected long getRetryDelayMs() {
+    return 2000; // 2 seconds for BEA API retry
+  }
+
   /**
    * Downloads BEA reference tables (NIPA tables catalog and regional line codes).
    *
