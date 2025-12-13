@@ -3977,41 +3977,26 @@ public abstract class AbstractGovDataDownloader {
 
     LOGGER.info("  Deleting {} temp files...", filesToDelete.size());
 
-    // Delete files in parallel for better performance on S3/R2
+    // Use batch delete for efficiency (1000 files per request vs 1 per request)
     if (storageProvider != null && filesToDelete.size() > 0) {
-      int numThreads = Math.min(10, filesToDelete.size() / 100 + 1);
-      java.util.concurrent.ExecutorService executor =
-          java.util.concurrent.Executors.newFixedThreadPool(numThreads);
-      java.util.concurrent.atomic.AtomicInteger deleted =
-          new java.util.concurrent.atomic.AtomicInteger(0);
-      java.util.concurrent.atomic.AtomicInteger failed =
-          new java.util.concurrent.atomic.AtomicInteger(0);
-      int total = filesToDelete.size();
-
-      for (String file : filesToDelete) {
-        executor.submit(() -> {
+      try {
+        int deleted = storageProvider.deleteBatch(filesToDelete);
+        LOGGER.info("  Batch deleted {} files", deleted);
+      } catch (IOException e) {
+        LOGGER.warn("  Batch delete failed, falling back to individual deletes: {}", e.getMessage());
+        // Fallback to individual deletes
+        int deleted = 0;
+        for (String file : filesToDelete) {
           try {
             storageProvider.delete(file);
-            int count = deleted.incrementAndGet();
-            if (count % 1000 == 0) {
-              LOGGER.info("    Deleted {}/{} temp files...", count, total);
+            deleted++;
+            if (deleted % 1000 == 0) {
+              LOGGER.info("    Deleted {}/{} temp files...", deleted, filesToDelete.size());
             }
-          } catch (Exception e) {
-            failed.incrementAndGet();
+          } catch (Exception ex) {
+            // Continue on individual failures
           }
-        });
-      }
-
-      executor.shutdown();
-      try {
-        executor.awaitTermination(30, java.util.concurrent.TimeUnit.MINUTES);
-      } catch (InterruptedException e) {
-        LOGGER.warn("  Temp cleanup interrupted");
-        Thread.currentThread().interrupt();
-      }
-
-      if (failed.get() > 0) {
-        LOGGER.warn("  Failed to delete {} temp files", failed.get());
+        }
       }
     }
     LOGGER.info("  Temp cleanup complete");
