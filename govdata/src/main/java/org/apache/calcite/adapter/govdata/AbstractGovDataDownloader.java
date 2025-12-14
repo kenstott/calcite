@@ -3335,17 +3335,27 @@ public abstract class AbstractGovDataDownloader {
     final List<String> batchPartitionColumns;
     /** Number of DuckDB threads to use for reorganization */
     final int threads;
+    /** Incremental keys for tracking completion by key values (e.g., [year] or [year, month]) */
+    final List<String> incrementalKeys;
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
         String alternateName, String alternatePattern, List<String> partitionColumns,
         Map<String, String> columnMappings, List<String> batchPartitionColumns) {
       this(sourceTableName, sourcePattern, alternateName, alternatePattern, partitionColumns,
-          columnMappings, batchPartitionColumns, 0);
+          columnMappings, batchPartitionColumns, 0, Collections.emptyList());
     }
 
     AlternatePartitionPattern(String sourceTableName, String sourcePattern,
         String alternateName, String alternatePattern, List<String> partitionColumns,
         Map<String, String> columnMappings, List<String> batchPartitionColumns, int threads) {
+      this(sourceTableName, sourcePattern, alternateName, alternatePattern, partitionColumns,
+          columnMappings, batchPartitionColumns, threads, Collections.emptyList());
+    }
+
+    AlternatePartitionPattern(String sourceTableName, String sourcePattern,
+        String alternateName, String alternatePattern, List<String> partitionColumns,
+        Map<String, String> columnMappings, List<String> batchPartitionColumns,
+        int threads, List<String> incrementalKeys) {
       this.sourceTableName = sourceTableName;
       this.sourcePattern = sourcePattern;
       this.alternateName = alternateName;
@@ -3355,6 +3365,7 @@ public abstract class AbstractGovDataDownloader {
       this.batchPartitionColumns = batchPartitionColumns != null
           ? batchPartitionColumns : Collections.emptyList();
       this.threads = threads;
+      this.incrementalKeys = incrementalKeys != null ? incrementalKeys : Collections.emptyList();
     }
   }
 
@@ -3423,8 +3434,8 @@ public abstract class AbstractGovDataDownloader {
 
   /**
    * Checks if an alternate partition can be skipped because:
-   * 1. The source table is marked complete in cache manifest
-   * 2. The alternate partition target file(s) already exist
+   * 1. The reorganization is tracked as complete in cache DB
+   * 2. OR the target files exist (self-heal by adding to cache DB)
    *
    * @param alternate Alternate partition pattern to check
    * @return true if reorganization can be skipped
@@ -3435,28 +3446,53 @@ public abstract class AbstractGovDataDownloader {
       return false;
     }
 
-    // Check source table completion
-    if (cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest) {
-      org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
-          (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
-
-      // Get signature for source table - we use empty signature since we just need
-      // to check if the source table was modified at all this run
-      String sourceTable = alternate.sourceTableName;
-
-      // Check if source table has any stale entries or errors
-      if (!econManifest.areAllEntriesFresh(sourceTable)
-          || econManifest.hasTableErrors(sourceTable)) {
-        LOGGER.debug("Source table '{}' has stale or error entries - must reorganize",
-            sourceTable);
-        return false;
-      }
+    // Only econ manifest has DuckDBCacheStore
+    if (!(cacheManifest instanceof org.apache.calcite.adapter.govdata.econ.CacheManifest)) {
+      return false;
     }
 
-    // Check if alternate partition target files exist
-    // For simple patterns without variables, check if the target file exists
-    String targetPattern = alternate.alternatePattern;
+    org.apache.calcite.adapter.govdata.econ.CacheManifest econManifest =
+        (org.apache.calcite.adapter.govdata.econ.CacheManifest) cacheManifest;
+    DuckDBCacheStore store = econManifest.getStore();
+    String sourceTable = alternate.sourceTableName;
 
+    // Check if source table has any stale entries or errors
+    if (!econManifest.areAllEntriesFresh(sourceTable)
+        || econManifest.hasTableErrors(sourceTable)) {
+      LOGGER.debug("Source table '{}' has stale or error entries - must reorganize",
+          sourceTable);
+      return false;
+    }
+
+    // First check: Is reorganization tracked in partition status store?
+    // Use empty key map for non-incremental tracking (backward compatibility)
+    Map<String, String> emptyKeys = Collections.emptyMap();
+    org.apache.calcite.adapter.file.partition.IncrementalTracker tracker = getIncrementalTracker();
+    if (tracker.isProcessed(alternate.alternateName, sourceTable, emptyKeys)) {
+      LOGGER.debug("Alternate partition '{}' reorganization tracked in partition status store",
+          alternate.alternateName);
+      return true;
+    }
+
+    // Second check: Target files exist but not tracked (self-heal opportunity)
+    String targetPattern = alternate.alternatePattern;
+    boolean filesExist = checkAlternatePartitionFilesExist(targetPattern);
+
+    if (filesExist) {
+      // Self-heal: record the existing reorganization in partition status store
+      LOGGER.info("Self-healing alternate partition '{}': recording existing reorganization",
+          alternate.alternateName);
+      tracker.markProcessed(alternate.alternateName, sourceTable, emptyKeys, targetPattern);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if alternate partition target files exist in storage.
+   */
+  private boolean checkAlternatePartitionFilesExist(String targetPattern) {
     try {
       // If pattern has no variables, check directly
       if (!targetPattern.contains("{")) {
@@ -3467,8 +3503,6 @@ public abstract class AbstractGovDataDownloader {
       }
 
       // For patterns with variables, check by trying to list the base directory
-      // This is a heuristic - if we find the alternate partition directory structure, assume it exists
-      // Extract the base directory from the pattern (up to the first variable)
       int firstVarIndex = targetPattern.indexOf("{");
       if (firstVarIndex > 0) {
         String baseDir = targetPattern.substring(0, firstVarIndex);
@@ -3491,8 +3525,19 @@ public abstract class AbstractGovDataDownloader {
     } catch (IOException e) {
       LOGGER.debug("Error checking alternate partition files: {}", e.getMessage());
     }
-
     return false;
+  }
+
+  /**
+   * Gets an IncrementalTracker for tracking reorganization progress.
+   * Uses DuckDB-based partition status store in the local operating directory
+   * (same location as the cache metadata DuckDB).
+   *
+   * @return IncrementalTracker instance
+   */
+  protected org.apache.calcite.adapter.file.partition.IncrementalTracker getIncrementalTracker() {
+    return org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore
+        .getInstance(operatingDirectory);
   }
 
   /**
@@ -3568,13 +3613,23 @@ public abstract class AbstractGovDataDownloader {
             // Parse threads (optional, defaults to 2)
             int threads = alternateNode.has("threads") ? alternateNode.get("threads").asInt() : 0;
 
+            // Parse incremental_keys for incremental processing (e.g., ["year"])
+            List<String> incrementalKeys = new ArrayList<>();
+            if (alternateNode.has("incremental_keys")
+                && alternateNode.get("incremental_keys").isArray()) {
+              for (JsonNode keyNode : alternateNode.get("incremental_keys")) {
+                incrementalKeys.add(keyNode.asText());
+              }
+            }
+
             if (alternateName != null && alternatePattern != null) {
               alternatePartitions.add(new AlternatePartitionPattern(
                   tableName, sourcePattern, alternateName, alternatePattern,
-                  partitionColumns, columnMappings, batchPartitionColumns, threads));
-              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {}, threads: {})",
+                  partitionColumns, columnMappings, batchPartitionColumns, threads, incrementalKeys));
+              LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {}, "
+                  + "threads: {}, incremental: {})",
                   tableName, alternateName, partitionColumns, batchPartitionColumns,
-                  threads > 0 ? threads : "default");
+                  threads > 0 ? threads : "default", incrementalKeys);
             }
           }
         }
@@ -3638,6 +3693,25 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.warn("Multi-variable alternate partitions not yet implemented: {}", alternateVars);
       // TODO: Implement Cartesian product for multiple variables
     }
+
+    // Mark reorganization complete in cache DB
+    markAlternatePartitionComplete(alternate);
+  }
+
+  /**
+   * Mark an alternate partition as complete in the partition status store.
+   * Uses empty key map for non-incremental tracking (when incremental_keys is not configured).
+   */
+  private void markAlternatePartitionComplete(AlternatePartitionPattern alternate) {
+    Map<String, String> emptyKeys = Collections.emptyMap();
+    org.apache.calcite.adapter.file.partition.IncrementalTracker tracker = getIncrementalTracker();
+    tracker.markProcessed(
+        alternate.alternateName,
+        alternate.sourceTableName,
+        emptyKeys,
+        alternate.alternatePattern);
+    LOGGER.info("Marked alternate partition '{}' as complete in partition status store",
+        alternate.alternateName);
   }
 
   /**
@@ -3706,6 +3780,9 @@ public abstract class AbstractGovDataDownloader {
             // No batch columns = no batching
             .yearRange(startYear, endYear)
             .threads(alternate.threads)
+            .sourceTable(alternate.sourceTableName)
+            .incrementalKeys(alternate.incrementalKeys)
+            .incrementalTracker(getIncrementalTracker())
             .build();
 
     reorganizer.reorganize(config);
@@ -3737,6 +3814,9 @@ public abstract class AbstractGovDataDownloader {
             .batchPartitionColumns(alternate.batchPartitionColumns)
             .yearRange(startYear, endYear)
             .threads(alternate.threads)
+            .sourceTable(alternate.sourceTableName)
+            .incrementalKeys(alternate.incrementalKeys)
+            .incrementalTracker(getIncrementalTracker())
             .build();
 
     reorganizer.reorganize(config);

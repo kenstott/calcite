@@ -83,6 +83,9 @@ public class ParquetReorganizer {
     private final int endYear;
     private final String name;
     private final int threads;
+    private final List<String> incrementalKeys;
+    private final IncrementalTracker incrementalTracker;
+    private final String sourceTable;
 
     private ReorgConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -97,6 +100,11 @@ public class ParquetReorganizer {
       this.endYear = builder.endYear;
       this.name = builder.name;
       this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
+      this.incrementalKeys = builder.incrementalKeys != null
+          ? builder.incrementalKeys : Collections.<String>emptyList();
+      this.incrementalTracker = builder.incrementalTracker != null
+          ? builder.incrementalTracker : IncrementalTracker.NOOP;
+      this.sourceTable = builder.sourceTable;
     }
 
     public String getSourcePattern() {
@@ -135,6 +143,22 @@ public class ParquetReorganizer {
       return threads;
     }
 
+    public List<String> getIncrementalKeys() {
+      return incrementalKeys;
+    }
+
+    public IncrementalTracker getIncrementalTracker() {
+      return incrementalTracker;
+    }
+
+    public String getSourceTable() {
+      return sourceTable;
+    }
+
+    public boolean supportsIncremental() {
+      return !incrementalKeys.isEmpty() && incrementalTracker != IncrementalTracker.NOOP;
+    }
+
     public static Builder builder() {
       return new Builder();
     }
@@ -152,6 +176,9 @@ public class ParquetReorganizer {
       private int endYear;
       private String name;
       private int threads;
+      private List<String> incrementalKeys;
+      private IncrementalTracker incrementalTracker;
+      private String sourceTable;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -191,6 +218,21 @@ public class ParquetReorganizer {
 
       public Builder threads(int threads) {
         this.threads = threads;
+        return this;
+      }
+
+      public Builder incrementalKeys(List<String> incrementalKeys) {
+        this.incrementalKeys = incrementalKeys;
+        return this;
+      }
+
+      public Builder incrementalTracker(IncrementalTracker incrementalTracker) {
+        this.incrementalTracker = incrementalTracker;
+        return this;
+      }
+
+      public Builder sourceTable(String sourceTable) {
+        this.sourceTable = sourceTable;
         return this;
       }
 
@@ -309,50 +351,133 @@ public class ParquetReorganizer {
 
   /**
    * Process data using configured batch combinations.
+   * Supports incremental processing - skips batches whose incremental keys are already processed.
    */
   private void processBatchCombinations(Connection conn, ReorgConfig config,
       List<Map<String, String>> batchCombinations, String tempBase) throws java.sql.SQLException {
 
-    LOGGER.info("Phase 1: Processing {} batch combinations (batch by: {})...",
-        batchCombinations.size(), config.getBatchPartitionColumns());
+    // Group batches by incremental key values for tracking
+    Map<Map<String, String>, List<Map<String, String>>> batchesByIncrementalKey =
+        groupBatchesByIncrementalKey(batchCombinations, config.getIncrementalKeys());
 
-    int processed = 0;
-    for (Map<String, String> batch : batchCombinations) {
-      // Build source glob with batch filters applied
-      String batchSourceGlob = config.getSourcePattern();
-      StringBuilder filenamePattern = new StringBuilder();
+    int totalBatches = batchCombinations.size();
+    int skippedGroups = 0;
+    int processedBatches = 0;
 
-      for (Map.Entry<String, String> entry : batch.entrySet()) {
-        String col = entry.getKey();
-        String val = entry.getValue();
-        batchSourceGlob = batchSourceGlob.replace(col + "=*", col + "=" + val);
-        if (filenamePattern.length() > 0) {
-          filenamePattern.append("_");
+    if (config.supportsIncremental()) {
+      LOGGER.info("Phase 1: Processing {} batch combinations (batch by: {}, incremental by: {})...",
+          totalBatches, config.getBatchPartitionColumns(), config.getIncrementalKeys());
+    } else {
+      LOGGER.info("Phase 1: Processing {} batch combinations (batch by: {})...",
+          totalBatches, config.getBatchPartitionColumns());
+    }
+
+    // Process batches grouped by incremental key
+    for (Map.Entry<Map<String, String>, List<Map<String, String>>> entry : batchesByIncrementalKey.entrySet()) {
+      Map<String, String> incrementalKeyValues = entry.getKey();
+      List<Map<String, String>> batchesForKey = entry.getValue();
+
+      // Check if this incremental key combination is already processed
+      if (config.supportsIncremental() && !incrementalKeyValues.isEmpty()) {
+        if (config.getIncrementalTracker().isProcessed(
+            config.getName(), config.getSourceTable(), incrementalKeyValues)) {
+          LOGGER.info("  Skipping {} batches for incremental key {} (already processed)",
+              batchesForKey.size(), incrementalKeyValues);
+          skippedGroups++;
+          continue;
         }
-        filenamePattern.append(col).append("_").append(val);
       }
-      filenamePattern.append("_{i}");
 
-      String fullBatchSourceGlob = storageProvider.resolvePath(baseDirectory, batchSourceGlob);
+      // Process all batches for this incremental key
+      boolean allSuccessful = true;
+      for (Map<String, String> batch : batchesForKey) {
+        boolean success = processSingleBatch(conn, config, batch, tempBase,
+            processedBatches + 1, totalBatches);
+        if (success) {
+          processedBatches++;
+        } else {
+          allSuccessful = false;
+        }
+      }
 
-      String sql = buildReorganizationSql(fullBatchSourceGlob, tempBase,
-          config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
-
-      LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
-      LOGGER.info("  Starting batch {}/{}: {}", processed + 1, batchCombinations.size(), batch);
-
-      try (Statement stmt = conn.createStatement()) {
-        long startTime = System.currentTimeMillis();
-        stmt.execute(sql);
-        long elapsed = System.currentTimeMillis() - startTime;
-        processed++;
-        LOGGER.info("    Completed batch {} in {}ms", batch, elapsed);
-      } catch (java.sql.SQLException e) {
-        // Log but continue - some combinations may not have data
-        LOGGER.debug("  Skipped batch {} (no data): {}", batch, e.getMessage());
+      // Mark incremental key as processed if all batches succeeded
+      if (config.supportsIncremental() && allSuccessful && !incrementalKeyValues.isEmpty()) {
+        config.getIncrementalTracker().markProcessed(
+            config.getName(), config.getSourceTable(), incrementalKeyValues, config.getTargetBase());
+        LOGGER.info("  Marked incremental key {} as processed", incrementalKeyValues);
       }
     }
-    LOGGER.info("  Completed {} batches for {}", processed, config.getName());
+
+    LOGGER.info("  Completed {} batches for {} ({} incremental groups skipped)",
+        processedBatches, config.getName(), skippedGroups);
+  }
+
+  /**
+   * Process a single batch.
+   * @return true if batch processed successfully (or had no data), false on error
+   */
+  private boolean processSingleBatch(Connection conn, ReorgConfig config, Map<String, String> batch,
+      String tempBase, int batchNum, int totalBatches) {
+    // Build source glob with batch filters applied
+    String batchSourceGlob = config.getSourcePattern();
+    StringBuilder filenamePattern = new StringBuilder();
+
+    for (Map.Entry<String, String> entry : batch.entrySet()) {
+      String col = entry.getKey();
+      String val = entry.getValue();
+      batchSourceGlob = batchSourceGlob.replace(col + "=*", col + "=" + val);
+      if (filenamePattern.length() > 0) {
+        filenamePattern.append("_");
+      }
+      filenamePattern.append(col).append("_").append(val);
+    }
+    filenamePattern.append("_{i}");
+
+    String fullBatchSourceGlob = storageProvider.resolvePath(baseDirectory, batchSourceGlob);
+
+    String sql = buildReorganizationSql(fullBatchSourceGlob, tempBase,
+        config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
+
+    LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
+    LOGGER.info("  Starting batch {}/{}: {}", batchNum, totalBatches, batch);
+
+    try (Statement stmt = conn.createStatement()) {
+      long startTime = System.currentTimeMillis();
+      stmt.execute(sql);
+      long elapsed = System.currentTimeMillis() - startTime;
+      LOGGER.info("    Completed batch {} in {}ms", batch, elapsed);
+      return true;
+    } catch (java.sql.SQLException e) {
+      // Log but continue - some combinations may not have data
+      LOGGER.debug("  Skipped batch {} (no data): {}", batch, e.getMessage());
+      return true;  // No data is not an error
+    }
+  }
+
+  /**
+   * Groups batches by their incremental key values.
+   * For example, with incremental_keys=[year] and batches [{year=2020, geo=STATE}, {year=2020, geo=COUNTY}],
+   * returns {{"year":"2020"} -> [{year=2020, geo=STATE}, {year=2020, geo=COUNTY}]}.
+   */
+  private Map<Map<String, String>, List<Map<String, String>>> groupBatchesByIncrementalKey(
+      List<Map<String, String>> batches, List<String> incrementalKeys) {
+    Map<Map<String, String>, List<Map<String, String>>> grouped = new LinkedHashMap<>();
+
+    for (Map<String, String> batch : batches) {
+      Map<String, String> keyValues = new LinkedHashMap<>();
+      if (incrementalKeys != null) {
+        for (String key : incrementalKeys) {
+          String value = batch.get(key);
+          if (value != null) {
+            keyValues.put(key, value);
+          }
+        }
+      }
+
+      grouped.computeIfAbsent(keyValues, k -> new ArrayList<>()).add(batch);
+    }
+
+    return grouped;
   }
 
   /**

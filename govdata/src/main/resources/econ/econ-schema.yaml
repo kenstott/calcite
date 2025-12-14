@@ -328,10 +328,10 @@ partitionedTables:
 
   # --- EMPLOYMENT STATISTICS ---
   - name: employment_statistics
-    pattern: "type=employment_statistics/frequency=*/year=*/employment_statistics.parquet"
+    pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
     alternate_partitions:
       - name: employment_statistics_trend
-        pattern: "type=employment_statistics/frequency=*/employment_statistics.parquet"
+        pattern: "type=employment_statistics/frequency=*/*.parquet"
         partition:
           columnDefinitions:
             - {name: frequency, type: VARCHAR}
@@ -1394,7 +1394,7 @@ partitionedTables:
 
   # --- REGIONAL INCOME ---
   - name: regional_income
-    pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/regional_income.parquet"
+    pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -1579,23 +1579,29 @@ partitionedTables:
 
     # Alternate partition layouts for optimized query patterns
     # Consolidated files use different partition keys within type=regional_income.
+    # All alternates include year as partition key for incremental processing.
     alternate_partitions:
-      # Consolidated by state - one file per state with all years/indicators
-      - name: regional_income_by_state
-        pattern: "type=regional_income/geo_fips=*/*.parquet"
+      # Consolidated by geo_fips (state/county/MSA/etc) and year
+      - name: regional_income_by_fips
+        pattern: "type=regional_income/geo_fips=*/year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
             - name: geo_fips
               type: VARCHAR
               sourceColumn: GeoFips
+            - name: year
+              type: INTEGER
+        # Incremental keys - only process new values of these columns
+        incremental_keys:
+          - year
         # Batch reorganization by year and geo_fips_set to avoid OOM on 700K+ files
         batch_partition_columns:
           - year
           - geo_fips_set
         threads: 4
 
-      # Consolidated by year - one file per year with all states/indicators
+      # Consolidated by year (all geo_fips in one partition per year)
       - name: regional_income_by_year
         pattern: "type=regional_income/year=*/*.parquet"
         partition:
@@ -1603,20 +1609,26 @@ partitionedTables:
           columnDefinitions:
             - name: year
               type: INTEGER
+        incremental_keys:
+          - year
         # Batch by geo_fips_set to reduce memory usage
         batch_partition_columns:
           - year
           - geo_fips_set
         threads: 4
 
-      # Consolidated by indicator table - one file per BEA table
+      # Consolidated by indicator table and year
       - name: regional_income_by_indicator
-        pattern: "type=regional_income/tablename=*/*.parquet"
+        pattern: "type=regional_income/tablename=*/year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
             - name: tablename
               type: VARCHAR
+            - name: year
+              type: INTEGER
+        incremental_keys:
+          - year
         # Batch by year and geo_fips_set for large datasets
         threads: 4
         batch_partition_columns:
