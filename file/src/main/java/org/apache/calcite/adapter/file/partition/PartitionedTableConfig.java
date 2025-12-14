@@ -201,20 +201,27 @@ public class PartitionedTableConfig {
     private final List<String> batchPartitionColumns;
     private final Map<String, String> columnMappings;
     private final int threads;
+    private final List<String> incrementalKeys;
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment) {
-      this(name, pattern, partition, comment, null, null, 0);
+      this(name, pattern, partition, comment, null, null, 0, null);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings) {
-      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, 0);
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, 0, null);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
         int threads) {
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, threads, null);
+    }
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
+        int threads, List<String> incrementalKeys) {
       this.name = name;
       this.pattern = pattern;
       this.partition = partition;
@@ -222,6 +229,7 @@ public class PartitionedTableConfig {
       this.batchPartitionColumns = batchPartitionColumns;
       this.columnMappings = columnMappings;
       this.threads = threads;
+      this.incrementalKeys = incrementalKeys;
     }
 
     public String getName() {
@@ -263,6 +271,27 @@ public class PartitionedTableConfig {
      */
     public int getThreads() {
       return threads;
+    }
+
+    /**
+     * Returns the incremental keys for this alternate partition.
+     * When set, only batches with new values for these keys will be processed.
+     * For example, if incrementalKeys = [year], only new years will be processed
+     * on subsequent runs, avoiding full rebuild.
+     *
+     * @return List of column names used as incremental keys, or null if full rebuild is required
+     */
+    public List<String> getIncrementalKeys() {
+      return incrementalKeys;
+    }
+
+    /**
+     * Checks whether this alternate partition supports incremental processing.
+     *
+     * @return true if incremental keys are defined
+     */
+    public boolean supportsIncremental() {
+      return incrementalKeys != null && !incrementalKeys.isEmpty();
     }
 
     /**
@@ -560,8 +589,23 @@ public class PartitionedTableConfig {
         threads = ((Number) threadsObj).intValue();
       }
 
+      // Parse incremental_keys (optional, enables incremental processing)
+      List<String> incrementalKeys = null;
+      Object incKeysObj = m.get("incremental_keys");
+      if (incKeysObj instanceof List) {
+        incrementalKeys = new java.util.ArrayList<>();
+        for (Object key : (List<?>) incKeysObj) {
+          if (key instanceof String) {
+            incrementalKeys.add((String) key);
+          }
+        }
+        if (incrementalKeys.isEmpty()) {
+          incrementalKeys = null;
+        }
+      }
+
       result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
-          batchPartitionColumns, columnMappings, threads));
+          batchPartitionColumns, columnMappings, threads, incrementalKeys));
     }
 
     return result.isEmpty() ? null : result;

@@ -50,6 +50,9 @@ public class AlternatePartitionMaterializer {
   private final int startYear;
   private final int endYear;
 
+  /** Lazy-initialized incremental tracker for partition status tracking. */
+  private IncrementalTracker incrementalTracker;
+
   /**
    * Creates a materializer for local file system with default year range.
    *
@@ -73,6 +76,20 @@ public class AlternatePartitionMaterializer {
     this.baseDirectory = baseDirectory;
     this.startYear = startYear;
     this.endYear = endYear;
+  }
+
+  /**
+   * Get or create the incremental tracker for partition status tracking.
+   * Uses DuckDB-based storage in the base directory.
+   *
+   * @return IncrementalTracker instance
+   */
+  private IncrementalTracker getOrCreateTracker() {
+    if (incrementalTracker == null) {
+      incrementalTracker = DuckDBPartitionStatusStore.getInstance(baseDirectory);
+      LOGGER.debug("Created incremental tracker for base directory: {}", baseDirectory);
+    }
+    return incrementalTracker;
   }
 
   /**
@@ -156,12 +173,15 @@ public class AlternatePartitionMaterializer {
       ParquetReorganizer.ReorgConfig reorgConfig = ParquetReorganizer.ReorgConfig.builder()
           .name(alternateName)
           .sourcePattern(sourceGlob)
+          .sourceTable(sourceTableName)
           .targetBase(targetBase)
           .partitionColumns(partitionColumns)
           .columnMappings(columnMappings)
           .batchPartitionColumns(batchColumns)
           .yearRange(startYear, endYear)
           .threads(alternate.getThreads())
+          .incrementalKeys(alternate.getIncrementalKeys())
+          .incrementalTracker(getOrCreateTracker())
           .build();
 
       reorganizer.reorganize(reorgConfig);
