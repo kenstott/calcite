@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Automated SharePoint test using Microsoft Graph API that loads credentials from multiple sources.
  *

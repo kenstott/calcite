@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * 4. Pattern-based view refresh works correctly
  */
 @Tag("integration")
+@SuppressWarnings("deprecation")
 public class DuckDBHiveOptimizationTest extends BaseFileTest {
   private File tempDir;
   private File dataDir;
