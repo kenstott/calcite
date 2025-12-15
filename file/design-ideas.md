@@ -68,6 +68,45 @@ Query gRPC microservices as SQL tables with automatic protobuf-to-SQL schema map
 
 ---
 
+## Future: Redis Distributed Caching
+
+**Priority**: Low | **Effort**: 2-3 weeks
+
+Enable distributed cache coordination for clustered deployments. Stub implementation exists (`RedisDistributedLock.java`) but methods are non-functional.
+
+**What's needed:**
+- Implement actual Redis integration for distributed locking
+- Add Redis-backed statistics cache
+- Test in multi-node scenarios
+
+---
+
+## Future: JSONL/NDJSON Support
+
+**Priority**: Low | **Effort**: 1 week
+
+Add support for newline-delimited JSON formats (`.jsonl`, `.ndjson`) common in streaming and log data.
+
+**What's needed:**
+- Add extensions to `TABLE_SOURCE_EXTENSIONS` in `FileSchema.java`
+- Handle line-by-line parsing vs. array parsing
+- Streaming support for large files
+
+---
+
+## Future: Office Document Hyperlink Crawling
+
+**Priority**: Low | **Effort**: 2-3 weeks
+
+Extract and follow hyperlinks from Word/Excel/PowerPoint documents, similar to HTML crawling.
+
+**What's needed:**
+- Parse `.rels` files for hyperlink relationships
+- Extend `DocxTableScanner`, `ExcelToJsonConverter` with link extraction
+- Integrate with existing `HtmlLinkCache` pattern
+
+---
+
 ## Future: Pluggable Data Pipeline Framework
 
 **Priority**: Low | **Effort**: 2-3 months
