@@ -1,0 +1,102 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.calcite.adapter.file.etl;
+
+/**
+ * Types of dimension value expansion.
+ *
+ * <p>Dimensions define how batch processing iterates over parameter combinations.
+ * Each type provides a different method of generating dimension values.
+ *
+ * @see DimensionConfig
+ * @see DimensionIterator
+ */
+public enum DimensionType {
+  /**
+   * Numeric range with start, end, and optional step.
+   *
+   * <pre>{@code
+   * year:
+   *   type: range
+   *   start: 2020
+   *   end: 2024
+   *   step: 1
+   * }</pre>
+   *
+   * <p>Generates: [2020, 2021, 2022, 2023, 2024]
+   */
+  RANGE,
+
+  /**
+   * Explicit list of values.
+   *
+   * <pre>{@code
+   * region:
+   *   type: list
+   *   values: [NORTH, SOUTH, EAST, WEST]
+   * }</pre>
+   */
+  LIST,
+
+  /**
+   * SQL query that returns dimension values.
+   *
+   * <pre>{@code
+   * region:
+   *   type: query
+   *   sql: "SELECT DISTINCT region FROM regions WHERE active = true"
+   * }</pre>
+   */
+  QUERY,
+
+  /**
+   * Year range with current year support.
+   *
+   * <pre>{@code
+   * year:
+   *   type: yearRange
+   *   start: 2020
+   *   end: current  # resolves to current year
+   * }</pre>
+   */
+  YEAR_RANGE;
+
+  /**
+   * Parses a dimension type from a string value.
+   *
+   * @param value String representation (case-insensitive)
+   * @return DimensionType, defaulting to LIST if not recognized
+   */
+  public static DimensionType fromString(String value) {
+    if (value == null || value.isEmpty()) {
+      return LIST;
+    }
+    switch (value.toLowerCase()) {
+      case "range":
+        return RANGE;
+      case "list":
+        return LIST;
+      case "query":
+        return QUERY;
+      case "yearrange":
+      case "year_range":
+        return YEAR_RANGE;
+      default:
+        return LIST;
+    }
+  }
+}

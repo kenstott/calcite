@@ -76,6 +76,9 @@ dependencies {
     // DuckDB for performance comparison tests and optional execution engine
     compileOnly("org.duckdb:duckdb_jdbc:1.4.1.0")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.1.0")
+    // Test dependencies for mock-based tests
+    testImplementation("org.mockito:mockito-core:5.11.0")
+    testImplementation("org.apache.hadoop:hadoop-minicluster:3.3.6")
 
     annotationProcessor("org.immutables:value")
     compileOnly("org.immutables:value-annotations")
