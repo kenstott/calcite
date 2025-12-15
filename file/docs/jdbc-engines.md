@@ -6,10 +6,12 @@ The File Adapter supports pluggable JDBC-based query engines for executing SQL a
 
 | Engine | Deployment | Best For | Iceberg Support |
 |--------|------------|----------|-----------------|
-| **DuckDB** | Embedded | Single-node, <100GB datasets | Yes |
-| **Trino** | Distributed cluster | Federated queries, data mesh | Via catalog |
-| **Spark SQL** | Distributed cluster | Existing Spark infrastructure | Via catalog |
-| **ClickHouse** | Embedded (chDB) or cluster | Fast OLAP, time-series | Yes |
+| **DuckDB** | Embedded | Single-node analytics, <100GB datasets | Yes |
+| **Trino** | Distributed cluster | Federated queries across multiple sources | Via catalog |
+| **ClickHouse** | Embedded (chDB) or cluster | Fast OLAP, time-series, aggregations | Yes |
+| **Spark SQL** | Distributed cluster | Legacy integration only | Via catalog |
+
+**Recommended engines**: DuckDB (default), Trino (federated), ClickHouse (OLAP). Spark support exists for infrastructure compatibility but offers no performance advantage.
 
 ## Configuration
 
@@ -83,9 +85,9 @@ Requires external Trino cluster. The dialect generates DDL to register tables in
 - External Trino cluster with Hive connector (or similar) for external table support
 - Authentication via Kerberos, LDAP, or OAuth2 supported
 
-### Spark SQL
+### Spark SQL (Legacy)
 
-Requires Spark Thrift Server (HiveServer2 interface).
+Requires Spark Thrift Server (HiveServer2 interface). **Not recommended for new deployments** - DuckDB is faster for single-node, Trino better for federation.
 
 ```json
 {
@@ -100,6 +102,8 @@ Requires Spark Thrift Server (HiveServer2 interface).
 
 **Requirements:**
 - Spark Thrift Server running (exposes HiveServer2 interface)
+
+**When to use:** Only if you have existing Spark infrastructure and want to avoid adding another system. Spark's Thrift Server is batch-oriented with higher latency than interactive engines.
 
 ### ClickHouse
 
@@ -124,27 +128,28 @@ Supports embedded (chDB) or distributed cluster.
 
 JDBC engines are **read-only**. All write operations (materialization, partition reorganization) use DuckDB with the Iceberg Java API regardless of the configured query engine.
 
-## Performance Considerations
+## Choosing an Engine
 
-### DuckDB
+### DuckDB (Recommended Default)
 - Best for single-node datasets under 100GB
 - Excellent columnar scan performance
 - In-memory caching for repeated queries
+- No external infrastructure required
 
-### Trino
-- Distributed execution for large datasets
-- Query latency 5-15 seconds typical
-- Best for federated queries across multiple sources
+### Trino (Federated Queries)
+- Query across multiple data sources (Postgres, S3, Kafka, etc.)
+- Distributed execution for datasets exceeding single-node capacity
+- Query latency 5-15 seconds typical (not for sub-second interactive)
 
-### Spark SQL
-- Leverage existing Spark infrastructure
-- Good for ETL integration
-- Higher latency than DuckDB for simple queries
-
-### ClickHouse
-- Excellent for OLAP and aggregations
+### ClickHouse (OLAP Workloads)
+- Sub-second aggregations on billions of rows
 - Native time-series optimizations
-- Sub-second queries on pre-aggregated data
+- Excellent for dashboards and analytics
+
+### Spark SQL (Legacy Only)
+- Higher latency than alternatives for interactive queries
+- Thrift Server is batch-oriented, not designed for low-latency
+- Use only when Spark infrastructure already exists and consolidation is priority
 
 ## Dependencies
 
