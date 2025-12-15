@@ -83,8 +83,6 @@ Schema names must be unique within the same connection. This validation prevents
 3. **Review existing schemas:**
    The error message lists all existing schemas to help identify conflicts.
 
-**Note:** This is a breaking change from previous versions where duplicate schema names would silently replace existing schemas, potentially causing data access issues.
-
 ### Schema Not Found
 
 **Error:**

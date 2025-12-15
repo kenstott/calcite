@@ -43,7 +43,7 @@ CSV configuration is handled through the `csvTypeInference` parameter and automa
 
 ### JSON (JavaScript Object Notation)
 
-**File Extensions:** `.json`, `.jsonl`, `.ndjson`
+**File Extensions:** `.json`
 
 **Features:**
 - Nested object flattening
@@ -60,7 +60,7 @@ CSV configuration is handled through the `csvTypeInference` parameter and automa
 }
 ```
 
-**Note:** Advanced JSON configuration features like JSONPath-based table extraction are planned for future releases.
+**JSONPath Extraction:** Use `jsonSearchPaths` configuration to extract multiple tables from JSON using JSONPath expressions (e.g., `$.data.users`, `$.data.orders`).
 
 **JSONPath Examples:**
 ```json
@@ -346,14 +346,11 @@ The HTML crawler now supports flexible configuration for controlling which resou
 
 **Example Queries:**
 ```sql
--- Current data
+-- Current data (latest snapshot)
 SELECT * FROM iceberg_table;
 
--- Time travel query
-SELECT * FROM iceberg_table FOR SYSTEM_TIME AS OF '2024-01-01 10:00:00';
-
--- Snapshot query
-SELECT * FROM iceberg_table FOR SYSTEM_VERSION AS OF 12345;
+-- Time travel requires config-based setup with timeRange or snapshotId
+-- See iceberg-integration.md for time travel configuration
 ```
 
 > **📖 For comprehensive Iceberg configuration, time travel features, and catalog setup, see [Apache Iceberg Integration](iceberg-integration.md)**
