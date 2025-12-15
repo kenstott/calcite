@@ -9,7 +9,9 @@ The file adapter currently supports multiple query engines for executing queries
 - **Parquet** - Direct parquet reading
 - **DuckDB** - Embedded SQL engine via JDBC
 
-This document describes extending JDBC-based engine support to include **Trino**, **Spark SQL**, and **ClickHouse**, enabling the file adapter to leverage existing distributed SQL infrastructure.
+This document describes the pluggable JDBC dialect system supporting **DuckDB**, **Trino**, **Spark SQL**, and **ClickHouse**, enabling the file adapter to leverage existing distributed SQL infrastructure.
+
+**Status**: Core dialect framework implemented. Time travel view generation is designed but not yet implemented.
 
 ## Motivation
 
@@ -21,18 +23,6 @@ Organizations with existing data lake infrastructure often have Trino or Spark c
 4. **Flexibility** - Choose engine based on data scale and available infrastructure
 
 ## Architecture
-
-### Current State
-
-```
-FileQueryEngine (enum)
-├── LINQ4J      → Linq4jQueryEngine
-├── ARROW       → ArrowQueryEngine
-├── PARQUET     → ParquetQueryEngine
-└── DUCKDB      → DuckDBJdbcSchema (JDBC-based)
-```
-
-### Proposed State
 
 ```
 FileQueryEngine (enum)
