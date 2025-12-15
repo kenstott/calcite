@@ -79,14 +79,8 @@ Requires external Trino cluster. The dialect generates DDL to register tables in
 }
 ```
 
-**How it works:**
-- File Adapter generates `CREATE TABLE ... WITH (external_location = '...', format = 'PARQUET')` DDL
-- For Iceberg tables, generates `CALL iceberg.system.register_table(...)`
-- Tables are registered once, then queried via standard SQL
-
-**Notes:**
-- Trino does not support direct glob patterns - registration creates catalog entries pointing to file locations
-- Requires Hive connector (or similar) configured in Trino for external table support
+**Requirements:**
+- External Trino cluster with Hive connector (or similar) for external table support
 - Authentication via Kerberos, LDAP, or OAuth2 supported
 
 ### Spark SQL
@@ -104,9 +98,8 @@ Requires Spark Thrift Server (HiveServer2 interface).
 }
 ```
 
-**Notes:**
-- Uses `parquet.\`path\`` syntax for direct file access
-- Supports limited glob patterns
+**Requirements:**
+- Spark Thrift Server running (exposes HiveServer2 interface)
 
 ### ClickHouse
 
@@ -123,34 +116,9 @@ Supports embedded (chDB) or distributed cluster.
 }
 ```
 
-**Notes:**
-- Uses `s3()` function for S3 paths with native glob support
-- Uses `iceberg()` function for Iceberg tables
-- Excellent for time-series and OLAP workloads
-
-## Parquet File Access
-
-Each engine has different syntax for reading parquet files:
-
-| Engine | Syntax |
-|--------|--------|
-| DuckDB | `read_parquet('s3://bucket/path/*.parquet')` |
-| Trino | Catalog table (auto-registered via DDL) |
-| Spark | `parquet.\`s3://bucket/path/*.parquet\`` |
-| ClickHouse | `s3('s3://bucket/path/*.parquet', 'Parquet')` |
-
-The File Adapter abstracts these differences - you write standard SQL and the dialect generates the appropriate syntax.
-
-## Iceberg Table Access
-
-For engines with Iceberg support:
-
-| Engine | Syntax |
-|--------|--------|
-| DuckDB | `iceberg_scan('s3://bucket/warehouse/table')` |
-| ClickHouse | `iceberg('s3://bucket/warehouse/table')` |
-| Trino | Catalog table via Iceberg connector |
-| Spark | Catalog table via Iceberg connector |
+**Requirements:**
+- ClickHouse server (external cluster) or chDB (embedded)
+- For S3 access, configure ClickHouse with appropriate credentials
 
 ## Write Operations
 
