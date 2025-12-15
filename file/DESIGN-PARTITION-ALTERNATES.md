@@ -111,6 +111,14 @@ tables:
     batch_partition_columns: [year]       # Columns for batching (OOM prevention)
     incremental_keys: [year]              # Columns for incremental tracking
 
+    # Time travel configuration (optional)
+    timeTravel:
+      enabled: true                       # Include all snapshots with timestamp column
+      snapshotColumn: snapshot_time       # Column name for snapshot timestamp (default: snapshot_time)
+      # Optional: limit to recent snapshots
+      # maxSnapshots: 100                 # Only include last N snapshots
+      # maxAge: P90D                      # Only include snapshots from last 90 days (ISO 8601 duration)
+
     # Partition alternates: same data, different partition order
     alternate_partitions:
       - name: by_fips                         # Description only (for logging), NOT a lookup key
@@ -133,6 +141,10 @@ tables:
 - `batch_partition_columns` - Columns for batching during materialization (OOM prevention). **Used by both primary table and alternates.**
 - `incremental_keys` - Columns for incremental tracking (skip already-processed batches). **Used by both primary table and alternates.**
 - `batch_partition_columns` and `incremental_keys` are often the same (e.g., both `[year]`) but conceptually distinct
+- `timeTravel.enabled` - When true, exposes all snapshots as a single table with a `snapshot_time` column for natural SQL filtering
+- `timeTravel.snapshotColumn` - Name of the timestamp column added to each row (default: `snapshot_time`)
+- `timeTravel.maxSnapshots` - Limit to most recent N snapshots (optional, for performance)
+- `timeTravel.maxAge` - Limit to snapshots within duration, e.g., `P90D` for 90 days (optional, ISO 8601 duration)
 
 ### How It Works
 
@@ -909,6 +921,70 @@ table.manageSnapshots()
     .rollbackTo(previousSnapshotId)
     .commit();
 ```
+
+### Time Travel via SQL (with JDBC Engines)
+
+When `timeTravel.enabled: true` is configured, the table exposes all snapshots with a `snapshot_time` column, enabling natural SQL queries for time travel.
+
+**How it works with JDBC engines (DuckDB, ClickHouse):**
+
+1. On schema initialization, query Iceberg metadata for all snapshots
+2. Call `dialect.createIcebergTimeRangeViewSql()` to generate a UNION ALL view
+3. Each snapshot contributes rows with its timestamp in the `snapshot_time` column
+
+**Generated DuckDB view:**
+```sql
+CREATE OR REPLACE VIEW regional_income AS
+SELECT *, TIMESTAMP '2024-01-15T10:00:00Z' AS snapshot_time
+FROM iceberg_scan('s3://warehouse/regional_income', version = '123456789')
+UNION ALL
+SELECT *, TIMESTAMP '2024-02-20T14:30:00Z' AS snapshot_time
+FROM iceberg_scan('s3://warehouse/regional_income', version = '234567890')
+UNION ALL
+SELECT *, TIMESTAMP '2024-03-10T09:15:00Z' AS snapshot_time
+FROM iceberg_scan('s3://warehouse/regional_income', version = '345678901');
+```
+
+**Natural SQL time travel queries:**
+```sql
+-- Query data as of a specific time (latest snapshot at or before that time)
+SELECT * FROM regional_income
+WHERE snapshot_time = (
+    SELECT MAX(snapshot_time) FROM regional_income
+    WHERE snapshot_time <= '2024-09-30 23:59:59'
+);
+
+-- Compare data between two points in time
+SELECT
+    a.geo_fips,
+    a.total AS q2_total,
+    b.total AS q3_total,
+    b.total - a.total AS change
+FROM regional_income a
+JOIN regional_income b ON a.geo_fips = b.geo_fips
+WHERE a.snapshot_time = '2024-06-30T23:59:59Z'
+  AND b.snapshot_time = '2024-09-30T23:59:59Z';
+
+-- Track changes over time for a specific record
+SELECT snapshot_time, status, amount
+FROM regional_income
+WHERE order_id = 12345
+ORDER BY snapshot_time;
+
+-- Aggregations across time
+SELECT
+    snapshot_time,
+    COUNT(*) as record_count,
+    SUM(amount) as total_amount
+FROM regional_income
+GROUP BY snapshot_time
+ORDER BY snapshot_time;
+```
+
+**Performance considerations:**
+- `maxSnapshots` limits the number of snapshots in the view (recent N only)
+- `maxAge` limits to snapshots within a time window (e.g., last 90 days)
+- JDBC engine query optimizers can push down filters to individual snapshot scans
 
 ### Schema Evolution Handling
 
