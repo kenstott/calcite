@@ -9,21 +9,19 @@ This document tracks potential future enhancements. Most original design ideas h
 
 ---
 
-## Pending: Iceberg Time Travel Implementation
+## BUG: Iceberg Time Travel Returns Empty Data
 
-**Status**: Partially implemented, not functional
+**Status**: BROKEN - returns empty results
 
-The `IcebergTimeRangeTable` exists but returns empty results - `createBasicParquetEnumerable()` is a stub. The feature needs to be wired through JDBC engines (DuckDB) to actually work.
+`IcebergTimeRangeTable.createBasicParquetEnumerable()` is a stub:
+```java
+return Linq4j.asEnumerable(Collections.<Object[]>emptyList());
+```
 
-**Current state:**
-- `IcebergTimeRangeResolver` - resolves snapshots in time range ✓
-- `IcebergTimeRangeTable` - creates schema with snapshot_time column ✓
-- Actual data reading - **NOT IMPLEMENTED** (returns empty)
-
-**What's needed:**
-- Option A: Generate UNION ALL views in DuckDB dialect combining parquet files with snapshot timestamps
-- Option B: Fix `IcebergTimeRangeTable` to actually read parquet files via execution engine
-- Test with real Iceberg tables
+**Fix required:**
+- Generate UNION ALL views via JDBC dialect (applies to ALL engines: DuckDB, Trino, Spark, ClickHouse)
+- Each snapshot's parquet files combined with `snapshot_time` literal
+- Wire into schema initialization when `timeRange` config is present
 
 ---
 
