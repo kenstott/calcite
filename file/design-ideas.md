@@ -22,6 +22,35 @@ The `createIcebergTimeRangeViewSql()` method generates UNION ALL views spanning 
 
 ---
 
+## Future: Deprecate Arrow Engine, Use DuckDB for Arrow Files
+
+**Priority**: Medium | **Effort**: 1-2 weeks
+
+The current Arrow execution engine (`VectorizedArrowExecutionEngine`, `ColumnBatch`, etc.) provides no real benefit - it converts rows to Arrow, does minimal processing, then converts back to rows for Calcite. This is overhead without columnar benefits.
+
+**Simpler architecture:**
+- Remove the Arrow engine code path
+- DuckDB already reads Arrow/Feather files natively (`read_arrow()`, zero-copy capable)
+- Add `.arrow`, `.feather` to supported file extensions
+- DuckDB handles both Parquet and Arrow files
+
+**Optional enhancement - Arrow Flight:**
+- Add Arrow Flight as result transfer protocol (instead of JDBC)
+- Benefits: columnar results end-to-end, parallel streaming
+- DuckDB has Flight extension, or use DataFusion/Dremio as Flight server
+- Best for: large result sets, columnar downstream consumers (pandas, Spark)
+
+**What to remove:**
+- `execution/arrow/` package (VectorizedArrowExecutionEngine, ColumnBatch, SIMDColumnBatch, etc.)
+- `execution/vectorized/` package (VectorizedFileEnumerator)
+- ARROW and VECTORIZED engine types from ExecutionEngineConfig
+
+**What to add:**
+- Arrow file format support in DuckDB dialect
+- (Optional) Arrow Flight execution engine type
+
+---
+
 ## Future: Delta Lake Support
 
 **Priority**: Medium | **Effort**: 4-6 weeks
