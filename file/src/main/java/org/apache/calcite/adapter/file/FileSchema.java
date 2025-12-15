@@ -214,6 +214,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private final List<org.apache.calcite.adapter.file.converters.RawToParquetConverter> rawToParquetConverters =
       new ArrayList<>();
 
+  // Registry for alternate partition tables (source table -> alternate mappings)
+  private final org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry alternatePartitionRegistry =
+      new org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry();
+
   /**
    * Creates a file schema with all features including storage provider support.
    *
@@ -3703,6 +3707,18 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     if (total > 0) {
       LOGGER.info("Materialized {} alternate partition layout(s)", total);
     }
+
+    // Register all alternates in the registry (both new and existing)
+    for (PartitionedTableConfig config : tablesWithAlternates) {
+      String sourceTableName = config.getName();
+      for (PartitionedTableConfig.AlternatePartitionConfig altConfig : config.getAlternatePartitions()) {
+        // Register in the schema-level registry
+        alternatePartitionRegistry.registerFromConfig(sourceTableName, altConfig, null);
+        // Mark as materialized since materializer has run
+        alternatePartitionRegistry.markMaterialized(altConfig.getName());
+      }
+    }
+    LOGGER.info("Registered {} alternate partitions in registry", alternatePartitionRegistry.size());
   }
 
   /**
@@ -4787,6 +4803,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    */
   public File getOperatingCacheDirectory() {
     return operatingCacheDirectory;
+  }
+
+  /**
+   * Gets the alternate partition registry for this schema.
+   * Used by AlternatePartitionSelectionRule to find optimal partition layouts.
+   *
+   * @return The AlternatePartitionRegistry instance
+   */
+  public org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry getAlternatePartitionRegistry() {
+    return alternatePartitionRegistry;
   }
 
   /**

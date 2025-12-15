@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.FileWriter;
