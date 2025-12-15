@@ -64,7 +64,7 @@ Embedded SQL engine, no external server required.
 
 ### Trino
 
-Requires external Trino cluster. Tables must be registered in Trino's catalog.
+Requires external Trino cluster. The dialect generates DDL to register tables in Trino's catalog automatically.
 
 ```json
 {
@@ -79,9 +79,14 @@ Requires external Trino cluster. Tables must be registered in Trino's catalog.
 }
 ```
 
+**How it works:**
+- File Adapter generates `CREATE TABLE ... WITH (external_location = '...', format = 'PARQUET')` DDL
+- For Iceberg tables, generates `CALL iceberg.system.register_table(...)`
+- Tables are registered once, then queried via standard SQL
+
 **Notes:**
-- Trino does not support direct glob patterns - files must be cataloged
-- Use Hive metastore or AWS Glue for table registration
+- Trino does not support direct glob patterns - registration creates catalog entries pointing to file locations
+- Requires Hive connector (or similar) configured in Trino for external table support
 - Authentication via Kerberos, LDAP, or OAuth2 supported
 
 ### Spark SQL
@@ -130,11 +135,11 @@ Each engine has different syntax for reading parquet files:
 | Engine | Syntax |
 |--------|--------|
 | DuckDB | `read_parquet('s3://bucket/path/*.parquet')` |
-| Trino | Catalog table (pre-registered) |
+| Trino | Catalog table (auto-registered via DDL) |
 | Spark | `parquet.\`s3://bucket/path/*.parquet\`` |
 | ClickHouse | `s3('s3://bucket/path/*.parquet', 'Parquet')` |
 
-The File Adapter abstracts these differences - you write standard SQL.
+The File Adapter abstracts these differences - you write standard SQL and the dialect generates the appropriate syntax.
 
 ## Iceberg Table Access
 
