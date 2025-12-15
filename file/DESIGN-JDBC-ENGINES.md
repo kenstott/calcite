@@ -114,6 +114,35 @@ public interface JdbcDialect {
     }
 
     /**
+     * Generate SQL to create a view spanning multiple Iceberg snapshots.
+     * Enables time travel queries via standard SQL WHERE clauses.
+     *
+     * @param viewName Name of the view to create
+     * @param tablePath Path to Iceberg table
+     * @param snapshots List of snapshot info (id, timestamp)
+     * @param snapshotColumnName Name for the snapshot timestamp column
+     * @return SQL to create the view, or null if not supported
+     */
+    default String createIcebergTimeRangeViewSql(String viewName, String tablePath,
+                                                  List<SnapshotInfo> snapshots,
+                                                  String snapshotColumnName) {
+        return null; // Override if engine supports Iceberg time travel
+    }
+
+    /**
+     * Snapshot information for time range views.
+     */
+    class SnapshotInfo {
+        public final long snapshotId;
+        public final Instant timestamp;
+
+        public SnapshotInfo(long snapshotId, Instant timestamp) {
+            this.snapshotId = snapshotId;
+            this.timestamp = timestamp;
+        }
+    }
+
+    /**
      * Register a path as a table in the engine's catalog.
      * Only needed when supportsDirectGlob() returns false.
      */
@@ -163,6 +192,27 @@ public class DuckDBDialect implements JdbcDialect {
     @Override
     public boolean supportsIceberg() {
         return true;
+    }
+
+    @Override
+    public String createIcebergTimeRangeViewSql(String viewName, String tablePath,
+                                                 List<SnapshotInfo> snapshots,
+                                                 String snapshotColumnName) {
+        StringBuilder sql = new StringBuilder("CREATE OR REPLACE VIEW ");
+        sql.append(viewName).append(" AS\n");
+
+        for (int i = 0; i < snapshots.size(); i++) {
+            if (i > 0) sql.append("\nUNION ALL\n");
+            SnapshotInfo snap = snapshots.get(i);
+            sql.append(String.format(
+                "SELECT *, TIMESTAMP '%s' AS %s FROM iceberg_scan('%s', version = '%d')",
+                snap.timestamp.toString(),
+                snapshotColumnName,
+                tablePath,
+                snap.snapshotId
+            ));
+        }
+        return sql.toString();
     }
 }
 ```
@@ -280,6 +330,27 @@ public class ClickHouseDialect implements JdbcDialect {
     @Override
     public boolean supportsIceberg() {
         return true; // Native iceberg() table function
+    }
+
+    @Override
+    public String createIcebergTimeRangeViewSql(String viewName, String tablePath,
+                                                 List<SnapshotInfo> snapshots,
+                                                 String snapshotColumnName) {
+        StringBuilder sql = new StringBuilder("CREATE OR REPLACE VIEW ");
+        sql.append(viewName).append(" AS\n");
+
+        for (int i = 0; i < snapshots.size(); i++) {
+            if (i > 0) sql.append("\nUNION ALL\n");
+            SnapshotInfo snap = snapshots.get(i);
+            sql.append(String.format(
+                "SELECT *, toDateTime('%s') AS %s FROM iceberg('%s', snapshot_id = %d)",
+                snap.timestamp.toString(),
+                snapshotColumnName,
+                tablePath,
+                snap.snapshotId
+            ));
+        }
+        return sql.toString();
     }
 }
 ```
