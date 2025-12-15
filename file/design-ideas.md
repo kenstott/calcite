@@ -128,6 +128,10 @@ Currently all write operations (materialization, partition reorganization) use D
 - DuckDB may already be optimal for datasets under 100GB on modern hardware
 - Distributed writes add complexity (coordination, failure handling)
 - Worth investigating for multi-TB materialization scenarios
+- **S3 rate limits**: Even with distributed compute, S3 caps at ~3,500 PUT/s per prefix. True throughput gains may require:
+  - S3-compatible clusters with higher limits (MinIO, Ceph)
+  - Partitioning strategies to spread writes across prefixes
+  - Local/HDFS storage for intermediate writes, then bulk sync to S3
 
 ---
 
