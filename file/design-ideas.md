@@ -107,6 +107,30 @@ Extract and follow hyperlinks from Word/Excel/PowerPoint documents, similar to H
 
 ---
 
+## Future: Distributed Write Engines
+
+**Priority**: Medium | **Effort**: 3-4 weeks
+
+Currently all write operations (materialization, partition reorganization) use DuckDB regardless of the configured query engine. For large datasets, distributed engines could improve write throughput.
+
+**Potential benefits:**
+- **Spark**: Parallel writes across cluster nodes, native Iceberg write support
+- **Trino**: `INSERT INTO ... SELECT` with distributed execution
+- **ClickHouse**: High-throughput ingestion, columnar compression
+
+**What's needed:**
+- Extend `JdbcDialect` interface with write methods (`insertIntoSql`, `createTableAsSql`)
+- Add write capability detection per dialect
+- Benchmark single-node DuckDB vs. distributed writes for various data sizes
+- Handle transaction semantics differences between engines
+
+**Considerations:**
+- DuckDB may already be optimal for datasets under 100GB on modern hardware
+- Distributed writes add complexity (coordination, failure handling)
+- Worth investigating for multi-TB materialization scenarios
+
+---
+
 ## Future: Pluggable Data Pipeline Framework
 
 **Priority**: Low | **Effort**: 2-3 months
