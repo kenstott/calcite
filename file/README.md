@@ -37,56 +37,43 @@ Storage providers can be configured at two levels:
 Mix storage types by using explicit table URLs or multiple schemas.
 
 ### Performance Features
-- **Multiple Execution Engines Per Connection** - Use different engines for different schemas:
-  - **Parquet**: Large datasets (>2GB) with automatic spillover
-  - **Arrow**: In-memory analytics (<2GB) with SIMD vectorization
-  - **DuckDB**: Complex analytical queries with advanced SQL features (10-20x performance improvement)
-  - **Mix & Match**: Each schema can use its optimal engine
+- **Multiple Execution Engines** - Choose the best engine for your workload:
+  - **Parquet**: Large datasets with automatic disk spillover
+  - **Arrow/Vectorized**: In-memory analytics with SIMD vectorization
+  - **DuckDB**: Embedded SQL analytics engine
+  - **Trino/Spark/ClickHouse**: Distributed SQL via JDBC
 - **Cross-Schema Materialized Views** - Join data across different engines and storage systems
 - **Automatic Parquet Conversion** - Convert all formats to optimized columnar storage
 - **HyperLogLog Statistics** - Advanced cardinality estimation for query optimization
 - **Query Optimization** - Column pruning, filter pushdown, join reordering
 - **Large Dataset Support** - Automatic disk spillover for data processing (Parquet engine) supporting datasets of several hundred GB, though metadata must fit in memory
-- **Distributed Caching** - Redis support for cluster environments
 
-#### Why Use File Adapter with DuckDB?
+#### What File Adapter Adds
 
-The File Adapter + DuckDB combination creates a **declarative data pipeline** that transforms complex data operations into simple SQL:
-
-**Traditional Approach** (Python/pandas):
-```python
-# Multiple steps, explicit data loading, memory management
-df1 = pd.read_csv('sales.csv')
-df2 = pd.read_json('customers.json')
-df3 = pd.read_parquet('products.parquet')
-merged = df1.merge(df2).merge(df3)
-result = merged.groupby('region').agg({'amount': 'sum'}).sort_values('amount', ascending=False)
+**Zero-Config Table Discovery**: Point at a directory, get queryable tables.
+```
+data/
+├── sales.csv          → SELECT * FROM sales
+├── customers.json     → SELECT * FROM customers
+├── products.parquet   → SELECT * FROM products
+└── reports/*.xlsx     → SELECT * FROM reports (combined)
 ```
 
-**File Adapter + DuckDB** (Declarative SQL):
-```sql
--- Single query, automatic optimization, no memory concerns
-SELECT region, SUM(amount) as total_sales
-FROM sales s
-JOIN customers c ON s.customer_id = c.id
-JOIN products p ON s.product_id = p.id
-GROUP BY region
-ORDER BY total_sales DESC;
+**Persistent Optimization Layer**: Statistics that survive restarts.
+- HyperLogLog sketches for instant COUNT(DISTINCT)
+- Partition pruning before the query engine sees the query
+- Join ordering from persistent cardinality stats
+
+**Declarative Materialization**: Define views in config, optimizer uses them automatically.
+```json
+"materializedViews": [{
+  "name": "monthly_summary",
+  "sql": "SELECT month, SUM(amount) as total FROM sales GROUP BY month"
+}]
 ```
+Query `SELECT * FROM sales WHERE month = '2024-01'` automatically rewrites to use the materialized view when beneficial.
 
-**Key Benefits**:
-- **Performance**: 10-20x faster than pandas/Spark for analytical workloads
-- **Simplicity**: No ETL pipelines - just declare what you want
-- **Flexibility**: Mix any file formats (CSV + JSON + Parquet + Excel) seamlessly
-- **Scale**: Handle datasets larger than memory with automatic spillover
-- **SQL Ecosystem**: Use any SQL tool (BI tools, notebooks, applications)
-
-**Unique Pre-Optimizer Architecture**: The File Adapter enhances DuckDB with a Calcite pre-optimization layer that:
-- Returns COUNT(DISTINCT) in <1ms using cached HyperLogLog sketches (vs seconds/minutes scanning data)
-- Optimizes join ordering using persistent statistics that DuckDB lacks for external files
-- Eliminates partitions before DuckDB sees the query
-- Provides rich statistics for external Parquet files where DuckDB only has basic metadata
-- Persists all statistics across restarts for consistent performance
+**Pluggable Engines**: Same SQL, different execution - DuckDB, Trino, Spark, or ClickHouse.
 
 ### Data Discovery
 - **Automatic Schema Discovery** - Zero-configuration table creation
@@ -233,7 +220,7 @@ Variables are resolved from environment variables first, then system properties 
 **Common schema configuration properties:**
 - `directory` - Base directory path for file discovery
 - `directoryPattern` - Glob pattern to filter files within directory (e.g., `2024/*.csv`, `**/reports/*.json`)
-- `executionEngine` - Choose from `parquet`, `arrow`, `duckdb`, `linq4j`
+- `executionEngine` - Choose from `parquet`, `arrow`, `vectorized`, `duckdb`, `trino`, `spark`, `clickhouse`, `linq4j`
 - `storageType` - Storage provider: `local`, `s3`, `http`, `sharepoint`
 - `recursive` - Scan subdirectories (default: `true`, ignored if `directoryPattern` is set)
 - `tableNameCasing` - Transform table names: `SMART_CASING`, `UPPER`, `LOWER`, `UNCHANGED`
@@ -243,9 +230,12 @@ Variables are resolved from environment variables first, then system properties 
 ### Execution Engine Configuration
 
 Each schema can use a different execution engine optimized for its workload:
-- **Parquet** - Best for large datasets with spillover support
-- **Arrow** - In-memory processing with SIMD vectorization
-- **DuckDB** - Advanced SQL analytics features
+- **Parquet** - Large datasets with disk spillover
+- **Arrow/Vectorized** - In-memory SIMD processing
+- **DuckDB** - Embedded analytical SQL
+- **Trino** - Distributed queries (requires cluster)
+- **Spark** - Spark SQL via Thrift Server
+- **ClickHouse** - Fast OLAP analytics
 - **LINQ4J** - Simple row-based processing
 
 **📚 For detailed configuration, see [Configuration Reference](docs/configuration-reference.md)**

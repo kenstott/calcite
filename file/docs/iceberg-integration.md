@@ -75,7 +75,7 @@ The Calcite File Adapter includes comprehensive support for Apache Iceberg table
 }
 ```
 
-With OAuth2 support:
+With OAuth2 support (for enterprise Iceberg catalogs with SSO/identity providers):
 ```json
 {
   "name": "rest_oauth_table",

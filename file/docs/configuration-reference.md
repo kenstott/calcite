@@ -126,8 +126,6 @@ Each schema operates as an independent instance with its own:
 }
 ```
 
-**Breaking Change Note**: Prior versions allowed duplicate schema names with silent replacement. Current versions validate uniqueness and throw descriptive errors to prevent unexpected behavior.
-
 **Example: Hybrid Architecture for Different Workloads**
 
 ```json
@@ -558,40 +556,6 @@ For complete configuration options for each storage provider, see:
         ]
       }
     ]
-  }
-}
-```
-
-## Security Configuration
-
-### Access Control
-
-```json
-{
-  "security": {
-    "enableAccessControl": true,
-    "allowedPaths": ["/data/public", "/data/reports"],
-    "deniedPaths": ["/data/private", "/data/sensitive"],
-    "filePermissions": {
-      "readable": true,
-      "writable": false,
-      "executable": false
-    }
-  }
-}
-```
-
-### Credential Management
-
-```json
-{
-  "credentials": {
-    "provider": "environment",
-    "encryption": {
-      "enabled": true,
-      "algorithm": "AES-256-GCM",
-      "keySource": "environment"
-    }
   }
 }
 ```
