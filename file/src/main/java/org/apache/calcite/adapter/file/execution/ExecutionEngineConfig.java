@@ -29,6 +29,9 @@ import java.util.Locale;
  * <p>Supports different execution engines for processing file data:
  * <ul>
  *   <li><b>DUCKDB</b>: DuckDB-based analytical processing with SQL pushdown (default when available)</li>
+ *   <li><b>TRINO</b>: Trino distributed SQL engine for federated queries</li>
+ *   <li><b>SPARK</b>: Spark SQL via Thrift Server for existing Spark infrastructure</li>
+ *   <li><b>CLICKHOUSE</b>: ClickHouse OLAP database for time-series analytics</li>
  *   <li><b>PARQUET</b>: Parquet-based columnar processing with streaming support (fallback)</li>
  *   <li><b>LINQ4J</b>: Traditional row-by-row processing</li>
  *   <li><b>ARROW</b>: Arrow-based columnar processing</li>
@@ -94,11 +97,14 @@ public class ExecutionEngineConfig {
     try {
       ExecutionEngineType engineType = ExecutionEngineType.valueOf(executionEngine.toUpperCase(Locale.ROOT));
 
-      // Warn when using non-recommended engines (neither DUCKDB nor PARQUET)
-      if (engineType != ExecutionEngineType.DUCKDB && engineType != ExecutionEngineType.PARQUET) {
+      // Warn when using non-recommended engines
+      if (!isRecommendedEngine(engineType)) {
         LOGGER.warn("WARNING: Using execution engine '{}' is not recommended for production use.", executionEngine);
         LOGGER.warn("         Recommended engines:");
-        LOGGER.warn("         - DUCKDB: Best performance for analytics (10-100x faster)");
+        LOGGER.warn("         - DUCKDB: Best performance for single-node analytics (10-100x faster)");
+        LOGGER.warn("         - TRINO: Best for distributed federated queries");
+        LOGGER.warn("         - SPARK: Best for existing Spark infrastructure");
+        LOGGER.warn("         - CLICKHOUSE: Best for OLAP and time-series analytics");
         LOGGER.warn("         - PARQUET: Good performance with streaming support");
         LOGGER.warn("         Other engines are primarily for benchmarking or compatibility purposes.");
       }
@@ -155,7 +161,26 @@ public class ExecutionEngineConfig {
    * @return Array of available execution engine type names
    */
   public static String[] getAvailableEngineTypes() {
-    return new String[]{"linq4j", "arrow", "vectorized", "parquet", "duckdb"};
+    return new String[]{"linq4j", "arrow", "vectorized", "parquet", "duckdb", "trino", "spark", "clickhouse"};
+  }
+
+  /**
+   * Checks if an engine type is recommended for production use.
+   *
+   * @param engineType the engine type to check
+   * @return true if the engine is recommended for production
+   */
+  private static boolean isRecommendedEngine(ExecutionEngineType engineType) {
+    switch (engineType) {
+    case DUCKDB:
+    case TRINO:
+    case SPARK:
+    case CLICKHOUSE:
+    case PARQUET:
+      return true;
+    default:
+      return false;
+    }
   }
 
   /**
@@ -193,6 +218,31 @@ public class ExecutionEngineConfig {
      * Leverages DuckDB's columnar execution engine for Parquet files.
      * Requires DuckDB JDBC driver dependency.
      */
-    DUCKDB
+    DUCKDB,
+
+    /**
+     * Trino distributed SQL engine for federated queries.
+     * Best for: Federated queries across multiple data sources, data mesh architectures.
+     * Requires Trino JDBC driver and a running Trino cluster.
+     * Note: Trino requires catalog registration - does not support direct glob patterns.
+     */
+    TRINO,
+
+    /**
+     * Spark SQL via Thrift Server.
+     * Best for: Organizations with existing Spark infrastructure.
+     * Supports direct Parquet file access using backtick syntax.
+     * Requires Hive JDBC driver and a running Spark Thrift Server.
+     */
+    SPARK,
+
+    /**
+     * ClickHouse OLAP database for time-series and analytical workloads.
+     * Best for: Fast OLAP queries, time-series analytics, real-time ingestion.
+     * Supports direct S3 file access via s3() function and native Iceberg support.
+     * Can be deployed as embedded (chDB) or distributed cluster.
+     * Requires ClickHouse JDBC driver.
+     */
+    CLICKHOUSE
   }
 }
