@@ -89,7 +89,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testIsDirectoryWhenDirectory() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(0, true, 1, 1024, 12345L, new Path("/test/dir"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(0, true, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/dir"));
     when(mockFileSystem.exists(any(Path.class))).thenReturn(true);
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
@@ -98,7 +98,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testIsDirectoryWhenFile() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(1024, false, 1, 1024, 12345L, new Path("/test/file.txt"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(1024, false, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/file.txt"));
     when(mockFileSystem.exists(any(Path.class))).thenReturn(true);
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
@@ -113,7 +113,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testGetMetadata() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(1024, false, 1, 1024, 12345L, new Path("/test/file.txt"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(1024, false, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/file.txt"));
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
     StorageProvider.FileMetadata metadata = storageProvider.getMetadata("/test/file.txt");
@@ -128,7 +128,7 @@ public class HDFSStorageProviderTest {
 
   @Test public void testGetMetadataForJsonFile() throws IOException {
     FileStatus mockStatus =
-        new FileStatus(512, false, 1, 1024, 67890L, new Path("/test/data.json"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(512, false, 1, 1024, 0L, 67890L, FsPermission.getDefault(), "user", "group", new Path("/test/data.json"));
     when(mockFileSystem.getFileStatus(any(Path.class))).thenReturn(mockStatus);
 
     StorageProvider.FileMetadata metadata = storageProvider.getMetadata("/test/data.json");
@@ -141,12 +141,12 @@ public class HDFSStorageProviderTest {
     when(mockFileSystem.exists(any(Path.class))).thenReturn(true);
 
     FileStatus[] statuses = {
-        new FileStatus(1024, false, 1, 1024, 12345L,
-            new Path("/test/file1.txt"), FsPermission.getDefault(), "user", "group"),
-        new FileStatus(0, true, 1, 1024, 12346L,
-            new Path("/test/subdir"), FsPermission.getDefault(), "user", "group"),
-        new FileStatus(2048, false, 1, 1024, 12347L,
-            new Path("/test/file2.csv"), FsPermission.getDefault(), "user", "group")
+        new FileStatus(1024, false, 1, 1024, 0L, 12345L,
+            FsPermission.getDefault(), "user", "group", new Path("/test/file1.txt")),
+        new FileStatus(0, true, 1, 1024, 0L, 12346L,
+            FsPermission.getDefault(), "user", "group", new Path("/test/subdir")),
+        new FileStatus(2048, false, 1, 1024, 0L, 12347L,
+            FsPermission.getDefault(), "user", "group", new Path("/test/file2.csv"))
     };
 
     when(mockFileSystem.listStatus(any(Path.class))).thenReturn(statuses);
@@ -247,14 +247,14 @@ public class HDFSStorageProviderTest {
   @Test public void testInferContentTypes() throws IOException {
     // Test various file extensions
     FileStatus csvStatus =
-        new FileStatus(100, false, 1, 1024, 12345L, new Path("/test/data.csv"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(100, false, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/data.csv"));
     when(mockFileSystem.getFileStatus(new Path("/test/data.csv"))).thenReturn(csvStatus);
 
     StorageProvider.FileMetadata csvMetadata = storageProvider.getMetadata("/test/data.csv");
     assertEquals("text/csv", csvMetadata.getContentType());
 
     FileStatus parquetStatus =
-        new FileStatus(100, false, 1, 1024, 12345L, new Path("/test/data.parquet"), FsPermission.getDefault(), "user", "group");
+        new FileStatus(100, false, 1, 1024, 0L, 12345L, FsPermission.getDefault(), "user", "group", new Path("/test/data.parquet"));
     when(mockFileSystem.getFileStatus(new Path("/test/data.parquet"))).thenReturn(parquetStatus);
 
     StorageProvider.FileMetadata parquetMetadata = storageProvider.getMetadata("/test/data.parquet");
