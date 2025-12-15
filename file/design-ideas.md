@@ -1,9 +1,9 @@
-# File Adapter - Design Status
+# File Adapter - Future Design Ideas
 
-Most design ideas have been implemented. This document tracks remaining work.
+This document tracks potential future enhancements. Most original design ideas have been implemented.
 
-**Design Documents:**
-- `DESIGN-JDBC-ENGINES.md` - Pluggable JDBC query engines (implemented)
+**See Also:**
+- `DESIGN-JDBC-ENGINES.md` - Pluggable JDBC query engines (implemented, time-travel pending)
 - `DESIGN-PARTITION-ALTERNATES.md` - Partition alternates with Iceberg (implemented)
 - `DESIGN-ETL-CAPABILITIES.md` - ETL transformation capabilities
 
@@ -19,3 +19,76 @@ The `createIcebergTimeRangeViewSql()` method generates UNION ALL views spanning 
 - Wire `JdbcDialect.createIcebergTimeRangeViewSql()` into schema initialization
 - Create views when `timeTravel.enabled: true` in partition config
 - Test with DuckDB and ClickHouse
+
+---
+
+## Future: Delta Lake Support
+
+**Priority**: Medium | **Effort**: 4-6 weeks
+
+Add support for Delta Lake table format alongside Iceberg.
+
+**Key features:**
+- Time travel queries
+- ACID transactions
+- Change Data Feed (CDC)
+- Schema evolution
+
+**Dependencies:** `io.delta:delta-standalone`
+
+---
+
+## Future: Additional File Formats
+
+### ORC Support
+**Priority**: Low | **Effort**: 2-3 weeks
+
+Optimized Row Columnar format, common in Hive ecosystems.
+
+### Avro Support
+**Priority**: Low | **Effort**: 2-3 weeks
+
+Schema-first format with strong schema evolution, common in streaming.
+
+---
+
+## Future: S3 Select Pushdown
+
+**Priority**: Low | **Effort**: 3-4 weeks
+
+Push filter predicates directly to S3 for server-side filtering, reducing data transfer for selective queries on large files.
+
+---
+
+## Future: gRPC Data Sources
+
+**Priority**: Low | **Effort**: 4-6 weeks
+
+Query gRPC microservices as SQL tables with automatic protobuf-to-SQL schema mapping.
+
+---
+
+## Future: Pluggable Data Pipeline Framework
+
+**Priority**: Low | **Effort**: 2-3 months
+
+Transform file adapter into a data ingestion platform with plugin ecosystem for custom data sources (REST APIs, CDC streams, file watchers).
+
+---
+
+## Implemented Features (Reference)
+
+The following features from original design documents have been implemented:
+
+| Feature | Status | Location |
+|---------|--------|----------|
+| Environment variable substitution | Done | `FileSchemaFactory` |
+| Duplicate schema detection | Done | `FileSchemaFactory` |
+| Iceberg table format | Done | `iceberg/` package |
+| JDBC dialect framework | Done | `jdbc/` package |
+| DuckDB, Trino, Spark, ClickHouse dialects | Done | `jdbc/` package |
+| Partition alternates | Done | `partition/` package |
+| Similarity/vector functions | Done | `similarity/` package |
+| HTML/Web table extraction | Done | `converters/` package |
+| Materialized views | Done | `materialized/` package |
+| Refresh framework | Done | `refresh/` package |
