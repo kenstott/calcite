@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.rules;
 
+import org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry;
+import org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry.AlternateInfo;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptSchema;
@@ -28,6 +30,7 @@ import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlKind;
 
@@ -35,6 +38,7 @@ import org.immutables.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -160,29 +164,99 @@ public class AlternatePartitionSelectionRule extends RelRule<AlternatePartitionS
 
   /**
    * Gets alternate partition information for a table.
-   * This looks up registered alternate partitions from the schema metadata.
+   * This looks up registered alternate partitions from the schema's registry.
    */
   private List<AlternatePartitionInfo> getAlternatePartitions(RelOptTable table) {
-    List<AlternatePartitionInfo> alternates = new ArrayList<>();
+    List<AlternatePartitionInfo> alternates = new ArrayList<AlternatePartitionInfo>();
 
     // Get alternate partition metadata from the table
-    // This metadata is set during schema creation by expandAlternatePartitions()
     Table unwrappedTable = table.unwrap(Table.class);
-    if (unwrappedTable instanceof PartitionedParquetTable) {
-      PartitionedParquetTable ppt = (PartitionedParquetTable) unwrappedTable;
-
-      // Access alternate partition metadata via the config
-      // The alternate tables are stored in the schema, linked by _sourceTableName
-      // For now, we rely on the schema to provide this information through
-      // a registry pattern. This is a placeholder for the actual implementation.
-
-      // TODO: Implement schema-level registry for alternate partitions
-      // The registry should map source table names to their alternates
-      LOGGER.debug("Looking up alternate partitions for table: {}",
-          table.getQualifiedName());
+    if (!(unwrappedTable instanceof PartitionedParquetTable)) {
+      return alternates;
     }
 
+    // Get the source table name
+    List<String> qualifiedName = table.getQualifiedName();
+    if (qualifiedName.size() < 2) {
+      return alternates;
+    }
+    String tableName = qualifiedName.get(qualifiedName.size() - 1);
+
+    // Try to get the AlternatePartitionRegistry from the schema
+    AlternatePartitionRegistry registry = getRegistryFromSchema(table);
+    if (registry == null) {
+      LOGGER.debug("No AlternatePartitionRegistry found for table: {}", qualifiedName);
+      return alternates;
+    }
+
+    // Get all alternates for this source table
+    List<AlternateInfo> registryAlternates = registry.getAlternates(tableName);
+    for (AlternateInfo info : registryAlternates) {
+      // Only include materialized alternates
+      if (info.isMaterialized()) {
+        alternates.add(new AlternatePartitionInfo(
+            info.getAlternateName(),
+            info.getPattern(),
+            info.getPartitionKeys()));
+      }
+    }
+
+    LOGGER.debug("Found {} alternate partitions for table {}: {}",
+        alternates.size(), tableName, alternates);
+
     return alternates;
+  }
+
+  /**
+   * Tries to get the AlternatePartitionRegistry from the schema.
+   * Uses reflection to avoid circular dependencies.
+   */
+  private AlternatePartitionRegistry getRegistryFromSchema(RelOptTable table) {
+    try {
+      // Get the schema from the table's qualified name
+      RelOptSchema relOptSchema = table.getRelOptSchema();
+      if (relOptSchema == null) {
+        return null;
+      }
+
+      // Try to get the underlying Schema
+      List<String> qualifiedName = table.getQualifiedName();
+      if (qualifiedName.size() < 2) {
+        return null;
+      }
+
+      // Look up the schema by name
+      List<String> schemaPath = qualifiedName.subList(0, qualifiedName.size() - 1);
+      RelOptTable schemaTable = relOptSchema.getTableForMember(schemaPath);
+
+      // Use reflection to call getAlternatePartitionRegistry() if available
+      Schema schema = null;
+      if (schemaTable != null) {
+        schema = schemaTable.unwrap(Schema.class);
+      }
+
+      if (schema == null) {
+        // Try getting schema from the table itself
+        schema = table.unwrap(Schema.class);
+      }
+
+      if (schema != null) {
+        try {
+          Method method = schema.getClass().getMethod("getAlternatePartitionRegistry");
+          Object result = method.invoke(schema);
+          if (result instanceof AlternatePartitionRegistry) {
+            return (AlternatePartitionRegistry) result;
+          }
+        } catch (NoSuchMethodException e) {
+          LOGGER.debug("Schema does not have getAlternatePartitionRegistry method");
+        } catch (Exception e) {
+          LOGGER.debug("Error getting registry via reflection: {}", e.getMessage());
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Error getting AlternatePartitionRegistry: {}", e.getMessage());
+    }
+    return null;
   }
 
   /**

@@ -17,6 +17,8 @@
 package org.apache.calcite.adapter.file.storage;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -29,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -179,9 +182,9 @@ public class HDFSStorageProviderTest {
   }
 
   @Test public void testOpenInputStream() throws IOException {
-    byte[] testContent = "Hello HDFS".getBytes();
-    InputStream mockInputStream = new ByteArrayInputStream(testContent);
-    when(mockFileSystem.open(any(Path.class))).thenReturn(mockInputStream);
+    FSDataInputStream mockFsInputStream = org.mockito.Mockito.mock(FSDataInputStream.class);
+    when(mockFsInputStream.read()).thenReturn((int) 'H');
+    when(mockFileSystem.open(any(Path.class))).thenReturn(mockFsInputStream);
 
     InputStream inputStream = storageProvider.openInputStream("/test/file.txt");
 
@@ -210,8 +213,8 @@ public class HDFSStorageProviderTest {
   }
 
   @Test public void testWriteFileByteArray() throws IOException {
-    when(mockFileSystem.create(any(Path.class), anyBoolean())).thenReturn(
-        new java.io.ByteArrayOutputStream());
+    FSDataOutputStream mockFsOutputStream = org.mockito.Mockito.mock(FSDataOutputStream.class);
+    when(mockFileSystem.create(any(Path.class), anyBoolean())).thenReturn(mockFsOutputStream);
 
     byte[] content = "Test content".getBytes();
 
