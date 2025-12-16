@@ -169,18 +169,13 @@ public abstract class CsvTable extends AbstractTable {
   /** Returns the field types of this CSV table. */
   public List<RelDataType> getFieldTypes(RelDataTypeFactory typeFactory) {
     if (fieldTypes == null) {
-      // If type inference is disabled or this is a stream, use the original deduction
-      if (typeInferenceConfig == null || !typeInferenceConfig.isEnabled() || isStream()) {
-        fieldTypes = new ArrayList<>();
-        CsvEnumerator.deduceRowType((JavaTypeFactory) typeFactory, source,
-            fieldTypes, isStream(), columnCasing);
-      } else {
-        // Get the row type which includes inferred types
-        RelDataType rowType = getRowType(typeFactory);
-        fieldTypes = rowType.getFieldList().stream()
-            .map(field -> field.getType())
-            .collect(Collectors.toList());
-      }
+      // Always derive fieldTypes from rowType to ensure consistency
+      // This prevents inconsistency when deduceRowType is called separately
+      // and one call succeeds while another fails (e.g., for gzipped files)
+      RelDataType rowType = getRowType(typeFactory);
+      fieldTypes = rowType.getFieldList().stream()
+          .map(field -> field.getType())
+          .collect(Collectors.toList());
     }
     return fieldTypes;
   }

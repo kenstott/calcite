@@ -18,9 +18,9 @@ package org.apache.calcite.adapter.file.storage;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +31,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Storage provider implementation for local filesystem access.
@@ -90,47 +91,37 @@ public class LocalFileStorageProvider implements StorageProvider {
   }
 
   @Override public InputStream openInputStream(String path) throws IOException {
+    File file;
     // Handle file:// URLs
     if (path.startsWith("file:")) {
       try {
         java.net.URI uri = new java.net.URI(path);
-        File file = new File(uri);
-        if (!file.exists()) {
-          throw new IOException("File does not exist: " + path);
-        }
-        return new FileInputStream(file);
+        file = new File(uri);
       } catch (java.net.URISyntaxException e) {
         throw new IOException("Invalid file URI: " + path, e);
       }
+    } else {
+      file = new File(path);
     }
 
-    File file = new File(path);
     if (!file.exists()) {
       throw new IOException("File does not exist: " + path);
     }
-    return new FileInputStream(file);
+
+    InputStream is = new FileInputStream(file);
+
+    // Handle gzip compressed files
+    if (path.endsWith(".gz")) {
+      is = new GZIPInputStream(is);
+    }
+
+    return is;
   }
 
   @Override public Reader openReader(String path) throws IOException {
-    // Handle file:// URLs
-    if (path.startsWith("file:")) {
-      try {
-        java.net.URI uri = new java.net.URI(path);
-        File file = new File(uri);
-        if (!file.exists()) {
-          throw new IOException("File does not exist: " + path);
-        }
-        return new FileReader(file, StandardCharsets.UTF_8);
-      } catch (java.net.URISyntaxException e) {
-        throw new IOException("Invalid file URI: " + path, e);
-      }
-    }
-
-    File file = new File(path);
-    if (!file.exists()) {
-      throw new IOException("File does not exist: " + path);
-    }
-    return new FileReader(file, StandardCharsets.UTF_8);
+    // Use openInputStream which handles gzip decompression
+    InputStream is = openInputStream(path);
+    return new InputStreamReader(is, StandardCharsets.UTF_8);
   }
 
   @Override public boolean exists(String path) {

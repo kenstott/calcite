@@ -38,7 +38,7 @@ public class TimestampAnalysisTest {
     DriverManager.registerDriver(new FileJdbcDriver());
 
     Properties info = new Properties();
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
 
     String sql = "select * from \"date\" where \"empno\" IN (140, 150)";
 

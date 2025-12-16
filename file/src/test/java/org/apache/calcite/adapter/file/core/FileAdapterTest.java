@@ -173,7 +173,7 @@ public class FileAdapterTest {
   /** Reads the EMPS table. */
   @Test void testSalesEmps() {
     final String sql = "select \"empno\", \"name\", \"deptno\" from \"SALES\".\"EMPS\"";
-    sql("SALES", sql)
+    sql("sales", sql)
         .returns("empno=100; name=Fred; deptno=30",
             "empno=110; name=Eric; deptno=20",
             "empno=110; name=John; deptno=40",
@@ -185,7 +185,7 @@ public class FileAdapterTest {
   /** Reads the DEPTS table. */
   @Test void testSalesDepts() {
     final String sql = "select * from \"SALES\".\"DEPTS\"";
-    sql("SALES", sql)
+    sql("sales", sql)
         .returns("deptno=10; name=Sales",
             "deptno=20; name=Marketing",
             "deptno=30; name=Accounts")
@@ -407,7 +407,7 @@ public class FileAdapterTest {
     final String sql = "select \"empno\" * 3 as \"E3\"\n"
         + "from \"BUG\".\"long_emps\" where \"empno\" = 100";
 
-    sql("BUG", sql).checking(resultSet -> {
+    sql("bug", sql).checking(resultSet -> {
       try {
         assertThat(resultSet.next(), is(true));
         Long o = (Long) resultSet.getObject(1);
@@ -599,21 +599,21 @@ public class FileAdapterTest {
             + "script=William Shakespeare; summary=; "
             + "lines=[Charlie is very surprised by Alice and Xavier's surprise plan.]",
     };
-    sql("BUG", sql)
+    sql("bug", sql)
         .returns(lines)
         .ok();
   }
 
   @Test void testWackyColumns() {
     final String sql = "select * from \"BUG\".\"wacky_column_names\" where false";
-    sql("BUG", sql).returns().ok();
+    sql("bug", sql).returns().ok();
 
     // Skip the problematic numeric column test for now
     // Column names starting with numbers may be transformed differently
     // final String sql2 = "select \"joined at\", \"name\"\n"
     //     + "from \"BUG\".\"wacky_column_names\"\n"
     //     + "where \"2gender\" = 'F'";
-    // sql("BUG", sql2)
+    // sql("bug", sql2)
     //     .returns("joined at=2005-09-07; name=Wilma",
     //         "joined at=2007-01-01; name=Alice")
     //     .ok();
@@ -860,7 +860,7 @@ public class FileAdapterTest {
     long offsetHours = TimeUnit.MILLISECONDS.toHours(java.util.TimeZone.getDefault().getRawOffset());
     Properties info = new Properties();
 
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
 
     try (Connection connection =
              DriverManager.getConnection("jdbc:calcite:", info)) {
@@ -957,7 +957,7 @@ public class FileAdapterTest {
    * CSV adapter incorrectly parses TIMESTAMP values after noon</a>. */
   @Test void testDateType2() throws SQLException {
     Properties info = new Properties();
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
 
     try (Connection connection =
              DriverManager.getConnection("jdbc:calcite:", info)) {
@@ -1091,7 +1091,7 @@ public class FileAdapterTest {
    * CompileException</a>. */
   @Test void testTimestampGroupBy() throws SQLException {
     Properties info = new Properties();
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
     // Use LIMIT to ensure that results are deterministic without ORDER BY
     final String sql = "select \"empno\", \"jointimes\"\n"
         + "from (select * from \"date\" limit 1)\n"
@@ -1216,7 +1216,7 @@ public class FileAdapterTest {
    * fields</a>. */
   @Test void testNonNullFilterOnDateType() throws SQLException {
     Properties info = new Properties();
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
 
     try (Connection connection =
              DriverManager.getConnection("jdbc:calcite:", info)) {
@@ -1276,7 +1276,7 @@ public class FileAdapterTest {
    * fields</a>. */
   @Test void testGreaterThanFilterOnDateType() throws SQLException {
     Properties info = new Properties();
-    info.put("model", FileAdapterTests.jsonPath("BUG"));
+    info.put("model", FileAdapterTests.jsonPath("bug"));
 
     try (Connection connection =
              DriverManager.getConnection("jdbc:calcite:", info)) {
