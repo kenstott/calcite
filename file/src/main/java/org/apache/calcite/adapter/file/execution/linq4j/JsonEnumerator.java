@@ -109,27 +109,39 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source,
       Map<String, Object> options, String columnNameCasing) {
-    // If source is a StorageProviderSource, assume JSON format since it's used in JsonTable
-    if (source instanceof org.apache.calcite.adapter.file.storage.StorageProviderSource) {
-      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
+    // Determine data type from file extension, regardless of source type
+    String path = source.path().toLowerCase();
+    // Strip .gz extension for type detection
+    if (path.endsWith(".gz")) {
+      path = path.substring(0, path.length() - 3);
     }
 
-    Source sourceSansGz = source.trim(".gz");
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
-    Source sourceSansYaml = sourceSansGz.trimOrNull(".yaml");
-    if (sourceSansYaml == null) {
-      sourceSansYaml = sourceSansGz.trimOrNull(".yml");
-    }
-    if (sourceSansYaml == null) {
-      sourceSansYaml = sourceSansGz.trimOrNull(".hml");
-    }
-    if (sourceSansJson != null) {
-      return deduceRowType(typeFactory, source, "json", options, columnNameCasing);
-    } else if (sourceSansYaml != null) {
-      return deduceRowType(typeFactory, source, "yaml", options, columnNameCasing);
+    String dataType;
+    if (path.endsWith(".yaml") || path.endsWith(".yml") || path.endsWith(".hml")) {
+      dataType = "yaml";
+    } else if (path.endsWith(".json")) {
+      dataType = "json";
     } else {
-      throw new IllegalArgumentException("Unsupported data type: " + source);
+      // Try trimOrNull approach as fallback for non-StorageProviderSource
+      Source sourceSansGz = source.trim(".gz");
+      Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+      Source sourceSansYaml = sourceSansGz.trimOrNull(".yaml");
+      if (sourceSansYaml == null) {
+        sourceSansYaml = sourceSansGz.trimOrNull(".yml");
+      }
+      if (sourceSansYaml == null) {
+        sourceSansYaml = sourceSansGz.trimOrNull(".hml");
+      }
+      if (sourceSansJson != null) {
+        dataType = "json";
+      } else if (sourceSansYaml != null) {
+        dataType = "yaml";
+      } else {
+        throw new IllegalArgumentException("Unsupported data type: " + source);
+      }
     }
+
+    return deduceRowType(typeFactory, source, dataType, options, columnNameCasing);
   }
 
   public static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source,
