@@ -470,6 +470,44 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
+   * Reset parquet conversion status to trigger re-conversion to iceberg format.
+   * This clears parquet_converted_at so isParquetConverted() returns false.
+   *
+   * @return Number of entries reset
+   */
+  public int resetAllParquetConversions() {
+    String sql = "UPDATE cache_entries SET parquet_converted_at = 0, parquet_path = NULL";
+    try (Statement stmt = getConnection().createStatement()) {
+      int updated = stmt.executeUpdate(sql);
+      LOGGER.info("Reset parquet conversion status for {} cache entries", updated);
+      return updated;
+    } catch (SQLException e) {
+      LOGGER.error("Error resetting parquet conversions: {}", e.getMessage());
+      return 0;
+    }
+  }
+
+  /**
+   * Reset parquet conversion status for entries matching a table name pattern.
+   *
+   * @param tableName Table name prefix to match
+   * @return Number of entries reset
+   */
+  public int resetParquetConversionsForTable(String tableName) {
+    String sql = "UPDATE cache_entries SET parquet_converted_at = 0, parquet_path = NULL "
+        + "WHERE cache_key LIKE ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, tableName + ":%");
+      int updated = stmt.executeUpdate();
+      LOGGER.info("Reset parquet conversion status for {} entries matching {}", updated, tableName);
+      return updated;
+    } catch (SQLException e) {
+      LOGGER.error("Error resetting parquet conversions for {}: {}", tableName, e.getMessage());
+      return 0;
+    }
+  }
+
+  /**
    * Mark parquet as converted.
    *
    * @param cacheKey Cache key
