@@ -3313,28 +3313,42 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("STOCK DOWNLOAD STARTING NOW WITH basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
-        // Get Alpha Vantage API key from environment
-        String apiKey = System.getenv("ALPHA_VANTAGE_KEY");
+        // Determine which stock price source to use
+        // Priority: 1) operand, 2) STOCK_PRICE_SOURCE env var, 3) default to "stooq"
+        String stockPriceSource = (String) currentOperand.get("stockPriceSource");
+        if (stockPriceSource == null || stockPriceSource.isEmpty()) {
+          stockPriceSource = System.getenv("STOCK_PRICE_SOURCE");
+        }
+        if (stockPriceSource == null || stockPriceSource.isEmpty()) {
+          stockPriceSource = "stooq";  // Default to Stooq
+        }
+        stockPriceSource = stockPriceSource.toLowerCase();
 
-        // If not found in system env, try TestEnvironmentLoader (for tests)
-        if (apiKey == null || apiKey.isEmpty()) {
-          try {
-            Class<?> testEnvClass = Class.forName("org.apache.calcite.adapter.govdata.TestEnvironmentLoader");
-            java.lang.reflect.Method getEnvMethod = testEnvClass.getMethod("getEnv", String.class);
-            apiKey = (String) getEnvMethod.invoke(null, "ALPHA_VANTAGE_KEY");
-          } catch (Exception e) {
-            // TestEnvironmentLoader not available or error accessing it
+        if ("stooq".equals(stockPriceSource)) {
+          // Use Stooq downloader (default - no API key required)
+          String stooqUsername = getEnvOrOperand("STOOQ_USERNAME", "stooqUsername");
+          String stooqPassword = getEnvOrOperand("STOOQ_PASSWORD", "stooqPassword");
+
+          LOGGER.info("Downloading stock prices for {} tickers using Stooq", tickerCikPairs.size());
+          StooqDownloader downloader = new StooqDownloader(storageProvider, stooqUsername, stooqPassword);
+          downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
+
+        } else if ("alphavantage".equals(stockPriceSource)) {
+          // Use Alpha Vantage downloader (requires API key)
+          String apiKey = getEnvOrOperand("ALPHA_VANTAGE_KEY", "alphaVantageKey");
+
+          if (apiKey == null || apiKey.isEmpty()) {
+            LOGGER.warn("ALPHA_VANTAGE_KEY not found in environment, skipping stock price download");
+            return;
           }
-        }
 
-        if (apiKey == null || apiKey.isEmpty()) {
-          LOGGER.warn("ALPHA_VANTAGE_KEY not found in environment, skipping stock price download");
-          return;
-        }
+          LOGGER.info("Downloading stock prices for {} tickers using Alpha Vantage", tickerCikPairs.size());
+          AlphaVantageDownloader downloader = new AlphaVantageDownloader(apiKey, storageProvider);
+          downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
 
-        LOGGER.info("Downloading stock prices for {} tickers using Alpha Vantage", tickerCikPairs.size());
-        AlphaVantageDownloader downloader = new AlphaVantageDownloader(apiKey, storageProvider);
-        downloader.downloadStockPrices(basePath, tickerCikPairs, startYear, endYear);
+        } else {
+          LOGGER.warn("Unknown stock price source: {}. Supported values: stooq, alphavantage", stockPriceSource);
+        }
       } else {
         LOGGER.info("No tickers found for stock price download");
       }
@@ -3430,6 +3444,40 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.warn("Error checking stock price cache: " + e.getMessage());
       return false; // Assume not cached if we can't check
     }
+  }
+
+  /**
+   * Gets a configuration value from environment variable or operand.
+   * Checks in order: 1) Environment variable, 2) TestEnvironmentLoader (for tests), 3) Operand
+   *
+   * @param envName Name of the environment variable
+   * @param operandName Name of the operand key
+   * @return The configuration value or null if not found
+   */
+  private String getEnvOrOperand(String envName, String operandName) {
+    // First check system environment variable
+    String value = System.getenv(envName);
+
+    // If not found in system env, try TestEnvironmentLoader (for tests)
+    if (value == null || value.isEmpty()) {
+      try {
+        Class<?> testEnvClass = Class.forName("org.apache.calcite.adapter.govdata.TestEnvironmentLoader");
+        java.lang.reflect.Method getEnvMethod = testEnvClass.getMethod("getEnv", String.class);
+        value = (String) getEnvMethod.invoke(null, envName);
+      } catch (Exception e) {
+        // TestEnvironmentLoader not available or error accessing it
+      }
+    }
+
+    // Finally check operand
+    if ((value == null || value.isEmpty()) && currentOperand != null) {
+      Object operandValue = currentOperand.get(operandName);
+      if (operandValue instanceof String) {
+        value = (String) operandValue;
+      }
+    }
+
+    return value;
   }
 
   /**
