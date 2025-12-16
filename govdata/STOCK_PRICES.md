@@ -291,6 +291,85 @@ To force re-download:
 - **SecSchemaFactory**: Orchestrates downloads and table creation
 - **YahooFinanceDownloader**: Manages API interaction and rate limiting
 
+## Design Idea: Replace Yahoo Finance and Alpha Vantage with Stooq.com
+
+**Status**: Proposed
+**Priority**: High
+**Effort**: 1-2 days
+
+### Problem with Current Approaches
+
+**Yahoo Finance (`YahooFinanceDownloader`)**:
+- Terms of Service concerns for commercial use
+- Aggressive rate limiting (429 errors)
+- Bulk downloading operates in a legal gray area
+
+**Alpha Vantage (`AlphaVantageDownloader`)**:
+- Requires API key
+- Free tier severely limited: 5 requests/minute, 25 requests/day
+- 12.5 second delay between requests required
+- Impractical for bulk downloads (~6,000 tickers)
+
+### Stooq.com as Alternative
+
+[Stooq.com](https://stooq.com) is a Polish financial data site that explicitly provides free bulk historical stock price downloads with no API key required.
+
+**URL Pattern**:
+```
+https://stooq.com/q/d/l/?s={ticker}.us&i=d
+```
+
+**Returns**: CSV with Date, Open, High, Low, Close, Volume (split-adjusted)
+
+### Advantages over Current Sources
+
+| Aspect | Yahoo Finance | Alpha Vantage | Stooq.com |
+|--------|---------------|---------------|-----------|
+| ToS for commercial use | Gray area | OK with key | Explicitly free |
+| Rate limiting | Aggressive (429 errors) | Severe (25/day free) | Permissive (~1 req/sec) |
+| API key required | No | Yes | No |
+| Bulk download friendly | No | No | Yes |
+| Full history per request | No (paginated) | Yes | Yes |
+| Data quality | Good | Good | Good |
+| US stock coverage | Full | Full | Full |
+| Time for 6,000 tickers | Hours (with backoff) | 250 days (free tier) | ~100 minutes |
+
+### Implementation
+
+**Bulk download math**:
+- ~6,000 CIKs × 1 request/second = ~100 minutes for full historical backfill
+- One request per ticker returns full history (2010-2025)
+- Daily updates: same math, run after market close
+
+**Code changes**:
+1. Create `StooqDownloader` to replace both `YahooFinanceDownloader` and `AlphaVantageDownloader`
+2. URL pattern: `https://stooq.com/q/d/l/?s={ticker.toLowerCase()}.us&i=d`
+3. Parse CSV response (Date, Open, High, Low, Close, Volume)
+4. Simple rate limiting: 1 request/second (vs. Yahoo's backoff or Alpha Vantage's 12.5s)
+5. Keep existing partitioned Parquet storage structure
+6. Remove `YahooFinanceDownloader.java`
+7. Remove `AlphaVantageDownloader.java`
+
+**Index pattern** (for indices):
+```
+^spx  -> S&P 500
+^ndq  -> NASDAQ
+^dji  -> Dow Jones
+```
+
+### Migration Path
+
+1. Implement `StooqDownloader` as new default
+2. Add config option: `stockPriceSource: "stooq"` (default), `"yahoo"`, or `"alphavantage"` (deprecated)
+3. Mark `YahooFinanceDownloader` and `AlphaVantageDownloader` as `@Deprecated`
+4. Remove both deprecated downloaders after validation period
+
+### Gotchas
+
+- Delisted stocks not available (survivorship bias - same as Yahoo)
+- Ticker suffix required: `.us` for US stocks
+- Some ETFs may need different suffix or no suffix
+
 ## Future Enhancements
 
 Potential improvements for consideration:
@@ -298,5 +377,4 @@ Potential improvements for consideration:
 - Options chain data
 - International exchanges
 - Cryptocurrency prices
-- Alternative data sources (Alpha Vantage, IEX Cloud)
 - Streaming updates via WebSocket
