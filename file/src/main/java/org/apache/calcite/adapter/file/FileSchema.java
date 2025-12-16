@@ -462,6 +462,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     if (sourceDirectory != null) {
       // If sourceDirectory is provided, ensure it's a fully qualified path
       this.sourceDirectory = sourceDirectory.getAbsoluteFile();
+    } else if (directoryPath != null && "local".equals(storageType)) {
+      // For local storage, use directoryPath as the source directory
+      // This allows relative table URLs to be resolved against the model directory
+      this.sourceDirectory = new File(directoryPath).getAbsoluteFile();
+      LOGGER.debug("Using directoryPath as sourceDirectory for local storage: {}", this.sourceDirectory);
     } else {
       // Fallback to current working directory
       String workingDir = System.getProperty("user.dir");
@@ -502,20 +507,21 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     }
 
     // baseDirectory represents the data directory (where parquet files are stored)
-    // When using StorageProvider, this is the directory passed from operand (could be S3 URI)
-    // When not using StorageProvider, use sourceDirectory or operating cache directory
-    if (storageType != null && directoryPath != null) {
-      // Using StorageProvider with cloud storage - use String path directly (e.g., S3 URI)
-      this.baseDirectory = directoryPath;
-      LOGGER.debug("Using directoryPath as baseDirectory for StorageProvider: {}", this.baseDirectory);
-    } else if (storageType != null && sourceDirectory != null) {
-      // Using StorageProvider with local storage - convert File to String
-      this.baseDirectory = sourceDirectory.getAbsolutePath();
-      LOGGER.debug("Using sourceDirectory as baseDirectory for StorageProvider: {}", this.baseDirectory);
-    } else if (userConfiguredBaseDirectory != null) {
-      // Legacy: user configured baseDirectory explicitly
+    // Priority: 1. User-configured baseDirectory (includes ephemeralCache), 2. Cloud storage path, 3. Default
+    if (userConfiguredBaseDirectory != null) {
+      // User configured baseDirectory explicitly (or ephemeralCache created a temp directory)
+      // This takes precedence over other options to respect explicit configuration
       this.baseDirectory = userConfiguredBaseDirectory.getAbsolutePath();
       LOGGER.debug("Using userConfiguredBaseDirectory as baseDirectory: {}", this.baseDirectory);
+    } else if (storageType != null && !"local".equals(storageType) && directoryPath != null) {
+      // Using StorageProvider with cloud storage - use String path directly (e.g., S3 URI)
+      this.baseDirectory = directoryPath;
+      LOGGER.debug("Using directoryPath as baseDirectory for cloud StorageProvider: {}", this.baseDirectory);
+    } else if (storageType != null && directoryPath != null) {
+      // Using StorageProvider with local storage - use directoryPath for both source and cache
+      // This keeps metadata and conversions with the source data for proper isolation
+      this.baseDirectory = directoryPath;
+      LOGGER.debug("Using directoryPath as baseDirectory for local StorageProvider: {}", this.baseDirectory);
     } else {
       // Default: use operating cache directory for backward compatibility
       this.baseDirectory = this.operatingCacheDirectory.getAbsolutePath();
@@ -964,8 +970,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     LOGGER.info("Processing JSON flattening for directory: {}", sourceDir.getAbsolutePath());
 
-    // Ensure conversions directory exists
-    File conversionDir = new File(baseDirectory, "conversions");
+    // Ensure conversions directory exists (use operatingCacheDirectory, always local)
+    File conversionDir = new File(operatingCacheDirectory, "conversions");
     if (!conversionDir.exists()) {
       conversionDir.mkdirs();
       LOGGER.debug("Created conversions directory for flattened JSON: {}", conversionDir.getAbsolutePath());
@@ -1204,10 +1210,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     }
 
     // Determine output directory for converted files
+    // Use operatingCacheDirectory for conversions (always local .aperio/<schema>)
     File conversionDir = null;
-    if (baseDirectory != null) {
-      // Use baseDirectory/conversions/ for converted files
-      conversionDir = new File(baseDirectory, "conversions");
+    if (operatingCacheDirectory != null) {
+      conversionDir = new File(operatingCacheDirectory, "conversions");
       if (!conversionDir.exists()) {
         conversionDir.mkdirs();
         LOGGER.debug("Created conversions directory: {}", conversionDir.getAbsolutePath());
@@ -1651,7 +1657,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     final Set<String> registeredTableNames = new HashSet<>();
 
     for (Map<String, Object> tableDef : this.tables) {
-      addTable(builder, tableDef);
+      addTable(builder, tableDef, registeredTableNames);
     }
 
     // Process JSON flattening AFTER explicit table definitions but BEFORE bulk conversion
@@ -1686,7 +1692,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       conversionMetadata.reload();
     }
 
-    if (sourceDirectory != null && storageProvider == null) {
+    // Process local files when: (1) no storage provider, OR (2) local storage provider
+    // This ensures Excel/HTML conversion happens for local file system scenarios
+    if (sourceDirectory != null && (storageProvider == null || "local".equals(storageType))) {
       LOGGER.debug("[FileSchema.getTableMap] Using local file system with sourceDirectory: {}", sourceDirectory);
 
       // Convert all supported file types to JSON using a consolidated approach
@@ -1748,10 +1756,18 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           LOGGER.info("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
           LOGGER.info("  JSON file: {}", source.path());
 
-          // For files in the conversions directory, use just the filename as the table name
+          // For files in conversion directories, use just the filename as the table name
+          // This includes both operatingCacheDirectory/conversions/ and baseDirectory/.download-cache/conversions/
           String rawName;
-          if (baseDirectory != null && file.getAbsolutePath().startsWith(
-              new File(baseDirectory, "conversions").getAbsolutePath())) {
+          boolean isInConversionsDir = false;
+          if (operatingCacheDirectory != null && file.getAbsolutePath().startsWith(
+              new File(operatingCacheDirectory, "conversions").getAbsolutePath())) {
+            isInConversionsDir = true;
+          } else if (baseDirectory != null && file.getAbsolutePath().startsWith(
+              new File(new File(baseDirectory, ".download-cache"), "conversions").getAbsolutePath())) {
+            isInConversionsDir = true;
+          }
+          if (isInConversionsDir) {
             // This is a converted file - use just the filename without path
             rawName = file.getName();
             // Remove extension
@@ -1956,9 +1972,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             } else {
               LOGGER.debug("Creating JSON table {} with NO refresh interval", tableName);
             }
-            if (addTable(builder, source, tableName, autoTableDef)) {
-              registeredTableNames.add(tableName);
-            }
+            addTable(builder, source, tableName, autoTableDef, registeredTableNames);
           }
         }
         final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
@@ -1979,9 +1993,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
           LOGGER.debug("CSV file {} -> table name: {}", source.path(), tableName);
           tableNameToFileType.put(tableName, "csv");
-          if (addTable(builder, source, tableName, null)) {
-            registeredTableNames.add(tableName);
-          }
+          addTable(builder, source, tableName, null, registeredTableNames);
         }
         final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
         if (sourceSansTsv != null) {
@@ -1999,9 +2011,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 baseName, tableName);
           }
           tableNameToFileType.put(tableName, "tsv");
-          if (addTable(builder, source, tableName, null)) {
-            registeredTableNames.add(tableName);
-          }
+          addTable(builder, source, tableName, null, registeredTableNames);
         }
         final Source sourceSansParquet =
             sourceSansGz.trimOrNull(".parquet");
@@ -2056,10 +2066,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       // HTML tables are now handled as JSON files created by convertHtmlFilesToJson
       // The JSON files will be picked up in the regular file scanning below
-    } else if (storageProvider != null) {
-      // Process files from storage provider
-      LOGGER.debug("[FileSchema.getTableMap] Using storage provider to process files");
-      processStorageProviderFiles(builder, tableNameCounts);
+    } else if (storageProvider != null && !"local".equals(storageType)) {
+      // Process files from cloud storage provider (local is handled above)
+      LOGGER.debug("[FileSchema.getTableMap] Using cloud storage provider to process files");
+      processStorageProviderFiles(builder, tableNameCounts, registeredTableNames);
     }
 
     // Process partitioned tables BEFORE views/materialized views
@@ -2228,7 +2238,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   private boolean addTable(ImmutableMap.Builder<String, Table> builder,
-      Map<String, Object> tableDef) {
+      Map<String, Object> tableDef, Set<String> registeredTableNames) {
     final String tableName = (String) tableDef.get("name");
     final String tableType = (String) tableDef.get("type");
     final String url = (String) tableDef.get("url");
@@ -2254,7 +2264,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing);
       // Use explicit table name as-is, without casing transformation
-      builder.put(tableName, globTable);
+      if (!registeredTableNames.contains(tableName)) {
+        builder.put(tableName, globTable);
+        registeredTableNames.add(tableName);
+      }
       return true;
     }
 
@@ -2263,7 +2276,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         && hasHttpConfiguration(tableDef)) {
       final Source source = resolveSourceWithHttpConfig(url, tableDef);
       LOGGER.debug("Creating HTTP table '{}' with source: {} (type: {})", tableName, source.path(), source.getClass().getName());
-      return addTable(builder, source, tableName, tableDef);
+      return addTable(builder, source, tableName, tableDef, registeredTableNames);
     }
 
     // Regular processing for URLs
@@ -2272,7 +2285,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return false;
     }
     final Source source = resolveSource(url);
-    return addTable(builder, source, tableName, tableDef);
+    return addTable(builder, source, tableName, tableDef, registeredTableNames);
   }
 
   /**
@@ -2411,7 +2424,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   private boolean addTable(ImmutableMap.Builder<String, Table> builder,
-      Source source, String tableName, @Nullable Map<String, Object> tableDef) {
+      Source source, String tableName, @Nullable Map<String, Object> tableDef,
+      Set<String> registeredTableNames) {
     LOGGER.info("FileSchema.addTable START: schemaName={}, tableName='{}', source={}, csvTypeInferenceConfig={}, engineType={}",
         name, tableName, source.path(),
         csvTypeInferenceConfig != null ? "enabled=" + csvTypeInferenceConfig.isEnabled() : "null",
@@ -2520,22 +2534,50 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           || path.endsWith(".yml.gz");
 
       if (canConvert) {
-        // Skip Parquet conversion for JSON/YAML files with flatten option
-        // because flattening happens at scan time, not schema time
-        boolean skipConversion = false;
+        // For JSON/YAML files with flatten option, use the flattened file from conversions directory
+        Source conversionSource = source;
         if (tableDef != null && Boolean.TRUE.equals(tableDef.get("flatten"))
             && (path.endsWith(".json") || path.endsWith(".yaml") || path.endsWith(".yml")
                 || path.endsWith(".json.gz") || path.endsWith(".yaml.gz") || path.endsWith(".yml.gz"))) {
-          skipConversion = true;
+          // Find the flattened file in the conversions directory
+          File flattenedFile = new File(new File(operatingCacheDirectory, "conversions"),
+              new File(source.path()).getName());
+          if (flattenedFile.exists()) {
+            LOGGER.info("Using flattened JSON file for PARQUET conversion: {}", flattenedFile.getAbsolutePath());
+            conversionSource = Sources.of(flattenedFile);
+          } else {
+            LOGGER.warn("Flattened file not found at {}, attempting to create it", flattenedFile.getAbsolutePath());
+            // Trigger flattening now
+            File conversionDir = new File(operatingCacheDirectory, "conversions");
+            if (!conversionDir.exists()) {
+              conversionDir.mkdirs();
+            }
+            Map<String, Object> flattenOptions = new HashMap<>();
+            flattenOptions.put("flatten", true);
+            if (tableDef.containsKey("flattenSeparator")) {
+              flattenOptions.put("flattenSeparator", tableDef.get("flattenSeparator"));
+            } else {
+              flattenOptions.put("flattenSeparator", "_");
+            }
+            createFlattenedJsonFile(new File(source.path()), conversionDir, flattenOptions);
+            if (flattenedFile.exists()) {
+              LOGGER.info("Created flattened JSON file: {}", flattenedFile.getAbsolutePath());
+              conversionSource = Sources.of(flattenedFile);
+            } else {
+              LOGGER.error("Failed to create flattened JSON file for: {}", source.path());
+            }
+          }
         }
 
-        if (!skipConversion) {
+        {
           try {
             // Create the original table first - use standard table for conversion
             // to avoid convention issues during the conversion process
+            // For flattened JSON, use conversionSource which points to the flattened file
+            String conversionPath = conversionSource.path().toLowerCase(Locale.ROOT);
             Table originalTable = path.endsWith(".csv") || path.endsWith(".csv.gz")
-                ? new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig)
-                : createTableFromSource(source, tableDef);
+                ? new CsvTranslatableTable(conversionSource, null, columnNameCasing, csvTypeInferenceConfig)
+                : createTableFromSource(conversionSource, tableDef);
             if (originalTable != null) {
             // Get cache directory
             File cacheDir =
@@ -2547,20 +2589,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             String targetParquetPath = new File(cacheDir, tableName + ".parquet").getAbsolutePath();
 
             for (org.apache.calcite.adapter.file.converters.RawToParquetConverter converter : rawToParquetConverters) {
-              if (converter.canConvert(source.path(), conversionMetadata)) {
+              if (converter.canConvert(conversionSource.path(), conversionMetadata)) {
                 LOGGER.info("Using custom converter {} for file: {}",
-                    converter.getClass().getSimpleName(), source.path());
+                    converter.getClass().getSimpleName(), conversionSource.path());
                 try {
-                  if (converter.convertToParquet(source.path(), targetParquetPath, storageProvider)) {
+                  if (converter.convertToParquet(conversionSource.path(), targetParquetPath, storageProvider)) {
                     parquetFile = new File(targetParquetPath);
                     customConverted = true;
                     LOGGER.info("Custom converter successfully converted {} to {}",
-                        source.path(), targetParquetPath);
+                        conversionSource.path(), targetParquetPath);
                     break;
                   }
                 } catch (IOException conversionException) {
                   LOGGER.warn("Custom converter {} failed for {}, trying next converter: {}",
-                      converter.getClass().getSimpleName(), source.path(), conversionException.getMessage());
+                      converter.getClass().getSimpleName(), conversionSource.path(), conversionException.getMessage());
                   // Continue to next converter
                 }
               }
@@ -2568,9 +2610,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
             // Fall back to default conversion if no custom converter handled it
             if (!customConverted) {
-              LOGGER.debug("No custom converter handled {}, using default ParquetConversionUtil", source.path());
+              LOGGER.debug("No custom converter handled {}, using default ParquetConversionUtil", conversionSource.path());
               parquetFile =
-                  ParquetConversionUtil.convertToParquet(source, tableName, originalTable, cacheDir, parentSchema, name, tableNameCasing);
+                  ParquetConversionUtil.convertToParquet(conversionSource, tableName, originalTable, cacheDir, parentSchema, name, tableNameCasing);
             }
 
             // DuckDB engine will be handled same as PARQUET for initial setup
@@ -2630,7 +2672,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               LOGGER.debug("Using casing-transformed table name '{}'", finalTableName);
             }
 
+            // Check for duplicate registration
+            if (registeredTableNames.contains(finalTableName)) {
+              LOGGER.debug("Skipping duplicate registration for table '{}' - already registered", finalTableName);
+              return true; // Table already exists, skip re-registration
+            }
             builder.put(finalTableName, parquetTable);
+            registeredTableNames.add(finalTableName);
 
             // Update the existing record with parquet file information
             // or create a new record if none exists
@@ -2808,7 +2856,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 htmlFile = new File(source.path());
               }
 
-              File conversionsDir = new File(baseDirectory, "conversions");
+              File conversionsDir = new File(operatingCacheDirectory, "conversions");
               if (!conversionsDir.exists()) {
                 conversionsDir.mkdirs();
               }
@@ -3063,10 +3111,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         // For PARQUET/DUCKDB engines, HTML files need to be converted to JSON
         if ((engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET
             || engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.DUCKDB)
-            && baseDirectory != null) {
+            && operatingCacheDirectory != null) {
           try {
             File htmlFile = new File(source.path());
-            File conversionsDir = new File(baseDirectory, "conversions");
+            File conversionsDir = new File(operatingCacheDirectory, "conversions");
             if (!conversionsDir.exists()) {
               conversionsDir.mkdirs();
             }
@@ -3206,7 +3254,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             htmlFile = new File(source.path());
           }
 
-          File conversionsDir = new File(baseDirectory, "conversions");
+          File conversionsDir = new File(operatingCacheDirectory, "conversions");
           if (!conversionsDir.exists()) {
             conversionsDir.mkdirs();
           }
@@ -4164,12 +4212,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    * otherwise falls back to local file system.
    */
   private File[] getFilesForProcessing() {
-    // If storage provider is configured, use it for file discovery
-    if (storageProvider != null) {
+    // For local storage, use sourceDirectory directly instead of storage provider
+    // This ensures Excel/HTML conversion works with local files
+    if (storageProvider != null && !"local".equals(storageType)) {
       return getFilesFromStorageProvider();
     }
 
-    // Otherwise use local file system from sourceDirectory
+    // For local storage (or no storage provider), use local file system from sourceDirectory
     if (sourceDirectory == null) {
       LOGGER.warn("[FileSchema] sourceDirectory is null, returning empty file array");
       return new File[0];
@@ -4203,10 +4252,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         .filter(this::isFileTypeSupported)
         .forEach(allFiles::add);
 
-    // Also include converted files from base directory if it exists
-    if (baseDirectory != null) {
-      // Check for converted files in baseDirectory/conversions/
-      File conversionsDir = new File(baseDirectory, "conversions");
+    // Also include converted files from operating cache directory if it exists
+    if (operatingCacheDirectory != null) {
+      // Check for converted files in operatingCacheDirectory/conversions/
+      File conversionsDir = new File(operatingCacheDirectory, "conversions");
       if (conversionsDir.exists() && conversionsDir.isDirectory()) {
         LOGGER.debug("[FileSchema] Including converted files from: {}", conversionsDir.getAbsolutePath());
         File[] convertedFiles = conversionsDir.listFiles(file -> isFileTypeSupported(file));
@@ -4335,18 +4384,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return new File[0];
     }
 
-    // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
+    // Determine the base path for file discovery
+    // For local storage: use sourceDirectory (where data files are)
+    // For cloud storage: use baseDirectory (the cloud URI passed to StorageProvider)
+    String basePath;
+    if ("local".equals(storageType) && sourceDirectory != null) {
+      basePath = sourceDirectory.getAbsolutePath();
+      LOGGER.debug("[FileSchema.getFilesFromStorageProvider] Using sourceDirectory for local storage: {}", basePath);
+    } else if (baseDirectory != null) {
+      // Cloud storage - use the URI directly (StorageProvider handles the abstraction)
       basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
+      LOGGER.debug("[FileSchema.getFilesFromStorageProvider] Using baseDirectory for cloud storage: {}", basePath);
+    } else {
+      basePath = "/";
     }
 
     List<File> files = new ArrayList<>();
@@ -4458,23 +4508,25 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    * Process files from the configured storage provider.
    */
   private void processStorageProviderFiles(ImmutableMap.Builder<String, Table> builder,
-                                           Map<String, Integer> tableNameCounts) {
+                                           Map<String, Integer> tableNameCounts,
+                                           Set<String> registeredTableNames) {
     if (storageProvider == null) {
       return;
     }
 
-    // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
+    // Determine the base path for file discovery
+    // For local storage: use sourceDirectory (where data files are)
+    // For cloud storage: use baseDirectory (the cloud URI passed to StorageProvider)
+    String basePath;
+    if ("local".equals(storageType) && sourceDirectory != null) {
+      basePath = sourceDirectory.getAbsolutePath();
+      LOGGER.debug("[FileSchema.processStorageProviderFiles] Using sourceDirectory for local storage: {}", basePath);
+    } else if (baseDirectory != null) {
+      // Cloud storage - use the URI directly (StorageProvider handles the abstraction)
       basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
+      LOGGER.debug("[FileSchema.processStorageProviderFiles] Using baseDirectory for cloud storage: {}", basePath);
+    } else {
+      basePath = "/";
     }
 
     try {
@@ -4530,7 +4582,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               autoTableDef = new HashMap<>();
               autoTableDef.put("refreshInterval", this.refreshInterval);
             }
-            addTable(builder, source, tableName, autoTableDef);
+            addTable(builder, source, tableName, autoTableDef, registeredTableNames);
             continue;
           }
 
@@ -4548,7 +4600,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               tableName = baseName + "_CSV";
             }
             tableNameCounts.put(baseName, tableNameCounts.getOrDefault(baseName, 0) + 1);
-            addTable(builder, source, tableName, null);
+            addTable(builder, source, tableName, null, registeredTableNames);
             continue;
           }
 
@@ -4566,7 +4618,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               tableName = baseName + "_TSV";
             }
             tableNameCounts.put(baseName, tableNameCounts.getOrDefault(baseName, 0) + 1);
-            addTable(builder, source, tableName, null);
+            addTable(builder, source, tableName, null, registeredTableNames);
             continue;
           }
 

@@ -323,11 +323,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Auto-detected local storage from directory path: {}", directory);
     }
 
-    // Validate storageType is set
+    // Default to "local" storage if not specified and no cloud indicators
+    // This maintains backward compatibility with existing model files
     if (storageType == null) {
-      throw new IllegalStateException(
-          String.format("storageType must be configured for schema '%s'. " +
-              "Set storageType='local' for local files or 's3' for S3 storage in model.json operand.", name));
+      storageType = "local";
+      LOGGER.info("Defaulting to local storage for schema: {}", name);
     }
 
     // Resolve directory path
