@@ -478,6 +478,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=employment_statistics/frequency=*/year=*/"
@@ -485,6 +486,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- INFLATION METRICS ---
   - name: inflation_metrics
@@ -586,6 +593,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=indicators/frequency=*/year=*/"
@@ -593,6 +601,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REGIONAL CPI ---
   - name: regional_cpi
@@ -661,6 +675,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=cpi_regional/frequency=*/year=*/"
@@ -668,6 +683,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- METRO CPI ---
   - name: metro_cpi
@@ -763,6 +784,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=metro_cpi/frequency=*/year=*/"
@@ -770,6 +792,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- STATE INDUSTRY ---
   - name: state_industry
@@ -834,6 +862,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=state_industry/frequency=*/year=*/"
@@ -841,6 +870,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- STATE WAGES ---
   - name: state_wages
@@ -895,6 +930,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=state_wages/frequency=*/year=*/"
@@ -902,6 +938,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
@@ -969,6 +1011,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=metro_industry/frequency=*/year=*/"
@@ -976,6 +1019,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- METRO WAGES ---
   - name: metro_wages
@@ -1033,6 +1082,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=metro_wages/frequency=*/year=*/"
@@ -1040,6 +1090,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- COUNTY QCEW ---
   - name: county_qcew
@@ -1103,6 +1159,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=county_qcew/frequency=*/year=*/"
@@ -1110,6 +1167,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- COUNTY WAGES ---
   - name: county_wages
@@ -1163,6 +1226,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=county_wages/frequency=*/year=*/"
@@ -1170,6 +1234,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
@@ -1247,6 +1317,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=jolts_regional/frequency=*/year=*/"
@@ -1254,6 +1325,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- JOLTS STATE ---
   - name: jolts_state
@@ -1327,6 +1404,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=jolts_state/frequency=*/year=*/"
@@ -1334,6 +1412,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- WAGE GROWTH ---
   - name: wage_growth
@@ -1417,6 +1501,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=wage_growth/frequency=*/year=*/"
@@ -1424,6 +1509,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
@@ -1515,6 +1606,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=regional/year=*/state_fips=*/"
@@ -1522,6 +1614,12 @@ partitionedTables:
         columns: [type, year, state_fips]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- TREASURY YIELDS ---
   - name: treasury_yields
@@ -1587,6 +1685,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=timeseries/frequency=daily/year=*/"
@@ -1594,6 +1693,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
@@ -1663,6 +1768,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=timeseries/frequency=daily/year=*/"
@@ -1670,6 +1776,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
@@ -1730,6 +1842,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=indicators/frequency=*/year=*/"
@@ -1737,6 +1850,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
@@ -1846,6 +1965,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=fred_indicators/series=*/year=*/"
@@ -1853,6 +1973,12 @@ partitionedTables:
         columns: [type, series, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
@@ -1976,6 +2102,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=national_accounts/frequency=*/year=*/tablename=*/"
@@ -1983,6 +2110,12 @@ partitionedTables:
         columns: [frequency, year, tablename]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REGIONAL INCOME ---
   - name: regional_income
@@ -2199,6 +2332,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/"
@@ -2206,6 +2340,12 @@ partitionedTables:
         columns: [year, geo_fips_set, tablename, line_code]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
     # Alternate partition layouts for optimized query patterns
     # Consolidated files use different partition keys within type=regional_income.
@@ -2406,6 +2546,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=indicators/frequency=*/year=*/indicator=*/"
@@ -2413,6 +2554,12 @@ partitionedTables:
         columns: [type, frequency, year, indicator]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- GDP STATISTICS ---
   - name: gdp_statistics
@@ -2475,6 +2622,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=indicators/frequency=*/year=*/"
@@ -2482,6 +2630,12 @@ partitionedTables:
         columns: [type, frequency, year]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- STATE GDP (View over regional_income) ---
   # Note: State GDP data is downloaded as part of regional_income (SAGDP* tables).
@@ -2617,6 +2771,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=indicators/frequency=*/year=*/industry=*/"
@@ -2624,6 +2779,12 @@ partitionedTables:
         columns: [type, frequency, year, industry]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE JOLTS INDUSTRIES ---
   - name: reference_jolts_industries
@@ -2661,6 +2822,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/"
@@ -2668,6 +2830,12 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: reference_jolts_dataelements
@@ -2708,6 +2876,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/"
@@ -2715,6 +2884,12 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: reference_bls_geographies
@@ -2768,6 +2943,7 @@ partitionedTables:
     # Materialization configuration (reference data)
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/geo_type=*/"
@@ -2775,6 +2951,12 @@ partitionedTables:
         columns: [type, geo_type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: reference_bls_naics_sectors
@@ -2802,6 +2984,7 @@ partitionedTables:
     # Materialization configuration (reference data)
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/"
@@ -2809,6 +2992,12 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE NIPA TABLES ---
   - name: reference_nipa_tables
@@ -2916,6 +3105,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/section=*/"
@@ -2923,6 +3113,12 @@ partitionedTables:
         columns: [type, section]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: reference_regional_linecodes
@@ -3091,6 +3287,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/tablename=*/"
@@ -3098,6 +3295,12 @@ partitionedTables:
         columns: [type, tablename]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
   # --- REFERENCE FRED SERIES ---
   - name: reference_fred_series
@@ -3225,6 +3428,7 @@ partitionedTables:
     # Materialization configuration
     materialize:
       enabled: true
+      format: iceberg
       output:
         location: "{baseDirectory}"
         pattern: "type=reference/category=*/frequency=*/source=*/status=*/"
@@ -3232,6 +3436,12 @@ partitionedTables:
         columns: [type, category, frequency, source, status]
       options:
         compression: snappy
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
 # ============================================================================
 # CONSTRAINTS

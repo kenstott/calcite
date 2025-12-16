@@ -94,7 +94,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    *
    * @param cacheDirectory Local directory for caching raw JSON data
    * @param cacheStorageProvider Provider for raw cache file operations
-   * @param storageProvider Provider for parquet file operations
+   * @param storageProvider Provider for output file operations
    */
   protected AbstractEconDataDownloader(String cacheDirectory, StorageProvider cacheStorageProvider, StorageProvider storageProvider, int startYear, int endYear) {
     this(cacheDirectory, cacheDirectory, cacheDirectory, cacheStorageProvider, storageProvider, null, startYear, endYear, null);
@@ -106,13 +106,13 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    *
    * @param cacheDirectory Local directory for caching raw JSON data
    * @param operatingDirectory Directory for storing operational metadata (.aperio/<schema>/)
-   * @param parquetDirectory Directory for storing parquet files (e.g., s3://govdata-parquet)
+   * @param parquetDirectory Directory for storing output files (e.g., s3://govdata-parquet)
    * @param cacheStorageProvider Provider for raw cache file operations
-   * @param storageProvider Provider for parquet file operations
+   * @param storageProvider Provider for output file operations
    * @param sharedManifest Shared cache manifest (if null, will load from operatingDirectory)
    * @param startYear Start year for data downloads (from model operands)
    * @param endYear End year for data downloads (from model operands)
-   * @param defaultParquetFilename Default filename for parquet files (null for default "data_0")
+   * @param defaultParquetFilename Default filename for output files (null for default "data_0")
    */
   public AbstractEconDataDownloader(String cacheDirectory, String operatingDirectory, String parquetDirectory,
       StorageProvider cacheStorageProvider,
@@ -273,7 +273,7 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
-   * Check if parquet file has been converted, with self-healing fallback to file existence.
+   * Check if output file has been converted, with self-healing fallback to file existence.
    * Uses centralized self-healing in DuckDBCacheStore to avoid code duplication.
    *
    * <p>This method supports optional partition parameters for tables with additional partitioning
@@ -281,15 +281,15 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
    *
    * @param cacheKey Cache key identifying this data
    * @param rawFilePath Full path to raw source file (JSON)
-   * @param parquetPath Full path to parquet file
+   * @param outputPath Full path to output file
    * @return true if parquet exists and is newer than raw file, false if conversion needed
    */
-  protected final boolean isParquetConvertedOrExists(CacheKey cacheKey, String rawFilePath, String parquetPath) {
+  protected final boolean isMaterializedOrExists(CacheKey cacheKey, String rawFilePath, String outputPath) {
     // Create a FileChecker that uses storageProvider for parquet and cacheStorageProvider for raw files
     DuckDBCacheStore.FileChecker fileChecker = path -> {
       try {
         // Determine which provider to use based on path
-        StorageProvider provider = path.equals(parquetPath) ? storageProvider : cacheStorageProvider;
+        StorageProvider provider = path.equals(outputPath) ? storageProvider : cacheStorageProvider;
         if (provider.exists(path)) {
           return provider.getMetadata(path).getLastModified();
         }
@@ -300,8 +300,8 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
     };
 
     // Delegate to centralized self-healing
-    return ((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
-        cacheKey, parquetPath, rawFilePath, fileChecker);
+    return ((CacheManifest) cacheManifest).isMaterializedWithSelfHealing(
+        cacheKey, outputPath, rawFilePath, fileChecker);
   }
 
 

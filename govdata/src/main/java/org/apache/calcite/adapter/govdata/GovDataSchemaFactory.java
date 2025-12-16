@@ -514,7 +514,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   /**
    * Register the EconRawToParquetConverter with the FileSchema after it's been created.
    * This allows ECON data sources (BLS, FRED, Treasury, BEA, World Bank) to properly
-   * register their parquet conversions in FileSchema's conversion registry.
+   * register their materializations in FileSchema's conversion registry.
    *
    * <p>When using executionEngine: "DUCKDB", the schema will be a DuckDBJdbcSchema
    * which wraps an internal FileSchema. This method extracts the internal FileSchema
@@ -578,7 +578,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     String fredApiKey = extractApiKey(operand, "fredApiKey", "FRED_API_KEY");
     String beaApiKey = extractApiKey(operand, "beaApiKey", "BEA_API_KEY");
 
-    // Get directory for parquet files
+    // Get directory for output files
     String directory = (String) operand.get("directory");
     if (directory == null) {
       directory = System.getenv("GOVDATA_PARQUET_DIR");
@@ -596,7 +596,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Create downloaders (lightweight - just configuration, no download occurs)
-    // Note: Pass null for config fields since these downloaders are only used for raw-to-parquet conversion registration
+    // Note: Pass null for config fields since these downloaders are only used for raw-to-materialization registration
     // Pass placeholder years (0, 0) since this instance is only for converter registration, not actual downloading
     BlsDataDownloader blsDownloader = blsApiKey != null
         ? new BlsDataDownloader(blsApiKey, econCacheDir, econOperatingDirectory, econParquetDir, cacheStorageProvider, storageProvider, cacheManifest, null, 0, 0)

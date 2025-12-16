@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  * thread-safe concurrent access. Replaces the previous JSON-based implementation.
  *
  * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
- * including ETag support, TTL-based expiration, and parquet conversion tracking.
+ * including ETag support, TTL-based expiration, and materialization tracking.
  */
 public class CacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CacheManifest.class);
@@ -120,15 +120,15 @@ public class CacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Check if parquet file has been converted for the given cache key.
+   * Check if output file has been converted for the given cache key.
    * This avoids expensive S3 exists checks on every run by tracking conversions in the manifest.
    *
    * @param cacheKey The cache key identifying the data
-   * @return true if parquet file exists and is up-to-date, false otherwise
+   * @return true if output file exists and is up-to-date, false otherwise
    */
   @Override
-  public boolean isParquetConverted(CacheKey cacheKey) {
-    boolean converted = store.isParquetConverted(cacheKey.asString());
+  public boolean isMaterialized(CacheKey cacheKey) {
+    boolean converted = store.isMaterialized(cacheKey.asString());
     // Use TRACE for per-item logging to avoid flooding DEBUG logs with 700K+ entries
     if (converted && LOGGER.isTraceEnabled()) {
       LOGGER.trace("Cached parquet, skipped conversion: {}", cacheKey.asString());
@@ -137,16 +137,16 @@ public class CacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Mark parquet file as converted for the given cache key.
-   * This is called after successful parquet conversion to avoid redundant conversions.
+   * Mark output file as converted for the given cache key.
+   * This is called after successful materialization to avoid redundant conversions.
    *
    * @param cacheKey The cache key identifying the data
-   * @param parquetPath Path to the converted parquet file
+   * @param outputPath Path to the converted output file
    */
   @Override
-  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
-    store.markParquetConverted(cacheKey.asString(), parquetPath);
-    LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), parquetPath);
+  public void markMaterialized(CacheKey cacheKey, String outputPath) {
+    store.markMaterialized(cacheKey.asString(), outputPath);
+    LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), outputPath);
   }
 
   /**
@@ -155,15 +155,15 @@ public class CacheManifest extends AbstractCacheManifest {
    * If file exists but not in manifest, updates manifest automatically.
    *
    * @param cacheKey Cache key to check
-   * @param parquetPath Path to parquet file
+   * @param outputPath Path to output file
    * @param rawFilePath Path to raw source file (for timestamp comparison), or null
    * @param fileChecker Function to check file existence and get modification time
    * @return true if parquet is converted (either in manifest or self-healed)
    */
-  public boolean isParquetConvertedWithSelfHealing(CacheKey cacheKey, String parquetPath,
+  public boolean isMaterializedWithSelfHealing(CacheKey cacheKey, String outputPath,
       String rawFilePath, DuckDBCacheStore.FileChecker fileChecker) {
-    return store.isParquetConvertedWithSelfHealing(
-        cacheKey.asString(), parquetPath, rawFilePath, fileChecker);
+    return store.isMaterializedWithSelfHealing(
+        cacheKey.asString(), outputPath, rawFilePath, fileChecker);
   }
 
   /**
@@ -267,9 +267,9 @@ public class CacheManifest extends AbstractCacheManifest {
               cacheEntry.refreshReason
           );
 
-          // Migrate parquet conversion status
-          if (cacheEntry.parquetConvertedAt > 0) {
-            store.markParquetConverted(cacheKey, cacheEntry.parquetPath);
+          // Migrate materialization status
+          if (cacheEntry.materializedAt > 0) {
+            store.markMaterialized(cacheKey, cacheEntry.outputPath);
           }
 
           migratedEntries++;
@@ -460,8 +460,8 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param tableName The table name prefix to check
    * @return true if all entries for this table have parquet_converted_at > 0
    */
-  public boolean areAllParquetConverted(String tableName) {
-    return store.areAllParquetConverted(tableName);
+  public boolean areAllMaterialized(String tableName) {
+    return store.areAllMaterialized(tableName);
   }
 
   /**
@@ -528,8 +528,8 @@ public class CacheManifest extends AbstractCacheManifest {
     public long refreshAfter;
     public String refreshReason;
     public String etag;
-    public String parquetPath;
-    public long parquetConvertedAt;
+    public String outputPath;
+    public long materializedAt;
     public String lastError;
     public int errorCount;
     public long lastAttemptAt;

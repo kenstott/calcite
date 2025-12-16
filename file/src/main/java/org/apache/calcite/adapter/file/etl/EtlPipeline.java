@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.slf4j.Logger;
@@ -28,15 +29,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Orchestrates ETL pipeline execution from HTTP sources to Parquet tables.
+ * Orchestrates ETL pipeline execution from HTTP sources to Iceberg or Parquet tables.
  *
  * <p>EtlPipeline coordinates the full ETL process:
  * <ol>
  *   <li>Dimension Expansion - Generate all dimension value combinations</li>
  *   <li>Data Fetching - Fetch data from HTTP source for each combination</li>
- *   <li>Materialization - Write to hive-partitioned Parquet files</li>
+ *   <li>Materialization - Write to Iceberg tables (default) or hive-partitioned Parquet</li>
  *   <li>Progress Reporting - Track and report pipeline progress</li>
  * </ol>
+ *
+ * <p>Output format is controlled by {@link MaterializeConfig.Format}:
+ * <ul>
+ *   <li>{@code ICEBERG} (default) - Uses {@link IcebergMaterializer} with atomic commits</li>
+ *   <li>{@code PARQUET} - Uses {@link HiveParquetWriter} for hive-partitioned files</li>
+ * </ul>
  *
  * <h3>Usage Example</h3>
  * <pre>{@code
@@ -73,6 +80,7 @@ public class EtlPipeline {
   private final StorageProvider storageProvider;
   private final String baseDirectory;
   private final ProgressListener progressListener;
+  private final IncrementalTracker incrementalTracker;
 
   /**
    * Creates a new ETL pipeline.
@@ -83,7 +91,7 @@ public class EtlPipeline {
    */
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory) {
-    this(config, storageProvider, baseDirectory, null);
+    this(config, storageProvider, baseDirectory, null, IncrementalTracker.NOOP);
   }
 
   /**
@@ -96,10 +104,26 @@ public class EtlPipeline {
    */
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory, ProgressListener progressListener) {
+    this(config, storageProvider, baseDirectory, progressListener, IncrementalTracker.NOOP);
+  }
+
+  /**
+   * Creates a new ETL pipeline with progress listener and incremental tracking.
+   *
+   * @param config Pipeline configuration
+   * @param storageProvider Storage provider for file operations
+   * @param baseDirectory Base directory for output
+   * @param progressListener Listener for progress updates
+   * @param incrementalTracker Tracker for incremental processing
+   */
+  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
+      String baseDirectory, ProgressListener progressListener,
+      IncrementalTracker incrementalTracker) {
     this.config = config;
     this.storageProvider = storageProvider;
     this.baseDirectory = baseDirectory;
     this.progressListener = progressListener;
+    this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
   }
 
   /**
@@ -120,6 +144,8 @@ public class EtlPipeline {
     int skippedBatches = 0;
     List<String> errors = new ArrayList<String>();
 
+    MaterializationWriter writer = null;
+
     try {
       // Phase 1: Expand dimensions
       LOGGER.info("Phase 1: Expanding dimensions for pipeline '{}'", pipelineName);
@@ -137,9 +163,16 @@ public class EtlPipeline {
       LOGGER.info("Phase 2: Creating HTTP source");
       HttpSource httpSource = new HttpSource(config.getSource());
 
-      // Phase 3: Create HiveParquetWriter
-      LOGGER.info("Phase 3: Creating Parquet writer");
-      HiveParquetWriter writer = new HiveParquetWriter(storageProvider, baseDirectory);
+      // Phase 3: Create and initialize materialization writer
+      MaterializeConfig materializeConfig = config.getMaterialize();
+      MaterializeConfig.Format format = materializeConfig != null
+          ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
+      LOGGER.info("Phase 3: Creating MaterializationWriter (format={})", format);
+
+      writer = MaterializationWriterFactory.createFromConfig(
+          materializeConfig, storageProvider, baseDirectory, incrementalTracker);
+      writer.initialize(materializeConfig);
+      LOGGER.info("Initialized {} writer", format);
 
       // Phase 4: Process each dimension combination
       LOGGER.info("Phase 4: Processing {} batches", totalBatches);
@@ -161,24 +194,16 @@ public class EtlPipeline {
           // Fetch data for this combination
           Iterator<Map<String, Object>> data = httpSource.fetch(variables);
 
-          // Count rows (this consumes the iterator)
-          List<Map<String, Object>> rowList = new ArrayList<Map<String, Object>>();
-          while (data.hasNext()) {
-            rowList.add(data.next());
-          }
-          int batchRows = rowList.size();
+          // Write batch through MaterializationWriter
+          long batchRows = writer.writeBatch(data, variables);
           totalRows += batchRows;
 
-          LOGGER.debug("Fetched {} rows for batch {}", batchRows, batchNum);
-
-          // Write to Parquet using HiveParquetWriter
-          // Note: For a full implementation, we would stream data to temp JSON
-          // and use materializeFromJson, but this shows the pipeline flow
+          LOGGER.debug("Wrote {} rows for batch {}", batchRows, batchNum);
 
           successfulBatches++;
 
           if (progressListener != null) {
-            progressListener.onBatchComplete(batchNum, totalBatches, batchRows, null);
+            progressListener.onBatchComplete(batchNum, totalBatches, (int) batchRows, null);
           }
 
         } catch (IOException e) {
@@ -216,7 +241,11 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("data_processing", successfulBatches);
       }
 
-      // Close HTTP source
+      // Phase 5: Commit writes
+      LOGGER.info("Phase 5: Committing writes");
+      writer.commit();
+
+      // Close resources
       httpSource.close();
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -250,6 +279,15 @@ public class EtlPipeline {
           .failed(true)
           .failureMessage(e.getMessage())
           .build();
+    } finally {
+      // Ensure writer is closed
+      if (writer != null) {
+        try {
+          writer.close();
+        } catch (IOException e) {
+          LOGGER.warn("Error closing writer: {}", e.getMessage());
+        }
+      }
     }
   }
 

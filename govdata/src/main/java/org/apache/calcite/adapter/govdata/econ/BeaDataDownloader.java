@@ -77,13 +77,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
         sharedManifest, startYear, endYear, null);
     this.parquetDir = parquetDir;
-    // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them
+    // Catalogs are loaded lazily from output files after downloadReferenceData() generates them
   }
 
   /**
-   * Ensures catalogs are loaded from parquet files.
+   * Ensures catalogs are loaded from output files.
    * Called lazily when catalog data is first needed.
-   * By this point, downloadReferenceData() should have already generated the parquet files.
+   * By this point, downloadReferenceData() should have already generated the output files.
    */
   private synchronized void ensureCatalogsLoaded() {
     if (catalogsLoaded) {
@@ -286,7 +286,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    *   <li>Expands dimensions (year, frequency, tablename) to generate all combinations</li>
    *   <li>Fetches data from BEA API for each combination</li>
    *   <li>Applies the BeaResponseTransformer hook for JSON response processing</li>
-   *   <li>Materializes results to hive-partitioned Parquet files</li>
+   *   <li>Materializes results to hive-partitioned Output files</li>
    * </ol>
    *
    * @return EtlResult containing execution statistics
@@ -495,7 +495,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createNationalAccountsDimensions(startYear, endYear, tableNames, frequencies),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Skip invalid table-frequency combinations
@@ -551,7 +551,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createNationalAccountsDimensions(startYear, endYear, tableNames, frequencies),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Skip invalid table-frequency combinations
           if (!isValidTableFrequency(vars.get("tablename"), vars.get("frequency"))) {
             return; // Skip this combination
@@ -562,7 +562,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
 
           // Mark as converted only if conversion succeeded
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           }
         },
         OperationType.CONVERSION);
@@ -759,8 +759,8 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
         if (success) {
           // Build cache key and mark as converted
           CacheKey cacheKey = new CacheKey(tableName, vars);
-          String parquetPath = resolveJsonPath(parquetPattern, vars);
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          String outputPath = resolveJsonPath(parquetPattern, vars);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
           converted++;
         } else {
           errors++;
@@ -859,14 +859,14 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       // Resolve paths using pattern
       String jsonPath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
-      String parquetPath =
+      String outputPath =
           storageProvider.resolvePath(parquetDir, resolveParquetPath(pattern, variables));
 
       Map<String, String> allParams = new HashMap<>(variables);
       allParams.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey(tableName, allParams);
 
-      if (isParquetConvertedOrExists(cacheKey, jsonPath, parquetPath)) {
+      if (isMaterializedOrExists(cacheKey, jsonPath, outputPath)) {
         skippedCount++;
         continue;
       }
@@ -874,7 +874,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       try {
         boolean converted = convertCachedJsonToParquet(tableName, variables);
         if (converted) {
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
           convertedCount++;
         }
       } catch (Exception e) {
@@ -932,7 +932,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createItaDataDimensions(tableName, startYear, endYear, itaIndicatorsList, frequencies),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Download to cache
@@ -965,13 +965,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createItaDataDimensions(tableName, startYear, endYear, itaIndicatorsList, frequencies),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Convert
           boolean converted = convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted only if conversion succeeded
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           }
         },
         OperationType.CONVERSION);
@@ -996,7 +996,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with metadata-only dimensions (no custom provider needed)
     iterateTableOperationsOptimized(
         tableName,
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = extractYear(vars);
 
           // Download to cache
@@ -1027,13 +1027,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with metadata-only dimensions (no custom provider needed)
     iterateTableOperationsOptimized(
         tableName,
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Convert
           boolean converted = convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted only if conversion succeeded
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           }
         },
         OperationType.CONVERSION);
@@ -1065,7 +1065,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
   public Map<String, Set<String>> loadNipaTableFrequencies() throws IOException {
     LOGGER.info("BEA reference: Loading NIPA frequency metadata from parquet catalog");
 
-    // Read from parquet files instead of JSON
+    // Read from output files instead of JSON
     // Pattern: type=reference/section=*/nipa_tables.parquet
     String parquetPattern = "type=reference/section=*/nipa_tables.parquet";
     String fullParquetPattern = storageProvider.resolvePath(parquetDirectory, parquetPattern);
@@ -1140,7 +1140,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     allParams.put("year", String.valueOf(year));
     CacheKey cacheKey = new CacheKey(tableName, allParams);
 
-    if (cacheManifest.isParquetConverted(cacheKey)) {
+    if (cacheManifest.isMaterialized(cacheKey)) {
       LOGGER.info("BEA reference: NIPA catalog already converted to parquet, skipping");
       return;
     }
@@ -1203,7 +1203,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     Map<String, String> convertParams = new HashMap<>(variables);
     convertParams.put("year", String.valueOf(year));
     CacheKey convertCacheKey = new CacheKey(tableName, convertParams);
-    cacheManifest.markParquetConverted(convertCacheKey, pattern);
+    cacheManifest.markMaterialized(convertCacheKey, pattern);
     cacheManifest.save(operatingDirectory);
   }
 
@@ -1247,7 +1247,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createRegionalLineCodeDimensions(tableNamesList),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Download to cache
           DownloadResult result = executeDownload(tableName, vars);
 
@@ -1281,7 +1281,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createRegionalLineCodeDimensions(tableNamesList),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           String regionalTableName = vars.get("tablename");
 
           // Check if JSON file has valid schema before conversion
@@ -1312,7 +1312,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
               LOGGER.info("BEA reference: Skipping conversion for {} - no valid linecodes data (no Key column)",
                   regionalTableName);
               // Mark as "converted" with null path to prevent repeated conversion attempts
-              cacheManifest.markParquetConverted(cacheKey, null);
+              cacheManifest.markMaterialized(cacheKey, null);
               return;
             }
           } catch (Exception connErr) {
@@ -1327,7 +1327,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
                 ImmutableMap.of(
                     "tableName", regionalTableName,
                     "jsonPath", jsonPath,
-                    "parquetPath", parquetPath));
+                    "outputPath", outputPath));
 
             try (Statement stmt = duckdb.createStatement()) {
               stmt.execute(enrichSql);
@@ -1379,13 +1379,13 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
           }
 
           // Mark as converted
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
         },
         OperationType.CONVERSION);
   }
 
   /**
-   * Load BEA Regional LineCode catalog from Parquet files using DuckDB.
+   * Load BEA Regional LineCode catalog from Output files using DuckDB.
    * Reads all reference_regional_linecodes partitions and builds a map of TableName to
    * valid LineCodes.
    *
@@ -1407,7 +1407,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     Map<String, Set<String>> catalogMap = new HashMap<>();
 
     try (Connection duckdb = getDuckDBConnection(storageProvider)) {
-      // Single query to read all parquet files and group LineCodes by TableName
+      // Single query to read all output files and group LineCodes by TableName
       String query =
           substituteSqlParameters(loadSqlResource("/sql/bea/load_regional_catalog.sql"),
           ImmutableMap.of("wildcardPath", fullWildcardPath));
@@ -2061,7 +2061,7 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
       } else if (operationType == OperationType.CONVERSION) {
         // Only convert if source JSON is cached AND parquet hasn't been converted
         // This prevents conversion attempts for entries that were never downloaded
-        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isMaterialized(cacheKey)) {
           uncached.add(combo);
         }
       }

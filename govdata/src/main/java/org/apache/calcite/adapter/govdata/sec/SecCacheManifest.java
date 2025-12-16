@@ -276,15 +276,15 @@ public class SecCacheManifest extends AbstractCacheManifest {
   }
 
   @Override
-  public boolean isParquetConverted(CacheKey cacheKey) {
+  public boolean isMaterialized(CacheKey cacheKey) {
     throw new UnsupportedOperationException(
-        "SEC schema tracks parquet conversion via filing-level state.");
+        "SEC schema tracks materialization via filing-level state.");
   }
 
   @Override
-  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
+  public void markMaterialized(CacheKey cacheKey, String outputPath) {
     throw new UnsupportedOperationException(
-        "SEC schema tracks parquet conversion via filing-level state.");
+        "SEC schema tracks materialization via filing-level state.");
   }
 
   @Override
