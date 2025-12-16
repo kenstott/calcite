@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -2870,21 +2871,28 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     List<String> geoTypes = Arrays.asList("state", "region", "metro");
     List<String> needsGeneration = new ArrayList<>();
 
+    // Create FileChecker for self-healing
+    DuckDBCacheStore.FileChecker fileChecker = path -> {
+      try {
+        if (storageProvider.exists(path)) {
+          return storageProvider.getMetadata(path).getLastModified();
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Error checking file existence: {}", e.getMessage());
+      }
+      return -1;
+    };
+
     for (String geoType : geoTypes) {
       Map<String, String> params = ImmutableMap.of("geo_type", geoType);
       CacheKey cacheKey = new CacheKey("reference_bls_geographies", params);
-
-      if (cacheManifest.isParquetConverted(cacheKey)) {
-        continue;  // Already in manifest
-      }
-
-      // Self-healing: check if file exists
       String resolvedPattern = resolveParquetPath(pattern, params);
       String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
-      if (storageProvider.exists(parquetPath)) {
-        LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", resolvedPattern);
-        cacheManifest.markParquetConverted(cacheKey, resolvedPattern);
-        continue;
+
+      // Use centralized self-healing check
+      if (((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
+          cacheKey, parquetPath, null, fileChecker)) {
+        continue;  // Already converted or self-healed
       }
 
       needsGeneration.add(geoType);
@@ -2969,19 +2977,26 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     String pattern = (String) metadata.get("pattern");
     String parquetPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
-    // Check manifest first (fast, no S3 check)
+    // Check manifest with self-healing fallback
     Map<String, String> params = ImmutableMap.of();
     CacheKey cacheKey = new CacheKey("reference_bls_naics_sectors", params);
 
-    if (cacheManifest.isParquetConverted(cacheKey)) {
-      LOGGER.debug("BLS NAICS sectors reference already in manifest, skipping");
-      return;
-    }
+    // Create FileChecker for self-healing
+    DuckDBCacheStore.FileChecker fileChecker = path -> {
+      try {
+        if (storageProvider.exists(path)) {
+          return storageProvider.getMetadata(path).getLastModified();
+        }
+      } catch (IOException e) {
+        LOGGER.debug("Error checking file existence: {}", e.getMessage());
+      }
+      return -1;
+    };
 
-    // Self-healing: manifest says not converted, check if file exists
-    if (storageProvider.exists(parquetPath)) {
-      LOGGER.info("Self-healing: Found existing parquet {}, added to manifest", pattern);
-      cacheManifest.markParquetConverted(cacheKey, pattern);
+    // Use centralized self-healing check
+    if (((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
+        cacheKey, parquetPath, null, fileChecker)) {
+      LOGGER.debug("BLS NAICS sectors reference already cached, skipping");
       return;
     }
 
