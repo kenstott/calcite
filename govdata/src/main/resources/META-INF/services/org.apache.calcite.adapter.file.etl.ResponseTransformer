@@ -1,0 +1,14 @@
+# ResponseTransformer implementations for government data APIs
+# These are discovered via Java SPI for use with the ETL pipeline
+
+# Economic data APIs
+org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer
+org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer
+org.apache.calcite.adapter.govdata.econ.FredResponseTransformer
+
+# SEC financial data APIs
+org.apache.calcite.adapter.govdata.sec.EdgarResponseTransformer
+org.apache.calcite.adapter.govdata.sec.AlphaVantageResponseTransformer
+
+# Census/Geo data APIs
+org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer
