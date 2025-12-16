@@ -21,28 +21,35 @@ package org.apache.calcite.adapter.govdata;
  *
  * <p>These operation types control cache manifest checking behavior:
  * <ul>
- *   <li>{@link #DOWNLOAD} - Downloads raw data (checks {@code cachedAt} timestamp)</li>
- *   <li>{@link #CONVERSION} - Converts cached data to Parquet (checks {@code parquetConvertedAt} timestamp)</li>
- *   <li>{@link #DOWNLOAD_AND_CONVERT} - Downloads and converts in single operation
- *       (checks both timestamps, updates both)</li>
+ *   <li>{@link #DOWNLOAD} - Downloads raw data (sourced check: {@code cachedAt} timestamp)</li>
+ *   <li>{@link #CONVERSION} - Materializes cached data to target format (materialized check: {@code materializedAt} timestamp)</li>
+ *   <li>{@link #DOWNLOAD_AND_CONVERT} - Downloads and materializes in single operation
+ *       (checks both sourced and materialized timestamps)</li>
+ * </ul>
+ *
+ * <p>The two-phase approach supports:
+ * <ul>
+ *   <li><b>Sourced check</b> - Do I have the raw source files cached?</li>
+ *   <li><b>Materialized check</b> - Have I converted them to the target format (Iceberg, Parquet, etc.)?</li>
  * </ul>
  */
 public enum OperationType {
   /**
    * Download operation - fetches raw data from remote source and caches it.
-   * Cache manifest checks {@code cachedAt} timestamp.
+   * Performs sourced check via {@code cachedAt} timestamp.
    */
   DOWNLOAD("download"),
 
   /**
-   * Conversion operation - converts cached raw data to Parquet format.
-   * Cache manifest checks {@code parquetConvertedAt} timestamp.
+   * Materialization operation - converts cached raw data to target output format.
+   * Performs materialized check via {@code materializedAt} timestamp.
+   * Target format is determined by MaterializeConfig (Iceberg, Parquet, Delta, etc.).
    */
   CONVERSION("conversion"),
 
   /**
-   * Combined download and conversion operation - fetches data and immediately converts to Parquet.
-   * Cache manifest checks both {@code cachedAt} and {@code parquetConvertedAt} timestamps.
+   * Combined download and materialization operation - fetches data and immediately converts to target format.
+   * Performs both sourced check ({@code cachedAt}) and materialized check ({@code materializedAt}).
    */
   DOWNLOAD_AND_CONVERT("download_and_convert");
 

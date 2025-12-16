@@ -314,13 +314,13 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     super(cacheDir, operatingDirectory, parquetDirectory, cacheStorageProvider, storageProvider, sharedManifest, startYear, endYear, null);
     this.apiKey = apiKey;
     this.enabledTables = enabledTables;
-    // Catalogs are loaded lazily from parquet files after downloadReferenceData() generates them
+    // Catalogs are loaded lazily from output files after downloadReferenceData() generates them
   }
 
   /**
-   * Ensures catalogs are loaded from parquet files.
+   * Ensures catalogs are loaded from output files.
    * Called lazily when catalog data is first needed.
-   * By this point, downloadReferenceData() should have already generated the parquet files.
+   * By this point, downloadReferenceData() should have already generated the output files.
    */
   private synchronized void ensureCatalogsLoaded() {
     if (catalogsLoaded) {
@@ -333,7 +333,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       LOGGER.info("Loaded BLS catalogs: {} regions, {} metros",
           regionCodesList.size(), metroGeographiesMap.size());
     } catch (Exception e) {
-      throw new RuntimeException("Failed to load BLS reference catalogs from parquet files. "
+      throw new RuntimeException("Failed to load BLS reference catalogs from output files. "
           + "This typically indicates the reference data hasn't been generated yet. "
           + "Ensure downloadReferenceData() is called before accessing catalog data. "
           + "Original error: " + e.getMessage(), e);
@@ -404,7 +404,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       JsonNode series = results.path("series");
 
       if (series.isMissingNode() || !series.isArray() || series.isEmpty()) {
-        // 404/No data - save anyway to create an empty parquet file
+        // 404/No data - save anyway to create an empty output file
         LOGGER.info("No data available for {} year {} - saving empty response", dataType, year);
       }
       // Has data - save normally
@@ -914,7 +914,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Convert each enabled table using IterationDimension pattern
     for (String tableName : tablesToConvert) {
       if (enabledTables == null || enabledTables.contains(tableName)) {
-        // metro_wages uses direct CSV→Parquet conversion (no intermediate JSON)
+        // metro_wages uses direct CSV→Materialization (no intermediate JSON)
         if (BLS.tableNames.metroWages.equals(tableName)) {
           convertMetroWagesAll();
           continue;
@@ -924,18 +924,18 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
         // only need fallback for dimensions not in metadata. Other tables use legacy provider.
         DimensionProvider dimensionProvider = getDimensionProvider(tableName);
 
-        // Other tables use JSON→Parquet conversion with DuckDB bulk cache filtering (10-20x faster)
+        // Other tables use JSON→Materialization with DuckDB bulk cache filtering (10-20x faster)
         iterateTableOperationsOptimized(
             tableName,
             dimensionProvider,
             null,  // No prefetch for conversion
-            (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+            (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
               // Execute conversion - only mark as converted if successful
               boolean converted = convertCachedJsonToParquet(tableName, vars);
 
               if (converted) {
                 // Mark as converted in manifest
-                cacheManifest.markParquetConverted(cacheKey, parquetPath);
+                cacheManifest.markMaterialized(cacheKey, outputPath);
               } else {
                 LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
                     tableName, cacheKey);
@@ -1079,7 +1079,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             }
           },
           // TABLE OPERATION - Convert cached JSON to parquet
-          (cacheKey, vars, jsonPath, parquetPath, helper) -> {
+          (cacheKey, vars, jsonPath, outputPath, helper) -> {
             String rawJson = helper.getJson(vars);
 
             if (rawJson != null) {
@@ -1131,7 +1131,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all regions for this year
@@ -1175,7 +1175,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Use optimized iteration with metadata-only dimensions
     iterateTableOperationsOptimized(
         tableName,
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch all metros for this year
@@ -1226,7 +1226,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year (with large series batching)
@@ -1268,7 +1268,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createMetadataDimensionProvider(tableName, (dim) -> null),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
 
@@ -1287,10 +1287,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse CSV and convert to Parquet using DuckDB
-          parseQcewForStateWages(fullZipPath, parquetPath, year, frequency);
+          parseQcewForStateWages(fullZipPath, outputPath, year, frequency);
 
           // Mark as converted in manifest
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
 
           LOGGER.info("Completed state wages for year {}", year);
         },
@@ -1326,7 +1326,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
 
@@ -1345,10 +1345,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse CSV and convert to Parquet using DuckDB
-          parseQcewForCountyWages(fullZipPath, parquetPath, year, frequency);
+          parseQcewForCountyWages(fullZipPath, outputPath, year, frequency);
 
           // Mark as converted in manifest
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
 
           LOGGER.info("Completed county wages for year {}", year);
         },
@@ -1390,7 +1390,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String frequency = vars.get("frequency");
 
@@ -1409,10 +1409,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           String fullZipPath = cacheStorageProvider.resolvePath(cacheDirectory, qcewZipPath);
 
           // Parse and convert to Parquet using DuckDB
-          parseAndConvertQcewToParquet(fullZipPath, parquetPath, year, frequency);
+          parseAndConvertQcewToParquet(fullZipPath, outputPath, year, frequency);
 
           // Mark as converted in manifest
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
 
           LOGGER.info("Completed county QCEW data for year {}", year);
         },
@@ -1451,7 +1451,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year (with large series batching)
@@ -1485,7 +1485,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * 27 major metropolitan areas from 1990 to present.
    *
    * @see #downloadQcewBulkFile(int, String) For ZIP download implementation
-   * @see #convertMetroWagesAll() For ZIP→Parquet conversion
+   * @see #convertMetroWagesAll() For ZIP→Materialization
    */
   public void downloadMetroWages() {
     LOGGER.debug("Processing QCEW bulk files for metro wages {}-{}", this.startYear, this.endYear);
@@ -1520,7 +1520,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * <ul>
    *   <li>Uses {@link #iterateTableOperationsOptimized} for efficient batch processing</li>
    *   <li>Checks cache manifest to skip already-converted years</li>
-   *   <li>Uses metadata-driven CSV→Parquet conversion via {@link #convertCsvToParquet}</li>
+   *   <li>Uses metadata-driven CSV→Materialization via {@link #convertCsvToParquet}</li>
    *   <li>Applies SQL filters to extract only the 27 major metro areas</li>
    *   <li>Maps QCEW area codes to publication codes and names via SQL CASE expressions</li>
    *   <li>Updates cache manifest after successful conversion</li>
@@ -1545,12 +1545,12 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
-          // Use metadata-driven CSV→Parquet conversion
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
+          // Use metadata-driven CSV→Materialization
           convertCsvToParquet(tableName, vars);
 
           // Mark as converted in manifest so isTableFullyCached() works on next run
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
           LOGGER.info("Completed metro wages for year {} {}", vars.get("year"), vars.get("frequency"));
         },
         OperationType.CONVERSION);
@@ -1680,7 +1680,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createMetadataDimensionProvider(tableName, (dim) -> null),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           String joltsRegionalJson = parseJoltsFtpForRegional(year);
@@ -1720,7 +1720,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createJoltsStateDimensions(),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Parse JOLTS FTP files for state data
@@ -1753,7 +1753,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
           return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Load FTP file metadata from schema
           Map<String, Object> metadata = loadTableMetadata(tableName);
           JsonNode sourcePaths = (JsonNode) metadata.get("sourcePaths");
@@ -1773,7 +1773,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           LOGGER.info("Parsed {} JOLTS industries from reference file", industries.size());
 
           // Convert directly to Parquet using DuckDB
-          convertListToParquet(industries, parquetPath, tableName);
+          convertListToParquet(industries, outputPath, tableName);
           LOGGER.info("Completed reference_jolts_industries");
         },
         OperationType.CONVERSION);
@@ -1831,7 +1831,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
           return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Load FTP file metadata from schema
           Map<String, Object> metadata = loadTableMetadata(tableName);
           JsonNode sourcePaths = (JsonNode) metadata.get("sourcePaths");
@@ -1851,7 +1851,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           LOGGER.info("Parsed {} JOLTS data elements from reference file", dataElements.size());
 
           // Convert directly to Parquet using DuckDB
-          convertListToParquet(dataElements, parquetPath, tableName);
+          convertListToParquet(dataElements, outputPath, tableName);
           LOGGER.info("Completed reference_jolts_dataelements");
         },
         OperationType.CONVERSION);
@@ -1879,7 +1879,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year
@@ -1915,7 +1915,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Batch fetch for this year
@@ -1934,7 +1934,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Downloads state-level LAUS (Local Area Unemployment Statistics) data for all 51 jurisdictions
    * (50 states + DC). Includes unemployment rate, employment level, unemployment level, and labor force.
    *
-   * <p>Data is partitioned by year and state_fips, with each state saved to a separate parquet file.
+   * <p>Data is partitioned by year and state_fips, with each state saved to a separate output file.
    * Uses DuckDB bulk cache filtering to eliminate redundant checks across 51 states × N years.
    *
    * <p>Optimized to batch up to 20 years per API call (per state), reducing total API calls from
@@ -1955,7 +1955,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
           String stateFips = vars.get("state_fips");
 
@@ -1999,7 +1999,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           // BLS returns: {Results: {series: [{seriesID: "...", data: [{year, period, value}, ...]}]}}
           // DuckDB will UNNEST the nested structure and apply expression columns
           List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
-          String sql = buildNestedJsonConversionSql(columns, jsonPath, parquetPath, stateFips);
+          String sql = buildNestedJsonConversionSql(columns, jsonPath, outputPath, stateFips);
 
           // Execute conversion
           executeDuckDBSql(sql, String.format("Regional employment conversion for state_fips %s year %d", stateFips, year));
@@ -2039,14 +2039,14 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    *
    * @param columns Schema columns with expression definitions
    * @param jsonPath Input JSON file path
-   * @param parquetPath Output Parquet file path
+   * @param outputPath Output Output file path
    * @param stateFips State FIPS code to substitute in expressions
    * @return DuckDB SQL COPY statement
    */
   private String buildNestedJsonConversionSql(
       List<PartitionedTableConfig.TableColumn> columns,
       String jsonPath,
-      String parquetPath,
+      String outputPath,
       String stateFips) {
 
     // Build column expressions
@@ -2089,7 +2089,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     return sqlTemplate
         .replace("{column_expressions}", columnExpressions.toString())
         .replace("{json_path}", jsonPath)
-        .replace("{parquet_path}", parquetPath);
+        .replace("{parquet_path}", outputPath);
   }
 
   /**
@@ -2138,7 +2138,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Reads CSV directly from ZIP archive without extraction.
    *
    * @param fullZipPath Full path to ZIP file containing QCEW CSV
-   * @param fullParquetPath Output Parquet file path
+   * @param fullParquetPath Output Output file path
    * @param year Year (used to determine CSV filename inside ZIP)
    * @throws IOException if conversion fails
    */
@@ -2171,7 +2171,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             "zipPath", fullZipPath,
             "csvFilename", csvFilename,
             "stateFipsPath", stateFipsJsonPath,
-            "parquetPath", fullParquetPath));
+            "outputPath", fullParquetPath));
 
     // Execute the SQL
     try (Connection conn = getDuckDBConnection(storageProvider);
@@ -2179,7 +2179,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       stmt.execute(sql);
       LOGGER.info("Successfully converted QCEW data to Parquet: {}", fullParquetPath);
     } catch (SQLException e) {
-      throw new IOException("QCEW county CSV to Parquet conversion failed: " + e.getMessage(), e);
+      throw new IOException("QCEW county CSV to Materialization failed: " + e.getMessage(), e);
     }
   }
 
@@ -2240,7 +2240,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * industry_code = 10 (total all industries).
    *
    * @param fullZipPath Full path to cached ZIP file containing CSV
-   * @param fullParquetPath Full path for the output Parquet file
+   * @param fullParquetPath Full path for the output Output file
    * @param year Year of data
    * @throws IOException if conversion fails
    */
@@ -2271,7 +2271,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             "zipPath", fullZipPath,
             "csvFilename", csvFilename,
             "stateFipsPath", stateFipsJsonPath,
-            "parquetPath", fullParquetPath));
+            "outputPath", fullParquetPath));
 
     // Execute the SQL
     try (Connection conn = getDuckDBConnection(storageProvider);
@@ -2279,7 +2279,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       stmt.execute(sql);
       LOGGER.info("Successfully converted state wages to Parquet: {}", fullParquetPath);
     } catch (SQLException e) {
-      throw new IOException("QCEW state wages CSV to Parquet conversion failed: " + e.getMessage(), e);
+      throw new IOException("QCEW state wages CSV to Materialization failed: " + e.getMessage(), e);
     }
   }
 
@@ -2289,7 +2289,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
    * Most granular wage data available (~6,038 counties).
    *
    * @param fullZipPath Full path to cached ZIP file containing CSV
-   * @param fullParquetPath Full path for the output Parquet file
+   * @param fullParquetPath Full path for the output Output file
    * @param year Year of data
    * @throws IOException if conversion fails
    */
@@ -2320,7 +2320,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             "zipPath", fullZipPath,
             "csvFilename", csvFilename,
             "stateFipsPath", stateFipsJsonPath,
-            "parquetPath", fullParquetPath));
+            "outputPath", fullParquetPath));
 
     // Execute the SQL
     try (Connection conn = getDuckDBConnection(storageProvider);
@@ -2328,7 +2328,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       stmt.execute(sql);
       LOGGER.info("Successfully converted county wages to Parquet: {}", fullParquetPath);
     } catch (SQLException e) {
-      throw new IOException("QCEW county wages CSV to Parquet conversion failed: " + e.getMessage(), e);
+      throw new IOException("QCEW county wages CSV to Materialization failed: " + e.getMessage(), e);
     }
   }
 
@@ -2843,10 +2843,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
   @Override public void downloadReferenceData() throws IOException {
     LOGGER.debug("Processing BLS reference tables");
 
-    // Download and convert JOLTS industries (now handles Parquet conversion internally)
+    // Download and convert JOLTS industries (now handles Materialization internally)
     downloadJoltsIndustries();
 
-    // Download and convert JOLTS data elements (now handles Parquet conversion internally)
+    // Download and convert JOLTS data elements (now handles Materialization internally)
     downloadJoltsDataelements();
 
     // Generate BLS geographies reference table from hardcoded maps
@@ -2887,11 +2887,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
       Map<String, String> params = ImmutableMap.of("geo_type", geoType);
       CacheKey cacheKey = new CacheKey("reference_bls_geographies", params);
       String resolvedPattern = resolveParquetPath(pattern, params);
-      String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
+      String outputPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
       // Use centralized self-healing check
-      if (((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
-          cacheKey, parquetPath, null, fileChecker)) {
+      if (((CacheManifest) cacheManifest).isMaterializedWithSelfHealing(
+          cacheKey, outputPath, null, fileChecker)) {
         continue;  // Already converted or self-healed
       }
 
@@ -2925,17 +2925,17 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           stmt.execute(loadSql);
         }
 
-        // Write partitioned parquet files only for geo_types that need generation
+        // Write partitioned output files only for geo_types that need generation
         for (String geoType : needsGeneration) {
           // Resolve path from schema pattern
           Map<String, String> params = ImmutableMap.of("geo_type", geoType);
           String resolvedPattern = resolveParquetPath(pattern, params);
-          String parquetPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
+          String outputPath = storageProvider.resolvePath(parquetDirectory, resolvedPattern);
 
-          // Generate parquet file for this geo_type using direct substitution (COPY TO requires literal paths)
+          // Generate output file for this geo_type using direct substitution (COPY TO requires literal paths)
           String generateSql =
               substituteSqlParameters(loadSqlResource("/sql/bls/generate_geographies.sql"),
-              ImmutableMap.of("geoType", geoType, "parquetPath", parquetPath));
+              ImmutableMap.of("geoType", geoType, "outputPath", outputPath));
           try (java.sql.Statement stmt = duckdb.createStatement()) {
             stmt.execute(generateSql);
           }
@@ -2952,11 +2952,11 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
             }
           }
 
-          LOGGER.info("Generated {} BLS {} geographies to {}", count, geoType, parquetPath);
+          LOGGER.info("Generated {} BLS {} geographies to {}", count, geoType, outputPath);
 
           // Mark as converted in manifest
           CacheKey cacheKey = new CacheKey("reference_bls_geographies", params);
-          cacheManifest.markParquetConverted(cacheKey, resolvedPattern);
+          cacheManifest.markMaterialized(cacheKey, resolvedPattern);
         }
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS geographies reference table: " + e.getMessage(), e);
@@ -2975,7 +2975,7 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     // Load pattern from schema
     Map<String, Object> metadata = loadTableMetadata("reference_bls_naics_sectors");
     String pattern = (String) metadata.get("pattern");
-    String parquetPath = storageProvider.resolvePath(parquetDirectory, pattern);
+    String outputPath = storageProvider.resolvePath(parquetDirectory, pattern);
 
     // Check manifest with self-healing fallback
     Map<String, String> params = ImmutableMap.of();
@@ -2994,8 +2994,8 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
     };
 
     // Use centralized self-healing check
-    if (((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
-        cacheKey, parquetPath, null, fileChecker)) {
+    if (((CacheManifest) cacheManifest).isMaterializedWithSelfHealing(
+        cacheKey, outputPath, null, fileChecker)) {
       LOGGER.debug("BLS NAICS sectors reference already cached, skipping");
       return;
     }
@@ -3014,10 +3014,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           stmt.execute(loadSql);
         }
 
-        // Generate parquet file using direct substitution (COPY TO requires literal paths)
+        // Generate output file using direct substitution (COPY TO requires literal paths)
         String generateSql =
             substituteSqlParameters(loadSqlResource("/sql/bls/generate_naics_sectors.sql"),
-            ImmutableMap.of("parquetPath", parquetPath));
+            ImmutableMap.of("outputPath", outputPath));
         try (java.sql.Statement stmt = duckdb.createStatement()) {
           stmt.execute(generateSql);
         }
@@ -3031,10 +3031,10 @@ public class BlsDataDownloader extends AbstractEconDataDownloader {
           }
         }
 
-        LOGGER.info("Generated {} NAICS supersectors to {}", count, parquetPath);
+        LOGGER.info("Generated {} NAICS supersectors to {}", count, outputPath);
 
         // Mark as converted in manifest
-        cacheManifest.markParquetConverted(cacheKey, parquetPath);
+        cacheManifest.markMaterialized(cacheKey, outputPath);
     } catch (SQLException e) {
       throw new IOException("Failed to generate BLS NAICS sectors reference table: " + e.getMessage(), e);
     }

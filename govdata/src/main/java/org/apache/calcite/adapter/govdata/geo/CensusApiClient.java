@@ -205,7 +205,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
     List<String> dataTypes = java.util.Arrays.asList(censusDataTypes);
 
     // Use optimized iteration with DuckDB cache filtering (10-20x faster)
-    // Note: For conversion operations, the optimized version checks cacheManifest.isParquetConverted()
+    // Note: For conversion operations, the optimized version checks cacheManifest.isMaterialized()
     iterateTableOperationsOptimized(
         getTableName(),
         (dimensionName) -> {
@@ -216,7 +216,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
             default: return null;
           }
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Convert JSON to Parquet using DuckDB
@@ -224,13 +224,13 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
           convertCensusDataToParquet(dataType, year, vars);
 
           if (cacheManifest != null) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
             cacheManifest.save(operatingDirectory);
           }
         },
         OperationType.CONVERSION);
 
-    LOGGER.info("Census JSON to Parquet conversion completed for years {} to {}", startYear, endYear);
+    LOGGER.info("Census JSON to Materialization completed for years {} to {}", startYear, endYear);
   }
 
   /**
@@ -269,7 +269,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       }
 
       // Build parquet target path
-      String parquetPath =
+      String outputPath =
           storageProvider.resolvePath(parquetDirectory, "type=acs/year=" + year + "/" + dataType + ".parquet");
 
       // Load column definitions from census-schema.json
@@ -289,7 +289,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
             columns,
             "null",  // Missing value indicator
             firstJsonFile,
-            parquetPath,
+            outputPath,
             null);  // No dataPath for Census data (not nested)
 
         LOGGER.info("Successfully converted Census {} data for year {} to Parquet", dataType, year);
@@ -297,7 +297,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
 
     } catch (Exception e) {
       LOGGER.error("Failed to convert Census {} data for year {}: {}", dataType, year, e.getMessage(), e);
-      throw new RuntimeException("Census parquet conversion failed for " + dataType, e);
+      throw new RuntimeException("Census materialization failed for " + dataType, e);
     }
   }
 

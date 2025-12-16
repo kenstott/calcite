@@ -166,7 +166,7 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createFredDimensions(tableName, startYear, endYear, seriesIds),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Download to cache
@@ -213,13 +213,13 @@ public class FredDataDownloader extends AbstractEconDataDownloader {
     iterateTableOperationsOptimized(
         tableName,
         createFredDimensions(tableName, startYear, endYear, seriesIds),
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Execute conversion
           boolean converted = convertCachedJsonToParquet(tableName, vars);
 
           // Mark as converted in manifest only if conversion succeeded
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           }
         },
         OperationType.CONVERSION);

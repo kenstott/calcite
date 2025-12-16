@@ -84,7 +84,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           }
           return null; // No additional dimensions beyond year
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Use executeDownload which reads URL pattern from schema
@@ -118,7 +118,7 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           }
           return null; // No additional dimensions beyond year
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           int year = Integer.parseInt(vars.get("year"));
 
           // Use executeDownload which reads URL pattern from schema
@@ -149,12 +149,12 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           }
           return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Execute conversion - only mark as converted if successful
           boolean converted = convertCachedJsonToParquet(tableName, vars);
 
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           } else {
             LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
                 tableName, cacheKey);
@@ -182,12 +182,12 @@ public class TreasuryDataDownloader extends AbstractEconDataDownloader {
           }
           return null;
         },
-        (cacheKey, vars, jsonPath, parquetPath, prefetchHelper) -> {
+        (cacheKey, vars, jsonPath, outputPath, prefetchHelper) -> {
           // Execute conversion - only mark as converted if successful
           boolean converted = convertCachedJsonToParquet(tableName, vars);
 
           if (converted) {
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
+            cacheManifest.markMaterialized(cacheKey, outputPath);
           } else {
             LOGGER.warn("Conversion failed for {} ({}), not marking as converted",
                 tableName, cacheKey);

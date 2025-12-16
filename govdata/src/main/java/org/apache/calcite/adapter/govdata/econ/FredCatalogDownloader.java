@@ -126,7 +126,7 @@ public class FredCatalogDownloader {
 
   /**
    * Download comprehensive FRED series catalog directly into partitioned files.
-   * Creates individual JSON/Parquet files for each category/frequency/source combination.
+   * Creates individual JSON/Output files for each category/frequency/source combination.
    */
   public void downloadCatalog() throws IOException {
     LOGGER.info("Starting FRED catalog download with direct partitioning");
@@ -695,7 +695,7 @@ public class FredCatalogDownloader {
         "/status=" + seriesStatus +
         "/reference_fred_series.parquet";
 
-    // Check if parquet file already converted using manifest (avoids expensive S3 exists check)
+    // Check if output file already converted using manifest (avoids expensive S3 exists check)
     Map<String, String> partitionParams = new HashMap<>();
     partitionParams.put("category", categoryName);
     partitionParams.put("frequency", frequency);
@@ -704,8 +704,8 @@ public class FredCatalogDownloader {
     partitionParams.put("year", "0");
     CacheKey cacheKey = new CacheKey("catalog", partitionParams);
 
-    if (cacheManifest.isParquetConverted(cacheKey)) {
-      LOGGER.debug("Parquet file already converted (manifest), skipping partition {}/{}/{}/{}", categoryName, frequency, sourceName, seriesStatus);
+    if (cacheManifest.isMaterialized(cacheKey)) {
+      LOGGER.debug("Output file already converted (manifest), skipping partition {}/{}/{}/{}", categoryName, frequency, sourceName, seriesStatus);
       return;
     }
 
@@ -746,14 +746,14 @@ public class FredCatalogDownloader {
       transformedSeries.add(transformed);
     }
 
-    // Write Parquet file using StorageProvider (parquetFile already constructed above)
+    // Write Output file using StorageProvider (parquetFile already constructed above)
     writeParquetWithStorageProvider(parquetFile, transformedSeries);
 
     // Mark as converted in manifest to avoid expensive S3 exists checks on subsequent runs
     // Note: Manifest will be saved centrally by EconSchemaFactory after all conversions complete
-    cacheManifest.markParquetConverted(cacheKey, parquetFile);
+    cacheManifest.markMaterialized(cacheKey, parquetFile);
 
-    LOGGER.debug("Created Parquet file for partition {}/{}/{}/{}: {} series",
+    LOGGER.debug("Created Output file for partition {}/{}/{}/{}: {} series",
         categoryName, frequency, sourceName, seriesStatus, transformedSeries.size());
 
     // FileSchema's conversion registry automatically tracks this conversion
@@ -772,7 +772,7 @@ public class FredCatalogDownloader {
 
 
   /**
-   * Write Parquet file using StorageProvider.
+   * Write Output file using StorageProvider.
    */
   private void writeParquetWithStorageProvider(String parquetFile, List<Map<String, Object>> transformedSeries) throws IOException {
     // Load column metadata and write parquet

@@ -66,7 +66,7 @@ public abstract class AbstractGovDataDownloader {
   protected static final int DEFAULT_API_ERROR_RETRY_DAYS = 7;
 
   /**
-   * Functional interface for transforming records during JSON to Parquet conversion.
+   * Functional interface for transforming records during JSON to Materialization.
    *
    * <p>Allows per-record transformations such as:
    * <ul>
@@ -106,7 +106,7 @@ public abstract class AbstractGovDataDownloader {
    */
   @FunctionalInterface
   public interface TableOperation {
-    void execute(CacheKey cacheKey, Map<String, String> vars, String jsonPath, String parquetPath,
+    void execute(CacheKey cacheKey, Map<String, String> vars, String jsonPath, String outputPath,
                  PrefetchHelper prefetchHelper) throws Exception;
   }
 
@@ -465,11 +465,11 @@ public abstract class AbstractGovDataDownloader {
   protected final String cacheDirectory;
   /** Operating directory for storing operational metadata (e.g., .aperio/<schema>/) */
   protected final String operatingDirectory;
-  /** Parquet directory for storing converted parquet files */
+  /** Parquet directory for storing converted output files */
   protected final String parquetDirectory;
   /** Storage provider for reading/writing raw cache files (JSON, CSV, XML) */
   protected final StorageProvider cacheStorageProvider;
-  /** Storage provider for reading/writing parquet files (supports local and S3) */
+  /** Storage provider for reading/writing output files (supports local and S3) */
   protected final StorageProvider storageProvider;
   /** Schema resource name (e.g., "/econ/econ-schema.json", "/geo/geo-schema.json") */
   protected final String schemaResourceName;
@@ -501,7 +501,7 @@ public abstract class AbstractGovDataDownloader {
   /** End year for data downloads (from model operands) */
   protected final int endYear;
 
-  /** Default filename for parquet files when pattern uses wildcard (from model operands) */
+  /** Default filename for output files when pattern uses wildcard (from model operands) */
   protected final String defaultParquetFilename;
 
   protected AbstractGovDataDownloader(
@@ -605,7 +605,7 @@ public abstract class AbstractGovDataDownloader {
    *
    * <p>Implementations should:
    * <ul>
-   *   <li>Check if conversion already done (skip if parquet files exist and are up-to-date)</li>
+   *   <li>Check if conversion already done (skip if output files exist and are up-to-date)</li>
    *   <li>Apply any transformations, enrichments, or schema mappings</li>
    *   <li>Mark successfully converted data in cache manifest</li>
    *   <li>Log progress (converted/skipped counts)</li>
@@ -1129,7 +1129,7 @@ public abstract class AbstractGovDataDownloader {
    *
    * @param pattern The pattern from schema JSON (e.g., "type=fred/year=&#42;/fred.parquet")
    * @param variables Map of partition key to value (e.g., {year: "2020", frequency: "monthly"})
-   * @return Relative path to Parquet file with wildcards replaced
+   * @return Relative path to Output file with wildcards replaced
    * @throws IllegalArgumentException if required variables are missing or pattern is invalid
    */
   protected String resolveParquetPath(String pattern, Map<String, String> variables) {
@@ -1198,11 +1198,11 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Returns the default filename to use when writing parquet files.
+   * Returns the default filename to use when writing output files.
    * This matches the naming convention used by DuckDB's PARTITION_BY.
    * Can be configured via model operand "defaultParquetFilename".
    *
-   * @return Default parquet filename without extension (default: "data_0")
+   * @return Default output filename without extension (default: "data_0")
    */
   protected String getDefaultParquetFilename() {
     return defaultParquetFilename;
@@ -2173,14 +2173,14 @@ public abstract class AbstractGovDataDownloader {
    * @param columns Column definitions from schema
    * @param missingValueIndicator String that represents NULL (e.g., ".", "-", or null if none)
    * @param jsonPath Input JSON file path
-   * @param parquetPath Output Parquet file path
+   * @param outputPath Output Output file path
    * @return Complete DuckDB SQL statement ready for execution
    */
   public static String buildDuckDBConversionSql(
       List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
       String missingValueIndicator,
       String jsonPath,
-      String parquetPath,
+      String outputPath,
       String dataPath) {
     StringBuilder sql = new StringBuilder();
 
@@ -2297,7 +2297,7 @@ public abstract class AbstractGovDataDownloader {
     }
 
     sql.append("\n) TO ");
-    sql.append(quoteLiteral(parquetPath));
+    sql.append(quoteLiteral(outputPath));
     sql.append(" (FORMAT PARQUET);");
 
     return sql.toString();
@@ -2499,7 +2499,7 @@ public abstract class AbstractGovDataDownloader {
    * Configures S3 access credentials for DuckDB connection.
    *
    * <p>Credentials are obtained from the StorageProvider's S3 config if available.
-   * This allows DuckDB to read parquet files directly from S3.</p>
+   * This allows DuckDB to read output files directly from S3.</p>
    *
    * @param conn DuckDB connection to configure
    * @param storageProvider Storage provider to get S3 config from (may be null)
@@ -2703,7 +2703,7 @@ public abstract class AbstractGovDataDownloader {
    * @param tableName Name of table (for logging)
    * @param columns Column definitions from schema
    * @param records List of data rows as maps
-   * @param fullParquetPath Absolute path to output Parquet file
+   * @param fullParquetPath Absolute path to output Output file
    * @throws IOException if conversion fails
    */
   protected void convertInMemoryToParquetViaDuckDB(
@@ -2780,7 +2780,7 @@ public abstract class AbstractGovDataDownloader {
    * @param columns Column definitions from schema
    * @param missingValueIndicator String that represents NULL (e.g., ".")
    * @param fullJsonPath Absolute path to input JSON file
-   * @param fullParquetPath Absolute path to output Parquet file
+   * @param fullParquetPath Absolute path to output Output file
    * @throws IOException if conversion fails
    */
   protected void convertCachedJsonToParquetViaDuckDB(
@@ -2829,11 +2829,11 @@ public abstract class AbstractGovDataDownloader {
    * </ul>
    *
    * @param rows List of data rows as maps
-   * @param parquetPath Full path to output Parquet file
+   * @param outputPath Full path to output Output file
    * @param tableName Table name for loading column metadata
    * @throws IOException if conversion fails or column metadata is missing
    */
-  protected void convertListToParquet(List<Map<String, Object>> rows, String parquetPath, String tableName)
+  protected void convertListToParquet(List<Map<String, Object>> rows, String outputPath, String tableName)
       throws IOException {
 
     if (rows == null || rows.isEmpty()) {
@@ -2885,10 +2885,10 @@ public abstract class AbstractGovDataDownloader {
       // Export to Parquet
       String exportSql =
           String.format("COPY (SELECT * FROM temp_data) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY')",
-          parquetPath.replace("'", "''"));
+          outputPath.replace("'", "''"));
       stmt.execute(exportSql);
 
-      LOGGER.info("Converted {} rows to Parquet: {}", rows.size(), parquetPath);
+      LOGGER.info("Converted {} rows to Parquet: {}", rows.size(), outputPath);
 
     } catch (java.sql.SQLException e) {
       String errorMsg =
@@ -2945,13 +2945,13 @@ public abstract class AbstractGovDataDownloader {
    *
    * <p>This is a generic helper for executing DuckDB operations including:
    * <ul>
-   *   <li>CSV→Parquet conversions via COPY (SELECT ... FROM read_csv()) TO ... </li>
+   *   <li>CSV→Materializations via COPY (SELECT ... FROM read_csv()) TO ... </li>
    *   <li>Custom data transformations with SQL expressions</li>
    *   <li>Multi-source JOINs with reference data</li>
    * </ul>
    *
    * @param sql DuckDB SQL statement to execute
-   * @param operationDescription Brief description for logging (e.g., "CSV to Parquet conversion")
+   * @param operationDescription Brief description for logging (e.g., "CSV to Materialization")
    * @throws IOException if SQL execution fails
    */
   protected void executeDuckDBSql(String sql, String operationDescription) throws IOException {
@@ -2980,7 +2980,7 @@ public abstract class AbstractGovDataDownloader {
   /**
    * Converts CSV data (potentially inside ZIP archives) to Parquet format using metadata-driven configuration.
    *
-   * <p>This method supports direct CSV→Parquet conversion without intermediate JSON files,
+   * <p>This method supports direct CSV→Materialization without intermediate JSON files,
    * leveraging DuckDB's zipfs extension to read compressed files and apply SQL filters.
    *
    * <h3>Metadata Configuration</h3>
@@ -3081,7 +3081,7 @@ public abstract class AbstractGovDataDownloader {
     // Load column metadata
     List<PartitionedTableConfig.TableColumn> columns = loadTableColumnsFromMetadata(tableName);
 
-    // Build SQL for CSV→Parquet conversion
+    // Build SQL for CSV→Materialization
     String sql =
         buildCsvToParquetSql(tableName,
         fullSourcePath,
@@ -3091,19 +3091,19 @@ public abstract class AbstractGovDataDownloader {
         csvConversionNode);
 
     // Execute conversion
-    executeDuckDBSql(sql, "CSV to Parquet conversion for " + tableName);
+    executeDuckDBSql(sql, "CSV to Materialization for " + tableName);
 
     // Verify file was written
     if (storageProvider.exists(fullParquetPath)) {
       LOGGER.info("Successfully converted {} to Parquet: {}", tableName, fullParquetPath);
     } else {
-      LOGGER.error("Parquet file not found after conversion: {}", fullParquetPath);
-      throw new IOException("Parquet file not found after write: " + fullParquetPath);
+      LOGGER.error("Output file not found after conversion: {}", fullParquetPath);
+      throw new IOException("Output file not found after write: " + fullParquetPath);
     }
   }
 
   /**
-   * Builds DuckDB SQL for CSV→Parquet conversion with filters and column mappings.
+   * Builds DuckDB SQL for CSV→Materialization with filters and column mappings.
    *
    * <p>Column handling:
    * <ul>
@@ -3306,8 +3306,8 @@ public abstract class AbstractGovDataDownloader {
       // not for reading from cache.
     }
 
-    // Use DuckDB for JSON→Parquet conversion with expression columns
-    LOGGER.info("Using DuckDB for JSON to Parquet conversion with expression columns");
+    // Use DuckDB for JSON→Materialization with expression columns
+    LOGGER.info("Using DuckDB for JSON to Materialization with expression columns");
     convertCachedJsonToParquetViaDuckDB(tableName, columns, missingValueIndicator,
         fullJsonPath, fullParquetPath, dataPath);
 
@@ -3316,8 +3316,8 @@ public abstract class AbstractGovDataDownloader {
       LOGGER.info("Successfully converted {} to Parquet: {}", tableName, fullParquetPath);
       return true;
     } else {
-      LOGGER.error("Parquet file not found after DuckDB conversion: {}", fullParquetPath);
-      throw new IOException("Parquet file not found after write: " + fullParquetPath);
+      LOGGER.error("Output file not found after DuckDB conversion: {}", fullParquetPath);
+      throw new IOException("Output file not found after write: " + fullParquetPath);
     }
   }
 
@@ -3383,7 +3383,7 @@ public abstract class AbstractGovDataDownloader {
   }
 
   /**
-   * Reorganizes all tables with alternate_partitions into reorganized parquet files.
+   * Reorganizes all tables with alternate_partitions into reorganized output files.
    *
    * <p>This method:
    * <ul>
@@ -4360,7 +4360,7 @@ public abstract class AbstractGovDataDownloader {
           && !econManifest.hasTableErrors(tableName)) {
         // For both operations: if parquet exists, we can skip entirely
         // (parquet implies download was also successful)
-        if (econManifest.areAllParquetConverted(tableName)) {
+        if (econManifest.areAllMaterialized(tableName)) {
           LOGGER.info("Table {} is complete with {} combinations - skipping {} (signature: {})",
               tableName, totalOperations, operationType.getValue(), dimensionSignature);
           return;
@@ -4477,7 +4477,7 @@ public abstract class AbstractGovDataDownloader {
             LOGGER.info("Self-healing: Found existing parquet in S3, skipping conversion: {}",
                 relativeParquetPath);
             // Mark as converted in manifest so we don't check again
-            cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+            cacheManifest.markMaterialized(cacheKey, relativeParquetPath);
             skipped++;
             continue;
           } else {
@@ -4589,7 +4589,7 @@ public abstract class AbstractGovDataDownloader {
         if (OperationType.CONVERSION.equals(operationType)) {
           // Verify parquet was created before marking - prevents false positives when source is missing
           if (storageProvider.exists(fullParquetPath)) {
-            cacheManifest.markParquetConverted(cacheKey, relativeParquetPath);
+            cacheManifest.markMaterialized(cacheKey, relativeParquetPath);
           } else {
             LOGGER.debug("Conversion completed but parquet not created (missing source?): {}",
                 relativeParquetPath);

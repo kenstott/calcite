@@ -582,7 +582,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
       params.put("year", String.valueOf(year));
       org.apache.calcite.adapter.govdata.CacheKey cacheKey =
           new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
         return;
       }
@@ -590,7 +590,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
     // Defensive check if file already exists (for backfill/legacy data)
     if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target output file already exists, skipping: {}", targetFilePath);
       // Update manifest since file exists but wasn't tracked
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
@@ -598,7 +598,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
         params.put("year", String.valueOf(year));
         org.apache.calcite.adapter.govdata.CacheKey cacheKey =
             new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
-        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
+        cacheManifest.markMaterialized(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
       return;
@@ -618,14 +618,14 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
       return;
     }
 
-    // Mark parquet conversion complete in manifest
+    // Mark materialization complete in manifest
     if (cacheManifest != null) {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("type", dataType);
       params.put("year", String.valueOf(year));
       org.apache.calcite.adapter.govdata.CacheKey cacheKey =
           new org.apache.calcite.adapter.govdata.CacheKey(dataType, params);
-      cacheManifest.markParquetConverted(cacheKey, targetFilePath);
+      cacheManifest.markMaterialized(cacheKey, targetFilePath);
       cacheManifest.save(this.operatingDirectory);
     }
   }

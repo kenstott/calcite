@@ -97,7 +97,7 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
 
       Map<String, Object> metadata = loadTableMetadata("world_indicators");
       String pattern = (String) metadata.get("pattern");
-      String parquetPath =
+      String outputPath =
           storageProvider.resolvePath(parquetDirectory, resolveParquetPath(pattern, variables));
       String rawPath =
           cacheStorageProvider.resolvePath(cacheDirectory, resolveJsonPath(pattern, variables));
@@ -106,10 +106,10 @@ public class WorldBankDataDownloader extends AbstractEconDataDownloader {
       allParams.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("world_indicators", allParams);
 
-      if (!isParquetConvertedOrExists(cacheKey, rawPath, parquetPath)) {
+      if (!isMaterializedOrExists(cacheKey, rawPath, outputPath)) {
         boolean converted = convertCachedJsonToParquet("world_indicators", variables);
         if (converted) {
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
           convertedCount++;
         }
       } else {

@@ -136,11 +136,11 @@ public class CacheManifestQueryHelper {
     for (DownloadRequest req : allRequests) {
       CacheKey cacheKey = new CacheKey(req.dataType, req.parameters);
 
-      // For conversions, check parquet conversion status
+      // For conversions, check materialization status
       if (isConversion) {
         // Only convert if source is cached AND parquet hasn't been converted
         // This prevents conversion attempts for entries that were never downloaded
-        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isCached(cacheKey) && !cacheManifest.isMaterialized(cacheKey)) {
           result.add(req);
         }
       } else {
