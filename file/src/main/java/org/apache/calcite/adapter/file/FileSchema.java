@@ -946,8 +946,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // JSON flattening now happens earlier in getTableMap(), before explicit table processing
     }
 
-    // Also process files from storage provider if configured
-    if (storageProvider != null) {
+    // Also process files from cloud storage provider if configured
+    // Local storage files are already handled by convertSupportedFilesToJson above
+    if (storageProvider != null && !"local".equals(storageType)) {
       convertStorageProviderFilesToJson();
     }
   }
@@ -4049,8 +4050,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return result;
     }
 
-    // Use StorageProvider if configured, otherwise fall back to local file system
-    if (storageProvider != null) {
+    // Use StorageProvider for cloud storage, but use local file system for local storage
+    // This ensures proper file discovery for local files (Excel, HTML conversion, etc.)
+    if (storageProvider != null && !"local".equals(storageType)) {
       return findMatchingFilesViaStorageProvider(pattern);
     }
 
