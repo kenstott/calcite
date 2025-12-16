@@ -240,7 +240,7 @@ public class HttpSource implements DataSource {
    * Performs the actual HTTP request.
    */
   private String doRequest(String urlString, Map<String, String> variables) throws IOException {
-    URL url = new URL(urlString);
+    URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
     try {
