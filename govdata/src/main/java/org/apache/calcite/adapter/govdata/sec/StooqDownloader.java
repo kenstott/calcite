@@ -469,7 +469,7 @@ public class StooqDownloader {
    * Creates an HTTP connection with optional authentication.
    */
   private HttpURLConnection createConnection(String urlString) throws IOException {
-    URL url = new URL(urlString);
+    URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("GET");
     conn.setRequestProperty("User-Agent", USER_AGENT);
