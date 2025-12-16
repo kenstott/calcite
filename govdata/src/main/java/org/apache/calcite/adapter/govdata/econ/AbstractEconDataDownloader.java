@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -272,60 +273,35 @@ public abstract class AbstractEconDataDownloader extends AbstractGovDataDownload
   }
 
   /**
-   * Check if parquet file has been converted, with defensive fallback to file existence and timestamp check.
-   * This prevents unnecessary reconversion when the manifest is deleted but parquet files still exist.
+   * Check if parquet file has been converted, with self-healing fallback to file existence.
+   * Uses centralized self-healing in DuckDBCacheStore to avoid code duplication.
    *
    * <p>This method supports optional partition parameters for tables with additional partitioning
    * beyond year (e.g., FRED indicators partitioned by series ID).
    *
+   * @param cacheKey Cache key identifying this data
    * @param rawFilePath Full path to raw source file (JSON)
    * @param parquetPath Full path to parquet file
    * @return true if parquet exists and is newer than raw file, false if conversion needed
    */
   protected final boolean isParquetConvertedOrExists(CacheKey cacheKey, String rawFilePath, String parquetPath) {
-
-    // 1. Check manifest first - trust it as source of truth
-    if (cacheManifest.isParquetConverted(cacheKey)) {
-      return true;
-    }
-
-    // 2. Defensive check: if a parquet file exists but not in manifest, verify it's up-to-date
-    try {
-      if (storageProvider.exists(parquetPath)) {
-        // Get timestamps for both files
-        long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
-
-        // Check if a raw file exists and compare timestamps
-        if (cacheStorageProvider.exists(rawFilePath)) {
-          long rawModTime = cacheStorageProvider.getMetadata(rawFilePath).getLastModified();
-
-          if (parquetModTime > rawModTime) {
-            // Parquet is newer than raw file - update manifest and skip conversion
-            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {}",
-                cacheKey.asString());
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
-            cacheManifest.save(operatingDirectory);
-            return true;
-          } else {
-            // Raw file is newer - needs reconversion
-            LOGGER.info("Raw file is newer than parquet, will reconvert: {}", cacheKey.asString());
-            return false;
-          }
-        } else {
-          // No raw file exists - parquet is valid
-          LOGGER.info("⚡ Parquet exists and raw file not found, updating cache manifest: {}",
-              cacheKey.asString());
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
-          cacheManifest.save(operatingDirectory);
-          return true;
+    // Create a FileChecker that uses storageProvider for parquet and cacheStorageProvider for raw files
+    DuckDBCacheStore.FileChecker fileChecker = path -> {
+      try {
+        // Determine which provider to use based on path
+        StorageProvider provider = path.equals(parquetPath) ? storageProvider : cacheStorageProvider;
+        if (provider.exists(path)) {
+          return provider.getMetadata(path).getLastModified();
         }
+      } catch (IOException e) {
+        LOGGER.debug("Error checking file existence for {}: {}", path, e.getMessage());
       }
-    } catch (IOException e) {
-      LOGGER.debug("Error checking parquet file existence: {}", e.getMessage());
-      // If we can't check, assume it doesn't exist
-    }
+      return -1;  // File doesn't exist or error
+    };
 
-    return false;
+    // Delegate to centralized self-healing
+    return ((CacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
+        cacheKey, parquetPath, rawFilePath, fileChecker);
   }
 
 

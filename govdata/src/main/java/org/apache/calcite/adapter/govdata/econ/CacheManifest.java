@@ -150,6 +150,23 @@ public class CacheManifest extends AbstractCacheManifest {
   }
 
   /**
+   * Check if parquet is converted with self-healing fallback.
+   * First checks manifest, then falls back to file existence check.
+   * If file exists but not in manifest, updates manifest automatically.
+   *
+   * @param cacheKey Cache key to check
+   * @param parquetPath Path to parquet file
+   * @param rawFilePath Path to raw source file (for timestamp comparison), or null
+   * @param fileChecker Function to check file existence and get modification time
+   * @return true if parquet is converted (either in manifest or self-healed)
+   */
+  public boolean isParquetConvertedWithSelfHealing(CacheKey cacheKey, String parquetPath,
+      String rawFilePath, DuckDBCacheStore.FileChecker fileChecker) {
+    return store.isParquetConvertedWithSelfHealing(
+        cacheKey.asString(), parquetPath, rawFilePath, fileChecker);
+  }
+
+  /**
    * Mark data as unavailable (404 or similar) with TTL for retry.
    * Prevents repeated failed requests while allowing automatic retry once TTL expires.
    *

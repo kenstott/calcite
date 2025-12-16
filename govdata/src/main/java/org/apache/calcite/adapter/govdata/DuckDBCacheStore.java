@@ -508,6 +508,64 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
+   * Functional interface for checking file existence and metadata.
+   * Used by self-healing to avoid coupling to StorageProvider.
+   */
+  @FunctionalInterface
+  public interface FileChecker {
+    /**
+     * Check if file exists and return its modification time.
+     * @param path Path to check
+     * @return modification time in millis, or -1 if file doesn't exist
+     */
+    long getModificationTime(String path);
+  }
+
+  /**
+   * Self-healing check for parquet conversion status.
+   * First checks manifest, then falls back to file existence check.
+   * If file exists but not in manifest, updates manifest automatically.
+   *
+   * <p>This centralizes the self-healing pattern that was scattered across
+   * AbstractEconDataDownloader and BlsDataDownloader.
+   *
+   * @param cacheKey Cache key to check
+   * @param parquetPath Path to parquet file
+   * @param rawFilePath Path to raw source file (for timestamp comparison), or null
+   * @param fileChecker Function to check file existence and get modification time
+   * @return true if parquet is converted (either in manifest or self-healed)
+   */
+  public boolean isParquetConvertedWithSelfHealing(String cacheKey, String parquetPath,
+      String rawFilePath, FileChecker fileChecker) {
+
+    // 1. Check manifest first - trust it as source of truth
+    if (isParquetConverted(cacheKey)) {
+      return true;
+    }
+
+    // 2. Self-healing: check if parquet file exists but manifest is missing/corrupted
+    long parquetModTime = fileChecker.getModificationTime(parquetPath);
+    if (parquetModTime < 0) {
+      return false;  // Parquet doesn't exist
+    }
+
+    // 3. If raw file path provided, compare timestamps
+    if (rawFilePath != null) {
+      long rawModTime = fileChecker.getModificationTime(rawFilePath);
+      if (rawModTime > 0 && rawModTime > parquetModTime) {
+        // Raw file is newer - needs reconversion
+        LOGGER.debug("Self-healing: Raw file newer than parquet for {}, needs reconversion", cacheKey);
+        return false;
+      }
+    }
+
+    // 4. Parquet exists and is valid - update manifest
+    LOGGER.info("Self-healing: Found existing parquet for {}, updating manifest", cacheKey);
+    markParquetConverted(cacheKey, parquetPath);
+    return true;
+  }
+
+  /**
    * Mark parquet as converted.
    *
    * @param cacheKey Cache key
