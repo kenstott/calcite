@@ -3990,9 +3990,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
-   * Find all files matching a glob pattern relative to baseDirectory.
-   * Uses ConversionMetadata as primary source (fast) and falls back to
-   * StorageProvider listing (expensive for S3) only when needed.
+   * Find all files matching a glob pattern relative to baseDirectory or sourceDirectory.
+   * Supports both StorageProvider (for S3, etc.) and local file system access.
    */
   private List<String> findMatchingFiles(String pattern) {
     List<String> result = new ArrayList<>();
@@ -4002,15 +4001,85 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       return result;
     }
 
-    // StorageProvider is the ONLY way to access files
-    if (storageProvider == null) {
-      LOGGER.error("findMatchingFiles: storageProvider is null - this is a configuration error");
+    // Use StorageProvider if configured, otherwise fall back to local file system
+    if (storageProvider != null) {
+      return findMatchingFilesViaStorageProvider(pattern);
+    }
+
+    // Local file system access - use sourceDirectory
+    if (sourceDirectory == null) {
+      LOGGER.warn("findMatchingFiles: sourceDirectory is null - returning empty");
       return result;
     }
 
+    String searchPath = sourceDirectory.getAbsolutePath();
+    LOGGER.info("findMatchingFiles: sourceDirectory={}, pattern={}, using local file system",
+                searchPath, pattern);
+
+    try {
+      // Determine if we need recursive scanning
+      boolean recursiveScan = pattern.contains("**") || pattern.contains("/");
+      int maxDepth = recursiveScan ? Integer.MAX_VALUE : 1;
+
+      // Create glob matcher for the pattern
+      PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+
+      // Special handling for "**" pattern: match all files
+      PathMatcher rootMatcher = null;
+      if (pattern.startsWith("**/")) {
+        String rootPattern = pattern.substring(3); // Get pattern after "**/"
+        rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + rootPattern);
+      }
+
+      // For "**" pattern, match all files
+      final boolean matchAll = "**".equals(pattern);
+      final PathMatcher finalRootMatcher = rootMatcher;
+
+      // Walk the directory tree
+      java.nio.file.Files.walkFileTree(sourceDirectory.toPath(),
+          java.util.EnumSet.noneOf(java.nio.file.FileVisitOption.class),
+          maxDepth,
+          new java.nio.file.SimpleFileVisitor<Path>() {
+            @Override
+            public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) {
+              if (!attrs.isDirectory()) {
+                Path relativePath = sourceDirectory.toPath().relativize(file);
+                // Match against pattern
+                if (matchAll ||
+                    matcher.matches(relativePath) ||
+                    (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
+                  result.add(file.toAbsolutePath().toString());
+                  LOGGER.debug("findMatchingFiles: MATCHED local file: {}, relativePath: {}",
+                      file.toAbsolutePath(), relativePath);
+                }
+              }
+              return java.nio.file.FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public java.nio.file.FileVisitResult visitFileFailed(Path file, java.io.IOException exc) {
+              LOGGER.debug("findMatchingFiles: Failed to visit file: {}", file);
+              return java.nio.file.FileVisitResult.CONTINUE;
+            }
+          });
+
+    } catch (Exception e) {
+      LOGGER.error("Error scanning for files with pattern '{}': {}", pattern, e.getMessage(), e);
+    }
+
+    LOGGER.info("findMatchingFiles: Found {} files matching pattern: {}", result.size(), pattern);
+    return result;
+  }
+
+  /**
+   * Find files matching pattern via StorageProvider (for S3, FTP, etc.).
+   */
+  private List<String> findMatchingFilesViaStorageProvider(String pattern) {
+    List<String> result = new ArrayList<>();
+
     // Determine the base directory to search
     if (baseDirectory == null) {
-      LOGGER.warn("findMatchingFiles: baseDirectory is null - returning empty");
+      LOGGER.warn("findMatchingFilesViaStorageProvider: baseDirectory is null - returning empty");
       return result;
     }
     String searchPath = baseDirectory;
@@ -4043,6 +4112,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + rootPattern);
       }
 
+      // For "**" pattern, match all files
+      final boolean matchAll = "**".equals(pattern);
+
       // Filter files by pattern
       for (StorageProvider.FileEntry entry : allFiles) {
         if (entry.isDirectory()) {
@@ -4070,7 +4142,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         // Pattern matching happens here, but no need to log every file check
 
         // Match against main pattern OR root pattern (if applicable)
-        if (matcher.matches(relPath) ||
+        if (matchAll ||
+            matcher.matches(relPath) ||
             (rootMatcher != null && rootMatcher.matches(relPath))) {
           result.add(fullPath);
           LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", fullPath, relativePath);
