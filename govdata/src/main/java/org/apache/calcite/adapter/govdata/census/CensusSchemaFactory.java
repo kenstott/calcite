@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.census;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.adapter.govdata.SchemaConfigReader;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
@@ -347,26 +348,29 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
           continue;  // Cached and fresh, skip S3 check
         }
 
-        // Self-healing: Manifest says not converted, check if file exists on storage
+        // Self-healing: Manifest says not converted, check if file exists with centralized self-healing
         String filename = tableName + ".parquet";
         String parquetPath =
             storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + filename);
 
-        try {
-          if (storageProvider.exists(parquetPath)) {
-            // File exists but not in manifest - add it (self-healing)
-            String relativePath = ACS_TYPE + "/year=" + year + "/" + filename;
-            LOGGER.info("Self-healing: Found existing ACS parquet {}, adding to manifest", relativePath);
-            cacheManifest.markParquetConverted(cacheKey, relativePath);
-          } else {
-            // File truly missing
-            needsAcsUpdate = true;
-            LOGGER.info("Missing ACS parquet file: {}", parquetPath);
-            break;
+        // Create FileChecker for self-healing
+        final StorageProvider sp = storageProvider;
+        DuckDBCacheStore.FileChecker fileChecker = path -> {
+          try {
+            if (sp.exists(path)) {
+              return sp.getMetadata(path).getLastModified();
+            }
+          } catch (IOException e) {
+            LOGGER.debug("Cannot access file {}: {}", path, e.getMessage());
           }
-        } catch (IOException e) {
+          return -1;
+        };
+
+        // Use centralized self-healing - returns true if converted or self-healed
+        if (!cacheManifest.isParquetConvertedWithSelfHealing(cacheKey, parquetPath, null, fileChecker)) {
+          // File truly missing
           needsAcsUpdate = true;
-          LOGGER.info("Cannot access ACS parquet file: {}", parquetPath);
+          LOGGER.info("Missing ACS parquet file: {}", parquetPath);
           break;
         }
       }

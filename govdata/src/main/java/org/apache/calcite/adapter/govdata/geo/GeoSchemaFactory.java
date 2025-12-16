@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 
@@ -381,29 +382,29 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     java.util.Map<String, String> params = new java.util.HashMap<>();
     params.put("year", String.valueOf(year));
 
-    // Check if already converted (via manifest or file existence)
+    // Check if already converted (via manifest with self-healing file check)
     CacheKey cacheKey = new CacheKey(tableName, params);
-    if (tigerDownloader.getCacheManifest().isParquetConverted(cacheKey)) {
-      LOGGER.debug("Table {} year {} already converted per manifest", tableName, year);
-      return;
-    }
 
-    // Check if parquet file exists
-    try {
-      if (storageProvider.exists(parquetPath)) {
-        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
-        if (metadata.getSize() > 0) {
-          LOGGER.debug("Table {} year {} parquet already exists", tableName, year);
-          // Update manifest since file exists but wasn't tracked
-          tigerDownloader.getCacheManifest().markParquetConverted(cacheKey, parquetPath);
-          tigerDownloader.getCacheManifest().save(
-              tigerDownloader.getOperatingDirectory());
-          return;
+    // Create FileChecker for self-healing
+    DuckDBCacheStore.FileChecker fileChecker = path -> {
+      try {
+        if (storageProvider.exists(path)) {
+          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(path);
+          if (metadata.getSize() > 0) {
+            return metadata.getLastModified();
+          }
         }
+      } catch (IOException e) {
+        LOGGER.debug("Could not check parquet existence for {}: {}", path, e.getMessage());
       }
-    } catch (IOException e) {
-      LOGGER.debug("Could not check parquet existence for {} year {}: {}",
-          tableName, year, e.getMessage());
+      return -1;
+    };
+
+    // Use centralized self-healing check
+    if (tigerDownloader.getCacheManifest().isParquetConvertedWithSelfHealing(
+        cacheKey, parquetPath, null, fileChecker)) {
+      LOGGER.debug("Table {} year {} already converted (manifest or self-healed)", tableName, year);
+      return;
     }
 
     // Need to download and convert

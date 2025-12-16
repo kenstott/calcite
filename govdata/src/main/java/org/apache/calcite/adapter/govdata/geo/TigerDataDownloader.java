@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.govdata.geo;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
 import org.apache.calcite.adapter.govdata.CacheKey;
+import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1944,8 +1945,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
-   * Check if parquet file has been converted, with defensive fallback to file existence and timestamp check.
-   * This prevents unnecessary downloads and reconversion when the manifest is deleted but parquet files still exist.
+   * Check if parquet file has been converted, with self-healing fallback to file existence.
+   * Uses centralized self-healing in DuckDBCacheStore to avoid code duplication.
+   *
+   * <p>For GEO data, we compare parquet timestamps against shapefile timestamps instead of JSON.
    *
    * @param dataType Type of data (e.g., "states", "counties")
    * @param year Year of data
@@ -1957,71 +1960,43 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   public boolean isParquetConvertedOrExists(String dataType, int year,
       java.util.Map<String, String> params, String shapefileCachePath, String parquetPath) {
 
-    // 1. Check manifest first - trust it as source of truth
-    if (cacheManifest != null) {
-      java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
-      allParams.put("year", String.valueOf(year));
-      CacheKey cacheKey = new CacheKey(dataType, allParams);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
-        return true;
-      }
+    if (cacheManifest == null) {
+      return false;
     }
 
-    // 2. Defensive check: if parquet file exists but not in manifest, verify it's up-to-date
-    try {
-      if (storageProvider.exists(parquetPath)) {
-        // Get parquet timestamp
-        long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
+    java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
+    allParams.put("year", String.valueOf(year));
+    CacheKey cacheKey = new CacheKey(dataType, allParams);
 
-        // Find the .shp file in the shapefile cache directory and check its timestamp
-        java.util.List<FileEntry> files = storageProvider.listFiles(shapefileCachePath, false);
-        java.util.Optional<FileEntry> shpFile = files.stream()
-            .filter(f -> !f.isDirectory() && f.getPath().endsWith(".shp"))
-            .findFirst();
-
-        if (shpFile.isPresent()) {
-          long shpModTime = shpFile.get().getLastModified();
-
-          if (parquetModTime > shpModTime) {
-            // Parquet is newer than shapefile - update manifest and skip conversion
-            LOGGER.info("⚡ Parquet exists and is up-to-date, updating cache manifest: {} (year={})",
-                dataType, year);
-            if (cacheManifest != null) {
-              java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
-              allParams.put("year", String.valueOf(year));
-              CacheKey cacheKey = new CacheKey(dataType, allParams);
-              cacheManifest.markParquetConverted(cacheKey, parquetPath);
-              cacheManifest.save(this.operatingDirectory);
-            }
-            return true;
-          } else {
-            // Shapefile is newer - needs reconversion
-            LOGGER.info("Shapefile is newer than parquet, reconversion needed: {} (year={})",
-                dataType, year);
-            return false;
+    // Create FileChecker that handles shapefile directory lookup for raw file timestamp
+    DuckDBCacheStore.FileChecker fileChecker = path -> {
+      try {
+        if (path.equals(parquetPath)) {
+          // Parquet file - use storageProvider
+          if (storageProvider.exists(path)) {
+            return storageProvider.getMetadata(path).getLastModified();
           }
         } else {
-          // Shapefile doesn't exist but parquet does - consider it up-to-date
-          LOGGER.info("⚡ Parquet exists (shapefile not found), updating cache manifest: {} (year={})",
-              dataType, year);
-          if (cacheManifest != null) {
-            java.util.Map<String, String> allParams = new java.util.HashMap<>(params != null ? params : new java.util.HashMap<>());
-            allParams.put("year", String.valueOf(year));
-            CacheKey cacheKey = new CacheKey(dataType, allParams);
-            cacheManifest.markParquetConverted(cacheKey, parquetPath);
-            cacheManifest.save(this.operatingDirectory);
+          // Shapefile directory - find .shp file and get its timestamp
+          java.util.List<FileEntry> files = storageProvider.listFiles(path, false);
+          java.util.Optional<FileEntry> shpFile = files.stream()
+              .filter(f -> !f.isDirectory() && f.getPath().endsWith(".shp"))
+              .findFirst();
+          if (shpFile.isPresent()) {
+            return shpFile.get().getLastModified();
           }
-          return true;
+          // No .shp file found - return -1 to indicate raw file doesn't exist
+          return -1;
         }
+      } catch (IOException e) {
+        LOGGER.debug("Error checking file existence for {}: {}", path, e.getMessage());
       }
-    } catch (IOException e) {
-      LOGGER.warn("Failed to check parquet/shapefile timestamps for {} year {}: {}",
-          dataType, year, e.getMessage());
-      // Fall through to return false - reconvert to be safe
-    }
+      return -1;
+    };
 
-    // 3. Parquet doesn't exist or check failed - needs conversion
-    return false;
+    // Use centralized self-healing
+    return ((GeoCacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
+        cacheKey, parquetPath, shapefileCachePath, fileChecker);
   }
 
   /**
