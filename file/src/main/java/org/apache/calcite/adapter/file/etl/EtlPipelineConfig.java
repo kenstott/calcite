@@ -77,6 +77,7 @@ public class EtlPipelineConfig {
   private final List<ColumnConfig> columns;
   private final MaterializeConfig materialize;
   private final ErrorHandlingConfig errorHandling;
+  private final HooksConfig hooks;
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
@@ -91,6 +92,9 @@ public class EtlPipelineConfig {
     this.errorHandling = builder.errorHandling != null
         ? builder.errorHandling
         : ErrorHandlingConfig.defaults();
+    this.hooks = builder.hooks != null
+        ? builder.hooks
+        : HooksConfig.empty();
   }
 
   /**
@@ -136,6 +140,13 @@ public class EtlPipelineConfig {
   }
 
   /**
+   * Returns the hooks configuration for extensibility.
+   */
+  public HooksConfig getHooks() {
+    return hooks;
+  }
+
+  /**
    * Creates a new builder for EtlPipelineConfig.
    */
   public static Builder builder() {
@@ -177,6 +188,11 @@ public class EtlPipelineConfig {
     Object errorHandlingObj = map.get("errorHandling");
     if (errorHandlingObj instanceof Map) {
       builder.errorHandling(ErrorHandlingConfig.fromMap((Map<String, Object>) errorHandlingObj));
+    }
+
+    Object hooksObj = map.get("hooks");
+    if (hooksObj instanceof Map) {
+      builder.hooks(HooksConfig.fromMap((Map<String, Object>) hooksObj));
     }
 
     return builder.build();
@@ -371,6 +387,7 @@ public class EtlPipelineConfig {
     private List<ColumnConfig> columns;
     private MaterializeConfig materialize;
     private ErrorHandlingConfig errorHandling;
+    private HooksConfig hooks;
 
     public Builder name(String name) {
       this.name = name;
@@ -399,6 +416,11 @@ public class EtlPipelineConfig {
 
     public Builder errorHandling(ErrorHandlingConfig errorHandling) {
       this.errorHandling = errorHandling;
+      return this;
+    }
+
+    public Builder hooks(HooksConfig hooks) {
+      this.hooks = hooks;
       return this;
     }
 

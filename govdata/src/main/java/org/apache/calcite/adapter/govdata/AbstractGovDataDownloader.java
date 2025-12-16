@@ -835,6 +835,19 @@ public abstract class AbstractGovDataDownloader {
             metadata.put("sourcePaths", tableNode.get("sourcePaths"));
           }
 
+          // EtlPipeline configuration sections
+          if (tableNode.has("source")) {
+            metadata.put("source", tableNode.get("source"));
+          }
+
+          if (tableNode.has("hooks")) {
+            metadata.put("hooks", tableNode.get("hooks"));
+          }
+
+          if (tableNode.has("materialize")) {
+            metadata.put("materialize", tableNode.get("materialize"));
+          }
+
           return metadata;
         }
       }

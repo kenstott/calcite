@@ -16,6 +16,14 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.etl.DimensionConfig;
+import org.apache.calcite.adapter.file.etl.DimensionType;
+import org.apache.calcite.adapter.file.etl.EtlPipeline;
+import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.EtlResult;
+import org.apache.calcite.adapter.file.etl.HooksConfig;
+import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
+import org.apache.calcite.adapter.file.etl.MaterializeConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.CacheKey;
@@ -24,6 +32,7 @@ import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.OperationType;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
@@ -260,6 +269,187 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
     };
   }
 
+  // ===== ETL PIPELINE-BASED METHODS =====
+  // These methods use the declarative EtlPipeline infrastructure instead of imperative code.
+  // Configuration is loaded from econ-schema.yaml (source, hooks, materialize sections).
+
+  /**
+   * Downloads and processes national accounts (NIPA) data using the EtlPipeline infrastructure.
+   *
+   * <p>This method replaces the imperative {@link #downloadNationalAccountsMetadata} and
+   * {@link #convertNationalAccountsMetadata} methods with a declarative pipeline approach.
+   * Configuration is loaded from the "source", "hooks", and "materialize" sections of the
+   * national_accounts table definition in econ-schema.yaml.
+   *
+   * <p>The pipeline:
+   * <ol>
+   *   <li>Expands dimensions (year, frequency, tablename) to generate all combinations</li>
+   *   <li>Fetches data from BEA API for each combination</li>
+   *   <li>Applies the BeaResponseTransformer hook for JSON response processing</li>
+   *   <li>Materializes results to hive-partitioned Parquet files</li>
+   * </ol>
+   *
+   * @return EtlResult containing execution statistics
+   * @throws IOException If pipeline execution fails
+   */
+  public EtlResult downloadNationalAccountsWithPipeline() throws IOException {
+    String tableName = "national_accounts";
+    LOGGER.info("Starting national_accounts pipeline-based ETL");
+
+    // Load table config from schema
+    EtlPipelineConfig config = createPipelineConfig(tableName);
+
+    // Create pipeline with storage provider
+    EtlPipeline pipeline = new EtlPipeline(config, storageProvider, parquetDir,
+        new EtlPipeline.LoggingProgressListener());
+
+    // Execute and return result
+    EtlResult result = pipeline.execute();
+
+    LOGGER.info("National accounts pipeline complete: {}", result);
+    return result;
+  }
+
+  /**
+   * Creates an EtlPipelineConfig from the schema YAML for the specified table.
+   *
+   * <p>Loads the "source", "hooks", "materialize", and "dimensions" sections from the
+   * table definition in econ-schema.yaml and converts them to EtlPipelineConfig format.
+   *
+   * <p>Dimension expansion handles:
+   * <ul>
+   *   <li>year: Generated from startYear/endYear instance variables</li>
+   *   <li>frequency: Loaded from table frequencies metadata (A, Q)</li>
+   *   <li>tablename: Loaded from NIPA tables catalog</li>
+   * </ul>
+   *
+   * @param tableName The name of the table in econ-schema.yaml
+   * @return EtlPipelineConfig ready for execution
+   * @throws IllegalArgumentException If table not found or configuration is incomplete
+   */
+  @SuppressWarnings("unchecked")
+  public EtlPipelineConfig createPipelineConfig(String tableName) {
+    LOGGER.debug("Creating pipeline config for table: {}", tableName);
+
+    // Load table metadata from schema
+    Map<String, Object> metadata = loadTableMetadata(tableName);
+
+    // Convert JsonNode sections to Maps for config parsing
+    ObjectMapper mapper = new ObjectMapper();
+
+    // Parse source configuration
+    HttpSourceConfig sourceConfig = null;
+    Object sourceObj = metadata.get("source");
+    if (sourceObj instanceof JsonNode) {
+      Map<String, Object> sourceMap = mapper.convertValue(sourceObj, Map.class);
+      sourceConfig = HttpSourceConfig.fromMap(sourceMap);
+    } else if (sourceObj instanceof Map) {
+      sourceConfig = HttpSourceConfig.fromMap((Map<String, Object>) sourceObj);
+    }
+
+    if (sourceConfig == null) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' does not have 'source' configuration in schema");
+    }
+
+    // Parse hooks configuration
+    HooksConfig hooksConfig = HooksConfig.empty();
+    Object hooksObj = metadata.get("hooks");
+    if (hooksObj instanceof JsonNode) {
+      Map<String, Object> hooksMap = mapper.convertValue(hooksObj, Map.class);
+      hooksConfig = HooksConfig.fromMap(hooksMap);
+    } else if (hooksObj instanceof Map) {
+      hooksConfig = HooksConfig.fromMap((Map<String, Object>) hooksObj);
+    }
+
+    // Parse materialize configuration
+    MaterializeConfig materializeConfig = null;
+    Object materializeObj = metadata.get("materialize");
+    if (materializeObj instanceof JsonNode) {
+      Map<String, Object> materializeMap = mapper.convertValue(materializeObj, Map.class);
+      materializeConfig = MaterializeConfig.fromMap(materializeMap);
+    } else if (materializeObj instanceof Map) {
+      materializeConfig = MaterializeConfig.fromMap((Map<String, Object>) materializeObj);
+    }
+
+    if (materializeConfig == null) {
+      throw new IllegalArgumentException(
+          "Table '" + tableName + "' does not have 'materialize' configuration in schema");
+    }
+
+    // Build dimensions configuration
+    Map<String, DimensionConfig> dimensions = buildDimensionsForTable(tableName, metadata);
+
+    // Build the pipeline config
+    return EtlPipelineConfig.builder()
+        .name(tableName)
+        .source(sourceConfig)
+        .dimensions(dimensions)
+        .materialize(materializeConfig)
+        .hooks(hooksConfig)
+        .build();
+  }
+
+  /**
+   * Builds dimension configurations for a table, merging schema definitions with runtime data.
+   *
+   * <p>For national_accounts, this:
+   * <ul>
+   *   <li>Creates a year range dimension from startYear to endYear</li>
+   *   <li>Creates a frequency list dimension from table frequency metadata</li>
+   *   <li>Creates a tablename list dimension from NIPA tables catalog</li>
+   * </ul>
+   *
+   * @param tableName Table name
+   * @param metadata Table metadata from schema
+   * @return Map of dimension name to DimensionConfig
+   */
+  private Map<String, DimensionConfig> buildDimensionsForTable(String tableName,
+      Map<String, Object> metadata) {
+    Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
+
+    if ("national_accounts".equals(tableName)) {
+      // Year dimension: range from instance variables
+      dimensions.put("year", DimensionConfig.builder()
+          .name("year")
+          .type(DimensionType.RANGE)
+          .start(startYear)
+          .end(endYear)
+          .build());
+
+      // Frequency dimension: from table frequencies
+      Set<String> allFrequencies = new HashSet<>();
+      Map<String, Set<String>> tableFreqs = getTableFrequencies();
+      for (Set<String> freqs : tableFreqs.values()) {
+        allFrequencies.addAll(freqs);
+      }
+      List<String> frequencyList = new ArrayList<>(allFrequencies);
+      Collections.sort(frequencyList);
+      dimensions.put("frequency", DimensionConfig.builder()
+          .name("frequency")
+          .type(DimensionType.LIST)
+          .values(frequencyList)
+          .build());
+
+      // Tablename dimension: from NIPA tables catalog
+      List<String> tableNames = getNipaTablesList();
+      dimensions.put("tablename", DimensionConfig.builder()
+          .name("tablename")
+          .type(DimensionType.LIST)
+          .values(tableNames)
+          .build());
+
+      // Type dimension: static value
+      dimensions.put("type", DimensionConfig.builder()
+          .name("type")
+          .type(DimensionType.LIST)
+          .values(Collections.singletonList("national_accounts"))
+          .build());
+    }
+
+    return dimensions;
+  }
+
   /**
    * Downloads national accounts (NIPA) data using metadata-driven pattern.
    *
@@ -268,7 +458,10 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @param nipaTablesList   List of NIPA table IDs to download
    * @param tableFrequencies Map of table names to their available frequencies (A=Annual,
    *                         Q=Quarterly)
+   * @deprecated Use {@link #downloadNationalAccountsWithPipeline()} instead, which uses
+   *             the declarative EtlPipeline infrastructure for cleaner, more maintainable code.
    */
+  @Deprecated
   public void downloadNationalAccountsMetadata(int startYear, int endYear,
       List<String> nipaTablesList, Map<String, Set<String>> tableFrequencies) {
     if (!validateListParameter(nipaTablesList, "NIPA tables", "download")) {
@@ -327,7 +520,11 @@ public class BeaDataDownloader extends AbstractEconDataDownloader {
    * @param nipaTablesList   List of NIPA table IDs to convert
    * @param tableFrequencies Map of table names to their available frequencies (A=Annual,
    *                         Q=Quarterly)
+   * @deprecated Use {@link #downloadNationalAccountsWithPipeline()} instead, which uses
+   *             the declarative EtlPipeline infrastructure and handles both download and
+   *             conversion in a single unified operation.
    */
+  @Deprecated
   public void convertNationalAccountsMetadata(int startYear, int endYear,
       List<String> nipaTablesList, Map<String, Set<String>> tableFrequencies) {
     if (!validateListParameter(nipaTablesList, "NIPA tables", "conversion")) {
