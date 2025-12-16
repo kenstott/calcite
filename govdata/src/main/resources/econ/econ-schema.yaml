@@ -1392,6 +1392,43 @@ partitionedTables:
         maxRetries: 5
         retryDelayMs: 5000
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "NIPA"
+        TableName: "{tablename}"
+        Frequency: "{frequency}"
+        Year: "{year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=national_accounts/frequency=*/year=*/tablename=*/"
+      partition:
+        columns: [frequency, year, tablename]
+      options:
+        compression: snappy
+
   # --- REGIONAL INCOME ---
   - name: regional_income
     pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/*.parquet"
@@ -1576,6 +1613,44 @@ partitionedTables:
         format: json
         dataPath: "BEAAPI.Results.Data"
         errorPath: "BEAAPI.Results.Error"
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "Regional"
+        TableName: "{tablename}"
+        LineCode: "{line_code}"
+        GeoFips: "{geo_fips_set}"
+        Year: "{year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/"
+      partition:
+        columns: [year, geo_fips_set, tablename, line_code]
+      options:
+        compression: snappy
 
     # Alternate partition layouts for optimized query patterns
     # Consolidated files use different partition keys within type=regional_income.
