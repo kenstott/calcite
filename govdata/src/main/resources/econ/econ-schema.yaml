@@ -451,6 +451,41 @@ partitionedTables:
         format: json
         dataPath: "Results.series"
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=employment_statistics/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- INFLATION METRICS ---
   - name: inflation_metrics
     pattern: "type=indicators/frequency=*/year=*/inflation_metrics.parquet"
@@ -524,6 +559,41 @@ partitionedTables:
         format: json
         dataPath: "Results.series"
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=indicators/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- REGIONAL CPI ---
   - name: regional_cpi
     pattern: "type=cpi_regional/frequency=*/year=*/regional_cpi.parquet"
@@ -563,6 +633,41 @@ partitionedTables:
         type: json_body
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set BLS API key in environment
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=cpi_regional/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- METRO CPI ---
   - name: metro_cpi
@@ -631,6 +736,41 @@ partitionedTables:
         paramName: registrationkey
         envVar: BLS_API_KEY
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=metro_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- STATE INDUSTRY ---
   - name: state_industry
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
@@ -666,6 +806,42 @@ partitionedTables:
         type: json_body
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set BLS API key in environment
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=state_industry/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- STATE WAGES ---
   - name: state_wages
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
@@ -700,6 +876,32 @@ partitionedTables:
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
+
+    # HTTP Source configuration for EtlPipeline (bulk download)
+    source:
+      type: http
+      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS QCEW response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=state_wages/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
@@ -740,6 +942,41 @@ partitionedTables:
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set API key in environment
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=metro_industry/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- METRO WAGES ---
   - name: metro_wages
     pattern: "type=metro_wages/frequency=*/year=*/metro_wages.parquet"
@@ -777,6 +1014,32 @@ partitionedTables:
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
+
+    # HTTP Source configuration for EtlPipeline (bulk download)
+    source:
+      type: http
+      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS QCEW response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=metro_wages/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- COUNTY QCEW ---
   - name: county_qcew
@@ -822,6 +1085,32 @@ partitionedTables:
     download:
       bulkDownload: qcew_annual_bulk
 
+    # HTTP Source configuration for EtlPipeline (bulk download)
+    source:
+      type: http
+      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS QCEW response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=county_qcew/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- COUNTY WAGES ---
   - name: county_wages
     pattern: "type=county_wages/frequency=*/year=*/county_wages.parquet"
@@ -855,6 +1144,32 @@ partitionedTables:
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
+
+    # HTTP Source configuration for EtlPipeline (bulk download)
+    source:
+      type: http
+      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS QCEW response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=county_wages/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
@@ -914,6 +1229,32 @@ partitionedTables:
       - *percent_change_month
       - *percent_change_year
 
+    # HTTP Source configuration for EtlPipeline (FTP files)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.data.{metric}"
+      method: GET
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=jolts_regional/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- JOLTS STATE ---
   - name: jolts_state
     pattern: "type=jolts_state/frequency=*/year=*/jolts_state.parquet"
@@ -967,6 +1308,32 @@ partitionedTables:
         type: double
         nullable: true
         comment: Total separations rate
+
+    # HTTP Source configuration for EtlPipeline (FTP files)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.data.{metric}"
+      method: GET
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=jolts_state/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- WAGE GROWTH ---
   - name: wage_growth
@@ -1022,6 +1389,41 @@ partitionedTables:
         type: json_body
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set API key in environment
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=wage_growth/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
@@ -1086,6 +1488,41 @@ partitionedTables:
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set API key in environment
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid: "{seriesList}"
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        dataPath: "Results.series"
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=regional/year=*/state_fips=*/"
+      partition:
+        columns: [type, year, state_fips]
+      options:
+        compression: snappy
+
   # --- TREASURY YIELDS ---
   - name: treasury_yields
     pattern: "type=timeseries/frequency=daily/year=*/treasury_yields.parquet"
@@ -1129,6 +1566,34 @@ partitionedTables:
           type: constant
           value: "10000"
       cachePattern: "type=timeseries/frequency=daily/year=*/treasury_yields.json"
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates"
+      method: GET
+      parameters:
+        filter: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort: "-record_date"
+        page[size]: "10000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=timeseries/frequency=daily/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
@@ -1178,6 +1643,34 @@ partitionedTables:
           value: "10000"
       cachePattern: "type=timeseries/frequency=daily/year=*/federal_debt.json"
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny"
+      method: GET
+      parameters:
+        filter: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort: "-record_date"
+        page[size]: "10000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=timeseries/frequency=daily/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+
   # --- WORLD INDICATORS ---
   - name: world_indicators
     pattern: "type=indicators/frequency=*/year=*/world_indicators.parquet"
@@ -1217,6 +1710,33 @@ partitionedTables:
         type: string
         nullable: true
         comment: Scale factor (e.g., 'Millions', 'Billions')
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.worldbank.org/v2/country/{country}/indicator/{indicator}"
+      method: GET
+      parameters:
+        format: "json"
+        date: "{year}"
+        per_page: "1000"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=indicators/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
@@ -1298,6 +1818,41 @@ partitionedTables:
         format: json
         dataPath: "observations"
         missingValueIndicator: "."  # FRED uses "." to indicate missing values
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/observations"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+        observation_start: "{year}-01-01"
+        observation_end: "{year}-12-31"
+        limit: "100000"
+      response:
+        format: json
+        dataPath: "observations"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for FRED response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=fred_indicators/series=*/year=*/"
+      partition:
+        columns: [type, series, year]
+      options:
+        compression: snappy
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
@@ -1822,6 +2377,43 @@ partitionedTables:
         maxRetries: 5
         retryDelayMs: 5000
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "ITA"
+        Indicator: "{indicator}"
+        Frequency: "{frequency}"
+        Year: "{year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=indicators/frequency=*/year=*/indicator=*/"
+      partition:
+        columns: [type, frequency, year, indicator]
+      options:
+        compression: snappy
+
   # --- GDP STATISTICS ---
   - name: gdp_statistics
     pattern: "type=indicators/frequency=*/year=*/gdp_statistics.parquet"
@@ -1853,6 +2445,43 @@ partitionedTables:
         type: string
         nullable: true
         comment: Whether the data is seasonally adjusted ('Yes' or 'No')
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "NIPA"
+        TableName: "T10101"
+        Frequency: "{frequency}"
+        Year: "{year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=indicators/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
 
   # --- STATE GDP (View over regional_income) ---
   # Note: State GDP data is downloaded as part of regional_income (SAGDP* tables).
@@ -1958,6 +2587,44 @@ partitionedTables:
         maxRetries: 5
         retryDelayMs: 5000
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "GDPbyIndustry"
+        Industry: "{industry}"
+        Frequency: "{frequency}"
+        Year: "{year}"
+        TableID: "ALL"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.Data"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=indicators/frequency=*/year=*/industry=*/"
+      partition:
+        columns: [type, frequency, year, industry]
+      options:
+        compression: snappy
+
   # --- REFERENCE JOLTS INDUSTRIES ---
   - name: reference_jolts_industries
     pattern: "type=reference/jolts_industries.parquet"
@@ -1979,6 +2646,28 @@ partitionedTables:
         nullable: true
         comment: JOLTS industry code
       - *industry_name
+
+    # HTTP Source configuration for EtlPipeline (FTP file)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
+      method: GET
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: reference_jolts_dataelements
@@ -2004,6 +2693,28 @@ partitionedTables:
         type: string
         nullable: true
         comment: Data element description
+
+    # HTTP Source configuration for EtlPipeline (FTP file)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
+      method: GET
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: reference_bls_geographies
@@ -2054,6 +2765,17 @@ partitionedTables:
     # API Configuration
     download:
 
+    # Materialization configuration (reference data)
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/geo_type=*/"
+      partition:
+        columns: [type, geo_type]
+      options:
+        compression: snappy
+
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: reference_bls_naics_sectors
     pattern: "type=reference/bls_naics_sectors.parquet"
@@ -2076,6 +2798,17 @@ partitionedTables:
 
     # API Configuration
     download:
+
+    # Materialization configuration (reference data)
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
 
   # --- REFERENCE NIPA TABLES ---
   - name: reference_nipa_tables
@@ -2156,6 +2889,40 @@ partitionedTables:
         maxRetries: 3
         retryDelayMs: 5000
       earlyDownload: true
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetParameterValues"
+        DataSetName: "NIPA"
+        ParameterName: "TableName"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/section=*/"
+      partition:
+        columns: [type, section]
+      options:
+        compression: snappy
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: reference_regional_linecodes
@@ -2296,6 +3063,42 @@ partitionedTables:
         retryDelayMs: 5000
       earlyDownload: true
 
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetParameterValuesFiltered"
+        DataSetName: "Regional"
+        TargetParameter: "LineCode"
+        TableName: "{tablename}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/tablename=*/"
+      partition:
+        columns: [type, tablename]
+      options:
+        compression: snappy
+
   # --- REFERENCE FRED SERIES ---
   - name: reference_fred_series
     pattern: "type=reference/category=*/frequency=*/source=*/status=*/reference_fred_series.parquet"
@@ -2396,6 +3199,39 @@ partitionedTables:
         nullable: true
         expression: "CASE WHEN length(title) > 10 THEN embed(title)::FLOAT[384] ELSE NULL END"
         comment: 384-dim vector embedding for semantic search on title (only for substantial text)
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/search"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        search_text: "{category}"
+        limit: "1000"
+      response:
+        format: json
+        dataPath: "seriess"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    # Custom hooks for FRED response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      output:
+        location: "{baseDirectory}"
+        pattern: "type=reference/category=*/frequency=*/source=*/status=*/"
+      partition:
+        columns: [type, category, frequency, source, status]
+      options:
+        compression: snappy
 
 # ============================================================================
 # CONSTRAINTS
