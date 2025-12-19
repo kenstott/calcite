@@ -166,8 +166,8 @@ public class AlternatePartitionMaterializer {
 
     // Use ParquetReorganizer for batched processing
     if (needsBatching || storageProvider != null) {
-      ParquetReorganizer reorganizer = new ParquetReorganizer(
-          storageProvider != null ? storageProvider : createLocalStorageProvider(),
+      ParquetReorganizer reorganizer =
+          new ParquetReorganizer(storageProvider != null ? storageProvider : createLocalStorageProvider(),
           baseDirectory);
 
       ParquetReorganizer.ReorgConfig reorgConfig = ParquetReorganizer.ReorgConfig.builder()
@@ -216,8 +216,8 @@ public class AlternatePartitionMaterializer {
           partitionByClause.append(col);
         }
 
-        String sql = String.format(
-            "COPY (SELECT * FROM read_parquet('%s', hive_partitioning=true)) "
+        String sql =
+            String.format("COPY (SELECT * FROM read_parquet('%s', hive_partitioning=true)) "
                 + "TO '%s' (FORMAT PARQUET, PARTITION_BY (%s), OVERWRITE_OR_IGNORE)",
             fullSourcePattern, targetDir, partitionByClause.toString());
 

@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.etl.BulkDownloadConfig;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -988,7 +989,13 @@ public abstract class AbstractGovDataDownloader {
 
         String comment = config.has("comment") ? config.get("comment").asText() : null;
 
-        BulkDownloadConfig bulkDownload = new BulkDownloadConfig(name, cachePattern, url, variables, comment);
+        BulkDownloadConfig.Builder builder = BulkDownloadConfig.builder()
+            .name(name)
+            .cachePattern(cachePattern)
+            .url(url)
+            .comment(comment);
+        // Note: variables list is legacy - file adapter uses DimensionConfig instead
+        BulkDownloadConfig bulkDownload = builder.build();
         bulkDownloads.put(name, bulkDownload);
 
         LOGGER.debug("Loaded bulk download config: {}", bulkDownload);
@@ -3636,7 +3643,8 @@ public abstract class AbstractGovDataDownloader {
             }
 
             if (alternateName != null && alternatePattern != null) {
-              alternatePartitions.add(new AlternatePartitionPattern(
+              alternatePartitions.add(
+                  new AlternatePartitionPattern(
                   tableName, sourcePattern, alternateName, alternatePattern,
                   partitionColumns, columnMappings, batchPartitionColumns, threads, incrementalKeys));
               LOGGER.debug("Found alternate partition: {} -> {} (partition by: {}, batch by: {}, "

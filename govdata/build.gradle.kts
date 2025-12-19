@@ -76,7 +76,7 @@ tasks.test {
 
     // Increase heap size for tests that process large CSV files
     minHeapSize = "2g"
-    maxHeapSize = "8g"
+    maxHeapSize = "4g"
 
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")

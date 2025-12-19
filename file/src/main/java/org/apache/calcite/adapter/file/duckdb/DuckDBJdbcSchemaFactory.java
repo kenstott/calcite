@@ -1475,8 +1475,8 @@ public class DuckDBJdbcSchemaFactory {
 
       try {
         // Pre-check if view already exists to avoid expensive validation
-        String checkViewSql = String.format(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' "
+        String checkViewSql =
+            String.format("SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' "
                 + "AND table_name = '%s' AND table_type = 'VIEW'",
             duckdbSchema, viewName);
         try (Statement checkStmt = conn.createStatement();

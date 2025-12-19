@@ -66,7 +66,7 @@ import java.util.concurrent.TimeUnit;
  * List<TickerCikPair> pairs = Arrays.asList(
  *     new TickerCikPair("AAPL", "0000320193"),
  *     new TickerCikPair("MSFT", "0000789019")
- * );
+ *);
  * downloader.downloadStockPrices("/data", pairs, 2020, 2024);
  * }</pre>
  */
@@ -236,12 +236,12 @@ public class StooqDownloader {
     for (int year = startYear; year <= endYear; year++) {
       // Build the path using StorageProvider.resolvePath for S3 compatibility
       String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
-      String tickerDir = storageProvider.resolvePath(stockPricesDir,
-          String.format("ticker=%s", pair.ticker.toUpperCase()));
+      String tickerDir =
+          storageProvider.resolvePath(stockPricesDir, String.format("ticker=%s", pair.ticker.toUpperCase()));
       String yearDir = storageProvider.resolvePath(tickerDir, String.format("year=%d", year));
 
-      String fullPath = storageProvider.resolvePath(yearDir,
-          String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
+      String fullPath =
+          storageProvider.resolvePath(yearDir, String.format("%s_prices.parquet", pair.ticker.toLowerCase()));
 
       // Check if data already exists and determine if refresh is needed
       boolean needsDownload;
@@ -362,8 +362,8 @@ public class StooqDownloader {
         List<StockPriceRecord> records;
         BufferedReader reader = null;
         try {
-          reader = new BufferedReader(
-              new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+          reader =
+              new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
           records = parseCsvResponse(reader, year);
         } finally {
           if (reader != null) {

@@ -20,11 +20,8 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
-import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -340,8 +337,7 @@ public class IcebergMaterializer {
       return failedCount == 0;
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("MaterializationResult{table=%s, success=%d, failed=%d, skipped=%d, duration=%dms}",
           tableId, successCount, failedCount, skippedCount, durationMs);
     }
@@ -416,8 +412,8 @@ public class IcebergMaterializer {
     }
 
     long durationMs = System.currentTimeMillis() - startTime;
-    MaterializationResult result = new MaterializationResult(
-        config.getTargetTableId(), successCount, failedCount, skippedCount, durationMs);
+    MaterializationResult result =
+        new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount, durationMs);
 
     LOGGER.info("Materialization complete: {}", result);
 
@@ -483,8 +479,8 @@ public class IcebergMaterializer {
       // Build source pattern with batch filters applied
       String sourcePattern = config.getSourcePattern();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
-        sourcePattern = sourcePattern.replace(entry.getKey() + "=*",
-            entry.getKey() + "=" + entry.getValue());
+        sourcePattern =
+            sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
 
       // Build DuckDB SQL
@@ -504,7 +500,8 @@ public class IcebergMaterializer {
       for (Map.Entry<String, String> entry : batch.entrySet()) {
         // Only add to filter if it's a partition column
         if (config.getPartitionColumnNames().contains(entry.getKey())) {
-          partitionFilter.put(entry.getKey(), coerceValue(entry.getValue(),
+          partitionFilter.put(
+              entry.getKey(), coerceValue(entry.getValue(),
               findColumnType(config.getPartitionColumns(), entry.getKey())));
         }
       }
@@ -641,15 +638,13 @@ public class IcebergMaterializer {
     try {
       if (Files.exists(stagingPath)) {
         Files.walkFileTree(stagingPath, new java.nio.file.SimpleFileVisitor<Path>() {
-          @Override
-          public java.nio.file.FileVisitResult visitFile(Path file,
+          @Override public java.nio.file.FileVisitResult visitFile(Path file,
               java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
             Files.deleteIfExists(file);
             return java.nio.file.FileVisitResult.CONTINUE;
           }
 
-          @Override
-          public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
+          @Override public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
               IOException exc) throws IOException {
             Files.deleteIfExists(dir);
             return java.nio.file.FileVisitResult.CONTINUE;
@@ -731,8 +726,8 @@ public class IcebergMaterializer {
          Statement stmt = conn.createStatement()) {
       String reader = format == SourceFormat.JSON ? "read_json" : "read_parquet";
       String options = format == SourceFormat.JSON ? "union_by_name=true" : "hive_partitioning=true, union_by_name=true";
-      String sql = String.format("SELECT DISTINCT %s FROM %s('%s', %s) WHERE %s IS NOT NULL ORDER BY %s",
-          column, reader, sourcePattern, options, column, column);
+      String sql =
+          String.format("SELECT DISTINCT %s FROM %s('%s', %s) WHERE %s IS NOT NULL ORDER BY %s", column, reader, sourcePattern, options, column, column);
 
       try (ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {

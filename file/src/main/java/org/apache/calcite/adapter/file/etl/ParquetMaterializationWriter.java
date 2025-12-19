@@ -33,7 +33,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -84,8 +83,7 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
     this.initialized = false;
   }
 
-  @Override
-  public void initialize(MaterializeConfig config) throws IOException {
+  @Override public void initialize(MaterializeConfig config) throws IOException {
     if (config == null) {
       throw new IllegalArgumentException("Config cannot be null");
     }
@@ -104,8 +102,7 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
     this.initialized = true;
   }
 
-  @Override
-  public long writeBatch(Iterator<Map<String, Object>> data,
+  @Override public long writeBatch(Iterator<Map<String, Object>> data,
       Map<String, String> partitionVariables) throws IOException {
 
     if (!initialized) {
@@ -342,29 +339,24 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
     return value.replace("'", "''");
   }
 
-  @Override
-  public void commit() throws IOException {
+  @Override public void commit() throws IOException {
     // For Parquet format, files are written directly - no commit needed
     LOGGER.debug("Commit called (no-op for Parquet format)");
   }
 
-  @Override
-  public long getTotalRowsWritten() {
+  @Override public long getTotalRowsWritten() {
     return totalRowsWritten;
   }
 
-  @Override
-  public int getTotalFilesWritten() {
+  @Override public int getTotalFilesWritten() {
     return totalFilesWritten;
   }
 
-  @Override
-  public MaterializeConfig.Format getFormat() {
+  @Override public MaterializeConfig.Format getFormat() {
     return MaterializeConfig.Format.PARQUET;
   }
 
-  @Override
-  public void close() throws IOException {
+  @Override public void close() throws IOException {
     LOGGER.debug("ParquetMaterializationWriter closed: {} rows in {} files",
         totalRowsWritten, totalFilesWritten);
     initialized = false;

@@ -25,10 +25,13 @@ import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiPredicate;
 
 /**
  * Table constraint metadata for file-based tables.
@@ -39,6 +42,8 @@ import java.util.Map;
  * documentation of the logical data model.
  */
 public class TableConstraints {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(TableConstraints.class);
 
   /**
    * Creates a Statistic object from constraint configuration.
@@ -345,5 +350,68 @@ public class TableConstraints {
         "columns", columns,
         "targetTable", List.of(targetSchema, targetTable),
         "targetColumns", targetColumns);
+  }
+
+  /**
+   * Validates foreign key constraints and returns a new Statistic with only valid FKs.
+   *
+   * <p>This method filters out FKs that reference non-existent tables and logs
+   * warnings for each invalid constraint found.
+   *
+   * @param statistic The original statistic containing FK constraints
+   * @param sourceTableName Name of the source table (for logging)
+   * @param tableExistsChecker Predicate that checks if a table exists given (schemaName, tableName)
+   * @return A new Statistic with only valid FK constraints
+   */
+  public static Statistic validateForeignKeys(
+      Statistic statistic,
+      String sourceTableName,
+      BiPredicate<String, String> tableExistsChecker) {
+
+    if (statistic == null || statistic.getReferentialConstraints() == null
+        || statistic.getReferentialConstraints().isEmpty()) {
+      return statistic;
+    }
+
+    List<RelReferentialConstraint> validFks = new ArrayList<>();
+    List<RelReferentialConstraint> invalidFks = new ArrayList<>();
+
+    for (RelReferentialConstraint fk : statistic.getReferentialConstraints()) {
+      List<String> targetQualifiedName = fk.getTargetQualifiedName();
+
+      // Extract schema and table from qualified name
+      String targetSchema = null;
+      String targetTable = null;
+
+      if (targetQualifiedName.size() >= 2) {
+        targetSchema = targetQualifiedName.get(targetQualifiedName.size() - 2);
+        targetTable = targetQualifiedName.get(targetQualifiedName.size() - 1);
+      } else if (targetQualifiedName.size() == 1) {
+        targetTable = targetQualifiedName.get(0);
+      }
+
+      if (targetTable != null && tableExistsChecker.test(targetSchema, targetTable)) {
+        validFks.add(fk);
+      } else {
+        invalidFks.add(fk);
+      }
+    }
+
+    // Log warnings for invalid FKs
+    for (RelReferentialConstraint invalidFk : invalidFks) {
+      LOGGER.warn("Removing invalid FK constraint from table '{}': target table '{}' not found",
+          sourceTableName, invalidFk.getTargetQualifiedName());
+    }
+
+    if (invalidFks.isEmpty()) {
+      return statistic; // No changes needed
+    }
+
+    // Return new statistic with filtered FKs
+    return Statistics.of(
+        statistic.getRowCount(),
+        statistic.getKeys(),
+        validFks,
+        statistic.getCollations());
   }
 }

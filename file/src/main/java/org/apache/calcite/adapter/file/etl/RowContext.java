@@ -91,8 +91,7 @@ public class RowContext {
     return new Builder();
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("RowContext{rowNumber=").append(rowNumber);
     if (!dimensionValues.isEmpty()) {

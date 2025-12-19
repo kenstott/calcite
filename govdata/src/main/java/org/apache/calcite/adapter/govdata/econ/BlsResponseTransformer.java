@@ -183,6 +183,14 @@ public class BlsResponseTransformer implements ResponseTransformer {
       return "[]";
     }
 
+    // Generic "request failed" - often means quota exhausted or temporary API issue
+    // Return empty results to let pipeline continue with other tables
+    if (lowerMessage.contains("request has failed") || lowerMessage.contains("check your input")) {
+      LOGGER.info("BLS: Request failed (likely quota/rate limit) - skipping batch. Message: {}",
+          message);
+      return "[]";
+    }
+
     // Log dimension values for debugging
     String dimensionInfo = context.getDimensionValues().isEmpty()
         ? ""

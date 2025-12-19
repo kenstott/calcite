@@ -194,7 +194,8 @@ public class AlternatePartitionSelectionRule extends RelRule<AlternatePartitionS
     for (AlternateInfo info : registryAlternates) {
       // Only include materialized alternates
       if (info.isMaterialized()) {
-        alternates.add(new AlternatePartitionInfo(
+        alternates.add(
+            new AlternatePartitionInfo(
             info.getAlternateName(),
             info.getPattern(),
             info.getPartitionKeys()));

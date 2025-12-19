@@ -494,8 +494,8 @@ public class PartitionedTableConfig {
     }
 
     // Parse alternate_partitions
-    List<AlternatePartitionConfig> alternatePartitions = parseAlternatePartitions(
-        map.get("alternate_partitions"));
+    List<AlternatePartitionConfig> alternatePartitions =
+        parseAlternatePartitions(map.get("alternate_partitions"));
 
     return new PartitionedTableConfig(name, pattern, type, partitionConfig, comment,
         columnComments, columns, alternatePartitions);
@@ -543,7 +543,8 @@ public class PartitionedTableConfig {
             Object firstElem = defsList.get(0);
             if (firstElem instanceof Map) {
               columnDefs = ((List<Map<String, Object>>) defsList).stream()
-                  .map(cm -> new ColumnDefinition(
+                  .map(
+                      cm -> new ColumnDefinition(
                       (String) cm.get("name"),
                       (String) cm.get("type")))
                   .collect(java.util.stream.Collectors.toList());
@@ -604,7 +605,8 @@ public class PartitionedTableConfig {
         }
       }
 
-      result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
+      result.add(
+          new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
           batchPartitionColumns, columnMappings, threads, incrementalKeys));
     }
 

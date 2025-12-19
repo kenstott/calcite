@@ -16,10 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.census;
 
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 import org.apache.calcite.adapter.govdata.SchemaConfigReader;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
 import org.apache.calcite.model.JsonTable;
@@ -88,9 +90,6 @@ import java.util.Map;
 public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusSchemaFactory.class);
 
-  /** Census ACS data is typically 1 year behind current year. */
-  private static final int DATA_LAG_YEARS = 1;
-
   /** Schema file containing data availability rules. */
   private static final String SCHEMA_FILE = "census/census-schema.json";
 
@@ -104,11 +103,6 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
   // Hive-partitioned structure for Census data
   private static final String CENSUS_SOURCE_PARTITION = "source=census";
-
-  @Override
-  public int getDataLagYears() {
-    return DATA_LAG_YEARS;
-  }
   private static final String ACS_TYPE = "type=acs";  // American Community Survey
   private static final String DECENNIAL_TYPE = "type=decennial";  // Decennial Census
   private static final String ECONOMIC_TYPE = "type=economic";  // Economic Census
@@ -116,6 +110,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public String getSchemaResourceName() {
     return "/census/census-schema.json";
+  }
+
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for CENSUS schema");
+    // CENSUS schema uses custom download logic in buildOperand() rather than standard ETL hooks
+    // No additional hooks needed - enablement is controlled via operand parameters
   }
 
   /**
@@ -129,8 +129,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     StorageProvider storageProvider = parent.getStorageProvider();
 
     // Get cache directories from operand
-    String govdataCacheDir = getGovDataCacheDir(operand);
-    String govdataParquetDir = getGovDataParquetDir(operand);
+    String govdataCacheDir = GovDataUtils.getCacheDir(operand);
+    String govdataParquetDir = GovDataUtils.getParquetDir(operand);
 
     // Check required configuration
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -149,8 +149,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     Map<String, Object> mutableOperand = new HashMap<>(operand);
 
     // Extract configuration parameters
-    Integer startYear = getConfiguredStartYear(mutableOperand);
-    Integer endYear = getConfiguredEndYear(mutableOperand);
+    Integer startYear = GovDataUtils.getStartYear(mutableOperand);
+    Integer endYear = GovDataUtils.getEndYear(mutableOperand);
     Boolean autoDownload = shouldAutoDownload(mutableOperand);
 
     // Default to recent 5-year period for ACS data
@@ -249,7 +249,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Load table definitions from census-schema.json
-    List<Map<String, Object>> censusTables = loadTableDefinitions();
+    List<Map<String, Object>> censusTables =
+        GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
     if (!censusTables.isEmpty()) {
       mutableOperand.put("partitionedTables", censusTables);
       LOGGER.info("Built {} CENSUS table definitions from census-schema.json", censusTables.size());
@@ -266,7 +267,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     if (enableConstraints) {
       // Load constraints from census-schema.json
-      censusConstraints.putAll(loadTableConstraints());
+      censusConstraints.putAll(GovDataUtils.loadTableConstraints(getClass(), getSchemaResourceName()));
     }
 
     // Merge with any constraints from model file
@@ -279,9 +280,14 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Add schema-level comment from JSON metadata
-    String schemaComment = loadSchemaComment();
+    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
     if (schemaComment != null) {
       mutableOperand.put("comment", schemaComment);
+    }
+
+    // Pass storage provider instance through operand (for FileSchema to reuse)
+    if (storageProvider != null) {
+      mutableOperand.put("_storageProvider", storageProvider);
     }
 
     // Return the configured operand for GovDataSchemaFactory to use
@@ -704,8 +710,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     int currentYear = java.time.Year.now().getValue();
 
     // Load availability rule from schema (cached)
-    SchemaConfigReader.DataAvailabilityRule rule = availabilityRules.computeIfAbsent(
-        censusType,
+    SchemaConfigReader.DataAvailabilityRule rule =
+        availabilityRules.computeIfAbsent(censusType,
         key -> SchemaConfigReader.getDataAvailabilityRule(SCHEMA_FILE, key));
 
     if (rule == null) {
@@ -1023,12 +1029,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     return decennialYears;
   }
 
-  @Override public boolean supportsConstraints() {
+  public boolean supportsConstraints() {
     // Enable constraint support for census data
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;

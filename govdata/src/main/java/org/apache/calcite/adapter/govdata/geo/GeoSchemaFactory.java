@@ -16,10 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 import org.apache.calcite.model.JsonTable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -93,6 +95,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     return "/geo/geo-schema.json";
   }
 
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for GEO schema");
+    // GEO schema uses custom download logic in buildOperand() rather than standard ETL hooks
+    // No additional hooks needed - enablement is controlled via operand parameters
+  }
+
   /**
    * Builds the operand configuration for GEO schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
@@ -103,9 +111,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     // Access shared services from parent
     org.apache.calcite.adapter.file.storage.StorageProvider storageProvider = parent.getStorageProvider();
 
-    // Get cache directories from interface methods
-    String govdataCacheDir = getGovDataCacheDir(operand);
-    String govdataParquetDir = getGovDataParquetDir(operand);
+    // Get cache directories from operand
+    String govdataCacheDir = GovDataUtils.getCacheDir(operand);
+    String govdataParquetDir = GovDataUtils.getParquetDir(operand);
 
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -259,7 +267,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Load table definitions from geo-schema.json
-    List<Map<String, Object>> geoTables = loadTableDefinitions();
+    List<Map<String, Object>> geoTables =
+        GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
     if (!geoTables.isEmpty()) {
       // Update patterns with the actual parquet directory
       for (Map<String, Object> table : geoTables) {
@@ -284,7 +293,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
 
     if (enableConstraints) {
       // Load constraints from geo-schema.json
-      geoConstraints.putAll(loadTableConstraints());
+      geoConstraints.putAll(GovDataUtils.loadTableConstraints(getClass(), getSchemaResourceName()));
     }
 
     // Merge with any constraints from model file
@@ -297,7 +306,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Add schema-level comment from JSON metadata
-    String schemaComment = loadSchemaComment();
+    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
     if (schemaComment != null) {
       mutableOperand.put("comment", schemaComment);
     }
@@ -306,6 +315,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     if (!votingYears.isEmpty()) {
       mutableOperand.put("votingYears", votingYears);
       LOGGER.info("Added voting years to GEO operand: {}", votingYears);
+    }
+
+    // Pass storage provider instance through operand (for FileSchema to reuse)
+    if (storageProvider != null) {
+      mutableOperand.put("_storageProvider", storageProvider);
     }
 
     // Return the configured operand for GovDataSchemaFactory to use
@@ -1013,12 +1027,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   }
 
 
-  @Override public boolean supportsConstraints() {
+  public boolean supportsConstraints() {
     // Enable constraint support for geographic data
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;

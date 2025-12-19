@@ -47,7 +47,7 @@ import java.util.Map;
  *     cacheManifest,
  *     allRequests,
  *     OperationType.DOWNLOAD
- * );
+ *);
  *
  * // Execute only uncached downloads
  * for (DownloadRequest req : needed) {

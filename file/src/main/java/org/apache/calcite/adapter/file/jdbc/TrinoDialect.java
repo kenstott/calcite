@@ -62,13 +62,11 @@ public class TrinoDialect implements JdbcDialect {
   /** Default schema name. */
   private static final String DEFAULT_SCHEMA = "default";
 
-  @Override
-  public String getDriverClassName() {
+  @Override public String getDriverClassName() {
     return "io.trino.jdbc.TrinoDriver";
   }
 
-  @Override
-  public String buildJdbcUrl(Map<String, String> config) {
+  @Override public String buildJdbcUrl(Map<String, String> config) {
     String host = getConfigValue(config, "host", "localhost");
     String port = getConfigValue(config, "port", DEFAULT_PORT);
     String catalog = getConfigValue(config, "catalog", DEFAULT_CATALOG);
@@ -77,8 +75,7 @@ public class TrinoDialect implements JdbcDialect {
     return String.format("jdbc:trino://%s:%s/%s/%s", host, port, catalog, schema);
   }
 
-  @Override
-  public String readParquetSql(String globPattern, List<String> columns) {
+  @Override public String readParquetSql(String globPattern, List<String> columns) {
     // Trino requires tables to be registered in a catalog first.
     // This method assumes the table has been registered and derives a table name from the path.
     String cols = formatColumns(columns);
@@ -86,13 +83,11 @@ public class TrinoDialect implements JdbcDialect {
     return String.format("SELECT %s FROM %s", cols, tableName);
   }
 
-  @Override
-  public boolean supportsDirectGlob() {
+  @Override public boolean supportsDirectGlob() {
     return false; // Trino requires catalog registration
   }
 
-  @Override
-  public String registerTableSql(String tableName, String path, String format) {
+  @Override public String registerTableSql(String tableName, String path, String format) {
     // Trino external table creation syntax
     // Note: The exact syntax depends on the connector (Hive, Delta Lake, etc.)
     return String.format(
@@ -100,8 +95,7 @@ public class TrinoDialect implements JdbcDialect {
         tableName, path, format.toUpperCase());
   }
 
-  @Override
-  public String createParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     // Trino requires external tables in the Hive catalog
     // The schema must be pre-configured with the Hive connector
@@ -123,8 +117,7 @@ public class TrinoDialect implements JdbcDialect {
     return sql.toString();
   }
 
-  @Override
-  public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
+  @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     // For Trino with Iceberg connector, register the Iceberg table location
     // This requires the iceberg catalog to be configured
     String qualifiedName = qualifyName(schemaName, viewName);
@@ -135,20 +128,17 @@ public class TrinoDialect implements JdbcDialect {
         tablePath);
   }
 
-  @Override
-  public String dropViewSql(String schemaName, String viewName) {
+  @Override public String dropViewSql(String schemaName, String viewName) {
     // Trino uses DROP TABLE for external tables
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format("DROP TABLE IF EXISTS %s", qualifiedName);
   }
 
-  @Override
-  public String getName() {
+  @Override public String getName() {
     return "Trino";
   }
 
-  @Override
-  public boolean supportsIceberg() {
+  @Override public boolean supportsIceberg() {
     return true; // Trino supports Iceberg via the iceberg connector
   }
 

@@ -209,11 +209,10 @@ public class IcebergCatalogManagerTest {
     config.put("warehousePath", warehousePath);
 
     // Create schema with partition column
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()),
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()),
         Types.NestedField.optional(2, "data", Types.StringType.get()),
-        Types.NestedField.optional(3, "year", Types.IntegerType.get())
-    );
+        Types.NestedField.optional(3, "year", Types.IntegerType.get()));
 
     PartitionSpec spec = PartitionSpec.builderFor(schema)
         .identity("year")
@@ -242,8 +241,8 @@ public class IcebergCatalogManagerTest {
     List<String> partitionColumns = new ArrayList<>();
     partitionColumns.add("geo");
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        config, "from_columns", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(config, "from_columns", columns, partitionColumns);
 
     assertNotNull(table);
     assertEquals(4, table.schema().columns().size());
@@ -257,8 +256,8 @@ public class IcebergCatalogManagerTest {
     config.put("warehousePath", warehousePath);
 
     // Create a table first
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
     PartitionSpec spec = PartitionSpec.unpartitioned();
 
     IcebergCatalogManager.createTable(config, "to_drop", schema, spec);
@@ -283,8 +282,8 @@ public class IcebergCatalogManagerTest {
     assertFalse(IcebergCatalogManager.tableExists(config, "nonexistent"));
 
     // Create a table
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
     IcebergCatalogManager.createTable(config, "exists_test",
         schema, PartitionSpec.unpartitioned());
 
@@ -318,8 +317,8 @@ public class IcebergCatalogManagerTest {
     config.put("warehousePath", warehousePath);
     config.put("namespace", "db");  // Use a namespace for HadoopCatalog
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
     PartitionSpec spec = PartitionSpec.unpartitioned();
 
     // Create regular and alternate tables in the namespace
@@ -341,8 +340,8 @@ public class IcebergCatalogManagerTest {
     config.put("catalogType", "hadoop");
     config.put("warehousePath", warehousePath);
 
-    Schema schema = new Schema(
-        Types.NestedField.optional(1, "id", Types.IntegerType.get()));
+    Schema schema =
+        new Schema(Types.NestedField.optional(1, "id", Types.IntegerType.get()));
     PartitionSpec spec = PartitionSpec.unpartitioned();
 
     // Create twice - should not throw
@@ -373,8 +372,8 @@ public class IcebergCatalogManagerTest {
 
     List<String> partitionColumns = new ArrayList<>();
 
-    Table table = IcebergCatalogManager.createTableFromColumns(
-        config, "type_mapping_test", columns, partitionColumns);
+    Table table =
+        IcebergCatalogManager.createTableFromColumns(config, "type_mapping_test", columns, partitionColumns);
 
     assertNotNull(table);
     assertEquals(9, table.schema().columns().size());

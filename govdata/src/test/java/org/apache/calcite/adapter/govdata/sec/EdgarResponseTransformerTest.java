@@ -46,8 +46,7 @@ class EdgarResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testSuccessfulSubmissionsResponse() {
+  @Test void testSuccessfulSubmissionsResponse() {
     String response = "{"
         + "\"cik\": \"0000320193\","
         + "\"entityType\": \"operating\","
@@ -74,8 +73,7 @@ class EdgarResponseTransformerTest {
     assertTrue(result.contains("0000320193-24-000001"));
   }
 
-  @Test
-  void testEmptyFilingsArray() {
+  @Test void testEmptyFilingsArray() {
     String response = "{"
         + "\"cik\": \"0000320193\","
         + "\"name\": \"Apple Inc.\","
@@ -90,8 +88,7 @@ class EdgarResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testMissingFilingsNode() {
+  @Test void testMissingFilingsNode() {
     String response = "{"
         + "\"cik\": \"0000320193\","
         + "\"name\": \"Apple Inc.\""
@@ -102,8 +99,7 @@ class EdgarResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testMissingRecentFilings() {
+  @Test void testMissingRecentFilings() {
     String response = "{"
         + "\"cik\": \"0000320193\","
         + "\"name\": \"Apple Inc.\","
@@ -116,8 +112,7 @@ class EdgarResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testRateLimitError() {
+  @Test void testRateLimitError() {
     String response = "{"
         + "\"error\": \"Rate limit exceeded. SEC allows 10 requests per second.\""
         + "}";
@@ -128,8 +123,7 @@ class EdgarResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testNotFoundError() {
+  @Test void testNotFoundError() {
     String response = "{"
         + "\"message\": \"CIK not found in SEC database.\""
         + "}";
@@ -139,8 +133,7 @@ class EdgarResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testServerError() {
+  @Test void testServerError() {
     String response = "{"
         + "\"error\": \"Internal server error occurred.\""
         + "}";
@@ -151,22 +144,19 @@ class EdgarResponseTransformerTest {
     assertTrue(ex.getMessage().contains("server error"));
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNonEdgarStructurePassthrough() {
+  @Test void testNonEdgarStructurePassthrough() {
     // Non-EDGAR JSON should be returned as-is
     String response = "{\"data\": [1, 2, 3]}";
 
@@ -175,8 +165,7 @@ class EdgarResponseTransformerTest {
     assertEquals(response, result);
   }
 
-  @Test
-  void testContextDimensionsIncludedInError() {
+  @Test void testContextDimensionsIncludedInError() {
     Map<String, String> dimensions = new HashMap<String, String>();
     dimensions.put("cik", "0000320193");
     dimensions.put("ticker", "AAPL");
@@ -196,8 +185,7 @@ class EdgarResponseTransformerTest {
     assertTrue(ex.getMessage().contains("server error"));
   }
 
-  @Test
-  void testMultipleFilingTypes() {
+  @Test void testMultipleFilingTypes() {
     String response = "{"
         + "\"cik\": \"0000320193\","
         + "\"name\": \"Apple Inc.\","
@@ -218,8 +206,7 @@ class EdgarResponseTransformerTest {
     assertTrue(result.contains("SC 13G"));
   }
 
-  @Test
-  void testGenericError() {
+  @Test void testGenericError() {
     String response = "{"
         + "\"message\": \"Some unexpected API error message\""
         + "}";

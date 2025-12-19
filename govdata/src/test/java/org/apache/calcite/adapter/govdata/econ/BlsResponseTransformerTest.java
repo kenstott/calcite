@@ -46,8 +46,7 @@ class BlsResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testSuccessfulResponse() {
+  @Test void testSuccessfulResponse() {
     String response = "{"
         + "\"status\": \"REQUEST_SUCCEEDED\","
         + "\"responseTime\": 150,"
@@ -66,8 +65,7 @@ class BlsResponseTransformerTest {
     assertTrue(result.contains("3.5"));
   }
 
-  @Test
-  void testEmptySeriesArray() {
+  @Test void testEmptySeriesArray() {
     String response = "{"
         + "\"status\": \"REQUEST_SUCCEEDED\","
         + "\"Results\": {"
@@ -79,8 +77,7 @@ class BlsResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testMissingSeriesArray() {
+  @Test void testMissingSeriesArray() {
     String response = "{"
         + "\"status\": \"REQUEST_SUCCEEDED\","
         + "\"Results\": {}"
@@ -91,8 +88,7 @@ class BlsResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testRequestFailed() {
+  @Test void testRequestFailed() {
     // Use a generic error that doesn't trigger special handling
     String response = "{"
         + "\"status\": \"REQUEST_FAILED\","
@@ -107,8 +103,7 @@ class BlsResponseTransformerTest {
     assertTrue(ex.getMessage().contains("Database connection error"));
   }
 
-  @Test
-  void testRateLimitError() {
+  @Test void testRateLimitError() {
     String response = "{"
         + "\"status\": \"REQUEST_FAILED\","
         + "\"message\": [\"Rate limit exceeded. Please try again later.\"],"
@@ -121,8 +116,7 @@ class BlsResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testInvalidSeriesReturnsEmpty() {
+  @Test void testInvalidSeriesReturnsEmpty() {
     String response = "{"
         + "\"status\": \"REQUEST_FAILED\","
         + "\"message\": [\"Invalid series ID: INVALID123\"],"
@@ -134,8 +128,7 @@ class BlsResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNoDataAvailableReturnsEmpty() {
+  @Test void testNoDataAvailableReturnsEmpty() {
     String response = "{"
         + "\"status\": \"REQUEST_FAILED\","
         + "\"message\": [\"No data available for the requested time period\"],"
@@ -147,22 +140,19 @@ class BlsResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testUnknownStatusStillExtractsData() {
+  @Test void testUnknownStatusStillExtractsData() {
     // Unknown status should still try to extract data
     String response = "{"
         + "\"status\": \"UNKNOWN_STATUS\","
@@ -175,8 +165,7 @@ class BlsResponseTransformerTest {
     assertTrue(result.contains("TEST"));
   }
 
-  @Test
-  void testMultipleSeriesRecords() {
+  @Test void testMultipleSeriesRecords() {
     String response = "{"
         + "\"status\": \"REQUEST_SUCCEEDED\","
         + "\"Results\": {"
@@ -194,8 +183,7 @@ class BlsResponseTransformerTest {
     assertTrue(result.contains("SERIES3"));
   }
 
-  @Test
-  void testMultipleErrorMessages() {
+  @Test void testMultipleErrorMessages() {
     String response = "{"
         + "\"status\": \"REQUEST_FAILED\","
         + "\"message\": [\"Error 1\", \"Error 2\", \"Error 3\"],"
@@ -211,8 +199,7 @@ class BlsResponseTransformerTest {
     assertTrue(ex.getMessage().contains("Error 3"));
   }
 
-  @Test
-  void testContextDimensionsForDebugging() {
+  @Test void testContextDimensionsForDebugging() {
     Map<String, String> dimensions = new HashMap<>();
     dimensions.put("series", "LAUCN040010000000005");
     dimensions.put("year", "2024");

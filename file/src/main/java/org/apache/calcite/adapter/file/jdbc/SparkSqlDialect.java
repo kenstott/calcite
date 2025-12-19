@@ -54,13 +54,11 @@ public class SparkSqlDialect implements JdbcDialect {
   /** Default database name. */
   private static final String DEFAULT_DATABASE = "default";
 
-  @Override
-  public String getDriverClassName() {
+  @Override public String getDriverClassName() {
     return "org.apache.hive.jdbc.HiveDriver";
   }
 
-  @Override
-  public String buildJdbcUrl(Map<String, String> config) {
+  @Override public String buildJdbcUrl(Map<String, String> config) {
     String host = getConfigValue(config, "host", "localhost");
     String port = getConfigValue(config, "port", DEFAULT_PORT);
     String database = getConfigValue(config, "database", DEFAULT_DATABASE);
@@ -68,20 +66,17 @@ public class SparkSqlDialect implements JdbcDialect {
     return String.format("jdbc:hive2://%s:%s/%s", host, port, database);
   }
 
-  @Override
-  public String readParquetSql(String globPattern, List<String> columns) {
+  @Override public String readParquetSql(String globPattern, List<String> columns) {
     // Spark SQL supports direct parquet path access with backticks
     String cols = formatColumns(columns);
     return String.format("SELECT %s FROM parquet.`%s`", cols, globPattern);
   }
 
-  @Override
-  public boolean supportsDirectGlob() {
+  @Override public boolean supportsDirectGlob() {
     return true; // Spark supports parquet.`path` syntax with globs
   }
 
-  @Override
-  public String createParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     // Spark SQL uses backtick syntax for direct parquet file access
     // hivePartitioning is automatically detected by Spark when reading parquet
@@ -91,8 +86,7 @@ public class SparkSqlDialect implements JdbcDialect {
         qualifiedName, path);
   }
 
-  @Override
-  public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
+  @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     // Spark requires Iceberg tables to be registered in a catalog
     // Using the Iceberg catalog reference syntax
     String qualifiedName = qualifyName(schemaName, viewName);
@@ -101,20 +95,17 @@ public class SparkSqlDialect implements JdbcDialect {
         qualifiedName, tablePath);
   }
 
-  @Override
-  public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     // Spark supports CREATE OR REPLACE VIEW natively
     return createParquetViewSql(schemaName, viewName, path, hivePartitioning);
   }
 
-  @Override
-  public boolean supportsIceberg() {
+  @Override public boolean supportsIceberg() {
     return true; // Spark supports Iceberg via the iceberg catalog
   }
 
-  @Override
-  public String getName() {
+  @Override public String getName() {
     return "Spark SQL";
   }
 

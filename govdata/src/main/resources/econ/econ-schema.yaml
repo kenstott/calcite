@@ -14,7 +14,9 @@
 #   - Bulk download support for QCEW data
 # ============================================================================
 
-schemaName: econ
+schemaName: "${SCHEMA_NAME:econ}"
+dataLagYears: 2
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=econ"
 
 comment: >
   U.S. economic indicators from Federal Reserve (FRED), Bureau of Labor Statistics (BLS),
@@ -312,9 +314,14 @@ bulkDownloads:
   qcew_annual_bulk:
     cachePattern: "type=qcew_bulk/year={year}/{frequency}_singlefile.zip"
     url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
-    variables:
-      - year
-      - frequency
+    dimensions:
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+        dataLag: 1  # QCEW annual data is released with ~1 year lag
+      frequency:
+        - annual
     comment: >
       QCEW bulk CSV download shared by state_wages, county_wages, county_qcew, and metro_wages tables. Annual file ~80MB, quarterly file ~323MB. Contains all counties, states, and metros for a given year.
 # ============================================================================
@@ -345,7 +352,9 @@ partitionedTables:
         - employment_statistics  # Static table type
       frequency: *monthly_frequency  # Reference YAML anchor
       year:
-        type: yearRange  # Special: computed from startYear/endYear
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
 
     columns:
       - *date_column
@@ -637,6 +646,8 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
 
     # API Configuration
     download:
@@ -700,6 +711,8 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
 
     comment: >
       Consumer Price Index for 20 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
@@ -892,7 +905,9 @@ partitionedTables:
         - annual
       year:
         type: yearRange
-        minYear: 1990  # QCEW data only available from 1990
+        start: "{env:GOVDATA_START_YEAR:1990}"  # QCEW data only available from 1990
+        end: current
+        dataLag: 1  # QCEW annual data is released with ~1 year lag
 
     columns:
       - *date_column
@@ -913,19 +928,22 @@ partitionedTables:
       bulkDownload: qcew_annual_bulk
 
     # HTTP Source configuration for EtlPipeline (bulk download)
+    # Downloads ZIP file and extracts CSV content
+    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
       method: GET
+      extractPattern: "*.csv"  # Extract CSV from ZIP archive
+      # Row filter: state-level data has area_fips = XX000 (2-digit state + 000)
+      rowFilter:
+        column: area_fips
+        pattern: "^\\d{2}000$"  # State FIPS codes: 01000, 02000, etc.
       response:
         format: csv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
-
-    # Custom hooks for BLS QCEW response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
     # Materialization configuration
     materialize:
@@ -951,6 +969,17 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - metro_industry
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+
     columns:
       - *date_column
       - *series_column
@@ -975,6 +1004,8 @@ partitionedTables:
       - *percent_change_year
 
     # API Configuration
+    # Full series list (594 total) available in /bls/metro-industry-series.json
+    # BLS API limit: 50 series/request. This config uses Batch 1 (first 50 series).
     download:
       enabled: true
       method: POST
@@ -983,16 +1014,84 @@ partitionedTables:
         type: json_body
         paramName: registrationkey
         envVar: BLS_API_KEY  # Set API key in environment
+      # BLS metro industry series IDs: SMU{areaCode}{industryCode}01
+      # Batch 1: NYC (22) + LA (22) + Chicago (6) = 50 series
+      seriesList:
+        # NYC (3693561) - All industries
+        - "SMU36935610000000001"
+        - "SMU36935610500000001"
+        - "SMU36935610600000001"
+        - "SMU36935610700000001"
+        - "SMU36935610800000001"
+        - "SMU36935611000000001"
+        - "SMU36935612000000001"
+        - "SMU36935613000000001"
+        - "SMU36935613100000001"
+        - "SMU36935613200000001"
+        - "SMU36935614000000001"
+        - "SMU36935614100000001"
+        - "SMU36935614200000001"
+        - "SMU36935614300000001"
+        - "SMU36935614400000001"
+        - "SMU36935615000000001"
+        - "SMU36935615500000001"
+        - "SMU36935616000000001"
+        - "SMU36935616500000001"
+        - "SMU36935617000000001"
+        - "SMU36935618000000001"
+        - "SMU36935619000000001"
+        # LA (0631080) - All industries
+        - "SMU06310800000000001"
+        - "SMU06310800500000001"
+        - "SMU06310800600000001"
+        - "SMU06310800700000001"
+        - "SMU06310800800000001"
+        - "SMU06310801000000001"
+        - "SMU06310802000000001"
+        - "SMU06310803000000001"
+        - "SMU06310803100000001"
+        - "SMU06310803200000001"
+        - "SMU06310804000000001"
+        - "SMU06310804100000001"
+        - "SMU06310804200000001"
+        - "SMU06310804300000001"
+        - "SMU06310804400000001"
+        - "SMU06310805000000001"
+        - "SMU06310805500000001"
+        - "SMU06310806000000001"
+        - "SMU06310806500000001"
+        - "SMU06310807000000001"
+        - "SMU06310808000000001"
+        - "SMU06310809000000001"
+        # Chicago (1716980) - First 6 industries
+        - "SMU17169800000000001"
+        - "SMU17169800500000001"
+        - "SMU17169800600000001"
+        - "SMU17169800700000001"
+        - "SMU17169800800000001"
+        - "SMU17169801000000001"
+      rateLimit:
+        minIntervalMs: 1100
+        maxRetries: 3
 
     # HTTP Source configuration for EtlPipeline
+    # Uses config-driven batching to fetch all 594 series (12 batches of 50)
+    # from /bls/metro-industry-series.json, respecting BLS API limit of 50 series/request
     source:
       type: http
       url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
       method: POST
       headers:
         Content-Type: "application/json"
+      # Config-driven batching: loads all series from JSON catalog and batches requests
+      batching:
+        field: seriesid                           # Body field to populate with batch values
+        source: "/bls/metro-industry-series.json" # JSON catalog resource path
+        path: seriesIds                           # JSONPath to array of series IDs
+        size: 50                                  # BLS API limit per request
+        delayMs: 1100                             # Rate limit delay between batches
       body:
-        seriesid: "{seriesList}"
+        seriesid: []                              # Will be populated by batching
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
@@ -1004,7 +1103,7 @@ partitionedTables:
         retryOn: [429, 503]
         maxRetries: 3
 
-    # Custom hooks for BLS response handling
+    # Custom hooks for BLS response transformation
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
@@ -1060,24 +1159,40 @@ partitionedTables:
         nullable: true
         comment: Average annual pay in dollars
 
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - metro_wages
+      frequency:
+        - annual
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+        dataLag: 1  # QCEW annual data is released with ~1 year lag
+
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
 
     # HTTP Source configuration for EtlPipeline (bulk download)
+    # Downloads ZIP file and extracts CSV content
+    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
       method: GET
+      extractPattern: "*.csv"  # Extract CSV from ZIP archive
+      # Row filter: all metro/CSA codes (area_fips starting with C)
+      rowFilter:
+        column: area_fips
+        pattern: "^C.*"
+        maxRows: 600000  # Safety limit for memory - all metros ~566k rows
       response:
         format: csv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
-
-    # Custom hooks for BLS QCEW response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
     # Materialization configuration
     materialize:
@@ -1137,24 +1252,40 @@ partitionedTables:
         nullable: true
         comment: Average weekly wage in dollars
 
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - county_qcew
+      frequency:
+        - annual
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+        dataLag: 1  # QCEW annual data is released with ~1 year lag
+
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
 
     # HTTP Source configuration for EtlPipeline (bulk download)
+    # Downloads ZIP file and extracts CSV content
+    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
       method: GET
+      extractPattern: "*.csv"  # Extract CSV from ZIP archive
+      # Row filter: county-level data has 5-digit area_fips (excludes state 000 suffix)
+      rowFilter:
+        column: area_fips
+        pattern: "^\\d{2}[0-9]{2}[1-9]$|^\\d{2}[0-9][1-9][0-9]$|^\\d{2}[1-9][0-9]{2}$"  # County FIPS (not ending in 000)
+        maxRows: 500000  # Limit to prevent OOM for large county datasets
       response:
         format: csv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
-
-    # Custom hooks for BLS QCEW response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
     # Materialization configuration
     materialize:
@@ -1204,24 +1335,40 @@ partitionedTables:
         nullable: true
         comment: Year
 
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - county_wages
+      frequency:
+        - annual
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+        dataLag: 1  # QCEW annual data is released with ~1 year lag
+
     # API Configuration
     download:
       bulkDownload: qcew_annual_bulk
 
     # HTTP Source configuration for EtlPipeline (bulk download)
+    # Downloads ZIP file and extracts CSV content
+    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
       method: GET
+      extractPattern: "*.csv"  # Extract CSV from ZIP archive
+      # Row filter: county-level data has 5-digit area_fips (excludes state 000 suffix)
+      rowFilter:
+        column: area_fips
+        pattern: "^\\d{2}[0-9]{2}[1-9]$|^\\d{2}[0-9][1-9][0-9]$|^\\d{2}[1-9][0-9]{2}$"  # County FIPS (not ending in 000)
+        maxRows: 500000  # Limit to prevent OOM for large county datasets
       response:
         format: csv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
-
-    # Custom hooks for BLS QCEW response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
     # Materialization configuration
     materialize:
@@ -1275,7 +1422,8 @@ partitionedTables:
       frequency: *monthly_frequency  # Monthly JOLTS releases
       year:
         type: yearRange
-        minYear: 2001  # JOLTS data only available from December 2000
+        start: "{env:GOVDATA_START_YEAR:2001}"  # JOLTS data only available from December 2000
+        end: current
 
     columns:
       - *date_column
@@ -1298,6 +1446,23 @@ partitionedTables:
         comment: Metric value in thousands
       - *percent_change_month
       - *percent_change_year
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - jolts_regional
+      frequency:
+        - monthly
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+      metric:
+        - "2.JobOpenings"
+        - "3.Hires"
+        - "4.TotalSeparations"
+        - "5.Quits"
+        - "6.LayoffsDischarges"
 
     # HTTP Source configuration for EtlPipeline (FTP files)
     source:
@@ -1385,6 +1550,23 @@ partitionedTables:
         type: double
         nullable: true
         comment: Total separations rate
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - jolts_state
+      frequency:
+        - monthly
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+      metric:
+        - "2.JobOpenings"
+        - "3.Hires"
+        - "4.TotalSeparations"
+        - "5.Quits"
+        - "6.LayoffsDischarges"
 
     # HTTP Source configuration for EtlPipeline (FTP files)
     source:
@@ -1789,6 +1971,22 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       International economic indicators from World Bank for major economies. Includes GDP, inflation, unemployment, government debt, and population statistics. Enables comparison of U.S. economic performance with global peers.
+
+    # Dimensions for batch iteration - loaded from JSON catalog files
+    dimensions:
+      country:
+        type: json_catalog
+        source: "/worldbank/worldbank-countries.json"
+        path: "countryGroups.G20.countries"
+      indicator:
+        type: json_catalog
+        source: "/worldbank/worldbank-indicators.json"
+        path: "indicators[*].items[*].code"
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2000}"
+        end: current
+
     columns:
       - name: country_code
         type: string
@@ -2141,7 +2339,9 @@ partitionedTables:
       type:
         - regional_income  # Static table type
       year:
-        type: yearRange  # Computed from startYear/endYear environment config
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2000}"
+        end: current
       geo_fips_set: *bea_geo_fips_sets  # Reference YAML anchor: STATE, COUNTY, MSA, MIC, PORT, DIV, CSA
       tablename: *bea_regional_tables  # Reference YAML anchor: All 63 BEA Regional tables
       line_code:
@@ -2655,7 +2855,9 @@ partitionedTables:
         - "54"
         - "GSLG"
       year:
-        type: yearRange  # Special: computed from startYear/endYear
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2000}"
+        end: current
     partitions:
       style: hive
       columnDefinitions:
@@ -2786,663 +2988,6 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
-  # --- REFERENCE JOLTS INDUSTRIES ---
-  - name: reference_jolts_industries
-    pattern: "type=reference/jolts_industries.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-    sourcePaths:
-      ftpFiles:
-        - cachePath: "type=jolts_ftp/jt.industry"
-          url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
-          comment: JOLTS industry code reference file
-    comment: >
-      JOLTS industry code reference table from BLS. Maps industry codes to human-readable industry names for JOLTS data (jolts_regional, jolts_state tables). Essential dimension table for decoding JOLTS industry classifications.
-    columns:
-      - name: industry_code
-        type: string
-        nullable: true
-        comment: JOLTS industry code
-      - *industry_name
-
-    # HTTP Source configuration for EtlPipeline (FTP file)
-    source:
-      type: http
-      url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
-      method: GET
-      response:
-        format: tsv
-      rateLimit:
-        requestsPerSecond: 1.0
-        maxRetries: 3
-
-    # Materialization configuration
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/"
-      partition:
-        columns: [type]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE JOLTS DATAELEMENTS ---
-  - name: reference_jolts_dataelements
-    pattern: "type=reference/jolts_dataelements.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-    sourcePaths:
-      ftpFiles:
-        - cachePath: "type=jolts_ftp/jt.dataelement"
-          url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
-          comment: JOLTS data element code reference file
-    comment: >
-      JOLTS data element code reference table from BLS. Maps metric codes (JOR, HIR, QUR, TSR, LDR) to descriptions (Job Openings Rate, Hires Rate, etc.). Essential dimension table for understanding JOLTS metrics in jolts_regional and jolts_state tables.
-    columns:
-      - name: dataelement_code
-        type: string
-        nullable: true
-        comment: JOLTS data element code
-      - name: dataelement_text
-        type: string
-        nullable: true
-        comment: Data element description
-
-    # HTTP Source configuration for EtlPipeline (FTP file)
-    source:
-      type: http
-      url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
-      method: GET
-      response:
-        format: tsv
-      rateLimit:
-        requestsPerSecond: 1.0
-        maxRetries: 3
-
-    # Materialization configuration
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/"
-      partition:
-        columns: [type]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE BLS GEOGRAPHIES ---
-  - name: reference_bls_geographies
-    pattern: "type=reference/geo_type=*/bls_geographies.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-        - name: geo_type
-          type: VARCHAR
-    comment: >
-      BLS geography reference table mapping state abbreviations to FIPS codes, census regions, metro areas, and BLS-specific area codes. Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES into a single catalog-driven table. Enables dynamic geography lookups without hardcoded maps.
-    columns:
-      - name: geo_code
-        type: string
-        nullable: false
-        comment: Primary geography code (state abbreviation, metro code like 'A100', or region code)
-      - name: geo_name
-        type: string
-        nullable: true
-        comment: Geography name (e.g., 'California', 'New York-Newark-Jersey City, NY-NJ-PA', 'Northeast')
-      - name: geo_type
-        type: string
-        nullable: false
-        comment: "Geography type: 'state', 'metro', 'region'"
-      - name: state_fips
-        type: string
-        nullable: true
-        comment: 2-digit state FIPS code (e.g., '06' for CA, '36' for NY). NULL for regions.
-      - name: region_code
-        type: string
-        nullable: true
-        comment: 4-digit census region code for regions (e.g., '0100' for Northeast). NULL for states/metros.
-      - name: metro_publication_code
-        type: string
-        nullable: true
-        comment: BLS publication code for metro areas (e.g., 'A100' for NYC). NULL for states/regions.
-      - name: metro_cpi_area_code
-        type: string
-        nullable: true
-        comment: CPI area code for metro CPI series (e.g., 'S35D' for NYC). NULL if metro lacks CPI data or for states/regions.
-      - name: metro_bls_area_code
-        type: string
-        nullable: true
-        comment: 7-digit BLS area code for metro employment series (state FIPS + 5-digit area code, e.g., '3693561' for NYC). NULL for states/regions.
-
-    # API Configuration
-    download:
-
-    # Materialization configuration (reference data)
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/geo_type=*/"
-      partition:
-        columns: [type, geo_type]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE BLS NAICS SECTORS ---
-  - name: reference_bls_naics_sectors
-    pattern: "type=reference/bls_naics_sectors.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-    comment: >
-      BLS NAICS supersector reference table mapping supersector codes to industry names. Consolidates NAICS_SUPERSECTORS hardcoded map. Used for state_industry_employment, metro_industry_employment, and other industry-based BLS series.
-    columns:
-      - name: supersector_code
-        type: string
-        nullable: false
-        comment: 8-digit NAICS supersector code (e.g., '00000000' for total nonfarm, '05000000' for construction)
-      - name: supersector_name
-        type: string
-        nullable: false
-        comment: Industry supersector name (e.g., 'Total Nonfarm', 'Construction', 'Manufacturing')
-
-    # API Configuration
-    download:
-
-    # Materialization configuration (reference data)
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/"
-      partition:
-        columns: [type]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE NIPA TABLES ---
-  - name: reference_nipa_tables
-    pattern: "type=reference/section=*/*.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-        - name: section
-          type: VARCHAR
-    comment: >
-      BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.
-    columns:
-      - name: TableName
-        type: string
-        nullable: true
-        comment: NIPA table code (e.g., 'T10105', 'T20100')
-      - name: Description
-        type: string
-        nullable: true
-        comment: Full table description from BEA including frequency indicators
-      - name: section_name
-        type: string
-        nullable: true
-        comment: Descriptive section name (e.g., 'domestic_product_income', 'foreign_transactions')
-      - name: family
-        type: string
-        nullable: true
-        comment: Table family code within section (e.g., '01' for section 1.1.x series)
-      - name: metric
-        type: string
-        nullable: true
-        comment: Metric code (e.g., '05' for current dollars, '06' for chained dollars)
-      - name: table_number
-        type: string
-        nullable: true
-        comment: Standard BEA table number format (e.g., '1.1.5', '4.2.5B')
-      - name: annual
-        type: boolean
-        nullable: true
-        comment: True if table has annual (A) frequency data available. Parsed from Description field during conversion.
-      - name: quarterly
-        type: boolean
-        nullable: true
-        comment: True if table has quarterly (Q) frequency data available. Parsed from Description field during conversion.
-
-    # API Configuration
-    download:
-      enabled: true
-      method: GET
-      baseUrl: "https://apps.bea.gov/api/data"
-      authentication:
-        type: query_param
-        paramName: UserID
-        envVar: BEA_API_KEY  # Set API key in environment
-      queryParams:
-        UserID:
-          type: auth
-        method:
-          type: constant
-          value: GetParameterValues
-        datasetname:
-          type: constant
-          value: NIPA
-        ParameterName:
-          type: constant
-          value: TableName
-        ResultFormat:
-          type: constant
-          value: JSON
-      cachePattern: "type=reference/nipa_tables.json"
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 3
-        retryDelayMs: 5000
-      earlyDownload: true
-
-    # HTTP Source configuration for EtlPipeline
-    source:
-      type: http
-      url: "https://apps.bea.gov/api/data"
-      method: GET
-      parameters:
-        UserID: "{env:BEA_API_KEY}"
-        method: "GetParameterValues"
-        DataSetName: "NIPA"
-        ParameterName: "TableName"
-        ResultFormat: "JSON"
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
-      rateLimit:
-        requestsPerSecond: 1.5
-        retryOn: [429, 503]
-        maxRetries: 3
-
-    # Custom hooks for BEA response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
-
-    # Materialization configuration
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/section=*/"
-      partition:
-        columns: [type, section]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE REGIONAL LINECODES ---
-  - name: reference_regional_linecodes
-    pattern: "type=reference/tablename=*/reference_regional_linecodes.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-        - name: tablename
-          type: VARCHAR
-    comment: >
-      BEA Regional dataset LineCode catalog. Maps table-specific line codes to their descriptions for all 67 Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP*, etc.). Each BEA Regional table has its own set of valid LineCodes - this catalog is downloaded first to enable complete regional data collection without hardcoded limitations.
-    columns:
-      - name: TableName
-        type: string
-        nullable: false
-        comment: BEA Regional table code (e.g., 'SQINC4', 'SAGDP2', 'CAINC1')
-      - name: LineCode
-        type: string
-        nullable: false
-        comment: Line code identifier for this table (e.g., '10', '20', '30'). Different tables use different LineCode numbering schemes.
-      - name: Description
-        type: string
-        nullable: false
-        comment: Full line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
-      - name: table_prefix
-        type: string
-        nullable: true
-        comment: "Parsed table prefix indicating geography and frequency: SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc."
-      - name: data_category
-        type: string
-        nullable: true
-        comment: "Parsed data category from table name: INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc."
-      - name: geography_level
-        type: string
-        nullable: true
-        comment: "Geographic aggregation level: state, county, msa, micropolitan, etc."
-      - name: frequency
-        type: string
-        nullable: true
-        comment: "Data frequency: annual, quarterly"
-
-    # API Configuration
-    download:
-      enabled: true
-      method: GET
-      baseUrl: "https://apps.bea.gov/api/data"
-      authentication:
-        type: query_param
-        paramName: UserID
-        envVar: BEA_API_KEY  # Set API key in environment
-      queryParams:
-        UserID:
-          type: auth
-        method:
-          type: constant
-          value: GetParameterValuesFiltered
-        datasetname:
-          type: constant
-          value: Regional
-        TargetParameter:
-          type: constant
-          value: LineCode
-        TableName:
-          type: expression
-          value: "{tablename}"
-        ResultFormat:
-          type: constant
-          value: JSON
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
-        errorPath: "BEAAPI.Results.Error"
-      tableNamesList:
-        - "SAINC1"
-        - "SAINC30"
-        - "SAINC35"
-        - "SAINC4"
-        - "SAINC40"
-        - "SAINC50"
-        - "SAINC51"
-        - "SAINC5H"
-        - "SAINC5N"
-        - "SAINC5S"
-        - "SAINC6N"
-        - "SAINC6S"
-        - "SAINC70"
-        - "SAINC7H"
-        - "SAINC7N"
-        - "SAINC7S"
-        - "SAINC91"
-        - "SQINC1"
-        - "SQINC35"
-        - "SQINC4"
-        - "SQINC5H"
-        - "SQINC5N"
-        - "SQINC5S"
-        - "SQINC6N"
-        - "SQINC6S"
-        - "SQINC7H"
-        - "SQINC7N"
-        - "SQINC7S"
-        - "CAINC1"
-        - "CAINC30"
-        - "CAINC4"
-        - "CAINC5N"
-        - "CAINC5S"
-        - "CAINC6N"
-        - "CAINC6S"
-        - "CAINC91"
-        - "SAGDP1"
-        - "SAGDP2"
-        - "SAGDP3"
-        - "SAGDP4"
-        - "SAGDP5"
-        - "SAGDP6"
-        - "SAGDP7"
-        - "SAGDP8"
-        - "SAGDP9"
-        - "SAGDP11"
-        - "SQGDP1"
-        - "SQGDP2"
-        - "SQGDP8"
-        - "SQGDP9"
-        - "SQGDP11"
-        - "CAGDP1"
-        - "CAGDP2"
-        - "CAGDP8"
-        - "CAGDP9"
-        - "CAGDP11"
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
-      rateLimit:  # API rate limiting
-        minIntervalMs: 500  # Milliseconds between requests
-        maxRetries: 3
-        retryDelayMs: 5000
-      earlyDownload: true
-
-    # HTTP Source configuration for EtlPipeline
-    source:
-      type: http
-      url: "https://apps.bea.gov/api/data"
-      method: GET
-      parameters:
-        UserID: "{env:BEA_API_KEY}"
-        method: "GetParameterValuesFiltered"
-        DataSetName: "Regional"
-        TargetParameter: "LineCode"
-        TableName: "{tablename}"
-        ResultFormat: "JSON"
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
-        errorPath: "BEAAPI.Results.Error"
-      rateLimit:
-        requestsPerSecond: 1.5
-        retryOn: [429, 503]
-        maxRetries: 3
-
-    # Custom hooks for BEA response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
-
-    # Materialization configuration
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/tablename=*/"
-      partition:
-        columns: [type, tablename]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
-  # --- REFERENCE FRED SERIES ---
-  - name: reference_fred_series
-    pattern: "type=reference/category=*/frequency=*/source=*/status=*/reference_fred_series.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
-        - name: category
-          type: VARCHAR
-        - name: frequency
-          type: VARCHAR
-        - name: source
-          type: VARCHAR
-        - name: status
-          type: VARCHAR
-    comment: >
-      Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.
-    columns:
-      - name: series
-        type: string
-        nullable: true
-        comment: Unique FRED series identifier (e.g., 'UNRATE', 'GDP')
-      - name: title
-        type: string
-        nullable: true
-        comment: Full descriptive title of the economic data series
-      - name: observation_start
-        type: string
-        nullable: true
-        comment: Date of first available observation (ISO 8601 format)
-      - name: observation_end
-        type: string
-        nullable: true
-        comment: Date of most recent observation (ISO 8601 format)
-      - name: frequency
-        type: string
-        nullable: true
-        comment: Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')
-      - name: frequency_short
-        type: string
-        nullable: true
-        comment: Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')
-      - name: units
-        type: string
-        nullable: true
-        comment: Units of measurement (e.g., 'Percent', 'Billions of Dollars')
-      - name: units_short
-        type: string
-        nullable: true
-        comment: Abbreviated units code
-      - name: seasonal_adjustment
-        type: string
-        nullable: true
-        comment: Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')
-      - name: seasonal_adjustment_short
-        type: string
-        nullable: true
-        comment: Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')
-      - name: last_updated
-        type: string
-        nullable: true
-        comment: Timestamp of last data update (ISO 8601 format)
-      - name: popularity
-        type: int
-        nullable: true
-        comment: FRED popularity score indicating usage/interest level
-      - name: group_popularity
-        type: int
-        nullable: true
-        comment: Popularity score within category group
-      - name: notes
-        type: string
-        nullable: true
-        comment: Detailed description, methodology, and source information
-      - name: category_id
-        type: int
-        nullable: true
-        comment: FRED category ID for hierarchical classification
-      - name: category_name
-        type: string
-        nullable: true
-        comment: Human-readable category name (e.g., 'National Accounts', 'Labor Markets')
-      - name: source_id
-        type: int
-        nullable: true
-        comment: Data source identifier
-      - name: source_name
-        type: string
-        nullable: true
-        comment: Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')
-      - name: series_status
-        type: string
-        nullable: true
-        comment: "Series status: 'active' (currently updated) or 'discontinued' (no longer updated)"
-      - name: title_embedding
-        type: array<double>
-        nullable: true
-        expression: "CASE WHEN length(title) > 10 THEN embed(title)::FLOAT[384] ELSE NULL END"
-        comment: 384-dim vector embedding for semantic search on title (only for substantial text)
-
-    # HTTP Source configuration for EtlPipeline
-    source:
-      type: http
-      url: "https://api.stlouisfed.org/fred/series/search"
-      method: GET
-      parameters:
-        api_key: "{env:FRED_API_KEY}"
-        file_type: "json"
-        search_text: "{category}"
-        limit: "1000"
-      response:
-        format: json
-        dataPath: "seriess"
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503]
-        maxRetries: 3
-
-    # Custom hooks for FRED response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
-
-    # Materialization configuration
-    materialize:
-      enabled: true
-      format: iceberg
-      output:
-        location: "{baseDirectory}"
-        pattern: "type=reference/category=*/frequency=*/source=*/status=*/"
-      partition:
-        columns: [type, category, frequency, source, status]
-      options:
-        compression: snappy
-      iceberg:
-        catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-        runMaintenance: true
-        snapshotRetentionDays: 7
-
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -3462,7 +3007,7 @@ constraints:
     foreignKeys:
       - columns:
           - series
-        targetSchema: econ
+        targetSchema: "${SCHEMA_NAME:econ}"
         targetTable: fred_indicators
         targetColumns:
           - series
@@ -3475,7 +3020,7 @@ constraints:
     foreignKeys:
       - columns:
           - area_code
-        targetSchema: econ
+        targetSchema: "${SCHEMA_NAME:econ}"
         targetTable: regional_employment
         targetColumns:
           - area_code
@@ -3500,7 +3045,7 @@ constraints:
     foreignKeys:
       - columns:
           - state_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3514,7 +3059,7 @@ constraints:
     foreignKeys:
       - columns:
           - state_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3561,7 +3106,7 @@ constraints:
         comment: Links county wage data to geographic and demographic data for granular regional compensation analysis and rural-urban wage comparisons
       - columns:
           - state_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3581,7 +3126,7 @@ constraints:
     foreignKeys:
       - columns:
           - state_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3601,7 +3146,7 @@ constraints:
     foreignKeys:
       - columns:
           - area_code
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3633,8 +3178,8 @@ constraints:
     foreignKeys:
       - columns:
           - series
-        targetSchema: econ
-        targetTable: reference_fred_series
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: fred_series
         targetColumns:
           - series
 
@@ -3647,8 +3192,8 @@ constraints:
     foreignKeys:
       - columns:
           - table_id
-        targetSchema: econ
-        targetTable: reference_nipa_tables
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: nipa_tables
         targetColumns:
           - TableName
         comment: Links national accounts data to NIPA table metadata catalog for section categorization and descriptions
@@ -3667,7 +3212,7 @@ constraints:
     foreignKeys:
       - columns:
           - geo_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3675,8 +3220,8 @@ constraints:
       - columns:
           - tablename
           - line_code
-        targetSchema: econ
-        targetTable: reference_regional_linecodes
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: regional_linecodes
         targetColumns:
           - TableName
           - LineCode
@@ -3690,7 +3235,7 @@ constraints:
     foreignKeys:
       - columns:
           - geo_fips
-        targetSchema: geo
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns:
           - state_fips
@@ -3714,110 +3259,63 @@ constraints:
       - frequency
       - year
 
-  reference_jolts_industries:
-    primaryKey:
-      - type
-    comment: Reference dimension table for JOLTS industry classifications
-
-  reference_jolts_dataelements:
-    primaryKey:
-      - type
-    comment: Reference dimension table for JOLTS metric codes and descriptions
-
-  reference_nipa_tables:
-    primaryKey:
-      - type
-    comment: Reference dimension table for NIPA table classifications and descriptions
-
-  reference_regional_linecodes:
-    primaryKey:
-      - type
-      - tablename
-      - TableName
-      - LineCode
-    comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and data columns (TableName, LineCode).
-
-  reference_fred_series:
-    primaryKey:
-      - type
-      - category
-      - frequency
-      - source
-      - status
-    indexes:
-      - - title
-      - - category_id
-      - - units
-      - - frequency
-      - - seasonal_adjustment
-      - - source_name
-
-# ============================================================================
-# TABLES (SQL VIEWS)
-# ============================================================================
-# SQL views built on top of the partitioned tables to provide enriched data
-# and pre-computed analytics. Views join fact tables with reference/dimension
-# tables to add semantic metadata, calculate derived metrics, and simplify
-# common query patterns.
-# ============================================================================
-
 tables:
   - name: fred_indicators_enriched
     type: view
-    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM econ.fred_indicators i JOIN econ.reference_fred_series c ON i.series = c.series"
+    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_series c ON i.series = c.series"
     comment: Enriched fred_indicator observations with metadata such as series names, units, frequency, or others.
 
   - name: national_accounts_enriched
     type: view
-    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.Description AS table_description, r.section, r.section_name, r.family, r.metric, r.table_number FROM econ.national_accounts na LEFT JOIN econ.reference_nipa_tables r ON na.table_id = r.TableName"
+    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.Description AS table_description, r.section, r.section_name, r.family, r.metric, r.table_number FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.TableName"
     comment: >
       National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8), section_name (e.g., 'domestic_product_income', 'foreign_transactions'), family (table family within section), metric (metric type code), table_number (standard BEA format like '1.1.5'). Enables semantic queries by economic category without manual joins.
 
   - name: regional_income_enriched
     type: view
-    sql: "SELECT ri.*, rlc.Description AS line_code_description, rlc.table_prefix, rlc.data_category, rlc.geography_level, rlc.frequency AS table_frequency FROM econ.regional_income ri LEFT JOIN econ.reference_regional_linecodes rlc ON ri.tablename = rlc.TableName AND ri.line_code = rlc.LineCode"
+    sql: "SELECT ri.*, rlc.Description AS line_code_description, rlc.table_prefix, rlc.data_category, rlc.geography_level, rlc.frequency AS table_frequency FROM ${ECON_SCHEMA_NAME:econ}.regional_income ri LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.regional_linecodes rlc ON ri.tablename = rlc.TableName AND ri.line_code = rlc.LineCode"
     comment: >
       Regional income data enriched with LineCode descriptions and table metadata from the reference catalog. Columns include all regional_income fields plus line_code_description (what the line code represents), table_prefix (SA/SQ/CA for State Annual/Quarterly, County/MSA Annual), data_category (INC/GDP/etc), geography_level (state/county/msa), table_frequency (annual/quarterly). Enables semantic queries without needing to know specific LineCode values.
 
   - name: interest_rate_spreads
     type: view
-    sql: "SELECT date, MAX(CASE WHEN series = 'DGS10' THEN value END) AS ten_year_yield, MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS three_month_yield, MAX(CASE WHEN series = 'DGS10' THEN value END) - MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS term_spread_10y_3m, MAX(CASE WHEN series = 'DFF' THEN value END) AS fed_funds_rate, MAX(CASE WHEN series = 'BAMLC0A0CM' THEN value END) AS corporate_spread_bps FROM econ.fred_indicators WHERE series IN ('DGS10', 'DGS3MO', 'DFF', 'BAMLC0A0CM') GROUP BY date"
+    sql: "SELECT date, MAX(CASE WHEN series = 'DGS10' THEN value END) AS ten_year_yield, MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS three_month_yield, MAX(CASE WHEN series = 'DGS10' THEN value END) - MAX(CASE WHEN series = 'DGS3MO' THEN value END) AS term_spread_10y_3m, MAX(CASE WHEN series = 'DFF' THEN value END) AS fed_funds_rate, MAX(CASE WHEN series = 'BAMLC0A0CM' THEN value END) AS corporate_spread_bps FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('DGS10', 'DGS3MO', 'DFF', 'BAMLC0A0CM') GROUP BY date"
     comment: >
       Interest rate spreads and yield curve analytics. Columns: date (observation date), ten_year_yield (10Y Treasury constant maturity rate %), three_month_yield (3M T-Bill rate %), term_spread_10y_3m (yield curve spread, negative values historically precede recessions), fed_funds_rate (Federal Reserve policy rate %), corporate_spread_bps (investment grade corporate bond spread over Treasuries in basis points, widening indicates credit stress). Critical for recession forecasting, monetary policy analysis, and credit market health assessment.
 
   - name: housing_indicators
     type: view
-    sql: "SELECT date, MAX(CASE WHEN series = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM econ.fred_indicators WHERE series IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date"
+    sql: "SELECT date, MAX(CASE WHEN series = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date"
     comment: >
       Comprehensive housing market health dashboard. Columns: date, housing_starts (total new housing units started in thousands, annualized), single_family_starts (single-family housing starts subset in thousands), building_permits (authorized building permits in thousands, leading indicator), existing_sales (existing home sales in millions annualized), case_shiller_index (S&P CoreLogic Case-Shiller U.S. National Home Price Index), median_sale_price (median sales price of houses sold in USD), mortgage_rate_30y (30-year fixed rate mortgage average %), rental_vacancy_rate (percentage of rental units vacant). Essential for real estate analysis, construction sector tracking, and housing affordability assessment.
 
   - name: monetary_aggregates
     type: view
-    sql: "SELECT date, MAX(CASE WHEN series = 'M1SL' THEN value END) AS m1_money_supply, MAX(CASE WHEN series = 'M2SL' THEN value END) AS m2_money_supply, MAX(CASE WHEN series = 'BOGMBASE' THEN value END) AS monetary_base, MAX(CASE WHEN series = 'GDP' THEN value END) AS nominal_gdp, MAX(CASE WHEN series = 'GDP' THEN value END) / NULLIF(MAX(CASE WHEN series = 'M2SL' THEN value END), 0) AS m2_velocity FROM econ.fred_indicators WHERE series IN ('M1SL', 'M2SL', 'BOGMBASE', 'GDP') GROUP BY date"
+    sql: "SELECT date, MAX(CASE WHEN series = 'M1SL' THEN value END) AS m1_money_supply, MAX(CASE WHEN series = 'M2SL' THEN value END) AS m2_money_supply, MAX(CASE WHEN series = 'BOGMBASE' THEN value END) AS monetary_base, MAX(CASE WHEN series = 'GDP' THEN value END) AS nominal_gdp, MAX(CASE WHEN series = 'GDP' THEN value END) / NULLIF(MAX(CASE WHEN series = 'M2SL' THEN value END), 0) AS m2_velocity FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('M1SL', 'M2SL', 'BOGMBASE', 'GDP') GROUP BY date"
     comment: >
       Federal Reserve monetary aggregates and velocity analysis. Columns: date, m1_money_supply (narrow money supply including currency and demand deposits in billions), m2_money_supply (broad money supply including M1 plus savings deposits and money market funds in billions), monetary_base (currency in circulation plus bank reserves in billions), nominal_gdp (gross domestic product in billions), m2_velocity (calculated as GDP/M2, measures money turnover rate, declining velocity may indicate liquidity hoarding). Critical for Federal Reserve policy analysis, inflation expectations, and monetary transmission mechanism assessment.
 
   - name: business_indicators
     type: view
-    sql: "SELECT date, MAX(CASE WHEN series = 'INDPRO' THEN value END) AS industrial_production_index, MAX(CASE WHEN series = 'TCU' THEN value END) AS capacity_utilization_pct, MAX(CASE WHEN series = 'RSXFS' THEN value END) AS retail_sales_millions, MAX(CASE WHEN series = 'TOTBKCR' THEN value END) AS bank_credit_billions, MAX(CASE WHEN series = 'DRTSCILM' THEN value END) AS lending_standards_net_pct FROM econ.fred_indicators WHERE series IN ('INDPRO', 'TCU', 'RSXFS', 'TOTBKCR', 'DRTSCILM') GROUP BY date"
+    sql: "SELECT date, MAX(CASE WHEN series = 'INDPRO' THEN value END) AS industrial_production_index, MAX(CASE WHEN series = 'TCU' THEN value END) AS capacity_utilization_pct, MAX(CASE WHEN series = 'RSXFS' THEN value END) AS retail_sales_millions, MAX(CASE WHEN series = 'TOTBKCR' THEN value END) AS bank_credit_billions, MAX(CASE WHEN series = 'DRTSCILM' THEN value END) AS lending_standards_net_pct FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('INDPRO', 'TCU', 'RSXFS', 'TOTBKCR', 'DRTSCILM') GROUP BY date"
     comment: >
       Business cycle and economic activity dashboard. Columns: date, industrial_production_index (index of manufacturing and industrial output, 2017=100), capacity_utilization_pct (percentage of total industrial capacity in use, high values indicate potential inflation pressure), retail_sales_millions (advance retail sales in millions USD, excludes services, leading consumer spending indicator), bank_credit_billions (total credit extended by banks in billions, measure of lending activity), lending_standards_net_pct (net percentage of banks tightening lending standards, positive values indicate credit tightening). Essential for business cycle analysis, recession/expansion identification, and credit conditions monitoring.
 
   - name: trade_balance_summary
     type: view
-    sql: "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM econ.trade_statistics GROUP BY year, quarter, line_description"
+    sql: "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM ${ECON_SCHEMA_NAME:econ}.trade_statistics GROUP BY year, quarter, line_description"
     comment: >
       U.S. international trade balance aggregated by category from BEA. Columns: year (calendar year), quarter (Q1-Q4 for quarterly data, NULL for annual), line_description (trade category such as 'Goods', 'Services', 'Foods feeds and beverages', etc.), total_exports (sum of exports in millions USD), total_imports (sum of imports in millions USD), net_trade_balance (exports minus imports, negative indicates trade deficit). Derived from BEA NIPA Table 4.2.5B (Foreign Transactions section), enables analysis of trade composition, bilateral balances, and sectoral trade patterns. Critical for understanding U.S. competitiveness, currency impacts, and GDP contribution from net exports.
 
   - name: trade_statistics
     type: view
-    sql: "SELECT tablename AS table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM econ.national_accounts WHERE tablename = 'T40205B'"
+    sql: "SELECT tablename AS table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM ${ECON_SCHEMA_NAME:econ}.national_accounts WHERE tablename = 'T40205B'"
     comment: >
       U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services with computed columns: quarter (1-4 extracted from time_period for quarterly data, NULL for annual), trade_type (exports/imports/trade_balance derived from line_description). This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'.
 
   - name: state_gdp
     type: view
-    sql: "SELECT geo_fips_set AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM econ.regional_income WHERE tablename LIKE 'SAGDP%'"
+    sql: "SELECT geo_fips_set AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM ${ECON_SCHEMA_NAME:econ}.regional_income WHERE tablename LIKE 'SAGDP%'"
     comment: >
       State-level GDP statistics from BEA Regional Economic Accounts (SAGDP tables). This is a convenience view filtering regional_income to just the State Annual GDP tables (SAGDP1-SAGDP11). Columns: geo_fips (2-digit state FIPS code), geo_name (state name), tablename (specific SAGDP table), line_code (BEA line code), year, metric (GDP component description), value (GDP value), units (unit multiplier). For quarterly state GDP, filter regional_income for SQGDP* tables.
 

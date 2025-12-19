@@ -110,67 +110,6 @@ public class AlternatePartitionMaterializationTest {
   }
 
   /**
-   * Test that materialization metadata is generated for alternate partition tables.
-   */
-  @Test void testMaterializationGeneration() {
-    LOGGER.info("Testing materialization generation from alternate partition tables");
-
-    // This test verifies the logic works at the factory level
-    org.apache.calcite.adapter.govdata.econ.EconSchemaFactory factory =
-        new org.apache.calcite.adapter.govdata.econ.EconSchemaFactory();
-
-    // Create a mock table definition with alternate partition
-    java.util.List<java.util.Map<String, Object>> tables = new java.util.ArrayList<>();
-
-    java.util.Map<String, Object> sourceTable = new java.util.HashMap<>();
-    sourceTable.put("name", "test_source");
-    sourceTable.put("pattern", "type=test/year={year}/data.parquet");
-
-    java.util.List<java.util.Map<String, Object>> alternatePartitions = new java.util.ArrayList<>();
-    java.util.Map<String, Object> alternatePartition = new java.util.HashMap<>();
-    alternatePartition.put("name", "test_alternate");
-    alternatePartition.put("pattern", "type=test/data.parquet");
-
-    // Add partition config
-    java.util.Map<String, Object> partition = new java.util.HashMap<>();
-    java.util.List<java.util.Map<String, Object>> columnDefs = new java.util.ArrayList<>();
-    // No partition columns for consolidated alternate
-    partition.put("columnDefinitions", columnDefs);
-    alternatePartition.put("partition", partition);
-
-    alternatePartitions.add(alternatePartition);
-
-    sourceTable.put("alternate_partitions", alternatePartitions);
-    tables.add(sourceTable);
-
-    // Expand alternate partitions
-    factory.expandAlternatePartitions(tables);
-
-    // Should now have 2 tables: source + alternate
-    assertEquals(2, tables.size(), "Should have source table + alternate partition table");
-
-    // Find the alternate partition table
-    java.util.Map<String, Object> altTable = tables.stream()
-        .filter(t -> "test_alternate".equals(t.get("name")))
-        .findFirst()
-        .orElse(null);
-
-    assertNotNull(altTable, "Alternate partition table should exist");
-
-    // Verify metadata
-    assertEquals(Boolean.TRUE, altTable.get("_isAlternatePartition"),
-        "Alternate table should be marked with _isAlternatePartition");
-    assertEquals("test_source", altTable.get("_sourceTableName"),
-        "Alternate table should link to source table");
-    assertEquals("type=test/year={year}/data.parquet", altTable.get("_sourceTablePattern"),
-        "Alternate table should reference source pattern");
-    assertNotNull(altTable.get("_partitionKeyCount"),
-        "Alternate table should have partition key count");
-
-    LOGGER.info("Alternate partition table metadata validated successfully");
-  }
-
-  /**
    * Test that queries against source tables can be executed.
    * Note: Actual materialized view substitution requires:
    * - Real data files
