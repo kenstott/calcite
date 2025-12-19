@@ -21,6 +21,9 @@ import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,14 +31,11 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -367,8 +367,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param endYear Last year to download
    * @throws IOException If download or file I/O fails
    */
-  @Override
-  public void downloadAll(int startYear, int endYear) throws IOException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException {
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download states
@@ -421,8 +420,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param endYear Last year to convert
    * @throws IOException If conversion or file I/O fails
    */
-  @Override
-  public void convertAll(int startYear, int endYear) throws IOException {
+  @Override public void convertAll(int startYear, int endYear) throws IOException {
     LOGGER.info("TIGER conversion phase: {} years ({}-{}), {} tables",
         endYear - startYear + 1, startYear, endYear, TIGER_TABLES.length);
 
@@ -481,8 +479,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Build parquet target path
-    String outputPath = storageProvider.resolvePath(parquetDirectory,
-        "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
+    String outputPath =
+        storageProvider.resolvePath(parquetDirectory, "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
 
     // Build cache key params
     java.util.Map<String, String> params = new java.util.HashMap<>();

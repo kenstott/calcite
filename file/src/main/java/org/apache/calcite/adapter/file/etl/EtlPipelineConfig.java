@@ -155,6 +155,9 @@ public class EtlPipelineConfig {
 
   /**
    * Creates an EtlPipelineConfig from a YAML/JSON map.
+   *
+   * <p>Handles both Map and JsonNode values in the metadata. This allows schema
+   * parsers to pass metadata directly without manual conversion.
    */
   @SuppressWarnings("unchecked")
   public static EtlPipelineConfig fromMap(Map<String, Object> map) {
@@ -165,14 +168,14 @@ public class EtlPipelineConfig {
     Builder builder = builder();
     builder.name((String) map.get("name"));
 
-    Object sourceObj = map.get("source");
-    if (sourceObj instanceof Map) {
-      builder.source(HttpSourceConfig.fromMap((Map<String, Object>) sourceObj));
+    Map<String, Object> sourceMap = toMap(map.get("source"));
+    if (sourceMap != null) {
+      builder.source(HttpSourceConfig.fromMap(sourceMap));
     }
 
-    Object dimensionsObj = map.get("dimensions");
-    if (dimensionsObj instanceof Map) {
-      builder.dimensions(DimensionConfig.fromDimensionsMap((Map<String, Object>) dimensionsObj));
+    Map<String, Object> dimensionsMap = toMap(map.get("dimensions"));
+    if (dimensionsMap != null) {
+      builder.dimensions(DimensionConfig.fromDimensionsMap(dimensionsMap));
     }
 
     Object columnsObj = map.get("columns");
@@ -180,22 +183,53 @@ public class EtlPipelineConfig {
       builder.columns(ColumnConfig.fromList((List<?>) columnsObj));
     }
 
-    Object materializeObj = map.get("materialize");
-    if (materializeObj instanceof Map) {
-      builder.materialize(MaterializeConfig.fromMap((Map<String, Object>) materializeObj));
+    Map<String, Object> materializeMap = toMap(map.get("materialize"));
+    if (materializeMap != null) {
+      builder.materialize(MaterializeConfig.fromMap(materializeMap));
     }
 
-    Object errorHandlingObj = map.get("errorHandling");
-    if (errorHandlingObj instanceof Map) {
-      builder.errorHandling(ErrorHandlingConfig.fromMap((Map<String, Object>) errorHandlingObj));
+    Map<String, Object> errorHandlingMap = toMap(map.get("errorHandling"));
+    if (errorHandlingMap != null) {
+      builder.errorHandling(ErrorHandlingConfig.fromMap(errorHandlingMap));
     }
 
-    Object hooksObj = map.get("hooks");
-    if (hooksObj instanceof Map) {
-      builder.hooks(HooksConfig.fromMap((Map<String, Object>) hooksObj));
+    Map<String, Object> hooksMap = toMap(map.get("hooks"));
+    if (hooksMap != null) {
+      builder.hooks(HooksConfig.fromMap(hooksMap));
     }
 
     return builder.build();
+  }
+
+  /**
+   * Converts an object to a Map, handling both Map and JsonNode types.
+   *
+   * @param obj Object that may be a Map or JsonNode
+   * @return Map representation, or null if not convertible
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> toMap(Object obj) {
+    if (obj == null) {
+      return null;
+    }
+    if (obj instanceof Map) {
+      return (Map<String, Object>) obj;
+    }
+    // Handle JsonNode without direct dependency - use reflection or ObjectMapper
+    if (obj.getClass().getName().contains("JsonNode")) {
+      try {
+        // Use Jackson ObjectMapper to convert JsonNode to Map
+        Class<?> objectMapperClass = Class.forName("com.fasterxml.jackson.databind.ObjectMapper");
+        Object mapper = objectMapperClass.getDeclaredConstructor().newInstance();
+        java.lang.reflect.Method convertMethod = objectMapperClass.getMethod(
+            "convertValue", Object.class, Class.class);
+        return (Map<String, Object>) convertMethod.invoke(mapper, obj, Map.class);
+      } catch (Exception e) {
+        // If reflection fails, return null
+        return null;
+      }
+    }
+    return null;
   }
 
   /**

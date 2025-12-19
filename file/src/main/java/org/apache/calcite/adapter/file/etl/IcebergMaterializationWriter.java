@@ -21,10 +21,10 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +77,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int DEFAULT_MAX_RETRIES = 3;
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
+  private static final int DEFAULT_BATCH_SIZE = 100000; // Process 100k rows at a time to avoid OOM
 
   private final StorageProvider storageProvider;
   private final String warehousePath;
@@ -111,8 +112,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     this.retryDelayMs = DEFAULT_RETRY_DELAY_MS;
   }
 
-  @Override
-  public void initialize(MaterializeConfig config) throws IOException {
+  @Override public void initialize(MaterializeConfig config) throws IOException {
     if (config == null) {
       throw new IllegalArgumentException("Config cannot be null");
     }
@@ -202,6 +202,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Create new table - infer schema from partition columns if available
     LOGGER.info("Creating new Iceberg table: {}", targetTableId);
     List<IcebergCatalogManager.ColumnDef> columns = new ArrayList<IcebergCatalogManager.ColumnDef>();
+    java.util.Set<String> columnNamesSet = new java.util.HashSet<String>();
 
     MaterializePartitionConfig partitionConfig = config.getPartition();
     List<String> partitionColumnNames = new ArrayList<String>();
@@ -213,9 +214,20 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     List<ColumnConfig> columnConfigs = config.getColumns();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
       for (ColumnConfig colConfig : columnConfigs) {
-        columns.add(new IcebergCatalogManager.ColumnDef(
+        columns.add(
+            new IcebergCatalogManager.ColumnDef(
             colConfig.getName(),
             mapToIcebergType(colConfig.getType())));
+        columnNamesSet.add(colConfig.getName());
+      }
+    }
+
+    // Add partition columns to schema if not already present
+    // These columns come from dimension values and are injected during transformation
+    for (String partitionCol : partitionColumnNames) {
+      if (!columnNamesSet.contains(partitionCol)) {
+        columns.add(new IcebergCatalogManager.ColumnDef(partitionCol, "STRING"));
+        LOGGER.debug("Added partition column '{}' to schema", partitionCol);
       }
     }
 
@@ -255,8 +267,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
   }
 
-  @Override
-  public long writeBatch(Iterator<Map<String, Object>> data,
+  @Override public long writeBatch(Iterator<Map<String, Object>> data,
       Map<String, String> partitionVariables) throws IOException {
 
     if (!initialized) {
@@ -268,23 +279,53 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return 0;
     }
 
-    // Collect data to list
-    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    // Process data in chunks to avoid OOM for large datasets
+    long totalRows = 0;
+    int chunkNumber = 0;
+    List<Map<String, Object>> chunk = new ArrayList<Map<String, Object>>(DEFAULT_BATCH_SIZE);
+
     while (data.hasNext()) {
-      rows.add(data.next());
+      chunk.add(data.next());
+
+      // When chunk is full, process it
+      if (chunk.size() >= DEFAULT_BATCH_SIZE) {
+        chunkNumber++;
+        totalRows += processChunk(chunk, partitionVariables, chunkNumber);
+        chunk = new ArrayList<Map<String, Object>>(DEFAULT_BATCH_SIZE);
+      }
     }
+
+    // Process remaining rows
+    if (!chunk.isEmpty()) {
+      chunkNumber++;
+      totalRows += processChunk(chunk, partitionVariables, chunkNumber);
+    }
+
+    if (chunkNumber > 1) {
+      LOGGER.info("Completed writing {} total rows in {} chunks with partitions: {}",
+          totalRows, chunkNumber, partitionVariables);
+    }
+
+    return totalRows;
+  }
+
+  /**
+   * Processes a single chunk of rows.
+   */
+  private long processChunk(List<Map<String, Object>> rows,
+      Map<String, String> partitionVariables, int chunkNumber) throws IOException {
 
     if (rows.isEmpty()) {
       return 0;
     }
 
-    LOGGER.info("Writing Iceberg batch of {} rows with partitions: {}",
-        rows.size(), partitionVariables);
+    LOGGER.info("Writing Iceberg chunk {}: {} rows with partitions: {}",
+        chunkNumber, rows.size(), partitionVariables);
 
     // Process with retry logic
     boolean success = processBatchWithRetry(rows, partitionVariables);
     if (!success) {
-      throw new IOException("Failed to write batch after " + maxRetries + " attempts");
+      throw new IOException("Failed to write chunk " + chunkNumber + " after " + maxRetries + " attempts");
     }
 
     totalRowsWritten += rows.size();
@@ -342,7 +383,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
       try {
         // Use DuckDB to transform JSON to partitioned Parquet in staging
-        transformWithDuckDB(tempJsonFile.getAbsolutePath(), stagingPath.toString());
+        transformWithDuckDB(tempJsonFile.getAbsolutePath(), stagingPath.toString(), partitionVariables);
 
         // Commit staging files to Iceberg
         Map<String, Object> partitionFilter = buildPartitionFilter(partitionVariables);
@@ -381,9 +422,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Uses DuckDB to transform JSON to partitioned Parquet.
    */
-  private void transformWithDuckDB(String jsonPath, String stagingPath) throws SQLException {
+  private void transformWithDuckDB(String jsonPath, String stagingPath,
+      Map<String, String> partitionVariables) throws SQLException {
     try (Connection conn = getDuckDBConnection()) {
-      String sql = buildDuckDBSql(jsonPath, stagingPath);
+      String sql = buildDuckDBSql(jsonPath, stagingPath, partitionVariables);
       LOGGER.debug("Executing DuckDB SQL:\n{}", sql);
 
       long startTime = System.currentTimeMillis();
@@ -397,8 +439,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Builds the DuckDB COPY SQL statement.
+   *
+   * <p>Partition variables (dimension values) are injected as literal columns
+   * in the SELECT clause if they're not already present in the source data.
+   * This allows Hive-style partitioning where partition values come from
+   * the ETL dimension iteration rather than the source data itself.
    */
-  private String buildDuckDBSql(String jsonPath, String stagingPath) {
+  private String buildDuckDBSql(String jsonPath, String stagingPath,
+      Map<String, String> partitionVariables) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");
     sql.append("  SELECT ");
@@ -418,12 +466,23 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       sql.append(selectClause);
     }
 
+    // Add partition variables as literal columns (if not already in source)
+    // These are dimension values that need to be written into the parquet files
+    MaterializePartitionConfig partitionConfig = config.getPartition();
+    if (partitionConfig != null && partitionVariables != null && !partitionVariables.isEmpty()) {
+      for (String partitionCol : partitionConfig.getColumns()) {
+        if (partitionVariables.containsKey(partitionCol)) {
+          sql.append(", '").append(escapeString(partitionVariables.get(partitionCol)))
+              .append("' AS ").append(partitionCol);
+        }
+      }
+    }
+
     sql.append("\n  FROM read_json('").append(escapeString(jsonPath)).append("')\n");
     sql.append(") TO '").append(escapeString(stagingPath)).append("'");
     sql.append(" (FORMAT PARQUET");
 
     // Add partition columns
-    MaterializePartitionConfig partitionConfig = config.getPartition();
     if (partitionConfig != null && !partitionConfig.getColumns().isEmpty()) {
       sql.append(", PARTITION_BY (");
       List<String> partitionCols = partitionConfig.getColumns();
@@ -485,15 +544,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     try {
       if (Files.exists(stagingPath)) {
         Files.walkFileTree(stagingPath, new java.nio.file.SimpleFileVisitor<Path>() {
-          @Override
-          public java.nio.file.FileVisitResult visitFile(Path file,
+          @Override public java.nio.file.FileVisitResult visitFile(Path file,
               java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
             Files.deleteIfExists(file);
             return java.nio.file.FileVisitResult.CONTINUE;
           }
 
-          @Override
-          public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
+          @Override public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
               IOException exc) throws IOException {
             Files.deleteIfExists(dir);
             return java.nio.file.FileVisitResult.CONTINUE;
@@ -575,8 +632,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return value.replace("'", "''");
   }
 
-  @Override
-  public void commit() throws IOException {
+  @Override public void commit() throws IOException {
     if (!initialized) {
       throw new IllegalStateException("Writer not initialized");
     }
@@ -593,23 +649,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         totalRowsWritten, totalFilesWritten);
   }
 
-  @Override
-  public long getTotalRowsWritten() {
+  @Override public long getTotalRowsWritten() {
     return totalRowsWritten;
   }
 
-  @Override
-  public int getTotalFilesWritten() {
+  @Override public int getTotalFilesWritten() {
     return totalFilesWritten;
   }
 
-  @Override
-  public MaterializeConfig.Format getFormat() {
+  @Override public MaterializeConfig.Format getFormat() {
     return MaterializeConfig.Format.ICEBERG;
   }
 
-  @Override
-  public void close() throws IOException {
+  @Override public void close() throws IOException {
     LOGGER.debug("IcebergMaterializationWriter closed: {} rows in {} files",
         totalRowsWritten, totalFilesWritten);
     initialized = false;

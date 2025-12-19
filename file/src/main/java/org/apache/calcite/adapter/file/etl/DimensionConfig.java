@@ -72,8 +72,11 @@ public class DimensionConfig {
   private final Integer start;
   private final Integer end;
   private final Integer step;
+  private final Integer dataLag;
   private final List<String> values;
   private final String sql;
+  private final String source;
+  private final String path;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -81,10 +84,13 @@ public class DimensionConfig {
     this.start = builder.start;
     this.end = builder.end;
     this.step = builder.step != null ? builder.step : 1;
+    this.dataLag = builder.dataLag != null ? builder.dataLag : 0;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
     this.sql = builder.sql;
+    this.source = builder.source;
+    this.path = builder.path;
   }
 
   /**
@@ -124,6 +130,15 @@ public class DimensionConfig {
   }
 
   /**
+   * Returns the data lag in years for YEAR_RANGE dimensions.
+   * When set, the end year is reduced by this amount (e.g., dataLag=1
+   * means data ends at current year - 1). Defaults to 0.
+   */
+  public Integer getDataLag() {
+    return dataLag;
+  }
+
+  /**
    * Returns the explicit value list for LIST type dimensions.
    */
   public List<String> getValues() {
@@ -135,6 +150,28 @@ public class DimensionConfig {
    */
   public String getSql() {
     return sql;
+  }
+
+  /**
+   * Returns the JSON resource file path for JSON_CATALOG type dimensions.
+   * The path should be a classpath resource (e.g., "/worldbank/worldbank-countries.json").
+   */
+  public String getSource() {
+    return source;
+  }
+
+  /**
+   * Returns the JSONPath-like expression for extracting values from the JSON catalog.
+   * Supports dot notation for nested objects and [*] for array iteration.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code countryGroups.G20.countries} - direct path to array</li>
+   *   <li>{@code indicators[*].items[*].code} - iterate nested arrays</li>
+   * </ul>
+   */
+  public String getPath() {
+    return path;
   }
 
   /**
@@ -165,23 +202,51 @@ public class DimensionConfig {
       builder.type(DimensionType.fromString((String) typeObj));
     }
 
-    // Parse range parameters
+    // Parse range parameters (supports numbers, env vars like {env:VAR}, or {env:VAR:default})
     Object startObj = map.get("start");
     if (startObj instanceof Number) {
       builder.start(((Number) startObj).intValue());
+    } else if (startObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) startObj);
+      if (resolved != null) {
+        builder.start(resolved);
+      }
     }
 
     Object endObj = map.get("end");
     if (endObj instanceof Number) {
       builder.end(((Number) endObj).intValue());
-    } else if (endObj instanceof String && "current".equalsIgnoreCase((String) endObj)) {
-      // For yearRange, "current" means resolve at runtime
-      builder.end(null);
+    } else if (endObj instanceof String) {
+      String endStr = (String) endObj;
+      if ("current".equalsIgnoreCase(endStr)) {
+        // For yearRange, "current" means resolve at runtime
+        builder.end(null);
+      } else {
+        Integer resolved = VariableResolver.resolveInteger(endStr);
+        if (resolved != null) {
+          builder.end(resolved);
+        }
+      }
     }
 
     Object stepObj = map.get("step");
     if (stepObj instanceof Number) {
       builder.step(((Number) stepObj).intValue());
+    } else if (stepObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) stepObj);
+      if (resolved != null) {
+        builder.step(resolved);
+      }
+    }
+
+    Object dataLagObj = map.get("dataLag");
+    if (dataLagObj instanceof Number) {
+      builder.dataLag(((Number) dataLagObj).intValue());
+    } else if (dataLagObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) dataLagObj);
+      if (resolved != null) {
+        builder.dataLag(resolved);
+      }
     }
 
     // Parse list values
@@ -198,6 +263,17 @@ public class DimensionConfig {
     Object sqlObj = map.get("sql");
     if (sqlObj instanceof String) {
       builder.sql((String) sqlObj);
+    }
+
+    // Parse JSON catalog source and path
+    Object sourceObj = map.get("source");
+    if (sourceObj instanceof String) {
+      builder.source((String) sourceObj);
+    }
+
+    Object pathObj = map.get("path");
+    if (pathObj instanceof String) {
+      builder.path((String) pathObj);
     }
 
     return builder.build();
@@ -219,18 +295,39 @@ public class DimensionConfig {
     for (Map.Entry<String, Object> entry : dimensionsMap.entrySet()) {
       String name = entry.getKey();
       Object value = entry.getValue();
+
+      DimensionConfig config = null;
       if (value instanceof Map) {
-        DimensionConfig config = fromMap(name, (Map<String, Object>) value);
-        if (config != null) {
-          result.put(name, config);
+        // Standard map-based config (type, start, end, values, etc.)
+        config = fromMap(name, (Map<String, Object>) value);
+      } else if (value instanceof List) {
+        // Shorthand: list values directly as dimension value (LIST type)
+        List<String> stringValues = new ArrayList<String>();
+        for (Object v : (List<?>) value) {
+          stringValues.add(String.valueOf(v));
         }
+        config = builder()
+            .name(name)
+            .type(DimensionType.LIST)
+            .values(stringValues)
+            .build();
+      } else if (value instanceof String) {
+        // Single value shorthand
+        config = builder()
+            .name(name)
+            .type(DimensionType.LIST)
+            .values(Collections.singletonList((String) value))
+            .build();
+      }
+
+      if (config != null) {
+        result.put(name, config);
       }
     }
     return result;
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("DimensionConfig{name='").append(name).append("'");
     sb.append(", type=").append(type);
@@ -247,6 +344,12 @@ public class DimensionConfig {
       case QUERY:
         sb.append(", sql='").append(sql).append("'");
         break;
+      case JSON_CATALOG:
+        sb.append(", source='").append(source).append("'");
+        sb.append(", path='").append(path).append("'");
+        break;
+      default:
+        break;
     }
     sb.append("}");
     return sb.toString();
@@ -261,8 +364,11 @@ public class DimensionConfig {
     private Integer start;
     private Integer end;
     private Integer step;
+    private Integer dataLag;
     private List<String> values;
     private String sql;
+    private String source;
+    private String path;
 
     public Builder name(String name) {
       this.name = name;
@@ -289,6 +395,11 @@ public class DimensionConfig {
       return this;
     }
 
+    public Builder dataLag(Integer dataLag) {
+      this.dataLag = dataLag;
+      return this;
+    }
+
     public Builder values(List<String> values) {
       this.values = values;
       return this;
@@ -296,6 +407,16 @@ public class DimensionConfig {
 
     public Builder sql(String sql) {
       this.sql = sql;
+      return this;
+    }
+
+    public Builder source(String source) {
+      this.source = source;
+      return this;
+    }
+
+    public Builder path(String path) {
+      this.path = path;
       return this;
     }
 

@@ -25,11 +25,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests for HttpSource and HttpSourceConfig.
@@ -101,8 +99,8 @@ public class HttpSourceTest {
   }
 
   @Test void testAuthConfigApiKey() {
-    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.apiKey(
-        HttpSourceConfig.AuthLocation.HEADER,
+    HttpSourceConfig.AuthConfig auth =
+        HttpSourceConfig.AuthConfig.apiKey(HttpSourceConfig.AuthLocation.HEADER,
         "X-Api-Key",
         "{env:API_KEY}");
 

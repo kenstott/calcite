@@ -106,8 +106,7 @@ public class RequestContext {
     return new Builder();
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("RequestContext{url='").append(url).append("'");
     if (!parameters.isEmpty()) {

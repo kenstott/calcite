@@ -34,6 +34,7 @@ import java.sql.Statement;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -164,8 +165,8 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
       if (is == null) {
         throw new RuntimeException("SQL resource not found: " + resourcePath);
       }
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
         StringBuilder sb = new StringBuilder();
         String line;
         while ((line = reader.readLine()) != null) {
@@ -212,8 +213,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
 
   // ===== IncrementalTracker Implementation =====
 
-  @Override
-  public boolean isProcessed(String alternateName, String sourceTable,
+  @Override public boolean isProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues) {
     String keyValuesJson = mapToJson(keyValues);
     String sql = "SELECT processed_at FROM partition_status "
@@ -234,8 +234,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     return false;
   }
 
-  @Override
-  public void markProcessed(String alternateName, String sourceTable,
+  @Override public void markProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern) {
     long now = System.currentTimeMillis();
     String keyValuesJson = mapToJson(keyValues);
@@ -263,8 +262,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     }
   }
 
-  @Override
-  public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
+  @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
     Set<Map<String, String>> result = new HashSet<>();
     String sql = "SELECT incremental_key_values FROM partition_status "
         + "WHERE alternate_name = ?";
@@ -285,8 +283,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     return result;
   }
 
-  @Override
-  public void invalidate(String alternateName, Map<String, String> keyValues) {
+  @Override public void invalidate(String alternateName, Map<String, String> keyValues) {
     String keyValuesJson = mapToJson(keyValues);
     String sql = "DELETE FROM partition_status "
         + "WHERE alternate_name = ? AND incremental_key_values = ?";
@@ -304,8 +301,7 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     }
   }
 
-  @Override
-  public void invalidateAll(String alternateName) {
+  @Override public void invalidateAll(String alternateName) {
     String sql = "DELETE FROM partition_status WHERE alternate_name = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, alternateName);
@@ -446,8 +442,156 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
         .replace("\\t", "\t");
   }
 
-  @Override
-  public void close() {
+  // ===== Bulk Filtering Implementation =====
+
+  @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
+      List<Map<String, String>> allCombinations) {
+    if (allCombinations == null || allCombinations.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    long startMs = System.currentTimeMillis();
+
+    // Build a temporary table with all combinations and their indices
+    // Then use a single SQL query to filter out processed ones
+    try {
+      Connection conn = getConnection();
+
+      // Create temp table for combinations
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS temp_combinations "
+            + "(idx INTEGER, key_values VARCHAR)");
+        stmt.execute("DELETE FROM temp_combinations");
+      }
+
+      // Insert all combinations with their indices
+      String insertSql = "INSERT INTO temp_combinations (idx, key_values) VALUES (?, ?)";
+      try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+        for (int i = 0; i < allCombinations.size(); i++) {
+          stmt.setInt(1, i);
+          stmt.setString(2, mapToJson(allCombinations.get(i)));
+          stmt.addBatch();
+          // Execute in batches of 1000 to avoid memory issues
+          if ((i + 1) % 1000 == 0) {
+            stmt.executeBatch();
+          }
+        }
+        stmt.executeBatch();
+      }
+
+      // Query for unprocessed combinations using LEFT ANTI JOIN pattern
+      Set<Integer> unprocessedIndices = new HashSet<>();
+      String filterSql = "SELECT t.idx FROM temp_combinations t "
+          + "LEFT JOIN partition_status p ON p.alternate_name = ? "
+          + "AND p.incremental_key_values = t.key_values "
+          + "WHERE p.processed_at IS NULL";
+
+      try (PreparedStatement stmt = conn.prepareStatement(filterSql)) {
+        stmt.setString(1, alternateName);
+        try (ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+            unprocessedIndices.add(rs.getInt("idx"));
+          }
+        }
+      }
+
+      // Cleanup temp table
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS temp_combinations");
+      }
+
+      long elapsedMs = System.currentTimeMillis() - startMs;
+      LOGGER.debug("Bulk filtering for {}: {} unprocessed of {} total ({}ms)",
+          alternateName, unprocessedIndices.size(), allCombinations.size(), elapsedMs);
+
+      return unprocessedIndices;
+
+    } catch (SQLException e) {
+      LOGGER.warn("Bulk filtering failed for {}, falling back to per-item check: {}",
+          alternateName, e.getMessage());
+      // Fallback: return all indices as unprocessed
+      Set<Integer> all = new HashSet<>();
+      for (int i = 0; i < allCombinations.size(); i++) {
+        all.add(i);
+      }
+      return all;
+    }
+  }
+
+  // ===== Table Completion Tracking Implementation =====
+
+  @Override public boolean isTableComplete(String pipelineName, String dimensionSignature) {
+    String sql = "SELECT signature, completed_at FROM table_completion "
+        + "WHERE pipeline_name = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          String storedSignature = rs.getString("signature");
+          return dimensionSignature.equals(storedSignature);
+        }
+      }
+    } catch (SQLException e) {
+      // Table might not exist yet, treat as not complete
+      LOGGER.debug("Error checking table completion for {}: {}", pipelineName, e.getMessage());
+    }
+    return false;
+  }
+
+  @Override public void markTableComplete(String pipelineName, String dimensionSignature) {
+    // Ensure the table_completion table exists
+    try {
+      ensureTableCompletionTableExists();
+    } catch (SQLException e) {
+      LOGGER.error("Failed to create table_completion table: {}", e.getMessage());
+      return;
+    }
+
+    long now = System.currentTimeMillis();
+    String sql = "INSERT INTO table_completion (pipeline_name, signature, completed_at) "
+        + "VALUES (?, ?, ?) "
+        + "ON CONFLICT (pipeline_name) DO UPDATE SET "
+        + "signature = EXCLUDED.signature, "
+        + "completed_at = EXCLUDED.completed_at";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      stmt.setString(2, dimensionSignature);
+      stmt.setLong(3, now);
+      stmt.executeUpdate();
+      LOGGER.debug("Marked pipeline {} as complete with signature {}", pipelineName, dimensionSignature);
+    } catch (SQLException e) {
+      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+    }
+  }
+
+  @Override public void invalidateTableCompletion(String pipelineName) {
+    String sql = "DELETE FROM table_completion WHERE pipeline_name = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      int deleted = stmt.executeUpdate();
+      if (deleted > 0) {
+        LOGGER.info("Invalidated table completion for {}", pipelineName);
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error invalidating table completion for {}: {}", pipelineName, e.getMessage());
+    }
+  }
+
+  /**
+   * Ensures the table_completion table exists.
+   */
+  private void ensureTableCompletionTableExists() throws SQLException {
+    String sql = "CREATE TABLE IF NOT EXISTS table_completion ("
+        + "pipeline_name VARCHAR PRIMARY KEY, "
+        + "signature VARCHAR NOT NULL, "
+        + "completed_at BIGINT NOT NULL)";
+    try (Statement stmt = getConnection().createStatement()) {
+      stmt.execute(sql);
+    }
+  }
+
+  @Override public void close() {
     synchronized (connectionLock) {
       if (connection != null) {
         try {

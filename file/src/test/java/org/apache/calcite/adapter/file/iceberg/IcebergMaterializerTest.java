@@ -47,14 +47,13 @@ public class IcebergMaterializerTest {
   @BeforeEach
   void setUp() {
     String warehousePath = tempDir.resolve("warehouse").toString();
-    materializer = new IcebergMaterializer(
-        warehousePath,
+    materializer =
+        new IcebergMaterializer(warehousePath,
         new LocalFileStorageProvider(),
         IncrementalTracker.NOOP);
   }
 
-  @Test
-  void testMaterializationConfigBuilder() {
+  @Test void testMaterializationConfigBuilder() {
     List<ColumnDefinition> partitionCols = new ArrayList<ColumnDefinition>();
     partitionCols.add(new ColumnDefinition("geo", "VARCHAR"));
 
@@ -85,8 +84,7 @@ public class IcebergMaterializerTest {
     assertEquals("Income by geography", config.getDescription());
   }
 
-  @Test
-  void testMaterializationConfigSupportsIncremental() {
+  @Test void testMaterializationConfigSupportsIncremental() {
     // With incremental keys
     IcebergMaterializer.MaterializationConfig withKeys =
         IcebergMaterializer.MaterializationConfig.builder()
@@ -105,8 +103,7 @@ public class IcebergMaterializerTest {
     assertEquals(false, withoutKeys.supportsIncremental());
   }
 
-  @Test
-  void testMaterializationResult() {
+  @Test void testMaterializationResult() {
     IcebergMaterializer.MaterializationResult result =
         new IcebergMaterializer.MaterializationResult(
             "test_table", 10, 0, 5, 1500);
@@ -125,20 +122,17 @@ public class IcebergMaterializerTest {
     assertEquals(false, withFailures.isFullySuccessful());
   }
 
-  @Test
-  void testMaterializerCreation() {
+  @Test void testMaterializerCreation() {
     assertNotNull(materializer);
   }
 
-  @Test
-  void testMaterializerWithCustomRetrySettings() {
-    IcebergMaterializer customMaterializer = new IcebergMaterializer(
-        tempDir.resolve("warehouse").toString(),
+  @Test void testMaterializerWithCustomRetrySettings() {
+    IcebergMaterializer customMaterializer =
+        new IcebergMaterializer(tempDir.resolve("warehouse").toString(),
         new LocalFileStorageProvider(),
         IncrementalTracker.NOOP,
         5,    // maxRetries
-        2000  // retryDelayMs
-    );
+        2000);  // retryDelayMs
     assertNotNull(customMaterializer);
   }
 }

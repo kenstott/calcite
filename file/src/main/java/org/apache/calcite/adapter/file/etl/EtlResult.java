@@ -53,6 +53,7 @@ public class EtlResult {
   private final List<String> errors;
   private final boolean failed;
   private final String failureMessage;
+  private final boolean skippedEntirePipeline;
 
   private EtlResult(Builder builder) {
     this.pipelineName = builder.pipelineName;
@@ -66,6 +67,7 @@ public class EtlResult {
         : Collections.<String>emptyList();
     this.failed = builder.failed;
     this.failureMessage = builder.failureMessage;
+    this.skippedEntirePipeline = builder.skippedEntirePipeline;
   }
 
   /**
@@ -147,6 +149,28 @@ public class EtlResult {
   }
 
   /**
+   * Returns whether the entire pipeline was skipped due to table completion.
+   */
+  public boolean isSkippedEntirePipeline() {
+    return skippedEntirePipeline;
+  }
+
+  /**
+   * Returns whether the entire pipeline was skipped.
+   * Alias for isSkippedEntirePipeline().
+   */
+  public boolean isSkipped() {
+    return skippedEntirePipeline;
+  }
+
+  /**
+   * Returns whether the pipeline failed.
+   */
+  public boolean isFailed() {
+    return failed;
+  }
+
+  /**
    * Returns the throughput in rows per second.
    */
   public double getRowsPerSecond() {
@@ -156,11 +180,13 @@ public class EtlResult {
     return (totalRows * 1000.0) / elapsedMs;
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("EtlResult{pipeline='").append(pipelineName).append("'");
-    if (failed) {
+    if (skippedEntirePipeline) {
+      sb.append(", SKIPPED (table complete)");
+      sb.append(", elapsed=").append(elapsedMs).append("ms");
+    } else if (failed) {
       sb.append(", FAILED: ").append(failureMessage);
     } else {
       sb.append(", rows=").append(totalRows);
@@ -210,6 +236,17 @@ public class EtlResult {
   }
 
   /**
+   * Creates a skipped result when the entire pipeline was skipped due to table completion.
+   */
+  public static EtlResult skipped(String pipelineName, long elapsedMs) {
+    return builder()
+        .pipelineName(pipelineName)
+        .skippedEntirePipeline(true)
+        .elapsedMs(elapsedMs)
+        .build();
+  }
+
+  /**
    * Builder for EtlResult.
    */
   public static class Builder {
@@ -222,6 +259,7 @@ public class EtlResult {
     private List<String> errors;
     private boolean failed;
     private String failureMessage;
+    private boolean skippedEntirePipeline;
 
     public Builder pipelineName(String pipelineName) {
       this.pipelineName = pipelineName;
@@ -265,6 +303,11 @@ public class EtlResult {
 
     public Builder failureMessage(String failureMessage) {
       this.failureMessage = failureMessage;
+      return this;
+    }
+
+    public Builder skippedEntirePipeline(boolean skippedEntirePipeline) {
+      this.skippedEntirePipeline = skippedEntirePipeline;
       return this;
     }
 

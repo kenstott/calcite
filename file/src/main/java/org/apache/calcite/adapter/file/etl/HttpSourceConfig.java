@@ -24,10 +24,10 @@ import java.util.Map;
  * Configuration for HTTP data source.
  *
  * <p>HttpSourceConfig defines how to fetch data from HTTP/REST APIs,
- * including URL, method, parameters, headers, authentication, response
- * parsing, pagination, rate limiting, and caching.
+ * including URL, method, parameters, headers, request body, authentication,
+ * response parsing, pagination, rate limiting, and caching.
  *
- * <h3>YAML Configuration Example</h3>
+ * <h3>GET Request Example</h3>
  * <pre>{@code
  * source:
  *   type: http
@@ -36,31 +36,32 @@ import java.util.Map;
  *   parameters:
  *     apiKey: "{env:API_KEY}"
  *     year: "{year}"
- *     region: "{region}"
- *   headers:
- *     Accept: "application/json"
- *     Authorization: "Bearer {env:AUTH_TOKEN}"
- *   auth:
- *     type: apiKey
- *     location: header
- *     name: "X-Api-Key"
- *     value: "{env:API_KEY}"
  *   response:
  *     format: json
  *     dataPath: "$.results.data"
- *     pagination:
- *       type: offset
- *       limitParam: "limit"
- *       offsetParam: "offset"
- *       pageSize: 1000
- *   rateLimit:
- *     requestsPerSecond: 10
- *     retryOn: [429, 503]
- *     maxRetries: 3
- *   cache:
- *     enabled: true
- *     ttlSeconds: 86400
  * }</pre>
+ *
+ * <h3>POST Request with JSON Body</h3>
+ * <pre>{@code
+ * source:
+ *   type: http
+ *   url: "https://api.example.com/data"
+ *   method: POST
+ *   headers:
+ *     Content-Type: "application/json"
+ *   body:
+ *     seriesid: "{seriesList}"
+ *     startyear: "{year}"
+ *     endyear: "{year}"
+ *     registrationkey: "{env:API_KEY}"
+ *   bodyFormat: json  # optional, defaults to json
+ *   response:
+ *     format: json
+ *     dataPath: "Results.series"
+ * }</pre>
+ *
+ * <p>Body values support variable substitution using {@code {varName}} syntax
+ * for dimension variables and {@code {env:VAR_NAME}} for environment variables.
  *
  * @see HttpSource
  */
@@ -77,7 +78,7 @@ public class HttpSourceConfig {
    * Response format types.
    */
   public enum ResponseFormat {
-    JSON, CSV, XML
+    JSON, CSV, XML, TSV
   }
 
   /**
@@ -101,28 +102,53 @@ public class HttpSourceConfig {
     NONE, OFFSET, CURSOR, PAGE
   }
 
+  /**
+   * Request body format types.
+   */
+  public enum BodyFormat {
+    JSON, FORM_URLENCODED
+  }
+
   private final String url;
   private final HttpMethod method;
   private final Map<String, String> parameters;
   private final Map<String, String> headers;
+  private final Map<String, Object> body;
+  private final BodyFormat bodyFormat;
+  private final BatchConfig batching;
   private final AuthConfig auth;
   private final ResponseConfig response;
   private final RateLimitConfig rateLimit;
   private final CacheConfig cache;
 
+  // Bulk download reference (alternative to direct HTTP)
+  private final String bulkDownload;
+  private final String extractPattern;
+
+  // Row filtering for CSV parsing (to avoid loading entire file into memory)
+  private final RowFilterConfig rowFilter;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
+    this.bulkDownload = builder.bulkDownload;
+    this.extractPattern = builder.extractPattern;
     this.parameters = builder.parameters != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.parameters))
         : Collections.<String, String>emptyMap();
     this.headers = builder.headers != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.headers))
         : Collections.<String, String>emptyMap();
+    this.body = builder.body != null
+        ? Collections.unmodifiableMap(new LinkedHashMap<String, Object>(builder.body))
+        : Collections.<String, Object>emptyMap();
+    this.bodyFormat = builder.bodyFormat != null ? builder.bodyFormat : BodyFormat.JSON;
+    this.batching = builder.batching;
     this.auth = builder.auth != null ? builder.auth : AuthConfig.none();
     this.response = builder.response != null ? builder.response : ResponseConfig.defaults();
     this.rateLimit = builder.rateLimit != null ? builder.rateLimit : RateLimitConfig.defaults();
     this.cache = builder.cache != null ? builder.cache : CacheConfig.defaults();
+    this.rowFilter = builder.rowFilter;
   }
 
   public String getUrl() {
@@ -141,6 +167,60 @@ public class HttpSourceConfig {
     return headers;
   }
 
+  /**
+   * Returns the request body template.
+   *
+   * <p>The body is a map of key-value pairs that will be serialized according
+   * to the {@link #getBodyFormat()} setting. Values may contain variable
+   * placeholders like {@code {year}} or {@code {env:API_KEY}} that are
+   * substituted at request time.
+   *
+   * @return Body template map, never null (may be empty)
+   */
+  public Map<String, Object> getBody() {
+    return body;
+  }
+
+  /**
+   * Returns the format for serializing the request body.
+   *
+   * @return Body format (JSON or FORM_URLENCODED), defaults to JSON
+   */
+  public BodyFormat getBodyFormat() {
+    return bodyFormat;
+  }
+
+  /**
+   * Returns true if this source has a request body configured.
+   */
+  public boolean hasBody() {
+    return body != null && !body.isEmpty();
+  }
+
+  /**
+   * Returns the batching configuration for splitting large requests.
+   *
+   * <p>When configured, the HTTP source will:
+   * <ol>
+   *   <li>Load values from the specified JSON catalog</li>
+   *   <li>Split them into batches of the specified size</li>
+   *   <li>Make multiple requests, one per batch</li>
+   *   <li>Aggregate all results</li>
+   * </ol>
+   *
+   * @return Batching config, or null if not configured
+   */
+  public BatchConfig getBatching() {
+    return batching;
+  }
+
+  /**
+   * Returns true if batching is configured.
+   */
+  public boolean hasBatching() {
+    return batching != null && batching.isEnabled();
+  }
+
   public AuthConfig getAuth() {
     return auth;
   }
@@ -157,6 +237,57 @@ public class HttpSourceConfig {
     return cache;
   }
 
+  /**
+   * Returns the bulk download reference name.
+   *
+   * <p>When set, this source references a pre-downloaded bulk file
+   * instead of making HTTP requests. The bulk file is downloaded
+   * during the bulk download phase of the ETL lifecycle.
+   *
+   * @return Bulk download name, or null for direct HTTP source
+   */
+  public String getBulkDownload() {
+    return bulkDownload;
+  }
+
+  /**
+   * Returns true if this source references a bulk download.
+   */
+  public boolean isBulkDownloadSource() {
+    return bulkDownload != null && !bulkDownload.isEmpty();
+  }
+
+  /**
+   * Returns the pattern for extracting files from a bulk download.
+   *
+   * <p>For ZIP files, this is a glob pattern to match files inside the archive.
+   * For example, "*.csv" extracts all CSV files.
+   *
+   * @return Extract pattern, or null to use the entire bulk file
+   */
+  public String getExtractPattern() {
+    return extractPattern;
+  }
+
+  /**
+   * Returns the row filter configuration for CSV parsing.
+   *
+   * <p>When set, only rows matching the filter are kept during parsing.
+   * This allows processing large CSV files without loading everything into memory.
+   *
+   * @return Row filter config, or null if no filtering
+   */
+  public RowFilterConfig getRowFilter() {
+    return rowFilter;
+  }
+
+  /**
+   * Returns true if row filtering is configured.
+   */
+  public boolean hasRowFilter() {
+    return rowFilter != null && rowFilter.isEnabled();
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -169,6 +300,16 @@ public class HttpSourceConfig {
 
     Builder builder = builder();
     builder.url((String) map.get("url"));
+
+    // Bulk download reference
+    Object bulkDownloadObj = map.get("bulkDownload");
+    if (bulkDownloadObj instanceof String) {
+      builder.bulkDownload((String) bulkDownloadObj);
+    }
+    Object extractPatternObj = map.get("extractPattern");
+    if (extractPatternObj instanceof String) {
+      builder.extractPattern((String) extractPatternObj);
+    }
 
     Object methodObj = map.get("method");
     if (methodObj instanceof String) {
@@ -193,6 +334,34 @@ public class HttpSourceConfig {
       builder.headers(hdrs);
     }
 
+    // Parse request body (preserves nested structure for JSON serialization)
+    Object bodyObj = map.get("body");
+    if (bodyObj instanceof Map) {
+      Map<String, Object> bodyMap = new LinkedHashMap<String, Object>();
+      for (Map.Entry<?, ?> e : ((Map<?, ?>) bodyObj).entrySet()) {
+        bodyMap.put(String.valueOf(e.getKey()), e.getValue());
+      }
+      builder.body(bodyMap);
+    }
+
+    // Parse body format (defaults to JSON)
+    Object bodyFormatObj = map.get("bodyFormat");
+    if (bodyFormatObj instanceof String) {
+      builder.bodyFormat(BodyFormat.valueOf(((String) bodyFormatObj).toUpperCase()));
+    }
+
+    // Parse batching configuration
+    Object batchingObj = map.get("batching");
+    if (batchingObj instanceof Map) {
+      builder.batching(BatchConfig.fromMap((Map<String, Object>) batchingObj));
+    }
+
+    // Parse row filter configuration
+    Object rowFilterObj = map.get("rowFilter");
+    if (rowFilterObj instanceof Map) {
+      builder.rowFilter(RowFilterConfig.fromMap((Map<String, Object>) rowFilterObj));
+    }
+
     Object authObj = map.get("auth");
     if (authObj instanceof Map) {
       builder.auth(AuthConfig.fromMap((Map<String, Object>) authObj));
@@ -214,6 +383,211 @@ public class HttpSourceConfig {
     }
 
     return builder.build();
+  }
+
+  /**
+   * Batching configuration for splitting large requests into smaller batches.
+   *
+   * <p>Use this when an API has limits on array sizes (e.g., BLS allows max 50 series).
+   * The HTTP source will automatically:
+   * <ol>
+   *   <li>Load all values from a JSON catalog file</li>
+   *   <li>Split into batches of the configured size</li>
+   *   <li>Make sequential API calls for each batch</li>
+   *   <li>Aggregate results from all batches</li>
+   * </ol>
+   *
+   * <h3>YAML Configuration Example</h3>
+   * <pre>{@code
+   * source:
+   *   type: http
+   *   url: "https://api.example.com/data"
+   *   method: POST
+   *   batching:
+   *     field: seriesid          # Body field to populate with batch values
+   *     source: "/catalog.json"  # JSON catalog resource path
+   *     path: "items"            # JSONPath to array of values
+   *     size: 50                 # Max items per batch
+   *     delayMs: 1000            # Delay between batch requests (rate limiting)
+   *   body:
+   *     seriesid: []             # Will be populated by batching
+   *     year: "{year}"
+   * }</pre>
+   */
+  public static class BatchConfig {
+    private final String field;
+    private final String source;
+    private final String path;
+    private final int size;
+    private final long delayMs;
+
+    private BatchConfig(String field, String source, String path, int size, long delayMs) {
+      this.field = field;
+      this.source = source;
+      this.path = path;
+      this.size = size > 0 ? size : 50;
+      this.delayMs = delayMs > 0 ? delayMs : 0;
+    }
+
+    /**
+     * Creates a BatchConfig from a map.
+     */
+    @SuppressWarnings("unchecked")
+    public static BatchConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String field = (String) map.get("field");
+      String source = (String) map.get("source");
+      String path = (String) map.get("path");
+
+      int size = 50;
+      Object sizeObj = map.get("size");
+      if (sizeObj instanceof Number) {
+        size = ((Number) sizeObj).intValue();
+      }
+
+      long delayMs = 0;
+      Object delayObj = map.get("delayMs");
+      if (delayObj instanceof Number) {
+        delayMs = ((Number) delayObj).longValue();
+      }
+
+      return new BatchConfig(field, source, path, size, delayMs);
+    }
+
+    /**
+     * Returns the body field name to populate with batch values.
+     */
+    public String getField() {
+      return field;
+    }
+
+    /**
+     * Returns the JSON catalog resource path.
+     */
+    public String getSource() {
+      return source;
+    }
+
+    /**
+     * Returns the JSONPath expression to extract values from the catalog.
+     */
+    public String getPath() {
+      return path;
+    }
+
+    /**
+     * Returns the maximum number of items per batch.
+     */
+    public int getSize() {
+      return size;
+    }
+
+    /**
+     * Returns the delay in milliseconds between batch requests.
+     */
+    public long getDelayMs() {
+      return delayMs;
+    }
+
+    /**
+     * Returns true if this batching config is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return field != null && !field.isEmpty()
+          && source != null && !source.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+      return "BatchConfig{field='" + field + "', source='" + source
+          + "', path='" + path + "', size=" + size + ", delayMs=" + delayMs + "}";
+    }
+  }
+
+  /**
+   * Row filter configuration for CSV parsing.
+   *
+   * <p>Filters rows during CSV parsing to avoid loading entire large files into memory.
+   * Only rows where the specified column matches the pattern are kept.
+   *
+   * <h3>YAML Configuration Example</h3>
+   * <pre>{@code
+   * source:
+   *   type: http
+   *   url: "https://example.com/data.zip"
+   *   extractPattern: "*.csv"
+   *   rowFilter:
+   *     column: area_fips       # Column name to filter on
+   *     pattern: "^C.*"         # Regex pattern (metro areas start with C)
+   *     maxRows: 100000         # Optional: stop after this many matching rows
+   * }</pre>
+   */
+  public static class RowFilterConfig {
+    private final String column;
+    private final String pattern;
+    private final int maxRows;
+
+    private RowFilterConfig(String column, String pattern, int maxRows) {
+      this.column = column;
+      this.pattern = pattern;
+      this.maxRows = maxRows;
+    }
+
+    /**
+     * Creates a RowFilterConfig from a map.
+     */
+    public static RowFilterConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String column = (String) map.get("column");
+      String pattern = (String) map.get("pattern");
+
+      int maxRows = 0;
+      Object maxRowsObj = map.get("maxRows");
+      if (maxRowsObj instanceof Number) {
+        maxRows = ((Number) maxRowsObj).intValue();
+      }
+
+      return new RowFilterConfig(column, pattern, maxRows);
+    }
+
+    /**
+     * Returns the column name to filter on.
+     */
+    public String getColumn() {
+      return column;
+    }
+
+    /**
+     * Returns the regex pattern to match column values.
+     */
+    public String getPattern() {
+      return pattern;
+    }
+
+    /**
+     * Returns the maximum number of matching rows to keep (0 = unlimited).
+     */
+    public int getMaxRows() {
+      return maxRows;
+    }
+
+    /**
+     * Returns true if this filter is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return column != null && !column.isEmpty()
+          && pattern != null && !pattern.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+      return "RowFilterConfig{column='" + column + "', pattern='" + pattern
+          + "', maxRows=" + maxRows + "}";
+    }
   }
 
   /**
@@ -311,8 +685,7 @@ public class HttpSourceConfig {
           (String) map.get("name"),
           (String) map.get("value"),
           (String) map.get("username"),
-          (String) map.get("password")
-      );
+          (String) map.get("password"));
     }
   }
 
@@ -322,16 +695,19 @@ public class HttpSourceConfig {
   public static class ResponseConfig {
     private final ResponseFormat format;
     private final String dataPath;
+    private final String errorPath;
     private final PaginationConfig pagination;
 
-    private ResponseConfig(ResponseFormat format, String dataPath, PaginationConfig pagination) {
+    private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
+        PaginationConfig pagination) {
       this.format = format;
       this.dataPath = dataPath;
+      this.errorPath = errorPath;
       this.pagination = pagination;
     }
 
     public static ResponseConfig defaults() {
-      return new ResponseConfig(ResponseFormat.JSON, null, PaginationConfig.none());
+      return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none());
     }
 
     public ResponseFormat getFormat() {
@@ -340,6 +716,16 @@ public class HttpSourceConfig {
 
     public String getDataPath() {
       return dataPath;
+    }
+
+    /**
+     * Returns the JSON path to check for API errors.
+     * If this path exists and is non-null in the response, it indicates an error.
+     *
+     * @return Error path (e.g., "BEAAPI.Results.Error"), or null if not configured
+     */
+    public String getErrorPath() {
+      return errorPath;
     }
 
     public PaginationConfig getPagination() {
@@ -358,13 +744,14 @@ public class HttpSourceConfig {
           : ResponseFormat.JSON;
 
       String dataPath = (String) map.get("dataPath");
+      String errorPath = (String) map.get("errorPath");
 
       Object paginationObj = map.get("pagination");
       PaginationConfig pagination = paginationObj instanceof Map
           ? PaginationConfig.fromMap((Map<String, Object>) paginationObj)
           : PaginationConfig.none();
 
-      return new ResponseConfig(format, dataPath, pagination);
+      return new ResponseConfig(format, dataPath, errorPath, pagination);
     }
   }
 
@@ -444,8 +831,7 @@ public class HttpSourceConfig {
           (String) map.get("offsetParam"),
           (String) map.get("cursorParam"),
           (String) map.get("pageParam"),
-          pageSize
-      );
+          pageSize);
     }
   }
 
@@ -577,10 +963,16 @@ public class HttpSourceConfig {
     private HttpMethod method;
     private Map<String, String> parameters;
     private Map<String, String> headers;
+    private Map<String, Object> body;
+    private BodyFormat bodyFormat;
+    private BatchConfig batching;
     private AuthConfig auth;
     private ResponseConfig response;
     private RateLimitConfig rateLimit;
     private CacheConfig cache;
+    private String bulkDownload;
+    private String extractPattern;
+    private RowFilterConfig rowFilter;
 
     public Builder url(String url) {
       this.url = url;
@@ -599,6 +991,21 @@ public class HttpSourceConfig {
 
     public Builder headers(Map<String, String> headers) {
       this.headers = headers;
+      return this;
+    }
+
+    public Builder body(Map<String, Object> body) {
+      this.body = body;
+      return this;
+    }
+
+    public Builder bodyFormat(BodyFormat bodyFormat) {
+      this.bodyFormat = bodyFormat;
+      return this;
+    }
+
+    public Builder batching(BatchConfig batching) {
+      this.batching = batching;
       return this;
     }
 
@@ -622,9 +1029,27 @@ public class HttpSourceConfig {
       return this;
     }
 
+    public Builder bulkDownload(String bulkDownload) {
+      this.bulkDownload = bulkDownload;
+      return this;
+    }
+
+    public Builder extractPattern(String extractPattern) {
+      this.extractPattern = extractPattern;
+      return this;
+    }
+
+    public Builder rowFilter(RowFilterConfig rowFilter) {
+      this.rowFilter = rowFilter;
+      return this;
+    }
+
     public HttpSourceConfig build() {
-      if (url == null || url.isEmpty()) {
-        throw new IllegalArgumentException("URL is required");
+      // Either url or bulkDownload must be set
+      boolean hasUrl = url != null && !url.isEmpty();
+      boolean hasBulkDownload = bulkDownload != null && !bulkDownload.isEmpty();
+      if (!hasUrl && !hasBulkDownload) {
+        throw new IllegalArgumentException("Either URL or bulkDownload is required");
       }
       return new HttpSourceConfig(this);
     }

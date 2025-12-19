@@ -27,11 +27,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -138,8 +136,8 @@ public class HiveParquetWriter {
       if (batchByColumns == null || batchByColumns.isEmpty()) {
         // No batching - process all data at once
         LOGGER.info("Processing all data without batching");
-        MaterializeBatchResult batchResult = processBatch(conn, config, source,
-            Collections.<String, String>emptyMap(), tempBase, fullOutputPath);
+        MaterializeBatchResult batchResult =
+            processBatch(conn, config, source, Collections.<String, String>emptyMap(), tempBase, fullOutputPath);
         rowCount = batchResult.getRowCount();
         fileCount = batchResult.getFileCount();
       } else {
@@ -153,8 +151,8 @@ public class HiveParquetWriter {
           batchNum++;
           LOGGER.info("Processing batch {}/{}: {}", batchNum, batchCombinations.size(), batch);
 
-          MaterializeBatchResult batchResult = processBatch(conn, config, source, batch,
-              tempBase, fullOutputPath);
+          MaterializeBatchResult batchResult =
+              processBatch(conn, config, source, batch, tempBase, fullOutputPath);
           rowCount += batchResult.getRowCount();
           fileCount += batchResult.getFileCount();
         }
@@ -173,8 +171,8 @@ public class HiveParquetWriter {
       return MaterializeResult.success(rowCount, fileCount, elapsed);
 
     } catch (SQLException e) {
-      String errorMsg = String.format("DuckDB materialization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB materialization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -215,8 +213,8 @@ public class HiveParquetWriter {
       return MaterializeResult.success(-1, -1, elapsed);
 
     } catch (SQLException e) {
-      String errorMsg = String.format("DuckDB JSON materialization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB JSON materialization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -257,8 +255,8 @@ public class HiveParquetWriter {
       return MaterializeResult.success(-1, -1, elapsed);
 
     } catch (SQLException e) {
-      String errorMsg = String.format("DuckDB CSV materialization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB CSV materialization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -299,8 +297,8 @@ public class HiveParquetWriter {
       return MaterializeResult.success(-1, -1, elapsed);
 
     } catch (SQLException e) {
-      String errorMsg = String.format("DuckDB Parquet materialization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB Parquet materialization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -342,8 +340,8 @@ public class HiveParquetWriter {
         ? partitionConfig.getColumns()
         : Collections.<String>emptyList();
 
-    String sql = buildConsolidationSql(tempBase, finalBase, partitionColumns,
-        config.getOutput().getCompression());
+    String sql =
+        buildConsolidationSql(tempBase, finalBase, partitionColumns, config.getOutput().getCompression());
 
     LOGGER.debug("Consolidation SQL:\n{}", sql);
 

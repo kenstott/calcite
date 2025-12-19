@@ -54,7 +54,7 @@ import java.util.Map;
  *     Collections.singletonMap("geo", "GeoFips"), // column mappings
  *     Arrays.asList("year", "geo_fips_set"),      // batch columns
  *     2020, 2024                                   // year range
- * );
+ *);
  * </pre>
  */
 public class ParquetReorganizer {
@@ -276,8 +276,8 @@ public class ParquetReorganizer {
       }
 
       // Phase 1: Process data in batches
-      List<Map<String, String>> batchCombinations = buildBatchCombinations(
-          conn, config.getSourcePattern(), config.getBatchPartitionColumns(),
+      List<Map<String, String>> batchCombinations =
+          buildBatchCombinations(conn, config.getSourcePattern(), config.getBatchPartitionColumns(),
           config.getStartYear(), config.getEndYear());
 
       if (batchCombinations.isEmpty()) {
@@ -289,8 +289,8 @@ public class ParquetReorganizer {
 
       // Phase 2: Consolidate temp files into final location
       LOGGER.info("Phase 2: Consolidating temp files to final location...");
-      String consolidateSql = buildConsolidationSql(tempBase, fullTargetBase,
-          config.getPartitionColumns());
+      String consolidateSql =
+          buildConsolidationSql(tempBase, fullTargetBase, config.getPartitionColumns());
       LOGGER.debug("Phase 2 SQL:\n{}", consolidateSql);
 
       try (Statement stmt = conn.createStatement()) {
@@ -310,8 +310,8 @@ public class ParquetReorganizer {
       LOGGER.info("Successfully reorganized: {}", displayName);
 
     } catch (java.sql.SQLException e) {
-      String errorMsg = String.format("DuckDB batched reorganization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB batched reorganization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -332,8 +332,8 @@ public class ParquetReorganizer {
       String yearSourceGlob = config.getSourcePattern().replace("year=*", "year=" + year);
       String fullYearSourceGlob = storageProvider.resolvePath(baseDirectory, yearSourceGlob);
 
-      String sql = buildReorganizationSql(fullYearSourceGlob, tempBase,
-          config.getPartitionColumns(), config.getColumnMappings(), "year_" + year + "_{i}");
+      String sql =
+          buildReorganizationSql(fullYearSourceGlob, tempBase, config.getPartitionColumns(), config.getColumnMappings(), "year_" + year + "_{i}");
 
       LOGGER.debug("Phase 1 SQL (year={}):\n{}", year, sql);
       LOGGER.info("  Starting year {}/{}: {}", year - startYear + 1, endYear - startYear + 1, year);
@@ -391,8 +391,8 @@ public class ParquetReorganizer {
       // Process all batches for this incremental key
       boolean allSuccessful = true;
       for (Map<String, String> batch : batchesForKey) {
-        boolean success = processSingleBatch(conn, config, batch, tempBase,
-            processedBatches + 1, totalBatches);
+        boolean success =
+            processSingleBatch(conn, config, batch, tempBase, processedBatches + 1, totalBatches);
         if (success) {
           processedBatches++;
         } else {
@@ -435,8 +435,8 @@ public class ParquetReorganizer {
 
     String fullBatchSourceGlob = storageProvider.resolvePath(baseDirectory, batchSourceGlob);
 
-    String sql = buildReorganizationSql(fullBatchSourceGlob, tempBase,
-        config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
+    String sql =
+        buildReorganizationSql(fullBatchSourceGlob, tempBase, config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
 
     LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
     LOGGER.info("  Starting batch {}/{}: {}", batchNum, totalBatches, batch);

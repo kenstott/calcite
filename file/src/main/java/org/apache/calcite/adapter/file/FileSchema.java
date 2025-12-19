@@ -556,8 +556,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           engineConfig.getParquetCacheDirectory());
     }
 
-    // Create storage provider if configured
-    if (storageType != null) {
+    // Create storage provider - check for pre-created instance first
+    if (storageConfig != null && storageConfig.get("_storageProvider") instanceof StorageProvider) {
+      // Use pre-created instance (allows sharing across schemas)
+      this.storageProvider = (StorageProvider) storageConfig.get("_storageProvider");
+      LOGGER.debug("[FileSchema] Using pre-created storage provider: {}", this.storageProvider);
+    } else if (storageType != null) {
       LOGGER.debug("[FileSchema] Creating storage provider of type: {}", storageType);
       this.storageProvider = StorageProviderFactory.createFromType(storageType, storageConfig);
       LOGGER.debug("[FileSchema] Storage provider created: {}", this.storageProvider);
@@ -2212,6 +2216,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     if (tableCache.isEmpty()) {
       LOGGER.warn("[FileSchema.getTableMap] WARNING: No tables were registered for schema '{}'!", name);
     }
+
+    // Validate FK constraints and log warnings for invalid references
+    validateForeignKeyConstraints(tableCache);
 
     // Generate Calcite model file in baseDirectory
     generateModelFile(tableCache);
@@ -3923,6 +3930,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           builder.put(config.getName(), table);
           alreadyProcessed.add(config.getName());
           LOGGER.info("✓ SUCCESS: Added partitioned table '{}' to builder, matchingFiles.size: {}", config.getName(), matchingFiles.size());
+
+          // Create table entries for alternate partitions (if any)
+          createAlternatePartitionTables(builder, alreadyProcessed, config, useLazyInit,
+              partitionInfo, columnTypes);
         } catch (Exception builderEx) {
           LOGGER.error("✗ FAILED: Exception adding partitioned table '{}' to builder: {}", config.getName(), builderEx.getMessage(), builderEx);
           throw builderEx; // Re-throw to maintain error handling
@@ -3985,6 +3996,79 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       } catch (Exception e) {
         LOGGER.error("Failed to process partitioned table: {}", e.getMessage());
         e.printStackTrace();
+      }
+    }
+  }
+
+  /**
+   * Create table entries for alternate partitions defined in a partitioned table config.
+   * This allows alternate partition layouts to be queried as separate tables.
+   */
+  private void createAlternatePartitionTables(
+      ImmutableMap.Builder<String, Table> builder,
+      Set<String> alreadyProcessed,
+      PartitionedTableConfig sourceConfig,
+      boolean useLazyInit,
+      PartitionDetector.PartitionInfo partitionInfo,
+      Map<String, String> columnTypes) {
+
+    if (sourceConfig.getAlternatePartitions() == null
+        || sourceConfig.getAlternatePartitions().isEmpty()) {
+      return;
+    }
+
+    for (PartitionedTableConfig.AlternatePartitionConfig altConfig
+        : sourceConfig.getAlternatePartitions()) {
+      String altName = altConfig.getName();
+      if (alreadyProcessed.contains(altName)) {
+        LOGGER.debug("Skipping alternate partition '{}' - already processed", altName);
+        continue;
+      }
+
+      try {
+        List<String> altMatchingFiles = findMatchingFiles(altConfig.getPattern());
+        if (altMatchingFiles.isEmpty() && !useLazyInit) {
+          LOGGER.debug("No files found for alternate partition '{}', skipping", altName);
+          continue;
+        }
+
+        // Get constraint config (inherit from source if not defined)
+        Map<String, Object> altConstraintConfig = getTableConstraints(altName);
+        if (altConstraintConfig == null) {
+          altConstraintConfig = getTableConstraints(sourceConfig.getName());
+        }
+
+        Table altTable;
+        if (this.refreshInterval != null) {
+          String directoryPath = baseDirectory != null ? baseDirectory
+              : (sourceDirectory != null ? sourceDirectory.getAbsolutePath() : null);
+          if (directoryPath == null) {
+            LOGGER.warn("Cannot create alternate partition '{}' - no directory path", altName);
+            continue;
+          }
+          PartitionedTableConfig altTableConfig = new PartitionedTableConfig(
+              altName, altConfig.getPattern(), "partitioned",
+              altConfig.getPartition(), altConfig.getComment(),
+              sourceConfig.getColumnComments(), sourceConfig.getColumns(), null);
+          RefreshablePartitionedParquetTable altRefreshable =
+              new RefreshablePartitionedParquetTable(altName,
+                  directoryPath, altConfig.getPattern(), altTableConfig,
+                  engineConfig, RefreshInterval.parse(this.refreshInterval),
+                  altConstraintConfig, name, this.storageProvider);
+          altRefreshable.setRefreshContext(this, altName);
+          altTable = altRefreshable;
+        } else {
+          altTable = new PartitionedParquetTable(altMatchingFiles, partitionInfo,
+              engineConfig, columnTypes, null, null, altConstraintConfig, name, altName,
+              this.storageProvider, sourceConfig);
+        }
+
+        builder.put(altName, altTable);
+        alreadyProcessed.add(altName);
+        LOGGER.info("✓ Added alternate partition table '{}' (source: '{}')",
+            altName, sourceConfig.getName());
+      } catch (Exception ex) {
+        LOGGER.warn("Failed to create alternate partition '{}': {}", altName, ex.getMessage());
       }
     }
   }
@@ -5214,4 +5298,110 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     return comment;
   }
 
+  /**
+   * Validates foreign key constraints by checking if target tables exist.
+   * Invalid FKs (referencing non-existent tables) are removed from the constraint
+   * metadata and logged as warnings.
+   *
+   * <p>This method should be called after all tables are registered to filter out
+   * invalid cross-table or cross-schema references before statistics are built.
+   *
+   * @param tables The map of table names to tables in this schema
+   */
+  @SuppressWarnings("unchecked")
+  private void validateForeignKeyConstraints(Map<String, Table> tables) {
+    if (constraintMetadata == null || constraintMetadata.isEmpty()) {
+      return;
+    }
+
+    int invalidFkCount = 0;
+
+    for (Map.Entry<String, Map<String, Object>> entry : constraintMetadata.entrySet()) {
+      String sourceTableName = entry.getKey();
+      Map<String, Object> constraints = entry.getValue();
+
+      if (constraints == null) {
+        continue;
+      }
+
+      List<Map<String, Object>> foreignKeys =
+          (List<Map<String, Object>>) constraints.get("foreignKeys");
+
+      if (foreignKeys == null || foreignKeys.isEmpty()) {
+        continue;
+      }
+
+      // Use iterator to safely remove invalid FKs
+      java.util.Iterator<Map<String, Object>> fkIterator = foreignKeys.iterator();
+      while (fkIterator.hasNext()) {
+        Map<String, Object> fk = fkIterator.next();
+        String targetSchema = (String) fk.get("targetSchema");
+        Object targetTableObj = fk.get("targetTable");
+        String targetTable = null;
+
+        if (targetTableObj instanceof String) {
+          targetTable = (String) targetTableObj;
+        } else if (targetTableObj instanceof List) {
+          List<String> qualifiedName = (List<String>) targetTableObj;
+          if (qualifiedName.size() >= 2) {
+            targetSchema = qualifiedName.get(qualifiedName.size() - 2);
+            targetTable = qualifiedName.get(qualifiedName.size() - 1);
+          } else if (qualifiedName.size() == 1) {
+            targetTable = qualifiedName.get(0);
+          }
+        }
+
+        if (targetTable == null) {
+          continue;
+        }
+
+        // Check if target table exists
+        boolean targetExists = checkTableExists(targetSchema, targetTable, tables);
+
+        if (!targetExists) {
+          invalidFkCount++;
+          String targetRef = targetSchema != null
+              ? targetSchema + "." + targetTable
+              : targetTable;
+          LOGGER.warn("Removing invalid FK constraint from table '{}': target table '{}' not found",
+              sourceTableName, targetRef);
+          fkIterator.remove();
+        }
+      }
+    }
+
+    if (invalidFkCount > 0) {
+      LOGGER.info("Removed {} invalid FK constraint(s) referencing non-existent tables", invalidFkCount);
+    }
+  }
+
+  /**
+   * Checks if a table exists in the specified schema.
+   *
+   * @param schemaName The target schema name (null means same schema)
+   * @param tableName The target table name
+   * @param localTables Tables in the current schema
+   * @return true if the table exists
+   */
+  @SuppressWarnings("deprecation")
+  private boolean checkTableExists(@Nullable String schemaName, String tableName,
+      Map<String, Table> localTables) {
+    // If no schema specified or same schema, check local tables
+    if (schemaName == null || schemaName.equals(this.name)) {
+      return localTables.containsKey(tableName);
+    }
+
+    // Check in a different schema via parentSchema
+    if (parentSchema != null) {
+      org.apache.calcite.schema.Schema targetSchema = parentSchema.getSubSchema(schemaName);
+      if (targetSchema != null) {
+        return targetSchema.getTableNames().contains(tableName);
+      }
+    }
+
+    // Schema not found - log this separately as it might be expected for deferred loading
+    LOGGER.debug("Target schema '{}' not found when validating FK to table '{}'",
+        schemaName, tableName);
+    return false;
+  }
 }

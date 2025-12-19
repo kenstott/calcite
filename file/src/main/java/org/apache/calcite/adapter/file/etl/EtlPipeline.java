@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Orchestrates ETL pipeline execution from HTTP sources to Iceberg or Parquet tables.
@@ -81,6 +82,8 @@ public class EtlPipeline {
   private final String baseDirectory;
   private final ProgressListener progressListener;
   private final IncrementalTracker incrementalTracker;
+  private final DataProvider dataProvider;
+  private final DataWriter dataWriter;
 
   /**
    * Creates a new ETL pipeline.
@@ -91,7 +94,7 @@ public class EtlPipeline {
    */
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory) {
-    this(config, storageProvider, baseDirectory, null, IncrementalTracker.NOOP);
+    this(config, storageProvider, baseDirectory, null, IncrementalTracker.NOOP, null, null);
   }
 
   /**
@@ -104,7 +107,7 @@ public class EtlPipeline {
    */
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory, ProgressListener progressListener) {
-    this(config, storageProvider, baseDirectory, progressListener, IncrementalTracker.NOOP);
+    this(config, storageProvider, baseDirectory, progressListener, IncrementalTracker.NOOP, null, null);
   }
 
   /**
@@ -119,15 +122,41 @@ public class EtlPipeline {
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory, ProgressListener progressListener,
       IncrementalTracker incrementalTracker) {
+    this(config, storageProvider, baseDirectory, progressListener, incrementalTracker, null, null);
+  }
+
+  /**
+   * Creates a new ETL pipeline with all options including custom data provider/writer.
+   *
+   * @param config Pipeline configuration
+   * @param storageProvider Storage provider for file operations
+   * @param baseDirectory Base directory for output
+   * @param progressListener Listener for progress updates
+   * @param incrementalTracker Tracker for incremental processing
+   * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
+   * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
+   */
+  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
+      String baseDirectory, ProgressListener progressListener,
+      IncrementalTracker incrementalTracker, DataProvider dataProvider, DataWriter dataWriter) {
     this.config = config;
     this.storageProvider = storageProvider;
     this.baseDirectory = baseDirectory;
     this.progressListener = progressListener;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
+    this.dataProvider = dataProvider;
+    this.dataWriter = dataWriter;
   }
 
   /**
    * Executes the ETL pipeline.
+   *
+   * <p>Uses optimized bulk filtering and table completion tracking:
+   * <ul>
+   *   <li>Fast-path: Skip entire pipeline if table is complete with same dimension signature</li>
+   *   <li>Bulk filtering: Check all combinations in one database call instead of per-batch</li>
+   *   <li>Table completion: Mark pipeline complete after successful processing</li>
+   * </ul>
    *
    * @return Execution result with statistics
    * @throws IOException If pipeline execution fails
@@ -147,70 +176,163 @@ public class EtlPipeline {
     MaterializationWriter writer = null;
 
     try {
-      // Phase 1: Expand dimensions
+      // Phase 1: Expand dimensions (with optional custom DimensionResolver from hooks)
       LOGGER.info("Phase 1: Expanding dimensions for pipeline '{}'", pipelineName);
-      DimensionIterator dimensionIterator = new DimensionIterator();
+      DimensionResolver dimensionResolver = loadDimensionResolver(config.getHooks());
+      DimensionIterator dimensionIterator = dimensionResolver != null
+          ? new DimensionIterator(dimensionResolver)
+          : new DimensionIterator();
       List<Map<String, String>> combinations = dimensionIterator.expand(config.getDimensions());
       int totalBatches = combinations.size();
       LOGGER.info("Expanded to {} dimension combinations", totalBatches);
+
+      // Compute dimension signature for table-level completion tracking
+      String dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
+
+      // Fast-path: Check if entire pipeline was already completed with same dimensions
+      if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
+            pipelineName, totalBatches, dimensionSignature, elapsed);
+        return EtlResult.skipped(pipelineName, elapsed);
+      }
 
       if (progressListener != null) {
         progressListener.onPhaseStart("dimension_expansion", totalBatches);
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
       }
 
-      // Phase 2: Create HTTP source
-      LOGGER.info("Phase 2: Creating HTTP source");
-      HttpSource httpSource = new HttpSource(config.getSource());
+      // Phase 2: Bulk filter to find unprocessed combinations
+      LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
+      long filterStartMs = System.currentTimeMillis();
+      Set<Integer> unprocessedIndices =
+          incrementalTracker.filterUnprocessed(pipelineName, pipelineName, combinations);
+      long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
-      // Phase 3: Create and initialize materialization writer
+      int neededCount = unprocessedIndices.size();
+      skippedBatches = totalBatches - neededCount;
+      LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
+          neededCount, totalBatches, filterElapsedMs,
+          totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
+
+      // If all combinations are already processed, mark complete and return
+      if (neededCount == 0) {
+        incrementalTracker.markTableComplete(pipelineName, dimensionSignature);
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.info("All {} combinations already processed - marking complete ({}ms)",
+            totalBatches, elapsed);
+        return EtlResult.builder()
+            .pipelineName(pipelineName)
+            .totalRows(0)
+            .successfulBatches(0)
+            .skippedBatches(totalBatches)
+            .elapsedMs(elapsed)
+            .build();
+      }
+
+      // Phase 3: Create HTTP source with hooks
+      LOGGER.info("Phase 3: Creating HTTP source");
+      HttpSource httpSource = new HttpSource(config.getSource(), config.getHooks());
+
+      // Phase 4: Create and initialize materialization writer
       MaterializeConfig materializeConfig = config.getMaterialize();
       MaterializeConfig.Format format = materializeConfig != null
           ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
-      LOGGER.info("Phase 3: Creating MaterializationWriter (format={})", format);
+      LOGGER.info("Phase 4: Creating MaterializationWriter (format={})", format);
 
-      writer = MaterializationWriterFactory.createFromConfig(
-          materializeConfig, storageProvider, baseDirectory, incrementalTracker);
+      // Ensure materialize config has a name (defaults to pipeline name for Iceberg table ID)
+      if (materializeConfig != null
+          && (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
+          && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty())) {
+        materializeConfig = MaterializeConfig.builder()
+            .enabled(materializeConfig.isEnabled())
+            .format(materializeConfig.getFormat())
+            .targetTableId(materializeConfig.getTargetTableId())
+            .output(materializeConfig.getOutput())
+            .partition(materializeConfig.getPartition())
+            .columns(materializeConfig.getColumns())
+            .options(materializeConfig.getOptions())
+            .name(config.getName())  // Use pipeline name as default
+            .iceberg(materializeConfig.getIceberg())
+            .build();
+      }
+
+      writer =
+          MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, baseDirectory, incrementalTracker);
       writer.initialize(materializeConfig);
       LOGGER.info("Initialized {} writer", format);
 
-      // Phase 4: Process each dimension combination
-      LOGGER.info("Phase 4: Processing {} batches", totalBatches);
+      // Phase 5: Process only unprocessed dimension combinations
+      LOGGER.info("Phase 5: Processing {} unprocessed batches (of {} total)", neededCount, totalBatches);
       if (progressListener != null) {
-        progressListener.onPhaseStart("data_processing", totalBatches);
+        progressListener.onPhaseStart("data_processing", neededCount);
       }
 
-      int batchNum = 0;
-      for (Map<String, String> variables : combinations) {
-        batchNum++;
+      int processedCount = 0;
+      for (int idx = 0; idx < combinations.size(); idx++) {
+        // Skip already-processed combinations (from bulk filter)
+        if (!unprocessedIndices.contains(idx)) {
+          continue;
+        }
+
+        Map<String, String> variables = combinations.get(idx);
+        processedCount++;
 
         if (progressListener != null) {
-          progressListener.onBatchStart(batchNum, totalBatches, variables);
+          progressListener.onBatchStart(processedCount, neededCount, variables);
         }
 
         try {
-          LOGGER.info("Processing batch {}/{}: {}", batchNum, totalBatches, variables);
+          LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
 
-          // Fetch data for this combination
-          Iterator<Map<String, Object>> data = httpSource.fetch(variables);
+          // Fetch data - use custom provider if available, otherwise built-in HttpSource
+          Iterator<Map<String, Object>> data = null;
+          if (dataProvider != null) {
+            data = dataProvider.fetch(config, variables);
+            if (data != null) {
+              LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
+            }
+          }
+          if (data == null) {
+            // Fall back to built-in HttpSource
+            data = httpSource.fetch(variables);
+          }
 
-          // Write batch through MaterializationWriter
-          long batchRows = writer.writeBatch(data, variables);
+          // Write batch - use custom writer if available, otherwise built-in MaterializationWriter
+          long batchRows;
+          if (dataWriter != null) {
+            batchRows = dataWriter.write(config, data, variables);
+            if (batchRows >= 0) {
+              LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+            } else {
+              // Custom writer returned -1, use built-in writer
+              batchRows = writer.writeBatch(data, variables);
+            }
+          } else {
+            // Use built-in MaterializationWriter
+            batchRows = writer.writeBatch(data, variables);
+          }
           totalRows += batchRows;
 
-          LOGGER.debug("Wrote {} rows for batch {}", batchRows, batchNum);
+          LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
+
+          // Mark batch as successfully processed for incremental tracking
+          incrementalTracker.markProcessed(pipelineName, pipelineName, variables, null);
 
           successfulBatches++;
 
           if (progressListener != null) {
-            progressListener.onBatchComplete(batchNum, totalBatches, (int) batchRows, null);
+            progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
           }
 
         } catch (IOException e) {
-          String errorMsg = String.format("Batch %d/%d failed: %s",
-              batchNum, totalBatches, e.getMessage());
+          String errorMsg =
+              String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
           LOGGER.error(errorMsg, e);
           errors.add(errorMsg);
+
+          // Invalidate table completion since we have an error
+          incrementalTracker.invalidateTableCompletion(pipelineName);
 
           // Handle error according to policy
           EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
@@ -218,21 +340,21 @@ public class EtlPipeline {
 
           switch (action) {
             case FAIL:
-              throw new IOException("Pipeline failed at batch " + batchNum, e);
+              throw new IOException("Pipeline failed at batch " + processedCount, e);
             case SKIP:
               skippedBatches++;
-              LOGGER.warn("Skipping batch {} due to error: {}", batchNum, e.getMessage());
+              LOGGER.warn("Skipping batch {} due to error: {}", processedCount, e.getMessage());
               break;
             case WARN:
               failedBatches++;
-              LOGGER.warn("Batch {} failed (continuing): {}", batchNum, e.getMessage());
+              LOGGER.warn("Batch {} failed (continuing): {}", processedCount, e.getMessage());
               break;
             default:
               failedBatches++;
           }
 
           if (progressListener != null) {
-            progressListener.onBatchComplete(batchNum, totalBatches, 0, e);
+            progressListener.onBatchComplete(processedCount, neededCount, 0, e);
           }
         }
       }
@@ -241,12 +363,18 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("data_processing", successfulBatches);
       }
 
-      // Phase 5: Commit writes
-      LOGGER.info("Phase 5: Committing writes");
+      // Phase 6: Commit writes
+      LOGGER.info("Phase 6: Committing writes");
       writer.commit();
 
       // Close resources
       httpSource.close();
+
+      // Mark table as complete if all batches succeeded without errors
+      if (failedBatches == 0 && errors.isEmpty()) {
+        incrementalTracker.markTableComplete(pipelineName, dimensionSignature);
+        LOGGER.info("Marked pipeline '{}' as complete with signature: {}", pipelineName, dimensionSignature);
+      }
 
       long elapsed = System.currentTimeMillis() - startTime;
       LOGGER.info("ETL pipeline '{}' complete: {} rows, {} successful, {} failed, {} skipped in {}ms",
@@ -264,9 +392,12 @@ public class EtlPipeline {
 
     } catch (Exception e) {
       long elapsed = System.currentTimeMillis() - startTime;
-      String errorMsg = String.format("ETL pipeline '%s' failed after %dms: %s",
-          pipelineName, elapsed, e.getMessage());
+      String errorMsg =
+          String.format("ETL pipeline '%s' failed after %dms: %s", pipelineName, elapsed, e.getMessage());
       LOGGER.error(errorMsg, e);
+
+      // Invalidate table completion on failure
+      incrementalTracker.invalidateTableCompletion(pipelineName);
 
       return EtlResult.builder()
           .pipelineName(pipelineName)
@@ -316,6 +447,35 @@ public class EtlPipeline {
     }
 
     return errorHandling.getApiErrorAction();
+  }
+
+  /**
+   * Loads a DimensionResolver from HooksConfig if configured.
+   *
+   * @param hooksConfig Hooks configuration
+   * @return DimensionResolver instance, or null if not configured
+   */
+  private DimensionResolver loadDimensionResolver(HooksConfig hooksConfig) {
+    if (hooksConfig == null || hooksConfig.getDimensionResolverClass() == null) {
+      return null;
+    }
+
+    String className = hooksConfig.getDimensionResolverClass();
+    try {
+      Class<?> clazz = Class.forName(className);
+      if (!DimensionResolver.class.isAssignableFrom(clazz)) {
+        throw new IllegalArgumentException(
+            "Class " + className + " does not implement DimensionResolver");
+      }
+      DimensionResolver resolver = (DimensionResolver) clazz.getDeclaredConstructor().newInstance();
+      LOGGER.info("Loaded DimensionResolver: {}", className);
+      return resolver;
+    } catch (ClassNotFoundException e) {
+      throw new IllegalArgumentException("DimensionResolver class not found: " + className, e);
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          "Failed to instantiate DimensionResolver: " + className, e);
+    }
   }
 
   /**
@@ -372,23 +532,19 @@ public class EtlPipeline {
   public static class LoggingProgressListener implements ProgressListener {
     private static final Logger LOG = LoggerFactory.getLogger(LoggingProgressListener.class);
 
-    @Override
-    public void onPhaseStart(String phase, int totalItems) {
+    @Override public void onPhaseStart(String phase, int totalItems) {
       LOG.info("Starting phase '{}' with {} items", phase, totalItems);
     }
 
-    @Override
-    public void onPhaseComplete(String phase, int processedItems) {
+    @Override public void onPhaseComplete(String phase, int processedItems) {
       LOG.info("Completed phase '{}': {} items processed", phase, processedItems);
     }
 
-    @Override
-    public void onBatchStart(int batchNum, int totalBatches, Map<String, String> variables) {
+    @Override public void onBatchStart(int batchNum, int totalBatches, Map<String, String> variables) {
       LOG.debug("Starting batch {}/{}: {}", batchNum, totalBatches, variables);
     }
 
-    @Override
-    public void onBatchComplete(int batchNum, int totalBatches, int rowCount, Exception error) {
+    @Override public void onBatchComplete(int batchNum, int totalBatches, int rowCount, Exception error) {
       if (error != null) {
         LOG.warn("Batch {}/{} failed: {}", batchNum, totalBatches, error.getMessage());
       } else {

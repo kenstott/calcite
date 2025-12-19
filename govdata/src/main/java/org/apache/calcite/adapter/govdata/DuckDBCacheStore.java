@@ -34,7 +34,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -176,8 +175,8 @@ public class DuckDBCacheStore implements AutoCloseable {
       if (is == null) {
         throw new RuntimeException("SQL resource not found: " + resourcePath);
       }
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
         return reader.lines().collect(Collectors.joining("\n"));
       }
     } catch (IOException e) {
@@ -1411,8 +1410,7 @@ public class DuckDBCacheStore implements AutoCloseable {
               rs.getBoolean("supports_mic"),
               rs.getBoolean("supports_port"),
               rs.getBoolean("supports_div"),
-              rs.getBoolean("supports_csa")
-          );
+              rs.getBoolean("supports_csa"));
         }
       }
     } catch (SQLException e) {
@@ -1469,8 +1467,7 @@ public class DuckDBCacheStore implements AutoCloseable {
     }
   }
 
-  @Override
-  public void close() {
+  @Override public void close() {
     synchronized (connectionLock) {
       if (connection != null) {
         try {

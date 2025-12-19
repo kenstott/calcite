@@ -39,7 +39,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -91,6 +93,36 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("[FileSchemaFactory] ==> Parent schema: '{}'", parentSchema != null ? parentSchema.getName() : "null");
     LOGGER.info("[FileSchemaFactory] ==> Operand keys: {}", operand.keySet());
     LOGGER.info("[FileSchemaFactory] ==> Thread: {}", Thread.currentThread().getName());
+
+    // Set schema name as system property for YAML variable substitution
+    // YAML files can use ${SCHEMA_NAME} to reference the actual schema name
+    System.setProperty("SCHEMA_NAME", name);
+
+    // Check for autoDownload - triggers ETL pipeline before schema creation
+    // Schema config can come from:
+    //   1. "schemaResource": "/path/to/schema.yaml" (classpath resource)
+    //   2. Directly embedded in the operand (sources, materialize sections, etc.)
+    Boolean autoDownload = parseBooleanValue(operand.get("autoDownload"));
+    if (Boolean.TRUE.equals(autoDownload)) {
+      String schemaResource = (String) operand.get("schemaResource");
+      LOGGER.info("autoDownload enabled, running ETL pipeline (schemaResource: {})",
+          schemaResource != null ? schemaResource : "embedded in operand");
+
+      FileSchemaBuilder builder = FileSchemaBuilder.create();
+      if (schemaResource != null) {
+        builder.schemaResource(schemaResource).operand(operand);
+      } else {
+        // Use operand directly as the schema config
+        builder.schemaConfig(operand);
+      }
+
+      Map<String, Object> enrichedOperand = builder.autoDownload(true).getOperand();
+      // Merge enriched operand back (ETL results, excluded tables, etc.)
+      operand = new HashMap<>(operand);
+      operand.putAll(enrichedOperand);
+      LOGGER.info("ETL complete, continuing with enriched operand");
+    }
+
     @SuppressWarnings("unchecked") List<Map<String, Object>> tables =
         (List) operand.get("tables");
 
@@ -249,6 +281,18 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     @SuppressWarnings("unchecked") Map<String, Object> storageConfig =
         (Map<String, Object>) operand.get("storageConfig");
 
+    // Check for pre-created storage provider instance (allows sharing across schemas)
+    Object storageProviderInstance = operand.get("_storageProvider");
+    if (storageProviderInstance != null) {
+      if (storageConfig == null) {
+        storageConfig = new HashMap<>();
+      } else {
+        storageConfig = new HashMap<>(storageConfig);
+      }
+      storageConfig.put("_storageProvider", storageProviderInstance);
+      LOGGER.debug("Using pre-created storage provider instance from operand");
+    }
+
     // Auto-detect storage type from directory path
     if (storageType == null && directory != null) {
       if (directory.startsWith("s3://")) {
@@ -367,6 +411,17 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     if (operandTableConstraints != null && !operandTableConstraints.isEmpty()) {
       // Operand constraints take precedence
       constraintsToPass = operandTableConstraints;
+    }
+
+    // Rewrite FK schema names if declaredSchemaName differs from actual schema name
+    // This allows YAML files to use canonical names (e.g., "econ") while model.json uses "ECON"
+    // Default: lowercase of actual schema name (standard YAML convention)
+    String declaredSchemaName = (String) operand.get("declaredSchemaName");
+    if (declaredSchemaName == null) {
+      declaredSchemaName = name.toLowerCase(java.util.Locale.ROOT);
+    }
+    if (constraintsToPass != null && !declaredSchemaName.equalsIgnoreCase(name)) {
+      constraintsToPass = rewriteForeignKeySchemaNames(constraintsToPass, declaredSchemaName, name);
     }
 
     // Check if we're using DuckDB engine
@@ -811,8 +866,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       return;
     }
 
-    // Extract declared schema name for rewriting
+    // Extract declared schema name for rewriting (default: lowercase of actual schema name)
     String declaredSchemaName = (String) operand.get("declaredSchemaName");
+    if (declaredSchemaName == null) {
+      declaredSchemaName = schemaName.toLowerCase(java.util.Locale.ROOT);
+    }
 
     int viewCount = 0;
     for (Map<String, Object> table : tables) {
@@ -836,7 +894,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       try {
         // Rewrite schema references if needed (same logic as DuckDB)
         String rewrittenViewSql = viewSql;
-        if (declaredSchemaName != null && !declaredSchemaName.equalsIgnoreCase(schemaName)) {
+        if (!declaredSchemaName.equalsIgnoreCase(schemaName)) {
           rewrittenViewSql = rewriteSchemaReferencesInSql(viewSql, declaredSchemaName, schemaName);
         }
 
@@ -900,4 +958,76 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
     return rewritten;
   }
+
+  /**
+   * Rewrites foreign key targetSchema values in constraint definitions.
+   * If targetSchema matches declaredSchemaName, rewrites it to actualSchemaName.
+   * This allows YAML files to use canonical schema names (e.g., "econ") while
+   * model.json instantiates the schema with a different name (e.g., "ECON").
+   *
+   * @param constraints Map of table name to constraint definitions
+   * @param declaredSchemaName Canonical schema name from YAML (e.g., "econ")
+   * @param actualSchemaName User-provided schema name from model.json (e.g., "ECON")
+   * @return New map with rewritten FK schema names (or original if no changes)
+   */
+  private static Map<String, Map<String, Object>> rewriteForeignKeySchemaNames(
+      Map<String, Map<String, Object>> constraints,
+      String declaredSchemaName,
+      String actualSchemaName) {
+
+    if (constraints == null || constraints.isEmpty()) {
+      return constraints;
+    }
+
+    // Create a deep copy to avoid modifying the original
+    Map<String, Map<String, Object>> rewritten = new HashMap<>();
+    int rewriteCount = 0;
+
+    for (Map.Entry<String, Map<String, Object>> entry : constraints.entrySet()) {
+      String tableName = entry.getKey();
+      Map<String, Object> tableConstraints = entry.getValue();
+
+      // Check if table has foreignKeys
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> foreignKeys =
+          (List<Map<String, Object>>) tableConstraints.get("foreignKeys");
+
+      if (foreignKeys == null || foreignKeys.isEmpty()) {
+        rewritten.put(tableName, tableConstraints);
+        continue;
+      }
+
+      // Deep copy the table constraints
+      Map<String, Object> rewrittenTableConstraints = new HashMap<>(tableConstraints);
+      List<Map<String, Object>> rewrittenForeignKeys = new ArrayList<>();
+
+      for (Map<String, Object> fk : foreignKeys) {
+        String targetSchema = (String) fk.get("targetSchema");
+
+        if (targetSchema != null && targetSchema.equalsIgnoreCase(declaredSchemaName)) {
+          // Rewrite to actual schema name
+          Map<String, Object> rewrittenFk = new HashMap<>(fk);
+          rewrittenFk.put("targetSchema", actualSchemaName);
+          rewrittenForeignKeys.add(rewrittenFk);
+          rewriteCount++;
+          LOGGER.debug("FK rewrite: table={}, targetSchema '{}' -> '{}'",
+              tableName, declaredSchemaName, actualSchemaName);
+        } else {
+          // Preserve as-is (cross-schema FK or already correct)
+          rewrittenForeignKeys.add(fk);
+        }
+      }
+
+      rewrittenTableConstraints.put("foreignKeys", rewrittenForeignKeys);
+      rewritten.put(tableName, rewrittenTableConstraints);
+    }
+
+    if (rewriteCount > 0) {
+      LOGGER.info("FK schema rewriting: rewrote {} foreign keys from '{}' to '{}'",
+          rewriteCount, declaredSchemaName, actualSchemaName);
+    }
+
+    return rewritten;
+  }
+
 }

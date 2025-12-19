@@ -53,13 +53,11 @@ public class ClickHouseDialect implements JdbcDialect {
   /** Default database name. */
   private static final String DEFAULT_DATABASE = "default";
 
-  @Override
-  public String getDriverClassName() {
+  @Override public String getDriverClassName() {
     return "com.clickhouse.jdbc.ClickHouseDriver";
   }
 
-  @Override
-  public String buildJdbcUrl(Map<String, String> config) {
+  @Override public String buildJdbcUrl(Map<String, String> config) {
     String host = getConfigValue(config, "host", "localhost");
     String port = getConfigValue(config, "port", DEFAULT_PORT);
     String database = getConfigValue(config, "database", DEFAULT_DATABASE);
@@ -67,33 +65,28 @@ public class ClickHouseDialect implements JdbcDialect {
     return String.format("jdbc:clickhouse://%s:%s/%s", host, port, database);
   }
 
-  @Override
-  public String readParquetSql(String globPattern, List<String> columns) {
+  @Override public String readParquetSql(String globPattern, List<String> columns) {
     // ClickHouse s3() function supports globs natively for S3 paths
     // For local files, the file() function would be used
     String cols = formatColumns(columns);
     return String.format("SELECT %s FROM s3('%s', 'Parquet')", cols, globPattern);
   }
 
-  @Override
-  public String readIcebergSql(String tablePath, List<String> columns) {
+  @Override public String readIcebergSql(String tablePath, List<String> columns) {
     // ClickHouse has a native iceberg() table function
     String cols = formatColumns(columns);
     return String.format("SELECT %s FROM iceberg('%s')", cols, tablePath);
   }
 
-  @Override
-  public boolean supportsDirectGlob() {
+  @Override public boolean supportsDirectGlob() {
     return true; // s3() and file() functions support globs
   }
 
-  @Override
-  public boolean supportsIceberg() {
+  @Override public boolean supportsIceberg() {
     return true; // Native iceberg() table function
   }
 
-  @Override
-  public String createParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     // ClickHouse uses s3() table function for S3 paths, file() for local
     // Note: ClickHouse doesn't support IF NOT EXISTS for views, use CREATE OR REPLACE
@@ -107,8 +100,7 @@ public class ClickHouseDialect implements JdbcDialect {
         qualifiedName, tableFunc, path);
   }
 
-  @Override
-  public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
+  @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     // ClickHouse has native iceberg() table function
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format(
@@ -116,21 +108,18 @@ public class ClickHouseDialect implements JdbcDialect {
         qualifiedName, tablePath);
   }
 
-  @Override
-  public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     // ClickHouse uses CREATE OR REPLACE by default
     return createParquetViewSql(schemaName, viewName, path, hivePartitioning);
   }
 
-  @Override
-  public String dropViewSql(String schemaName, String viewName) {
+  @Override public String dropViewSql(String schemaName, String viewName) {
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format("DROP VIEW IF EXISTS %s", qualifiedName);
   }
 
-  @Override
-  public String getName() {
+  @Override public String getName() {
     return "ClickHouse";
   }
 

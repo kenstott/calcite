@@ -16,23 +16,13 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.Metrics;
 import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.data.GenericAppenderFactory;
-import org.apache.iceberg.data.GenericRecord;
-import org.apache.iceberg.data.Record;
 import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.io.FileAppender;
-import org.apache.iceberg.io.OutputFile;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,8 +105,8 @@ public class IcebergTableWriter {
       // Build filter expression from partition values
       org.apache.iceberg.expressions.Expression filter = Expressions.alwaysTrue();
       for (Map.Entry<String, Object> entry : partitionFilter.entrySet()) {
-        filter = Expressions.and(filter,
-            Expressions.equal(entry.getKey(), entry.getValue()));
+        filter =
+            Expressions.and(filter, Expressions.equal(entry.getKey(), entry.getValue()));
       }
       overwrite.overwriteByRowFilter(filter);
 
@@ -144,8 +134,7 @@ public class IcebergTableWriter {
       java.nio.file.Path dataPath, List<DataFile> dataFiles) throws IOException {
 
     Files.walkFileTree(stagingPath, new SimpleFileVisitor<java.nio.file.Path>() {
-      @Override
-      public FileVisitResult visitFile(java.nio.file.Path file,
+      @Override public FileVisitResult visitFile(java.nio.file.Path file,
           BasicFileAttributes attrs) throws IOException {
         if (file.toString().endsWith(".parquet")) {
           // Preserve partition path: staging/year=2020/data.parquet -> data/year=2020/data.parquet
@@ -166,8 +155,7 @@ public class IcebergTableWriter {
         return FileVisitResult.CONTINUE;
       }
 
-      @Override
-      public FileVisitResult postVisitDirectory(java.nio.file.Path dir,
+      @Override public FileVisitResult postVisitDirectory(java.nio.file.Path dir,
           IOException exc) throws IOException {
         // Clean up empty directories in staging
         if (!dir.equals(stagingPath)) {
@@ -275,8 +263,8 @@ public class IcebergTableWriter {
 
     org.apache.iceberg.expressions.Expression filter = Expressions.alwaysTrue();
     for (Map.Entry<String, Object> entry : partitionFilter.entrySet()) {
-      filter = Expressions.and(filter,
-          Expressions.equal(entry.getKey(), entry.getValue()));
+      filter =
+          Expressions.and(filter, Expressions.equal(entry.getKey(), entry.getValue()));
     }
 
     LOGGER.info("Deleting partition with filter: {}", partitionFilter);

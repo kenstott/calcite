@@ -17,41 +17,14 @@
 package org.apache.calcite.adapter.govdata;
 
 /**
- * Defines the types of operations supported by the government data downloader infrastructure.
- *
- * <p>These operation types control cache manifest checking behavior:
- * <ul>
- *   <li>{@link #DOWNLOAD} - Downloads raw data (sourced check: {@code cachedAt} timestamp)</li>
- *   <li>{@link #CONVERSION} - Materializes cached data to target format (materialized check: {@code materializedAt} timestamp)</li>
- *   <li>{@link #DOWNLOAD_AND_CONVERT} - Downloads and materializes in single operation
- *       (checks both sourced and materialized timestamps)</li>
- * </ul>
- *
- * <p>The two-phase approach supports:
- * <ul>
- *   <li><b>Sourced check</b> - Do I have the raw source files cached?</li>
- *   <li><b>Materialized check</b> - Have I converted them to the target format (Iceberg, Parquet, etc.)?</li>
- * </ul>
+ * Type of cache operation for government data downloads.
  */
 public enum OperationType {
-  /**
-   * Download operation - fetches raw data from remote source and caches it.
-   * Performs sourced check via {@code cachedAt} timestamp.
-   */
+  /** Downloading raw data from source API. */
   DOWNLOAD("download"),
 
-  /**
-   * Materialization operation - converts cached raw data to target output format.
-   * Performs materialized check via {@code materializedAt} timestamp.
-   * Target format is determined by MaterializeConfig (Iceberg, Parquet, Delta, etc.).
-   */
-  CONVERSION("conversion"),
-
-  /**
-   * Combined download and materialization operation - fetches data and immediately converts to target format.
-   * Performs both sourced check ({@code cachedAt}) and materialized check ({@code materializedAt}).
-   */
-  DOWNLOAD_AND_CONVERT("download_and_convert");
+  /** Converting raw data to Parquet format. */
+  CONVERSION("conversion");
 
   private final String value;
 
@@ -60,28 +33,9 @@ public enum OperationType {
   }
 
   /**
-   * Returns the string representation of this operation type.
-   * Used for logging and backward compatibility.
-   *
-   * @return the operation type string
+   * Get the string value for logging/display.
    */
   public String getValue() {
     return value;
-  }
-
-  /**
-   * Parses a string into an OperationType enum value.
-   *
-   * @param value the string value to parse
-   * @return the corresponding OperationType
-   * @throws IllegalArgumentException if the value doesn't match any operation type
-   */
-  public static OperationType fromValue(String value) {
-    for (OperationType type : values()) {
-      if (type.value.equals(value)) {
-        return type;
-      }
-    }
-    throw new IllegalArgumentException("Unknown operation type: " + value);
   }
 }

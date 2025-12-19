@@ -310,8 +310,8 @@ public class DimensionIteratorTest {
 
   @Test void testDimensionIteratorEmptyDimensionsMap() {
     DimensionIterator iterator = new DimensionIterator();
-    List<Map<String, String>> combinations = iterator.expand(
-        new LinkedHashMap<String, DimensionConfig>());
+    List<Map<String, String>> combinations =
+        iterator.expand(new LinkedHashMap<String, DimensionConfig>());
 
     // Should return single empty map
     assertEquals(1, combinations.size());

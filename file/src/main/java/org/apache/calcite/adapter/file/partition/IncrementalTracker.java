@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -73,35 +75,130 @@ public interface IncrementalTracker {
    */
   void invalidateAll(String alternateName);
 
+  // ===== Bulk Filtering Methods =====
+
+  /**
+   * Filters a list of dimension combinations to return only unprocessed ones.
+   * This is more efficient than calling isProcessed() per combination.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param allCombinations All dimension combinations to check
+   * @return Set of combination indices that have NOT been processed
+   */
+  Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
+      List<Map<String, String>> allCombinations);
+
+  // ===== Table Completion Tracking =====
+
+  /**
+   * Checks if the entire pipeline was completed with the same dimension signature.
+   * Used for fast-path skipping when dimensions haven't changed.
+   *
+   * @param pipelineName The pipeline name
+   * @param dimensionSignature Hash of all dimension values
+   * @return true if table was fully processed with same signature
+   */
+  boolean isTableComplete(String pipelineName, String dimensionSignature);
+
+  /**
+   * Marks a pipeline as complete after all combinations were processed.
+   *
+   * @param pipelineName The pipeline name
+   * @param dimensionSignature Hash of all dimension values
+   */
+  void markTableComplete(String pipelineName, String dimensionSignature);
+
+  /**
+   * Invalidates table completion status, forcing reprocessing.
+   *
+   * @param pipelineName The pipeline name
+   */
+  void invalidateTableCompletion(String pipelineName);
+
+  // ===== Dimension Signature Computation =====
+
+  /**
+   * Computes a signature for a list of dimension combinations.
+   * The signature changes when dimension values change.
+   *
+   * @param dimensions List of dimension configurations
+   * @param combinations All expanded combinations
+   * @return Signature string for comparison
+   */
+  static String computeDimensionSignature(List<Map<String, String>> combinations) {
+    if (combinations == null || combinations.isEmpty()) {
+      return "empty";
+    }
+    // Build signature from count and sorted dimension keys
+    StringBuilder sb = new StringBuilder();
+    sb.append("count:").append(combinations.size());
+    if (!combinations.isEmpty()) {
+      Map<String, String> first = combinations.get(0);
+      java.util.List<String> keys = new java.util.ArrayList<>(first.keySet());
+      java.util.Collections.sort(keys);
+      for (String key : keys) {
+        sb.append("|").append(key);
+      }
+    }
+    // Add hash of all values for change detection
+    int hash = 0;
+    for (Map<String, String> combo : combinations) {
+      for (Map.Entry<String, String> entry : combo.entrySet()) {
+        hash = 31 * hash + entry.getKey().hashCode();
+        hash = 31 * hash + (entry.getValue() != null ? entry.getValue().hashCode() : 0);
+      }
+    }
+    sb.append("|hash:").append(Integer.toHexString(hash));
+    return sb.toString();
+  }
+
   /**
    * A no-op tracker that always returns false (forces full rebuild).
    * Use when incremental tracking is not available.
    */
   IncrementalTracker NOOP = new IncrementalTracker() {
-    @Override
-    public boolean isProcessed(String alternateName, String sourceTable,
+    @Override public boolean isProcessed(String alternateName, String sourceTable,
         Map<String, String> keyValues) {
       return false;
     }
 
-    @Override
-    public void markProcessed(String alternateName, String sourceTable,
+    @Override public void markProcessed(String alternateName, String sourceTable,
         Map<String, String> keyValues, String targetPattern) {
       // No-op
     }
 
-    @Override
-    public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
+    @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
       return java.util.Collections.emptySet();
     }
 
-    @Override
-    public void invalidate(String alternateName, Map<String, String> keyValues) {
+    @Override public void invalidate(String alternateName, Map<String, String> keyValues) {
       // No-op
     }
 
-    @Override
-    public void invalidateAll(String alternateName) {
+    @Override public void invalidateAll(String alternateName) {
+      // No-op
+    }
+
+    @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
+        List<Map<String, String>> allCombinations) {
+      // NOOP returns all indices as unprocessed
+      Set<Integer> all = new HashSet<>();
+      for (int i = 0; i < allCombinations.size(); i++) {
+        all.add(i);
+      }
+      return all;
+    }
+
+    @Override public boolean isTableComplete(String pipelineName, String dimensionSignature) {
+      return false;
+    }
+
+    @Override public void markTableComplete(String pipelineName, String dimensionSignature) {
+      // No-op
+    }
+
+    @Override public void invalidateTableCompletion(String pipelineName) {
       // No-op
     }
   };

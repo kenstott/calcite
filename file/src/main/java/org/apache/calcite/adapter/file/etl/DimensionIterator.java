@@ -78,13 +78,15 @@ public class DimensionIterator {
   private static final Logger LOGGER = LoggerFactory.getLogger(DimensionIterator.class);
 
   private final Connection queryConnection;
+  private final DimensionResolver dimensionResolver;
 
   /**
-   * Creates a DimensionIterator without SQL query support.
-   * Query-type dimensions will throw an exception.
+   * Creates a DimensionIterator without SQL query or custom resolver support.
+   * Query-type and custom-type dimensions will throw an exception.
    */
   public DimensionIterator() {
     this.queryConnection = null;
+    this.dimensionResolver = null;
   }
 
   /**
@@ -94,6 +96,28 @@ public class DimensionIterator {
    */
   public DimensionIterator(Connection queryConnection) {
     this.queryConnection = queryConnection;
+    this.dimensionResolver = null;
+  }
+
+  /**
+   * Creates a DimensionIterator with custom dimension resolver support.
+   *
+   * @param dimensionResolver Custom resolver for CUSTOM type dimensions
+   */
+  public DimensionIterator(DimensionResolver dimensionResolver) {
+    this.queryConnection = null;
+    this.dimensionResolver = dimensionResolver;
+  }
+
+  /**
+   * Creates a DimensionIterator with both SQL query and custom resolver support.
+   *
+   * @param queryConnection JDBC connection for executing query-type dimensions
+   * @param dimensionResolver Custom resolver for CUSTOM type dimensions
+   */
+  public DimensionIterator(Connection queryConnection, DimensionResolver dimensionResolver) {
+    this.queryConnection = queryConnection;
+    this.dimensionResolver = dimensionResolver;
   }
 
   /**
@@ -161,6 +185,10 @@ public class DimensionIterator {
         return resolveQuery(config);
       case YEAR_RANGE:
         return resolveYearRange(config);
+      case CUSTOM:
+        return resolveCustom(config);
+      case JSON_CATALOG:
+        return resolveJsonCatalog(config);
       default:
         LOGGER.warn("Unknown dimension type '{}' for '{}', using empty list",
             config.getType(), config.getName());
@@ -202,11 +230,13 @@ public class DimensionIterator {
   /**
    * Resolves a YEAR_RANGE type dimension.
    * Supports "current" as the end value, resolving to current year.
+   * Supports dataLag to exclude recent years (e.g., dataLag=1 ends at current-1).
    */
   private List<String> resolveYearRange(DimensionConfig config) {
     Integer start = config.getStart();
     Integer end = config.getEnd();
     Integer step = config.getStep();
+    Integer dataLag = config.getDataLag();
 
     if (start == null) {
       LOGGER.warn("Year range dimension '{}' missing start", config.getName());
@@ -218,6 +248,13 @@ public class DimensionIterator {
       end = Calendar.getInstance().get(Calendar.YEAR);
       LOGGER.debug("Year range dimension '{}' end resolved to current year: {}",
           config.getName(), end);
+    }
+
+    // Apply data lag (subtract from end year)
+    if (dataLag != null && dataLag > 0) {
+      end = end - dataLag;
+      LOGGER.debug("Year range dimension '{}' adjusted end to {} (dataLag={})",
+          config.getName(), end, dataLag);
     }
 
     if (step == null || step == 0) {
@@ -265,6 +302,72 @@ public class DimensionIterator {
     }
 
     return values;
+  }
+
+  /**
+   * Resolves a CUSTOM type dimension by calling the DimensionResolver.
+   *
+   * <p>Custom dimensions allow adapters to provide dynamic dimension values
+   * from external sources like catalog APIs, databases, or computed values.
+   *
+   * @param config Dimension configuration
+   * @return List of resolved values
+   */
+  private List<String> resolveCustom(DimensionConfig config) {
+    if (dimensionResolver == null) {
+      throw new IllegalStateException(
+          "Custom dimension '" + config.getName() + "' requires a DimensionResolver. "
+          + "Configure hooks.dimensionResolver in the schema.");
+    }
+
+    try {
+      List<String> values = dimensionResolver.resolve(config.getName(), config);
+      if (values == null) {
+        LOGGER.warn("DimensionResolver returned null for '{}', using empty list",
+            config.getName());
+        return Collections.emptyList();
+      }
+      LOGGER.info("Custom dimension '{}' resolved to {} values",
+          config.getName(), values.size());
+      return values;
+    } catch (RuntimeException e) {
+      LOGGER.error("DimensionResolver failed for '{}': {}",
+          config.getName(), e.getMessage());
+      throw new RuntimeException(
+          "Failed to resolve custom dimension '" + config.getName() + "'", e);
+    }
+  }
+
+  /**
+   * Resolves a JSON_CATALOG type dimension by loading values from a JSON resource file.
+   *
+   * <p>Uses {@link JsonCatalogResolver} to load and extract values from the
+   * JSON resource specified by the dimension's source and path properties.
+   *
+   * @param config Dimension configuration with source and path
+   * @return List of resolved values
+   */
+  private List<String> resolveJsonCatalog(DimensionConfig config) {
+    String source = config.getSource();
+    String path = config.getPath();
+
+    if (source == null || source.isEmpty()) {
+      LOGGER.warn("JSON catalog dimension '{}' has no source", config.getName());
+      return Collections.emptyList();
+    }
+
+    try {
+      List<String> values = JsonCatalogResolver.resolve(
+          DimensionIterator.class, source, path);
+      LOGGER.info("JSON catalog dimension '{}' loaded {} values from {}",
+          config.getName(), values.size(), source);
+      return values;
+    } catch (RuntimeException e) {
+      LOGGER.error("Failed to resolve JSON catalog dimension '{}': {}",
+          config.getName(), e.getMessage());
+      throw new RuntimeException(
+          "Failed to resolve JSON catalog dimension '" + config.getName() + "'", e);
+    }
   }
 
   /**

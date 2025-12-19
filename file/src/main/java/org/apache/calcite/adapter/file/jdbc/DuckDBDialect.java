@@ -44,13 +44,11 @@ public class DuckDBDialect implements JdbcDialect {
   /** Singleton instance for reuse. */
   public static final DuckDBDialect INSTANCE = new DuckDBDialect();
 
-  @Override
-  public String getDriverClassName() {
+  @Override public String getDriverClassName() {
     return "org.duckdb.DuckDBDriver";
   }
 
-  @Override
-  public String buildJdbcUrl(Map<String, String> config) {
+  @Override public String buildJdbcUrl(Map<String, String> config) {
     String path = config != null ? config.get("path") : null;
     if (path == null || path.isEmpty()) {
       return "jdbc:duckdb:";
@@ -58,30 +56,25 @@ public class DuckDBDialect implements JdbcDialect {
     return "jdbc:duckdb:" + path;
   }
 
-  @Override
-  public String readParquetSql(String globPattern, List<String> columns) {
+  @Override public String readParquetSql(String globPattern, List<String> columns) {
     String cols = formatColumns(columns);
     return String.format("SELECT %s FROM read_parquet('%s')", cols, globPattern);
   }
 
-  @Override
-  public String readIcebergSql(String tablePath, List<String> columns) {
+  @Override public String readIcebergSql(String tablePath, List<String> columns) {
     String cols = formatColumns(columns);
     return String.format("SELECT %s FROM iceberg_scan('%s')", cols, tablePath);
   }
 
-  @Override
-  public boolean supportsDirectGlob() {
+  @Override public boolean supportsDirectGlob() {
     return true;
   }
 
-  @Override
-  public boolean supportsIceberg() {
+  @Override public boolean supportsIceberg() {
     return true;
   }
 
-  @Override
-  public String createParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     String qualifiedName = qualifyName(schemaName, viewName);
     if (hivePartitioning) {
@@ -94,16 +87,14 @@ public class DuckDBDialect implements JdbcDialect {
         qualifiedName, path);
   }
 
-  @Override
-  public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
+  @Override public String createIcebergViewSql(String schemaName, String viewName, String tablePath) {
     String qualifiedName = qualifyName(schemaName, viewName);
     return String.format(
         "CREATE VIEW IF NOT EXISTS %s AS SELECT * FROM iceberg_scan('%s')",
         qualifiedName, tablePath);
   }
 
-  @Override
-  public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
+  @Override public String createOrReplaceParquetViewSql(String schemaName, String viewName, String path,
       boolean hivePartitioning) {
     String qualifiedName = qualifyName(schemaName, viewName);
     if (hivePartitioning) {
@@ -116,8 +107,7 @@ public class DuckDBDialect implements JdbcDialect {
         qualifiedName, path);
   }
 
-  @Override
-  public String getName() {
+  @Override public String getName() {
     return "DuckDB";
   }
 
