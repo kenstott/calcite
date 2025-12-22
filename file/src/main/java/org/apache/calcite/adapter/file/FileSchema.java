@@ -969,7 +969,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     LOGGER.info("Processing JSON flattening for directory: {}", sourceDir.getAbsolutePath());
 
     // Ensure conversions directory exists
-    File conversionDir = new File(baseDirectory, "conversions");
+    File conversionDir = new File(operatingCacheDirectory, "conversions");
     if (!conversionDir.exists()) {
       conversionDir.mkdirs();
       LOGGER.debug("Created conversions directory for flattened JSON: {}", conversionDir.getAbsolutePath());
@@ -1146,7 +1146,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       // Also log the full conversions.json content
       try {
-        File conversionsFile = new File(baseDirectory, ".conversions.json");
+        File conversionsFile = new File(operatingCacheDirectory, ".conversions.json");
         if (conversionsFile.exists()) {
           LOGGER.info("Contents of .conversions.json after flattening:");
           java.nio.file.Files.lines(conversionsFile.toPath()).forEach(line -> LOGGER.info("  {}", line));
@@ -1211,7 +1211,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     File conversionDir = null;
     if (baseDirectory != null) {
       // Use baseDirectory/conversions/ for converted files
-      conversionDir = new File(baseDirectory, "conversions");
+      conversionDir = new File(operatingCacheDirectory, "conversions");
       if (!conversionDir.exists()) {
         conversionDir.mkdirs();
         LOGGER.debug("Created conversions directory: {}", conversionDir.getAbsolutePath());
@@ -1269,7 +1269,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         // Pass baseDirectory for metadata storage and relativePath for directory preservation
         boolean converted =
             FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing,
-                baseDirectory != null ? new File(baseDirectory) : null, relativePath);
+                operatingCacheDirectory, relativePath);
         if (converted) {
           LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
         }
@@ -1295,7 +1295,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       // Also log the full conversions.json content after bulk conversion
       try {
-        File conversionsFile = new File(baseDirectory, ".conversions.json");
+        File conversionsFile = new File(operatingCacheDirectory, ".conversions.json");
         if (conversionsFile.exists()) {
           LOGGER.info("Contents of .conversions.json after bulk conversion:");
           java.nio.file.Files.lines(conversionsFile.toPath()).forEach(line -> LOGGER.info("  {}", line));
@@ -1346,7 +1346,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
             // Determine output directory for converted JSON files
             // Use baseDirectory/.download-cache/conversions/
-            File conversionDir = new File(baseDirectory, ".download-cache/conversions");
+            File conversionDir = new File(operatingCacheDirectory, ".download-cache/conversions");
             if (!conversionDir.exists()) {
               conversionDir.mkdirs();
             }
@@ -1367,7 +1367,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 conversionDir,
                 columnNameCasing,
                 tableNameCasing,
-                baseDirectory != null ? new File(baseDirectory) : null,
+                operatingCacheDirectory,
                 relativePath);
 
             if (converted) {
@@ -1390,7 +1390,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
    */
   private File downloadToCache(StorageProvider.FileEntry entry) throws IOException {
     // Create cache directory structure
-    File cacheDir = new File(baseDirectory, ".download-cache/originals");
+    File cacheDir = new File(operatingCacheDirectory, ".download-cache/originals");
     if (!cacheDir.exists()) {
       cacheDir.mkdirs();
     }
@@ -1572,10 +1572,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   private Source findOriginalSource(File jsonFile) {
     if (baseDirectory != null) {
       try {
-        LOGGER.debug("Looking for conversion metadata for {} in baseDirectory: {}",
-            jsonFile.getName(), baseDirectory);
+        LOGGER.debug("Looking for conversion metadata for {} in operatingCacheDirectory: {}",
+            jsonFile.getName(), operatingCacheDirectory);
         org.apache.calcite.adapter.file.metadata.ConversionMetadata metadata =
-            new org.apache.calcite.adapter.file.metadata.ConversionMetadata(new File(baseDirectory));
+            new org.apache.calcite.adapter.file.metadata.ConversionMetadata(operatingCacheDirectory);
         File originalFile = metadata.findOriginalSource(jsonFile);
         LOGGER.debug("Metadata lookup result for {}: originalFile={}", jsonFile.getName(), originalFile);
         if (originalFile != null) {
@@ -1755,7 +1755,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           // For files in the conversions directory, use just the filename as the table name
           String rawName;
           if (baseDirectory != null && file.getAbsolutePath().startsWith(
-              new File(baseDirectory, "conversions").getAbsolutePath())) {
+              new File(operatingCacheDirectory, "conversions").getAbsolutePath())) {
             // This is a converted file - use just the filename without path
             rawName = file.getName();
             // Remove extension
@@ -1903,7 +1903,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
                     // Convert to Parquet
                     File cacheDir =
-                        ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+                        ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
                     File createdParquetFile =
                         ParquetConversionUtil.convertToParquet(tableSource, tableName, jsonTable, cacheDir, parentSchema, name, tableNameCasing);
 
@@ -2033,7 +2033,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               // Try to convert Arrow file to Parquet, but fall back to ArrowTable if conversion fails
               try {
                 File cacheDir =
-                    ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+                    ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
                 File parquetFile =
                     ParquetConversionUtil.convertToParquet(source, tableName, arrowTable, cacheDir, parentSchema, this.name, tableNameCasing);
                 Table table = new ParquetTranslatableTable(parquetFile, name);
@@ -2117,7 +2117,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             if (baseDirectory != null) {
               // Use schema-aware cache directory for materialized views
               File cacheDir =
-                  ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+                  ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
               File mvDir = new File(cacheDir, ".materialized_views");
               if (!mvDir.exists()) {
                 mvDir.mkdirs();
@@ -2256,7 +2256,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       // Get cache directory for glob results
       File cacheDir = baseDirectory != null
-          ? new File(baseDirectory, ".glob_cache")
+          ? new File(operatingCacheDirectory, ".glob_cache")
           : new File(System.getProperty("java.io.tmpdir"), "calcite_glob_cache");
 
       Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing);
@@ -2450,7 +2450,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
       try {
         File cacheDir =
-            ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+            ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
         File sourceFile = new File(source.path());
         boolean typeInferenceEnabled = csvTypeInferenceConfig != null && csvTypeInferenceConfig.isEnabled();
         File parquetFile = ParquetConversionUtil.getCachedParquetFile(sourceFile, cacheDir, typeInferenceEnabled, this.tableNameCasing);
@@ -2546,7 +2546,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             if (originalTable != null) {
             // Get cache directory
             File cacheDir =
-                ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+                ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
 
             // Try custom converters first, then fall back to default conversion
             File parquetFile = null;
@@ -2766,7 +2766,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                   || source.path().startsWith("//")) {
                 // For URLs, we need to fetch the content first
                 // Create a temporary file to store the fetched HTML
-                File tempDir = new File(baseDirectory, "temp");
+                File tempDir = new File(operatingCacheDirectory, "temp");
                 if (!tempDir.exists()) {
                   tempDir.mkdirs();
                 }
@@ -2815,7 +2815,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 htmlFile = new File(source.path());
               }
 
-              File conversionsDir = new File(baseDirectory, "conversions");
+              File conversionsDir = new File(operatingCacheDirectory, "conversions");
               if (!conversionsDir.exists()) {
                 conversionsDir.mkdirs();
               }
@@ -2839,12 +2839,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
                 // Use specific table selector and index - this should create exactly one table
                 LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
               } else {
                 // Use regular conversion that processes all tables
                 LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
               }
 
               if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3073,7 +3073,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             && baseDirectory != null) {
           try {
             File htmlFile = new File(source.path());
-            File conversionsDir = new File(baseDirectory, "conversions");
+            File conversionsDir = new File(operatingCacheDirectory, "conversions");
             if (!conversionsDir.exists()) {
               conversionsDir.mkdirs();
             }
@@ -3097,12 +3097,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               // Use specific table selector and index - this should create exactly one table
               LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
             } else {
               // Use regular conversion that processes all tables
               LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
             }
 
             if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3164,7 +3164,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
               || source.path().startsWith("//")) {
             // For URLs, we need to fetch the content first
             // Create a temporary file to store the fetched HTML
-            File tempDir = new File(baseDirectory, "temp");
+            File tempDir = new File(operatingCacheDirectory, "temp");
             if (!tempDir.exists()) {
               tempDir.mkdirs();
             }
@@ -3213,7 +3213,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             htmlFile = new File(source.path());
           }
 
-          File conversionsDir = new File(baseDirectory, "conversions");
+          File conversionsDir = new File(operatingCacheDirectory, "conversions");
           if (!conversionsDir.exists()) {
             conversionsDir.mkdirs();
           }
@@ -3237,12 +3237,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
             // Use specific table selector and index - this should create exactly one table
             LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, index, tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, baseDirectory != null ? new File(baseDirectory) : null, fieldConfigs);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, index, tableName, operatingCacheDirectory, fieldConfigs);
           } else {
             // Use regular conversion that processes all tables
             LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, baseDirectory != null ? new File(baseDirectory) : null, null, tableName);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
           }
 
           if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3441,7 +3441,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         try {
           // For Parquet engine with refresh, use RefreshableParquetCacheTable
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new CsvTranslatableTable(source, protoRowType, columnNameCasing, csvTypeInferenceConfig),
               cacheDir, parentSchema, name, tableNameCasing);
@@ -3537,7 +3537,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           // For Parquet engine with refresh, we need to use RefreshableParquetCacheTable
           // First convert JSON to Parquet
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new JsonScannableTable(source, options, columnNameCasing), cacheDir, parentSchema, name, tableNameCasing);
 
@@ -3578,7 +3578,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       if (baseDirectory != null) {
         try {
           File cacheDir =
-              ParquetConversionUtil.getParquetCacheDir(baseDirectory != null ? new File(baseDirectory) : null, engineConfig.getParquetCacheDirectory(), name);
+              ParquetConversionUtil.getParquetCacheDir(operatingCacheDirectory, engineConfig.getParquetCacheDirectory(), name);
           File parquetFile =
               ParquetConversionUtil.convertToParquet(source, tableName, new JsonScannableTable(source, options, columnNameCasing), cacheDir, parentSchema, name, tableNameCasing);
 
@@ -3707,8 +3707,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     LOGGER.info("Found {} table(s) with alternate_partitions to materialize", tablesWithAlternates.size());
 
     // Use the AlternatePartitionMaterializer to create the data files
+    // Note: Uses operatingCacheDirectory for local operations (incremental tracker, etc.)
     org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer materializer =
-        org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer.create(baseDirectory);
+        org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer.create(
+            operatingCacheDirectory.getAbsolutePath());
 
     int total = materializer.materializeAll(tablesWithAlternates);
     if (total > 0) {
@@ -4217,7 +4219,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     // Also include converted files from base directory if it exists
     if (baseDirectory != null) {
       // Check for converted files in baseDirectory/conversions/
-      File conversionsDir = new File(baseDirectory, "conversions");
+      File conversionsDir = new File(operatingCacheDirectory, "conversions");
       if (conversionsDir.exists() && conversionsDir.isDirectory()) {
         LOGGER.debug("[FileSchema] Including converted files from: {}", conversionsDir.getAbsolutePath());
         File[] convertedFiles = conversionsDir.listFiles(file -> isFileTypeSupported(file));
@@ -4230,7 +4232,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       }
 
       // Check for converted files from storage providers in .download-cache/conversions/
-      File downloadCacheConversionsDir = new File(new File(baseDirectory, ".download-cache"), "conversions");
+      File downloadCacheConversionsDir = new File(new File(operatingCacheDirectory, ".download-cache"), "conversions");
       if (downloadCacheConversionsDir.exists() && downloadCacheConversionsDir.isDirectory()) {
         LOGGER.debug("[FileSchema] Including storage provider converted files from: {}",
             downloadCacheConversionsDir.getAbsolutePath());
@@ -4917,7 +4919,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
       // Use local filesystem
       File targetFile;
       if (baseDirectory != null) {
-        targetFile = new File(baseDirectory, relativePath);
+        targetFile = new File(operatingCacheDirectory, relativePath);
       } else {
         targetFile = new File(relativePath);
       }
@@ -4966,7 +4968,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     } else {
       File targetDir;
       if (baseDirectory != null) {
-        targetDir = new File(baseDirectory, relativePath);
+        targetDir = new File(operatingCacheDirectory, relativePath);
       } else {
         targetDir = new File(relativePath);
       }
@@ -4988,7 +4990,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     } else {
       File targetFile;
       if (baseDirectory != null) {
-        targetFile = new File(baseDirectory, relativePath);
+        targetFile = new File(operatingCacheDirectory, relativePath);
       } else {
         targetFile = new File(relativePath);
       }
@@ -5010,7 +5012,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
     } else {
       File targetFile;
       if (baseDirectory != null) {
-        targetFile = new File(baseDirectory, relativePath);
+        targetFile = new File(operatingCacheDirectory, relativePath);
       } else {
         targetFile = new File(relativePath);
       }
