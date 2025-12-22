@@ -180,7 +180,7 @@ public class EtlPipeline {
       LOGGER.info("Phase 1: Expanding dimensions for pipeline '{}'", pipelineName);
       DimensionResolver dimensionResolver = loadDimensionResolver(config.getHooks());
       DimensionIterator dimensionIterator = dimensionResolver != null
-          ? new DimensionIterator(dimensionResolver)
+          ? new DimensionIterator(dimensionResolver, storageProvider)
           : new DimensionIterator();
       List<Map<String, String>> combinations = dimensionIterator.expand(config.getDimensions());
       int totalBatches = combinations.size();
@@ -240,27 +240,47 @@ public class EtlPipeline {
           ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
       LOGGER.info("Phase 4: Creating MaterializationWriter (format={})", format);
 
-      // Ensure materialize config has a name (defaults to pipeline name for Iceberg table ID)
-      if (materializeConfig != null
-          && (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
-          && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty())) {
-        materializeConfig = MaterializeConfig.builder()
-            .enabled(materializeConfig.isEnabled())
-            .format(materializeConfig.getFormat())
-            .targetTableId(materializeConfig.getTargetTableId())
-            .output(materializeConfig.getOutput())
-            .partition(materializeConfig.getPartition())
-            .columns(materializeConfig.getColumns())
-            .options(materializeConfig.getOptions())
-            .name(config.getName())  // Use pipeline name as default
-            .iceberg(materializeConfig.getIceberg())
-            .build();
+      // Merge table-level config into materialize config:
+      // 1. Default name to pipeline name for Iceberg table ID
+      // 2. Default columns to table-level columns if not defined in materialize section
+      if (materializeConfig != null) {
+        boolean needsName = (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
+            && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty());
+        boolean needsColumns = (materializeConfig.getColumns() == null || materializeConfig.getColumns().isEmpty())
+            && config.getColumns() != null && !config.getColumns().isEmpty();
+
+        if (needsName || needsColumns) {
+          materializeConfig = MaterializeConfig.builder()
+              .enabled(materializeConfig.isEnabled())
+              .format(materializeConfig.getFormat())
+              .targetTableId(materializeConfig.getTargetTableId())
+              .output(materializeConfig.getOutput())
+              .partition(materializeConfig.getPartition())
+              .columns(needsColumns ? config.getColumns() : materializeConfig.getColumns())
+              .options(materializeConfig.getOptions())
+              .name(needsName ? config.getName() : materializeConfig.getName())
+              .iceberg(materializeConfig.getIceberg())
+              .build();
+          LOGGER.debug("Merged table config: name={}, columns={}",
+              needsName, needsColumns ? config.getColumns().size() : 0);
+        }
+      }
+
+      // Append table name to base directory: schema/tableName/
+      String tableName = config.getName();
+      String tableDirectory = baseDirectory;
+      if (tableName != null && !tableName.isEmpty()) {
+        if (!baseDirectory.endsWith("/")) {
+          tableDirectory = baseDirectory + "/" + tableName;
+        } else {
+          tableDirectory = baseDirectory + tableName;
+        }
       }
 
       writer =
-          MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, baseDirectory, incrementalTracker);
+          MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, tableDirectory, incrementalTracker);
       writer.initialize(materializeConfig);
-      LOGGER.info("Initialized {} writer", format);
+      LOGGER.info("Initialized {} writer for table {}", format, tableName);
 
       // Phase 5: Process only unprocessed dimension combinations
       LOGGER.info("Phase 5: Processing {} unprocessed batches (of {} total)", neededCount, totalBatches);
@@ -367,6 +387,11 @@ public class EtlPipeline {
       LOGGER.info("Phase 6: Committing writes");
       writer.commit();
 
+      // Capture table location and format for metadata update
+      String tableLocation = writer.getTableLocation();
+      MaterializeConfig.Format writerFormat = writer.getFormat();
+      LOGGER.info("Materialization complete: format={}, location={}", writerFormat, tableLocation);
+
       // Close resources
       httpSource.close();
 
@@ -388,6 +413,8 @@ public class EtlPipeline {
           .skippedBatches(skippedBatches)
           .elapsedMs(elapsed)
           .errors(errors)
+          .tableLocation(tableLocation)
+          .materializeFormat(writerFormat)
           .build();
 
     } catch (Exception e) {

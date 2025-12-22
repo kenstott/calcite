@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,6 +81,7 @@ public class DimensionIterator {
 
   private final Connection queryConnection;
   private final DimensionResolver dimensionResolver;
+  private final StorageProvider storageProvider;
 
   /**
    * Creates a DimensionIterator without SQL query or custom resolver support.
@@ -87,6 +90,7 @@ public class DimensionIterator {
   public DimensionIterator() {
     this.queryConnection = null;
     this.dimensionResolver = null;
+    this.storageProvider = null;
   }
 
   /**
@@ -97,27 +101,33 @@ public class DimensionIterator {
   public DimensionIterator(Connection queryConnection) {
     this.queryConnection = queryConnection;
     this.dimensionResolver = null;
+    this.storageProvider = null;
   }
 
   /**
-   * Creates a DimensionIterator with custom dimension resolver support.
+   * Creates a DimensionIterator with custom dimension resolver and storage provider.
    *
    * @param dimensionResolver Custom resolver for CUSTOM type dimensions
+   * @param storageProvider Storage provider for file access (local or S3)
    */
-  public DimensionIterator(DimensionResolver dimensionResolver) {
+  public DimensionIterator(DimensionResolver dimensionResolver, StorageProvider storageProvider) {
     this.queryConnection = null;
     this.dimensionResolver = dimensionResolver;
+    this.storageProvider = storageProvider;
   }
 
   /**
-   * Creates a DimensionIterator with both SQL query and custom resolver support.
+   * Creates a DimensionIterator with SQL query, custom resolver, and storage provider.
    *
    * @param queryConnection JDBC connection for executing query-type dimensions
    * @param dimensionResolver Custom resolver for CUSTOM type dimensions
+   * @param storageProvider Storage provider for file access (local or S3)
    */
-  public DimensionIterator(Connection queryConnection, DimensionResolver dimensionResolver) {
+  public DimensionIterator(Connection queryConnection, DimensionResolver dimensionResolver,
+      StorageProvider storageProvider) {
     this.queryConnection = queryConnection;
     this.dimensionResolver = dimensionResolver;
+    this.storageProvider = storageProvider;
   }
 
   /**
@@ -126,6 +136,9 @@ public class DimensionIterator {
    * <p>This method computes the Cartesian product of all dimension values.
    * For example, if dimension A has values [1, 2] and dimension B has values
    * [X, Y, Z], the result will be 6 combinations.
+   *
+   * <p>For CUSTOM type dimensions, the resolver is called with context from
+   * previously-resolved dimensions, enabling dependent dimension patterns.
    *
    * @param dimensions Map of dimension name to configuration
    * @return List of parameter maps, one per combination
@@ -136,7 +149,28 @@ public class DimensionIterator {
       return Collections.singletonList(Collections.<String, String>emptyMap());
     }
 
-    // Resolve each dimension to its list of values
+    // Check if any dimensions are CUSTOM (context-dependent)
+    boolean hasCustomDimensions = false;
+    for (DimensionConfig config : dimensions.values()) {
+      if (config.getType() == DimensionType.CUSTOM) {
+        hasCustomDimensions = true;
+        break;
+      }
+    }
+
+    // Use context-aware expansion if there are CUSTOM dimensions
+    if (hasCustomDimensions && dimensionResolver != null) {
+      return expandWithContext(dimensions);
+    }
+
+    // Standard expansion for non-custom dimensions
+    return expandStandard(dimensions);
+  }
+
+  /**
+   * Standard expansion without context (original behavior).
+   */
+  private List<Map<String, String>> expandStandard(Map<String, DimensionConfig> dimensions) {
     List<String> dimensionNames = new ArrayList<String>();
     List<List<String>> dimensionValues = new ArrayList<List<String>>();
 
@@ -167,6 +201,86 @@ public class DimensionIterator {
         dimensionNames.size(), combinations.size());
 
     return combinations;
+  }
+
+  /**
+   * Context-aware expansion for CUSTOM dimensions.
+   *
+   * <p>Iteratively expands dimensions, passing context to the resolver for
+   * CUSTOM dimensions so they can return values based on previously-selected
+   * dimension values.
+   */
+  private List<Map<String, String>> expandWithContext(Map<String, DimensionConfig> dimensions) {
+    List<Map<String, String>> result = new ArrayList<Map<String, String>>();
+    result.add(new LinkedHashMap<String, String>());
+
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      String name = entry.getKey();
+      DimensionConfig config = entry.getValue();
+
+      List<Map<String, String>> newResult = new ArrayList<Map<String, String>>();
+
+      for (Map<String, String> existing : result) {
+        // Resolve dimension values with context from existing combination
+        List<String> values;
+        if (config.getType() == DimensionType.CUSTOM) {
+          values = resolveCustomWithContext(config, existing);
+        } else {
+          values = resolveDimension(config);
+        }
+
+        if (values.isEmpty()) {
+          LOGGER.debug("Dimension '{}' resolved to empty for context {}, skipping",
+              name, existing);
+          continue;
+        }
+
+        // Expand this combination with each dimension value
+        for (String value : values) {
+          Map<String, String> newCombination = new LinkedHashMap<String, String>(existing);
+          newCombination.put(name, value);
+          newResult.add(newCombination);
+        }
+      }
+
+      if (newResult.isEmpty()) {
+        LOGGER.warn("Dimension '{}' resulted in no valid combinations", name);
+        return Collections.emptyList();
+      }
+
+      result = newResult;
+      LOGGER.debug("After dimension '{}': {} combinations", name, result.size());
+    }
+
+    LOGGER.info("Expanded {} dimensions into {} combinations (context-aware)",
+        dimensions.size(), result.size());
+    return result;
+  }
+
+  /**
+   * Resolves a CUSTOM dimension with context from other dimensions.
+   */
+  private List<String> resolveCustomWithContext(DimensionConfig config,
+      Map<String, String> context) {
+    try {
+      List<String> values = dimensionResolver.resolve(
+          config.getName(), config, context, storageProvider);
+      if (values == null) {
+        LOGGER.warn("DimensionResolver returned null for '{}' with context {}, using empty list",
+            config.getName(), context);
+        return Collections.emptyList();
+      }
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Custom dimension '{}' resolved to {} values for context {}",
+            config.getName(), values.size(), context);
+      }
+      return values;
+    } catch (RuntimeException e) {
+      LOGGER.error("DimensionResolver failed for '{}' with context {}: {}",
+          config.getName(), context, e.getMessage());
+      throw new RuntimeException(
+          "Failed to resolve custom dimension '" + config.getName() + "'", e);
+    }
   }
 
   /**
@@ -310,6 +424,9 @@ public class DimensionIterator {
    * <p>Custom dimensions allow adapters to provide dynamic dimension values
    * from external sources like catalog APIs, databases, or computed values.
    *
+   * <p>Note: This method is called from standard expansion without context.
+   * For context-aware resolution, use {@link #resolveCustomWithContext}.
+   *
    * @param config Dimension configuration
    * @return List of resolved values
    */
@@ -320,22 +437,8 @@ public class DimensionIterator {
           + "Configure hooks.dimensionResolver in the schema.");
     }
 
-    try {
-      List<String> values = dimensionResolver.resolve(config.getName(), config);
-      if (values == null) {
-        LOGGER.warn("DimensionResolver returned null for '{}', using empty list",
-            config.getName());
-        return Collections.emptyList();
-      }
-      LOGGER.info("Custom dimension '{}' resolved to {} values",
-          config.getName(), values.size());
-      return values;
-    } catch (RuntimeException e) {
-      LOGGER.error("DimensionResolver failed for '{}': {}",
-          config.getName(), e.getMessage());
-      throw new RuntimeException(
-          "Failed to resolve custom dimension '" + config.getName() + "'", e);
-    }
+    // Call with empty context (no prior dimensions available)
+    return resolveCustomWithContext(config, Collections.<String, String>emptyMap());
   }
 
   /**

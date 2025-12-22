@@ -301,11 +301,23 @@ public class SchemaLifecycleProcessor {
     // Create DataWriter from listener's writeData hook
     DataWriter dataWriter = (config, data, variables) -> listener.writeData(context, data, variables);
 
+    // Build schema-prefixed output directory: materializeDirectory/schemaName/
+    String baseMaterializeDir = context.getMaterializeDirectory();
+    String schemaName = context.getSchemaContext().getConfig().getName();
+    String schemaMaterializeDir = baseMaterializeDir;
+    if (baseMaterializeDir != null && schemaName != null && !schemaName.isEmpty()) {
+      if (!baseMaterializeDir.endsWith("/")) {
+        schemaMaterializeDir = baseMaterializeDir + "/" + schemaName;
+      } else {
+        schemaMaterializeDir = baseMaterializeDir + schemaName;
+      }
+    }
+
     // Create and execute the ETL pipeline
     EtlPipeline pipeline = new EtlPipeline(
         effectiveConfig,
         context.getStorageProvider(),
-        context.getMaterializeDirectory(),
+        schemaMaterializeDir,
         new EtlPipeline.LoggingProgressListener(),
         context.getIncrementalTracker(),
         dataProvider,
@@ -887,9 +899,9 @@ public class SchemaLifecycleProcessor {
             "Materialize directory is required (set in config or via builder)");
       }
 
-      // Auto-create storage provider from directory URL if not explicitly set
+      // Storage provider must be explicitly set
       if (storageProvider == null) {
-        storageProvider = StorageProviderFactory.createFromUrl(effectiveMaterializeDir);
+        throw new IllegalArgumentException("Storage provider is required");
       }
 
       // If any hooks were registered, create a delegating table listener

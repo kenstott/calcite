@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.materialize.MaterializationService;
@@ -109,6 +110,21 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           schemaResource != null ? schemaResource : "embedded in operand");
 
       FileSchemaBuilder builder = FileSchemaBuilder.create();
+
+      // Extract storage providers from operand if passed from parent builder
+      StorageProvider storageProvider = (StorageProvider) operand.get("_storageProvider");
+      StorageProvider cacheStorageProvider = (StorageProvider) operand.get("_cacheStorageProvider");
+      if (storageProvider != null) {
+        builder.storageProvider(storageProvider);
+        LOGGER.debug("Extracted _storageProvider from operand: {}",
+            storageProvider.getClass().getSimpleName());
+      }
+      if (cacheStorageProvider != null) {
+        builder.cacheStorageProvider(cacheStorageProvider);
+        LOGGER.debug("Extracted _cacheStorageProvider from operand: {}",
+            cacheStorageProvider.getClass().getSimpleName());
+      }
+
       if (schemaResource != null) {
         builder.schemaResource(schemaResource).operand(operand);
       } else {
@@ -498,6 +514,27 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         LOGGER.info("FileSchemaFactory: After getTableMap(), conversion metadata has {} records", records.size());
         for (String key : records.keySet()) {
           LOGGER.debug("FileSchemaFactory: Conversion record key: {}", key);
+        }
+
+        // Update conversion metadata with materialization info from ETL results
+        // This enables DuckDB to use iceberg_scan() for Iceberg-materialized tables
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, String>> materializationInfo =
+            (Map<String, Map<String, String>>) operand.get("_materializationInfo");
+        if (materializationInfo != null && !materializationInfo.isEmpty()) {
+          LOGGER.info("FileSchemaFactory: Updating conversion metadata with materialization info for {} tables",
+              materializationInfo.size());
+          org.apache.calcite.adapter.file.metadata.ConversionMetadata conversionMetadata =
+              fileSchema.getConversionMetadata();
+          for (Map.Entry<String, Map<String, String>> entry : materializationInfo.entrySet()) {
+            String tableName = entry.getKey();
+            Map<String, String> info = entry.getValue();
+            String tableLocation = info.get("tableLocation");
+            String conversionType = info.get("conversionType");
+            if (tableLocation != null && conversionType != null) {
+              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType);
+            }
+          }
         }
       } else {
         LOGGER.warn("FileSchemaFactory: FileSchema has no conversion metadata!");

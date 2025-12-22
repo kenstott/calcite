@@ -199,21 +199,40 @@ public class S3StorageProvider implements StorageProvider {
 
     // Store S3 config for DuckDB access
     if (config != null) {
+      LOGGER.info("S3StorageProvider: Initializing with config containing {} keys: {}",
+          config.size(), config.keySet());
+
       java.util.Map<String, String> s3ConfigMap = new java.util.HashMap<>();
       if (config.get("accessKeyId") != null) {
         s3ConfigMap.put("accessKeyId", (String) config.get("accessKeyId"));
+        LOGGER.debug("S3StorageProvider: Found accessKeyId (length={})",
+            ((String) config.get("accessKeyId")).length());
       }
       if (config.get("secretAccessKey") != null) {
         s3ConfigMap.put("secretAccessKey", (String) config.get("secretAccessKey"));
+        LOGGER.debug("S3StorageProvider: Found secretAccessKey (length={})",
+            ((String) config.get("secretAccessKey")).length());
       }
       if (config.get("region") != null) {
         s3ConfigMap.put("region", (String) config.get("region"));
+        LOGGER.debug("S3StorageProvider: Found region={}", config.get("region"));
       }
       if (config.get("endpoint") != null) {
         s3ConfigMap.put("endpoint", (String) config.get("endpoint"));
+        LOGGER.debug("S3StorageProvider: Found endpoint={}", config.get("endpoint"));
       }
       this.s3Config = s3ConfigMap.isEmpty() ? null : s3ConfigMap;
+
+      if (s3ConfigMap.isEmpty()) {
+        LOGGER.warn("S3StorageProvider: Config was provided but no recognized keys found. "
+            + "Expected keys: accessKeyId, secretAccessKey, region, endpoint. "
+            + "Provided keys: {}", config.keySet());
+      } else {
+        LOGGER.info("S3StorageProvider: Stored {} credentials for DuckDB/Iceberg access",
+            s3ConfigMap.size());
+      }
     } else {
+      LOGGER.info("S3StorageProvider: No config provided, credentials will be null");
       this.s3Config = null;
     }
   }

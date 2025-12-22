@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,13 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   @Override
   public String getSchemaResourceName() {
     return "/econ/econ-schema.yaml";
+  }
+
+  @Override
+  public List<String> getDependencies() {
+    // The econ schema depends on econ_reference for dimension lookup tables
+    // (e.g., regional_linecodes needed by BeaDimensionResolver)
+    return Collections.singletonList("econ_reference");
   }
 
   @Override

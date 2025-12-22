@@ -300,6 +300,38 @@ dimension_values:
     - TASUMMARY1
     - TASUMMARY2
 
+  # --- BEA Regional Line Codes ---
+  # Common line codes for BEA Regional API queries
+  bea_regional_line_codes: &bea_regional_line_codes
+    - 1    # Total Personal Income
+    - 2    # Per Capita Personal Income
+    - 3    # Population
+    - 10   # Wages and Salaries
+    - 20   # Dividends, Interest, Rent
+    - 35   # Personal Current Transfer Receipts
+    - 45   # Farm Income
+    - 46   # Nonfarm Income
+
+  # --- Year Range Dimensions ---
+  # Common year range configurations with YAML anchors
+
+  year_range_from_2020: &year_range_from_2020
+    type: yearRange
+    start: "{env:GOVDATA_START_YEAR:2020}"
+    end: current
+    dataLag: 1
+
+  year_range_from_2000: &year_range_from_2000
+    type: yearRange
+    start: "{env:GOVDATA_START_YEAR:2000}"
+    end: current
+    dataLag: 1
+
+  # --- BEA Frequencies ---
+  bea_frequencies: &bea_frequencies
+    - A   # Annual
+    - Q   # Quarterly
+
 # ============================================================================
 # BULK DOWNLOADS
 # ============================================================================
@@ -335,10 +367,10 @@ partitionedTables:
 
   # --- EMPLOYMENT STATISTICS ---
   - name: employment_statistics
-    pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
+    pattern: "frequency=*/year=*/*.parquet"
     alternate_partitions:
       - name: employment_statistics_trend
-        pattern: "type=employment_statistics/frequency=*/*.parquet"
+        pattern: "frequency=*/*.parquet"
         partition:
           columnDefinitions:
             - {name: frequency, type: VARCHAR}
@@ -489,8 +521,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=employment_statistics/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -504,7 +535,7 @@ partitionedTables:
 
   # --- INFLATION METRICS ---
   - name: inflation_metrics
-    pattern: "type=indicators/frequency=*/year=*/inflation_metrics.parquet"
+    pattern: "frequency=*/year=*/inflation_metrics.parquet"
     partitions: *standard_partitions
     comment: >
       Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates.
@@ -604,8 +635,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=indicators/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -619,7 +649,7 @@ partitionedTables:
 
   # --- REGIONAL CPI ---
   - name: regional_cpi
-    pattern: "type=cpi_regional/frequency=*/year=*/regional_cpi.parquet"
+    pattern: "frequency=*/year=*/regional_cpi.parquet"
     partitions: *standard_partitions
     comment: >
       Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas.
@@ -688,8 +718,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=cpi_regional/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -703,7 +732,7 @@ partitionedTables:
 
   # --- METRO CPI ---
   - name: metro_cpi
-    pattern: "type=metro_cpi/frequency=*/year=*/metro_cpi.parquet"
+    pattern: "frequency=*/year=*/metro_cpi.parquet"
     partitions: *standard_partitions
 
     # Dimension definitions for iteration (frequency and year only)
@@ -799,8 +828,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=metro_cpi/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -814,7 +842,7 @@ partitionedTables:
 
   # --- STATE INDUSTRY ---
   - name: state_industry
-    pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
+    pattern: "frequency=*/year=*/state_industry.parquet"
     partitions: *standard_partitions
     comment: >
       Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons.
@@ -877,8 +905,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=state_industry/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -892,7 +919,7 @@ partitionedTables:
 
   # --- STATE WAGES ---
   - name: state_wages
-    pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
+    pattern: "frequency=*/year=*/state_wages.parquet"
     partitions: *standard_partitions
     comment: >
       Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.
@@ -909,19 +936,51 @@ partitionedTables:
         end: current
         dataLag: 1  # QCEW annual data is released with ~1 year lag
 
+    # Source columns from QCEW CSV (matching actual file structure)
     columns:
-      - *date_column
-      - *series_column
-      - name: state_code
+      - name: area_fips
         type: string
         nullable: true
-        comment: State FIPS code
-      - *state_name
-      - name: value
-        type: double
+        comment: State FIPS code with 000 suffix (e.g., 01000 for Alabama)
+      - name: own_code
+        type: string
+        nullable: true
+        comment: Ownership code (0=all, 5=private)
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: NAICS industry code (10=total)
+      - name: agglvl_code
+        type: string
+        nullable: true
+        comment: Aggregation level code
+      - name: annual_avg_estabs
+        type: int
+        nullable: true
+        comment: Average annual establishment count
+      - name: annual_avg_emplvl
+        type: int
+        nullable: true
+        comment: Average annual employment level
+      - name: total_annual_wages
+        type: long
+        nullable: true
+        comment: Total annual wages in dollars
+      - name: annual_avg_wkly_wage
+        type: int
         nullable: true
         comment: Average weekly wage in dollars
-      - *percent_change_year
+      # Computed columns for user convenience
+      - name: state_fips
+        type: string
+        nullable: true
+        expression: "SUBSTR(CAST(area_fips AS VARCHAR), 1, 2)"
+        comment: 2-digit state FIPS code derived from area_fips
+      - name: state_name
+        type: string
+        nullable: true
+        expression: "CASE SUBSTR(CAST(area_fips AS VARCHAR), 1, 2) WHEN '01' THEN 'Alabama' WHEN '02' THEN 'Alaska' WHEN '04' THEN 'Arizona' WHEN '05' THEN 'Arkansas' WHEN '06' THEN 'California' WHEN '08' THEN 'Colorado' WHEN '09' THEN 'Connecticut' WHEN '10' THEN 'Delaware' WHEN '11' THEN 'District of Columbia' WHEN '12' THEN 'Florida' WHEN '13' THEN 'Georgia' WHEN '15' THEN 'Hawaii' WHEN '16' THEN 'Idaho' WHEN '17' THEN 'Illinois' WHEN '18' THEN 'Indiana' WHEN '19' THEN 'Iowa' WHEN '20' THEN 'Kansas' WHEN '21' THEN 'Kentucky' WHEN '22' THEN 'Louisiana' WHEN '23' THEN 'Maine' WHEN '24' THEN 'Maryland' WHEN '25' THEN 'Massachusetts' WHEN '26' THEN 'Michigan' WHEN '27' THEN 'Minnesota' WHEN '28' THEN 'Mississippi' WHEN '29' THEN 'Missouri' WHEN '30' THEN 'Montana' WHEN '31' THEN 'Nebraska' WHEN '32' THEN 'Nevada' WHEN '33' THEN 'New Hampshire' WHEN '34' THEN 'New Jersey' WHEN '35' THEN 'New Mexico' WHEN '36' THEN 'New York' WHEN '37' THEN 'North Carolina' WHEN '38' THEN 'North Dakota' WHEN '39' THEN 'Ohio' WHEN '40' THEN 'Oklahoma' WHEN '41' THEN 'Oregon' WHEN '42' THEN 'Pennsylvania' WHEN '44' THEN 'Rhode Island' WHEN '45' THEN 'South Carolina' WHEN '46' THEN 'South Dakota' WHEN '47' THEN 'Tennessee' WHEN '48' THEN 'Texas' WHEN '49' THEN 'Utah' WHEN '50' THEN 'Vermont' WHEN '51' THEN 'Virginia' WHEN '53' THEN 'Washington' WHEN '54' THEN 'West Virginia' WHEN '55' THEN 'Wisconsin' WHEN '56' THEN 'Wyoming' WHEN '72' THEN 'Puerto Rico' WHEN '78' THEN 'Virgin Islands' ELSE 'Unknown' END"
+        comment: State name derived from FIPS code
 
     # API Configuration
     download:
@@ -950,8 +1009,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=state_wages/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -965,7 +1023,7 @@ partitionedTables:
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
-    pattern: "type=metro_industry/frequency=*/year=*/metro_industry.parquet"
+    pattern: "frequency=*/year=*/metro_industry.parquet"
     partitions: *standard_partitions
     comment: >
       Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons.
@@ -1112,8 +1170,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=metro_industry/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1127,11 +1184,49 @@ partitionedTables:
 
   # --- METRO WAGES ---
   - name: metro_wages
-    pattern: "type=metro_wages/frequency=*/year=*/metro_wages.parquet"
+    pattern: "frequency=*/year=*/metro_wages.parquet"
     partitions: *standard_partitions
     comment: >
       Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis.
+    # Source columns from QCEW CSV (matching actual file structure)
     columns:
+      - name: area_fips
+        type: string
+        nullable: true
+        comment: Metro/CSA area FIPS code
+      - name: own_code
+        type: string
+        nullable: true
+        comment: Ownership code (0=all, 5=private)
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: NAICS industry code (10=total)
+      - name: agglvl_code
+        type: string
+        nullable: true
+        comment: Aggregation level code
+      - name: annual_avg_estabs
+        type: int
+        nullable: true
+        comment: Average annual establishment count
+      - name: annual_avg_emplvl
+        type: int
+        nullable: true
+        comment: Average annual employment level
+      - name: total_annual_wages
+        type: long
+        nullable: true
+        comment: Total annual wages in dollars
+      - name: annual_avg_wkly_wage
+        type: int
+        nullable: true
+        comment: Average weekly wage in dollars
+      - name: avg_annual_pay
+        type: int
+        nullable: true
+        comment: Average annual pay in dollars
+      # Computed columns for user convenience
       - name: metro_code
         type: string
         nullable: true
@@ -1142,22 +1237,6 @@ partitionedTables:
         nullable: true
         expression: "CASE area_fips WHEN 'C3562' THEN 'New York-Newark-Jersey City, NY-NJ-PA' WHEN 'C3108' THEN 'Los Angeles-Long Beach-Anaheim, CA' WHEN 'C1698' THEN 'Chicago-Naperville-Elgin, IL-IN' WHEN 'C2642' THEN 'Houston-The Woodlands-Sugar Land, TX' WHEN 'C3806' THEN 'Phoenix-Mesa-Chandler, AZ' WHEN 'C3798' THEN 'Philadelphia-Camden-Wilmington, PA-NJ-DE-MD' WHEN 'C4170' THEN 'San Antonio-New Braunfels, TX' WHEN 'C4174' THEN 'San Diego-Chula Vista-Carlsbad, CA' WHEN 'C1910' THEN 'Dallas-Fort Worth-Arlington, TX' WHEN 'C4194' THEN 'San Jose-Sunnyvale-Santa Clara, CA' WHEN 'C1242' THEN 'Austin-Round Rock-San Marcos, TX' WHEN 'C2726' THEN 'Jacksonville, FL' WHEN 'C1446' THEN 'Boston-Cambridge-Newton, MA-NH' WHEN 'C4266' THEN 'Seattle-Tacoma-Bellevue, WA' WHEN 'C1974' THEN 'Denver-Aurora-Centennial, CO' WHEN 'C4790' THEN 'Washington-Arlington-Alexandria, DC-VA-MD-WV' WHEN 'C1982' THEN 'Detroit-Warren-Dearborn, MI' WHEN 'C1746' THEN 'Cleveland-Elyria, OH' WHEN 'C3346' THEN 'Minneapolis-St. Paul-Bloomington, MN-WI' WHEN 'C3310' THEN 'Miami-Fort Lauderdale-West Palm Beach, FL' WHEN 'C1206' THEN 'Atlanta-Sandy Springs-Roswell, GA' WHEN 'C3890' THEN 'Portland-Vancouver-Hillsboro, OR-WA' WHEN 'C4014' THEN 'Riverside-San Bernardino-Ontario, CA' WHEN 'C4118' THEN 'St. Louis, MO-IL' WHEN 'C1258' THEN 'Baltimore-Columbia-Towson, MD' WHEN 'C4530' THEN 'Tampa-St. Petersburg-Clearwater, FL' WHEN 'C1126' THEN 'Anchorage, AK' END"
         comment: Metro area name
-      - name: year
-        type: integer
-        nullable: false
-        comment: Year of observation
-      - name: qtr
-        type: string
-        nullable: true
-        comment: Quarter ('1'-'4' for quarterly, 'A' for annual average)
-      - name: avg_weekly_wage
-        type: integer
-        nullable: true
-        comment: Average weekly wage in dollars
-      - name: avg_annual_pay
-        type: integer
-        nullable: true
-        comment: Average annual pay in dollars
 
     # Dimension definitions for iteration
     dimensions:
@@ -1199,8 +1278,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=metro_wages/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1214,7 +1292,7 @@ partitionedTables:
 
   # --- COUNTY QCEW ---
   - name: county_qcew
-    pattern: "type=county_qcew/frequency=*/year=*/county_qcew.parquet"
+    pattern: "frequency=*/year=*/county_qcew.parquet"
     partitions: *standard_partitions
     comment: >
       County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research.
@@ -1292,8 +1370,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=county_qcew/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1307,33 +1384,55 @@ partitionedTables:
 
   # --- COUNTY WAGES ---
   - name: county_wages
-    pattern: "type=county_wages/frequency=*/year=*/county_wages.parquet"
+    pattern: "frequency=*/year=*/county_wages.parquet"
     partitions: *standard_partitions
     comment: >
       Average weekly wages for all 6,038 U.S. counties from BLS QCEW (Quarterly Census of Employment and Wages). Most granular geographic wage data available, enabling county-level compensation analysis, local labor market studies, and rural-urban wage comparisons. Essential for detailed regional economic analysis.
+    # Source columns from QCEW CSV (matching actual file structure)
     columns:
+      - name: area_fips
+        type: string
+        nullable: true
+        comment: County FIPS code (5 digits)
+      - name: own_code
+        type: string
+        nullable: true
+        comment: Ownership code (0=all, 5=private)
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: NAICS industry code (10=total)
+      - name: agglvl_code
+        type: string
+        nullable: true
+        comment: Aggregation level code
+      - name: annual_avg_estabs
+        type: int
+        nullable: true
+        comment: Average annual establishment count
+      - name: annual_avg_emplvl
+        type: int
+        nullable: true
+        comment: Average annual employment level
+      - name: total_annual_wages
+        type: long
+        nullable: true
+        comment: Total annual wages in dollars
+      - name: annual_avg_wkly_wage
+        type: int
+        nullable: true
+        comment: Average weekly wage in dollars
+      # Computed columns for user convenience
       - name: county_fips
         type: string
         nullable: true
-        comment: County FIPS code
-      - name: county_name
+        expression: "area_fips"
+        comment: County FIPS code alias
+      - name: state_fips
         type: string
         nullable: true
-        comment: County name
-      - *state_fips
-      - *state_name
-      - name: average_weekly_wage
-        type: double
-        nullable: true
-        comment: Average weekly wage in dollars
-      - name: total_employment
-        type: int
-        nullable: true
-        comment: Total employment count
-      - name: year
-        type: int
-        nullable: true
-        comment: Year
+        expression: "SUBSTR(CAST(area_fips AS VARCHAR), 1, 2)"
+        comment: State FIPS code derived from county FIPS
 
     # Dimension definitions for iteration
     dimensions:
@@ -1375,8 +1474,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=county_wages/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1390,7 +1488,7 @@ partitionedTables:
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
-    pattern: "type=jolts_regional/frequency=*/year=*/jolts_regional.parquet"
+    pattern: "frequency=*/year=*/jolts_regional.parquet"
     partitions: *standard_partitions
     sourcePaths:
       ftpFiles:
@@ -1475,17 +1573,13 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
 
-    # Custom hooks for BLS response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
-
     # Materialization configuration
+    # Note: No responseTransformer needed - uses built-in TSV parsing
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=jolts_regional/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1499,7 +1593,7 @@ partitionedTables:
 
   # --- JOLTS STATE ---
   - name: jolts_state
-    pattern: "type=jolts_state/frequency=*/year=*/jolts_state.parquet"
+    pattern: "frequency=*/year=*/jolts_state.parquet"
     partitions: *standard_partitions
     sourcePaths:
       ftpFiles:
@@ -1579,17 +1673,13 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
 
-    # Custom hooks for BLS response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
-
     # Materialization configuration
+    # Note: No responseTransformer needed - uses built-in TSV parsing
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=jolts_state/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1603,7 +1693,7 @@ partitionedTables:
 
   # --- WAGE GROWTH ---
   - name: wage_growth
-    pattern: "type=wage_growth/frequency=*/year=*/wage_growth.parquet"
+    pattern: "frequency=*/year=*/wage_growth.parquet"
     partitions: *standard_partitions
     comment: >
       Average hourly earnings, weekly earnings, and employment cost index by industry and occupation. Tracks wage growth trends and labor cost pressures.
@@ -1685,8 +1775,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=wage_growth/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1700,7 +1789,7 @@ partitionedTables:
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
-    pattern: "type=regional/year=*/state_fips=*/regional_employment.parquet"
+    pattern: "year=*/state_fips=*/regional_employment.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -1790,8 +1879,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=regional/year=*/state_fips=*/"
+        pattern: "year=*/state_fips=*/"
       partition:
         columns: [type, year, state_fips]
       options:
@@ -1805,7 +1893,7 @@ partitionedTables:
 
   # --- TREASURY YIELDS ---
   - name: treasury_yields
-    pattern: "type=timeseries/frequency=daily/year=*/treasury_yields.parquet"
+    pattern: "frequency=daily/year=*/treasury_yields.parquet"
     partitions: *standard_partitions
     comment: >
       Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API.
@@ -1869,8 +1957,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=timeseries/frequency=daily/year=*/"
+        pattern: "frequency=daily/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1884,7 +1971,7 @@ partitionedTables:
 
   # --- FEDERAL DEBT ---
   - name: federal_debt
-    pattern: "type=timeseries/frequency=daily/year=*/federal_debt.parquet"
+    pattern: "frequency=daily/year=*/federal_debt.parquet"
     partitions: *standard_partitions
     comment: >
       U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API.
@@ -1952,8 +2039,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=timeseries/frequency=daily/year=*/"
+        pattern: "frequency=daily/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -1967,7 +2053,7 @@ partitionedTables:
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
-    pattern: "type=indicators/frequency=*/year=*/world_indicators.parquet"
+    pattern: "frequency=*/year=*/world_indicators.parquet"
     partitions: *standard_partitions
     comment: >
       International economic indicators from World Bank for major economies. Includes GDP, inflation, unemployment, government debt, and population statistics. Enables comparison of U.S. economic performance with global peers.
@@ -2042,8 +2128,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=indicators/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -2057,7 +2142,7 @@ partitionedTables:
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
-    pattern: "type=fred_indicators/series=*/year=*/fred_indicators.parquet"
+    pattern: "series=*/year=*/fred_indicators.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -2160,13 +2245,33 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
 
+    # Dimension definitions for ETL iteration
+    dimensions:
+      type:
+        - fred_indicators
+      series:
+        - "DFF"
+        - "UNRATE"
+        - "GDP"
+        - "CPIAUCSL"
+        - "FEDFUNDS"
+        - "T10Y2Y"
+        - "MORTGAGE30US"
+        - "UMCSENT"
+        - "PAYEMS"
+        - "INDPRO"
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+        dataLag: 0
+
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=fred_indicators/series=*/year=*/"
+        pattern: "series=*/year=*/"
       partition:
         columns: [type, series, year]
       options:
@@ -2180,7 +2285,7 @@ partitionedTables:
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
-    pattern: "type=national_accounts/frequency=*/year=*/tablename=*/national_accounts.parquet"
+    pattern: "frequency=*/year=*/tablename=*/national_accounts.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -2195,42 +2300,71 @@ partitionedTables:
     comment: >
       National Income and Product Accounts (NIPA) data from BEA covering comprehensive economic statistics. Includes ALL NIPA tables across 8 sections: 1=Domestic Product & Income (GDP, national income), 2=Personal Income & Outlays (wages, consumer spending), 3=Government (receipts, expenditures), 4=Foreign Transactions (exports, imports), 5=Saving & Investment (capital formation), 6=Industry (sectoral data), 7=Supplemental (per capita, additional details), 8=Not Seasonally Adjusted. Tables dynamically discovered from BEA reference catalog.
     columns:
-      - name: table_id
+      # Source columns from BEA NIPA API response (PascalCase field names)
+      - name: TableName
         type: string
         nullable: true
-        comment: BEA table identifier for GDP components
-      - name: line_number
-        type: int
+        comment: BEA table identifier (e.g., 'T10101')
+      - name: LineNumber
+        type: string
         nullable: true
         comment: Line number within the BEA table
-      - name: line_description
+      - name: LineDescription
         type: string
         nullable: true
         comment: Description of the GDP component
-      - name: series_code
+      - name: SeriesCode
         type: string
         nullable: true
         comment: BEA series code for this component
-      - name: year
-        type: int
-        nullable: true
-        comment: Year of the observation
-      - name: time_period
+      - name: TimePeriod
         type: string
         nullable: true
-        comment: BEA time period from API (e.g., '2023' for annual, '2023Q1' for quarterly data)
-      - name: value
-        type: double
+        comment: BEA time period (e.g., '2023' for annual, '2023Q1' for quarterly)
+      - name: DataValue
+        type: string
         nullable: true
-        comment: Component value in millions of dollars
-      - name: units
+        comment: Raw data value from BEA API
+      - name: CL_UNIT
         type: string
         nullable: true
         comment: Units of measurement (e.g., 'Millions of Dollars')
-      - name: frequency
+      - name: UNIT_MULT
         type: string
         nullable: true
-        comment: Data frequency ('A' = Annual)
+        comment: Unit multiplier
+      - name: NoteRef
+        type: string
+        nullable: true
+        comment: Note reference
+      # Computed columns with user-friendly lowercase names
+      - name: table_id
+        expression: "TableName"
+        comment: BEA table identifier for GDP components
+      - name: line_number
+        expression: "CAST(LineNumber AS INTEGER)"
+        comment: Line number within the BEA table
+      - name: line_description
+        expression: "LineDescription"
+        comment: Description of the GDP component
+      - name: series_code
+        expression: "SeriesCode"
+        comment: BEA series code for this component
+      - name: time_period
+        expression: "TimePeriod"
+        comment: BEA time period from API
+      - name: year
+        expression: "CAST(SUBSTR(TimePeriod, 1, 4) AS INTEGER)"
+        comment: Year extracted from time period
+      - name: value
+        expression: "CASE WHEN DataValue IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(DataValue AS DOUBLE) END"
+        comment: Component value in millions of dollars (NULL for unavailable data)
+      - name: units
+        expression: "CL_UNIT"
+        comment: Units of measurement
+      - name: frequency
+        expression: "CASE WHEN TimePeriod LIKE '%Q%' THEN 'Q' WHEN LENGTH(TimePeriod) = 4 THEN 'A' ELSE NULL END"
+        comment: Data frequency (A=Annual, Q=Quarterly)
 
     # API Configuration
     download:
@@ -2286,7 +2420,7 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        dataPath: "BEAAPI.Results.Data"
+        # Note: dataPath removed because responseTransformer already extracts the data
         errorPath: "BEAAPI.Results.Error"
       rateLimit:
         requestsPerSecond: 1.5
@@ -2297,13 +2431,33 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
 
+    # Dimension definitions for ETL iteration
+    dimensions:
+      type:
+        - national_accounts
+      frequency: *bea_frequencies  # Use anchor: A, Q
+      year: *year_range_from_2020  # Use anchor for year range
+      tablename:
+        # Section 1: Domestic Product and Income (Core GDP)
+        - T10101   # Percent Change From Preceding Period in Real GDP
+        - T10105   # Gross Domestic Product
+        - T10301   # Real Gross Domestic Product, Quantity Indexes
+        - T10303   # Real Gross Domestic Product, Chained Dollars
+        # Section 2: Personal Income and Outlays
+        - T20100   # Personal Income and Its Disposition
+        - T20200   # Personal Consumption Expenditures by Major Type
+        # Section 3: Government
+        - T30100   # Federal Government Current Receipts and Expenditures
+        # Section 4: Foreign Transactions
+        - T40100   # Foreign Transactions in GDP
+        - T40205B  # Exports and Imports of Goods and Services
+
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=national_accounts/frequency=*/year=*/tablename=*/"
+        pattern: "frequency=*/year=*/tablename=*/"
       partition:
         columns: [frequency, year, tablename]
       options:
@@ -2317,7 +2471,7 @@ partitionedTables:
 
   # --- REGIONAL INCOME ---
   - name: regional_income
-    pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/*.parquet"
+    pattern: "year=*/geo_fips_set=*/tablename=*/line_code=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -2335,19 +2489,21 @@ partitionedTables:
       State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.
 
     # Dimension definitions for iteration
+    # IMPORTANT: Dimension order matters for context-aware resolution!
+    # geo_fips_set and tablename must come before line_code so the resolver can filter
+    # valid combinations. BeaDimensionResolver uses both to return only valid line codes.
     dimensions:
       type:
         - regional_income  # Static table type
-      year:
-        type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2000}"
-        end: current
-      geo_fips_set: *bea_geo_fips_sets  # Reference YAML anchor: STATE, COUNTY, MSA, MIC, PORT, DIV, CSA
-      tablename: *bea_regional_tables  # Reference YAML anchor: All 63 BEA Regional tables
+      year: *year_range_from_2000  # Use anchor for year range from 2000
+      geo_fips_set: *bea_geo_fips_sets  # Use anchor: STATE, COUNTY, MSA, MIC, PORT, DIV, CSA
+      tablename: *bea_regional_tables  # Use anchor: All 63 BEA Regional tables
       line_code:
-        type: reference_catalog  # Dynamic: loaded from reference_regional_linecodes table
-        table: reference_regional_linecodes
-        column: LineCode
+        type: custom  # Resolved by BeaDimensionResolver using tablename context
+        properties:
+          # Reference directory containing regional_linecodes parquet files
+          # Supports local paths or s3:// URIs. Must point to the econ_reference materialized output
+          referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/source=econ}"
 
     columns:
       - name: GeoFips
@@ -2518,24 +2674,24 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        dataPath: "BEAAPI.Results.Data"
+        # Note: dataPath removed because responseTransformer already extracts the data
         errorPath: "BEAAPI.Results.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
 
-    # Custom hooks for BEA response handling
+    # Custom hooks for BEA response handling and dimension resolution
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.econ.BeaDimensionResolver"
 
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=regional_income/year=*/geo_fips_set=*/tablename=*/line_code=*/"
+        pattern: "year=*/geo_fips_set=*/tablename=*/line_code=*/"
       partition:
         columns: [year, geo_fips_set, tablename, line_code]
       options:
@@ -2553,7 +2709,7 @@ partitionedTables:
     alternate_partitions:
       # Consolidated by geo_fips (state/county/MSA/etc) and year
       - name: regional_income_by_fips
-        pattern: "type=regional_income/geo_fips=*/year=*/*.parquet"
+        pattern: "geo_fips=*/year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
@@ -2573,7 +2729,7 @@ partitionedTables:
 
       # Consolidated by year (all geo_fips in one partition per year)
       - name: regional_income_by_year
-        pattern: "type=regional_income/year=*/*.parquet"
+        pattern: "year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
@@ -2589,7 +2745,7 @@ partitionedTables:
 
       # Consolidated by indicator table and year
       - name: regional_income_by_indicator
-        pattern: "type=regional_income/tablename=*/year=*/*.parquet"
+        pattern: "tablename=*/year=*/*.parquet"
         partition:
           style: hive
           columnDefinitions:
@@ -2607,7 +2763,7 @@ partitionedTables:
 
   # --- ITA DATA ---
   - name: ita_data
-    pattern: "type=indicators/frequency=*/year=*/indicator=*/ita_data.parquet"
+    pattern: "frequency=*/year=*/indicator=*/ita_data.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -2732,7 +2888,7 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        dataPath: "BEAAPI.Results.Data"
+        # Note: dataPath removed because responseTransformer already extracts the data
         errorPath: "BEAAPI.Results.Error"
       rateLimit:
         requestsPerSecond: 1.5
@@ -2743,13 +2899,31 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
 
+    # Dimension definitions for ETL iteration
+    dimensions:
+      type:
+        - ita_data
+      frequency: *bea_frequencies  # Use anchor: A, Q
+      year: *year_range_from_2020  # Use anchor for year range
+      indicator:
+        - "BalGds"        # Balance on Goods
+        - "BalServ"       # Balance on Services
+        - "BalGdsServ"    # Balance on Goods and Services
+        - "BalCurrAcct"   # Current Account Balance
+        - "BalCapAcct"    # Capital Account Balance
+        - "BalPrimInc"    # Primary Income Balance
+        - "BalSecInc"     # Secondary Income Balance
+        - "ExpGds"        # Exports of Goods
+        - "ImpGds"        # Imports of Goods
+        - "ExpServ"       # Exports of Services
+        - "ImpServ"       # Imports of Services
+
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=indicators/frequency=*/year=*/indicator=*/"
+        pattern: "frequency=*/year=*/indicator=*/"
       partition:
         columns: [type, frequency, year, indicator]
       options:
@@ -2763,7 +2937,7 @@ partitionedTables:
 
   # --- GDP STATISTICS ---
   - name: gdp_statistics
-    pattern: "type=indicators/frequency=*/year=*/gdp_statistics.parquet"
+    pattern: "frequency=*/year=*/gdp_statistics.parquet"
     partitions: *standard_partitions
     comment: >
       Quarterly and annual GDP growth rates, nominal and real GDP values.
@@ -2808,7 +2982,7 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        dataPath: "BEAAPI.Results.Data"
+        # Note: dataPath removed because responseTransformer already extracts the data
         errorPath: "BEAAPI.Results.Error"
       rateLimit:
         requestsPerSecond: 1.5
@@ -2819,13 +2993,19 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
 
+    # Dimension definitions for ETL iteration
+    dimensions:
+      type:
+        - gdp_statistics
+      frequency: *bea_frequencies     # Use anchor: A, Q
+      year: *year_range_from_2020     # Use anchor for year range
+
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=indicators/frequency=*/year=*/"
+        pattern: "frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
       options:
@@ -2843,7 +3023,7 @@ partitionedTables:
 
   # --- INDUSTRY GDP ---
   - name: industry_gdp
-    pattern: "type=indicators/frequency=*/year=*/industry=*/industry_gdp.parquet"
+    pattern: "frequency=*/year=*/industry=*/industry_gdp.parquet"
     dimensions:
       frequency:
         - "A"  # Annual
@@ -2959,7 +3139,7 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        dataPath: "BEAAPI.Results.Data"
+        # Note: dataPath removed because responseTransformer already extracts the data
         errorPath: "BEAAPI.Results.Error"
       rateLimit:
         requestsPerSecond: 1.5
@@ -2975,8 +3155,7 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        location: "{baseDirectory}"
-        pattern: "type=indicators/frequency=*/year=*/industry=*/"
+        pattern: "frequency=*/year=*/industry=*/"
       partition:
         columns: [type, frequency, year, industry]
       options:

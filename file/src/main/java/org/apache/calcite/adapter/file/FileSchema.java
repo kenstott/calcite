@@ -4726,15 +4726,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
   /**
    * Generates a Calcite model JSON file documenting the discovered schema and tables.
-   * The file is saved to baseDirectory/generated-model.json
+   * The file is saved to operatingCacheDirectory/generated-model.json
    */
   private void generateModelFile(Map<String, Table> tables) {
-    if (baseDirectory == null || !new File(baseDirectory).exists()) {
-      LOGGER.debug("Cannot generate model file - baseDirectory doesn't exist");
-      return;
+    // operatingCacheDirectory is always set during construction - this is a programming error if null
+    if (operatingCacheDirectory == null) {
+      throw new IllegalStateException("operatingCacheDirectory must be set");
     }
 
-    File modelFile = new File(baseDirectory, ".generated-model.json");
+    File modelFile = new File(operatingCacheDirectory, ".generated-model.json");
 
     try (FileWriter writer = new FileWriter(modelFile)) {
       writer.write("{\n");

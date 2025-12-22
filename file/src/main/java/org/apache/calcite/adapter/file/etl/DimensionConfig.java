@@ -77,6 +77,7 @@ public class DimensionConfig {
   private final String sql;
   private final String source;
   private final String path;
+  private final Map<String, String> properties;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -91,6 +92,9 @@ public class DimensionConfig {
     this.sql = builder.sql;
     this.source = builder.source;
     this.path = builder.path;
+    this.properties = builder.properties != null
+        ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.properties))
+        : Collections.<String, String>emptyMap();
   }
 
   /**
@@ -172,6 +176,60 @@ public class DimensionConfig {
    */
   public String getPath() {
     return path;
+  }
+
+  /**
+   * Returns custom properties for this dimension.
+   *
+   * <p>Properties allow passing arbitrary configuration to custom dimension resolvers.
+   * Common properties include:
+   * <ul>
+   *   <li>{@code referenceDirectory} - Base directory for reference data lookup</li>
+   *   <li>{@code pattern} - File pattern for locating dimension source data</li>
+   * </ul>
+   *
+   * @return Immutable map of property name to value, never null
+   */
+  public Map<String, String> getProperties() {
+    return properties;
+  }
+
+  /**
+   * Returns a specific property value with variable resolution.
+   *
+   * <p>Property values containing {@code ${VAR}} or {@code ${VAR:-default}} patterns
+   * are resolved using environment variables and system properties.
+   *
+   * @param key Property name
+   * @return Resolved property value, or null if not set or resolves to empty
+   */
+  public String getProperty(String key) {
+    String value = properties.get(key);
+    if (value == null) {
+      return null;
+    }
+    // Resolve ${VAR} patterns using VariableResolver
+    String resolved = VariableResolver.resolveEnvVars(value);
+    // If resolution resulted in the original placeholder (unresolved), treat as null
+    if (resolved.equals(value) && value.contains("${")) {
+      return null;
+    }
+    return resolved.isEmpty() ? null : resolved;
+  }
+
+  /**
+   * Returns a specific property value with a default and variable resolution.
+   *
+   * <p>Property values containing {@code ${VAR}} or {@code ${VAR:-default}} patterns
+   * are resolved using environment variables and system properties.
+   *
+   * @param key Property name
+   * @param defaultValue Value to return if property is not set or resolves to empty
+   * @return Resolved property value, or defaultValue if not set
+   */
+  public String getProperty(String key, String defaultValue) {
+    String value = getProperty(key);
+    return value != null ? value : defaultValue;
   }
 
   /**
@@ -276,6 +334,21 @@ public class DimensionConfig {
       builder.path((String) pathObj);
     }
 
+    // Parse custom properties (for CUSTOM type dimensions)
+    // Properties are stored as-is; variable resolution happens at runtime
+    Object propsObj = map.get("properties");
+    if (propsObj instanceof Map) {
+      Map<String, String> props = new LinkedHashMap<String, String>();
+      for (Map.Entry<?, ?> propEntry : ((Map<?, ?>) propsObj).entrySet()) {
+        String key = String.valueOf(propEntry.getKey());
+        Object val = propEntry.getValue();
+        if (val != null) {
+          props.put(key, String.valueOf(val));
+        }
+      }
+      builder.properties(props);
+    }
+
     return builder.build();
   }
 
@@ -369,6 +442,7 @@ public class DimensionConfig {
     private String sql;
     private String source;
     private String path;
+    private Map<String, String> properties;
 
     public Builder name(String name) {
       this.name = name;
@@ -417,6 +491,19 @@ public class DimensionConfig {
 
     public Builder path(String path) {
       this.path = path;
+      return this;
+    }
+
+    public Builder properties(Map<String, String> properties) {
+      this.properties = properties;
+      return this;
+    }
+
+    public Builder property(String key, String value) {
+      if (this.properties == null) {
+        this.properties = new LinkedHashMap<String, String>();
+      }
+      this.properties.put(key, value);
       return this;
     }
 

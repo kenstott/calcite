@@ -100,30 +100,48 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Initialize storage providers
     initializeStorageProviders(operand);
 
-    // Establish operating directory (.aperio/<dataSource>/)
-    String operatingDirectory = establishOperatingDirectory(dataSource);
-
-    // Create incremental tracker for resumability
-    IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name);
+    // Set cross-schema system properties for YAML variable substitution
+    setCrossSchemaProperties(dataSource, operand);
 
     // Get the appropriate sub-schema factory
     SubSchemaFactory factory = getFactoryForDataSource(dataSource);
 
-    // Set cross-schema system properties for YAML variable substitution
-    setCrossSchemaProperties(dataSource, operand);
+    // Build processor with dependencies first, then the requested schema
+    ModelLifecycleProcessor.Builder processorBuilder = ModelLifecycleProcessor.builder()
+        .sourceStorage(sourceStorage)
+        .materializedStorage(materializedStorage);
 
-    // Enrich operand with additional properties
+    // Process dependencies first (in order)
+    for (String depDataSource : factory.getDependencies()) {
+      if (!processedDependencies.contains(depDataSource)) {
+        LOGGER.info("Processing dependency '{}' for schema '{}'", depDataSource, name);
+
+        String depOperatingDir = establishOperatingDirectory(depDataSource);
+        IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource);
+        SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
+        Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource.toUpperCase());
+
+        processorBuilder
+            .operatingDirectory(depOperatingDir)
+            .incrementalTracker(depTracker)
+            .addSchema(depDataSource.toUpperCase(), depFactory, depOperand);
+
+        processedDependencies.add(depDataSource);
+      }
+    }
+
+    // Now add the main schema
+    String operatingDirectory = establishOperatingDirectory(dataSource);
+    IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name);
     Map<String, Object> enrichedOperand = enrichOperand(operand, dataSource, name);
 
-    // Use ModelLifecycleProcessor to run ETL and create schema
-    SchemaPlus rootSchema = ModelLifecycleProcessor.builder()
-        .sourceStorage(sourceStorage)
-        .materializedStorage(materializedStorage)
+    processorBuilder
         .operatingDirectory(operatingDirectory)
         .incrementalTracker(tracker)
-        .addSchema(name, factory, enrichedOperand)
-        .build()
-        .process();
+        .addSchema(name, factory, enrichedOperand);
+
+    // Run ETL for all schemas
+    SchemaPlus rootSchema = processorBuilder.build().process();
 
     // Return the created schema
     Schema schema = rootSchema.subSchemas().get(name);
@@ -134,6 +152,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("Schema '{}' created successfully", name);
     return schema;
   }
+
+  // Track processed dependencies to avoid duplicates
+  private final java.util.Set<String> processedDependencies = new java.util.HashSet<>();
 
   /**
    * Get the sub-schema factory for the given data source.
@@ -173,15 +194,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   @SuppressWarnings("unchecked")
   private void initializeStorageProviders(Map<String, Object> operand) {
     // Check for S3 configuration in operand (for R2, MinIO, custom S3)
-    // Values may contain ${VAR} references that need to be resolved
-    LOGGER.info("initializeStorageProviders: operand keys = {}", operand.keySet());
-    Map<String, Object> s3Config = (Map<String, Object>) operand.get("s3");
-    LOGGER.info("initializeStorageProviders: s3Config from operand = {}", s3Config != null ? "present" : "null");
+    // Check for both "s3Config" (legacy) and "s3" (new) keys
+    Map<String, Object> s3Config = (Map<String, Object>) operand.get("s3Config");
+    if (s3Config == null) {
+      s3Config = (Map<String, Object>) operand.get("s3");
+    }
     if (s3Config != null) {
-      LOGGER.info("initializeStorageProviders: s3Config keys before resolve = {}", s3Config.keySet());
       // Resolve env vars in nested s3 config
       s3Config = resolveS3Config(s3Config);
-      LOGGER.info("initializeStorageProviders: s3Config after resolve = {} keys", s3Config.size());
+      LOGGER.debug("Resolved S3 config with {} keys", s3Config.size());
     } else {
       // Also check for individual S3 fields in operand
       if (operand.containsKey("accessKeyId") || operand.containsKey("secretAccessKey")
@@ -204,16 +225,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
     // Materialized storage (parquet/iceberg output)
     String directory = resolveDirectory(operand, "directory");
-    LOGGER.info("initializeStorageProviders: directory = {}", directory);
-    LOGGER.info("initializeStorageProviders: s3Config for decision = {} (isEmpty={})",
-        s3Config != null ? "present" : "null",
-        s3Config != null ? s3Config.isEmpty() : "n/a");
     if (directory != null) {
       if (directory.startsWith("s3://") && s3Config != null && !s3Config.isEmpty()) {
-        LOGGER.info("Creating S3StorageProvider with explicit config");
+        LOGGER.debug("Creating S3StorageProvider with explicit config for {}", directory);
         materializedStorage = StorageProviderFactory.createFromType("s3", s3Config);
       } else {
-        LOGGER.info("Creating storage provider from URL (no s3Config or not s3://)");
         materializedStorage = StorageProviderFactory.createFromUrl(directory);
       }
       LOGGER.debug("Initialized materialized storage: {}", directory);

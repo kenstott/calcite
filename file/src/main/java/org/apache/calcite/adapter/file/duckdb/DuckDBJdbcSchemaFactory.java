@@ -178,15 +178,12 @@ public class DuckDBJdbcSchemaFactory {
         }
         LOGGER.info("Using configured database filename: {} (resolved to: {})", databaseFilename, catalogPath);
       } else {
-        // Use default per-schema database
         // Use FileSchema's operating cache directory for catalog storage (always local filesystem)
-        // DuckDB database files must be on local filesystem (not S3) for file locking
-        String baseDirForCatalog;
-        if (fileSchema != null && fileSchema.getOperatingCacheDirectory() != null) {
-          baseDirForCatalog = fileSchema.getOperatingCacheDirectory().getAbsolutePath();
-        } else {
-          baseDirForCatalog = directoryPath;
+        if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
+          throw new IllegalStateException(
+              "FileSchema with operatingCacheDirectory is required for DuckDB catalog storage");
         }
+        String baseDirForCatalog = fileSchema.getOperatingCacheDirectory().getAbsolutePath();
         catalogPath = determineCatalogPath(schemaName, baseDirForCatalog);
       }
 
