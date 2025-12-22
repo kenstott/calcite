@@ -81,6 +81,27 @@ public class IcebergTableWriter {
    */
   public void commitFromStaging(java.nio.file.Path stagingPath,
       Map<String, Object> partitionFilter) throws IOException {
+    List<DataFile> dataFiles = stageFiles(stagingPath);
+
+    if (dataFiles.isEmpty()) {
+      return;
+    }
+
+    commitDataFiles(dataFiles, partitionFilter);
+  }
+
+  /**
+   * Stages files from a staging directory without committing.
+   *
+   * <p>This method moves files from staging to Iceberg data location and
+   * returns DataFile objects that can be accumulated for bulk commit.
+   * Use with {@link #bulkCommitDataFiles(List)} for reduced metadata operations.
+   *
+   * @param stagingPath The staging directory containing Parquet files
+   * @return List of DataFile objects ready for commit
+   * @throws IOException if file operations fail
+   */
+  public List<DataFile> stageFiles(java.nio.file.Path stagingPath) throws IOException {
     String dataLocation = table.location() + "/data";
     java.nio.file.Path dataPath = java.nio.file.Paths.get(dataLocation.replace("file:", ""));
 
@@ -93,6 +114,21 @@ public class IcebergTableWriter {
 
     if (dataFiles.isEmpty()) {
       LOGGER.warn("No data files found in staging directory: {}", stagingPath);
+    } else {
+      LOGGER.debug("Staged {} data files from {}", dataFiles.size(), stagingPath);
+    }
+
+    return dataFiles;
+  }
+
+  /**
+   * Commits data files to Iceberg with optional partition filter.
+   *
+   * @param dataFiles The data files to commit
+   * @param partitionFilter Optional filter for partition overwrite (null for append)
+   */
+  public void commitDataFiles(List<DataFile> dataFiles, Map<String, Object> partitionFilter) {
+    if (dataFiles.isEmpty()) {
       return;
     }
 
@@ -125,6 +161,38 @@ public class IcebergTableWriter {
     }
 
     LOGGER.info("Successfully committed {} files to Iceberg table {}", dataFiles.size(), table.name());
+  }
+
+  /**
+   * Bulk commits multiple data files in a single Iceberg append operation.
+   *
+   * <p>This is more efficient than individual commits for batch operations
+   * as it reduces the number of metadata updates to S3/R2 from O(n) to O(1).
+   *
+   * <p>Note: This uses append mode, not overwrite. For idempotent writes,
+   * consider using partition-level deduplication or calling
+   * {@link #commitDataFiles(List, Map)} per partition group.
+   *
+   * @param allDataFiles All data files to commit in a single transaction
+   */
+  public void bulkCommitDataFiles(List<DataFile> allDataFiles) {
+    if (allDataFiles.isEmpty()) {
+      LOGGER.debug("No data files to bulk commit");
+      return;
+    }
+
+    LOGGER.info("Bulk committing {} data files to Iceberg table {}",
+        allDataFiles.size(), table.name());
+    long startTime = System.currentTimeMillis();
+
+    org.apache.iceberg.AppendFiles append = table.newAppend();
+    for (DataFile dataFile : allDataFiles) {
+      append.appendFile(dataFile);
+    }
+    append.commit();
+
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
   }
 
   /**

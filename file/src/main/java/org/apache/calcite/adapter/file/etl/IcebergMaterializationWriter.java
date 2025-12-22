@@ -93,6 +93,26 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private int maxRetries;
   private long retryDelayMs;
 
+  /** Pending staged batches awaiting bulk commit. */
+  private final List<StagedBatch> pendingStagedBatches = new ArrayList<StagedBatch>();
+
+  /** Accumulated data files for bulk commit. */
+  private final List<org.apache.iceberg.DataFile> pendingDataFiles =
+      new ArrayList<org.apache.iceberg.DataFile>();
+
+  /**
+   * Represents a staged batch ready for commit.
+   */
+  private static class StagedBatch {
+    final Path stagingPath;
+    final Map<String, Object> partitionFilter;
+
+    StagedBatch(Path stagingPath, Map<String, Object> partitionFilter) {
+      this.stagingPath = stagingPath;
+      this.partitionFilter = partitionFilter;
+    }
+  }
+
   /**
    * Creates a new IcebergMaterializationWriter.
    *
@@ -181,28 +201,87 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       if (effectiveWarehouse == null || effectiveWarehouse.isEmpty()) {
         effectiveWarehouse = warehousePath;
       }
-      catalogCfg.put("warehousePath", effectiveWarehouse);
+      // Convert s3:// to s3a:// for Hadoop S3A FileSystem compatibility
+      catalogCfg.put("warehousePath", convertToS3aScheme(effectiveWarehouse));
     } else {
       catalogCfg.put("catalog", "hadoop");
-      catalogCfg.put("warehousePath", warehousePath);
+      // Convert s3:// to s3a:// for Hadoop S3A FileSystem compatibility
+      catalogCfg.put("warehousePath", convertToS3aScheme(warehousePath));
+    }
+
+    // Add S3 credentials as Hadoop configuration if available from storage provider
+    Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
+    if (s3Config != null && !s3Config.isEmpty()) {
+      Map<String, String> hadoopConfig = buildHadoopS3Config(s3Config);
+      catalogCfg.put("hadoopConfig", hadoopConfig);
+      LOGGER.info("Added S3 credentials to Hadoop config for Iceberg catalog: {} keys",
+          hadoopConfig.size());
+    } else {
+      LOGGER.warn("No S3 credentials available from storage provider for Iceberg catalog. "
+          + "storageProvider={}, s3Config={}",
+          storageProvider != null ? storageProvider.getClass().getSimpleName() : "null",
+          s3Config);
     }
 
     return catalogCfg;
   }
 
   /**
-   * Ensures the target Iceberg table exists.
+   * Converts s3:// scheme to s3a:// for Hadoop S3A FileSystem compatibility.
    */
-  private Table ensureTableExists(String targetTableId) {
-    if (IcebergCatalogManager.tableExists(catalogConfig, targetTableId)) {
-      LOGGER.debug("Loading existing Iceberg table: {}", targetTableId);
-      return IcebergCatalogManager.loadTable(catalogConfig, targetTableId);
+  private String convertToS3aScheme(String path) {
+    if (path != null && path.startsWith("s3://")) {
+      return "s3a://" + path.substring(5);
+    }
+    return path;
+  }
+
+  /**
+   * Builds Hadoop S3A configuration from S3 config map.
+   */
+  private Map<String, String> buildHadoopS3Config(Map<String, String> s3Config) {
+    Map<String, String> hadoopConfig = new HashMap<String, String>();
+
+    // S3A FileSystem implementation
+    hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+    // Credentials
+    String accessKey = s3Config.get("accessKeyId");
+    String secretKey = s3Config.get("secretAccessKey");
+    if (accessKey != null) {
+      hadoopConfig.put("fs.s3a.access.key", accessKey);
+    }
+    if (secretKey != null) {
+      hadoopConfig.put("fs.s3a.secret.key", secretKey);
     }
 
-    // Create new table - infer schema from partition columns if available
-    LOGGER.info("Creating new Iceberg table: {}", targetTableId);
-    List<IcebergCatalogManager.ColumnDef> columns = new ArrayList<IcebergCatalogManager.ColumnDef>();
-    java.util.Set<String> columnNamesSet = new java.util.HashSet<String>();
+    // Custom endpoint for R2, MinIO, etc.
+    String endpoint = s3Config.get("endpoint");
+    if (endpoint != null) {
+      hadoopConfig.put("fs.s3a.endpoint", endpoint);
+      hadoopConfig.put("fs.s3a.path.style.access", "true");
+    }
+
+    // Region
+    String region = s3Config.get("region");
+    if (region != null) {
+      hadoopConfig.put("fs.s3a.endpoint.region", region);
+    }
+
+    return hadoopConfig;
+  }
+
+  /**
+   * Ensures the target Iceberg table exists with correct schema.
+   *
+   * <p>If the table exists but is missing expected data columns (e.g., only has
+   * partition columns from a previous buggy run), it will be dropped and recreated.
+   */
+  private Table ensureTableExists(String targetTableId) {
+    // Build expected columns from config
+    List<IcebergCatalogManager.ColumnDef> expectedColumns =
+        new ArrayList<IcebergCatalogManager.ColumnDef>();
+    java.util.Set<String> expectedColumnNames = new java.util.HashSet<String>();
 
     MaterializePartitionConfig partitionConfig = config.getPartition();
     List<String> partitionColumnNames = new ArrayList<String>();
@@ -214,25 +293,57 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     List<ColumnConfig> columnConfigs = config.getColumns();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
       for (ColumnConfig colConfig : columnConfigs) {
-        columns.add(
+        expectedColumns.add(
             new IcebergCatalogManager.ColumnDef(
             colConfig.getName(),
             mapToIcebergType(colConfig.getType())));
-        columnNamesSet.add(colConfig.getName());
+        expectedColumnNames.add(colConfig.getName());
       }
     }
 
     // Add partition columns to schema if not already present
-    // These columns come from dimension values and are injected during transformation
     for (String partitionCol : partitionColumnNames) {
-      if (!columnNamesSet.contains(partitionCol)) {
-        columns.add(new IcebergCatalogManager.ColumnDef(partitionCol, "STRING"));
-        LOGGER.debug("Added partition column '{}' to schema", partitionCol);
+      if (!expectedColumnNames.contains(partitionCol)) {
+        expectedColumns.add(new IcebergCatalogManager.ColumnDef(partitionCol, "STRING"));
+        expectedColumnNames.add(partitionCol);
       }
     }
 
+    if (IcebergCatalogManager.tableExists(catalogConfig, targetTableId)) {
+      Table existingTable = IcebergCatalogManager.loadTable(catalogConfig, targetTableId);
+
+      // Check if existing table has all expected data columns
+      // This handles the case where a previous run only created partition columns
+      java.util.Set<String> existingColumnNames = new java.util.HashSet<String>();
+      for (org.apache.iceberg.types.Types.NestedField field : existingTable.schema().columns()) {
+        existingColumnNames.add(field.name());
+      }
+
+      // Find missing columns (excluding partition columns which are always present)
+      java.util.Set<String> missingDataColumns = new java.util.HashSet<String>();
+      for (ColumnConfig colConfig : columnConfigs != null ? columnConfigs
+          : java.util.Collections.<ColumnConfig>emptyList()) {
+        if (!existingColumnNames.contains(colConfig.getName())) {
+          missingDataColumns.add(colConfig.getName());
+        }
+      }
+
+      if (!missingDataColumns.isEmpty()) {
+        LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
+            + "Dropping and recreating table.",
+            targetTableId, missingDataColumns.size(), missingDataColumns);
+        IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
+      } else {
+        LOGGER.debug("Loading existing Iceberg table: {} (schema OK)", targetTableId);
+        return existingTable;
+      }
+    }
+
+    // Create new table
+    LOGGER.info("Creating new Iceberg table: {} with {} columns",
+        targetTableId, expectedColumns.size());
     return IcebergCatalogManager.createTableFromColumns(
-        catalogConfig, targetTableId, columns, partitionColumnNames);
+        catalogConfig, targetTableId, expectedColumns, partitionColumnNames);
   }
 
   /**
@@ -369,7 +480,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   /**
-   * Processes a single batch: stage to JSON -> DuckDB transform -> Iceberg commit.
+   * Processes a single batch: stage to JSON -> DuckDB transform -> queue for bulk commit.
+   *
+   * <p>This method stages the data but does NOT commit to Iceberg immediately.
+   * The staged files are accumulated and committed in bulk during {@link #commit()}.
+   * This reduces the number of Iceberg metadata operations from O(batches) to O(1),
+   * significantly improving performance for R2/S3 storage.
    */
   private void processBatch(List<Map<String, Object>> rows,
       Map<String, String> partitionVariables) throws IOException, SQLException {
@@ -377,27 +493,28 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Create staging path
     Path stagingPath = createStagingPath();
 
+    // Stage data to temp JSON file
+    File tempJsonFile = createTempJsonFile(rows);
+
     try {
-      // Stage data to temp JSON file
-      File tempJsonFile = createTempJsonFile(rows);
+      // Use DuckDB to transform JSON to partitioned Parquet in staging
+      transformWithDuckDB(tempJsonFile.getAbsolutePath(), stagingPath.toString(), partitionVariables);
 
-      try {
-        // Use DuckDB to transform JSON to partitioned Parquet in staging
-        transformWithDuckDB(tempJsonFile.getAbsolutePath(), stagingPath.toString(), partitionVariables);
+      // Stage files to data location and accumulate DataFile objects for bulk commit
+      List<org.apache.iceberg.DataFile> stagedFiles = tableWriter.stageFiles(stagingPath);
+      pendingDataFiles.addAll(stagedFiles);
 
-        // Commit staging files to Iceberg
-        Map<String, Object> partitionFilter = buildPartitionFilter(partitionVariables);
-        tableWriter.commitFromStaging(stagingPath, partitionFilter.isEmpty() ? null : partitionFilter);
+      // Track staging path for cleanup after commit
+      pendingStagedBatches.add(new StagedBatch(stagingPath, null));
 
-      } finally {
-        // Cleanup temp JSON file
-        if (tempJsonFile.exists()) {
-          tempJsonFile.delete();
-        }
-      }
+      LOGGER.debug("Staged batch {} ({} files) for bulk commit: {}",
+          pendingStagedBatches.size(), stagedFiles.size(), partitionVariables);
+
     } finally {
-      // Cleanup staging directory
-      cleanupStagingDirectory(stagingPath);
+      // Cleanup temp JSON file (staging directory cleaned up after commit)
+      if (tempJsonFile.exists()) {
+        tempJsonFile.delete();
+      }
     }
   }
 
@@ -444,6 +561,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * in the SELECT clause if they're not already present in the source data.
    * This allows Hive-style partitioning where partition values come from
    * the ETL dimension iteration rather than the source data itself.
+   *
+   * <p>Uses a CTE (WITH clause) to first load JSON data, then SELECT from it.
+   * This resolves DuckDB's column reference ambiguity where computed expressions
+   * reference source columns that are also being selected (e.g., both selecting
+   * TableName and using SUBSTR(TableName, 1, 2) in the same SELECT).
    */
   private String buildDuckDBSql(String jsonPath, String stagingPath,
       Map<String, String> partitionVariables) {
@@ -451,17 +573,26 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     sql.append("COPY (\n");
     sql.append("  SELECT ");
 
-    // Build select clause
+    // Build select clause with qualified column references to avoid DuckDB ambiguity
     List<ColumnConfig> columns = config.getColumns();
     if (columns == null || columns.isEmpty()) {
       sql.append("*");
     } else {
+      // Build set of source column names (non-computed columns)
+      java.util.Set<String> sourceColumns = new java.util.HashSet<String>();
+      for (ColumnConfig col : columns) {
+        if (!col.isComputed()) {
+          sourceColumns.add(col.getEffectiveSource());
+        }
+      }
+
+      // Build SELECT clause with qualified column references and partition variable substitution
       StringBuilder selectClause = new StringBuilder();
       for (ColumnConfig col : columns) {
         if (selectClause.length() > 0) {
           selectClause.append(", ");
         }
-        selectClause.append(col.buildSelectExpression());
+        selectClause.append(col.buildSelectExpression("src", sourceColumns, partitionVariables));
       }
       sql.append(selectClause);
     }
@@ -478,7 +609,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
-    sql.append("\n  FROM read_json('").append(escapeString(jsonPath)).append("')\n");
+    sql.append("\n  FROM read_json('").append(escapeString(jsonPath)).append("') AS src\n");
     sql.append(") TO '").append(escapeString(stagingPath)).append("'");
     sql.append(" (FORMAT PARQUET");
 
@@ -637,6 +768,31 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throw new IllegalStateException("Writer not initialized");
     }
 
+    // Bulk commit all pending data files in a single Iceberg transaction
+    if (!pendingDataFiles.isEmpty()) {
+      LOGGER.info("Bulk committing {} data files from {} batches to Iceberg",
+          pendingDataFiles.size(), pendingStagedBatches.size());
+      long commitStart = System.currentTimeMillis();
+
+      try {
+        // Single Iceberg commit for all accumulated files - O(1) metadata operations
+        tableWriter.bulkCommitDataFiles(pendingDataFiles);
+
+        long commitElapsed = System.currentTimeMillis() - commitStart;
+        LOGGER.info("Bulk commit complete: {} files in {}ms", pendingDataFiles.size(), commitElapsed);
+      } catch (Exception e) {
+        LOGGER.error("Bulk commit failed: {}", e.getMessage());
+        throw new IOException("Bulk commit failed", e);
+      } finally {
+        // Cleanup all staging directories after commit (success or failure)
+        for (StagedBatch batch : pendingStagedBatches) {
+          cleanupStagingDirectory(batch.stagingPath);
+        }
+        pendingStagedBatches.clear();
+        pendingDataFiles.clear();
+      }
+    }
+
     // Run maintenance if configured
     MaterializeConfig.IcebergConfig icebergConfig = config.getIceberg();
     if (icebergConfig != null && icebergConfig.isRunMaintenance()) {
@@ -661,7 +817,31 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return MaterializeConfig.Format.ICEBERG;
   }
 
+  @Override public String getTableLocation() {
+    if (table != null) {
+      // Return the Iceberg table location (e.g., s3://bucket/warehouse/table_name)
+      // Convert s3a:// back to s3:// for consistency with DuckDB
+      String location = table.location();
+      if (location != null && location.startsWith("s3a://")) {
+        location = "s3://" + location.substring(6);
+      }
+      return location;
+    }
+    return null;
+  }
+
   @Override public void close() throws IOException {
+    // Cleanup any uncommitted staging directories to prevent disk space leaks
+    if (!pendingStagedBatches.isEmpty() || !pendingDataFiles.isEmpty()) {
+      LOGGER.warn("Closing writer with {} uncommitted batches ({} files) - cleaning up",
+          pendingStagedBatches.size(), pendingDataFiles.size());
+      for (StagedBatch batch : pendingStagedBatches) {
+        cleanupStagingDirectory(batch.stagingPath);
+      }
+      pendingStagedBatches.clear();
+      pendingDataFiles.clear();
+    }
+
     LOGGER.debug("IcebergMaterializationWriter closed: {} rows in {} files",
         totalRowsWritten, totalFilesWritten);
     initialized = false;

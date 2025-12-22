@@ -47,8 +47,12 @@ public final class VariableResolver {
 
   private static final Pattern VAR_PATTERN = Pattern.compile("\\{([^}]+)\\}");
   private static final Pattern ENV_PATTERN = Pattern.compile("env:(.+)");
-  /** Pattern for ${VAR_NAME} style environment variable references. */
-  private static final Pattern DOLLAR_VAR_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
+  /**
+   * Pattern for ${VAR_NAME} style environment variable references.
+   * Uses [^{}]+ to match only innermost patterns (no nested braces),
+   * allowing iterative resolution from inside out.
+   */
+  private static final Pattern DOLLAR_VAR_PATTERN = Pattern.compile("\\$\\{([^{}]+)\\}");
 
   private VariableResolver() {
     // Utility class
@@ -87,7 +91,8 @@ public final class VariableResolver {
    * Resolves ${VAR_NAME} style environment variable references.
    *
    * <p>This is the common shell-style variable syntax. Supports defaults
-   * with ${VAR_NAME:-default} syntax.
+   * with ${VAR_NAME:-default} syntax. Resolution is iterative, so nested
+   * variables like ${A:-${B}/path} are fully resolved.
    *
    * @param template Template string with ${VAR} placeholders
    * @return String with environment variables resolved
@@ -97,6 +102,24 @@ public final class VariableResolver {
       return template;
     }
 
+    // Iterative resolution to handle nested variables
+    String current = template;
+    int maxIterations = 10; // Prevent infinite loops
+    for (int i = 0; i < maxIterations; i++) {
+      String resolved = resolveEnvVarsOnce(current);
+      if (resolved.equals(current)) {
+        // No more substitutions made
+        break;
+      }
+      current = resolved;
+    }
+    return current;
+  }
+
+  /**
+   * Single pass of ${VAR} resolution.
+   */
+  private static String resolveEnvVarsOnce(String template) {
     StringBuffer result = new StringBuffer();
     Matcher matcher = DOLLAR_VAR_PATTERN.matcher(template);
 
@@ -111,7 +134,14 @@ public final class VariableResolver {
         envName = varExpr.substring(0, colonIdx);
         defaultValue = varExpr.substring(colonIdx + 2);
       } else {
-        envName = varExpr;
+        // Also support ${VAR:default} (single colon) for backward compatibility
+        colonIdx = varExpr.indexOf(':');
+        if (colonIdx > 0) {
+          envName = varExpr.substring(0, colonIdx);
+          defaultValue = varExpr.substring(colonIdx + 1);
+        } else {
+          envName = varExpr;
+        }
       }
 
       // Try environment variable first, then system property

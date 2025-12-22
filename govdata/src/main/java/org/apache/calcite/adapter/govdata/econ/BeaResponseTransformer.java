@@ -95,7 +95,11 @@ public class BeaResponseTransformer implements ResponseTransformer {
         String errorDesc = error.path("APIErrorDescription").asText("No description");
 
         // Some error codes are expected (e.g., no data for requested parameters)
-        if ("NO_DATA".equals(errorCode) || "PARAMETER_EMPTY".equals(errorCode)) {
+        // Error code 101 with "Unknown error" typically means invalid parameter combination
+        boolean isNoDataError = "NO_DATA".equals(errorCode)
+            || "PARAMETER_EMPTY".equals(errorCode)
+            || ("101".equals(errorCode) && errorDesc.toLowerCase().contains("unknown error"));
+        if (isNoDataError) {
           LOGGER.debug("BEA: No data available for request: {} - {}",
               errorCode, errorDesc);
           return "[]";

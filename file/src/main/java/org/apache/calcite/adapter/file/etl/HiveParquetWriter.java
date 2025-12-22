@@ -98,6 +98,17 @@ public class HiveParquetWriter {
   }
 
   /**
+   * Resolves the output path from config, using baseDirectory when location is not specified.
+   */
+  private String resolveOutputPath(MaterializeConfig config) {
+    String outputLocation = config.getOutput() != null ? config.getOutput().getLocation() : null;
+    if (outputLocation == null || outputLocation.isEmpty() || "{baseDirectory}".equals(outputLocation)) {
+      return baseDirectory;
+    }
+    return storageProvider.resolvePath(baseDirectory, outputLocation);
+  }
+
+  /**
    * Materializes data from source to partitioned Parquet files.
    *
    * @param config Materialization configuration
@@ -119,8 +130,7 @@ public class HiveParquetWriter {
     long rowCount = 0;
     int fileCount = 0;
 
-    String outputLocation = config.getOutput().getLocation();
-    String fullOutputPath = storageProvider.resolvePath(baseDirectory, outputLocation);
+    String fullOutputPath = resolveOutputPath(config);
 
     // Temp location with timestamp to isolate each run
     String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -161,7 +171,7 @@ public class HiveParquetWriter {
       // Consolidate if we used temp location
       if (fileCount > 0) {
         consolidateTempFiles(conn, config, tempBase, fullOutputPath);
-        setLifecycleRule(outputLocation, tempBase);
+        setLifecycleRule(fullOutputPath, tempBase);
       }
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -194,8 +204,7 @@ public class HiveParquetWriter {
 
     long startTime = System.currentTimeMillis();
     String fullJsonPath = storageProvider.resolvePath(baseDirectory, jsonFilePath);
-    String outputLocation = config.getOutput().getLocation();
-    String fullOutputPath = storageProvider.resolvePath(baseDirectory, outputLocation);
+    String fullOutputPath = resolveOutputPath(config);
 
     try (Connection conn = getDuckDBConnection()) {
       applyDuckDBSettings(conn, config.getOptions());
@@ -236,8 +245,7 @@ public class HiveParquetWriter {
 
     long startTime = System.currentTimeMillis();
     String fullCsvPath = storageProvider.resolvePath(baseDirectory, csvFilePath);
-    String outputLocation = config.getOutput().getLocation();
-    String fullOutputPath = storageProvider.resolvePath(baseDirectory, outputLocation);
+    String fullOutputPath = resolveOutputPath(config);
 
     try (Connection conn = getDuckDBConnection()) {
       applyDuckDBSettings(conn, config.getOptions());
@@ -278,8 +286,7 @@ public class HiveParquetWriter {
 
     long startTime = System.currentTimeMillis();
     String fullSourcePattern = storageProvider.resolvePath(baseDirectory, sourcePattern);
-    String outputLocation = config.getOutput().getLocation();
-    String fullOutputPath = storageProvider.resolvePath(baseDirectory, outputLocation);
+    String fullOutputPath = resolveOutputPath(config);
 
     try (Connection conn = getDuckDBConnection()) {
       applyDuckDBSettings(conn, config.getOptions());

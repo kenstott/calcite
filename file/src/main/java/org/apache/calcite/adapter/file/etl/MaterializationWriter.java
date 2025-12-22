@@ -103,4 +103,17 @@ public interface MaterializationWriter extends Closeable {
    * @return The materialization format
    */
   MaterializeConfig.Format getFormat();
+
+  /**
+   * Returns the location of the materialized table.
+   *
+   * <p>For Iceberg format, this returns the Iceberg table location (e.g.,
+   * {@code s3://bucket/warehouse/table_name}) which contains the metadata folder.
+   * DuckDB's {@code iceberg_scan()} function requires this location.
+   *
+   * <p>For Parquet format, this returns the output directory pattern.
+   *
+   * @return The table location URI, or null if not yet initialized
+   */
+  String getTableLocation();
 }

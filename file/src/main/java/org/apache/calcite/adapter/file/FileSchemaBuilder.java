@@ -132,6 +132,8 @@ public class FileSchemaBuilder {
     this.storageProvider = provider;
     // Also set on ETL builder so ETL uses the same provider
     etlBuilder.storageProvider(provider);
+    LOGGER.info("FileSchemaBuilder.storageProvider(): Set storage provider {} on etlBuilder",
+        provider != null ? provider.getClass().getSimpleName() : "null");
     return this;
   }
 
@@ -269,12 +271,34 @@ public class FileSchemaBuilder {
 
       // Track tables that were skipped by isEnabled hook
       // These will be excluded from schema metadata
+      // Also collect materialization info for later metadata update
+      Map<String, Map<String, String>> materializationInfo = new HashMap<>();
       for (Map.Entry<String, org.apache.calcite.adapter.file.etl.EtlResult> entry
           : result.getTableResults().entrySet()) {
-        if (entry.getValue().isSkipped()) {
+        org.apache.calcite.adapter.file.etl.EtlResult etlResult = entry.getValue();
+        if (etlResult.isSkipped()) {
           excludedTables.add(entry.getKey());
           LOGGER.debug("Table '{}' excluded from schema (skipped during ETL)", entry.getKey());
+        } else if (!etlResult.isFailed() && etlResult.getTableLocation() != null) {
+          // Store materialization info for updating ConversionMetadata later
+          Map<String, String> info = new HashMap<>();
+          info.put("tableLocation", etlResult.getTableLocation());
+          if (etlResult.getMaterializeFormat() != null) {
+            String conversionType = etlResult.getMaterializeFormat() ==
+                org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG
+                ? "ICEBERG_PARQUET" : "PARQUET";
+            info.put("conversionType", conversionType);
+          }
+          materializationInfo.put(entry.getKey(), info);
+          LOGGER.debug("Table '{}' materialized: location={}, format={}",
+              entry.getKey(), etlResult.getTableLocation(), etlResult.getMaterializeFormat());
         }
+      }
+
+      // Store materialization info in operand overrides for later use
+      if (!materializationInfo.isEmpty()) {
+        operandOverrides.put("_materializationInfo", materializationInfo);
+        LOGGER.info("Stored materialization info for {} tables", materializationInfo.size());
       }
     } catch (Exception e) {
       LOGGER.error("ETL failed", e);
@@ -319,6 +343,14 @@ public class FileSchemaBuilder {
     // Map materializeDirectory -> directory for FileSchemaFactory
     if (operand.containsKey("materializeDirectory") && !operand.containsKey("directory")) {
       operand.put("directory", operand.get("materializeDirectory"));
+    }
+
+    // Add storage providers so they can be passed to any nested builders
+    if (storageProvider != null) {
+      operand.put("_storageProvider", storageProvider);
+    }
+    if (cacheStorageProvider != null) {
+      operand.put("_cacheStorageProvider", cacheStorageProvider);
     }
 
     // Create schema via FileSchemaFactory

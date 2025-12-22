@@ -57,7 +57,6 @@ import java.util.Map;
  *     materialize:
  *       enabled: true
  *       output:
- *         location: "{baseDirectory}"
  *         pattern: "type=sales/year=STAR/region=STAR/"
  *       partition:
  *         columns: [year, region]

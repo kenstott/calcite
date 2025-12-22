@@ -71,7 +71,12 @@ dependencies {
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
+tasks.register<Delete>("cleanTestLogs") {
+    delete(layout.buildDirectory.dir("test-logs"))
+}
+
 tasks.test {
+    dependsOn("cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
     // Increase heap size for tests that process large CSV files

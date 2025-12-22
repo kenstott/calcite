@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -101,5 +103,21 @@ public interface SubSchemaFactory {
       return Boolean.parseBoolean((String) autoDownload);
     }
     return true;
+  }
+
+  /**
+   * Returns the list of data source names this schema depends on.
+   *
+   * <p>Dependencies are processed before this schema's ETL runs.
+   * For example, the 'econ' schema depends on 'econ_reference' because
+   * it needs dimension lookup tables populated first.
+   *
+   * <p>Dependency names should match the canonical data source names
+   * used by the parent schema factory (e.g., "econ_reference", "geo").
+   *
+   * @return List of dependency data source names, empty if none
+   */
+  default List<String> getDependencies() {
+    return Collections.emptyList();
   }
 }

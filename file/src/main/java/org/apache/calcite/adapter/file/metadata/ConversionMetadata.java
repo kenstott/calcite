@@ -1486,6 +1486,28 @@ public class ConversionMetadata {
   }
 
   /**
+   * Updates a table's materialization info after ETL completes.
+   * This is called when ETL materializes data to Iceberg or Parquet format,
+   * enabling DuckDB to use the appropriate scan function (iceberg_scan vs parquet_scan).
+   *
+   * @param tableName The table name
+   * @param tableLocation The location of the materialized table (Iceberg table location or Parquet directory)
+   * @param conversionType The conversion type (e.g., "ICEBERG_PARQUET" or "PARQUET")
+   */
+  public void updateMaterializationInfo(String tableName, String tableLocation, String conversionType) {
+    ConversionRecord record = conversions.get(tableName);
+    if (record != null) {
+      LOGGER.info("Updating materialization info for table '{}': conversionType='{}' -> '{}', sourceFile='{}' -> '{}'",
+          tableName, record.conversionType, conversionType, record.sourceFile, tableLocation);
+      record.conversionType = conversionType;
+      record.sourceFile = tableLocation;
+      saveMetadata();
+    } else {
+      LOGGER.warn("Cannot update materialization info for table '{}': record not found", tableName);
+    }
+  }
+
+  /**
    * Loads metadata from disk with file locking for concurrent access.
    */
   private void loadMetadata() {

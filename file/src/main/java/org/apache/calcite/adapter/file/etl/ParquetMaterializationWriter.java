@@ -92,12 +92,15 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
     }
 
     this.config = config;
-    MaterializeOutputConfig outputConfig = config.getOutput();
-    if (outputConfig == null) {
-      throw new IllegalArgumentException("Output configuration is required");
-    }
 
-    this.outputPath = storageProvider.resolvePath(baseDirectory, outputConfig.getLocation());
+    // Use baseDirectory directly - location in output config is optional and deprecated
+    MaterializeOutputConfig outputConfig = config.getOutput();
+    String location = (outputConfig != null) ? outputConfig.getLocation() : null;
+    if (location == null || location.isEmpty() || "{baseDirectory}".equals(location)) {
+      this.outputPath = baseDirectory;
+    } else {
+      this.outputPath = storageProvider.resolvePath(baseDirectory, location);
+    }
     LOGGER.info("Initialized ParquetMaterializationWriter: output={}", outputPath);
     this.initialized = true;
   }
@@ -354,6 +357,11 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
 
   @Override public MaterializeConfig.Format getFormat() {
     return MaterializeConfig.Format.PARQUET;
+  }
+
+  @Override public String getTableLocation() {
+    // For Parquet format, return the output path (directory pattern)
+    return outputPath != null ? outputPath : baseDirectory;
   }
 
   @Override public void close() throws IOException {

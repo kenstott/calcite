@@ -746,7 +746,12 @@ public class HttpSource implements DataSource {
 
     // Handle CSV format
     if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV) {
-      return parseCsvResponse(response);
+      return parseDelimitedResponse(response, ',');
+    }
+
+    // Handle TSV format
+    if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
+      return parseDelimitedResponse(response, '\t');
     }
 
     if (respConfig.getFormat() != HttpSourceConfig.ResponseFormat.JSON) {
@@ -758,16 +763,20 @@ public class HttpSource implements DataSource {
     // Check for API errors using errorPath if configured
     if (respConfig.getErrorPath() != null && !respConfig.getErrorPath().isEmpty()) {
       JsonNode errorNode = navigateToPath(root, respConfig.getErrorPath());
-      if (errorNode != null && !errorNode.isMissingNode() && !errorNode.isNull()) {
+      // Skip if error node is missing, null, or an empty array (common API pattern for "no error")
+      boolean hasError = errorNode != null && !errorNode.isMissingNode() && !errorNode.isNull()
+          && !(errorNode.isArray() && errorNode.size() == 0);
+      if (hasError) {
         // API returned an error in the configured error location
         String errorMessage = errorNode.isTextual()
             ? errorNode.asText()
             : errorNode.toString();
 
         // Check for "no data" type errors that should return empty results
+        // These indicate the parameter combination is invalid, not a real API error
         String errorLower = errorMessage.toLowerCase();
         if (errorLower.contains("no data") || errorLower.contains("not found")
-            || errorLower.contains("parameter_empty")) {
+            || errorLower.contains("parameter_empty") || errorLower.contains("unknown error")) {
           LOGGER.debug("API returned no-data error, returning empty result: {}", errorMessage);
           return Collections.emptyList();
         }
@@ -800,15 +809,17 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Parses a CSV response into a list of maps with streaming and optional filtering.
+   * Parses a delimited response (CSV or TSV) into a list of maps with streaming and optional filtering.
    *
    * <p>Uses streaming to avoid loading entire file into memory.
    * When rowFilter is configured, only matching rows are kept.
    *
-   * @param response CSV content with header row
+   * @param response Delimited content with header row
+   * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return List of maps, one per row, with column names as keys
    */
-  private List<Map<String, Object>> parseCsvResponse(String response) throws IOException {
+  private List<Map<String, Object>> parseDelimitedResponse(String response, char delimiter)
+      throws IOException {
     List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
 
     if (response == null || response.isEmpty()) {
@@ -837,8 +848,8 @@ public class HttpSource implements DataSource {
         return result;
       }
 
-      String[] headers = parseCsvLine(headerLine);
-      LOGGER.info("CSV headers: {} columns", headers.length);
+      String[] headers = parseDelimitedLine(headerLine, delimiter);
+      LOGGER.debug("Parsed {} columns from header", headers.length);
 
       // Find filter column index if filtering is enabled
       int filterColumnIndex = -1;
@@ -868,7 +879,7 @@ public class HttpSource implements DataSource {
           continue;
         }
 
-        String[] values = parseCsvLine(line);
+        String[] values = parseDelimitedLine(line, delimiter);
 
         // Apply filter if configured
         if (filterColumnIndex >= 0 && filterRegex != null) {
@@ -929,9 +940,13 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Parses a single CSV line, handling quoted fields with commas.
+   * Parses a single delimited line, handling quoted fields.
+   *
+   * @param line The line to parse
+   * @param delimiter The delimiter character (comma for CSV, tab for TSV)
+   * @return Array of field values
    */
-  private String[] parseCsvLine(String line) {
+  private String[] parseDelimitedLine(String line, char delimiter) {
     List<String> fields = new ArrayList<String>();
     StringBuilder current = new StringBuilder();
     boolean inQuotes = false;
@@ -947,7 +962,7 @@ public class HttpSource implements DataSource {
         } else {
           inQuotes = !inQuotes;
         }
-      } else if (c == ',' && !inQuotes) {
+      } else if (c == delimiter && !inQuotes) {
         fields.add(current.toString());
         current = new StringBuilder();
       } else {
