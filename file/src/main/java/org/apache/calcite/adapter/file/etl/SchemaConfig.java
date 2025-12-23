@@ -206,7 +206,7 @@ public class SchemaConfig {
       nameObj = map.get("schemaName");
     }
     if (nameObj instanceof String) {
-      builder.name((String) nameObj);
+      builder.name(VariableResolver.resolveEnvVars((String) nameObj));
     }
 
     Object sourceDirObj = map.get("sourceDirectory");
