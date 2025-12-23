@@ -619,18 +619,19 @@ public class IcebergMaterializer {
   /**
    * Creates a staging path with timestamp and random suffix.
    *
-   * <p>Uses StorageProvider.getStagingDirectory() which provides automatic cleanup:
-   * <ul>
-   *   <li>Local storage: Uses system temp directory (OS cleanup)</li>
-   *   <li>S3 storage: Uses lifecycle rules for auto-expiration</li>
-   * </ul>
+   * <p>Staging happens under warehousePath/.staging/ to ensure it uses the same
+   * storage type (local or S3) as the warehouse. For S3, a lifecycle rule is
+   * set up to auto-expire orphaned staging files after 1 day.
    */
   private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
-    // Get staging base directory with auto-cleanup guarantee
-    String stagingBase = storageProvider.getStagingDirectory("iceberg");
-    String stagingPath = storageProvider.resolvePath(stagingBase, timestamp + "_" + random);
+    String stagingSubpath = ".staging/" + timestamp + "_" + random;
+    String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
+
+    // Set up lifecycle rule for auto-cleanup (S3 only, no-op for local)
+    storageProvider.ensureLifecycleRule(".staging/", 1);
+
     storageProvider.createDirectories(stagingPath);
     LOGGER.debug("Created staging directory: {}", stagingPath);
     return stagingPath;
