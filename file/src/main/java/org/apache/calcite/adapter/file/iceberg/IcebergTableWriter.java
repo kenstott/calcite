@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
@@ -28,10 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,15 +52,18 @@ public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
   private final Table table;
+  private final StorageProvider storageProvider;
   private final Configuration hadoopConf;
 
   /**
    * Creates a writer for the specified Iceberg table.
    *
    * @param table The Iceberg table to write to
+   * @param storageProvider Storage provider for file operations (local/S3)
    */
-  public IcebergTableWriter(Table table) {
+  public IcebergTableWriter(Table table, StorageProvider storageProvider) {
     this.table = table;
+    this.storageProvider = storageProvider;
     this.hadoopConf = new Configuration();
   }
 
@@ -79,7 +81,7 @@ public class IcebergTableWriter {
    * @param partitionFilter Optional filter for partition overwrite (null for append)
    * @throws IOException if file operations fail
    */
-  public void commitFromStaging(java.nio.file.Path stagingPath,
+  public void commitFromStaging(String stagingPath,
       Map<String, Object> partitionFilter) throws IOException {
     List<DataFile> dataFiles = stageFiles(stagingPath);
 
@@ -101,16 +103,15 @@ public class IcebergTableWriter {
    * @return List of DataFile objects ready for commit
    * @throws IOException if file operations fail
    */
-  public List<DataFile> stageFiles(java.nio.file.Path stagingPath) throws IOException {
+  public List<DataFile> stageFiles(String stagingPath) throws IOException {
     String dataLocation = table.location() + "/data";
-    java.nio.file.Path dataPath = java.nio.file.Paths.get(dataLocation.replace("file:", ""));
 
-    // Ensure data directory exists
-    Files.createDirectories(dataPath);
+    // Ensure data directory exists using StorageProvider
+    storageProvider.createDirectories(dataLocation);
 
-    // Walk staging directory and move files
+    // Walk staging directory and move files using StorageProvider
     List<DataFile> dataFiles = new ArrayList<DataFile>();
-    moveFilesAndBuildDataFiles(stagingPath, dataPath, dataFiles);
+    moveFilesAndBuildDataFiles(stagingPath, dataLocation, dataFiles);
 
     if (dataFiles.isEmpty()) {
       LOGGER.warn("No data files found in staging directory: {}", stagingPath);
@@ -197,57 +198,99 @@ public class IcebergTableWriter {
 
   /**
    * Moves files from staging to data location and builds DataFile metadata.
+   * Uses StorageProvider for all file operations, supporting both local and S3.
    */
-  private void moveFilesAndBuildDataFiles(java.nio.file.Path stagingPath,
-      java.nio.file.Path dataPath, List<DataFile> dataFiles) throws IOException {
+  private void moveFilesAndBuildDataFiles(String stagingPath,
+      String dataPath, List<DataFile> dataFiles) throws IOException {
 
-    Files.walkFileTree(stagingPath, new SimpleFileVisitor<java.nio.file.Path>() {
-      @Override public FileVisitResult visitFile(java.nio.file.Path file,
-          BasicFileAttributes attrs) throws IOException {
-        if (file.toString().endsWith(".parquet")) {
-          // Preserve partition path: staging/year=2020/data.parquet -> data/year=2020/data.parquet
-          java.nio.file.Path relativePath = stagingPath.relativize(file);
-          java.nio.file.Path finalPath = dataPath.resolve(relativePath);
+    // List all files in staging directory
+    List<StorageProvider.FileEntry> stagingFiles = storageProvider.listFiles(stagingPath, true);
 
-          // Create parent directories
-          Files.createDirectories(finalPath.getParent());
-
-          // Move file (atomic on same filesystem)
-          Files.move(file, finalPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-          LOGGER.debug("Moved {} to {}", file, finalPath);
-
-          // Build DataFile for the moved file
-          DataFile dataFile = buildDataFile(finalPath, attrs.size());
-          dataFiles.add(dataFile);
-        }
-        return FileVisitResult.CONTINUE;
+    for (StorageProvider.FileEntry entry : stagingFiles) {
+      if (entry.isDirectory()) {
+        continue;
       }
 
-      @Override public FileVisitResult postVisitDirectory(java.nio.file.Path dir,
-          IOException exc) throws IOException {
-        // Clean up empty directories in staging
-        if (!dir.equals(stagingPath)) {
-          try {
-            Files.deleteIfExists(dir);
-          } catch (IOException e) {
-            // Directory not empty, ignore
-          }
+      String filePath = entry.getPath();
+      if (filePath.endsWith(".parquet")) {
+        // Compute relative path from staging
+        String relativePath = computeRelativePath(stagingPath, filePath);
+
+        // Compute final path in data directory
+        String finalPath = storageProvider.resolvePath(dataPath, relativePath);
+
+        // Create parent directories
+        String parentPath = getParentPath(finalPath);
+        if (parentPath != null) {
+          storageProvider.createDirectories(parentPath);
         }
-        return FileVisitResult.CONTINUE;
+
+        // Copy file from staging to data location
+        try (InputStream in = storageProvider.openInputStream(filePath)) {
+          storageProvider.writeFile(finalPath, in);
+        }
+        LOGGER.debug("Copied {} to {}", filePath, finalPath);
+
+        // Delete the source file from staging
+        storageProvider.delete(filePath);
+
+        // Build DataFile for the final file
+        DataFile dataFile = buildDataFile(finalPath, entry.getSize());
+        dataFiles.add(dataFile);
       }
-    });
+    }
+  }
+
+  /**
+   * Computes the relative path from a base path.
+   */
+  private String computeRelativePath(String basePath, String fullPath) {
+    // Normalize paths - ensure base ends with /
+    String normalizedBase = basePath.endsWith("/") ? basePath : basePath + "/";
+
+    if (fullPath.startsWith(normalizedBase)) {
+      return fullPath.substring(normalizedBase.length());
+    }
+
+    // Handle case where paths differ in trailing slash
+    if (fullPath.startsWith(basePath)) {
+      String remainder = fullPath.substring(basePath.length());
+      return remainder.startsWith("/") ? remainder.substring(1) : remainder;
+    }
+
+    // Fallback - return just the filename
+    int lastSlash = fullPath.lastIndexOf('/');
+    return lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
+  }
+
+  /**
+   * Gets the parent path of a file path.
+   */
+  private String getParentPath(String path) {
+    int lastSlash = path.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return null;
+    }
+    // Handle s3:// prefix
+    if (path.startsWith("s3://") && lastSlash <= 5) {
+      return null;
+    }
+    if (path.startsWith("s3a://") && lastSlash <= 6) {
+      return null;
+    }
+    return path.substring(0, lastSlash);
   }
 
   /**
    * Builds a DataFile for a Parquet file with partition information extracted from path.
    */
-  private DataFile buildDataFile(java.nio.file.Path filePath, long fileSize) {
-    String pathStr = filePath.toString();
+  private DataFile buildDataFile(String pathStr, long fileSize) {
     PartitionSpec spec = table.spec();
 
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData = new org.apache.iceberg.PartitionData(spec.partitionType());
-    String relativePath = pathStr.substring(pathStr.indexOf("/data/") + 6);
+    int dataIdx = pathStr.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
