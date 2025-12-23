@@ -27,9 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -357,7 +354,7 @@ public class IcebergMaterializer {
 
     // Ensure Iceberg table exists
     Table table = ensureTableExists(config);
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Build batch combinations
     List<Map<String, String>> batches = buildBatchCombinations(config);
@@ -473,7 +470,7 @@ public class IcebergMaterializer {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
 
     // Create staging path
-    Path stagingPath = createStagingPath();
+    String stagingPath = createStagingPath();
 
     try (Connection conn = getDuckDBConnection(config.getThreads())) {
       // Build source pattern with batch filters applied
@@ -495,7 +492,7 @@ public class IcebergMaterializer {
       LOGGER.info("DuckDB transformation completed in {}ms", elapsed);
 
       // Commit from staging to Iceberg
-      IcebergTableWriter writer = new IcebergTableWriter(table);
+      IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
       Map<String, Object> partitionFilter = new HashMap<String, Object>();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
         // Only add to filter if it's a partition column
@@ -621,38 +618,38 @@ public class IcebergMaterializer {
 
   /**
    * Creates a staging path with timestamp and random suffix.
-   * Uses system temp directory to avoid creating local directories when warehousePath is S3.
+   * Uses StorageProvider to resolve and create the path, supporting both local and S3 storage.
    */
-  private Path createStagingPath() throws IOException {
+  private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
-    // Use system temp directory for staging - never create local dirs from S3 paths
-    Path stagingPath = Paths.get(System.getProperty("java.io.tmpdir"),
-        ".iceberg_staging", timestamp + "_" + random);
-    Files.createDirectories(stagingPath);
+    String stagingSubpath = ".staging/" + timestamp + "_" + random;
+    String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
+    // StorageProvider handles both local (Files.createDirectories) and S3 (marker object)
+    storageProvider.createDirectories(stagingPath);
     LOGGER.debug("Created staging directory: {}", stagingPath);
     return stagingPath;
   }
 
   /**
-   * Cleans up the staging directory.
+   * Cleans up the staging directory using StorageProvider.
+   * Works for both local and S3 storage.
    */
-  private void cleanupStagingDirectory(Path stagingPath) {
+  private void cleanupStagingDirectory(String stagingPath) {
     try {
-      if (Files.exists(stagingPath)) {
-        Files.walkFileTree(stagingPath, new java.nio.file.SimpleFileVisitor<Path>() {
-          @Override public java.nio.file.FileVisitResult visitFile(Path file,
-              java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
-            Files.deleteIfExists(file);
-            return java.nio.file.FileVisitResult.CONTINUE;
-          }
-
-          @Override public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
-              IOException exc) throws IOException {
-            Files.deleteIfExists(dir);
-            return java.nio.file.FileVisitResult.CONTINUE;
-          }
-        });
+      if (storageProvider.exists(stagingPath)) {
+        // List all files recursively and delete them
+        List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+        List<String> paths = new ArrayList<String>();
+        for (StorageProvider.FileEntry entry : files) {
+          paths.add(entry.getPath());
+        }
+        // Delete all files in batch (more efficient for S3)
+        if (!paths.isEmpty()) {
+          storageProvider.deleteBatch(paths);
+        }
+        // Delete the staging directory itself
+        storageProvider.delete(stagingPath);
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());
