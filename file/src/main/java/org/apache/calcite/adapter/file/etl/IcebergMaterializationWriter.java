@@ -655,14 +655,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Creates a staging path with timestamp and random suffix.
-   * Uses StorageProvider to resolve and create the path, supporting both local and S3 storage.
+   *
+   * <p>Uses StorageProvider.getStagingDirectory() which provides automatic cleanup:
+   * <ul>
+   *   <li>Local storage: Uses system temp directory (OS cleanup)</li>
+   *   <li>S3 storage: Uses lifecycle rules for auto-expiration</li>
+   * </ul>
    */
   private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
-    String stagingSubpath = ".staging/" + timestamp + "_" + random;
-    String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
-    // StorageProvider handles both local (Files.createDirectories) and S3 (marker object)
+    // Get staging base directory with auto-cleanup guarantee
+    String stagingBase = storageProvider.getStagingDirectory("iceberg");
+    String stagingPath = storageProvider.resolvePath(stagingBase, timestamp + "_" + random);
     storageProvider.createDirectories(stagingPath);
     LOGGER.debug("Created staging path: {}", stagingPath);
     return stagingPath;

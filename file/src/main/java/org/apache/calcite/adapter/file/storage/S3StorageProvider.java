@@ -756,6 +756,40 @@ public class S3StorageProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Gets a staging directory for temporary files with automatic cleanup via S3 lifecycle rules.
+   *
+   * <p>For S3 storage, this returns a .staging/ prefix under the base path and ensures
+   * a lifecycle rule exists to auto-expire objects after 1 day. This provides a safety
+   * net for orphaned staging files.
+   *
+   * @param purpose Subdirectory name to isolate different staging uses (e.g., "iceberg", "etl")
+   * @return S3 path to staging directory with auto-cleanup guarantee
+   * @throws IOException If an I/O error occurs
+   */
+  @Override public String getStagingDirectory(String purpose) throws IOException {
+    if (baseS3Path == null || baseS3Path.isEmpty()) {
+      // Fall back to default (system temp directory) if no S3 path configured
+      String tempDir = System.getProperty("java.io.tmpdir");
+      String stagingPath = tempDir + "/.staging/" + purpose;
+      createDirectories(stagingPath);
+      return stagingPath;
+    }
+
+    // Build staging path under .staging/ prefix
+    String stagingPrefix = ".staging/" + purpose;
+    String stagingPath = resolvePath(baseS3Path, stagingPrefix);
+
+    // Ensure lifecycle rule exists for auto-cleanup (1 day expiration)
+    ensureLifecycleRule(".staging/", 1);
+
+    // Create the staging directory marker
+    createDirectories(stagingPath);
+
+    LOGGER.debug("S3 staging directory: {} (auto-expires in 1 day)", stagingPath);
+    return stagingPath;
+  }
+
   @Override public void copyFile(String source, String destination) throws IOException {
     S3Uri sourceUri = parseS3Uri(source);
     S3Uri destUri = parseS3Uri(destination);
