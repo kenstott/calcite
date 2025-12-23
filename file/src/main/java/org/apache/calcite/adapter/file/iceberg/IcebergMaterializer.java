@@ -621,11 +621,14 @@ public class IcebergMaterializer {
 
   /**
    * Creates a staging path with timestamp and random suffix.
+   * Uses system temp directory to avoid creating local directories when warehousePath is S3.
    */
   private Path createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
-    Path stagingPath = Paths.get(warehousePath, ".staging", timestamp + "_" + random);
+    // Use system temp directory for staging - never create local dirs from S3 paths
+    Path stagingPath = Paths.get(System.getProperty("java.io.tmpdir"),
+        ".iceberg_staging", timestamp + "_" + random);
     Files.createDirectories(stagingPath);
     LOGGER.debug("Created staging directory: {}", stagingPath);
     return stagingPath;
