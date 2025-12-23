@@ -185,6 +185,31 @@ public interface StorageProvider {
   }
 
   /**
+   * Gets a staging directory for temporary files with automatic cleanup guarantee.
+   *
+   * <p>This method returns a directory path suitable for temporary/staging files
+   * that will be automatically cleaned up:
+   * <ul>
+   *   <li>Local storage: Uses system temp directory (OS handles cleanup)</li>
+   *   <li>S3 storage: Uses a .staging/ prefix with lifecycle rule for auto-expiration</li>
+   * </ul>
+   *
+   * <p>Callers should still attempt to clean up staging files when done, but
+   * this provides a safety net for failed cleanups.
+   *
+   * @param purpose Subdirectory name to isolate different staging uses (e.g., "iceberg", "etl")
+   * @return Path to staging directory that will be auto-cleaned
+   * @throws IOException If an I/O error occurs
+   */
+  default String getStagingDirectory(String purpose) throws IOException {
+    // Default implementation uses system temp directory
+    String tempDir = System.getProperty("java.io.tmpdir");
+    String stagingPath = tempDir + "/.staging/" + purpose;
+    createDirectories(stagingPath);
+    return stagingPath;
+  }
+
+  /**
    * Copies a file from source to destination.
    *
    * @param source The source file path
