@@ -407,7 +407,8 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public String resolvePath(String basePath, String relativePath) {
-    if (relativePath.startsWith("s3://")) {
+    // If relativePath is already a full S3 URI, return it unchanged
+    if (relativePath.startsWith("s3://") || relativePath.startsWith("s3a://")) {
       return relativePath;
     }
 
@@ -478,10 +479,10 @@ public class S3StorageProvider implements StorageProvider {
 
   /**
    * Converts a relative path to a full S3 URI using the base S3 path.
-   * If the path is already a full S3 URI, returns it unchanged.
+   * If the path is already a full S3 URI (s3:// or s3a://), returns it unchanged.
    */
   private String toFullPath(String path) throws IOException {
-    if (path.startsWith("s3://")) {
+    if (path.startsWith("s3://") || path.startsWith("s3a://")) {
       return path;
     }
 
