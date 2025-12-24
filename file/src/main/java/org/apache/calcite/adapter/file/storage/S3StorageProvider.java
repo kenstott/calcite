@@ -434,7 +434,8 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   private S3Uri parseS3Uri(String uri) throws IOException {
-    if (!uri.startsWith("s3://")) {
+    // Accept both s3:// and s3a:// (Hadoop S3A FileSystem) URI schemes
+    if (!uri.startsWith("s3://") && !uri.startsWith("s3a://")) {
       throw new IOException("Invalid S3 URI: " + uri);
     }
 
