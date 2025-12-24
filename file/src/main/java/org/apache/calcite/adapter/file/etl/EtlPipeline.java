@@ -267,9 +267,11 @@ public class EtlPipeline {
       }
 
       // Append table name to base directory: schema/tableName/
+      // Skip for Iceberg format - Iceberg catalog manages table location using warehousePath/tableName
       String tableName = config.getName();
       String tableDirectory = baseDirectory;
-      if (tableName != null && !tableName.isEmpty()) {
+      if (format != MaterializeConfig.Format.ICEBERG
+          && tableName != null && !tableName.isEmpty()) {
         if (!baseDirectory.endsWith("/")) {
           tableDirectory = baseDirectory + "/" + tableName;
         } else {
