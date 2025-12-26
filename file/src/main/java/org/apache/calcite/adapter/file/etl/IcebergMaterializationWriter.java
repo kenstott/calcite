@@ -594,12 +594,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       sql.append(selectClause);
     }
 
-    // Add partition variables as literal columns (if not already in source)
-    // These are dimension values that need to be written into the parquet files
+    // Add partition variables as literal columns for partition-only columns
+    // (columns that are in partition config but NOT in the regular column list).
+    // Columns that ARE in the column list are already handled by buildSelectExpression.
     MaterializePartitionConfig partitionConfig = config.getPartition();
     if (partitionConfig != null && partitionVariables != null && !partitionVariables.isEmpty()) {
+      // Build set of column names to check for duplicates
+      java.util.Set<String> columnNames = new java.util.HashSet<String>();
+      if (columns != null) {
+        for (ColumnConfig col : columns) {
+          columnNames.add(col.getName());
+        }
+      }
+
       for (String partitionCol : partitionConfig.getColumns()) {
-        if (partitionVariables.containsKey(partitionCol)) {
+        // Only add if: has a value AND not already in column list
+        if (partitionVariables.containsKey(partitionCol) && !columnNames.contains(partitionCol)) {
           sql.append(", '").append(escapeString(partitionVariables.get(partitionCol)))
               .append("' AS ").append(partitionCol);
         }
@@ -677,22 +687,35 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Cleans up the staging directory using StorageProvider.
    * Works for both local and S3 storage.
+   *
+   * <p>For S3: After stageFiles() moves files to the data location, the staging
+   * directory is empty. We skip cleanup entirely and rely on the lifecycle rule
+   * to expire orphaned staging files after 1 day. This saves N API calls per commit.
+   *
+   * <p>For local: We attempt cleanup to free disk space immediately.
    */
   private void cleanupStagingDirectory(String stagingPath) {
+    // For S3 paths, skip cleanup - lifecycle rule handles orphaned staging
+    if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
+      LOGGER.debug("Skipping S3 staging cleanup (lifecycle rule handles expiration): {}",
+          stagingPath);
+      return;
+    }
+
+    // For local storage, clean up immediately
     try {
-      if (storageProvider.exists(stagingPath)) {
-        // List all files recursively and delete them
-        List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+      if (!files.isEmpty()) {
         List<String> paths = new ArrayList<String>();
         for (StorageProvider.FileEntry entry : files) {
           paths.add(entry.getPath());
         }
-        // Delete all files in batch (more efficient for S3)
-        if (!paths.isEmpty()) {
-          storageProvider.deleteBatch(paths);
-        }
-        // Delete the staging directory itself
+        storageProvider.deleteBatch(paths);
+      }
+      try {
         storageProvider.delete(stagingPath);
+      } catch (IOException ignored) {
+        // Directory may not exist, which is fine
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());

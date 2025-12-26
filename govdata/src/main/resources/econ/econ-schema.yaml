@@ -2357,7 +2357,7 @@ partitionedTables:
         expression: "CAST(SUBSTR(TimePeriod, 1, 4) AS INTEGER)"
         comment: Year extracted from time period
       - name: value
-        expression: "CASE WHEN DataValue IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(DataValue AS DOUBLE) END"
+        expression: "CASE WHEN DataValue IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(REPLACE(DataValue, ',', '') AS DOUBLE) END"
         comment: Component value in millions of dollars (NULL for unavailable data)
       - name: units
         expression: "CL_UNIT"

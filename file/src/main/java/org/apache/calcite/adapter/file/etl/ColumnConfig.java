@@ -175,6 +175,18 @@ public class ColumnConfig {
     } else {
       // Qualify source column with table alias
       String sourceName = source != null && !source.isEmpty() ? source : name;
+
+      // If source doesn't have this column but it's available as a partition variable,
+      // use the partition variable value as a literal. This handles the case where
+      // dimension values (e.g., year from query params) aren't echoed back in API responses.
+      if (sourceColumns != null && !sourceColumns.contains(sourceName)
+          && partitionVariables != null && partitionVariables.containsKey(name)) {
+        String value = partitionVariables.get(name);
+        // Escape single quotes in value
+        value = value.replace("'", "''");
+        return "'" + value + "' AS " + name;
+      }
+
       return tableAlias + ".\"" + sourceName + "\" AS " + name;
     }
   }
