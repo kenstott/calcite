@@ -640,22 +640,35 @@ public class IcebergMaterializer {
   /**
    * Cleans up the staging directory using StorageProvider.
    * Works for both local and S3 storage.
+   *
+   * <p>For S3: After stageFiles() moves files to the data location, the staging
+   * directory is empty. We skip cleanup entirely and rely on the lifecycle rule
+   * to expire orphaned staging files after 1 day. This saves N API calls per commit.
+   *
+   * <p>For local: We attempt cleanup to free disk space immediately.
    */
   private void cleanupStagingDirectory(String stagingPath) {
+    // For S3 paths, skip cleanup - lifecycle rule handles orphaned staging
+    if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
+      LOGGER.debug("Skipping S3 staging cleanup (lifecycle rule handles expiration): {}",
+          stagingPath);
+      return;
+    }
+
+    // For local storage, clean up immediately
     try {
-      if (storageProvider.exists(stagingPath)) {
-        // List all files recursively and delete them
-        List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+      if (!files.isEmpty()) {
         List<String> paths = new ArrayList<String>();
         for (StorageProvider.FileEntry entry : files) {
           paths.add(entry.getPath());
         }
-        // Delete all files in batch (more efficient for S3)
-        if (!paths.isEmpty()) {
-          storageProvider.deleteBatch(paths);
-        }
-        // Delete the staging directory itself
+        storageProvider.deleteBatch(paths);
+      }
+      try {
         storageProvider.delete(stagingPath);
+      } catch (IOException ignored) {
+        // Directory may not exist, which is fine
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());

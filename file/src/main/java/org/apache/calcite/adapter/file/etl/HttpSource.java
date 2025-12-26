@@ -24,6 +24,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -512,9 +515,19 @@ public class HttpSource implements DataSource {
             "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
       }
 
-      // Set headers
+      // Set headers from config
       for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
         conn.setRequestProperty(e.getKey(), substituteVariables(e.getValue(), variables));
+      }
+
+      // Log headers being used for debugging
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("HTTP {} {} with {} custom headers",
+            config.getMethod(), urlString, config.getHeaders().size());
+        for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+          LOGGER.debug("  Header: {}={}", e.getKey(),
+              e.getKey().toLowerCase().contains("key") ? "[REDACTED]" : e.getValue());
+        }
       }
 
       // Apply authentication
@@ -561,11 +574,27 @@ public class HttpSource implements DataSource {
   }
 
   /**
+   * Marker prefix for temp file paths in response strings.
+   * When a response starts with this prefix, the remainder is a temp file path.
+   */
+  private static final String TEMP_FILE_PREFIX = "TEMP_FILE:";
+
+  /**
+   * Threshold for using temp file vs memory (10MB).
+   * Files larger than this are extracted to temp files to avoid OOM.
+   */
+  private static final long TEMP_FILE_THRESHOLD = 10 * 1024 * 1024;
+
+  /**
    * Extracts content from a ZIP archive matching the given pattern.
+   *
+   * <p>For large files (>10MB), extracts to a temp file and returns a marker string
+   * (TEMP_FILE:/path/to/file) to avoid loading entire content into memory.
+   * Callers must check for this prefix and handle accordingly.
    *
    * @param input ZIP file input stream
    * @param pattern Glob pattern to match file names (e.g., "*.csv")
-   * @return Content of the first matching file
+   * @return Content of the first matching file, or TEMP_FILE:path for large files
    * @throws IOException if extraction fails or no matching file found
    */
   private String extractFromZip(InputStream input, String pattern) throws IOException {
@@ -587,23 +616,44 @@ public class HttpSource implements DataSource {
         if (name.matches(regex) || name.endsWith(pattern.replace("*", ""))) {
           LOGGER.info("Extracting file from ZIP: {}", name);
 
-          ByteArrayOutputStream baos = new ByteArrayOutputStream();
-          byte[] buffer = new byte[8192];
+          // First pass: extract to temp file to get size and avoid OOM
+          File tempFile = File.createTempFile("http-source-", ".tmp");
+          tempFile.deleteOnExit();
+
+          byte[] buffer = new byte[65536];  // 64KB buffer for better throughput
           int len;
           long totalBytes = 0;
           long lastLogTime = System.currentTimeMillis();
-          while ((len = zis.read(buffer)) > 0) {
-            baos.write(buffer, 0, len);
-            totalBytes += len;
-            // Log progress every 5 seconds
-            long now = System.currentTimeMillis();
-            if (now - lastLogTime > 5000) {
-              LOGGER.info("Extracting... {} MB read", totalBytes / (1024 * 1024));
-              lastLogTime = now;
+
+          try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            while ((len = zis.read(buffer)) > 0) {
+              fos.write(buffer, 0, len);
+              totalBytes += len;
+              // Log progress every 5 seconds
+              long now = System.currentTimeMillis();
+              if (now - lastLogTime > 5000) {
+                LOGGER.info("Extracting... {} MB read", totalBytes / (1024 * 1024));
+                lastLogTime = now;
+              }
             }
           }
-          LOGGER.info("Extracted {} MB from ZIP", totalBytes / (1024 * 1024));
-          return baos.toString(StandardCharsets.UTF_8.name());
+
+          LOGGER.info("Extracted {} MB from ZIP to temp file", totalBytes / (1024 * 1024));
+
+          // For large files, return temp file path marker (caller streams from file)
+          if (totalBytes > TEMP_FILE_THRESHOLD) {
+            LOGGER.info("Using temp file for large content ({}MB > {}MB threshold)",
+                totalBytes / (1024 * 1024), TEMP_FILE_THRESHOLD / (1024 * 1024));
+            return TEMP_FILE_PREFIX + tempFile.getAbsolutePath();
+          }
+
+          // For small files, read into memory and delete temp file
+          try {
+            byte[] content = java.nio.file.Files.readAllBytes(tempFile.toPath());
+            return new String(content, StandardCharsets.UTF_8);
+          } finally {
+            tempFile.delete();
+          }
         }
         zis.closeEntry();
       }
@@ -817,13 +867,48 @@ public class HttpSource implements DataSource {
    * @param response Delimited content with header row
    * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return List of maps, one per row, with column names as keys
+   * @throws IOException if response contains error content instead of tabular data
    */
   private List<Map<String, Object>> parseDelimitedResponse(String response, char delimiter)
       throws IOException {
     List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
 
     if (response == null || response.isEmpty()) {
+      LOGGER.warn("Received empty response body - returning 0 records");
       return result;
+    }
+
+    // Check if response is a temp file marker (for large files)
+    File tempFile = null;
+    java.io.Reader sourceReader;
+    if (response.startsWith(TEMP_FILE_PREFIX)) {
+      String filePath = response.substring(TEMP_FILE_PREFIX.length());
+      tempFile = new File(filePath);
+      LOGGER.info("Streaming from temp file: {} ({} MB)",
+          filePath, tempFile.length() / (1024 * 1024));
+      sourceReader = new InputStreamReader(new FileInputStream(tempFile), StandardCharsets.UTF_8);
+    } else {
+      // Check for error-like responses (HTTP 200 with error content)
+      // These indicate server returned error page instead of data
+      String trimmed = response.trim();
+
+      // Log response info for debugging
+      LOGGER.info("Parsing delimited response: {} bytes, first 100 chars: {}",
+          response.length(),
+          response.length() > 100 ? response.substring(0, 100).replace("\n", "\\n") : response.replace("\n", "\\n"));
+
+      if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE")) {
+        // HTML response - likely an error page
+        String preview = trimmed.length() > 200 ? trimmed.substring(0, 200) + "..." : trimmed;
+        throw new IOException("Received HTML instead of tabular data (possible error page): " + preview);
+      }
+      if (trimmed.toLowerCase().startsWith("access denied")
+          || trimmed.toLowerCase().startsWith("error")
+          || trimmed.toLowerCase().startsWith("forbidden")) {
+        throw new IOException("Received error response: " + trimmed);
+      }
+
+      sourceReader = new java.io.StringReader(response);
     }
 
     // Get filter config if present
@@ -841,7 +926,7 @@ public class HttpSource implements DataSource {
     }
 
     // Stream through the CSV line by line
-    try (BufferedReader reader = new BufferedReader(new java.io.StringReader(response))) {
+    try (BufferedReader reader = new BufferedReader(sourceReader)) {
       // Parse header row
       String headerLine = reader.readLine();
       if (headerLine == null) {
@@ -934,6 +1019,16 @@ public class HttpSource implements DataSource {
 
       LOGGER.info("CSV parse complete: {} lines read, {} matched, {} skipped",
           lineNumber, matchedRows, skippedRows);
+    } finally {
+      // Clean up temp file if used
+      if (tempFile != null && tempFile.exists()) {
+        boolean deleted = tempFile.delete();
+        if (deleted) {
+          LOGGER.debug("Deleted temp file: {}", tempFile.getAbsolutePath());
+        } else {
+          LOGGER.warn("Failed to delete temp file: {}", tempFile.getAbsolutePath());
+        }
+      }
     }
 
     return result;
@@ -1177,7 +1272,7 @@ public class HttpSource implements DataSource {
         new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
-        response.append(line);
+        response.append(line).append('\n');
       }
     }
     return response.toString();
