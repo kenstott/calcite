@@ -186,6 +186,19 @@ public class HttpSource implements DataSource {
       // Single request
       String response = executeRequest(url, params, variables);
       response = transformResponse(response, url, params, variables);
+
+      // For CSV/TSV with large temp files, use lazy streaming iterator directly
+      // This avoids loading entire file into memory
+      HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
+      if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
+          || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
+          && response.startsWith(TEMP_FILE_PREFIX)) {
+        char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
+        LOGGER.info("Using lazy streaming iterator for large CSV/TSV file");
+        // Note: Caching disabled for streaming - data is too large to cache in memory
+        return parseDelimitedResponseStreaming(response, delimiter);
+      }
+
       allData.addAll(parseResponse(response));
     } else {
       // Paginated requests
@@ -856,6 +869,234 @@ public class HttpSource implements DataSource {
     }
 
     return result;
+  }
+
+  /**
+   * Parses a delimited response (CSV or TSV) returning a lazy iterator.
+   *
+   * <p>For large files (TEMP_FILE: prefix), returns a lazy iterator that reads one row
+   * at a time, avoiding loading entire file into memory. For small in-memory responses,
+   * falls back to the list-based implementation.
+   *
+   * @param response Delimited content or TEMP_FILE: marker
+   * @param delimiter The delimiter character (comma for CSV, tab for TSV)
+   * @return Iterator over rows, each row is a Map with column names as keys
+   * @throws IOException if response contains error content
+   */
+  private Iterator<Map<String, Object>> parseDelimitedResponseStreaming(String response, char delimiter)
+      throws IOException {
+
+    if (response == null || response.isEmpty()) {
+      LOGGER.warn("Received empty response body - returning empty iterator");
+      return Collections.<Map<String, Object>>emptyList().iterator();
+    }
+
+    // For large temp files, use lazy streaming iterator
+    if (response.startsWith(TEMP_FILE_PREFIX)) {
+      String filePath = response.substring(TEMP_FILE_PREFIX.length());
+      File tempFile = new File(filePath);
+      LOGGER.info("Creating lazy streaming iterator for temp file: {} ({} MB)",
+          filePath, tempFile.length() / (1024 * 1024));
+      return new LazyCSVIterator(tempFile, delimiter, config.getRowFilter());
+    }
+
+    // For small in-memory responses, use existing list-based parsing
+    return parseDelimitedResponse(response, delimiter).iterator();
+  }
+
+  /**
+   * Lazy iterator that reads CSV rows one at a time from a file.
+   * Parses rows on-demand to avoid loading entire file into memory.
+   */
+  private class LazyCSVIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
+    private final File tempFile;
+    private final BufferedReader reader;
+    private final char delimiter;
+    private final String[] headers;
+    private final int filterColumnIndex;
+    private final java.util.regex.Pattern filterRegex;
+    private final int maxRows;
+
+    private Map<String, Object> nextRow;
+    private boolean exhausted;
+    private int lineNumber;
+    private int matchedRows;
+    private int skippedRows;
+    private long lastLogTime;
+
+    LazyCSVIterator(File tempFile, char delimiter, HttpSourceConfig.RowFilterConfig filter)
+        throws IOException {
+      this.tempFile = tempFile;
+      this.delimiter = delimiter;
+      this.reader = new BufferedReader(
+          new InputStreamReader(new FileInputStream(tempFile), StandardCharsets.UTF_8));
+      this.exhausted = false;
+      this.lineNumber = 0;
+      this.matchedRows = 0;
+      this.skippedRows = 0;
+      this.lastLogTime = System.currentTimeMillis();
+
+      // Parse header row
+      String headerLine = reader.readLine();
+      if (headerLine == null) {
+        this.headers = new String[0];
+        this.filterColumnIndex = -1;
+        this.filterRegex = null;
+        this.maxRows = 0;
+        exhausted = true;
+        return;
+      }
+      this.headers = parseDelimitedLine(headerLine, delimiter);
+      LOGGER.debug("Parsed {} columns from header", headers.length);
+
+      // Setup filter
+      String filterColumn = filter != null ? filter.getColumn() : null;
+      String filterPattern = filter != null ? filter.getPattern() : null;
+      this.maxRows = filter != null ? filter.getMaxRows() : 0;
+      this.filterRegex = filterPattern != null
+          ? java.util.regex.Pattern.compile(filterPattern)
+          : null;
+
+      // Find filter column index
+      int foundIndex = -1;
+      if (filterColumn != null) {
+        for (int i = 0; i < headers.length; i++) {
+          if (headers[i].trim().equals(filterColumn)) {
+            foundIndex = i;
+            break;
+          }
+        }
+        if (foundIndex < 0) {
+          LOGGER.warn("Filter column '{}' not found in CSV headers", filterColumn);
+        }
+      }
+      this.filterColumnIndex = foundIndex;
+
+      if (filter != null && filter.isEnabled()) {
+        LOGGER.info("CSV filter: column={}, pattern={}, maxRows={}",
+            filterColumn, filterPattern, maxRows > 0 ? maxRows : "unlimited");
+      }
+
+      // Pre-fetch first matching row
+      advance();
+    }
+
+    private void advance() {
+      if (exhausted) {
+        return;
+      }
+
+      try {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          lineNumber++;
+          line = line.trim();
+          if (line.isEmpty()) {
+            continue;
+          }
+
+          String[] values = parseDelimitedLine(line, delimiter);
+
+          // Apply filter if configured
+          if (filterColumnIndex >= 0 && filterRegex != null) {
+            if (filterColumnIndex >= values.length) {
+              skippedRows++;
+              continue;
+            }
+            String filterValue = values[filterColumnIndex].trim();
+            if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
+              filterValue = filterValue.substring(1, filterValue.length() - 1);
+            }
+            if (!filterRegex.matcher(filterValue).matches()) {
+              skippedRows++;
+              continue;
+            }
+          }
+
+          // Build row map
+          Map<String, Object> row = new LinkedHashMap<String, Object>();
+          for (int j = 0; j < headers.length && j < values.length; j++) {
+            String header = headers[j].trim();
+            String value = values[j].trim();
+            if (value.startsWith("\"") && value.endsWith("\"")) {
+              value = value.substring(1, value.length() - 1);
+            }
+            Object parsed = parseValue(value);
+            row.put(header, parsed);
+          }
+
+          nextRow = row;
+          matchedRows++;
+
+          // Check maxRows limit
+          if (maxRows > 0 && matchedRows >= maxRows) {
+            LOGGER.info("Reached maxRows limit ({}), stopping lazy parse", maxRows);
+            exhausted = true;
+          }
+
+          // Log progress periodically
+          long now = System.currentTimeMillis();
+          if (now - lastLogTime > 10000 || lineNumber % 100000 == 0) {
+            LOGGER.info("Lazy CSV... {} lines read, {} matched, {} skipped",
+                lineNumber, matchedRows, skippedRows);
+            lastLogTime = now;
+          }
+
+          return;
+        }
+
+        // End of file
+        exhausted = true;
+        nextRow = null;
+        LOGGER.info("Lazy CSV complete: {} lines read, {} matched, {} skipped",
+            lineNumber, matchedRows, skippedRows);
+        close();
+
+      } catch (IOException e) {
+        LOGGER.error("Error reading CSV: {}", e.getMessage());
+        exhausted = true;
+        nextRow = null;
+        try {
+          close();
+        } catch (IOException ignored) {
+          // Already logging the original error
+        }
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return nextRow != null;
+    }
+
+    @Override
+    public Map<String, Object> next() {
+      if (nextRow == null) {
+        throw new java.util.NoSuchElementException();
+      }
+      Map<String, Object> current = nextRow;
+      nextRow = null;
+      if (!exhausted) {
+        advance();
+      }
+      return current;
+    }
+
+    @Override
+    public void close() throws IOException {
+      try {
+        reader.close();
+      } finally {
+        if (tempFile != null && tempFile.exists()) {
+          boolean deleted = tempFile.delete();
+          if (deleted) {
+            LOGGER.debug("Deleted temp file: {}", tempFile.getAbsolutePath());
+          } else {
+            LOGGER.warn("Failed to delete temp file: {}", tempFile.getAbsolutePath());
+          }
+        }
+      }
+    }
   }
 
   /**
