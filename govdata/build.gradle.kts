@@ -89,8 +89,9 @@ tasks.test {
 
     // Increase heap size for tests that process large CSV files
     // BLS QCEW bulk downloads can have 250k+ rows per year, each with 20+ columns
-    minHeapSize = "2g"
-    maxHeapSize = "8g"
+    // Note: Keep maxHeapSize below system RAM to avoid OOM kills (exit code 137)
+    minHeapSize = "1g"
+    maxHeapSize = "4g"
 
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
