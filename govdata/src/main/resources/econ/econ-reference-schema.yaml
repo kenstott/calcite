@@ -134,18 +134,31 @@ partitionedTables:
         type: string
         nullable: true
         comment: JOLTS industry code
-      - *industry_name
+      - name: industry_name
+        type: string
+        nullable: true
+        comment: Industry name
+        source: industry_text
 
     # HTTP Source configuration for EtlPipeline (FTP file)
     source:
       type: http
       url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
       method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        Accept: "text/plain, text/tab-separated-values, */*"
+        Accept-Language: "en-US,en;q=0.9"
       response:
         format: tsv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+
+    # Dimension for partition variable
+    dimensions:
+      type:
+        - jolts_industries
 
     # Materialization configuration
     materialize:
@@ -194,11 +207,20 @@ partitionedTables:
       type: http
       url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
       method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        Accept: "text/plain, text/tab-separated-values, */*"
+        Accept-Language: "en-US,en;q=0.9"
       response:
         format: tsv
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+
+    # Dimension for partition variable
+    dimensions:
+      type:
+        - jolts_dataelements
 
     # Materialization configuration
     materialize:
@@ -303,8 +325,21 @@ partitionedTables:
         nullable: false
         comment: Industry supersector name (e.g., 'Total Nonfarm', 'Construction', 'Manufacturing')
 
-    # API Configuration
+    # API Configuration (empty - this is reference data from constants)
     download:
+
+    # Source configuration - reads from YAML constants file
+    source:
+      type: constants
+      file: "/bls/bls-constants.yaml"
+      path: "naicsSupersectors"
+      keyColumn: "supersector_code"
+      valueColumn: "supersector_name"
+
+    # Dimension definitions for ETL iteration (single batch for reference data)
+    dimensions:
+      type:
+        - naics_sectors
 
     # Materialization configuration (reference data)
     materialize:
@@ -318,8 +353,6 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
 

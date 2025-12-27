@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -216,7 +217,8 @@ public class EtlPipeline {
           totalBatches > 0 ? (skippedBatches * 100 / totalBatches) : 0);
 
       // If all combinations are already processed, mark complete and return
-      if (neededCount == 0) {
+      // But only if there were actual combinations - empty dimensions is a config error
+      if (neededCount == 0 && totalBatches > 0) {
         incrementalTracker.markTableComplete(pipelineName, dimensionSignature);
         long elapsed = System.currentTimeMillis() - startTime;
         LOGGER.info("All {} combinations already processed - marking complete ({}ms)",
@@ -228,11 +230,24 @@ public class EtlPipeline {
             .skippedBatches(totalBatches)
             .elapsedMs(elapsed)
             .build();
+      } else if (totalBatches == 0) {
+        // No dimension combinations - likely a configuration error
+        long elapsed = System.currentTimeMillis() - startTime;
+        LOGGER.warn("Pipeline '{}' has no dimension combinations - check dimensions config", pipelineName);
+        return EtlResult.builder()
+            .pipelineName(pipelineName)
+            .totalRows(0)
+            .successfulBatches(0)
+            .failedBatches(0)
+            .skippedBatches(0)
+            .elapsedMs(elapsed)
+            .errors(Collections.singletonList("No dimension combinations - check dimensions config"))
+            .build();
       }
 
-      // Phase 3: Create HTTP source with hooks
-      LOGGER.info("Phase 3: Creating HTTP source");
-      HttpSource httpSource = new HttpSource(config.getSource(), config.getHooks());
+      // Phase 3: Create data source based on type
+      LOGGER.info("Phase 3: Creating data source (type={})", config.getSourceType());
+      DataSource dataSource = createDataSource(config);
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig materializeConfig = config.getMaterialize();
@@ -316,8 +331,8 @@ public class EtlPipeline {
             }
           }
           if (data == null) {
-            // Fall back to built-in HttpSource
-            data = httpSource.fetch(variables);
+            // Fall back to built-in DataSource
+            data = dataSource.fetch(variables);
           }
 
           // Write batch - use custom writer if available, otherwise built-in MaterializationWriter
@@ -395,7 +410,7 @@ public class EtlPipeline {
       LOGGER.info("Materialization complete: format={}, location={}", writerFormat, tableLocation);
 
       // Close resources
-      httpSource.close();
+      dataSource.close();
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
@@ -476,6 +491,25 @@ public class EtlPipeline {
     }
 
     return errorHandling.getApiErrorAction();
+  }
+
+  /**
+   * Creates a DataSource based on the source type in the configuration.
+   *
+   * @param config Pipeline configuration
+   * @return DataSource instance (HttpSource or ConstantsSource)
+   */
+  private DataSource createDataSource(EtlPipelineConfig config) {
+    String sourceType = config.getSourceType();
+
+    if (EtlPipelineConfig.SOURCE_TYPE_CONSTANTS.equals(sourceType)) {
+      LOGGER.info("Creating ConstantsSource for type: {}", sourceType);
+      return ConstantsSource.fromMap(config.getRawSourceConfig());
+    }
+
+    // Default to HTTP source
+    LOGGER.info("Creating HttpSource for type: {}", sourceType);
+    return new HttpSource(config.getSource(), config.getHooks());
   }
 
   /**
