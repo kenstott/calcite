@@ -228,7 +228,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (directory != null) {
       if (directory.startsWith("s3://") && s3Config != null && !s3Config.isEmpty()) {
         LOGGER.debug("Creating S3StorageProvider with explicit config for {}", directory);
-        materializedStorage = StorageProviderFactory.createFromType("s3", s3Config);
+        // Add directory to config so S3StorageProvider sets baseS3Path for lifecycle rules
+        Map<String, Object> storageConfig = new HashMap<>(s3Config);
+        storageConfig.put("directory", directory);
+        materializedStorage = StorageProviderFactory.createFromType("s3", storageConfig);
       } else {
         materializedStorage = StorageProviderFactory.createFromUrl(directory);
       }
@@ -242,7 +245,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
     if (cacheDirectory != null) {
       if (cacheDirectory.startsWith("s3://") && s3Config != null && !s3Config.isEmpty()) {
-        sourceStorage = StorageProviderFactory.createFromType("s3", s3Config);
+        // Add directory to config so S3StorageProvider sets baseS3Path for lifecycle rules
+        Map<String, Object> cacheStorageConfig = new HashMap<>(s3Config);
+        cacheStorageConfig.put("directory", cacheDirectory);
+        sourceStorage = StorageProviderFactory.createFromType("s3", cacheStorageConfig);
       } else {
         sourceStorage = StorageProviderFactory.createFromUrl(cacheDirectory);
       }
