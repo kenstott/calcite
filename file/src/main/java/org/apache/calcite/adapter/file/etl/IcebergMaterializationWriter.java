@@ -572,13 +572,23 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Build select clause with qualified column references to avoid DuckDB ambiguity
     List<ColumnConfig> columns = config.getColumns();
+    MaterializePartitionConfig partitionConfig = config.getPartition();
+
     if (columns == null || columns.isEmpty()) {
       sql.append("*");
     } else {
-      // Build set of source column names (non-computed columns)
+      // Build set of partition column names - these come from dimension iteration,
+      // not from source data, so they shouldn't be in sourceColumns
+      java.util.Set<String> partitionColumnNames = new java.util.HashSet<String>();
+      if (partitionConfig != null) {
+        partitionColumnNames.addAll(partitionConfig.getColumns());
+      }
+
+      // Build set of source column names (non-computed, non-partition columns)
+      // Partition columns are injected from partitionVariables, not source data
       java.util.Set<String> sourceColumns = new java.util.HashSet<String>();
       for (ColumnConfig col : columns) {
-        if (!col.isComputed()) {
+        if (!col.isComputed() && !partitionColumnNames.contains(col.getName())) {
           sourceColumns.add(col.getEffectiveSource());
         }
       }
@@ -597,7 +607,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Add partition variables as literal columns for partition-only columns
     // (columns that are in partition config but NOT in the regular column list).
     // Columns that ARE in the column list are already handled by buildSelectExpression.
-    MaterializePartitionConfig partitionConfig = config.getPartition();
     if (partitionConfig != null && partitionVariables != null && !partitionVariables.isEmpty()) {
       // Build set of column names to check for duplicates
       java.util.Set<String> columnNames = new java.util.HashSet<String>();
