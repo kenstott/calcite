@@ -510,7 +510,8 @@ public class EtlPipelineConfig {
       if (name == null || name.isEmpty()) {
         throw new IllegalArgumentException("Pipeline name is required");
       }
-      if (source == null) {
+      // For HTTP sources, require HttpSourceConfig; for other types, require rawSourceConfig
+      if (source == null && rawSourceConfig == null) {
         throw new IllegalArgumentException("Source configuration is required");
       }
       if (materialize == null) {
