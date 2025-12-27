@@ -998,6 +998,7 @@ partitionedTables:
       rowFilter:
         column: area_fips
         pattern: "^\\d{2}000$"  # State FIPS codes: 01000, 02000, etc.
+        maxRows: 300000  # Safety limit - state-level ~255k rows/year
       response:
         format: csv
       rateLimit:
