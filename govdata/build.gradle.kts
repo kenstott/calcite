@@ -79,9 +79,18 @@ tasks.test {
     dependsOn("cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
+    // Run tests serially to avoid DuckDB file lock conflicts
+    maxParallelForks = 1
+
+    // Disable JUnit5 parallel execution (overrides root build.gradle.kts setting)
+    // DuckDB requires exclusive file locks, so tests must run sequentially
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
+    systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
+
     // Increase heap size for tests that process large CSV files
+    // BLS QCEW bulk downloads can have 250k+ rows per year, each with 20+ columns
     minHeapSize = "2g"
-    maxHeapSize = "4g"
+    maxHeapSize = "8g"
 
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
