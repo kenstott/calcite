@@ -988,7 +988,7 @@ partitionedTables:
 
     # HTTP Source configuration for EtlPipeline (bulk download)
     # Downloads ZIP file and extracts CSV content
-    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
+    # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
@@ -998,7 +998,6 @@ partitionedTables:
       rowFilter:
         column: area_fips
         pattern: "^\\d{2}000$"  # State FIPS codes: 01000, 02000, etc.
-        maxRows: 300000  # Safety limit - state-level ~255k rows/year
       response:
         format: csv
       rateLimit:
@@ -1257,7 +1256,7 @@ partitionedTables:
 
     # HTTP Source configuration for EtlPipeline (bulk download)
     # Downloads ZIP file and extracts CSV content
-    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
+    # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
@@ -1267,7 +1266,6 @@ partitionedTables:
       rowFilter:
         column: area_fips
         pattern: "^C.*"
-        maxRows: 600000  # Safety limit for memory - all metros ~566k rows
       response:
         format: csv
       rateLimit:
@@ -1349,7 +1347,7 @@ partitionedTables:
 
     # HTTP Source configuration for EtlPipeline (bulk download)
     # Downloads ZIP file and extracts CSV content
-    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
+    # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
@@ -1359,7 +1357,6 @@ partitionedTables:
       rowFilter:
         column: area_fips
         pattern: "^\\d{2}[0-9]{2}[1-9]$|^\\d{2}[0-9][1-9][0-9]$|^\\d{2}[1-9][0-9]{2}$"  # County FIPS (not ending in 000)
-        maxRows: 500000  # Limit to prevent OOM for large county datasets
       response:
         format: csv
       rateLimit:
@@ -1453,7 +1450,7 @@ partitionedTables:
 
     # HTTP Source configuration for EtlPipeline (bulk download)
     # Downloads ZIP file and extracts CSV content
-    # IMPORTANT: rowFilter is REQUIRED to avoid OOM - QCEW file has 3+ million rows
+    # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
       url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
@@ -1463,7 +1460,6 @@ partitionedTables:
       rowFilter:
         column: area_fips
         pattern: "^\\d{2}[0-9]{2}[1-9]$|^\\d{2}[0-9][1-9][0-9]$|^\\d{2}[1-9][0-9]{2}$"  # County FIPS (not ending in 000)
-        maxRows: 500000  # Limit to prevent OOM for large county datasets
       response:
         format: csv
       rateLimit:
