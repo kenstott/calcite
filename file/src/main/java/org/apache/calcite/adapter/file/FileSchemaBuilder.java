@@ -62,6 +62,7 @@ public class FileSchemaBuilder {
   private boolean etlExecuted = false;
   private StorageProvider storageProvider;
   private StorageProvider cacheStorageProvider;
+  private IncrementalTracker incrementalTracker;
 
   private FileSchemaBuilder() {
     this.etlBuilder = SchemaLifecycleProcessor.builder()
@@ -160,6 +161,7 @@ public class FileSchemaBuilder {
    * @param tracker Incremental tracker for resumability
    */
   public FileSchemaBuilder incrementalTracker(IncrementalTracker tracker) {
+    this.incrementalTracker = tracker;
     etlBuilder.incrementalTracker(tracker);
     return this;
   }
@@ -352,6 +354,10 @@ public class FileSchemaBuilder {
     if (cacheStorageProvider != null) {
       operand.put("_cacheStorageProvider", cacheStorageProvider);
     }
+    // Add incremental tracker for cache database sharing across schemas
+    if (incrementalTracker != null) {
+      operand.put("_incrementalTracker", incrementalTracker);
+    }
 
     // Create schema via FileSchemaFactory
     return FileSchemaFactory.INSTANCE.create(parentSchema, name, operand);
@@ -391,6 +397,10 @@ public class FileSchemaBuilder {
     }
     if (cacheStorageProvider != null) {
       operand.put("_cacheStorageProvider", cacheStorageProvider);
+    }
+    // Add incremental tracker for cache database sharing across schemas
+    if (incrementalTracker != null) {
+      operand.put("_incrementalTracker", incrementalTracker);
     }
 
     return operand;

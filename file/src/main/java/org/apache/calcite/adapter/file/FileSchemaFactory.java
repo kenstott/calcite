@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
 import org.apache.calcite.adapter.file.metadata.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
+import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
@@ -123,6 +124,14 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         builder.cacheStorageProvider(cacheStorageProvider);
         LOGGER.debug("Extracted _cacheStorageProvider from operand: {}",
             cacheStorageProvider.getClass().getSimpleName());
+      }
+
+      // Extract incremental tracker for cache database sharing across schemas
+      IncrementalTracker incrementalTracker = (IncrementalTracker) operand.get("_incrementalTracker");
+      if (incrementalTracker != null) {
+        builder.incrementalTracker(incrementalTracker);
+        LOGGER.debug("Extracted _incrementalTracker from operand: {}",
+            incrementalTracker.getClass().getSimpleName());
       }
 
       if (schemaResource != null) {
