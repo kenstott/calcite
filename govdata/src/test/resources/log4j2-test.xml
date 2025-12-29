@@ -77,5 +77,9 @@
     <!-- Enable debug logging for govdata package (includes AbstractGovDataDownloader) -->
     <logger name="org.apache.calcite.adapter.govdata" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.govdata.econ" level="DEBUG"/>
+    <!-- Enable debug logging for ETL pipeline to see rawCache config -->
+    <logger name="org.apache.calcite.adapter.file.etl" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.etl.EtlPipeline" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.etl.HttpSource" level="DEBUG"/>
   </Loggers>
 </Configuration>
