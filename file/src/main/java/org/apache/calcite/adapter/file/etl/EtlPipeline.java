@@ -520,7 +520,9 @@ public class EtlPipeline {
     // Pass StorageProvider and rawCachePath for persistent response caching
     HttpSourceConfig sourceConfig = config.getSource();
     String rawCachePath = null;
-    if (sourceConfig.getRawCache().isEnabled()) {
+    HttpSourceConfig.RawCacheConfig rawCacheConfig = sourceConfig.getRawCache();
+    LOGGER.debug("RawCache config: enabled={}, ttlDays={}", rawCacheConfig.isEnabled(), rawCacheConfig.getTtlDays());
+    if (rawCacheConfig.isEnabled()) {
       // Build raw cache path: {baseDirectory}/.raw/{tableName}
       rawCachePath = storageProvider.resolvePath(baseDirectory, ".raw/" + config.getName());
       LOGGER.info("Creating HttpSource with raw cache: {}", rawCachePath);

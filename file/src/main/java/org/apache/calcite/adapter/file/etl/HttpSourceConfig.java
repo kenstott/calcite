@@ -1017,6 +1017,8 @@ public class HttpSourceConfig {
       Object enabledObj = map.get("enabled");
       if (enabledObj instanceof Boolean) {
         enabled = (Boolean) enabledObj;
+      } else if (enabledObj instanceof String) {
+        enabled = "true".equalsIgnoreCase((String) enabledObj);
       }
 
       int ttlDays = 30;
