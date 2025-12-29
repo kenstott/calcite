@@ -984,27 +984,21 @@ public class HttpSourceConfig {
    */
   public static class RawCacheConfig {
     private final boolean enabled;
-    private final int ttlDays;
 
-    private RawCacheConfig(boolean enabled, int ttlDays) {
+    private RawCacheConfig(boolean enabled) {
       this.enabled = enabled;
-      this.ttlDays = ttlDays;
     }
 
     public static RawCacheConfig defaults() {
-      return new RawCacheConfig(false, 30);
+      return new RawCacheConfig(false);
     }
 
     public static RawCacheConfig enabled() {
-      return new RawCacheConfig(true, 30);
+      return new RawCacheConfig(true);
     }
 
     public boolean isEnabled() {
       return enabled;
-    }
-
-    public int getTtlDays() {
-      return ttlDays;
     }
 
     @SuppressWarnings("unchecked")
@@ -1021,13 +1015,7 @@ public class HttpSourceConfig {
         enabled = "true".equalsIgnoreCase((String) enabledObj);
       }
 
-      int ttlDays = 30;
-      Object ttlObj = map.get("ttlDays");
-      if (ttlObj instanceof Number) {
-        ttlDays = ((Number) ttlObj).intValue();
-      }
-
-      return new RawCacheConfig(enabled, ttlDays);
+      return new RawCacheConfig(enabled);
     }
   }
 

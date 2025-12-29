@@ -1661,24 +1661,13 @@ public class HttpSource implements DataSource {
    */
   private boolean hasValidRawCache(String cachePath) {
     try {
+      // Immutable data - if cache exists, it's valid
+      // Staleness is determined by IncrementalTracker, not by TTL
       if (!storageProvider.exists(cachePath)) {
+        LOGGER.debug("Raw cache miss: {}", cachePath);
         return false;
       }
-
-      // Check TTL
-      int ttlDays = config.getRawCache().getTtlDays();
-      if (ttlDays > 0) {
-        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(cachePath);
-        long lastModified = metadata.getLastModified();
-        long ageMs = System.currentTimeMillis() - lastModified;
-        long ttlMs = (long) ttlDays * 24 * 60 * 60 * 1000;
-        if (ageMs > ttlMs) {
-          LOGGER.debug("Raw cache expired: {} (age={}d, ttl={}d)",
-              cachePath, ageMs / (24 * 60 * 60 * 1000), ttlDays);
-          return false;
-        }
-      }
-
+      LOGGER.debug("Raw cache hit: {}", cachePath);
       return true;
     } catch (IOException e) {
       LOGGER.debug("Error checking raw cache: {}", e.getMessage());

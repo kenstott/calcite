@@ -513,7 +513,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -630,7 +629,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -716,7 +714,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -829,7 +826,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -909,7 +905,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -1020,7 +1015,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1180,7 +1174,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response transformation
     hooks:
@@ -1294,7 +1287,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1388,7 +1380,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1494,7 +1485,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1629,7 +1619,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
       # Filter to only keep rows for the dimension year and regional data
       # Regional data has region codes (00=US, NE, MW, SO, WE), not state FIPS codes
       rowFilter:
@@ -1751,7 +1740,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
       # Filter to only keep rows for the dimension year and state-level data
       # State data has 2-digit FIPS codes (01-56), not region codes (00, NE, etc.)
       rowFilter:
@@ -1851,7 +1839,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -1958,7 +1945,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -2043,7 +2029,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2128,7 +2113,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2220,7 +2204,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2341,7 +2324,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for FRED response handling
     hooks:
@@ -2530,7 +2512,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -3001,7 +2982,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -3105,7 +3085,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -3273,7 +3252,6 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
