@@ -517,8 +517,17 @@ public class EtlPipeline {
     }
 
     // Default to HTTP source
-    LOGGER.info("Creating HttpSource for type: {}", sourceType);
-    return new HttpSource(config.getSource(), config.getHooks());
+    // Pass StorageProvider and rawCachePath for persistent response caching
+    HttpSourceConfig sourceConfig = config.getSource();
+    String rawCachePath = null;
+    if (sourceConfig.getRawCache().isEnabled()) {
+      // Build raw cache path: {baseDirectory}/.raw/{tableName}
+      rawCachePath = storageProvider.resolvePath(baseDirectory, ".raw/" + config.getName());
+      LOGGER.info("Creating HttpSource with raw cache: {}", rawCachePath);
+    } else {
+      LOGGER.info("Creating HttpSource for type: {}", sourceType);
+    }
+    return new HttpSource(sourceConfig, config.getHooks(), storageProvider, rawCachePath);
   }
 
   /**

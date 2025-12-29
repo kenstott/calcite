@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -88,6 +90,8 @@ public class HttpSource implements DataSource {
   private final HttpSourceConfig config;
   private final Map<String, CacheEntry> cache;
   private final ResponseTransformer responseTransformer;
+  private final StorageProvider storageProvider;
+  private final String rawCachePath;
   private long lastRequestTime;
 
   /**
@@ -96,7 +100,7 @@ public class HttpSource implements DataSource {
    * @param config HTTP source configuration
    */
   public HttpSource(HttpSourceConfig config) {
-    this(config, (HooksConfig) null);
+    this(config, (HooksConfig) null, null, null);
   }
 
   /**
@@ -106,12 +110,27 @@ public class HttpSource implements DataSource {
    * @param hooksConfig Optional hooks configuration for response transformation
    */
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig) {
+    this(config, hooksConfig, null, null);
+  }
+
+  /**
+   * Creates a new HttpSource with configuration, hooks, and storage provider for raw caching.
+   *
+   * @param config HTTP source configuration
+   * @param hooksConfig Optional hooks configuration for response transformation
+   * @param storageProvider Storage provider for raw response caching (S3, local, etc.)
+   * @param rawCachePath Base path for raw response cache (e.g., s3://bucket/.raw)
+   */
+  public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
+      StorageProvider storageProvider, String rawCachePath) {
     this.config = config;
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
     this.lastRequestTime = 0;
     this.responseTransformer = loadResponseTransformer(hooksConfig);
+    this.storageProvider = storageProvider;
+    this.rawCachePath = rawCachePath;
   }
 
   /**
@@ -127,6 +146,8 @@ public class HttpSource implements DataSource {
         : null;
     this.lastRequestTime = 0;
     this.responseTransformer = responseTransformer;
+    this.storageProvider = null;
+    this.rawCachePath = null;
   }
 
   /**
@@ -168,7 +189,20 @@ public class HttpSource implements DataSource {
       params.put(e.getKey(), substituteVariables(e.getValue(), variables));
     }
 
-    // Check cache if enabled
+    // Check raw cache first (persistent storage-based)
+    String rawCacheFilePath = null;
+    if (isRawCacheEnabled()) {
+      rawCacheFilePath = buildRawCachePath(variables);
+      if (hasValidRawCache(rawCacheFilePath)) {
+        String cachedResponse = readRawCache(rawCacheFilePath);
+        cachedResponse = transformResponse(cachedResponse, url, params, variables);
+        List<Map<String, Object>> data = parseResponse(cachedResponse);
+        LOGGER.info("Fetched {} records from raw cache", data.size());
+        return data.iterator();
+      }
+    }
+
+    // Check in-memory cache if enabled
     String cacheKey = buildCacheKey(url, params);
     if (cache != null) {
       CacheEntry cached = cache.get(cacheKey);
@@ -185,6 +219,12 @@ public class HttpSource implements DataSource {
     if (pagination.getType() == HttpSourceConfig.PaginationType.NONE) {
       // Single request
       String response = executeRequest(url, params, variables);
+
+      // Write to raw cache BEFORE transformation (preserve original response)
+      if (rawCacheFilePath != null && isRawCacheEnabled()) {
+        writeRawCache(rawCacheFilePath, response);
+      }
+
       response = transformResponse(response, url, params, variables);
 
       // For CSV/TSV with large temp files, use lazy streaming iterator directly
@@ -1567,6 +1607,124 @@ public class HttpSource implements DataSource {
    */
   public static HttpSource create(HttpSourceConfig config, HooksConfig hooksConfig) {
     return new HttpSource(config, hooksConfig);
+  }
+
+  // --- Raw Response Caching (StorageProvider-based) ---
+
+  /**
+   * Checks if raw cache is enabled and available.
+   */
+  private boolean isRawCacheEnabled() {
+    return config.getRawCache().isEnabled()
+        && storageProvider != null
+        && rawCachePath != null;
+  }
+
+  /**
+   * Builds the raw cache path for a given set of dimension variables.
+   * Path format: {rawCachePath}/{partitionKey}/response.json
+   * Example: s3://bucket/.raw/type=regional_income/year=2020/tablename=CAGDP2/response.json
+   */
+  private String buildRawCachePath(Map<String, String> variables) {
+    StringBuilder path = new StringBuilder(rawCachePath);
+    if (!rawCachePath.endsWith("/")) {
+      path.append("/");
+    }
+
+    // Build partition key from sorted variables
+    List<String> sortedKeys = new ArrayList<String>(variables.keySet());
+    Collections.sort(sortedKeys);
+    for (String key : sortedKeys) {
+      String value = variables.get(key);
+      if (value != null && !value.isEmpty()) {
+        path.append(key).append("=").append(sanitizePathComponent(value)).append("/");
+      }
+    }
+
+    path.append("response.json");
+    return path.toString();
+  }
+
+  /**
+   * Sanitizes a path component by removing or replacing invalid characters.
+   */
+  private String sanitizePathComponent(String value) {
+    // Replace invalid path characters with underscores
+    return value.replaceAll("[/\\\\:*?\"<>|]", "_");
+  }
+
+  /**
+   * Checks if a raw cached response exists and is not expired.
+   *
+   * @param cachePath Path to the cached response
+   * @return true if cache hit, false otherwise
+   */
+  private boolean hasValidRawCache(String cachePath) {
+    try {
+      if (!storageProvider.exists(cachePath)) {
+        return false;
+      }
+
+      // Check TTL
+      int ttlDays = config.getRawCache().getTtlDays();
+      if (ttlDays > 0) {
+        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(cachePath);
+        long lastModified = metadata.getLastModified();
+        long ageMs = System.currentTimeMillis() - lastModified;
+        long ttlMs = (long) ttlDays * 24 * 60 * 60 * 1000;
+        if (ageMs > ttlMs) {
+          LOGGER.debug("Raw cache expired: {} (age={}d, ttl={}d)",
+              cachePath, ageMs / (24 * 60 * 60 * 1000), ttlDays);
+          return false;
+        }
+      }
+
+      return true;
+    } catch (IOException e) {
+      LOGGER.debug("Error checking raw cache: {}", e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Reads raw cached response from storage provider.
+   *
+   * @param cachePath Path to the cached response
+   * @return Cached response content
+   * @throws IOException if read fails
+   */
+  private String readRawCache(String cachePath) throws IOException {
+    try (InputStream is = storageProvider.openInputStream(cachePath)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      byte[] buffer = new byte[8192];
+      int len;
+      while ((len = is.read(buffer)) != -1) {
+        baos.write(buffer, 0, len);
+      }
+      String content = baos.toString(StandardCharsets.UTF_8.name());
+      LOGGER.info("Raw cache hit: {} ({} bytes)", cachePath, content.length());
+      return content;
+    }
+  }
+
+  /**
+   * Writes response to raw cache in storage provider.
+   *
+   * @param cachePath Path to write the cached response
+   * @param content Response content to cache
+   */
+  private void writeRawCache(String cachePath, String content) {
+    try {
+      // Ensure parent directory exists
+      String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+      storageProvider.createDirectories(parentPath);
+
+      // Write content
+      storageProvider.writeFile(cachePath, content.getBytes(StandardCharsets.UTF_8));
+      LOGGER.info("Raw cache written: {} ({} bytes)", cachePath, content.length());
+    } catch (IOException e) {
+      LOGGER.warn("Failed to write raw cache: {} - {}", cachePath, e.getMessage());
+    }
   }
 
   /**

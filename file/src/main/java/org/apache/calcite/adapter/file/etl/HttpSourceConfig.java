@@ -120,6 +120,7 @@ public class HttpSourceConfig {
   private final ResponseConfig response;
   private final RateLimitConfig rateLimit;
   private final CacheConfig cache;
+  private final RawCacheConfig rawCache;
 
   // Bulk download reference (alternative to direct HTTP)
   private final String bulkDownload;
@@ -148,6 +149,7 @@ public class HttpSourceConfig {
     this.response = builder.response != null ? builder.response : ResponseConfig.defaults();
     this.rateLimit = builder.rateLimit != null ? builder.rateLimit : RateLimitConfig.defaults();
     this.cache = builder.cache != null ? builder.cache : CacheConfig.defaults();
+    this.rawCache = builder.rawCache != null ? builder.rawCache : RawCacheConfig.defaults();
     this.rowFilter = builder.rowFilter;
   }
 
@@ -235,6 +237,10 @@ public class HttpSourceConfig {
 
   public CacheConfig getCache() {
     return cache;
+  }
+
+  public RawCacheConfig getRawCache() {
+    return rawCache;
   }
 
   /**
@@ -380,6 +386,11 @@ public class HttpSourceConfig {
     Object cacheObj = map.get("cache");
     if (cacheObj instanceof Map) {
       builder.cache(CacheConfig.fromMap((Map<String, Object>) cacheObj));
+    }
+
+    Object rawCacheObj = map.get("rawCache");
+    if (rawCacheObj instanceof Map) {
+      builder.rawCache(RawCacheConfig.fromMap((Map<String, Object>) rawCacheObj));
     }
 
     return builder.build();
@@ -956,6 +967,69 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Raw response cache configuration for persistent storage.
+   *
+   * <p>Unlike the in-memory cache ({@link CacheConfig}), raw cache stores
+   * API responses in the storage provider (S3, local filesystem) for:
+   * <ul>
+   *   <li>Persistence across runs - no re-download if cache exists</li>
+   *   <li>Self-healing - re-process from raw data without API calls</li>
+   *   <li>Data lineage - preserve original API responses</li>
+   * </ul>
+   *
+   * <h3>Cache Path Structure</h3>
+   * <pre>
+   * {basePath}/.raw/{tableName}/{partitionKey}/response.json
+   * </pre>
+   */
+  public static class RawCacheConfig {
+    private final boolean enabled;
+    private final int ttlDays;
+
+    private RawCacheConfig(boolean enabled, int ttlDays) {
+      this.enabled = enabled;
+      this.ttlDays = ttlDays;
+    }
+
+    public static RawCacheConfig defaults() {
+      return new RawCacheConfig(false, 30);
+    }
+
+    public static RawCacheConfig enabled() {
+      return new RawCacheConfig(true, 30);
+    }
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public int getTtlDays() {
+      return ttlDays;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static RawCacheConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return defaults();
+      }
+
+      boolean enabled = false;
+      Object enabledObj = map.get("enabled");
+      if (enabledObj instanceof Boolean) {
+        enabled = (Boolean) enabledObj;
+      }
+
+      int ttlDays = 30;
+      Object ttlObj = map.get("ttlDays");
+      if (ttlObj instanceof Number) {
+        ttlDays = ((Number) ttlObj).intValue();
+      }
+
+      return new RawCacheConfig(enabled, ttlDays);
+    }
+  }
+
+  /**
    * Builder for HttpSourceConfig.
    */
   public static class Builder {
@@ -970,6 +1044,7 @@ public class HttpSourceConfig {
     private ResponseConfig response;
     private RateLimitConfig rateLimit;
     private CacheConfig cache;
+    private RawCacheConfig rawCache;
     private String bulkDownload;
     private String extractPattern;
     private RowFilterConfig rowFilter;
@@ -1026,6 +1101,11 @@ public class HttpSourceConfig {
 
     public Builder cache(CacheConfig cache) {
       this.cache = cache;
+      return this;
+    }
+
+    public Builder rawCache(RawCacheConfig rawCache) {
+      this.rawCache = rawCache;
       return this;
     }
 
