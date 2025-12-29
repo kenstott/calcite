@@ -1521,26 +1521,54 @@ partitionedTables:
         end: current
 
     columns:
-      - *date_column
-      - *series_column
+      # BLS TSV columns: series_id, year, period, value, footnote_codes
+      # Series ID format: JTU{region}{industry}{dataelement} (e.g., JTU00000000JOR)
+      - name: date
+        type: string
+        nullable: true
+        comment: Observation date (ISO 8601 format)
+        # Construct date from year + period (e.g., 2020 + M01 -> 2020-01-01)
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: BLS series identifier
+        source: series_id
       - name: region_code
         type: string
         nullable: true
-        comment: Census region code
+        comment: Census region code (00=US, NE/MW/SO/WE for regions)
+        # Extract region from series_id positions 4-5 (after JTU prefix)
+        expression: "SUBSTRING(series_id, 4, 2)"
       - name: region_name
         type: string
         nullable: true
         comment: Census region name
+        # Map region code to name
+        expression: "CASE SUBSTRING(series_id, 4, 2) WHEN '00' THEN 'United States' WHEN 'NE' THEN 'Northeast' WHEN 'MW' THEN 'Midwest' WHEN 'SO' THEN 'South' WHEN 'WE' THEN 'West' ELSE 'Unknown' END"
       - name: metric_type
         type: string
         nullable: true
         comment: JOLTS metric (hires, separations, openings, quits, layoffs)
+        # Extract data element code from series_id (last 3 chars like JOR, HIR, etc.)
+        expression: "CASE RIGHT(series_id, 3) WHEN 'JOR' THEN 'JobOpenings' WHEN 'HIR' THEN 'Hires' WHEN 'TSR' THEN 'TotalSeparations' WHEN 'QUR' THEN 'Quits' WHEN 'LDR' THEN 'LayoffsDischarges' ELSE RIGHT(series_id, 3) END"
       - name: value
         type: double
         nullable: true
         comment: Metric value in thousands
-      - *percent_change_month
-      - *percent_change_year
+        source: value
+      - name: percent_change_month
+        type: double
+        nullable: true
+        comment: Month-over-month percentage change
+        # Not available in raw BLS data, set to NULL
+        expression: "NULL"
+      - name: percent_change_year
+        type: double
+        nullable: true
+        comment: Year-over-year percentage change
+        # Not available in raw BLS data, set to NULL
+        expression: "NULL"
 
     # Dimension definitions for iteration
     dimensions:
@@ -1569,22 +1597,26 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      # Filter to only keep rows for the dimension year and regional data
+      # Regional data has region codes (00=US, NE, MW, SO, WE), not state FIPS codes
+      rowFilter:
+        condition: "CAST(year AS VARCHAR) = '{year}' AND (SUBSTRING(series_id, 4, 2) = '00' OR SUBSTRING(series_id, 4, 2) IN ('NE', 'MW', 'SO', 'WE'))"
+        maxRows: 10000  # Safety limit per year/metric combination (5 regions x ~12 months)
 
     # Materialization configuration
-    # Note: No responseTransformer needed - uses built-in TSV parsing
     materialize:
       enabled: true
       format: iceberg
       output:
         pattern: "frequency=*/year=*/"
       partition:
-        columns: [type, frequency, year]
+        columns: [type, frequency, year, metric]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, metric]
+        incrementalKeys: [year, metric]
         runMaintenance: true
         snapshotRetentionDays: 7
 
@@ -1615,32 +1647,47 @@ partitionedTables:
     comment: >
       Job Openings and Labor Turnover Survey (JOLTS) data for all 51 U.S. jurisdictions (50 states + DC). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate at state level. Provides state-specific insights into labor market dynamics, worker mobility, and employment trends for state-level policy analysis.
     columns:
-      - *state_fips
-      - *state_name
+      # BLS TSV columns: series_id, year, period, value, footnote_codes
+      # Series ID format for state data: JTS{state}{industry}{dataelement} (e.g., JTS01000000JOR)
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: State FIPS code
+        # Extract state FIPS from series_id positions 4-5 (after JTS prefix)
+        expression: "SUBSTRING(series_id, 4, 2)"
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (derived from FIPS)
+        # NULL for now - can be joined with geo.states table
+        expression: "NULL"
       - name: year
         type: int
         nullable: true
         comment: Year
-      - name: hires_rate
+        source: year
+      - name: date
+        type: string
+        nullable: true
+        comment: Observation date (ISO 8601 format)
+        # Construct date from year + period (e.g., 2020 + M01 -> 2020-01-01)
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: BLS series identifier
+        source: series_id
+      - name: metric_type
+        type: string
+        nullable: true
+        comment: JOLTS metric (hires, separations, openings, quits, layoffs)
+        # Extract data element code from series_id (last 3 chars like JOR, HIR, etc.)
+        expression: "CASE RIGHT(series_id, 3) WHEN 'JOR' THEN 'JobOpenings' WHEN 'HIR' THEN 'Hires' WHEN 'TSR' THEN 'TotalSeparations' WHEN 'QUR' THEN 'Quits' WHEN 'LDR' THEN 'LayoffsDischarges' ELSE RIGHT(series_id, 3) END"
+      - name: value
         type: double
         nullable: true
-        comment: Hires rate
-      - name: jobopenings_rate
-        type: double
-        nullable: true
-        comment: Job openings rate
-      - name: quits_rate
-        type: double
-        nullable: true
-        comment: Quits rate
-      - name: layoffsdischarges_rate
-        type: double
-        nullable: true
-        comment: Layoffs and discharges rate
-      - name: totalseparations_rate
-        type: double
-        nullable: true
-        comment: Total separations rate
+        comment: Metric value (rate)
+        source: value
 
     # Dimension definitions for iteration
     dimensions:
@@ -1669,22 +1716,26 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      # Filter to only keep rows for the dimension year and state-level data
+      # State data has 2-digit FIPS codes (01-56), not region codes (00, NE, etc.)
+      rowFilter:
+        condition: "CAST(year AS VARCHAR) = '{year}' AND SUBSTRING(series_id, 4, 2) ~ '^[0-9]{2}$' AND SUBSTRING(series_id, 4, 2) != '00'"
+        maxRows: 100000  # Safety limit per year/metric combination (51 states x ~12 months)
 
     # Materialization configuration
-    # Note: No responseTransformer needed - uses built-in TSV parsing
     materialize:
       enabled: true
       format: iceberg
       output:
         pattern: "frequency=*/year=*/"
       partition:
-        columns: [type, frequency, year]
+        columns: [type, frequency, year, metric]
       options:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, metric]
+        incrementalKeys: [year, metric]
         runMaintenance: true
         snapshotRetentionDays: 7
 
