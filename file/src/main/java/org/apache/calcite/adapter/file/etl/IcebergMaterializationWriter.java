@@ -884,4 +884,81 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         totalRowsWritten, totalFilesWritten);
     initialized = false;
   }
+
+  /**
+   * Queries existing partition combinations from an Iceberg table.
+   *
+   * <p>This enables "self-healing" of the incremental tracker when the cache DB
+   * is deleted but Iceberg data exists. By reading existing partitions from the
+   * table metadata, we can rebuild the cache without re-downloading data.
+   *
+   * @param catalogConfig Catalog configuration
+   * @param tableId Table identifier
+   * @param partitionColumns List of partition column names
+   * @return Set of existing partition value combinations, or empty set if table doesn't exist
+   */
+  public static java.util.Set<Map<String, String>> getExistingPartitions(
+      Map<String, Object> catalogConfig, String tableId, List<String> partitionColumns) {
+
+    java.util.Set<Map<String, String>> partitions = new java.util.LinkedHashSet<Map<String, String>>();
+
+    if (!IcebergCatalogManager.tableExists(catalogConfig, tableId)) {
+      LOGGER.debug("Table {} does not exist, no existing partitions", tableId);
+      return partitions;
+    }
+
+    try {
+      Table table = IcebergCatalogManager.loadTable(catalogConfig, tableId);
+      org.apache.iceberg.Snapshot currentSnapshot = table.currentSnapshot();
+
+      if (currentSnapshot == null) {
+        LOGGER.debug("Table {} has no snapshots, no existing partitions", tableId);
+        return partitions;
+      }
+
+      // Get partition spec
+      org.apache.iceberg.PartitionSpec spec = table.spec();
+      if (spec.isUnpartitioned()) {
+        LOGGER.debug("Table {} is unpartitioned", tableId);
+        return partitions;
+      }
+
+      // Build field index map for partition columns
+      Map<Integer, String> fieldIdToName = new java.util.HashMap<Integer, String>();
+      for (org.apache.iceberg.PartitionField field : spec.fields()) {
+        fieldIdToName.put(field.fieldId(), field.name());
+      }
+
+      // Scan manifest files to extract partition values
+      for (org.apache.iceberg.ManifestFile manifest : currentSnapshot.allManifests(table.io())) {
+        try (org.apache.iceberg.ManifestReader<org.apache.iceberg.DataFile> reader =
+            org.apache.iceberg.ManifestFiles.read(manifest, table.io())) {
+          for (org.apache.iceberg.DataFile dataFile : reader) {
+            org.apache.iceberg.StructLike partition = dataFile.partition();
+
+            Map<String, String> partitionValues = new java.util.LinkedHashMap<String, String>();
+            for (int i = 0; i < spec.fields().size(); i++) {
+              org.apache.iceberg.PartitionField field = spec.fields().get(i);
+              Object value = partition.get(i, Object.class);
+              if (value != null) {
+                partitionValues.put(field.name(), value.toString());
+              }
+            }
+
+            if (!partitionValues.isEmpty()) {
+              partitions.add(partitionValues);
+            }
+          }
+        }
+      }
+
+      LOGGER.info("Found {} existing partition combinations in Iceberg table {}",
+          partitions.size(), tableId);
+      return partitions;
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read existing partitions from {}: {}", tableId, e.getMessage());
+      return partitions;
+    }
+  }
 }

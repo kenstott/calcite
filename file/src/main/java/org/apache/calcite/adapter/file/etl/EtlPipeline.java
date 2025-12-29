@@ -203,6 +203,15 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
       }
 
+      // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed
+      // This handles the case where cache DB was deleted but Iceberg table has data
+      MaterializeConfig materializeConfig = config.getMaterialize();
+      if (materializeConfig != null
+          && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
+          && materializeConfig.isEnabled()) {
+        rebuildCacheFromIceberg(pipelineName, config, combinations);
+      }
+
       // Phase 2: Bulk filter to find unprocessed combinations
       LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
       long filterStartMs = System.currentTimeMillis();
@@ -250,7 +259,7 @@ public class EtlPipeline {
       DataSource dataSource = createDataSource(config);
 
       // Phase 4: Create and initialize materialization writer
-      MaterializeConfig materializeConfig = config.getMaterialize();
+      // Reuse materializeConfig from Phase 1.5 - already fetched above
       MaterializeConfig.Format format = materializeConfig != null
           ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
       LOGGER.info("Phase 4: Creating MaterializationWriter (format={})", format);
@@ -547,6 +556,193 @@ public class EtlPipeline {
   public static EtlPipeline create(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory) {
     return new EtlPipeline(config, storageProvider, baseDirectory);
+  }
+
+  /**
+   * Rebuilds the incremental tracker cache from existing Iceberg table metadata.
+   *
+   * <p>This enables "self-healing" when the cache database is deleted but Iceberg
+   * data still exists. Instead of re-downloading all data, we query the Iceberg
+   * table's partition metadata and mark those partitions as processed.
+   *
+   * <p>The method only acts when:
+   * <ol>
+   *   <li>Cache is empty (all combinations show as unprocessed)</li>
+   *   <li>Iceberg table exists with partition data</li>
+   *   <li>Existing partitions are a subset of expected combinations (not stale)</li>
+   * </ol>
+   *
+   * @param pipelineName Pipeline name for cache key
+   * @param config Pipeline configuration
+   * @param combinations Expected dimension combinations
+   */
+  private void rebuildCacheFromIceberg(String pipelineName, EtlPipelineConfig config,
+      List<Map<String, String>> combinations) {
+
+    // Quick check: if cache already has data, skip rebuild
+    Set<Integer> unprocessed = incrementalTracker.filterUnprocessed(
+        pipelineName, pipelineName, combinations);
+    if (unprocessed.size() < combinations.size()) {
+      LOGGER.debug("Cache has {} processed entries, skipping Iceberg rebuild",
+          combinations.size() - unprocessed.size());
+      return;
+    }
+
+    // Cache is empty - check if Iceberg table has data we can use
+    MaterializeConfig materializeConfig = config.getMaterialize();
+    if (materializeConfig == null || !materializeConfig.isEnabled()) {
+      return;
+    }
+
+    // Get target table ID
+    String targetTableId = materializeConfig.getTargetTableId();
+    if (targetTableId == null || targetTableId.isEmpty()) {
+      targetTableId = materializeConfig.getName();
+    }
+    if (targetTableId == null || targetTableId.isEmpty()) {
+      targetTableId = config.getName();
+    }
+
+    // Get partition columns
+    MaterializePartitionConfig partitionConfig = materializeConfig.getPartition();
+    List<String> partitionColumns = partitionConfig != null
+        ? partitionConfig.getColumns()
+        : Collections.<String>emptyList();
+
+    if (partitionColumns.isEmpty()) {
+      LOGGER.debug("No partition columns configured, skipping Iceberg rebuild");
+      return;
+    }
+
+    // Build catalog config for querying Iceberg metadata
+    Map<String, Object> catalogConfig = buildIcebergCatalogConfig(materializeConfig);
+
+    // Query existing partitions from Iceberg table
+    java.util.Set<Map<String, String>> existingPartitions =
+        IcebergMaterializationWriter.getExistingPartitions(catalogConfig, targetTableId, partitionColumns);
+
+    if (existingPartitions.isEmpty()) {
+      LOGGER.debug("No existing partitions in Iceberg table '{}', no cache rebuild needed",
+          targetTableId);
+      return;
+    }
+
+    // Verify existing partitions are not stale - they should be a subset of expected combinations
+    // Convert combinations to a set for efficient lookup
+    java.util.Set<Map<String, String>> expectedSet =
+        new java.util.HashSet<Map<String, String>>(combinations);
+    java.util.Set<Map<String, String>> stalePartitions =
+        new java.util.HashSet<Map<String, String>>();
+
+    for (Map<String, String> existing : existingPartitions) {
+      // Extract only the partition columns we care about for comparison
+      Map<String, String> partitionOnly = new java.util.LinkedHashMap<String, String>();
+      for (String col : partitionColumns) {
+        String val = existing.get(col);
+        if (val != null) {
+          partitionOnly.put(col, val);
+        }
+      }
+      if (!expectedSet.contains(partitionOnly)) {
+        stalePartitions.add(partitionOnly);
+      }
+    }
+
+    if (!stalePartitions.isEmpty()) {
+      LOGGER.warn("Found {} stale partitions in Iceberg table '{}' not in current dimensions. "
+          + "Example: {}. Skipping cache rebuild - data will be re-downloaded.",
+          stalePartitions.size(), targetTableId,
+          stalePartitions.iterator().next());
+      return;
+    }
+
+    // Iceberg data is valid - rebuild cache from existing partitions
+    LOGGER.info("Self-healing: Rebuilding cache from {} existing Iceberg partitions for table '{}'",
+        existingPartitions.size(), targetTableId);
+
+    int rebuilt = 0;
+    for (Map<String, String> partition : existingPartitions) {
+      incrementalTracker.markProcessed(pipelineName, pipelineName, partition, null);
+      rebuilt++;
+    }
+
+    LOGGER.info("Self-healing complete: Rebuilt cache with {} partition entries from Iceberg metadata",
+        rebuilt);
+  }
+
+  /**
+   * Builds Iceberg catalog configuration from MaterializeConfig.
+   */
+  private Map<String, Object> buildIcebergCatalogConfig(MaterializeConfig materializeConfig) {
+    Map<String, Object> catalogConfig = new java.util.HashMap<String, Object>();
+
+    MaterializeConfig.IcebergConfig icebergConfig = materializeConfig.getIceberg();
+    if (icebergConfig != null) {
+      MaterializeConfig.IcebergConfig.CatalogType catalogType = icebergConfig.getCatalogType();
+      switch (catalogType) {
+        case REST:
+          catalogConfig.put("catalog", "rest");
+          if (icebergConfig.getRestUri() != null) {
+            catalogConfig.put("uri", icebergConfig.getRestUri());
+          }
+          break;
+        case HIVE:
+          catalogConfig.put("catalog", "hive");
+          break;
+        case HADOOP:
+        default:
+          catalogConfig.put("catalog", "hadoop");
+          break;
+      }
+
+      String warehousePath = icebergConfig.getWarehousePath();
+      if (warehousePath == null || warehousePath.isEmpty()) {
+        warehousePath = baseDirectory;
+      }
+      // Convert s3:// to s3a:// for Hadoop S3A FileSystem compatibility
+      if (warehousePath != null && warehousePath.startsWith("s3://")) {
+        warehousePath = "s3a://" + warehousePath.substring(5);
+      }
+      catalogConfig.put("warehousePath", warehousePath);
+    } else {
+      catalogConfig.put("catalog", "hadoop");
+      String warehousePath = baseDirectory;
+      if (warehousePath != null && warehousePath.startsWith("s3://")) {
+        warehousePath = "s3a://" + warehousePath.substring(5);
+      }
+      catalogConfig.put("warehousePath", warehousePath);
+    }
+
+    // Add S3 credentials from storage provider
+    Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
+    if (s3Config != null && !s3Config.isEmpty()) {
+      Map<String, String> hadoopConfig = new java.util.HashMap<String, String>();
+      hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+      String accessKey = s3Config.get("accessKeyId");
+      String secretKey = s3Config.get("secretAccessKey");
+      if (accessKey != null) {
+        hadoopConfig.put("fs.s3a.access.key", accessKey);
+      }
+      if (secretKey != null) {
+        hadoopConfig.put("fs.s3a.secret.key", secretKey);
+      }
+
+      String endpoint = s3Config.get("endpoint");
+      if (endpoint != null) {
+        hadoopConfig.put("fs.s3a.endpoint", endpoint);
+        hadoopConfig.put("fs.s3a.path.style.access", "true");
+      }
+
+      String region = s3Config.get("region");
+      if (region != null) {
+        hadoopConfig.put("fs.s3a.endpoint.region", region);
+      }
+
+      catalogConfig.put("hadoopConfig", hadoopConfig);
+    }
+
+    return catalogConfig;
   }
 
   /**
