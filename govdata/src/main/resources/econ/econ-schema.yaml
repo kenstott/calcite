@@ -511,6 +511,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -625,6 +628,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -708,6 +714,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -818,6 +827,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -895,6 +907,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -1003,6 +1018,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1160,6 +1178,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response transformation
     hooks:
@@ -1271,6 +1292,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1362,6 +1386,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1465,6 +1492,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -1597,6 +1627,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
       # Filter to only keep rows for the dimension year and regional data
       # Regional data has region codes (00=US, NE, MW, SO, WE), not state FIPS codes
       rowFilter:
@@ -1716,6 +1749,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
       # Filter to only keep rows for the dimension year and state-level data
       # State data has 2-digit FIPS codes (01-56), not region codes (00, NE, etc.)
       rowFilter:
@@ -1813,6 +1849,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -1917,6 +1956,9 @@ partitionedTables:
         requestsPerSecond: 0.9
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BLS response handling
     hooks:
@@ -1999,6 +2041,9 @@ partitionedTables:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2081,6 +2126,9 @@ partitionedTables:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2170,6 +2218,9 @@ partitionedTables:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Materialization configuration
     materialize:
@@ -2288,6 +2339,9 @@ partitionedTables:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for FRED response handling
     hooks:
@@ -2474,6 +2528,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -2942,6 +2999,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -3043,6 +3103,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -3208,6 +3271,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
