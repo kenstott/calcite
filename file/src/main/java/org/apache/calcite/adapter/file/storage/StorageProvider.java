@@ -665,6 +665,35 @@ public interface StorageProvider {
   }
 
   /**
+   * Normalizes a path to ensure proper S3/S3A URI format.
+   *
+   * <p>Hadoop's Path.toString() can return malformed URIs like "s3a:/bucket"
+   * (single slash) instead of "s3a://bucket" (double slashes). This method
+   * fixes such malformed paths.
+   *
+   * @param path Path to normalize
+   * @return Normalized path with proper URI format
+   */
+  static String normalizePath(String path) {
+    if (path == null) {
+      return null;
+    }
+    // Fix s3a:/ (single slash) to s3a:// (double slashes)
+    if (path.startsWith("s3a:/") && !path.startsWith("s3a://")) {
+      return "s3a://" + path.substring(5);
+    }
+    // Fix s3:/ (single slash) to s3:// (double slashes)
+    if (path.startsWith("s3:/") && !path.startsWith("s3://")) {
+      return "s3://" + path.substring(4);
+    }
+    // Fix hdfs:/ (single slash) to hdfs:// (double slashes)
+    if (path.startsWith("hdfs:/") && !path.startsWith("hdfs://")) {
+      return "hdfs://" + path.substring(6);
+    }
+    return path;
+  }
+
+  /**
    * File entry representing a file in a directory listing.
    */
   class FileEntry {

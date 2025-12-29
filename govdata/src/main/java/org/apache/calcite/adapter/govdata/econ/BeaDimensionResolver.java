@@ -185,7 +185,8 @@ public class BeaDimensionResolver implements DimensionResolver {
     }
 
     // Get reference directory from config - DimensionConfig.getProperty() resolves ${VAR} patterns
-    String referenceDir = config.getProperty("referenceDirectory");
+    // Normalize path to fix malformed S3A URIs (s3a:/ -> s3a://)
+    String referenceDir = StorageProvider.normalizePath(config.getProperty("referenceDirectory"));
 
     if (referenceDir == null || referenceDir.isEmpty()) {
       throw new IllegalStateException(
@@ -217,8 +218,9 @@ public class BeaDimensionResolver implements DimensionResolver {
   private void populateCacheFromIceberg(DimensionConfig config, StorageProvider storageProvider,
       String referenceDir) throws Exception {
     // Build path to regional_linecodes Iceberg table
-    String linecodeTablePath = config.getProperty("linecodeTablePath",
-        referenceDir + "/regional_linecodes");
+    // Normalize path to fix malformed S3A URIs (s3a:/ -> s3a://)
+    String linecodeTablePath = StorageProvider.normalizePath(
+        config.getProperty("linecodeTablePath", referenceDir + "/regional_linecodes"));
 
     LOGGER.info("BeaDimensionResolver: Loading regional_linecodes from Iceberg table: {}",
         linecodeTablePath);
