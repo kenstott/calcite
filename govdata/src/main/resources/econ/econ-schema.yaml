@@ -2939,29 +2939,36 @@ partitionedTables:
     comment: >
       Quarterly and annual GDP growth rates, nominal and real GDP values.
     columns:
+      # Map BEA API field names to our column names
       - name: year
         type: int
         nullable: true
-        comment: Year of the GDP observation
+        expression: "CAST(SUBSTRING(TimePeriod, 1, 4) AS INTEGER)"
+        comment: Year of the GDP observation (extracted from TimePeriod)
       - name: quarter
         type: int
         nullable: true
+        expression: "CASE WHEN TimePeriod LIKE '%Q%' THEN CAST(SUBSTRING(TimePeriod, 6, 1) AS INTEGER) ELSE NULL END"
         comment: Quarter number (1-4) for quarterly data, null for annual data
       - name: metric
         type: string
+        source: LineDescription
         nullable: true
         comment: GDP metric name (e.g., 'Nominal GDP', 'Real GDP', 'Personal Consumption')
       - name: value
         type: double
         nullable: true
-        comment: GDP value in millions of dollars
+        expression: "CAST(REPLACE(DataValue, ',', '') AS DOUBLE)"
+        comment: GDP value in millions of dollars (BEA returns comma-formatted numbers)
       - name: percent_change
         type: double
         nullable: true
-        comment: Percent change from previous period
+        expression: "NULL"
+        comment: Percent change from previous period (not available in raw NIPA data)
       - name: seasonally_adjusted
         type: string
         nullable: true
+        expression: "CASE WHEN NoteRef IS NOT NULL AND NoteRef LIKE '%SA%' THEN 'Yes' ELSE 'No' END"
         comment: Whether the data is seasonally adjusted ('Yes' or 'No')
 
     # HTTP Source configuration for EtlPipeline
@@ -3049,32 +3056,40 @@ partitionedTables:
     comment: >
       GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.
     columns:
+      # Map BEA GDPbyIndustry API field names to our column names
       - name: table_id
         type: string
+        source: TableID
         nullable: true
         comment: BEA table identifier for industry GDP data
       - name: quarter
         type: string
         nullable: true
+        expression: "CASE WHEN Quarter IS NOT NULL THEN Quarter ELSE NULL END"
         comment: Quarter identifier (e.g., 'Q1', 'Q2') or empty for annual data
       - name: industry_code
         type: string
+        source: Industry
         nullable: true
         comment: NAICS industry code
       - name: industry_description
         type: string
+        source: IndusDesc
         nullable: true
         comment: Full description of the industry
       - name: value
         type: double
         nullable: true
+        expression: "CAST(REPLACE(DataValue, ',', '') AS DOUBLE)"
         comment: GDP value for the industry in millions of dollars
       - name: units
         type: string
+        source: CL_UNIT
         nullable: true
         comment: Units of measurement (e.g., 'Millions of Dollars')
       - name: note_ref
         type: string
+        source: NoteRef
         nullable: true
         comment: Reference to footnotes or data quality notes
 
