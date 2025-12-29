@@ -154,6 +154,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Dimension for partition variable
     dimensions:
@@ -216,6 +219,9 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Dimension for partition variable
     dimensions:
@@ -470,6 +476,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for BEA response handling
     hooks:
@@ -669,6 +678,9 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Dimensions for batch processing - one API call per table
     dimensions:
@@ -871,6 +883,9 @@ partitionedTables:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
+        ttlDays: 30
 
     # Custom hooks for FRED response handling
     hooks:
