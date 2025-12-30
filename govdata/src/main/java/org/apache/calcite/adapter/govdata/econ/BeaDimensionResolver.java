@@ -195,20 +195,13 @@ public class BeaDimensionResolver implements DimensionResolver {
           + "ECON_REFERENCE_CACHE_DIR/GOVDATA_CACHE_DIR environment variables.");
     }
 
-    // Try Iceberg table first, then fall back to parquet files
+    // Use parquet directly - DuckDB's iceberg_scan extension has bugs with NULL values
     try {
-      populateCacheFromIceberg(config, storageProvider, referenceDir);
-    } catch (Exception icebergEx) {
-      LOGGER.warn("BeaDimensionResolver: Iceberg scan failed: {}. Falling back to parquet files.",
-          icebergEx.getMessage());
-      try {
-        populateCacheFromParquet(storageProvider, referenceDir);
-      } catch (Exception parquetEx) {
-        throw new IllegalStateException(
-            "BeaDimensionResolver: Failed to load regional_linecodes. "
-            + "Iceberg error: " + icebergEx.getMessage() + ". "
-            + "Parquet error: " + parquetEx.getMessage(), parquetEx);
-      }
+      populateCacheFromParquet(storageProvider, referenceDir);
+    } catch (Exception e) {
+      throw new IllegalStateException(
+          "BeaDimensionResolver: Failed to load regional_linecodes from " + referenceDir
+          + ": " + e.getMessage(), e);
     }
   }
 
@@ -262,14 +255,17 @@ public class BeaDimensionResolver implements DimensionResolver {
       }
 
       // Include geography_level in query if available
+      // Filter out NULLs to avoid DuckDB Iceberg extension crash
       String sql;
       if (geoLevelCol != null) {
         sql = "SELECT DISTINCT \"" + tableNameCol + "\", \"" + lineCodeCol + "\", \"" + geoLevelCol + "\" "
             + "FROM iceberg_scan('" + linecodeTablePath + "') "
+            + "WHERE \"" + tableNameCol + "\" IS NOT NULL AND \"" + lineCodeCol + "\" IS NOT NULL "
             + "ORDER BY 1, 3, 2";
       } else {
         sql = "SELECT DISTINCT \"" + tableNameCol + "\", \"" + lineCodeCol + "\", NULL as geography_level "
             + "FROM iceberg_scan('" + linecodeTablePath + "') "
+            + "WHERE \"" + tableNameCol + "\" IS NOT NULL AND \"" + lineCodeCol + "\" IS NOT NULL "
             + "ORDER BY 1, 2";
       }
 
@@ -294,10 +290,13 @@ public class BeaDimensionResolver implements DimensionResolver {
   private void populateCacheFromParquet(StorageProvider storageProvider, String referenceDir)
       throws Exception {
     // Try multiple patterns for parquet file locations
+    // Iceberg stores data in {table}/data/{partition}/*.parquet
     String[] patterns = {
-        referenceDir + "/type=reference/tablename=*/*.parquet",
+        referenceDir + "/regional_linecodes/data/*.parquet",
+        referenceDir + "/regional_linecodes/data/*/*.parquet",
+        referenceDir + "/regional_linecodes/data/**/*.parquet",
         referenceDir + "/type=regional_linecodes/tablename=*/*.parquet",
-        referenceDir + "/regional_linecodes/data/**/*.parquet"
+        referenceDir + "/type=reference/tablename=*/*.parquet"
     };
 
     LOGGER.info("BeaDimensionResolver: Attempting parquet file fallback from: {}", referenceDir);
