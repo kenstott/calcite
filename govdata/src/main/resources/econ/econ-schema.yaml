@@ -2766,6 +2766,8 @@ partitionedTables:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
         maxRetries: 3
+      rawCache:
+        enabled: true
 
     # Custom hooks for BEA response handling and dimension resolution
     hooks:
