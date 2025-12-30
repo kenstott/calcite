@@ -2154,25 +2154,41 @@ partitionedTables:
         end: current
 
     columns:
+      # Partition columns (required for Hive-style partitioning)
+      - name: type
+        type: string
+        nullable: false
+        expression: "'world_bank'"  # Literal value for partition
+        comment: Data source type identifier
+      - name: frequency
+        type: string
+        nullable: false
+        expression: "'A'"  # Annual data
+        comment: Data frequency (A=Annual)
       - name: country_code
         type: string
         nullable: true
+        expression: "countryiso3code"  # Map from API field name
         comment: ISO 3-letter country code (e.g., 'USA', 'CHN')
       - name: country_name
         type: string
         nullable: true
+        expression: "country.value"  # Nested object access
         comment: Full country name
       - name: indicator_code
         type: string
         nullable: true
+        expression: "indicator.id"  # Nested object access
         comment: World Bank indicator code (e.g., 'NY.GDP.MKTP.CD' for GDP)
       - name: indicator_name
         type: string
         nullable: true
+        expression: "indicator.value"  # Nested object access
         comment: Full description of the World Bank indicator
       - name: year
         type: int
         nullable: true
+        expression: "CAST(date AS INTEGER)"  # Map 'date' field to 'year'
         comment: Year of observation
       - name: value
         type: double
@@ -2185,6 +2201,7 @@ partitionedTables:
       - name: scale
         type: string
         nullable: true
+        expression: "NULL"  # Not provided by World Bank API
         comment: Scale factor (e.g., 'Millions', 'Billions')
 
     # HTTP Source configuration for EtlPipeline
@@ -2198,6 +2215,7 @@ partitionedTables:
         per_page: "1000"
       response:
         format: json
+        dataPath: "[1]"  # World Bank API returns [metadata, data_array]
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
