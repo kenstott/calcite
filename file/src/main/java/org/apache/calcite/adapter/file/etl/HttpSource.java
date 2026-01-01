@@ -228,8 +228,9 @@ public class HttpSource implements DataSource {
         return parseDelimitedResponseStreaming(cachePath, delimiter);
       }
 
-      // For JSON, read from cache and parse
+      // For JSON, read from cache, transform, and parse
       String content = readFromCache(cachePath);
+      content = transformResponse(content, url, params, variables);
       allData.addAll(parseResponse(content));
     } else {
       // Paginated requests
