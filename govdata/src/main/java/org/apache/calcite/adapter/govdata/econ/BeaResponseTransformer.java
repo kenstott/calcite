@@ -124,7 +124,21 @@ public class BeaResponseTransformer implements ResponseTransformer {
           return paramValue.toString();
         }
 
-        LOGGER.debug("BEA: No Data array in response for {}", context.getUrl());
+        // Log what IS in the Results to help debug missing data issues
+        if (LOGGER.isDebugEnabled()) {
+          StringBuilder fields = new StringBuilder();
+          java.util.Iterator<String> fieldNames = results.fieldNames();
+          while (fieldNames.hasNext()) {
+            if (fields.length() > 0) {
+              fields.append(", ");
+            }
+            fields.append(fieldNames.next());
+          }
+          LOGGER.debug("BEA: No Data array in response for {} - Results contains: [{}]{}",
+              context.getUrl(), fields.toString(),
+              context.getDimensionValues().isEmpty() ? ""
+                  : " [dimensions: " + context.getDimensionValues() + "]");
+        }
         return "[]";
       }
 
