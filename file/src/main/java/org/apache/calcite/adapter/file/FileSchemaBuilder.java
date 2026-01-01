@@ -33,6 +33,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
@@ -105,7 +106,8 @@ public class FileSchemaBuilder {
    */
   public FileSchemaBuilder schemaConfig(Map<String, Object> config) {
     // Resolve all ${ENV_VAR} patterns at load time
-    this.config = resolveAllEnvVars(new HashMap<>(config));
+    // Use LinkedHashMap to preserve key order from input
+    this.config = resolveAllEnvVars(new LinkedHashMap<>(config));
     return this;
   }
 
@@ -114,7 +116,8 @@ public class FileSchemaBuilder {
    */
   @SuppressWarnings("unchecked")
   private Map<String, Object> resolveAllEnvVars(Map<String, Object> map) {
-    Map<String, Object> resolved = new HashMap<>();
+    // Use LinkedHashMap to preserve YAML key order - critical for dimension ordering
+    Map<String, Object> resolved = new LinkedHashMap<>();
     for (Map.Entry<String, Object> entry : map.entrySet()) {
       Object value = entry.getValue();
       if (value instanceof String) {

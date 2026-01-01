@@ -194,6 +194,15 @@ public class HttpSource implements DataSource {
     if (isRawCacheEnabled()) {
       rawCacheFilePath = buildRawCachePath(variables);
       if (hasValidRawCache(rawCacheFilePath)) {
+        // For CSV/TSV, stream directly from raw cache to avoid OOM on large files
+        HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
+        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
+            || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
+          char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
+          LOGGER.info("Streaming CSV from raw cache: {}", rawCacheFilePath);
+          return parseDelimitedResponseStreaming(rawCacheFilePath, delimiter);
+        }
+        // For JSON and other formats, read into memory (typically small)
         String cachedResponse = readRawCache(rawCacheFilePath);
         cachedResponse = transformResponse(cachedResponse, url, params, variables);
         List<Map<String, Object>> data = parseResponse(cachedResponse);

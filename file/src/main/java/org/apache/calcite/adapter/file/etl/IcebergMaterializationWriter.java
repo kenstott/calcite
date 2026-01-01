@@ -71,7 +71,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int DEFAULT_MAX_RETRIES = 3;
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
-  private static final int DEFAULT_BATCH_SIZE = 100000; // Process 100k rows at a time to avoid OOM
+  private static final int DEFAULT_BATCH_SIZE = 10000; // Process 10k rows at a time to avoid OOM
 
   private final StorageProvider storageProvider;
   private final String warehousePath;

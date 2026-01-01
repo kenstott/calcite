@@ -1501,6 +1501,13 @@ public class ConversionMetadata {
           tableName, record.conversionType, conversionType, record.sourceFile, tableLocation);
       record.conversionType = conversionType;
       record.sourceFile = tableLocation;
+      record.tableType = "ICEBERG_PARQUET".equals(conversionType) ? "IcebergTable" : "ParquetTable";
+      // Clear parquet-related fields when switching to Iceberg to avoid DuckDB using stale parquet paths
+      if ("ICEBERG_PARQUET".equals(conversionType)) {
+        record.viewScanPattern = null;
+        record.convertedFile = null;
+        record.parquetCacheFile = null;
+      }
       saveMetadata();
     } else {
       // Create a new record for newly materialized tables (e.g., first ETL run)

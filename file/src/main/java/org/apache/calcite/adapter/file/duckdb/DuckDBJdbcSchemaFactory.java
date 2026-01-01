@@ -1165,12 +1165,18 @@ public class DuckDBJdbcSchemaFactory {
                 // Note: Removed DESCRIBE debug call - it forces expensive S3 file listing
                 // for hive-partitioned tables with many files (e.g., regional_income with ~20K files)
               } catch (SQLException e) {
-              // Check if this is a "No files found" error for glob patterns
+              // Check if this is a "No files found" or 404 error for glob patterns
               // This is expected when table definitions exist but data hasn't been downloaded yet
+              // or when Iceberg tables are misconfigured with parquet patterns
               String errorMsg = e.getMessage();
-              if (errorMsg != null && errorMsg.contains("No files found that match the pattern")) {
-                LOGGER.warn("⚠️ Skipping view creation for '{}' - no files match pattern: {}", tableName, parquetPath);
-                LOGGER.debug("This is expected when table definitions exist but data hasn't been downloaded yet");
+              boolean isExpectedError = errorMsg != null && (
+                  errorMsg.contains("No files found that match the pattern") ||
+                  errorMsg.contains("404") ||
+                  errorMsg.contains("Not Found"));
+              if (isExpectedError) {
+                LOGGER.warn("⚠️ Skipping view creation for '{}' - file not found: {}", tableName, parquetPath);
+                LOGGER.debug("This is expected when table definitions exist but data hasn't been downloaded yet, " +
+                    "or when Iceberg tables have parquet patterns in their config");
               } else {
                 // Real error - log with full detail
                 LOGGER.error("═══════════════════════════════════════════════════════════════");
