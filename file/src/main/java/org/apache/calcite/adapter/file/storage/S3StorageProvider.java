@@ -266,7 +266,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
     List<FileEntry> entries = new ArrayList<>();
 
     ListObjectsV2Request request = new ListObjectsV2Request()
@@ -314,7 +316,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public FileMetadata getMetadata(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     com.amazonaws.services.s3.model.ObjectMetadata metadata =
         s3Client.getObjectMetadata(s3Uri.bucket, s3Uri.key);
@@ -329,6 +333,7 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public InputStream openInputStream(String path) throws IOException {
     // Check persistent cache first if available
+    // Use original path as cache key for consistency
     if (persistentCache != null) {
       byte[] cachedData = persistentCache.getCachedData(path);
       FileMetadata cachedMetadata = persistentCache.getCachedMetadata(path);
@@ -346,7 +351,9 @@ public class S3StorageProvider implements StorageProvider {
       }
     }
 
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
     GetObjectRequest request = new GetObjectRequest(s3Uri.bucket, s3Uri.key);
     S3Object object = s3Client.getObject(request);
 
@@ -356,6 +363,7 @@ public class S3StorageProvider implements StorageProvider {
       object.close();
 
       // Get file metadata for caching (use S3 object metadata)
+      // Use original path as cache key for consistency
       FileMetadata metadata =
           new FileMetadata(path, object.getObjectMetadata().getContentLength(),
           object.getObjectMetadata().getLastModified().getTime(),
@@ -375,7 +383,9 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public boolean exists(String path) throws IOException {
     try {
-      S3Uri s3Uri = parseS3Uri(path);
+      // Convert relative path to full S3 URI if needed
+      String fullPath = toFullPath(path);
+      S3Uri s3Uri = parseS3Uri(fullPath);
       boolean exists = s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
       LOGGER.debug("S3 exists check: {} -> {}", path, exists);
       return exists;
@@ -386,7 +396,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public boolean isDirectory(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     // In S3, directories are conceptual. Check if there are objects with this prefix
     ListObjectsV2Request request = new ListObjectsV2Request()
@@ -608,11 +620,14 @@ public class S3StorageProvider implements StorageProvider {
     // S3 doesn't have real directories, they're just prefixes
     // We can create a marker object if needed, but it's often not necessary
     // For compatibility, we'll create an empty object with a trailing slash
-    if (!path.endsWith("/")) {
-      path = path + "/";
+
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    if (!fullPath.endsWith("/")) {
+      fullPath = fullPath + "/";
     }
 
-    S3Uri s3Uri = parseS3Uri(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     // Create an empty marker object
     ObjectMetadata metadata = new ObjectMetadata();
@@ -630,7 +645,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public boolean delete(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     try {
       // Check if an object exists first
@@ -663,7 +680,9 @@ public class S3StorageProvider implements StorageProvider {
         new java.util.HashMap<>();
 
     for (String path : paths) {
-      S3Uri s3Uri = parseS3Uri(path);
+      // Convert relative path to full S3 URI if needed
+      String fullPath = toFullPath(path);
+      S3Uri s3Uri = parseS3Uri(fullPath);
       bucketKeys.computeIfAbsent(s3Uri.bucket, k -> new ArrayList<>())
           .add(new DeleteObjectsRequest.KeyVersion(s3Uri.key));
     }
@@ -793,8 +812,11 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public void copyFile(String source, String destination) throws IOException {
-    S3Uri sourceUri = parseS3Uri(source);
-    S3Uri destUri = parseS3Uri(destination);
+    // Convert relative paths to full S3 URIs if needed
+    String fullSource = toFullPath(source);
+    String fullDest = toFullPath(destination);
+    S3Uri sourceUri = parseS3Uri(fullSource);
+    S3Uri destUri = parseS3Uri(fullDest);
 
     try {
       // Check if source exists

@@ -80,6 +80,7 @@ public class EtlPipeline {
 
   private final EtlPipelineConfig config;
   private final StorageProvider storageProvider;
+  private final StorageProvider sourceStorageProvider;  // For raw cache (separate from parquet)
   private final String baseDirectory;
   private final ProgressListener progressListener;
   private final IncrementalTracker incrementalTracker;
@@ -131,7 +132,7 @@ public class EtlPipeline {
    *
    * @param config Pipeline configuration
    * @param storageProvider Storage provider for file operations
-   * @param baseDirectory Base directory for output
+   * @param baseDirectory Base directory for output (parquet/materialized data)
    * @param progressListener Listener for progress updates
    * @param incrementalTracker Tracker for incremental processing
    * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
@@ -140,8 +141,30 @@ public class EtlPipeline {
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory, ProgressListener progressListener,
       IncrementalTracker incrementalTracker, DataProvider dataProvider, DataWriter dataWriter) {
+    this(config, storageProvider, null, baseDirectory, progressListener, incrementalTracker,
+        dataProvider, dataWriter);
+  }
+
+  /**
+   * Creates a new ETL pipeline with separate source storage provider for raw cache.
+   *
+   * @param config Pipeline configuration
+   * @param storageProvider Storage provider for materialized output (parquet)
+   * @param sourceStorageProvider Storage provider for raw cache; if null, uses storageProvider
+   * @param baseDirectory Base directory for output (parquet/materialized data)
+   * @param progressListener Listener for progress updates
+   * @param incrementalTracker Tracker for incremental processing
+   * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
+   * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
+   */
+  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
+      StorageProvider sourceStorageProvider, String baseDirectory,
+      ProgressListener progressListener, IncrementalTracker incrementalTracker,
+      DataProvider dataProvider, DataWriter dataWriter) {
     this.config = config;
     this.storageProvider = storageProvider;
+    // Default to main storageProvider if sourceStorageProvider not specified
+    this.sourceStorageProvider = sourceStorageProvider != null ? sourceStorageProvider : storageProvider;
     this.baseDirectory = baseDirectory;
     this.progressListener = progressListener;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
@@ -516,19 +539,29 @@ public class EtlPipeline {
       return ConstantsSource.fromMap(config.getRawSourceConfig());
     }
 
+    if (EtlPipelineConfig.SOURCE_TYPE_FILE.equals(sourceType)) {
+      LOGGER.info("Creating FileSource for type: {}", sourceType);
+      FileSourceConfig fileConfig = FileSourceConfig.fromMap(config.getRawSourceConfig());
+      return new FileSource(fileConfig);
+    }
+
     // Default to HTTP source
-    // Pass StorageProvider and rawCachePath for persistent response caching
+    // Pass sourceStorageProvider and rawCachePath for persistent response caching
     HttpSourceConfig sourceConfig = config.getSource();
     String rawCachePath = null;
     HttpSourceConfig.RawCacheConfig rawCacheConfig = sourceConfig.getRawCache();
     if (rawCacheConfig.isEnabled()) {
-      // Build raw cache path: {baseDirectory}/.raw/{tableName}
-      rawCachePath = storageProvider.resolvePath(baseDirectory, ".raw/" + config.getName());
-      LOGGER.info("Creating HttpSource with raw cache: {}", rawCachePath);
+      // Build raw cache path: just use table name as relative path
+      // The sourceStorageProvider has its base path configured (e.g., s3://bucket/raw/)
+      // so files go to {baseS3Path}/{tableName}/{partitionKey}/response.json
+      rawCachePath = config.getName();
+      LOGGER.info("Creating HttpSource with raw cache: {} (via {})",
+          rawCachePath, sourceStorageProvider.getStorageType());
     } else {
       LOGGER.info("Creating HttpSource for type: {}", sourceType);
     }
-    return new HttpSource(sourceConfig, config.getHooks(), storageProvider, rawCachePath);
+    // Use sourceStorageProvider for raw cache (not the materialized storage provider)
+    return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath);
   }
 
   /**

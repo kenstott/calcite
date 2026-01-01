@@ -82,6 +82,7 @@ public class SchemaLifecycleProcessor {
 
   private final SchemaConfig config;
   private final StorageProvider storageProvider;
+  private final StorageProvider sourceStorageProvider;  // For raw/source data
   private final String sourceDirectory;
   private final String materializeDirectory;
   private final IncrementalTracker incrementalTracker;
@@ -91,6 +92,9 @@ public class SchemaLifecycleProcessor {
   private SchemaLifecycleProcessor(Builder builder) {
     this.config = builder.config;
     this.storageProvider = builder.storageProvider;
+    // Default to main storageProvider if sourceStorageProvider not set
+    this.sourceStorageProvider = builder.sourceStorageProvider != null
+        ? builder.sourceStorageProvider : builder.storageProvider;
     // Use builder override or fall back to config
     this.sourceDirectory = builder.sourceDirectory != null
         ? builder.sourceDirectory : config.getSourceDirectory();
@@ -123,6 +127,7 @@ public class SchemaLifecycleProcessor {
     SchemaContext schemaContext = SchemaContext.builder()
         .config(config)
         .storageProvider(storageProvider)
+        .sourceStorageProvider(sourceStorageProvider)
         .sourceDirectory(sourceDirectory)
         .materializeDirectory(materializeDirectory)
         .incrementalTracker(incrementalTracker)
@@ -314,9 +319,12 @@ public class SchemaLifecycleProcessor {
     }
 
     // Create and execute the ETL pipeline
+    // sourceStorageProvider handles raw cache (has its base path configured)
+    // storageProvider handles parquet output
     EtlPipeline pipeline = new EtlPipeline(
         effectiveConfig,
-        context.getStorageProvider(),
+        context.getStorageProvider(),                       // For parquet output
+        context.getSchemaContext().getSourceStorageProvider(),  // For raw cache
         schemaMaterializeDir,
         new EtlPipeline.LoggingProgressListener(),
         context.getIncrementalTracker(),
@@ -599,6 +607,7 @@ public class SchemaLifecycleProcessor {
   public static class Builder {
     private SchemaConfig config;
     private StorageProvider storageProvider;
+    private StorageProvider sourceStorageProvider;  // For raw/source data
     private String sourceDirectory;
     private String materializeDirectory;
     private IncrementalTracker incrementalTracker;
@@ -652,11 +661,20 @@ public class SchemaLifecycleProcessor {
     }
 
     /**
-     * Sets the storage provider directly (for advanced use cases).
-     * Usually not needed - the processor auto-creates from materializeDirectory.
+     * Sets the storage provider for materialized output (parquet).
      */
     public Builder storageProvider(StorageProvider storageProvider) {
       this.storageProvider = storageProvider;
+      return this;
+    }
+
+    /**
+     * Sets the storage provider for source/raw data (cache).
+     *
+     * <p>If not set, falls back to main storageProvider.
+     */
+    public Builder sourceStorageProvider(StorageProvider sourceStorageProvider) {
+      this.sourceStorageProvider = sourceStorageProvider;
       return this;
     }
 

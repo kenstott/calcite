@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.etl.SchemaConfig;
 import org.apache.calcite.adapter.file.etl.SchemaLifecycleProcessor;
 import org.apache.calcite.adapter.file.etl.SchemaResult;
 import org.apache.calcite.adapter.file.etl.TableContext;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.schema.Schema;
@@ -89,7 +90,9 @@ public class FileSchemaBuilder {
       // that use many anchors/aliases (e.g., *standard_partitions repeated in many tables)
       org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
       loaderOptions.setMaxAliasesForCollections(200);
-      this.config = new Yaml(loaderOptions).load(is);
+      Map<String, Object> rawConfig = new Yaml(loaderOptions).load(is);
+      // Resolve all ${ENV_VAR} patterns at load time
+      this.config = resolveAllEnvVars(rawConfig);
       LOGGER.debug("Loaded schema config from: {}", resourcePath);
     } catch (Exception e) {
       throw new RuntimeException("Failed to load schema: " + resourcePath, e);
@@ -101,8 +104,50 @@ public class FileSchemaBuilder {
    * Set schema configuration directly from a Map.
    */
   public FileSchemaBuilder schemaConfig(Map<String, Object> config) {
-    this.config = new HashMap<>(config);
+    // Resolve all ${ENV_VAR} patterns at load time
+    this.config = resolveAllEnvVars(new HashMap<>(config));
     return this;
+  }
+
+  /**
+   * Recursively resolve all ${ENV_VAR} patterns in a config map.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> resolveAllEnvVars(Map<String, Object> map) {
+    Map<String, Object> resolved = new HashMap<>();
+    for (Map.Entry<String, Object> entry : map.entrySet()) {
+      Object value = entry.getValue();
+      if (value instanceof String) {
+        resolved.put(entry.getKey(), VariableResolver.resolveEnvVars((String) value));
+      } else if (value instanceof Map) {
+        resolved.put(entry.getKey(), resolveAllEnvVars((Map<String, Object>) value));
+      } else if (value instanceof java.util.List) {
+        resolved.put(entry.getKey(), resolveListEnvVars((java.util.List<Object>) value));
+      } else {
+        resolved.put(entry.getKey(), value);
+      }
+    }
+    return resolved;
+  }
+
+  /**
+   * Recursively resolve all ${ENV_VAR} patterns in a list.
+   */
+  @SuppressWarnings("unchecked")
+  private java.util.List<Object> resolveListEnvVars(java.util.List<Object> list) {
+    java.util.List<Object> resolved = new java.util.ArrayList<>();
+    for (Object item : list) {
+      if (item instanceof String) {
+        resolved.add(VariableResolver.resolveEnvVars((String) item));
+      } else if (item instanceof Map) {
+        resolved.add(resolveAllEnvVars((Map<String, Object>) item));
+      } else if (item instanceof java.util.List) {
+        resolved.add(resolveListEnvVars((java.util.List<Object>) item));
+      } else {
+        resolved.add(item);
+      }
+    }
+    return resolved;
   }
 
   /**
@@ -148,6 +193,8 @@ public class FileSchemaBuilder {
    */
   public FileSchemaBuilder cacheStorageProvider(StorageProvider provider) {
     this.cacheStorageProvider = provider;
+    // Also set on ETL builder so raw cache uses this provider
+    etlBuilder.sourceStorageProvider(provider);
     return this;
   }
 
@@ -342,9 +389,12 @@ public class FileSchemaBuilder {
     Map<String, Object> operand = new HashMap<>(config);
     operand.putAll(operandOverrides);
 
-    // Map materializeDirectory -> directory for FileSchemaFactory
-    if (operand.containsKey("materializeDirectory") && !operand.containsKey("directory")) {
-      operand.put("directory", operand.get("materializeDirectory"));
+    // Schema's materializeDirectory takes precedence over parent's directory
+    // The YAML schema's materializeDirectory is more specific (e.g., bucket/source=econ)
+    // than the parent operand's directory (e.g., just bucket root)
+    // Note: ${ENV_VAR} patterns are already resolved at load time via resolveAllEnvVars()
+    if (config.containsKey("materializeDirectory")) {
+      operand.put("directory", config.get("materializeDirectory"));
     }
 
     // Add storage providers so they can be passed to any nested builders
@@ -380,9 +430,9 @@ public class FileSchemaBuilder {
     Map<String, Object> operand = new HashMap<>(config);
     operand.putAll(operandOverrides);
 
-    // Map materializeDirectory -> directory
-    if (operand.containsKey("materializeDirectory") && !operand.containsKey("directory")) {
-      operand.put("directory", operand.get("materializeDirectory"));
+    // Schema's materializeDirectory takes precedence over parent's directory
+    if (config.containsKey("materializeDirectory")) {
+      operand.put("directory", config.get("materializeDirectory"));
     }
 
     // Add excluded tables (from isEnabled hook) so schema can filter them out

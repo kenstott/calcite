@@ -73,6 +73,9 @@ public class EtlPipelineConfig {
   /** Source type identifier for HTTP/REST API sources. */
   public static final String SOURCE_TYPE_HTTP = "http";
 
+  /** Source type identifier for file-based sources (xlsx, csv, json, parquet). */
+  public static final String SOURCE_TYPE_FILE = "file";
+
   /** Source type identifier for YAML constants sources. */
   public static final String SOURCE_TYPE_CONSTANTS = "constants";
 

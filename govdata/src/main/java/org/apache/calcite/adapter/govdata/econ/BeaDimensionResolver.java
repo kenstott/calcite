@@ -173,8 +173,7 @@ public class BeaDimensionResolver implements DimensionResolver {
   }
 
   /**
-   * Populates the line code cache by reading regional_linecodes data.
-   * First tries Iceberg table, then falls back to parquet files if Iceberg fails.
+   * Populates the line code cache by reading regional_linecodes Iceberg table.
    *
    * @param config DimensionConfig containing properties (referenceDirectory must be set)
    * @param storageProvider Storage provider for file access (passed from EtlPipeline)
@@ -195,18 +194,20 @@ public class BeaDimensionResolver implements DimensionResolver {
           + "ECON_REFERENCE_CACHE_DIR/GOVDATA_CACHE_DIR environment variables.");
     }
 
-    // Use parquet directly - DuckDB's iceberg_scan extension has bugs with NULL values
+    // Use Iceberg table with dynamic column discovery
     try {
-      populateCacheFromParquet(storageProvider, referenceDir);
+      populateCacheFromIceberg(config, storageProvider, referenceDir);
     } catch (Exception e) {
       throw new IllegalStateException(
-          "BeaDimensionResolver: Failed to load regional_linecodes from " + referenceDir
-          + ": " + e.getMessage(), e);
+          "BeaDimensionResolver: Failed to load regional_linecodes: " + e.getMessage(), e);
     }
   }
 
   /**
    * Populates cache from Iceberg table.
+   *
+   * <p>Reads parquet files directly with hive partitioning to get tablename
+   * from partition paths and LineCode/geography_level from data columns.
    */
   private void populateCacheFromIceberg(DimensionConfig config, StorageProvider storageProvider,
       String referenceDir) throws Exception {
@@ -215,59 +216,19 @@ public class BeaDimensionResolver implements DimensionResolver {
     String linecodeTablePath = StorageProvider.normalizePath(
         config.getProperty("linecodeTablePath", referenceDir + "/regional_linecodes"));
 
-    LOGGER.info("BeaDimensionResolver: Loading regional_linecodes from Iceberg table: {}",
-        linecodeTablePath);
+    LOGGER.info("BeaDimensionResolver: Loading regional_linecodes from: {}", linecodeTablePath);
 
     try (Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
-      // Load Iceberg extension for DuckDB and enable version guessing
-      stmt.execute("INSTALL iceberg; LOAD iceberg;");
-      stmt.execute("SET unsafe_enable_version_guessing = true;");
-
-      // Query Iceberg table using iceberg_scan
-      String descSql = "DESCRIBE SELECT * FROM iceberg_scan('" + linecodeTablePath + "')";
-      LOGGER.debug("BeaDimensionResolver: Discovering columns: {}", descSql);
-      ResultSet descRs = stmt.executeQuery(descSql);
-      String tableNameCol = null;
-      String lineCodeCol = null;
-      String geoLevelCol = null;
-      java.util.List<String> allColumns = new java.util.ArrayList<String>();
-      while (descRs.next()) {
-        String colName = descRs.getString("column_name");
-        allColumns.add(colName);
-        if (colName.equalsIgnoreCase("tablename")) {
-          tableNameCol = colName;
-        } else if (colName.equalsIgnoreCase("linecode")) {
-          lineCodeCol = colName;
-        } else if (colName.equalsIgnoreCase("geography_level")) {
-          geoLevelCol = colName;
-        }
-      }
-      descRs.close();
-
-      LOGGER.info("BeaDimensionResolver: All columns in Iceberg table: {}", allColumns);
-
-      if (tableNameCol == null || lineCodeCol == null) {
-        throw new IllegalStateException(
-            "Required columns not found in regional_linecodes Iceberg table. "
-            + "Available columns: " + allColumns + ". Expected: TableName, LineCode.");
-      }
-
-      // Include geography_level in query if available
-      // Filter out NULLs to avoid DuckDB Iceberg extension crash
-      String sql;
-      if (geoLevelCol != null) {
-        sql = "SELECT DISTINCT \"" + tableNameCol + "\", \"" + lineCodeCol + "\", \"" + geoLevelCol + "\" "
-            + "FROM iceberg_scan('" + linecodeTablePath + "') "
-            + "WHERE \"" + tableNameCol + "\" IS NOT NULL AND \"" + lineCodeCol + "\" IS NOT NULL "
-            + "ORDER BY 1, 3, 2";
-      } else {
-        sql = "SELECT DISTINCT \"" + tableNameCol + "\", \"" + lineCodeCol + "\", NULL as geography_level "
-            + "FROM iceberg_scan('" + linecodeTablePath + "') "
-            + "WHERE \"" + tableNameCol + "\" IS NOT NULL AND \"" + lineCodeCol + "\" IS NOT NULL "
-            + "ORDER BY 1, 2";
-      }
+      // Read parquet files with hive partitioning. The 'tablename' column comes from
+      // the partition path (e.g., tablename=SAINC1/), and LineCode/geography_level
+      // are data columns in the parquet files.
+      String sql = "SELECT DISTINCT tablename, LineCode, geography_level "
+          + "FROM read_parquet('" + linecodeTablePath + "/data/**/*.parquet', "
+          + "hive_partitioning=true, union_by_name=true) "
+          + "WHERE tablename IS NOT NULL AND LineCode IS NOT NULL "
+          + "ORDER BY 1, 3, 2";
 
       LOGGER.debug("BeaDimensionResolver: Executing SQL: {}", sql);
       ResultSet rs = stmt.executeQuery(sql);
@@ -275,66 +236,18 @@ public class BeaDimensionResolver implements DimensionResolver {
 
       if (totalCount == 0) {
         throw new IllegalStateException(
-            "No line codes found in Iceberg table " + linecodeTablePath);
+            "No line codes found in " + linecodeTablePath);
       }
 
-      LOGGER.info("BeaDimensionResolver: Loaded {} line codes for {} (table,geo) combinations from Iceberg",
+      LOGGER.info("BeaDimensionResolver: Loaded {} line codes for {} (table,geo) combinations",
           totalCount, lineCodeCache.size());
       cachePopulated = true;
     }
   }
 
   /**
-   * Populates cache from parquet files (fallback when Iceberg fails).
-   */
-  private void populateCacheFromParquet(StorageProvider storageProvider, String referenceDir)
-      throws Exception {
-    // Try multiple patterns for parquet file locations
-    // Iceberg stores data in {table}/data/{partition}/*.parquet
-    String[] patterns = {
-        referenceDir + "/regional_linecodes/data/*.parquet",
-        referenceDir + "/regional_linecodes/data/*/*.parquet",
-        referenceDir + "/regional_linecodes/data/**/*.parquet",
-        referenceDir + "/type=regional_linecodes/tablename=*/*.parquet",
-        referenceDir + "/type=reference/tablename=*/*.parquet"
-    };
-
-    LOGGER.info("BeaDimensionResolver: Attempting parquet file fallback from: {}", referenceDir);
-
-    try (Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
-         Statement stmt = conn.createStatement()) {
-
-      for (String pattern : patterns) {
-        try {
-          // Include geography_level in the query
-          String sql = "SELECT DISTINCT TableName, LineCode, geography_level "
-              + "FROM read_parquet('" + pattern + "', hive_partitioning=false, union_by_name=true) "
-              + "WHERE TableName IS NOT NULL AND LineCode IS NOT NULL "
-              + "ORDER BY 1, 3, 2";
-
-          LOGGER.debug("BeaDimensionResolver: Trying parquet pattern: {}", pattern);
-          ResultSet rs = stmt.executeQuery(sql);
-          int totalCount = loadFromResultSet(rs);
-
-          if (totalCount > 0) {
-            LOGGER.info("BeaDimensionResolver: Loaded {} line codes for {} (table,geo) combinations from parquet: {}",
-                totalCount, lineCodeCache.size(), pattern);
-            cachePopulated = true;
-            return;
-          }
-        } catch (Exception e) {
-          LOGGER.debug("BeaDimensionResolver: Pattern '{}' failed: {}", pattern, e.getMessage());
-        }
-      }
-
-      throw new IllegalStateException(
-          "No regional_linecodes data found at any pattern in " + referenceDir);
-    }
-  }
-
-  /**
    * Loads line codes from a result set into the cache.
-   * ResultSet expected columns: TableName, LineCode, geography_level
+   * ResultSet expected columns: tablename, LineCode, geography_level
    */
   private int loadFromResultSet(ResultSet rs) throws Exception {
     int totalCount = 0;

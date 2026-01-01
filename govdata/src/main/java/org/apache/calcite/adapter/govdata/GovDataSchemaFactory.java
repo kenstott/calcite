@@ -133,6 +133,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Now add the main schema
     String operatingDirectory = establishOperatingDirectory(dataSource);
     IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name);
+
+    // Check for freshStart option - clears all completion tracking to force re-download
+    Boolean freshStart = (Boolean) operand.get("freshStart");
+    if (Boolean.TRUE.equals(freshStart)) {
+      LOGGER.info("freshStart=true: Clearing all completion tracking for '{}'", name);
+      tracker.clearAllCompletions();
+    }
+
     Map<String, Object> enrichedOperand = enrichOperand(operand, dataSource, name);
 
     processorBuilder
@@ -377,6 +385,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // SEC schema name
     String secSchemaName = getStringOrDefault(operand, "secSchemaName", "sec");
     System.setProperty("SEC_SCHEMA_NAME", secSchemaName);
+
+    // Set parquet directory for cross-schema references (e.g., BeaDimensionResolver)
+    // This allows dimension resolvers to find reference tables from other schemas
+    String directory = resolveDirectory(operand, "directory");
+    if (directory != null) {
+      System.setProperty("GOVDATA_PARQUET_DIR", directory);
+      LOGGER.debug("Set GOVDATA_PARQUET_DIR={}", directory);
+    }
 
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
   }

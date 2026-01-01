@@ -3969,7 +3969,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
             String patternPath = basePath + config.getPattern();
             partitionSource = Sources.of(patternPath);
-            LOGGER.info("Recording metadata for lazy-initialized table '{}' using pattern: {}", config.getName(), patternPath);
+            LOGGER.info("Recording metadata for lazy-initialized table '{}' using pattern: {}",
+                config.getName(), patternPath);
           } else if (!matchingFiles.isEmpty()) {
             // Normal table - use first file
             String firstFile = matchingFiles.get(0);

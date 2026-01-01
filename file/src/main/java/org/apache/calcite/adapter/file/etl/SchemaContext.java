@@ -37,6 +37,7 @@ public class SchemaContext {
 
   private final SchemaConfig config;
   private final StorageProvider storageProvider;
+  private final StorageProvider sourceStorageProvider;  // For raw/source data
   private final IncrementalTracker incrementalTracker;
   private final String sourceDirectory;
   private final String materializeDirectory;
@@ -45,6 +46,9 @@ public class SchemaContext {
   private SchemaContext(Builder builder) {
     this.config = builder.config;
     this.storageProvider = builder.storageProvider;
+    // Default to main storageProvider if sourceStorageProvider not set
+    this.sourceStorageProvider = builder.sourceStorageProvider != null
+        ? builder.sourceStorageProvider : builder.storageProvider;
     this.incrementalTracker = builder.incrementalTracker != null
         ? builder.incrementalTracker : IncrementalTracker.NOOP;
     this.sourceDirectory = builder.sourceDirectory;
@@ -74,10 +78,20 @@ public class SchemaContext {
   }
 
   /**
-   * Returns the storage provider for file operations.
+   * Returns the storage provider for materialized data (parquet output).
    */
   public StorageProvider getStorageProvider() {
     return storageProvider;
+  }
+
+  /**
+   * Returns the storage provider for source/raw data (cache).
+   *
+   * <p>Use this for reading/writing raw data files, HTTP response cache, etc.
+   * Falls back to main storageProvider if not explicitly set.
+   */
+  public StorageProvider getSourceStorageProvider() {
+    return sourceStorageProvider;
   }
 
   /**
@@ -188,6 +202,7 @@ public class SchemaContext {
   public static class Builder {
     private SchemaConfig config;
     private StorageProvider storageProvider;
+    private StorageProvider sourceStorageProvider;
     private IncrementalTracker incrementalTracker;
     private String sourceDirectory;
     private String materializeDirectory;
@@ -199,6 +214,16 @@ public class SchemaContext {
 
     public Builder storageProvider(StorageProvider storageProvider) {
       this.storageProvider = storageProvider;
+      return this;
+    }
+
+    /**
+     * Sets the storage provider for source/raw data (cache).
+     *
+     * <p>If not set, falls back to main storageProvider.
+     */
+    public Builder sourceStorageProvider(StorageProvider sourceStorageProvider) {
+      this.sourceStorageProvider = sourceStorageProvider;
       return this;
     }
 

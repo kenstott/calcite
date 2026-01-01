@@ -531,11 +531,7 @@ partitionedTables:
         nullable: false
         comment: Full line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
         expression: "Desc"
-      - name: TableName
-        type: string
-        nullable: false
-        comment: BEA Regional table code (e.g., 'SQINC4', 'SAGDP2', 'CAINC1'). Comes from tablename partition variable.
-        expression: "'{tablename}'"
+      # Note: TableName is available via the 'tablename' partition column - no need to duplicate
       - name: table_prefix
         type: string
         nullable: true
@@ -756,8 +752,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [tablename]
+        incrementalKeys: [tablename]
         runMaintenance: true
         snapshotRetentionDays: 7
 
@@ -928,9 +924,8 @@ constraints:
     primaryKey:
       - type
       - tablename
-      - TableName
       - LineCode
-    comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and data columns (TableName, LineCode).
+    comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and LineCode data column.
 
   fred_series:
     primaryKey:

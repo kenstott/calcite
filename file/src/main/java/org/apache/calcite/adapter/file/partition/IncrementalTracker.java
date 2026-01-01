@@ -116,6 +116,20 @@ public interface IncrementalTracker {
    */
   void invalidateTableCompletion(String pipelineName);
 
+  /**
+   * Clears ALL completion tracking state, forcing a complete fresh start.
+   *
+   * <p>This method removes all entries from both:
+   * <ul>
+   *   <li>partition_status - individual batch/combination tracking</li>
+   *   <li>table_completion - table-level completion signatures</li>
+   * </ul>
+   *
+   * <p>Use this when you want to force re-download of all data,
+   * ignoring any previous completion state.
+   */
+  void clearAllCompletions();
+
   // ===== Dimension Signature Computation =====
 
   /**
@@ -199,6 +213,10 @@ public interface IncrementalTracker {
     }
 
     @Override public void invalidateTableCompletion(String pipelineName) {
+      // No-op
+    }
+
+    @Override public void clearAllCompletions() {
       // No-op
     }
   };

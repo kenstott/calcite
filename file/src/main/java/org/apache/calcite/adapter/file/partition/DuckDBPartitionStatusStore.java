@@ -578,6 +578,27 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     }
   }
 
+  @Override public void clearAllCompletions() {
+    LOGGER.info("Clearing ALL completion tracking state (freshStart)");
+    try {
+      // Clear partition_status table
+      try (Statement stmt = getConnection().createStatement()) {
+        int partitionDeleted = stmt.executeUpdate("DELETE FROM partition_status");
+        LOGGER.info("Cleared {} partition_status entries", partitionDeleted);
+      }
+
+      // Clear table_completion table
+      try (Statement stmt = getConnection().createStatement()) {
+        int completionDeleted = stmt.executeUpdate("DELETE FROM table_completion");
+        LOGGER.info("Cleared {} table_completion entries", completionDeleted);
+      }
+
+      LOGGER.info("Fresh start: all completion tracking state cleared");
+    } catch (SQLException e) {
+      LOGGER.error("Error clearing completion tracking state: {}", e.getMessage());
+    }
+  }
+
   /**
    * Ensures the table_completion table exists.
    */

@@ -29,9 +29,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -490,12 +487,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Create staging path
     String stagingPath = createStagingPath();
 
-    // Stage data to temp JSON file
-    File tempJsonFile = createTempJsonFile(rows);
+    // Stage data to JSON file (local temp or S3 depending on storage type)
+    String jsonPath = createStagingJsonFile(rows, stagingPath);
 
     try {
       // Use DuckDB to transform JSON to partitioned Parquet in staging
-      transformWithDuckDB(tempJsonFile.getAbsolutePath(), stagingPath.toString(), partitionVariables);
+      transformWithDuckDB(jsonPath, stagingPath, partitionVariables);
 
       // Stage files to data location and accumulate DataFile objects for bulk commit
       List<org.apache.iceberg.DataFile> stagedFiles = tableWriter.stageFiles(stagingPath);
@@ -508,29 +505,50 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           pendingStagedBatches.size(), stagedFiles.size(), partitionVariables);
 
     } finally {
-      // Cleanup temp JSON file (staging directory cleaned up after commit)
-      if (tempJsonFile.exists()) {
-        tempJsonFile.delete();
-      }
+      // Cleanup JSON file (staging directory cleaned up after commit)
+      cleanupJsonFile(jsonPath);
     }
   }
 
   /**
-   * Creates a temporary JSON file with batch data.
+   * Creates a JSON staging file with batch data.
+   * For S3 storage, writes directly to S3. For local storage, uses temp file.
+   *
+   * @param rows The data rows to write
+   * @param stagingPath The staging directory path
+   * @return The path to the JSON file (S3 URI or local path)
    */
-  private File createTempJsonFile(List<Map<String, Object>> rows) throws IOException {
+  private String createStagingJsonFile(List<Map<String, Object>> rows, String stagingPath)
+      throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-    File tempFile = File.createTempFile("iceberg_batch_" + timestamp + "_", ".json");
+    String jsonFileName = "batch_" + timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + ".json";
 
-    try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
-      for (Map<String, Object> row : rows) {
-        writer.write(MAPPER.writeValueAsString(row));
-        writer.newLine();
-      }
+    // Build JSON content
+    StringBuilder jsonContent = new StringBuilder();
+    for (Map<String, Object> row : rows) {
+      jsonContent.append(MAPPER.writeValueAsString(row));
+      jsonContent.append("\n");
     }
 
-    LOGGER.debug("Created temp JSON file: {} ({} rows)", tempFile.getAbsolutePath(), rows.size());
-    return tempFile;
+    // Write to storage (S3 or local)
+    String jsonPath = stagingPath + "/" + jsonFileName;
+    storageProvider.writeFile(jsonPath, jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    LOGGER.debug("Created staging JSON file: {} ({} rows)", jsonPath, rows.size());
+    return jsonPath;
+  }
+
+  /**
+   * Cleans up the staging JSON file.
+   */
+  private void cleanupJsonFile(String jsonPath) {
+    try {
+      if (storageProvider.delete(jsonPath)) {
+        LOGGER.debug("Cleaned up JSON file: {}", jsonPath);
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to cleanup JSON file {}: {}", jsonPath, e.getMessage());
+    }
   }
 
   /**

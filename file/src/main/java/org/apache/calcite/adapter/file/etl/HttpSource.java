@@ -217,29 +217,20 @@ public class HttpSource implements DataSource {
     HttpSourceConfig.PaginationConfig pagination = config.getResponse().getPagination();
 
     if (pagination.getType() == HttpSourceConfig.PaginationType.NONE) {
-      // Single request
-      String response = executeRequest(url, params, variables);
+      // Single request - response is cached in doRequest, returns cache path
+      String cachePath = executeRequest(url, params, variables, rawCacheFilePath);
 
-      // Write to raw cache BEFORE transformation (preserve original response)
-      if (rawCacheFilePath != null && isRawCacheEnabled()) {
-        writeRawCache(rawCacheFilePath, response);
-      }
-
-      response = transformResponse(response, url, params, variables);
-
-      // For CSV/TSV with large temp files, use lazy streaming iterator directly
-      // This avoids loading entire file into memory
+      // For CSV/TSV, stream directly from cache
       HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
-      if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
-          || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
-          && response.startsWith(TEMP_FILE_PREFIX)) {
+      if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
+          || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV) {
         char delimiter = respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV ? ',' : '\t';
-        LOGGER.info("Using lazy streaming iterator for large CSV/TSV file");
-        // Note: Caching disabled for streaming - data is too large to cache in memory
-        return parseDelimitedResponseStreaming(response, delimiter);
+        return parseDelimitedResponseStreaming(cachePath, delimiter);
       }
 
-      allData.addAll(parseResponse(response));
+      // For JSON, read from cache and parse
+      String content = readFromCache(cachePath);
+      allData.addAll(parseResponse(content));
     } else {
       // Paginated requests
       int offset = 0;
@@ -266,7 +257,7 @@ public class HttpSource implements DataSource {
             continue;
         }
 
-        String response = executeRequest(url, pageParams, variables);
+        String response = executeRequest(url, pageParams, variables, null);  // No raw cache for pages
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
@@ -506,9 +497,14 @@ public class HttpSource implements DataSource {
 
   /**
    * Executes an HTTP request with rate limiting and retries.
+   *
+   * @param baseUrl Base URL for the request
+   * @param params Query parameters
+   * @param variables Variable substitution map
+   * @param rawCachePath Optional path to write large files directly to cache (null to use temp files)
    */
   private String executeRequest(String baseUrl, Map<String, String> params,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, String rawCachePath) throws IOException {
 
     // Rate limiting
     enforceRateLimit();
@@ -522,7 +518,7 @@ public class HttpSource implements DataSource {
 
     while (retries <= rateLimit.getMaxRetries()) {
       try {
-        String response = doRequest(fullUrl, variables);
+        String response = doRequest(fullUrl, variables, rawCachePath);
         return response;
       } catch (IOException e) {
         lastException = e;
@@ -552,8 +548,13 @@ public class HttpSource implements DataSource {
 
   /**
    * Performs the actual HTTP request.
+   *
+   * @param urlString Full URL to request
+   * @param variables Variable substitution map
+   * @param rawCachePath Optional path to write large files directly to cache (null to use temp files)
    */
-  private String doRequest(String urlString, Map<String, String> variables) throws IOException {
+  private String doRequest(String urlString, Map<String, String> variables,
+      String rawCachePath) throws IOException {
     URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -614,9 +615,10 @@ public class HttpSource implements DataSource {
         // Check if we need to extract from ZIP
         String extractPattern = config.getExtractPattern();
         if (extractPattern != null && !extractPattern.isEmpty()) {
-          return extractFromZip(conn.getInputStream(), extractPattern);
+          return extractFromZip(conn.getInputStream(), extractPattern, rawCachePath);
         }
-        return readResponse(conn.getInputStream());
+        // Cache response to storage provider
+        return cacheResponse(conn.getInputStream(), rawCachePath);
       } else {
         String errorBody = readResponse(conn.getErrorStream());
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
@@ -627,33 +629,52 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Marker prefix for temp file paths in response strings.
-   * When a response starts with this prefix, the remainder is a temp file path.
-   */
-  private static final String TEMP_FILE_PREFIX = "TEMP_FILE:";
-
-  /**
-   * Threshold for using temp file vs memory (10MB).
-   * Files larger than this are extracted to temp files to avoid OOM.
-   */
-  private static final long TEMP_FILE_THRESHOLD = 10 * 1024 * 1024;
-
-  /**
-   * Extracts content from a ZIP archive matching the given pattern.
+   * Caches HTTP response to storage provider.
    *
-   * <p>For large files (>10MB), extracts to a temp file and returns a marker string
-   * (TEMP_FILE:/path/to/file) to avoid loading entire content into memory.
-   * Callers must check for this prefix and handle accordingly.
+   * @param input Response input stream
+   * @param cachePath Path to write to storage provider
+   * @return The cache path
+   * @throws IOException if caching fails
+   */
+  private String cacheResponse(InputStream input, String cachePath) throws IOException {
+    String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+    storageProvider.createDirectories(parentPath);
+    storageProvider.writeFile(cachePath, input);
+    LOGGER.info("Cached response: {}", cachePath);
+    return cachePath;
+  }
+
+  /**
+   * Reads content from cache.
+   *
+   * @param cachePath Path in storage provider
+   * @return Content as string
+   * @throws IOException if reading fails
+   */
+  private String readFromCache(String cachePath) throws IOException {
+    try (InputStream is = storageProvider.openInputStream(cachePath);
+         java.io.Reader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+      StringBuilder sb = new StringBuilder();
+      char[] buffer = new char[8192];
+      int len;
+      while ((len = reader.read(buffer)) != -1) {
+        sb.append(buffer, 0, len);
+      }
+      return sb.toString();
+    }
+  }
+
+  /**
+   * Extracts content from a ZIP archive and caches it to storage provider.
    *
    * @param input ZIP file input stream
    * @param pattern Glob pattern to match file names (e.g., "*.csv")
-   * @return Content of the first matching file, or TEMP_FILE:path for large files
+   * @param cachePath Path to write file to storage provider
+   * @return The cache path
    * @throws IOException if extraction fails or no matching file found
    */
-  private String extractFromZip(InputStream input, String pattern) throws IOException {
-    LOGGER.debug("Extracting from ZIP with pattern: {}", pattern);
-
-    // Convert glob pattern to regex
+  private String extractFromZip(InputStream input, String pattern, String cachePath)
+      throws IOException {
     String regex = pattern
         .replace(".", "\\.")
         .replace("*", ".*")
@@ -663,56 +684,43 @@ public class HttpSource implements DataSource {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String name = entry.getName();
-        LOGGER.debug("ZIP entry: {}", name);
-
-        // Check if name matches pattern
         if (name.matches(regex) || name.endsWith(pattern.replace("*", ""))) {
-          LOGGER.info("Extracting file from ZIP: {}", name);
+          LOGGER.info("Extracting from ZIP: {}", name);
 
-          // First pass: extract to temp file to get size and avoid OOM
+          // Extract to temp file (ZIP streaming requires it)
           File tempFile = File.createTempFile("http-source-", ".tmp");
           tempFile.deleteOnExit();
-
-          byte[] buffer = new byte[65536];  // 64KB buffer for better throughput
-          int len;
           long totalBytes = 0;
-          long lastLogTime = System.currentTimeMillis();
 
           try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            byte[] buffer = new byte[65536];
+            int len;
+            long lastLogTime = System.currentTimeMillis();
             while ((len = zis.read(buffer)) > 0) {
               fos.write(buffer, 0, len);
               totalBytes += len;
-              // Log progress every 5 seconds
               long now = System.currentTimeMillis();
               if (now - lastLogTime > 5000) {
-                LOGGER.info("Extracting... {} MB read", totalBytes / (1024 * 1024));
+                LOGGER.info("Extracting... {} MB", totalBytes / (1024 * 1024));
                 lastLogTime = now;
               }
             }
           }
 
-          LOGGER.info("Extracted {} MB from ZIP to temp file", totalBytes / (1024 * 1024));
-
-          // For large files, return temp file path marker (caller streams from file)
-          if (totalBytes > TEMP_FILE_THRESHOLD) {
-            LOGGER.info("Using temp file for large content ({}MB > {}MB threshold)",
-                totalBytes / (1024 * 1024), TEMP_FILE_THRESHOLD / (1024 * 1024));
-            return TEMP_FILE_PREFIX + tempFile.getAbsolutePath();
+          // Write to cache
+          try (InputStream fis = new FileInputStream(tempFile)) {
+            String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+            storageProvider.createDirectories(parentPath);
+            storageProvider.writeFile(cachePath, fis);
           }
-
-          // For small files, read into memory and delete temp file
-          try {
-            byte[] content = java.nio.file.Files.readAllBytes(tempFile.toPath());
-            return new String(content, StandardCharsets.UTF_8);
-          } finally {
-            tempFile.delete();
-          }
+          tempFile.delete();
+          LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
+          return cachePath;
         }
         zis.closeEntry();
       }
     }
-
-    throw new IOException("No file matching pattern '" + pattern + "' found in ZIP archive");
+    throw new IOException("No file matching pattern '" + pattern + "' found in ZIP");
   }
 
   /**
@@ -912,44 +920,24 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Parses a delimited response (CSV or TSV) returning a lazy iterator.
+   * Parses cached delimited response (CSV or TSV) returning a lazy iterator.
    *
-   * <p>For large files (TEMP_FILE: prefix), returns a lazy iterator that reads one row
-   * at a time, avoiding loading entire file into memory. For small in-memory responses,
-   * falls back to the list-based implementation.
-   *
-   * @param response Delimited content or TEMP_FILE: marker
+   * @param cachePath Path to cached file in storage provider
    * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return Iterator over rows, each row is a Map with column names as keys
-   * @throws IOException if response contains error content
+   * @throws IOException if reading from cache fails
    */
-  private Iterator<Map<String, Object>> parseDelimitedResponseStreaming(String response, char delimiter)
+  private Iterator<Map<String, Object>> parseDelimitedResponseStreaming(String cachePath, char delimiter)
       throws IOException {
-
-    if (response == null || response.isEmpty()) {
-      LOGGER.warn("Received empty response body - returning empty iterator");
-      return Collections.<Map<String, Object>>emptyList().iterator();
-    }
-
-    // For large temp files, use lazy streaming iterator
-    if (response.startsWith(TEMP_FILE_PREFIX)) {
-      String filePath = response.substring(TEMP_FILE_PREFIX.length());
-      File tempFile = new File(filePath);
-      LOGGER.info("Creating lazy streaming iterator for temp file: {} ({} MB)",
-          filePath, tempFile.length() / (1024 * 1024));
-      return new LazyCSVIterator(tempFile, delimiter, config.getRowFilter());
-    }
-
-    // For small in-memory responses, use existing list-based parsing
-    return parseDelimitedResponse(response, delimiter).iterator();
+    LOGGER.info("Streaming from cache: {}", cachePath);
+    return new LazyCSVIterator(storageProvider, cachePath, delimiter, config.getRowFilter());
   }
 
   /**
-   * Lazy iterator that reads CSV rows one at a time from a file.
+   * Lazy iterator that reads CSV rows one at a time from storage provider.
    * Parses rows on-demand to avoid loading entire file into memory.
    */
   private class LazyCSVIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
-    private final File tempFile;
     private final BufferedReader reader;
     private final char delimiter;
     private final String[] headers;
@@ -964,12 +952,11 @@ public class HttpSource implements DataSource {
     private int skippedRows;
     private long lastLogTime;
 
-    LazyCSVIterator(File tempFile, char delimiter, HttpSourceConfig.RowFilterConfig filter)
-        throws IOException {
-      this.tempFile = tempFile;
+    LazyCSVIterator(StorageProvider provider, String cachePath, char delimiter,
+        HttpSourceConfig.RowFilterConfig filter) throws IOException {
       this.delimiter = delimiter;
       this.reader = new BufferedReader(
-          new InputStreamReader(new FileInputStream(tempFile), StandardCharsets.UTF_8));
+          new InputStreamReader(provider.openInputStream(cachePath), StandardCharsets.UTF_8));
       this.exhausted = false;
       this.lineNumber = 0;
       this.matchedRows = 0;
@@ -987,7 +974,7 @@ public class HttpSource implements DataSource {
         return;
       }
       this.headers = parseDelimitedLine(headerLine, delimiter);
-      LOGGER.debug("Parsed {} columns from header", headers.length);
+      LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
 
       // Setup filter
       String filterColumn = filter != null ? filter.getColumn() : null;
@@ -1124,18 +1111,7 @@ public class HttpSource implements DataSource {
 
     @Override
     public void close() throws IOException {
-      try {
-        reader.close();
-      } finally {
-        if (tempFile != null && tempFile.exists()) {
-          boolean deleted = tempFile.delete();
-          if (deleted) {
-            LOGGER.debug("Deleted temp file: {}", tempFile.getAbsolutePath());
-          } else {
-            LOGGER.warn("Failed to delete temp file: {}", tempFile.getAbsolutePath());
-          }
-        }
-      }
+      reader.close();
     }
   }
 
@@ -1159,38 +1135,8 @@ public class HttpSource implements DataSource {
       return result;
     }
 
-    // Check if response is a temp file marker (for large files)
-    File tempFile = null;
-    java.io.Reader sourceReader;
-    if (response.startsWith(TEMP_FILE_PREFIX)) {
-      String filePath = response.substring(TEMP_FILE_PREFIX.length());
-      tempFile = new File(filePath);
-      LOGGER.info("Streaming from temp file: {} ({} MB)",
-          filePath, tempFile.length() / (1024 * 1024));
-      sourceReader = new InputStreamReader(new FileInputStream(tempFile), StandardCharsets.UTF_8);
-    } else {
-      // Check for error-like responses (HTTP 200 with error content)
-      // These indicate server returned error page instead of data
-      String trimmed = response.trim();
-
-      // Log response info for debugging
-      LOGGER.info("Parsing delimited response: {} bytes, first 100 chars: {}",
-          response.length(),
-          response.length() > 100 ? response.substring(0, 100).replace("\n", "\\n") : response.replace("\n", "\\n"));
-
-      if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE")) {
-        // HTML response - likely an error page
-        String preview = trimmed.length() > 200 ? trimmed.substring(0, 200) + "..." : trimmed;
-        throw new IOException("Received HTML instead of tabular data (possible error page): " + preview);
-      }
-      if (trimmed.toLowerCase().startsWith("access denied")
-          || trimmed.toLowerCase().startsWith("error")
-          || trimmed.toLowerCase().startsWith("forbidden")) {
-        throw new IOException("Received error response: " + trimmed);
-      }
-
-      sourceReader = new java.io.StringReader(response);
-    }
+    // Get reader - parse in-memory content (used for paginated responses)
+    java.io.Reader sourceReader = new java.io.StringReader(response);
 
     // Get filter config if present
     HttpSourceConfig.RowFilterConfig filter = config.getRowFilter();
@@ -1300,16 +1246,6 @@ public class HttpSource implements DataSource {
 
       LOGGER.info("CSV parse complete: {} lines read, {} matched, {} skipped",
           lineNumber, matchedRows, skippedRows);
-    } finally {
-      // Clean up temp file if used
-      if (tempFile != null && tempFile.exists()) {
-        boolean deleted = tempFile.delete();
-        if (deleted) {
-          LOGGER.debug("Deleted temp file: {}", tempFile.getAbsolutePath());
-        } else {
-          LOGGER.warn("Failed to delete temp file: {}", tempFile.getAbsolutePath());
-        }
-      }
     }
 
     return result;

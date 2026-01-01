@@ -1503,7 +1503,18 @@ public class ConversionMetadata {
       record.sourceFile = tableLocation;
       saveMetadata();
     } else {
-      LOGGER.warn("Cannot update materialization info for table '{}': record not found", tableName);
+      // Create a new record for newly materialized tables (e.g., first ETL run)
+      // This ensures DuckDB can use iceberg_scan for Iceberg tables
+      LOGGER.info("Creating new materialization record for table '{}': tableLocation='{}', conversionType='{}'",
+          tableName, tableLocation, conversionType);
+      ConversionRecord newRecord = new ConversionRecord();
+      newRecord.tableName = tableName;
+      newRecord.sourceFile = tableLocation;
+      newRecord.conversionType = conversionType;
+      newRecord.tableType = "ICEBERG_PARQUET".equals(conversionType) ? "IcebergTable" : "ParquetTable";
+      newRecord.timestamp = System.currentTimeMillis();
+      conversions.put(tableName, newRecord);
+      saveMetadata();
     }
   }
 
