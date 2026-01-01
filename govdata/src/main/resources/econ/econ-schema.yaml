@@ -3011,7 +3011,8 @@ partitionedTables:
     dimensions:
       type:
         - ita_data
-      frequency: *bea_frequencies  # Use anchor: A, Q
+      frequency:
+        - A   # Annual only - BEA ITA dataset does not provide quarterly data
       year: *year_range_from_2020  # Use anchor for year range
       indicator:
         - "BalGds"        # Balance on Goods
