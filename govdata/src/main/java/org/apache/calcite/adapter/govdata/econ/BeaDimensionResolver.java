@@ -231,12 +231,24 @@ public class BeaDimensionResolver implements DimensionResolver {
           + "ORDER BY 1, 3, 2";
 
       LOGGER.debug("BeaDimensionResolver: Executing SQL: {}", sql);
-      ResultSet rs = stmt.executeQuery(sql);
+      ResultSet rs;
+      try {
+        rs = stmt.executeQuery(sql);
+      } catch (Exception queryEx) {
+        // Likely "No files found" - reference data doesn't exist yet
+        throw new IllegalStateException(
+            "Cannot read regional_linecodes from: " + linecodeTablePath + "\n"
+            + "This table is required to resolve 'line_code' dimension values.\n"
+            + "Please run the econ_reference schema ETL first to create this reference data.\n"
+            + "Underlying error: " + queryEx.getMessage());
+      }
       int totalCount = loadFromResultSet(rs);
 
       if (totalCount == 0) {
         throw new IllegalStateException(
-            "No line codes found in " + linecodeTablePath);
+            "No line codes found in " + linecodeTablePath + "\n"
+            + "The regional_linecodes table exists but is empty.\n"
+            + "Please run the econ_reference schema ETL to populate this reference data.");
       }
 
       LOGGER.info("BeaDimensionResolver: Loaded {} line codes for {} (table,geo) combinations",
