@@ -22,9 +22,18 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.data.GenericRecord;
+import org.apache.iceberg.data.Record;
+import org.apache.iceberg.data.parquet.GenericParquetWriter;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.io.DataWriter;
+import org.apache.iceberg.io.OutputFile;
+import org.apache.iceberg.parquet.Parquet;
+import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -285,6 +294,8 @@ public class IcebergTableWriter {
    * Builds a DataFile for a Parquet file with partition information extracted from path.
    */
   private DataFile buildDataFile(String pathStr, long fileSize) {
+    // Normalize path - fix Hadoop's s3a:/ to s3a://
+    pathStr = normalizeS3Path(pathStr);
     PartitionSpec spec = table.spec();
 
     // Extract partition values from Hive-style path
@@ -385,6 +396,210 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Writes records to Iceberg using the native Parquet writer with proper field IDs.
+   *
+   * <p>This method creates Parquet files with Iceberg field IDs embedded in the schema,
+   * which is required for Iceberg readers (including DuckDB's iceberg_scan) to properly
+   * map columns. Using DuckDB's COPY TO PARQUET does not include these field IDs.
+   *
+   * @param records The records to write (as Map objects)
+   * @param partitionValues The partition values for these records
+   * @return DataFile object ready for commit
+   * @throws IOException if writing fails
+   */
+  public DataFile writeRecords(List<Map<String, Object>> records,
+      Map<String, String> partitionValues) throws IOException {
+    if (records == null || records.isEmpty()) {
+      return null;
+    }
+
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+
+    // Generate unique file path in data location
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPath(partitionValues);
+    String filePath = dataLocation + "/" + partitionPath + "/data_"
+        + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+
+    // Normalize to s3a:// for Iceberg/Hadoop compatibility
+    if (filePath.startsWith("s3://")) {
+      filePath = "s3a://" + filePath.substring(5);
+    }
+
+    LOGGER.debug("Writing {} records to {} with partition {}", records.size(), filePath, partitionValues);
+
+    // Create output file using table's FileIO
+    OutputFile outputFile = table.io().newOutputFile(filePath);
+
+    // Build partition key
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    setPartitionKeyValues(partitionKey, spec, schema, partitionValues);
+
+    // Convert Map records to GenericRecord
+    List<Record> icebergRecords = new ArrayList<Record>(records.size());
+    for (Map<String, Object> row : records) {
+      GenericRecord record = GenericRecord.create(schema);
+      for (Types.NestedField field : schema.columns()) {
+        String fieldName = field.name();
+        Object value = getFieldValue(row, fieldName, partitionValues);
+        if (value != null) {
+          record.setField(fieldName, coerceValue(value, field.type()));
+        }
+      }
+      icebergRecords.add(record);
+    }
+
+    // Write using Iceberg's Parquet writer which includes field IDs
+    DataWriter<Record> writer = null;
+    try {
+      writer = Parquet.writeData(outputFile)
+          .schema(schema)
+          .withSpec(spec)
+          .withPartition(partitionKey)
+          .createWriterFunc(GenericParquetWriter::buildWriter)
+          .overwrite()
+          .build();
+
+      for (Record record : icebergRecords) {
+        writer.write(record);
+      }
+    } finally {
+      if (writer != null) {
+        writer.close();
+      }
+    }
+
+    // Build and return DataFile
+    DataFile dataFile = writer.toDataFile();
+    LOGGER.debug("Created data file: {} ({} records, {} bytes)",
+        dataFile.path(), dataFile.recordCount(), dataFile.fileSizeInBytes());
+
+    return dataFile;
+  }
+
+  /**
+   * Builds a Hive-style partition path from partition values.
+   */
+  private String buildPartitionPath(Map<String, String> partitionValues) {
+    if (partitionValues == null || partitionValues.isEmpty()) {
+      return "";
+    }
+    StringBuilder path = new StringBuilder();
+    PartitionSpec spec = table.spec();
+    for (org.apache.iceberg.PartitionField field : spec.fields()) {
+      String value = partitionValues.get(field.name());
+      if (value != null) {
+        if (path.length() > 0) {
+          path.append("/");
+        }
+        path.append(field.name()).append("=").append(value);
+      }
+    }
+    return path.toString();
+  }
+
+  /**
+   * Sets partition key values from the partition variables map.
+   */
+  private void setPartitionKeyValues(PartitionKey partitionKey, PartitionSpec spec,
+      Schema schema, Map<String, String> partitionValues) {
+    if (partitionValues == null) {
+      return;
+    }
+    for (int i = 0; i < spec.fields().size(); i++) {
+      org.apache.iceberg.PartitionField field = spec.fields().get(i);
+      String stringValue = partitionValues.get(field.name());
+      if (stringValue != null) {
+        Object value = coercePartitionValue(stringValue, field);
+        partitionKey.set(i, value);
+      }
+    }
+  }
+
+  /**
+   * Gets field value from row map, falling back to partition values for partition columns.
+   */
+  private Object getFieldValue(Map<String, Object> row, String fieldName,
+      Map<String, String> partitionValues) {
+    // First check the row data (case-insensitive lookup)
+    for (Map.Entry<String, Object> entry : row.entrySet()) {
+      if (entry.getKey().equalsIgnoreCase(fieldName)) {
+        return entry.getValue();
+      }
+    }
+    // Fall back to partition values for partition columns
+    if (partitionValues != null) {
+      for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
+        if (entry.getKey().equalsIgnoreCase(fieldName)) {
+          return entry.getValue();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Coerces a value to the appropriate Iceberg type.
+   */
+  private Object coerceValue(Object value, org.apache.iceberg.types.Type type) {
+    if (value == null) {
+      return null;
+    }
+
+    switch (type.typeId()) {
+      case INTEGER:
+        if (value instanceof Number) {
+          return ((Number) value).intValue();
+        }
+        return Integer.parseInt(value.toString());
+      case LONG:
+        if (value instanceof Number) {
+          return ((Number) value).longValue();
+        }
+        return Long.parseLong(value.toString());
+      case FLOAT:
+        if (value instanceof Number) {
+          return ((Number) value).floatValue();
+        }
+        return Float.parseFloat(value.toString());
+      case DOUBLE:
+        if (value instanceof Number) {
+          return ((Number) value).doubleValue();
+        }
+        return Double.parseDouble(value.toString());
+      case BOOLEAN:
+        if (value instanceof Boolean) {
+          return value;
+        }
+        return Boolean.parseBoolean(value.toString());
+      case STRING:
+        return value.toString();
+      case DATE:
+        if (value instanceof java.time.LocalDate) {
+          return (int) ((java.time.LocalDate) value).toEpochDay();
+        }
+        if (value instanceof java.sql.Date) {
+          return (int) ((java.sql.Date) value).toLocalDate().toEpochDay();
+        }
+        if (value instanceof String) {
+          return (int) java.time.LocalDate.parse((String) value).toEpochDay();
+        }
+        return value;
+      case TIMESTAMP:
+        if (value instanceof java.time.Instant) {
+          return ((java.time.Instant) value).toEpochMilli() * 1000;
+        }
+        if (value instanceof java.sql.Timestamp) {
+          return ((java.sql.Timestamp) value).getTime() * 1000;
+        }
+        return value;
+      default:
+        return value;
+    }
+  }
+
+  /**
    * Runs maintenance operations on the table.
    * Should be called at the end of ingestion.
    *
@@ -421,5 +636,24 @@ public class IcebergTableWriter {
    */
   public Table getTable() {
     return table;
+  }
+
+  /**
+   * Normalizes S3 paths to fix Hadoop's malformed URIs.
+   * Hadoop's Path.toString() can return "s3a:/bucket" instead of "s3a://bucket".
+   */
+  private String normalizeS3Path(String path) {
+    if (path == null) {
+      return null;
+    }
+    // Fix s3a:/ (single slash) to s3a:// (double slashes)
+    if (path.startsWith("s3a:/") && !path.startsWith("s3a://")) {
+      return "s3a://" + path.substring(5);
+    }
+    // Fix s3:/ (single slash) to s3:// (double slashes)
+    if (path.startsWith("s3:/") && !path.startsWith("s3://")) {
+      return "s3://" + path.substring(4);
+    }
+    return path;
   }
 }

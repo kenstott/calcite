@@ -73,6 +73,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
   private static final int DEFAULT_BATCH_SIZE = 10000; // Process 10k rows at a time to avoid OOM
 
+  /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
+  private static final String DUCKDB_MEMORY_LIMIT =
+      System.getenv("DUCKDB_MEMORY_LIMIT") != null
+          ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
+
   private final StorageProvider storageProvider;
   private final String warehousePath;
   private final IncrementalTracker incrementalTracker;
@@ -86,6 +91,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private boolean initialized;
   private int maxRetries;
   private long retryDelayMs;
+  private int batchSize;
+  private MaterializeOptionsConfig.StagingMode stagingMode;
+  private Connection sharedDuckDBConnection;
 
   /** Pending staged batches awaiting bulk commit. */
   private final List<StagedBatch> pendingStagedBatches = new ArrayList<StagedBatch>();
@@ -145,6 +153,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       this.maxRetries = icebergConfig.getMaxRetries();
       this.retryDelayMs = icebergConfig.getRetryDelayMs();
     }
+
+    // Apply options config (batch size, staging mode)
+    MaterializeOptionsConfig optionsConfig = config.getOptions();
+    if (optionsConfig != null) {
+      this.batchSize = optionsConfig.getBatchSize();
+      this.stagingMode = optionsConfig.getStagingMode();
+    } else {
+      this.batchSize = DEFAULT_BATCH_SIZE;
+      this.stagingMode = MaterializeOptionsConfig.StagingMode.REMOTE;
+    }
+    LOGGER.info("Using batchSize={}, stagingMode={}", batchSize, stagingMode);
 
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
@@ -283,23 +302,69 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       partitionColumnNames = partitionConfig.getColumns();
     }
 
-    // Add columns from config if available
+    // Add columns from config if available, and build maps for partition column lookup
+    // Use lowercase keys for case-insensitive matching (DuckDB/Iceberg are case-insensitive)
     List<ColumnConfig> columnConfigs = config.getColumns();
+    Map<String, String> columnTypeMap = new java.util.HashMap<String, String>();
+    java.util.Set<String> expectedColumnNamesLower = new java.util.HashSet<String>();
+    // Map lowercase column name -> actual column name (for partition spec)
+    Map<String, String> lowerToActualName = new java.util.HashMap<String, String>();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
       for (ColumnConfig colConfig : columnConfigs) {
+        String icebergType = mapToIcebergType(colConfig.getType());
         expectedColumns.add(
             new IcebergCatalogManager.ColumnDef(
             colConfig.getName(),
-            mapToIcebergType(colConfig.getType())));
+            icebergType));
         expectedColumnNames.add(colConfig.getName());
+        String lowerName = colConfig.getName().toLowerCase(java.util.Locale.ROOT);
+        expectedColumnNamesLower.add(lowerName);
+        columnTypeMap.put(lowerName, icebergType);
+        lowerToActualName.put(lowerName, colConfig.getName());
       }
     }
 
-    // Add partition columns to schema if not already present
+    // Build partition column type map from partition config's columnDefinitions
+    Map<String, String> partitionColumnTypeMap = new java.util.HashMap<String, String>();
+    if (partitionConfig != null && partitionConfig.getColumnDefinitions() != null) {
+      for (MaterializePartitionConfig.ColumnDefinition colDef
+          : partitionConfig.getColumnDefinitions()) {
+        String lowerName = colDef.getName().toLowerCase(java.util.Locale.ROOT);
+        partitionColumnTypeMap.put(lowerName, mapToIcebergType(colDef.getType()));
+      }
+    }
+
+    // Add partition columns to schema if not already present (case-insensitive check)
+    // Use the column type from partition columnDefinitions, then data columns, then STRING
+    // Skip adding partition columns that already exist in source data to avoid duplicates
+    // Also build the actual partition column names list for Iceberg partition spec
+    List<String> actualPartitionColumnNames = new ArrayList<String>();
     for (String partitionCol : partitionColumnNames) {
-      if (!expectedColumnNames.contains(partitionCol)) {
-        expectedColumns.add(new IcebergCatalogManager.ColumnDef(partitionCol, "STRING"));
+      String partitionColLower = partitionCol.toLowerCase(java.util.Locale.ROOT);
+      if (!expectedColumnNamesLower.contains(partitionColLower)) {
+        // Partition column doesn't exist in source - add it
+        // Priority: partitionColumnTypeMap > columnTypeMap > STRING
+        String partitionType;
+        if (partitionColumnTypeMap.containsKey(partitionColLower)) {
+          partitionType = partitionColumnTypeMap.get(partitionColLower);
+        } else if (columnTypeMap.containsKey(partitionColLower)) {
+          partitionType = columnTypeMap.get(partitionColLower);
+        } else {
+          partitionType = "STRING";
+        }
+        expectedColumns.add(new IcebergCatalogManager.ColumnDef(partitionCol, partitionType));
         expectedColumnNames.add(partitionCol);
+        expectedColumnNamesLower.add(partitionColLower);
+        lowerToActualName.put(partitionColLower, partitionCol);
+        actualPartitionColumnNames.add(partitionCol);
+        LOGGER.debug("Adding partition column '{}' with type '{}' to Iceberg schema",
+            partitionCol, partitionType);
+      } else {
+        // Partition column exists in source (case-insensitive) - use source column's actual name
+        String actualName = lowerToActualName.get(partitionColLower);
+        actualPartitionColumnNames.add(actualName);
+        LOGGER.debug("Partition column '{}' maps to source column '{}' (case-insensitive match)",
+            partitionCol, actualName);
       }
     }
 
@@ -334,10 +399,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Create new table
-    LOGGER.info("Creating new Iceberg table: {} with {} columns",
-        targetTableId, expectedColumns.size());
+    LOGGER.info("Creating new Iceberg table: {} with {} columns, partitioned by {}",
+        targetTableId, expectedColumns.size(), actualPartitionColumnNames);
     return IcebergCatalogManager.createTableFromColumns(
-        catalogConfig, targetTableId, expectedColumns, partitionColumnNames);
+        catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
   }
 
   /**
@@ -372,6 +437,40 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
   }
 
+  /**
+   * Maps YAML column types to DuckDB types.
+   * Used for generating CAST expressions in SQL queries.
+   */
+  private String mapToDuckDBType(String yamlType) {
+    if (yamlType == null) {
+      return "VARCHAR";
+    }
+    String upperType = yamlType.toUpperCase();
+    if (upperType.startsWith("VARCHAR") || upperType.startsWith("CHAR")
+        || upperType.equals("STRING")) {
+      return "VARCHAR";
+    }
+    switch (upperType) {
+      case "INTEGER":
+      case "INT":
+        return "INTEGER";
+      case "BIGINT":
+      case "LONG":
+        return "BIGINT";
+      case "DOUBLE":
+      case "FLOAT":
+        return "DOUBLE";
+      case "BOOLEAN":
+        return "BOOLEAN";
+      case "DATE":
+        return "DATE";
+      case "TIMESTAMP":
+        return "TIMESTAMP";
+      default:
+        return "VARCHAR";
+    }
+  }
+
   @Override public long writeBatch(Iterator<Map<String, Object>> data,
       Map<String, String> partitionVariables) throws IOException {
 
@@ -387,16 +486,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Process data in chunks to avoid OOM for large datasets
     long totalRows = 0;
     int chunkNumber = 0;
-    List<Map<String, Object>> chunk = new ArrayList<Map<String, Object>>(DEFAULT_BATCH_SIZE);
+    List<Map<String, Object>> chunk = new ArrayList<Map<String, Object>>(batchSize);
 
     while (data.hasNext()) {
       chunk.add(data.next());
 
       // When chunk is full, process it
-      if (chunk.size() >= DEFAULT_BATCH_SIZE) {
+      if (chunk.size() >= batchSize) {
         chunkNumber++;
         totalRows += processChunk(chunk, partitionVariables, chunkNumber);
-        chunk = new ArrayList<Map<String, Object>>(DEFAULT_BATCH_SIZE);
+        chunk = new ArrayList<Map<String, Object>>(batchSize);
       }
     }
 
@@ -474,54 +573,292 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   /**
-   * Processes a single batch: stage to JSON -> DuckDB transform -> queue for bulk commit.
+   * Processes a single batch using Iceberg's native Parquet writer.
    *
-   * <p>This method stages the data but does NOT commit to Iceberg immediately.
-   * The staged files are accumulated and committed in bulk during {@link #commit()}.
-   * This reduces the number of Iceberg metadata operations from O(batches) to O(1),
-   * significantly improving performance for R2/S3 storage.
+   * <p>This method writes data using Iceberg's GenericParquetWriter which embeds
+   * proper field IDs in the Parquet schema. This is required for Iceberg readers
+   * (including DuckDB's iceberg_scan) to correctly map columns.
+   *
+   * <p>The staged files are accumulated and committed in bulk during {@link #commit()}.
+   * This reduces the number of Iceberg metadata operations from O(batches) to O(1).
    */
   private void processBatch(List<Map<String, Object>> rows,
       Map<String, String> partitionVariables) throws IOException, SQLException {
 
-    // Create staging path
-    String stagingPath = createStagingPath();
+    // Transform rows: map source field names to target column names
+    List<Map<String, Object>> transformedRows = transformRows(rows, partitionVariables);
 
-    // Stage data to JSON file (local temp or S3 depending on storage type)
-    String jsonPath = createStagingJsonFile(rows, stagingPath);
+    // Use Iceberg's native Parquet writer with proper field IDs
+    org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(transformedRows, partitionVariables);
 
+    if (dataFile != null) {
+      pendingDataFiles.add(dataFile);
+      LOGGER.debug("Staged batch {} (1 file) for bulk commit: {}",
+          pendingStagedBatches.size() + 1, partitionVariables);
+    }
+  }
+
+  /**
+   * Transforms rows from source field names to target column names.
+   *
+   * <p>Applies column mappings defined in the config:
+   * <ul>
+   *   <li>Direct columns: maps source field name to target column name</li>
+   *   <li>Computed columns: evaluates simple expressions (partition variable substitution)</li>
+   *   <li>Partition columns: injects partition variable values</li>
+   * </ul>
+   */
+  private List<Map<String, Object>> transformRows(List<Map<String, Object>> rows,
+      Map<String, String> partitionVariables) {
+    List<ColumnConfig> columns = config.getColumns();
+    if (columns == null || columns.isEmpty()) {
+      return rows;  // No transformation needed
+    }
+
+    List<Map<String, Object>> transformed = new ArrayList<Map<String, Object>>(rows.size());
+    for (Map<String, Object> row : rows) {
+      Map<String, Object> newRow = new HashMap<String, Object>();
+
+      for (ColumnConfig col : columns) {
+        String targetName = col.getName();
+        Object value = null;
+
+        if (col.isComputed()) {
+          // For computed columns, check if it's a simple partition variable reference
+          String expr = col.getExpression();
+          if (partitionVariables != null && expr != null) {
+            // Handle simple {varname} substitution
+            for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
+              String placeholder = "{" + pv.getKey() + "}";
+              if (expr.equals(placeholder) || expr.equals("'" + placeholder + "'")) {
+                value = pv.getValue();
+                break;
+              }
+            }
+          }
+          // Complex computed expressions are not supported in the native writer
+          // They would need DuckDB for evaluation
+        } else {
+          // Direct column: look up by source name
+          String sourceName = col.getEffectiveSource();
+          value = getValueCaseInsensitive(row, sourceName);
+
+          // If not found in row, check partition variables
+          if (value == null && partitionVariables != null) {
+            value = getValueCaseInsensitive(partitionVariables, targetName);
+            if (value == null) {
+              value = getValueCaseInsensitive(partitionVariables, sourceName);
+            }
+          }
+        }
+
+        if (value != null) {
+          newRow.put(targetName, value);
+        }
+      }
+
+      // Also add partition variables directly if not already present
+      if (partitionVariables != null) {
+        for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
+          if (!newRow.containsKey(pv.getKey())) {
+            newRow.put(pv.getKey(), pv.getValue());
+          }
+        }
+      }
+
+      transformed.add(newRow);
+    }
+    return transformed;
+  }
+
+  /**
+   * Gets a value from a map using case-insensitive key lookup.
+   */
+  private Object getValueCaseInsensitive(Map<String, ?> map, String key) {
+    if (map == null || key == null) {
+      return null;
+    }
+    // First try exact match
+    Object value = map.get(key);
+    if (value != null) {
+      return value;
+    }
+    // Then try case-insensitive match
+    for (Map.Entry<String, ?> entry : map.entrySet()) {
+      if (entry.getKey().equalsIgnoreCase(key)) {
+        return entry.getValue();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Uploads locally staged Parquet files to remote storage and returns DataFile objects.
+   *
+   * <p>For LOCAL staging mode, DuckDB writes Parquet to local filesystem.
+   * This method uploads those files to the Iceberg data location on S3/remote.
+   */
+  private List<org.apache.iceberg.DataFile> uploadLocalStagingToRemote(String localStagingPath)
+      throws IOException {
+
+    String dataLocation = table.location() + "/data";
+    // Normalize data location to s3:// for DuckDB compatibility
+    if (dataLocation.startsWith("s3a://")) {
+      dataLocation = "s3://" + dataLocation.substring(6);
+    }
+    storageProvider.createDirectories(dataLocation);
+
+    List<org.apache.iceberg.DataFile> dataFiles = new ArrayList<org.apache.iceberg.DataFile>();
+    java.nio.file.Path localPath = java.nio.file.Paths.get(localStagingPath);
+
+    if (!java.nio.file.Files.exists(localPath)) {
+      LOGGER.warn("Local staging directory does not exist: {}", localStagingPath);
+      return dataFiles;
+    }
+
+    // Walk local directory and upload Parquet files
+    java.util.stream.Stream<java.nio.file.Path> fileStream = java.nio.file.Files.walk(localPath);
     try {
-      // Use DuckDB to transform JSON to partitioned Parquet in staging
-      transformWithDuckDB(jsonPath, stagingPath, partitionVariables);
+      java.util.Iterator<java.nio.file.Path> iterator = fileStream.iterator();
+      while (iterator.hasNext()) {
+        java.nio.file.Path file = iterator.next();
+        if (java.nio.file.Files.isRegularFile(file) && file.toString().endsWith(".parquet")) {
+          // Compute relative path from staging root
+          String relativePath = localPath.relativize(file).toString();
 
-      // Stage files to data location and accumulate DataFile objects for bulk commit
-      List<org.apache.iceberg.DataFile> stagedFiles = tableWriter.stageFiles(stagingPath);
-      pendingDataFiles.addAll(stagedFiles);
+          // Compute final remote path
+          String finalPath = storageProvider.resolvePath(dataLocation, relativePath);
 
-      // Track staging path for cleanup after commit
-      pendingStagedBatches.add(new StagedBatch(stagingPath, null));
+          // Create parent directories on remote
+          String parentPath = getRemoteParentPath(finalPath);
+          if (parentPath != null) {
+            storageProvider.createDirectories(parentPath);
+          }
 
-      LOGGER.debug("Staged batch {} ({} files) for bulk commit: {}",
-          pendingStagedBatches.size(), stagedFiles.size(), partitionVariables);
+          // Upload file
+          long fileSize = java.nio.file.Files.size(file);
+          try (java.io.InputStream in = java.nio.file.Files.newInputStream(file)) {
+            storageProvider.writeFile(finalPath, in);
+          }
+          LOGGER.debug("Uploaded local {} to remote {} ({} bytes)",
+              file, finalPath, fileSize);
 
+          // Build DataFile pointing to remote location
+          org.apache.iceberg.DataFile dataFile = buildDataFileFromPath(finalPath, fileSize);
+          dataFiles.add(dataFile);
+        }
+      }
     } finally {
-      // Cleanup JSON file (staging directory cleaned up after commit)
-      cleanupJsonFile(jsonPath);
+      fileStream.close();
+    }
+
+    LOGGER.info("Uploaded {} files from local staging to remote", dataFiles.size());
+    return dataFiles;
+  }
+
+  /**
+   * Gets the parent path for a remote path.
+   */
+  private String getRemoteParentPath(String path) {
+    int lastSlash = path.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return null;
+    }
+    // Handle s3:// prefix
+    if (path.startsWith("s3://") && lastSlash <= 5) {
+      return null;
+    }
+    if (path.startsWith("s3a://") && lastSlash <= 6) {
+      return null;
+    }
+    return path.substring(0, lastSlash);
+  }
+
+  /**
+   * Builds a DataFile from a remote path and file size.
+   * Extracts partition values from Hive-style path components.
+   */
+  private org.apache.iceberg.DataFile buildDataFileFromPath(String pathStr, long fileSize) {
+    org.apache.iceberg.PartitionSpec spec = table.spec();
+
+    // Extract partition values from Hive-style path
+    org.apache.iceberg.PartitionData partitionData =
+        new org.apache.iceberg.PartitionData(spec.partitionType());
+    int dataIdx = pathStr.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
+    String[] pathParts = relativePath.split("/");
+
+    for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
+      String part = pathParts[i];
+      if (part.contains("=")) {
+        String[] kv = part.split("=", 2);
+        String columnName = kv[0];
+        String value = kv[1];
+
+        // Find field index in partition spec
+        for (int fieldIdx = 0; fieldIdx < spec.fields().size(); fieldIdx++) {
+          if (spec.fields().get(fieldIdx).name().equals(columnName)) {
+            partitionData.set(fieldIdx, coercePartitionValue(value, spec.fields().get(fieldIdx)));
+            break;
+          }
+        }
+      }
+    }
+
+    // Build the DataFile
+    org.apache.iceberg.DataFiles.Builder builder = org.apache.iceberg.DataFiles.builder(spec)
+        .withPath(pathStr)
+        .withFileSizeInBytes(fileSize)
+        .withFormat(org.apache.iceberg.FileFormat.PARQUET)
+        .withRecordCount(Math.max(1, fileSize / 100)); // Rough estimate
+
+    if (spec.fields().size() > 0) {
+      builder.withPartition(partitionData);
+    }
+
+    return builder.build();
+  }
+
+  /**
+   * Coerces a string partition value to the appropriate type based on schema.
+   */
+  private Object coercePartitionValue(String value, org.apache.iceberg.PartitionField field) {
+    org.apache.iceberg.types.Type sourceType = table.schema().findType(field.sourceId());
+    if (sourceType == null) {
+      return value;
+    }
+
+    switch (sourceType.typeId()) {
+      case INTEGER:
+        return Integer.parseInt(value);
+      case LONG:
+        return Long.parseLong(value);
+      case FLOAT:
+        return Float.parseFloat(value);
+      case DOUBLE:
+        return Double.parseDouble(value);
+      case BOOLEAN:
+        return Boolean.parseBoolean(value);
+      default:
+        return value;
     }
   }
 
   /**
    * Creates a JSON staging file with batch data.
-   * For S3 storage, writes directly to S3. For local storage, uses temp file.
+   *
+   * <p>For LOCAL staging mode, writes directly to local filesystem (fast).
+   * For REMOTE staging mode, writes via storage provider (may be S3).
    *
    * @param rows The data rows to write
    * @param stagingPath The staging directory path
-   * @return The path to the JSON file (S3 URI or local path)
+   * @return The path to the JSON file (local path or S3 URI)
    */
   private String createStagingJsonFile(List<Map<String, Object>> rows, String stagingPath)
       throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     String jsonFileName = "batch_" + timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + ".json";
+    String jsonPath = stagingPath + "/" + jsonFileName;
 
     // Build JSON content
     StringBuilder jsonContent = new StringBuilder();
@@ -530,9 +867,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       jsonContent.append("\n");
     }
 
-    // Write to storage (S3 or local)
-    String jsonPath = stagingPath + "/" + jsonFileName;
-    storageProvider.writeFile(jsonPath, jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    // Write to local filesystem or remote storage depending on staging mode
+    if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
+      java.nio.file.Files.write(java.nio.file.Paths.get(jsonPath),
+          jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } else {
+      storageProvider.writeFile(jsonPath, jsonContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
 
     LOGGER.debug("Created staging JSON file: {} ({} rows)", jsonPath, rows.size());
     return jsonPath;
@@ -543,8 +884,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private void cleanupJsonFile(String jsonPath) {
     try {
-      if (storageProvider.delete(jsonPath)) {
-        LOGGER.debug("Cleaned up JSON file: {}", jsonPath);
+      if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
+        java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(jsonPath));
+        LOGGER.debug("Cleaned up local JSON file: {}", jsonPath);
+      } else {
+        if (storageProvider.delete(jsonPath)) {
+          LOGGER.debug("Cleaned up remote JSON file: {}", jsonPath);
+        }
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup JSON file {}: {}", jsonPath, e.getMessage());
@@ -553,20 +899,24 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Uses DuckDB to transform JSON to partitioned Parquet.
+   * Reuses a shared DuckDB connection across batches for efficiency.
    */
   private void transformWithDuckDB(String jsonPath, String stagingPath,
       Map<String, String> partitionVariables) throws SQLException {
-    try (Connection conn = getDuckDBConnection()) {
-      String sql = buildDuckDBSql(jsonPath, stagingPath, partitionVariables);
-      LOGGER.debug("Executing DuckDB SQL:\n{}", sql);
-
-      long startTime = System.currentTimeMillis();
-      try (Statement stmt = conn.createStatement()) {
-        stmt.execute(sql);
-      }
-      long elapsed = System.currentTimeMillis() - startTime;
-      LOGGER.debug("DuckDB transformation completed in {}ms", elapsed);
+    // Reuse connection for efficiency
+    if (sharedDuckDBConnection == null || sharedDuckDBConnection.isClosed()) {
+      sharedDuckDBConnection = createDuckDBConnection();
     }
+
+    String sql = buildDuckDBSql(jsonPath, stagingPath, partitionVariables);
+    LOGGER.debug("Executing DuckDB SQL:\n{}", sql);
+
+    long startTime = System.currentTimeMillis();
+    try (Statement stmt = sharedDuckDBConnection.createStatement()) {
+      stmt.execute(sql);
+    }
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.debug("DuckDB transformation completed in {}ms", elapsed);
   }
 
   /**
@@ -602,11 +952,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         partitionColumnNames.addAll(partitionConfig.getColumns());
       }
 
-      // Build set of source column names (non-computed, non-partition columns)
-      // Partition columns are injected from partitionVariables, not source data
+      // Build set of source column names (non-computed, non-partition, non-dimension columns)
+      // Columns that are in partitionVariables are dimension values injected from iteration,
+      // not from source data, so they shouldn't be in sourceColumns
       java.util.Set<String> sourceColumns = new java.util.HashSet<String>();
+      java.util.Set<String> dimensionKeys = partitionVariables != null
+          ? partitionVariables.keySet() : java.util.Collections.<String>emptySet();
       for (ColumnConfig col : columns) {
-        if (!col.isComputed() && !partitionColumnNames.contains(col.getName())) {
+        if (!col.isComputed()
+            && !partitionColumnNames.contains(col.getName())
+            && !dimensionKeys.contains(col.getName())) {
           sourceColumns.add(col.getEffectiveSource());
         }
       }
@@ -625,20 +980,36 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Add partition variables as literal columns for partition-only columns
     // (columns that are in partition config but NOT in the regular column list).
     // Columns that ARE in the column list are already handled by buildSelectExpression.
+    // Use case-insensitive matching since DuckDB/Iceberg treat columns as case-insensitive.
     if (partitionConfig != null && partitionVariables != null && !partitionVariables.isEmpty()) {
-      // Build set of column names to check for duplicates
-      java.util.Set<String> columnNames = new java.util.HashSet<String>();
+      // Build set of column names (lowercase) to check for duplicates
+      java.util.Set<String> columnNamesLower = new java.util.HashSet<String>();
       if (columns != null) {
         for (ColumnConfig col : columns) {
-          columnNames.add(col.getName());
+          columnNamesLower.add(col.getName().toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+
+      // Build map of partition column types from columnDefinitions
+      Map<String, String> partitionColTypes = new java.util.HashMap<String, String>();
+      if (partitionConfig.getColumnDefinitions() != null) {
+        for (MaterializePartitionConfig.ColumnDefinition colDef
+            : partitionConfig.getColumnDefinitions()) {
+          partitionColTypes.put(
+              colDef.getName().toLowerCase(java.util.Locale.ROOT), colDef.getType());
         }
       }
 
       for (String partitionCol : partitionConfig.getColumns()) {
-        // Only add if: has a value AND not already in column list
-        if (partitionVariables.containsKey(partitionCol) && !columnNames.contains(partitionCol)) {
-          sql.append(", '").append(escapeString(partitionVariables.get(partitionCol)))
-              .append("' AS ").append(partitionCol);
+        String partitionColLower = partitionCol.toLowerCase(java.util.Locale.ROOT);
+        // Only add if: has a value AND not already in column list (case-insensitive)
+        if (partitionVariables.containsKey(partitionCol)
+            && !columnNamesLower.contains(partitionColLower)) {
+          // Use the partition column type from config, defaulting to VARCHAR
+          String colType = partitionColTypes.get(partitionColLower);
+          String duckdbType = mapToDuckDBType(colType);
+          sql.append(", CAST('").append(escapeString(partitionVariables.get(partitionCol)))
+              .append("' AS ").append(duckdbType).append(") AS ").append(partitionCol);
         }
       }
     }
@@ -693,66 +1064,108 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Creates a staging path with timestamp and random suffix.
    *
-   * <p>Staging happens under warehousePath/.staging/ to ensure it uses the same
-   * storage type (local or S3) as the warehouse. For S3, a lifecycle rule is
-   * set up to auto-expire orphaned staging files after 1 day.
+   * <p>Staging location depends on stagingMode:
+   * <ul>
+   *   <li>REMOTE: Under warehousePath/.staging/ (same storage as warehouse)</li>
+   *   <li>LOCAL: Under system temp directory (faster for transforms)</li>
+   * </ul>
+   *
+   * <p>For remote S3 staging, a lifecycle rule auto-expires orphaned files after 1 day.
    */
   private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
     String stagingSubpath = ".staging/" + timestamp + "_" + random;
-    String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
 
-    // Set up lifecycle rule for auto-cleanup (S3 only, no-op for local)
-    storageProvider.ensureLifecycleRule(".staging/", 1);
+    String stagingPath;
+    if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
+      // Use local temp directory for faster staging
+      java.io.File tempDir = new java.io.File(System.getProperty("java.io.tmpdir"),
+          "iceberg-staging/" + stagingSubpath);
+      tempDir.mkdirs();
+      stagingPath = tempDir.getAbsolutePath();
+      LOGGER.debug("Created local staging path: {}", stagingPath);
+    } else {
+      // Use remote staging (same storage as warehouse)
+      stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
+      // Set up lifecycle rule for auto-cleanup (S3 only, no-op for local)
+      storageProvider.ensureLifecycleRule(".staging/", 1);
+      storageProvider.createDirectories(stagingPath);
+      LOGGER.debug("Created remote staging path: {}", stagingPath);
+    }
 
-    storageProvider.createDirectories(stagingPath);
-    LOGGER.debug("Created staging path: {}", stagingPath);
     return stagingPath;
   }
 
   /**
-   * Cleans up the staging directory using StorageProvider.
-   * Works for both local and S3 storage.
+   * Cleans up the staging directory.
    *
-   * <p>For S3: After stageFiles() moves files to the data location, the staging
-   * directory is empty. We skip cleanup entirely and rely on the lifecycle rule
-   * to expire orphaned staging files after 1 day. This saves N API calls per commit.
+   * <p>For LOCAL staging mode: Deletes local temp directory to free disk space.
    *
-   * <p>For local: We attempt cleanup to free disk space immediately.
+   * <p>For REMOTE staging mode with S3: Skip cleanup and rely on lifecycle rule
+   * to expire orphaned staging files after 1 day. This saves API calls.
    */
   private void cleanupStagingDirectory(String stagingPath) {
-    // For S3 paths, skip cleanup - lifecycle rule handles orphaned staging
-    if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
-      LOGGER.debug("Skipping S3 staging cleanup (lifecycle rule handles expiration): {}",
-          stagingPath);
-      return;
-    }
-
-    // For local storage, clean up immediately
-    try {
-      List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
-      if (!files.isEmpty()) {
-        List<String> paths = new ArrayList<String>();
-        for (StorageProvider.FileEntry entry : files) {
-          paths.add(entry.getPath());
-        }
-        storageProvider.deleteBatch(paths);
-      }
+    if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
+      // Clean up local staging directory
       try {
-        storageProvider.delete(stagingPath);
-      } catch (IOException ignored) {
-        // Directory may not exist, which is fine
+        java.nio.file.Path localPath = java.nio.file.Paths.get(stagingPath);
+        if (java.nio.file.Files.exists(localPath)) {
+          // Delete all files recursively
+          java.util.stream.Stream<java.nio.file.Path> walkStream = java.nio.file.Files.walk(localPath);
+          try {
+            java.util.List<java.nio.file.Path> pathsToDelete = new ArrayList<java.nio.file.Path>();
+            java.util.Iterator<java.nio.file.Path> it = walkStream.iterator();
+            while (it.hasNext()) {
+              pathsToDelete.add(it.next());
+            }
+            // Sort in reverse order to delete files before directories
+            java.util.Collections.sort(pathsToDelete, java.util.Collections.reverseOrder());
+            for (java.nio.file.Path p : pathsToDelete) {
+              java.nio.file.Files.deleteIfExists(p);
+            }
+          } finally {
+            walkStream.close();
+          }
+          LOGGER.debug("Cleaned up local staging directory: {}", stagingPath);
+        }
+      } catch (IOException e) {
+        LOGGER.warn("Failed to cleanup local staging directory {}: {}", stagingPath, e.getMessage());
       }
-    } catch (IOException e) {
-      LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());
+    } else {
+      // For remote S3 paths, skip cleanup - lifecycle rule handles orphaned staging
+      if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
+        LOGGER.debug("Skipping S3 staging cleanup (lifecycle rule handles expiration): {}",
+            stagingPath);
+        return;
+      }
+
+      // For local storage via remote mode, clean up immediately
+      try {
+        List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+        if (!files.isEmpty()) {
+          List<String> paths = new ArrayList<String>();
+          for (StorageProvider.FileEntry entry : files) {
+            paths.add(entry.getPath());
+          }
+          storageProvider.deleteBatch(paths);
+        }
+        try {
+          storageProvider.delete(stagingPath);
+        } catch (IOException ignored) {
+          // Directory may not exist, which is fine
+        }
+      } catch (IOException e) {
+        LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());
+      }
     }
   }
 
   /**
-   * Creates a DuckDB connection with required extensions.
+   * Creates a new DuckDB connection with required extensions.
+   * The connection is configured based on MaterializeOptionsConfig.
    */
-  private Connection getDuckDBConnection() throws SQLException {
+  private Connection createDuckDBConnection() throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 
     MaterializeOptionsConfig optionsConfig = config.getOptions();
@@ -761,6 +1174,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=" + threads);
       stmt.execute("SET preserve_insertion_order=false");
+      // Limit memory to avoid OOM on memory-constrained systems
+      stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      if (warehousePath != null) {
+        stmt.execute("SET temp_directory='" + warehousePath + "/.duckdb_tmp'");
+      }
 
       try {
         stmt.execute("INSTALL parquet");
@@ -887,6 +1305,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   @Override public void close() throws IOException {
+    // Close shared DuckDB connection
+    if (sharedDuckDBConnection != null) {
+      try {
+        sharedDuckDBConnection.close();
+        sharedDuckDBConnection = null;
+      } catch (SQLException e) {
+        LOGGER.warn("Failed to close DuckDB connection: {}", e.getMessage());
+      }
+    }
+
     // Cleanup any uncommitted staging directories to prevent disk space leaks
     if (!pendingStagedBatches.isEmpty() || !pendingDataFiles.isEmpty()) {
       LOGGER.warn("Closing writer with {} uncommitted batches ({} files) - cleaning up",

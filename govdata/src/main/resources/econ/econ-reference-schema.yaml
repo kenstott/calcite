@@ -172,6 +172,8 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [year]
@@ -236,6 +238,8 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [year]
@@ -302,6 +306,8 @@ partitionedTables:
         columns: [type, geo_type]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [year]
@@ -355,6 +361,8 @@ partitionedTables:
         columns: [type]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         runMaintenance: true
@@ -491,6 +499,8 @@ partitionedTables:
         columns: [type, section]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [year]
@@ -750,6 +760,8 @@ partitionedTables:
         columns: [type, tablename]
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [tablename]
@@ -759,26 +771,21 @@ partitionedTables:
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
-    pattern: "category=*/frequency=*/source=*/status=*/reference_fred_series.parquet"
+    pattern: "type=*/category=*/reference_fred_series.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - name: type
           type: VARCHAR
         - name: category
-          type: VARCHAR
-        - name: frequency
-          type: VARCHAR
-        - name: source
-          type: VARCHAR
-        - name: status
-          type: VARCHAR
+          type: INTEGER
     comment: >
       Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.
     columns:
       - name: series
         type: string
         nullable: true
+        source: id
         comment: Unique FRED series identifier (e.g., 'UNRATE', 'GDP')
       - name: title
         type: string
@@ -832,51 +839,44 @@ partitionedTables:
         type: string
         nullable: true
         comment: Detailed description, methodology, and source information
-      - name: category_id
-        type: int
-        nullable: true
-        comment: FRED category ID for hierarchical classification
-      - name: category_name
-        type: string
-        nullable: true
-        comment: Human-readable category name (e.g., 'National Accounts', 'Labor Markets')
-      - name: source_id
-        type: int
-        nullable: true
-        comment: Data source identifier
-      - name: source_name
-        type: string
-        nullable: true
-        comment: Name of originating agency/organization (e.g., 'U.S. Bureau of Labor Statistics')
-      - name: series_status
-        type: string
-        nullable: true
-        comment: "Series status: 'active' (currently updated) or 'discontinued' (no longer updated)"
-      - name: title_embedding
-        type: array<double>
-        nullable: true
-        expression: "CASE WHEN length(title) > 10 THEN embed(title)::FLOAT[384] ELSE NULL END"
-        comment: 384-dim vector embedding for semantic search on title (only for substantial text)
+      # Note: category_id is the partition column 'category' (from dimension)
+      # Note: Removed fields not in /fred/category/series response:
+      #   category_name, source_id, source_name, series_status, title_embedding
 
     # HTTP Source configuration for EtlPipeline
+    # Uses FRED /fred/category/series endpoint to get all series in a category
     source:
       type: http
-      url: "https://api.stlouisfed.org/fred/series/search"
+      url: "https://api.stlouisfed.org/fred/category/series"
       method: GET
       parameters:
         api_key: "{env:FRED_API_KEY}"
         file_type: "json"
-        search_text: "{category}"
+        category_id: "{category}"
         limit: "1000"
       response:
         format: json
-        dataPath: "seriess"
+        # Note: dataPath removed because FredResponseTransformer already extracts the data
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
+
+    # Dimension definitions for ETL iteration
+    # FRED category IDs from fred-catalog-config.json majorCategories
+    dimensions:
+      type:
+        - fred_series
+      category:
+        - 1        # National Accounts
+        - 10       # Population, Employment, & Labor Markets
+        - 32992    # Money, Banking, & Finance
+        - 32455    # International Data
+        - 3        # Production & Business Activity
+        - 32991    # Prices
+        - 32263    # Academic Data
 
     # Custom hooks for FRED response handling
     hooks:
@@ -887,15 +887,22 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "category=*/frequency=*/source=*/status=*/"
+        pattern: "category=*/"
       partition:
-        columns: [type, category, frequency, source, status]
+        columns: [type, category]
+        columnDefinitions:
+          - name: type
+            type: VARCHAR
+          - name: category
+            type: INTEGER
       options:
         compression: snappy
+        batchSize: 50000
+        stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [category]
+        incrementalKeys: [category]
         runMaintenance: true
         snapshotRetentionDays: 7
 
@@ -931,16 +938,12 @@ constraints:
     primaryKey:
       - type
       - category
-      - frequency
-      - source
-      - status
+      - series
     indexes:
       - - title
-      - - category_id
       - - units
-      - - frequency
+      - - frequency_short
       - - seasonal_adjustment
-      - - source_name
 
 # ============================================================================
 # TABLES (SQL VIEWS)
