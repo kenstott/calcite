@@ -165,6 +165,11 @@ public class ModelLifecycleProcessor {
    * Process a single schema definition.
    */
   private Schema processSchema(SchemaDefinition def, SchemaPlus parentSchema) {
+    // Set SCHEMA_NAME property BEFORE loading schema resource
+    // This ensures ${SCHEMA_NAME:default} patterns in YAML resolve to this schema's name
+    // Critical: Must be set before schemaResource() call which resolves env vars
+    System.setProperty("SCHEMA_NAME", def.name);
+
     // Create builder with shared resources
     FileSchemaBuilder builder = FileSchemaBuilder.create()
         .schemaResource(def.factory.getSchemaResourceName())
@@ -178,12 +183,17 @@ public class ModelLifecycleProcessor {
       builder.cacheStorageProvider(sourceStorage);
     }
 
-    // Set incremental tracker for resumability
-    builder.incrementalTracker(incrementalTracker);
+    // Use schema-specific tracker (captured when addSchema was called)
+    // This ensures each schema stores completion status in its own database
+    IncrementalTracker schemaTracker = def.incrementalTracker != null
+        ? def.incrementalTracker : this.incrementalTracker;
+    builder.incrementalTracker(schemaTracker);
 
-    // Set operating directory
-    if (operatingDirectory != null) {
-      builder.operand("operatingDirectory", operatingDirectory);
+    // Use schema-specific operating directory
+    String schemaOpDir = def.operatingDirectory != null
+        ? def.operatingDirectory : this.operatingDirectory;
+    if (schemaOpDir != null) {
+      builder.operand("operatingDirectory", schemaOpDir);
     }
 
     // Apply factory's hooks
@@ -283,6 +293,11 @@ public class ModelLifecycleProcessor {
      * <p>The hook overrides are applied after the factory's hooks,
      * allowing users to customize or extend the factory behavior.
      *
+     * <p>The current {@link #incrementalTracker} and {@link #operatingDirectory}
+     * are captured at this point and stored with the schema definition.
+     * This ensures each schema uses its own tracker for completion status,
+     * which is critical when processing dependency schemas.
+     *
      * @param name Schema name (e.g., "ECON")
      * @param factory Sub-schema factory providing hooks
      * @param operand Configuration operand from model file
@@ -290,9 +305,13 @@ public class ModelLifecycleProcessor {
      */
     public Builder addSchema(String name, SubSchemaFactory factory,
         Map<String, Object> operand, Consumer<FileSchemaBuilder> hookOverrides) {
+      // Capture current tracker and operatingDirectory for this schema
+      // This ensures each schema uses its own tracker, not a shared one
       schemas.add(new SchemaDefinition(name, factory,
           operand != null ? new HashMap<>(operand) : new HashMap<>(),
-          hookOverrides));
+          hookOverrides,
+          this.incrementalTracker,
+          this.operatingDirectory));
       return this;
     }
 
@@ -309,19 +328,29 @@ public class ModelLifecycleProcessor {
 
   /**
    * Internal holder for schema definition.
+   *
+   * <p>Each schema has its own incremental tracker and operating directory
+   * to ensure completion status is stored in the correct location.
+   * This is critical when processing dependency schemas (e.g., ECON_REFERENCE)
+   * before the main schema (e.g., ECON) - each needs its own tracker.
    */
   private static class SchemaDefinition {
     final String name;
     final SubSchemaFactory factory;
     final Map<String, Object> operand;
     final Consumer<FileSchemaBuilder> hookOverrides;
+    final IncrementalTracker incrementalTracker;
+    final String operatingDirectory;
 
     SchemaDefinition(String name, SubSchemaFactory factory,
-        Map<String, Object> operand, Consumer<FileSchemaBuilder> hookOverrides) {
+        Map<String, Object> operand, Consumer<FileSchemaBuilder> hookOverrides,
+        IncrementalTracker incrementalTracker, String operatingDirectory) {
       this.name = name;
       this.factory = factory;
       this.operand = operand;
       this.hookOverrides = hookOverrides;
+      this.incrementalTracker = incrementalTracker;
+      this.operatingDirectory = operatingDirectory;
     }
   }
 }
