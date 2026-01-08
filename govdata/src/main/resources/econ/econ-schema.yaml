@@ -2531,7 +2531,7 @@ partitionedTables:
         limit: "100000"
       response:
         format: json
-        dataPath: "observations"
+        # NOTE: dataPath removed - FredResponseTransformer already extracts observations array
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
