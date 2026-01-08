@@ -122,9 +122,9 @@ public class ModelLifecycleProcessor {
   /**
    * Run ETL and create schemas.
    *
-   * @return SchemaPlus ready for SQL queries
+   * @return ProcessResult containing rootSchema and created schemas
    */
-  public SchemaPlus process() {
+  public ProcessResult process() {
     LOGGER.info("Starting model lifecycle processing with {} schemas", schemas.size());
     long startTime = System.currentTimeMillis();
 
@@ -139,6 +139,7 @@ public class ModelLifecycleProcessor {
 
     // Create root schema
     SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+    Map<String, Schema> createdSchemas = new HashMap<>();
 
     // Process each schema definition
     for (int i = 0; i < schemas.size(); i++) {
@@ -148,6 +149,7 @@ public class ModelLifecycleProcessor {
       try {
         Schema schema = processSchema(def, rootSchema);
         rootSchema.add(def.name, schema);
+        createdSchemas.put(def.name, schema);
         LOGGER.info("Schema '{}' created successfully", def.name);
       } catch (Exception e) {
         LOGGER.error("Failed to create schema '{}': {}", def.name, e.getMessage(), e);
@@ -158,7 +160,38 @@ public class ModelLifecycleProcessor {
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Model lifecycle complete: {} schemas in {}ms", schemas.size(), elapsed);
 
-    return rootSchema;
+    return new ProcessResult(rootSchema, createdSchemas);
+  }
+
+  /**
+   * Result of processing containing root schema and all created schemas.
+   *
+   * <p>The createdSchemas map provides direct access to the underlying Schema
+   * objects without SchemaPlus wrappers. This is essential for returning schemas
+   * from SchemaFactory.create() because Calcite's snapshot mechanism fails
+   * with SchemaPlus wrappers (SchemaPlusImpl.snapshot() throws UnsupportedOperationException).
+   */
+  public static class ProcessResult {
+    private final SchemaPlus rootSchema;
+    private final Map<String, Schema> createdSchemas;
+
+    ProcessResult(SchemaPlus rootSchema, Map<String, Schema> createdSchemas) {
+      this.rootSchema = rootSchema;
+      this.createdSchemas = createdSchemas;
+    }
+
+    /** Returns the root schema containing all created schemas. */
+    public SchemaPlus getRootSchema() {
+      return rootSchema;
+    }
+
+    /**
+     * Returns the underlying Schema (not SchemaPlus wrapper) for the given name.
+     * This should be used when returning from SchemaFactory.create().
+     */
+    public Schema getSchema(String name) {
+      return createdSchemas.get(name);
+    }
   }
 
   /**

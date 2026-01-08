@@ -149,10 +149,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         .addSchema(name, factory, enrichedOperand);
 
     // Run ETL for all schemas
-    SchemaPlus rootSchema = processorBuilder.build().process();
+    ModelLifecycleProcessor.ProcessResult result = processorBuilder.build().process();
 
-    // Return the created schema
-    Schema schema = rootSchema.subSchemas().get(name);
+    // Return the created schema directly (not the SchemaPlus wrapper)
+    // This is essential because CachingCalciteSchema.snapshot() fails
+    // with SchemaPlus wrappers (SchemaPlusImpl.snapshot() throws UnsupportedOperationException)
+    Schema schema = result.getSchema(name);
     if (schema == null) {
       throw new IllegalStateException("Failed to create schema: " + name);
     }
