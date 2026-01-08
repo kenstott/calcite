@@ -428,6 +428,15 @@ public class SchemaLifecycleProcessor {
     String cachePath = bulkConfig.resolveCachePath(variables);
     String url = bulkConfig.resolveUrl(variables);
 
+    // Skip if URL or cache path still has unreplaced placeholders
+    // This happens when a required dimension (like year) resolves to empty
+    if (url.contains("{") || cachePath.contains("{")) {
+      LOGGER.warn("Skipping bulk download '{}' - unresolved placeholders in URL or cache path. "
+          + "URL: {}, cachePath: {}, variables: {}",
+          name, url, cachePath, variables);
+      return;
+    }
+
     // Full path in source directory (fall back to materialize directory if source not set)
     String baseDir = sourceDirectory != null ? sourceDirectory : materializeDirectory;
     String fullCachePath = baseDir != null
