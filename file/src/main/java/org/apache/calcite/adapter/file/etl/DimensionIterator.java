@@ -344,7 +344,10 @@ public class DimensionIterator {
   /**
    * Resolves a YEAR_RANGE type dimension.
    * Supports "current" as the end value, resolving to current year.
-   * Supports dataLag to exclude recent years (e.g., dataLag=1 ends at current-1).
+   * Supports dataLag to exclude recent years (e.g., dataLag=1 means data through current-1).
+   *
+   * <p>The dataLag is always computed from the current year, then the effective end
+   * is the minimum of the lag-adjusted year and the configured end year.
    */
   private List<String> resolveYearRange(DimensionConfig config) {
     Integer start = config.getStart();
@@ -357,26 +360,43 @@ public class DimensionIterator {
       return Collections.emptyList();
     }
 
-    // Resolve "current" year
-    if (end == null) {
-      end = Calendar.getInstance().get(Calendar.YEAR);
-      LOGGER.debug("Year range dimension '{}' end resolved to current year: {}",
-          config.getName(), end);
+    int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+
+    // Compute lag year from current year (always from current, not from configured end)
+    int lagYear = currentYear;
+    if (dataLag != null && dataLag > 0) {
+      lagYear = currentYear - dataLag;
+      LOGGER.debug("Year range dimension '{}' lag year computed as {} (currentYear={}, dataLag={})",
+          config.getName(), lagYear, currentYear, dataLag);
     }
 
-    // Apply data lag (subtract from end year)
-    if (dataLag != null && dataLag > 0) {
-      end = end - dataLag;
-      LOGGER.debug("Year range dimension '{}' adjusted end to {} (dataLag={})",
-          config.getName(), end, dataLag);
+    // Apply release month adjustment to lag year
+    // This handles cases where data for year Y is released mid-year in year Y+1
+    Integer releaseMonth = config.getReleaseMonth();
+    if (releaseMonth != null && releaseMonth >= 1 && releaseMonth <= 12) {
+      int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1; // 1-based
+      if (currentMonth < releaseMonth) {
+        lagYear = lagYear - 1;
+        LOGGER.debug("Year range dimension '{}' adjusted lag year to {} (before releaseMonth={})",
+            config.getName(), lagYear, releaseMonth);
+      }
     }
+
+    // Resolve configured end year (null means "current")
+    int configuredEnd = (end != null) ? end : currentYear;
+    LOGGER.debug("Year range dimension '{}' configured end: {}", config.getName(), configuredEnd);
+
+    // Effective end is the minimum of lag year and configured end
+    int effectiveEnd = Math.min(lagYear, configuredEnd);
+    LOGGER.debug("Year range dimension '{}' effective end: {} (min of lagYear={}, configuredEnd={})",
+        config.getName(), effectiveEnd, lagYear, configuredEnd);
 
     if (step == null || step == 0) {
       step = 1;
     }
 
     List<String> values = new ArrayList<String>();
-    for (int year = start; year <= end; year += step) {
+    for (int year = start; year <= effectiveEnd; year += step) {
       values.add(String.valueOf(year));
     }
 
