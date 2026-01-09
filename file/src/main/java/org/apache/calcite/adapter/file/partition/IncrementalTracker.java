@@ -42,6 +42,23 @@ public interface IncrementalTracker {
   boolean isProcessed(String alternateName, String sourceTable, Map<String, String> keyValues);
 
   /**
+   * Checks if a specific combination has been processed within the TTL window.
+   *
+   * <p>This is useful for incremental keys like "current year" that should be
+   * reprocessed periodically to pick up new data, rather than being permanently
+   * marked as processed.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param keyValues Map of incremental key names to values
+   * @param ttlMillis Time-to-live in milliseconds. If the entry was processed more than
+   *                  ttlMillis ago, it's considered expired and returns false.
+   * @return true if this combination was processed within the TTL window
+   */
+  boolean isProcessedWithTtl(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long ttlMillis);
+
+  /**
    * Marks a combination of incremental key values as successfully processed.
    *
    * @param alternateName The alternate partition name
@@ -51,6 +68,42 @@ public interface IncrementalTracker {
    */
   void markProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern);
+
+  /**
+   * Marks a combination as processed with a specific row count.
+   *
+   * <p>When rowCount is 0 (empty result), the entry will be subject to TTL-based
+   * requerying. When rowCount > 0, the entry is permanently marked as processed.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param keyValues Map of incremental key names to values
+   * @param targetPattern The target pattern used for this combination
+   * @param rowCount Number of rows written (0 = empty, will be requeried after TTL)
+   */
+  default void markProcessedWithRowCount(String alternateName, String sourceTable,
+      Map<String, String> keyValues, String targetPattern, long rowCount) {
+    // Default implementation ignores row count for backward compatibility
+    markProcessed(alternateName, sourceTable, keyValues, targetPattern);
+  }
+
+  /**
+   * Checks if a combination needs reprocessing due to empty result TTL expiry.
+   *
+   * <p>This is specifically for empty results (row_count=0) that should be
+   * requeried after a configured interval to check if data became available.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param keyValues Map of incremental key names to values
+   * @param emptyResultTtlMillis TTL for empty results in milliseconds
+   * @return true if the combination was processed with data OR empty result is within TTL
+   */
+  default boolean isProcessedWithEmptyTtl(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long emptyResultTtlMillis) {
+    // Default: fall back to simple isProcessed check
+    return isProcessed(alternateName, sourceTable, keyValues);
+  }
 
   /**
    * Gets all processed key value combinations for an alternate partition.
@@ -88,6 +141,27 @@ public interface IncrementalTracker {
    */
   Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
       List<Map<String, String>> allCombinations);
+
+  /**
+   * Filters combinations considering empty result TTL.
+   *
+   * <p>A combination is considered "needing processing" if:
+   * <ul>
+   *   <li>It was never processed, OR</li>
+   *   <li>It was processed but returned 0 rows AND the TTL has expired</li>
+   * </ul>
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param allCombinations All dimension combinations to check
+   * @param emptyResultTtlMillis TTL for empty results - requery after this interval
+   * @return Set of combination indices that need processing
+   */
+  default Set<Integer> filterUnprocessedWithEmptyTtl(String alternateName, String sourceTable,
+      List<Map<String, String>> allCombinations, long emptyResultTtlMillis) {
+    // Default: fall back to regular filterUnprocessed (ignores TTL)
+    return filterUnprocessed(alternateName, sourceTable, allCombinations);
+  }
 
   // ===== Table Completion Tracking =====
 
@@ -174,6 +248,11 @@ public interface IncrementalTracker {
   IncrementalTracker NOOP = new IncrementalTracker() {
     @Override public boolean isProcessed(String alternateName, String sourceTable,
         Map<String, String> keyValues) {
+      return false;
+    }
+
+    @Override public boolean isProcessedWithTtl(String alternateName, String sourceTable,
+        Map<String, String> keyValues, long ttlMillis) {
       return false;
     }
 

@@ -298,4 +298,61 @@ public class HttpSourceTest {
     // Should not throw
     source.close();
   }
+
+  @Test void testWideToNarrowConfigFromMap() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("GeoFIPS", "GeoName", "TableName", "LineCode"));
+    map.put("valueColumnPattern", "^\\d{4}$");
+    map.put("keyColumnName", "Year");
+    map.put("valueColumnName", "DataValue");
+    map.put("skipValues", Arrays.asList("(NA)", "(D)", ""));
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertEquals(4, config.getKeyColumns().size());
+    assertEquals("GeoFIPS", config.getKeyColumns().get(0));
+    assertEquals("^\\d{4}$", config.getValueColumnPattern());
+    assertEquals("Year", config.getKeyColumnName());
+    assertEquals("DataValue", config.getValueColumnName());
+    assertTrue(config.isEnabled());
+
+    // Test isValueColumn
+    assertTrue(config.isValueColumn("2020"));
+    assertTrue(config.isValueColumn("1929"));
+    assertFalse(config.isValueColumn("GeoFIPS"));
+    assertFalse(config.isValueColumn("Description"));
+
+    // Test shouldSkipValue
+    assertTrue(config.shouldSkipValue(""));
+    assertTrue(config.shouldSkipValue("(NA)"));
+    assertTrue(config.shouldSkipValue("(D)"));
+    assertTrue(config.shouldSkipValue(null));
+    assertFalse(config.shouldSkipValue("12345.0"));
+    assertFalse(config.shouldSkipValue("100"));
+  }
+
+  @Test void testWideToNarrowConfigDefaults() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("GeoFIPS"));
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertEquals("Key", config.getKeyColumnName());
+    assertEquals("Value", config.getValueColumnName());
+    assertTrue(config.getSkipValues().isEmpty());
+    assertTrue(config.isEnabled());
+  }
+
+  @Test void testWideToNarrowConfigRequiresKeyColumns() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("valueColumnPattern", "^\\d{4}$");
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    // Should return null when keyColumns is missing
+    assertEquals(null, config);
+  }
 }

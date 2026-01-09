@@ -249,13 +249,11 @@ partitionedTables:
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
-    pattern: "geo_type=*/bls_geographies.parquet"
+    pattern: "type=bls_geographies.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - name: type
-          type: VARCHAR
-        - name: geo_type
           type: VARCHAR
     comment: >
       BLS geography reference table mapping state abbreviations to FIPS codes, census regions, metro areas, and BLS-specific area codes. Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES into a single catalog-driven table. Enables dynamic geography lookups without hardcoded maps.
@@ -293,25 +291,31 @@ partitionedTables:
         nullable: true
         comment: 7-digit BLS area code for metro employment series (state FIPS + 5-digit area code, e.g., '3693561' for NYC). NULL for states/regions.
 
-    # API Configuration
-    download:
+    # Source configuration - reads from YAML constants file
+    source:
+      type: constants
+      file: "/bls/bls-geographies.yaml"
+      path: "geographies"
+
+    # Dimension definitions for ETL iteration (single batch for all reference data)
+    dimensions:
+      type:
+        - bls_geographies
 
     # Materialization configuration (reference data)
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: "geo_type=*/"
+        pattern: ""
       partition:
-        columns: [type, geo_type]
+        columns: [type]
       options:
         compression: snappy
         batchSize: 50000
         stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
 

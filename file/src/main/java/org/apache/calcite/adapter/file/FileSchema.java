@@ -3708,9 +3708,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
 
     // Use the AlternatePartitionMaterializer to create the data files
     // Note: Uses operatingCacheDirectory for local operations (incremental tracker, etc.)
+    int currentYear = java.time.Year.now().getValue();
+    int startYear = 2000;  // Default start year for partition materialization
+    int endYear = currentYear;
     org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer materializer =
         org.apache.calcite.adapter.file.partition.AlternatePartitionMaterializer.create(
-            operatingCacheDirectory.getAbsolutePath());
+            storageProvider, baseDirectory, operatingCacheDirectory.getAbsolutePath(),
+            startYear, endYear);
 
     int total = materializer.materializeAll(tablesWithAlternates);
     if (total > 0) {

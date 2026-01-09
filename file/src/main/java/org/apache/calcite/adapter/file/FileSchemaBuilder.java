@@ -341,9 +341,14 @@ public class FileSchemaBuilder {
                 ? "ICEBERG_PARQUET" : "PARQUET";
             info.put("conversionType", conversionType);
           }
+          // Include row count for COUNT(*) optimization
+          if (etlResult.getTotalRows() > 0) {
+            info.put("rowCount", String.valueOf(etlResult.getTotalRows()));
+          }
           materializationInfo.put(entry.getKey(), info);
-          LOGGER.debug("Table '{}' materialized: location={}, format={}",
-              entry.getKey(), etlResult.getTableLocation(), etlResult.getMaterializeFormat());
+          LOGGER.debug("Table '{}' materialized: location={}, format={}, rows={}",
+              entry.getKey(), etlResult.getTableLocation(), etlResult.getMaterializeFormat(),
+              etlResult.getTotalRows());
         }
       }
 

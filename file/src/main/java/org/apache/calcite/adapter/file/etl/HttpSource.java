@@ -627,8 +627,20 @@ public class HttpSource implements DataSource {
         if (extractPattern != null && !extractPattern.isEmpty()) {
           return extractFromZip(conn.getInputStream(), extractPattern, rawCachePath);
         }
-        // Cache response to storage provider
-        return cacheResponse(conn.getInputStream(), rawCachePath);
+        // Read response into memory first to check for API-level errors before caching
+        String responseBody = readResponse(conn.getInputStream());
+
+        // Check for API-level errors in JSON responses before caching
+        HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
+        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.JSON) {
+          String apiError = checkForApiError(responseBody, respConfig);
+          if (apiError != null) {
+            throw new IOException("API error (not cached): " + apiError);
+          }
+        }
+
+        // No API error - cache the response
+        return cacheResponseString(responseBody, rawCachePath);
       } else {
         String errorBody = readResponse(conn.getErrorStream());
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
@@ -652,6 +664,69 @@ public class HttpSource implements DataSource {
     storageProvider.writeFile(cachePath, input);
     LOGGER.info("Cached response: {}", cachePath);
     return cachePath;
+  }
+
+  /**
+   * Caches a string response to storage provider.
+   *
+   * @param response Response content as string
+   * @param cachePath Path to write to storage provider
+   * @return The cache path
+   * @throws IOException if caching fails
+   */
+  private String cacheResponseString(String response, String cachePath) throws IOException {
+    String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+    storageProvider.createDirectories(parentPath);
+    byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+    storageProvider.writeFile(cachePath, new java.io.ByteArrayInputStream(bytes));
+    LOGGER.info("Cached response: {} ({} bytes)", cachePath, bytes.length);
+    return cachePath;
+  }
+
+  /**
+   * Checks for API-level errors in a JSON response before caching.
+   * Returns the error message if an error is found, null otherwise.
+   *
+   * <p>This prevents caching error responses that would cause repeated failures.
+   * Empty data responses (valid "no data" cases) return null and will be cached.
+   *
+   * @param responseBody The JSON response body
+   * @param respConfig Response configuration with optional errorPath
+   * @return Error message if API error found, null if response is valid (or empty data)
+   */
+  private String checkForApiError(String responseBody,
+      HttpSourceConfig.ResponseConfig respConfig) {
+    try {
+      JsonNode root = OBJECT_MAPPER.readTree(responseBody);
+
+      // Check for API errors using errorPath if configured
+      if (respConfig.getErrorPath() != null && !respConfig.getErrorPath().isEmpty()) {
+        JsonNode errorNode = navigateToPath(root, respConfig.getErrorPath());
+        // Skip if error node is missing, null, or an empty array (common API pattern for "no error")
+        boolean hasError = errorNode != null && !errorNode.isMissingNode() && !errorNode.isNull()
+            && !(errorNode.isArray() && errorNode.size() == 0);
+        if (hasError) {
+          String errorMessage = errorNode.isTextual()
+              ? errorNode.asText()
+              : errorNode.toString();
+
+          // Check for "no data" type errors that should be cached as empty results
+          String errorLower = errorMessage.toLowerCase();
+          if (errorLower.contains("no data") || errorLower.contains("not found")
+              || errorLower.contains("parameter_empty") || errorLower.contains("unknown error")) {
+            LOGGER.debug("API returned no-data message (will cache): {}", errorMessage);
+            return null; // This is valid, cache it
+          }
+
+          return errorMessage; // Real API error - don't cache
+        }
+      }
+
+      return null; // No error found (or no errorPath configured)
+    } catch (Exception e) {
+      LOGGER.debug("Could not check for API error (treating as valid): {}", e.getMessage());
+      return null; // If we can't parse, assume it's valid
+    }
   }
 
   /**
@@ -1187,6 +1262,28 @@ public class HttpSource implements DataSource {
         }
       }
 
+      // Wide-to-narrow transformation setup
+      HttpSourceConfig.WideToNarrowConfig wideToNarrow = config.getWideToNarrow();
+      List<Integer> keyColumnIndices = new ArrayList<Integer>();
+      List<Integer> valueColumnIndices = new ArrayList<Integer>();
+      List<String> valueColumnNames = new ArrayList<String>();
+
+      if (wideToNarrow != null && wideToNarrow.isEnabled()) {
+        // Build index lists for key and value columns
+        for (int i = 0; i < headers.length; i++) {
+          String header = headers[i].trim();
+          if (wideToNarrow.getKeyColumns().contains(header)) {
+            keyColumnIndices.add(i);
+          } else if (wideToNarrow.isValueColumn(header)) {
+            valueColumnIndices.add(i);
+            valueColumnNames.add(header);
+          }
+          // Columns not in keyColumns and not matching valueColumnPattern are skipped
+        }
+        LOGGER.info("Wide-to-narrow: {} key columns, {} value columns to unpivot",
+            keyColumnIndices.size(), valueColumnIndices.size());
+      }
+
       // Parse data rows with streaming
       String line;
       int lineNumber = 0;
@@ -1220,41 +1317,88 @@ public class HttpSource implements DataSource {
           }
         }
 
-        // Build row map
-        Map<String, Object> row = new LinkedHashMap<String, Object>();
-        for (int j = 0; j < headers.length && j < values.length; j++) {
-          String header = headers[j].trim();
-          String value = values[j].trim();
-
-          // Remove surrounding quotes if present
-          if (value.startsWith("\"") && value.endsWith("\"")) {
-            value = value.substring(1, value.length() - 1);
+        // Wide-to-narrow transformation: one input row -> N output rows
+        if (wideToNarrow != null && wideToNarrow.isEnabled()) {
+          // Build base row with key columns
+          Map<String, Object> baseRow = new LinkedHashMap<String, Object>();
+          for (int idx : keyColumnIndices) {
+            if (idx < values.length) {
+              String header = headers[idx].trim();
+              String value = values[idx].trim();
+              if (value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+              }
+              baseRow.put(header, parseValue(value));
+            }
           }
 
-          // Try to parse as number
-          Object parsed = parseValue(value);
-          row.put(header, parsed);
-        }
+          // Create one output row per value column
+          for (int i = 0; i < valueColumnIndices.size(); i++) {
+            int idx = valueColumnIndices.get(i);
+            if (idx < values.length) {
+              String valueStr = values[idx].trim();
+              if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
+                valueStr = valueStr.substring(1, valueStr.length() - 1);
+              }
 
-        result.add(row);
-        matchedRows++;
+              // Skip null/empty values based on config
+              if (wideToNarrow.shouldSkipValue(valueStr)) {
+                continue;
+              }
 
-        // Check maxRows limit
-        if (maxRows > 0 && matchedRows >= maxRows) {
-          LOGGER.info("Reached maxRows limit ({}), stopping CSV parse", maxRows);
-          break;
+              Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
+              row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
+              row.put(wideToNarrow.getValueColumnName(), parseValue(valueStr));   // e.g., 12345.0
+              result.add(row);
+              matchedRows++;
+
+              // Check maxRows limit
+              if (maxRows > 0 && matchedRows >= maxRows) {
+                LOGGER.info("Reached maxRows limit ({}), stopping CSV parse", maxRows);
+                break;
+              }
+            }
+          }
+          if (maxRows > 0 && matchedRows >= maxRows) {
+            break;
+          }
+        } else {
+          // Standard row parsing (no transformation)
+          Map<String, Object> row = new LinkedHashMap<String, Object>();
+          for (int j = 0; j < headers.length && j < values.length; j++) {
+            String header = headers[j].trim();
+            String value = values[j].trim();
+
+            // Remove surrounding quotes if present
+            if (value.startsWith("\"") && value.endsWith("\"")) {
+              value = value.substring(1, value.length() - 1);
+            }
+
+            // Try to parse as number
+            Object parsed = parseValue(value);
+            row.put(header, parsed);
+          }
+
+          result.add(row);
+          matchedRows++;
+
+          // Check maxRows limit
+          if (maxRows > 0 && matchedRows >= maxRows) {
+            LOGGER.info("Reached maxRows limit ({}), stopping CSV parse", maxRows);
+            break;
+          }
         }
 
         // Log progress every 10 seconds or 100k lines
         long now = System.currentTimeMillis();
         if (now - lastLogTime > 10000 || lineNumber % 100000 == 0) {
-          LOGGER.info("Parsing CSV... {} lines read, {} matched, {} skipped",
-              lineNumber, matchedRows, skippedRows);
+          LOGGER.info("Parsing CSV... {} lines read, {} output rows",
+              lineNumber, matchedRows);
           lastLogTime = now;
         }
       }
 
-      LOGGER.info("CSV parse complete: {} lines read, {} matched, {} skipped",
+      LOGGER.info("CSV parse complete: {} lines read, {} output rows, {} skipped",
           lineNumber, matchedRows, skippedRows);
     }
 

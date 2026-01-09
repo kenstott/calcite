@@ -234,18 +234,56 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
     return false;
   }
 
+  @Override public boolean isProcessedWithTtl(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long ttlMillis) {
+    String keyValuesJson = mapToJson(keyValues);
+    String sql = "SELECT processed_at FROM partition_status "
+        + "WHERE alternate_name = ? AND incremental_key_values = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      stmt.setString(2, keyValuesJson);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          long processedAt = rs.getLong("processed_at");
+          if (processedAt <= 0) {
+            return false;
+          }
+          // Check if TTL has expired
+          long now = System.currentTimeMillis();
+          boolean withinTtl = (now - processedAt) < ttlMillis;
+          if (!withinTtl) {
+            LOGGER.debug("TTL expired for {}/{}: processed {}ms ago, TTL is {}ms",
+                alternateName, keyValues, now - processedAt, ttlMillis);
+          }
+          return withinTtl;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking partition status with TTL for {}/{}: {}",
+          alternateName, keyValues, e.getMessage());
+    }
+    return false;
+  }
+
   @Override public void markProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern) {
+    // Legacy method: mark with unknown row count (NULL)
+    markProcessedWithRowCount(alternateName, sourceTable, keyValues, targetPattern, -1);
+  }
+
+  @Override public void markProcessedWithRowCount(String alternateName, String sourceTable,
+      Map<String, String> keyValues, String targetPattern, long rowCount) {
     long now = System.currentTimeMillis();
     String keyValuesJson = mapToJson(keyValues);
 
     String sql = "INSERT INTO partition_status "
-        + "(alternate_name, incremental_key_values, source_table, target_pattern, processed_at) "
-        + "VALUES (?, ?, ?, ?, ?) "
+        + "(alternate_name, incremental_key_values, source_table, target_pattern, processed_at, row_count) "
+        + "VALUES (?, ?, ?, ?, ?, ?) "
         + "ON CONFLICT (alternate_name, incremental_key_values) DO UPDATE SET "
         + "source_table = EXCLUDED.source_table, "
         + "target_pattern = EXCLUDED.target_pattern, "
-        + "processed_at = EXCLUDED.processed_at";
+        + "processed_at = EXCLUDED.processed_at, "
+        + "row_count = EXCLUDED.row_count";
 
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, alternateName);
@@ -253,13 +291,59 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
       stmt.setString(3, sourceTable);
       stmt.setString(4, targetPattern);
       stmt.setLong(5, now);
+      if (rowCount >= 0) {
+        stmt.setInt(6, (int) rowCount);
+      } else {
+        stmt.setNull(6, java.sql.Types.INTEGER);
+      }
       stmt.executeUpdate();
-      LOGGER.debug("Marked {} with key {} as processed at {}",
-          alternateName, keyValues, now);
+      LOGGER.debug("Marked {} with key {} as processed at {} (rows={})",
+          alternateName, keyValues, now, rowCount >= 0 ? rowCount : "unknown");
     } catch (SQLException e) {
       LOGGER.error("Error marking partition status for {}/{}: {}",
           alternateName, keyValues, e.getMessage());
     }
+  }
+
+  @Override public boolean isProcessedWithEmptyTtl(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long emptyResultTtlMillis) {
+    String keyValuesJson = mapToJson(keyValues);
+    String sql = "SELECT processed_at, row_count FROM partition_status "
+        + "WHERE alternate_name = ? AND incremental_key_values = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      stmt.setString(2, keyValuesJson);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          long processedAt = rs.getLong("processed_at");
+          if (processedAt <= 0) {
+            return false;
+          }
+
+          // Check row_count - if 0 (empty result), apply TTL
+          int rowCount = rs.getInt("row_count");
+          boolean wasEmpty = !rs.wasNull() && rowCount == 0;
+
+          if (wasEmpty) {
+            // Empty result - check if TTL has expired
+            long now = System.currentTimeMillis();
+            boolean withinTtl = (now - processedAt) < emptyResultTtlMillis;
+            if (!withinTtl) {
+              LOGGER.debug("Empty result TTL expired for {}/{}: processed {}ms ago, TTL is {}ms",
+                  alternateName, keyValues, now - processedAt, emptyResultTtlMillis);
+            }
+            return withinTtl;
+          }
+
+          // Non-empty or legacy entry (row_count NULL) - treat as permanently processed
+          return true;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Error checking partition status with empty TTL for {}/{}: {}",
+          alternateName, keyValues, e.getMessage());
+    }
+    return false;
   }
 
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
@@ -510,6 +594,83 @@ public class DuckDBPartitionStatusStore implements IncrementalTracker, AutoClose
       LOGGER.warn("Bulk filtering failed for {}, falling back to per-item check: {}",
           alternateName, e.getMessage());
       // Fallback: return all indices as unprocessed
+      Set<Integer> all = new HashSet<>();
+      for (int i = 0; i < allCombinations.size(); i++) {
+        all.add(i);
+      }
+      return all;
+    }
+  }
+
+  @Override public Set<Integer> filterUnprocessedWithEmptyTtl(String alternateName,
+      String sourceTable, List<Map<String, String>> allCombinations, long emptyResultTtlMillis) {
+    if (allCombinations == null || allCombinations.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    long startMs = System.currentTimeMillis();
+    long now = System.currentTimeMillis();
+    long ttlCutoff = now - emptyResultTtlMillis;
+
+    try {
+      Connection conn = getConnection();
+
+      // Create temp table for combinations
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("CREATE TEMP TABLE IF NOT EXISTS temp_combinations "
+            + "(idx INTEGER, key_values VARCHAR)");
+        stmt.execute("DELETE FROM temp_combinations");
+      }
+
+      // Insert all combinations with their indices
+      String insertSql = "INSERT INTO temp_combinations (idx, key_values) VALUES (?, ?)";
+      try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+        for (int i = 0; i < allCombinations.size(); i++) {
+          stmt.setInt(1, i);
+          stmt.setString(2, mapToJson(allCombinations.get(i)));
+          stmt.addBatch();
+          if ((i + 1) % 1000 == 0) {
+            stmt.executeBatch();
+          }
+        }
+        stmt.executeBatch();
+      }
+
+      // Query for combinations that need processing:
+      // 1. Never processed (p.processed_at IS NULL), OR
+      // 2. Processed with 0 rows AND TTL expired (row_count = 0 AND processed_at < cutoff)
+      Set<Integer> unprocessedIndices = new HashSet<>();
+      String filterSql = "SELECT t.idx FROM temp_combinations t "
+          + "LEFT JOIN partition_status p ON p.alternate_name = ? "
+          + "AND p.incremental_key_values = t.key_values "
+          + "WHERE p.processed_at IS NULL "
+          + "   OR (p.row_count = 0 AND p.processed_at < ?)";
+
+      try (PreparedStatement stmt = conn.prepareStatement(filterSql)) {
+        stmt.setString(1, alternateName);
+        stmt.setLong(2, ttlCutoff);
+        try (ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+            unprocessedIndices.add(rs.getInt("idx"));
+          }
+        }
+      }
+
+      // Cleanup temp table
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS temp_combinations");
+      }
+
+      long elapsedMs = System.currentTimeMillis() - startMs;
+      LOGGER.debug("Bulk filtering with TTL for {}: {} need processing of {} total ({}ms)",
+          alternateName, unprocessedIndices.size(), allCombinations.size(), elapsedMs);
+
+      return unprocessedIndices;
+
+    } catch (SQLException e) {
+      LOGGER.warn("Bulk filtering with TTL failed for {}, falling back to per-item check: {}",
+          alternateName, e.getMessage());
+      // Fallback: return all indices as needing processing
       Set<Integer> all = new HashSet<>();
       for (int i = 0; i < allCombinations.size(); i++) {
         all.add(i);

@@ -540,8 +540,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
             Map<String, String> info = entry.getValue();
             String tableLocation = info.get("tableLocation");
             String conversionType = info.get("conversionType");
+            String rowCountStr = info.get("rowCount");
+            Long rowCount = rowCountStr != null ? Long.parseLong(rowCountStr) : null;
             if (tableLocation != null && conversionType != null) {
-              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType);
+              conversionMetadata.updateMaterializationInfo(tableName, tableLocation, conversionType, rowCount);
             }
           }
         }

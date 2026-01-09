@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
 
@@ -84,6 +85,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private MaterializeConfig config;
   private Map<String, Object> catalogConfig;
+  private Configuration hadoopConfiguration;
   private Table table;
   private IcebergTableWriter tableWriter;
   private long totalRowsWritten;
@@ -168,6 +170,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Build catalog configuration
     this.catalogConfig = buildCatalogConfig(icebergConfig);
 
+    // Build Hadoop configuration from catalog config (includes S3 credentials)
+    this.hadoopConfiguration = buildHadoopConfiguration();
+
     // Get target table identifier
     String targetTableId = config.getTargetTableId();
     if (targetTableId == null || targetTableId.isEmpty()) {
@@ -179,7 +184,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Ensure table exists
     this.table = ensureTableExists(targetTableId);
-    this.tableWriter = new IcebergTableWriter(table, storageProvider);
+    this.tableWriter = new IcebergTableWriter(table, storageProvider, hadoopConfiguration);
 
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
         targetTableId, warehousePath);
@@ -282,6 +287,29 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     return hadoopConfig;
+  }
+
+  /**
+   * Builds Hadoop Configuration from catalogConfig.
+   *
+   * <p>Extracts the hadoopConfig map from catalogConfig and creates
+   * a Configuration object with S3 credentials for file access.
+   */
+  @SuppressWarnings("unchecked")
+  private Configuration buildHadoopConfiguration() {
+    Configuration conf = new Configuration();
+
+    // Extract hadoopConfig from catalogConfig
+    Object hadoopConfigObj = catalogConfig.get("hadoopConfig");
+    if (hadoopConfigObj instanceof Map) {
+      Map<String, String> hadoopConfigMap = (Map<String, String>) hadoopConfigObj;
+      for (Map.Entry<String, String> entry : hadoopConfigMap.entrySet()) {
+        conf.set(entry.getKey(), entry.getValue());
+      }
+      LOGGER.debug("Built Hadoop configuration with {} properties", hadoopConfigMap.size());
+    }
+
+    return conf;
   }
 
   /**
@@ -821,26 +849,39 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Coerces a string partition value to the appropriate type based on schema.
+   * Handles null indicators like "-" (used by BLS for missing values).
    */
   private Object coercePartitionValue(String value, org.apache.iceberg.PartitionField field) {
+    // Handle null/missing value indicators
+    if (value == null || value.isEmpty() || "-".equals(value.trim())) {
+      return null;
+    }
+
     org.apache.iceberg.types.Type sourceType = table.schema().findType(field.sourceId());
     if (sourceType == null) {
       return value;
     }
 
-    switch (sourceType.typeId()) {
-      case INTEGER:
-        return Integer.parseInt(value);
-      case LONG:
-        return Long.parseLong(value);
-      case FLOAT:
-        return Float.parseFloat(value);
-      case DOUBLE:
-        return Double.parseDouble(value);
-      case BOOLEAN:
-        return Boolean.parseBoolean(value);
-      default:
-        return value;
+    try {
+      switch (sourceType.typeId()) {
+        case INTEGER:
+          return Integer.parseInt(value);
+        case LONG:
+          return Long.parseLong(value);
+        case FLOAT:
+          return Float.parseFloat(value);
+        case DOUBLE:
+          return Double.parseDouble(value);
+        case BOOLEAN:
+          return Boolean.parseBoolean(value);
+        default:
+          return value;
+      }
+    } catch (NumberFormatException e) {
+      // If parsing fails, log and return null
+      LOGGER.debug("Could not parse partition value '{}' as {}: {}",
+          value, sourceType.typeId(), e.getMessage());
+      return null;
     }
   }
 
@@ -1267,8 +1308,25 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
-    // Run maintenance if configured
+    // Run compaction if configured - consolidates many small files into fewer large files
     MaterializeConfig.IcebergConfig icebergConfig = config.getIceberg();
+    if (icebergConfig != null && icebergConfig.isRunCompaction()) {
+      long targetSize = icebergConfig.getCompactionTargetFileSizeBytes();
+      int minFiles = icebergConfig.getCompactionMinFiles();
+      long smallSize = icebergConfig.getCompactionSmallFileSizeBytes();
+      LOGGER.info("Running automatic compaction: targetSize={}MB, minFiles={}, smallSize={}MB",
+          targetSize / (1024 * 1024), minFiles, smallSize / (1024 * 1024));
+      try {
+        int compacted = tableWriter.compactSmallFiles(targetSize, minFiles, smallSize);
+        if (compacted > 0) {
+          LOGGER.info("Compaction complete: {} partitions consolidated", compacted);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Compaction failed (non-fatal): {}", e.getMessage());
+      }
+    }
+
+    // Run maintenance if configured
     if (icebergConfig != null && icebergConfig.isRunMaintenance()) {
       int retentionDays = icebergConfig.getSnapshotRetentionDays();
       LOGGER.info("Running Iceberg maintenance with {}d snapshot retention", retentionDays);

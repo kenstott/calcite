@@ -440,6 +440,8 @@ partitionedTables:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
 
     columns:
       - *date_column
@@ -759,6 +761,8 @@ partitionedTables:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
 
     # API Configuration
     download:
@@ -836,6 +840,8 @@ partitionedTables:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
 
     comment: >
       Consumer Price Index for 20 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
@@ -2042,6 +2048,8 @@ partitionedTables:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
 
     columns:
       - name: series
@@ -2574,6 +2582,7 @@ partitionedTables:
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
         dataLag: 0
+        releaseMonth: 2  # FRED data typically available within days
 
     # Materialization configuration
     materialize:

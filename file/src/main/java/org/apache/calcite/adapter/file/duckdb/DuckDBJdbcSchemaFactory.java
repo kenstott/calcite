@@ -992,10 +992,12 @@ public class DuckDBJdbcSchemaFactory {
 
       // Create view if we have a table name and either a Parquet path or it's an Iceberg table
       if (tableName != null) {
-        // Check if this is an Iceberg table that needs special handling
+        // Check if this is an Iceberg table that has been materialized
+        // Only use Iceberg format when conversionType is ICEBERG_PARQUET (actually materialized)
+        // isIcebergFormat() only indicates schema intent, not actual materialization
         boolean isIcebergTable = "ICEBERG_PARQUET".equals(record.getConversionType());
 
-        if (isIcebergTable && record.getSourceFile() != null) {
+        if (isIcebergTable) {
           // Use DuckDB's native Iceberg support
           // First, ensure the iceberg extension is installed and loaded
           try {
@@ -1014,16 +1016,53 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
             }
 
-            // For Iceberg tables, try iceberg_scan
-            // Check if view exists first to avoid expensive file scanning
-            if (viewExists(conn, duckdbSchema, tableName)) {
-              LOGGER.debug("⚡ Iceberg view exists, skipped: {}.{}", duckdbSchema, tableName);
+            // Enable version guessing for tables without version-hint file
+            try {
+              conn.createStatement().execute("SET unsafe_enable_version_guessing = true");
+            } catch (SQLException e) {
+              LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
+            }
+
+            // Use record.sourceFile which contains the actual Iceberg table location from materialization
+            // For ICEBERG_PARQUET tables, sourceFile should always contain the correct path
+            String icebergTablePath;
+            if (record.sourceFile != null && !record.sourceFile.endsWith(".parquet")) {
+              icebergTablePath = record.sourceFile;
             } else {
+              // Fallback: compute from baseDirectory + schemaName + tableName
+              icebergTablePath = directoryPath + "/" + calciteSchemaName + "/" + tableName;
+              LOGGER.warn("ICEBERG_PARQUET table '{}' has unexpected sourceFile '{}', using computed path: {}",
+                         tableName, record.sourceFile, icebergTablePath);
+            }
+
+            // For Iceberg tables, try iceberg_scan
+            // Check if view exists - if it does but uses wrong format or wrong path, recreate it
+            if (viewExists(conn, duckdbSchema, tableName)) {
+              String existingViewSql = getViewSql(conn, duckdbSchema, tableName);
+              boolean usesIcebergScan = existingViewSql != null && existingViewSql.toLowerCase().contains("iceberg_scan");
+              boolean usesCorrectPath = existingViewSql != null && existingViewSql.contains(icebergTablePath);
+
+              if (usesIcebergScan && usesCorrectPath) {
+                LOGGER.debug("⚡ Iceberg view exists with correct format and path, skipped: {}.{}", duckdbSchema, tableName);
+              } else {
+                // View exists but with wrong format or path - drop and recreate
+                String reason = !usesIcebergScan ? "wrong format (not iceberg_scan)" : "wrong path";
+                LOGGER.info("Dropping existing view to recreate as Iceberg ({}): {}.{}", reason, duckdbSchema, tableName);
+                try {
+                  conn.createStatement().execute(
+                      String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"", duckdbSchema, tableName));
+                } catch (SQLException dropError) {
+                  LOGGER.warn("Failed to drop old view: {}", dropError.getMessage());
+                }
+              }
+            }
+
+            if (!viewExists(conn, duckdbSchema, tableName)) {
               // View doesn't exist - create it
               String sql =
-                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, record.getSourceFile());
+                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM iceberg_scan('%s')", duckdbSchema, tableName, icebergTablePath);
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
-                         duckdbSchema, tableName, record.getSourceFile());
+                         duckdbSchema, tableName, icebergTablePath);
 
               try {
                 conn.createStatement().execute(sql);
@@ -1373,6 +1412,29 @@ public class DuckDBJdbcSchemaFactory {
         return rs.next() && rs.getInt(1) > 0;
       }
     }
+  }
+
+  /**
+   * Checks if an existing view uses iceberg_scan (vs parquet_scan or other).
+   * Used to detect if a view needs to be recreated when table format changes.
+   */
+  private static boolean viewUsesIcebergScan(Connection conn, String schema, String tableName) throws SQLException {
+    String viewSql = getViewSql(conn, schema, tableName);
+    return viewSql != null && viewSql.toLowerCase().contains("iceberg_scan");
+  }
+
+  private static String getViewSql(Connection conn, String schema, String tableName) throws SQLException {
+    String sql = "SELECT sql FROM duckdb_views() WHERE schema_name = ? AND view_name = ?";
+    try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, schema);
+      ps.setString(2, tableName);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          return rs.getString("sql");
+        }
+      }
+    }
+    return null;
   }
 
   /**

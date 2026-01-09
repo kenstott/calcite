@@ -73,6 +73,7 @@ public class DimensionConfig {
   private final Integer end;
   private final Integer step;
   private final Integer dataLag;
+  private final Integer releaseMonth;
   private final List<String> values;
   private final String sql;
   private final String source;
@@ -86,6 +87,7 @@ public class DimensionConfig {
     this.end = builder.end;
     this.step = builder.step != null ? builder.step : 1;
     this.dataLag = builder.dataLag != null ? builder.dataLag : 0;
+    this.releaseMonth = builder.releaseMonth;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
@@ -140,6 +142,26 @@ public class DimensionConfig {
    */
   public Integer getDataLag() {
     return dataLag;
+  }
+
+  /**
+   * Returns the release month for YEAR_RANGE dimensions (1=January, 12=December).
+   *
+   * <p>When set along with dataLag, adds an extra year of lag if the current
+   * month is before the release month. This handles cases where data for year Y
+   * is released mid-year in year Y+1.
+   *
+   * <p>Example: BLS QCEW annual data is released in September.
+   * With dataLag=1 and releaseMonth=9:
+   * <ul>
+   *   <li>In January 2026 (before Sept): end = 2026 - 1 - 1 = 2024</li>
+   *   <li>In October 2026 (after Sept): end = 2026 - 1 = 2025</li>
+   * </ul>
+   *
+   * @return Release month (1-12), or null if not configured
+   */
+  public Integer getReleaseMonth() {
+    return releaseMonth;
   }
 
   /**
@@ -307,6 +329,17 @@ public class DimensionConfig {
       }
     }
 
+    // Parse release month (1-12, month when data for previous year becomes available)
+    Object releaseMonthObj = map.get("releaseMonth");
+    if (releaseMonthObj instanceof Number) {
+      builder.releaseMonth(((Number) releaseMonthObj).intValue());
+    } else if (releaseMonthObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) releaseMonthObj);
+      if (resolved != null) {
+        builder.releaseMonth(resolved);
+      }
+    }
+
     // Parse list values
     Object valuesObj = map.get("values");
     if (valuesObj instanceof List) {
@@ -438,6 +471,7 @@ public class DimensionConfig {
     private Integer end;
     private Integer step;
     private Integer dataLag;
+    private Integer releaseMonth;
     private List<String> values;
     private String sql;
     private String source;
@@ -471,6 +505,11 @@ public class DimensionConfig {
 
     public Builder dataLag(Integer dataLag) {
       this.dataLag = dataLag;
+      return this;
+    }
+
+    public Builder releaseMonth(Integer releaseMonth) {
+      this.releaseMonth = releaseMonth;
       return this;
     }
 

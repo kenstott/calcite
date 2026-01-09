@@ -7,5 +7,9 @@ CREATE TABLE IF NOT EXISTS partition_status (
   source_table VARCHAR NOT NULL,
   target_pattern VARCHAR,
   processed_at BIGINT NOT NULL,
+  row_count INTEGER DEFAULT NULL,  -- NULL=legacy/unknown, 0=empty (requery after TTL), >0=has data
   PRIMARY KEY (alternate_name, incremental_key_values)
 );
+
+-- Add row_count column to existing tables (migration)
+ALTER TABLE partition_status ADD COLUMN IF NOT EXISTS row_count INTEGER DEFAULT NULL;

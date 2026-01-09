@@ -102,9 +102,12 @@ public class S3StorageProvider implements StorageProvider {
       // Configure client with longer timeouts for large file uploads (e.g., 100MB+ parquet files)
       // Socket timeout: 15 minutes (sufficient for large files over slow connections)
       // Connection timeout: 60 seconds (DNS + TCP handshake)
+      // Max connections: 200 (default 50 is too low for heavy ETL with many concurrent requests)
       ClientConfiguration clientConfig = new ClientConfiguration();
-      clientConfig.setSocketTimeout(15 * 60 * 1000); // 15 minutes
-      clientConfig.setConnectionTimeout(60 * 1000);   // 60 seconds
+      clientConfig.setSocketTimeout(15 * 60 * 1000);    // 15 minutes for data transfer
+      clientConfig.setConnectionTimeout(60 * 1000);     // 60 seconds for TCP handshake
+      clientConfig.setConnectionMaxIdleMillis(60_000);  // Close idle connections after 1 minute
+      clientConfig.setMaxConnections(200);              // Support heavy ETL workloads
 
       AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
           .withClientConfiguration(clientConfig);

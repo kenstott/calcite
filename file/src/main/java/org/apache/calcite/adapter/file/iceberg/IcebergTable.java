@@ -23,17 +23,28 @@ import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.ScannableTable;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Source;
 
+import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Types;
+
+import com.google.common.collect.ImmutableList;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,12 +62,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </ul>
  */
 public class IcebergTable extends AbstractTable implements ScannableTable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTable.class);
+
   private final Table icebergTable;
   private final @Nullable Long snapshotId;
   private final @Nullable String asOfTimestamp;
   private final Source source;
   private final Map<String, Object> config;
   private @Nullable RelDataType rowType;
+  private @Nullable Double cachedRowCount;
 
   /**
    * Creates an IcebergTable from a path.
@@ -191,6 +205,47 @@ public class IcebergTable extends AbstractTable implements ScannableTable {
     };
   }
 
+  /**
+   * Returns statistics for this Iceberg table, including row count.
+   *
+   * <p>Row count is extracted from Iceberg metadata by summing record counts
+   * from all data files. This enables query optimization rules like
+   * {@code CountStarStatisticsRule} to replace COUNT(*) with a constant value.
+   *
+   * @return Statistics with row count from Iceberg metadata
+   */
+  @Override public Statistic getStatistic() {
+    if (cachedRowCount != null) {
+      return Statistics.of(cachedRowCount, ImmutableList.of());
+    }
+
+    try {
+      Snapshot snapshot = icebergTable.currentSnapshot();
+      if (snapshot == null) {
+        // Empty table - no snapshots yet
+        LOGGER.debug("Iceberg table has no snapshot, returning 0 row count");
+        cachedRowCount = 0.0;
+        return Statistics.of(0.0, ImmutableList.of());
+      }
+
+      // Sum record counts from all data files
+      long totalRecords = 0;
+      try (CloseableIterable<FileScanTask> fileScanTasks =
+               icebergTable.newScan().planFiles()) {
+        for (FileScanTask task : fileScanTasks) {
+          totalRecords += task.file().recordCount();
+        }
+      }
+
+      cachedRowCount = (double) totalRecords;
+      LOGGER.debug("Iceberg table row count from metadata: {}", totalRecords);
+      return Statistics.of(cachedRowCount, ImmutableList.of());
+
+    } catch (Exception e) {
+      LOGGER.warn("Failed to get Iceberg statistics: {}", e.getMessage());
+      return Statistics.UNKNOWN;
+    }
+  }
 
   /**
    * Gets the underlying Iceberg table.

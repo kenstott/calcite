@@ -19,18 +19,25 @@ package org.apache.calcite.adapter.file.iceberg;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.RewriteFiles;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.StructLike;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
+import org.apache.iceberg.hadoop.HadoopInputFile;
+import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.parquet.Parquet;
 import org.apache.iceberg.types.Types;
@@ -41,8 +48,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -71,9 +81,20 @@ public class IcebergTableWriter {
    * @param storageProvider Storage provider for file operations (local/S3)
    */
   public IcebergTableWriter(Table table, StorageProvider storageProvider) {
+    this(table, storageProvider, new Configuration());
+  }
+
+  /**
+   * Creates a writer for the specified Iceberg table with custom Hadoop configuration.
+   *
+   * @param table The Iceberg table to write to
+   * @param storageProvider Storage provider for file operations (local/S3)
+   * @param hadoopConf Hadoop configuration with S3 credentials
+   */
+  public IcebergTableWriter(Table table, StorageProvider storageProvider, Configuration hadoopConf) {
     this.table = table;
     this.storageProvider = storageProvider;
-    this.hadoopConf = new Configuration();
+    this.hadoopConf = hadoopConf;
   }
 
   /**
@@ -338,27 +359,37 @@ public class IcebergTableWriter {
 
   /**
    * Coerces a string partition value to the appropriate type.
+   * Handles null indicators like "-" (used by BLS for missing values).
    */
   private Object coercePartitionValue(String value, org.apache.iceberg.PartitionField field) {
+    // Handle null/missing value indicators
+    if (value == null || value.isEmpty() || "-".equals(value.trim())) {
+      return null;
+    }
+
     // For identity transforms, look at the source field type
     org.apache.iceberg.types.Type sourceType = table.schema().findType(field.sourceId());
     if (sourceType == null) {
       return value;
     }
 
-    switch (sourceType.typeId()) {
-      case INTEGER:
-        return Integer.parseInt(value);
-      case LONG:
-        return Long.parseLong(value);
-      case FLOAT:
-        return Float.parseFloat(value);
-      case DOUBLE:
-        return Double.parseDouble(value);
-      case BOOLEAN:
-        return Boolean.parseBoolean(value);
-      default:
-        return value;
+    try {
+      switch (sourceType.typeId()) {
+        case INTEGER:
+          return Integer.parseInt(value);
+        case LONG:
+          return Long.parseLong(value);
+        case FLOAT:
+          return Float.parseFloat(value);
+        case DOUBLE:
+          return Double.parseDouble(value);
+        case BOOLEAN:
+          return Boolean.parseBoolean(value);
+        default:
+          return value;
+      }
+    } catch (NumberFormatException e) {
+      return null;
     }
   }
 
@@ -547,27 +578,51 @@ public class IcebergTableWriter {
       return null;
     }
 
+    // Handle null indicators like "-" (used by BLS for missing values)
+    if (value instanceof String) {
+      String strVal = ((String) value).trim();
+      if (strVal.isEmpty() || "-".equals(strVal)) {
+        return null;
+      }
+    }
+
     switch (type.typeId()) {
       case INTEGER:
         if (value instanceof Number) {
           return ((Number) value).intValue();
         }
-        return Integer.parseInt(value.toString());
+        try {
+          return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+          return null;  // Return null for unparseable values
+        }
       case LONG:
         if (value instanceof Number) {
           return ((Number) value).longValue();
         }
-        return Long.parseLong(value.toString());
+        try {
+          return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
       case FLOAT:
         if (value instanceof Number) {
           return ((Number) value).floatValue();
         }
-        return Float.parseFloat(value.toString());
+        try {
+          return Float.parseFloat(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
       case DOUBLE:
         if (value instanceof Number) {
           return ((Number) value).doubleValue();
         }
-        return Double.parseDouble(value.toString());
+        try {
+          return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
       case BOOLEAN:
         if (value instanceof Boolean) {
           return value;
@@ -624,9 +679,312 @@ public class IcebergTableWriter {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
     }
 
-    // Note: removeOrphanFiles requires iceberg-spark or iceberg-flink
-    // For the core API, we rely on staging directory lifecycle rules
-    LOGGER.debug("Orphan file cleanup is handled by staging directory lifecycle rules");
+    // Remove orphan files using core Iceberg API
+    // Orphans are data files not referenced by any snapshot
+    try {
+      int orphansRemoved = removeOrphanFiles(orphanFilesMillis);
+      if (orphansRemoved > 0) {
+        LOGGER.info("Removed {} orphan files older than {} days", orphansRemoved, orphanFilesDays);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to remove orphan files: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Removes orphan data files not referenced by any snapshot.
+   *
+   * <p>This implements orphan file cleanup using the core Iceberg API:
+   * <ol>
+   *   <li>Collect all data file paths referenced by any snapshot</li>
+   *   <li>List all parquet files in the table's data directory</li>
+   *   <li>Delete files that are not referenced and older than the threshold</li>
+   * </ol>
+   *
+   * @param olderThanMillis Only delete orphans older than this timestamp
+   * @return Number of orphan files removed
+   */
+  private int removeOrphanFiles(long olderThanMillis) {
+    // Collect all data files referenced by ANY snapshot (including ancestors)
+    Set<String> referencedFiles = new HashSet<>();
+
+    for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
+      try (CloseableIterable<FileScanTask> tasks =
+          table.newScan().useSnapshot(snapshot.snapshotId()).planFiles()) {
+        for (FileScanTask task : tasks) {
+          referencedFiles.add(task.file().path().toString());
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to scan snapshot {}: {}", snapshot.snapshotId(), e.getMessage());
+      }
+    }
+
+    LOGGER.debug("Found {} files referenced by snapshots", referencedFiles.size());
+
+    // Get the data directory path
+    String tableLocation = table.location();
+    String dataDir = tableLocation + "/data";
+
+    // List all parquet files in data directory
+    List<String> allDataFiles = new ArrayList<>();
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(dataDir, true);
+      for (StorageProvider.FileEntry entry : entries) {
+        if (entry.getPath().endsWith(".parquet")) {
+          allDataFiles.add(entry.getPath());
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to list data files in {}: {}", dataDir, e.getMessage());
+      return 0;
+    }
+
+    // Build set of referenced file names for fast lookup
+    // Use just the filename (last path component) to avoid s3:// vs s3a:// issues
+    Set<String> referencedFileNames = new HashSet<>();
+    for (String refPath : referencedFiles) {
+      int lastSlash = refPath.lastIndexOf('/');
+      String fileName = lastSlash >= 0 ? refPath.substring(lastSlash + 1) : refPath;
+      referencedFileNames.add(fileName);
+    }
+
+    // Find orphans (files not referenced by any snapshot)
+    List<String> orphanFiles = new ArrayList<>();
+    for (String filePath : allDataFiles) {
+      int lastSlash = filePath.lastIndexOf('/');
+      String fileName = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+      boolean isReferenced = referencedFileNames.contains(fileName);
+
+      if (!isReferenced) {
+        // Check file age before adding to orphan list
+        try {
+          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(filePath);
+          if (metadata.getLastModified() < olderThanMillis) {
+            orphanFiles.add(filePath);
+          }
+        } catch (IOException e) {
+          // If we can't get metadata, assume it's old enough to delete
+          orphanFiles.add(filePath);
+        }
+      }
+    }
+
+    if (orphanFiles.isEmpty()) {
+      LOGGER.debug("No orphan files found");
+      return 0;
+    }
+
+    LOGGER.info("Found {} orphan files to remove", orphanFiles.size());
+
+    // Delete orphan files in batches
+    int deleted = 0;
+    try {
+      storageProvider.deleteBatch(orphanFiles);
+      deleted = orphanFiles.size();
+    } catch (IOException e) {
+      LOGGER.warn("Failed to delete orphan files: {}", e.getMessage());
+    }
+
+    return deleted;
+  }
+
+  /**
+   * Compacts small files in the table into larger files.
+   *
+   * <p>This method scans all data files, groups them by partition, and rewrites
+   * partitions that have many small files into fewer larger files targeting the
+   * specified file size.
+   *
+   * @param targetFileSizeBytes Target size for compacted files (default: 128MB)
+   * @param minFilesToCompact Minimum number of small files to trigger compaction (default: 10)
+   * @param smallFileSizeBytes Files smaller than this are considered "small" (default: 10MB)
+   * @return Number of partitions compacted
+   */
+  public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
+      long smallFileSizeBytes) throws IOException {
+    LOGGER.info("Starting compaction for table {} (target={}MB, minFiles={}, smallSize={}MB)",
+        table.name(), targetFileSizeBytes / (1024 * 1024), minFilesToCompact,
+        smallFileSizeBytes / (1024 * 1024));
+
+    if (table.currentSnapshot() == null) {
+      LOGGER.info("Table has no snapshots, nothing to compact");
+      return 0;
+    }
+
+    // Group files by partition
+    Map<String, List<FileScanTask>> partitionFiles = new HashMap<>();
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        String partitionKey = task.file().partition().toString();
+        partitionFiles.computeIfAbsent(partitionKey, k -> new ArrayList<>()).add(task);
+      }
+    }
+
+    int compactedPartitions = 0;
+    for (Map.Entry<String, List<FileScanTask>> entry : partitionFiles.entrySet()) {
+      String partitionKey = entry.getKey();
+      List<FileScanTask> tasks = entry.getValue();
+
+      // Count small files in this partition
+      List<FileScanTask> smallFiles = new ArrayList<>();
+      for (FileScanTask task : tasks) {
+        if (task.file().fileSizeInBytes() < smallFileSizeBytes) {
+          smallFiles.add(task);
+        }
+      }
+
+      if (smallFiles.size() >= minFilesToCompact) {
+        LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
+        try {
+          compactPartition(smallFiles, targetFileSizeBytes);
+          compactedPartitions++;
+        } catch (Exception e) {
+          LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
+        }
+      }
+    }
+
+    LOGGER.info("Compaction complete: {} partitions compacted", compactedPartitions);
+    return compactedPartitions;
+  }
+
+  /**
+   * Compacts files within a single partition.
+   */
+  private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes)
+      throws IOException {
+    if (smallFiles.isEmpty()) {
+      return;
+    }
+
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+
+    // Read all records from small files
+    List<Record> allRecords = new ArrayList<>();
+    Set<DataFile> filesToDelete = new HashSet<>();
+
+    // Read records from each small file individually using Parquet reader
+    for (FileScanTask task : smallFiles) {
+      DataFile dataFile = task.file();
+      filesToDelete.add(dataFile);
+
+      String filePath = normalizeS3Path(dataFile.path().toString());
+      // Use HadoopInputFile with configured hadoopConf for S3 credentials
+      InputFile inputFile = HadoopInputFile.fromPath(new Path(filePath), hadoopConf);
+
+      try (CloseableIterable<Record> records = Parquet.read(inputFile)
+          .project(schema)
+          .createReaderFunc(fileSchema ->
+              org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                  schema, fileSchema))
+          .build()) {
+        for (Record record : records) {
+          allRecords.add(record);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
+      }
+    }
+
+    if (allRecords.isEmpty()) {
+      return;
+    }
+
+    LOGGER.info("Read {} records from {} small files, writing compacted files",
+        allRecords.size(), smallFiles.size());
+
+    // Write compacted files
+    List<DataFile> newFiles = new ArrayList<>();
+    int recordsPerFile = Math.max(1, (int) (targetFileSizeBytes / estimateRecordSize(allRecords)));
+
+    // Get partition values from first file (all files in partition have same values)
+    StructLike partitionData = smallFiles.get(0).file().partition();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    copyPartitionValues(partitionKey, partitionData, spec);
+
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
+
+    for (int i = 0; i < allRecords.size(); i += recordsPerFile) {
+      int end = Math.min(i + recordsPerFile, allRecords.size());
+      List<Record> chunk = allRecords.subList(i, end);
+
+      String filePath = dataLocation + "/" + partitionPath + "/compacted_"
+          + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+      if (filePath.startsWith("s3://")) {
+        filePath = "s3a://" + filePath.substring(5);
+      }
+
+      OutputFile outputFile = table.io().newOutputFile(filePath);
+      DataWriter<Record> writer = Parquet.writeData(outputFile)
+          .schema(schema)
+          .withSpec(spec)
+          .withPartition(partitionKey)
+          .createWriterFunc(GenericParquetWriter::buildWriter)
+          .overwrite()
+          .build();
+
+      try {
+        for (Record record : chunk) {
+          writer.write(record);
+        }
+      } finally {
+        writer.close();
+      }
+
+      newFiles.add(writer.toDataFile());
+    }
+
+    // Commit the rewrite: delete old files, add new files
+    RewriteFiles rewrite = table.newRewrite();
+    for (DataFile oldFile : filesToDelete) {
+      rewrite.deleteFile(oldFile);
+    }
+    for (DataFile newFile : newFiles) {
+      rewrite.addFile(newFile);
+    }
+    rewrite.commit();
+
+    LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
+  }
+
+  /**
+   * Estimates average record size from a sample of records.
+   */
+  private long estimateRecordSize(List<Record> records) {
+    if (records.isEmpty()) {
+      return 100; // Default estimate
+    }
+    // Simple estimate: count fields and estimate bytes per field
+    Record sample = records.get(0);
+    int fieldCount = table.schema().columns().size();
+    return fieldCount * 50L; // Rough estimate of 50 bytes per field
+  }
+
+  /**
+   * Copies partition values from StructLike to PartitionKey.
+   */
+  private void copyPartitionValues(PartitionKey key, StructLike source, PartitionSpec spec) {
+    for (int i = 0; i < spec.fields().size(); i++) {
+      Object value = source.get(i, Object.class);
+      key.set(i, value);
+    }
+  }
+
+  /**
+   * Builds partition path from PartitionKey.
+   */
+  private String buildPartitionPathFromKey(PartitionKey key, PartitionSpec spec) {
+    StringBuilder path = new StringBuilder();
+    List<org.apache.iceberg.PartitionField> fields = spec.fields();
+    for (int i = 0; i < fields.size(); i++) {
+      if (path.length() > 0) {
+        path.append("/");
+      }
+      path.append(fields.get(i).name()).append("=").append(key.get(i, Object.class));
+    }
+    return path.toString();
   }
 
   /**

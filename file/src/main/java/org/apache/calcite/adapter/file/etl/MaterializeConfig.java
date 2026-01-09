@@ -445,6 +445,10 @@ public class MaterializeConfig {
     private final long retryDelayMs;
     private final boolean runMaintenance;
     private final int snapshotRetentionDays;
+    private final boolean runCompaction;
+    private final long compactionTargetFileSizeBytes;
+    private final int compactionMinFiles;
+    private final long compactionSmallFileSizeBytes;
 
     private IcebergConfig(IcebergConfigBuilder builder) {
       this.catalogType = builder.catalogType != null ? builder.catalogType : CatalogType.HADOOP;
@@ -462,6 +466,13 @@ public class MaterializeConfig {
       this.runMaintenance = builder.runMaintenance;
       this.snapshotRetentionDays = builder.snapshotRetentionDays > 0
           ? builder.snapshotRetentionDays : 7;
+      this.runCompaction = builder.runCompaction;
+      this.compactionTargetFileSizeBytes = builder.compactionTargetFileSizeBytes > 0
+          ? builder.compactionTargetFileSizeBytes : 128L * 1024 * 1024; // 128MB default
+      this.compactionMinFiles = builder.compactionMinFiles > 0
+          ? builder.compactionMinFiles : 10;
+      this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
+          ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
     }
 
     public CatalogType getCatalogType() {
@@ -502,6 +513,22 @@ public class MaterializeConfig {
 
     public int getSnapshotRetentionDays() {
       return snapshotRetentionDays;
+    }
+
+    public boolean isRunCompaction() {
+      return runCompaction;
+    }
+
+    public long getCompactionTargetFileSizeBytes() {
+      return compactionTargetFileSizeBytes;
+    }
+
+    public int getCompactionMinFiles() {
+      return compactionMinFiles;
+    }
+
+    public long getCompactionSmallFileSizeBytes() {
+      return compactionSmallFileSizeBytes;
     }
 
     public static IcebergConfigBuilder builder() {
@@ -578,6 +605,26 @@ public class MaterializeConfig {
         builder.snapshotRetentionDays(((Number) retentionObj).intValue());
       }
 
+      Object compactionObj = map.get("runCompaction");
+      if (compactionObj instanceof Boolean) {
+        builder.runCompaction((Boolean) compactionObj);
+      }
+
+      Object targetSizeObj = map.get("compactionTargetFileSizeBytes");
+      if (targetSizeObj instanceof Number) {
+        builder.compactionTargetFileSizeBytes(((Number) targetSizeObj).longValue());
+      }
+
+      Object minFilesObj = map.get("compactionMinFiles");
+      if (minFilesObj instanceof Number) {
+        builder.compactionMinFiles(((Number) minFilesObj).intValue());
+      }
+
+      Object smallSizeObj = map.get("compactionSmallFileSizeBytes");
+      if (smallSizeObj instanceof Number) {
+        builder.compactionSmallFileSizeBytes(((Number) smallSizeObj).longValue());
+      }
+
       return builder.build();
     }
 
@@ -610,6 +657,10 @@ public class MaterializeConfig {
       private long retryDelayMs;
       private boolean runMaintenance;
       private int snapshotRetentionDays;
+      private boolean runCompaction;
+      private long compactionTargetFileSizeBytes;
+      private int compactionMinFiles;
+      private long compactionSmallFileSizeBytes;
 
       public IcebergConfigBuilder catalogType(CatalogType catalogType) {
         this.catalogType = catalogType;
@@ -658,6 +709,26 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder snapshotRetentionDays(int snapshotRetentionDays) {
         this.snapshotRetentionDays = snapshotRetentionDays;
+        return this;
+      }
+
+      public IcebergConfigBuilder runCompaction(boolean runCompaction) {
+        this.runCompaction = runCompaction;
+        return this;
+      }
+
+      public IcebergConfigBuilder compactionTargetFileSizeBytes(long compactionTargetFileSizeBytes) {
+        this.compactionTargetFileSizeBytes = compactionTargetFileSizeBytes;
+        return this;
+      }
+
+      public IcebergConfigBuilder compactionMinFiles(int compactionMinFiles) {
+        this.compactionMinFiles = compactionMinFiles;
+        return this;
+      }
+
+      public IcebergConfigBuilder compactionSmallFileSizeBytes(long compactionSmallFileSizeBytes) {
+        this.compactionSmallFileSizeBytes = compactionSmallFileSizeBytes;
         return this;
       }
 

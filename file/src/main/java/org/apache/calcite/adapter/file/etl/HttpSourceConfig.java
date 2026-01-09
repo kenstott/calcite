@@ -129,6 +129,12 @@ public class HttpSourceConfig {
   // Row filtering for CSV parsing (to avoid loading entire file into memory)
   private final RowFilterConfig rowFilter;
 
+  // Response partitioning for bulk API responses
+  private final ResponsePartitioningConfig responsePartitioning;
+
+  // Wide-to-narrow transformation for CSV files with years as columns
+  private final WideToNarrowConfig wideToNarrow;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -151,6 +157,8 @@ public class HttpSourceConfig {
     this.cache = builder.cache != null ? builder.cache : CacheConfig.defaults();
     this.rawCache = builder.rawCache != null ? builder.rawCache : RawCacheConfig.defaults();
     this.rowFilter = builder.rowFilter;
+    this.responsePartitioning = builder.responsePartitioning;
+    this.wideToNarrow = builder.wideToNarrow;
   }
 
   public String getUrl() {
@@ -288,10 +296,49 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Returns the response partitioning configuration.
+   *
+   * <p>When enabled, rows from the response are grouped by the specified fields
+   * and written to separate partitions. This allows a single bulk API call to
+   * produce multiple output partitions.
+   *
+   * @return Response partitioning config, or null if not configured
+   */
+  public ResponsePartitioningConfig getResponsePartitioning() {
+    return responsePartitioning;
+  }
+
+  /**
+   * Returns true if response partitioning is configured.
+   */
+  public boolean hasResponsePartitioning() {
+    return responsePartitioning != null && responsePartitioning.isEnabled();
+  }
+
+  /**
    * Returns true if row filtering is configured.
    */
   public boolean hasRowFilter() {
     return rowFilter != null && rowFilter.isEnabled();
+  }
+
+  /**
+   * Returns the wide-to-narrow transformation configuration.
+   *
+   * <p>When configured, CSV data in wide format (time periods as columns) is
+   * transformed to narrow format (time period as a row value) during parsing.
+   *
+   * @return Wide-to-narrow config, or null if not configured
+   */
+  public WideToNarrowConfig getWideToNarrow() {
+    return wideToNarrow;
+  }
+
+  /**
+   * Returns true if wide-to-narrow transformation is configured.
+   */
+  public boolean hasWideToNarrow() {
+    return wideToNarrow != null && wideToNarrow.isEnabled();
   }
 
   public static Builder builder() {
@@ -391,6 +438,17 @@ public class HttpSourceConfig {
     Object rawCacheObj = map.get("rawCache");
     if (rawCacheObj instanceof Map) {
       builder.rawCache(RawCacheConfig.fromMap((Map<String, Object>) rawCacheObj));
+    }
+
+    Object responsePartitioningObj = map.get("responsePartitioning");
+    if (responsePartitioningObj instanceof Map) {
+      builder.responsePartitioning(
+          ResponsePartitioningConfig.fromMap((Map<String, Object>) responsePartitioningObj));
+    }
+
+    Object wideToNarrowObj = map.get("wideToNarrow");
+    if (wideToNarrowObj instanceof Map) {
+      builder.wideToNarrow(WideToNarrowConfig.fromMap((Map<String, Object>) wideToNarrowObj));
     }
 
     return builder.build();
@@ -1020,6 +1078,362 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Configuration for partitioning response data by fields extracted from the response.
+   *
+   * <p>Response partitioning allows a single bulk API call to be split into multiple
+   * output partitions based on values in the response data. This is useful when an API
+   * returns data for multiple dimensions (e.g., all countries, all years) in a single
+   * response, but you want to partition the output by those dimensions.
+   *
+   * <h3>Example: World Bank API</h3>
+   * <pre>{@code
+   * source:
+   *   url: "https://api.worldbank.org/v2/country/all/indicator/{indicator}"
+   *   parameters:
+   *     per_page: "20000"
+   *     date: "{startYear}:{endYear}"
+   *   responsePartitioning:
+   *     fields:
+   *       country_code: "countryiso3code"   # Extract country from response
+   *       year: "date"                       # Extract year from response
+   * }</pre>
+   *
+   * <p>When response partitioning is enabled:
+   * <ol>
+   *   <li>The API is called once with URL dimensions (e.g., just indicator)</li>
+   *   <li>Response rows are grouped by the extracted partition field values</li>
+   *   <li>Each group is written separately with partition variables set</li>
+   * </ol>
+   */
+  public static class ResponsePartitioningConfig {
+    private final Map<String, String> fields;
+    private final String yearField;
+    private final int yearStart;
+    private final int yearEnd;
+
+    private ResponsePartitioningConfig(Map<String, String> fields,
+        String yearField, int yearStart, int yearEnd) {
+      this.fields = fields != null
+          ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(fields))
+          : Collections.<String, String>emptyMap();
+      this.yearField = yearField;
+      this.yearStart = yearStart;
+      this.yearEnd = yearEnd;
+    }
+
+    /**
+     * Creates a ResponsePartitioningConfig from a map.
+     *
+     * <p>Expected structure:
+     * <pre>{@code
+     * responsePartitioning:
+     *   fields:
+     *     partition_column: "source_field"
+     *   yearFilter:
+     *     field: "date"
+     *     start: 2000
+     *     end: 2025
+     * }</pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static ResponsePartitioningConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+
+      Map<String, String> fields = new LinkedHashMap<String, String>();
+      Object fieldsObj = map.get("fields");
+      if (fieldsObj instanceof Map) {
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) fieldsObj).entrySet()) {
+          fields.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+        }
+      }
+
+      if (fields.isEmpty()) {
+        return null;
+      }
+
+      // Parse year filter if present
+      String yearField = null;
+      int yearStart = 0;
+      int yearEnd = Integer.MAX_VALUE;
+
+      Object yearFilterObj = map.get("yearFilter");
+      if (yearFilterObj instanceof Map) {
+        Map<?, ?> yearFilter = (Map<?, ?>) yearFilterObj;
+        yearField = (String) yearFilter.get("field");
+        Object startObj = yearFilter.get("start");
+        Object endObj = yearFilter.get("end");
+
+        if (startObj instanceof Number) {
+          yearStart = ((Number) startObj).intValue();
+        } else if (startObj instanceof String) {
+          yearStart = VariableResolver.resolveInteger((String) startObj);
+        }
+
+        if (endObj instanceof Number) {
+          yearEnd = ((Number) endObj).intValue();
+        } else if (endObj instanceof String) {
+          String endStr = (String) endObj;
+          if ("current".equalsIgnoreCase(endStr)) {
+            yearEnd = java.time.Year.now().getValue();
+          } else {
+            yearEnd = VariableResolver.resolveInteger(endStr);
+          }
+        }
+      }
+
+      return new ResponsePartitioningConfig(fields, yearField, yearStart, yearEnd);
+    }
+
+    /**
+     * Returns the mapping from partition column names to source field names.
+     *
+     * <p>Keys are the output partition column names (e.g., "country_code").
+     * Values are the source field names in the response data (e.g., "countryiso3code").
+     *
+     * @return Partition field mappings, never null
+     */
+    public Map<String, String> getFields() {
+      return fields;
+    }
+
+    /**
+     * Returns true if response partitioning is enabled.
+     */
+    public boolean isEnabled() {
+      return !fields.isEmpty();
+    }
+
+    /**
+     * Returns true if year filtering is enabled.
+     */
+    public boolean hasYearFilter() {
+      return yearField != null && !yearField.isEmpty();
+    }
+
+    /**
+     * Returns the source field name for year filtering.
+     */
+    public String getYearField() {
+      return yearField;
+    }
+
+    /**
+     * Returns the minimum year to include (inclusive).
+     */
+    public int getYearStart() {
+      return yearStart;
+    }
+
+    /**
+     * Returns the maximum year to include (inclusive).
+     */
+    public int getYearEnd() {
+      return yearEnd;
+    }
+
+    /**
+     * Checks if a year value is within the configured range.
+     *
+     * @param yearValue The year value from the response (as string)
+     * @return true if within range or no filter configured
+     */
+    public boolean isYearInRange(Object yearValue) {
+      if (!hasYearFilter() || yearValue == null) {
+        return true;
+      }
+      try {
+        int year;
+        if (yearValue instanceof Number) {
+          year = ((Number) yearValue).intValue();
+        } else {
+          year = Integer.parseInt(String.valueOf(yearValue).trim());
+        }
+        return year >= yearStart && year <= yearEnd;
+      } catch (NumberFormatException e) {
+        return false;  // Skip rows with invalid year values
+      }
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("ResponsePartitioningConfig{fields=");
+      sb.append(fields);
+      if (hasYearFilter()) {
+        sb.append(", yearFilter={field=").append(yearField)
+            .append(", range=").append(yearStart).append("-").append(yearEnd).append("}");
+      }
+      sb.append("}");
+      return sb.toString();
+    }
+  }
+
+  /**
+   * Configuration for transforming wide-format CSV to narrow format.
+   *
+   * <p>Many bulk data files (like BEA Regional data) use wide format where time periods
+   * (years, quarters) are stored as column headers. This config transforms such data
+   * into a normalized narrow format with separate rows for each time period.
+   *
+   * <h3>BEA Example</h3>
+   * <pre>
+   * Wide format (input):
+   * GeoFIPS,GeoName,TableName,LineCode,Description,Unit,1929,1930,...,2024
+   * 00000,United States,SAINC1,1,Personal income,Millions,85151.0,76394.0,...,12345.0
+   *
+   * Narrow format (output):
+   * GeoFIPS,GeoName,TableName,LineCode,Description,Unit,Year,DataValue
+   * 00000,United States,SAINC1,1,Personal income,Millions,1929,85151.0
+   * 00000,United States,SAINC1,1,Personal income,Millions,1930,76394.0
+   * ...
+   * </pre>
+   *
+   * <h3>YAML Configuration</h3>
+   * <pre>{@code
+   * wideToNarrow:
+   *   keyColumns: [GeoFIPS, GeoName, TableName, LineCode, Description, Unit]
+   *   valueColumnPattern: "^\\d{4}$"  # Match 4-digit year columns
+   *   keyColumnName: Year             # Name for unpivoted key column
+   *   valueColumnName: DataValue      # Name for unpivoted value column
+   *   skipValues: ["(NA)", "(D)", ""]  # Values to skip during unpivot
+   * }</pre>
+   */
+  public static class WideToNarrowConfig {
+    private final java.util.List<String> keyColumns;
+    private final String valueColumnPattern;
+    private final String keyColumnName;
+    private final String valueColumnName;
+    private final java.util.Set<String> skipValues;
+
+    private WideToNarrowConfig(java.util.List<String> keyColumns, String valueColumnPattern,
+        String keyColumnName, String valueColumnName, java.util.Set<String> skipValues) {
+      this.keyColumns = keyColumns != null
+          ? Collections.unmodifiableList(new java.util.ArrayList<String>(keyColumns))
+          : Collections.<String>emptyList();
+      this.valueColumnPattern = valueColumnPattern;
+      this.keyColumnName = keyColumnName != null ? keyColumnName : "Key";
+      this.valueColumnName = valueColumnName != null ? valueColumnName : "Value";
+      this.skipValues = skipValues != null
+          ? Collections.unmodifiableSet(new java.util.HashSet<String>(skipValues))
+          : Collections.<String>emptySet();
+    }
+
+    /**
+     * Creates a WideToNarrowConfig from a map.
+     */
+    @SuppressWarnings("unchecked")
+    public static WideToNarrowConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+
+      java.util.List<String> keyColumns = new java.util.ArrayList<String>();
+      Object keyColumnsObj = map.get("keyColumns");
+      if (keyColumnsObj instanceof java.util.List) {
+        for (Object item : (java.util.List<?>) keyColumnsObj) {
+          keyColumns.add(String.valueOf(item));
+        }
+      }
+
+      if (keyColumns.isEmpty()) {
+        return null;  // keyColumns is required
+      }
+
+      String valueColumnPattern = (String) map.get("valueColumnPattern");
+      String keyColumnName = (String) map.get("keyColumnName");
+      String valueColumnName = (String) map.get("valueColumnName");
+
+      java.util.Set<String> skipValues = new java.util.HashSet<String>();
+      Object skipValuesObj = map.get("skipValues");
+      if (skipValuesObj instanceof java.util.List) {
+        for (Object item : (java.util.List<?>) skipValuesObj) {
+          skipValues.add(String.valueOf(item));
+        }
+      }
+
+      return new WideToNarrowConfig(keyColumns, valueColumnPattern, keyColumnName,
+          valueColumnName, skipValues);
+    }
+
+    /**
+     * Returns the list of columns to keep as-is (not unpivoted).
+     */
+    public java.util.List<String> getKeyColumns() {
+      return keyColumns;
+    }
+
+    /**
+     * Returns the regex pattern to identify value columns (columns to unpivot).
+     * If null, all columns not in keyColumns are treated as value columns.
+     */
+    public String getValueColumnPattern() {
+      return valueColumnPattern;
+    }
+
+    /**
+     * Returns the name for the new key column (e.g., "Year").
+     */
+    public String getKeyColumnName() {
+      return keyColumnName;
+    }
+
+    /**
+     * Returns the name for the new value column (e.g., "DataValue").
+     */
+    public String getValueColumnName() {
+      return valueColumnName;
+    }
+
+    /**
+     * Returns true if this config is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return !keyColumns.isEmpty();
+    }
+
+    /**
+     * Returns the set of values to skip during unpivot.
+     * Empty values are always skipped regardless of this setting.
+     */
+    public java.util.Set<String> getSkipValues() {
+      return skipValues;
+    }
+
+    /**
+     * Checks if a value should be skipped during unpivot.
+     *
+     * @param value The value to check
+     * @return true if the value is empty or in the skipValues set
+     */
+    public boolean shouldSkipValue(String value) {
+      return value == null || value.isEmpty() || skipValues.contains(value);
+    }
+
+    /**
+     * Checks if a column name matches the value column pattern.
+     *
+     * @param columnName The column name to check
+     * @return true if this column should be unpivoted as a value column
+     */
+    public boolean isValueColumn(String columnName) {
+      if (valueColumnPattern == null || valueColumnPattern.isEmpty()) {
+        // If no pattern, all non-key columns are value columns
+        return !keyColumns.contains(columnName);
+      }
+      return columnName.matches(valueColumnPattern);
+    }
+
+    @Override
+    public String toString() {
+      return "WideToNarrowConfig{keyColumns=" + keyColumns
+          + ", valueColumnPattern='" + valueColumnPattern + "'"
+          + ", keyColumnName='" + keyColumnName + "'"
+          + ", valueColumnName='" + valueColumnName + "'}";
+    }
+  }
+
+  /**
    * Builder for HttpSourceConfig.
    */
   public static class Builder {
@@ -1038,6 +1452,8 @@ public class HttpSourceConfig {
     private String bulkDownload;
     private String extractPattern;
     private RowFilterConfig rowFilter;
+    private ResponsePartitioningConfig responsePartitioning;
+    private WideToNarrowConfig wideToNarrow;
 
     public Builder url(String url) {
       this.url = url;
@@ -1111,6 +1527,16 @@ public class HttpSourceConfig {
 
     public Builder rowFilter(RowFilterConfig rowFilter) {
       this.rowFilter = rowFilter;
+      return this;
+    }
+
+    public Builder responsePartitioning(ResponsePartitioningConfig responsePartitioning) {
+      this.responsePartitioning = responsePartitioning;
+      return this;
+    }
+
+    public Builder wideToNarrow(WideToNarrowConfig wideToNarrow) {
+      this.wideToNarrow = wideToNarrow;
       return this;
     }
 

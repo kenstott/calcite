@@ -68,7 +68,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   ));
 
   private static final Set<String> BEA_TABLES = new HashSet<>(Arrays.asList(
-      "national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp"
+      "national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp",
+      // Bulk download tables (using ZIP files instead of per-API-call approach)
+      "state_personal_income", "state_gdp", "state_quarterly_income",
+      "state_quarterly_gdp", "state_consumption"
   ));
 
   @Override

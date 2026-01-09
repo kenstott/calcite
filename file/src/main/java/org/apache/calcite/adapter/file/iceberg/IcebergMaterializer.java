@@ -69,6 +69,11 @@ public class IcebergMaterializer {
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
   private static final int DEFAULT_THREADS = 2;
 
+  /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
+  private static final String DUCKDB_MEMORY_LIMIT =
+      System.getenv("DUCKDB_MEMORY_LIMIT") != null
+          ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
+
   private final String warehousePath;
   private final Map<String, Object> catalogConfig;
   private final StorageProvider storageProvider;
@@ -838,6 +843,11 @@ public class IcebergMaterializer {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=" + threads);
       stmt.execute("SET preserve_insertion_order=false");
+      // Limit memory to avoid OOM on memory-constrained systems
+      stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      if (warehousePath != null) {
+        stmt.execute("SET temp_directory='" + warehousePath + "/.duckdb_tmp'");
+      }
 
       // Load extensions
       try {

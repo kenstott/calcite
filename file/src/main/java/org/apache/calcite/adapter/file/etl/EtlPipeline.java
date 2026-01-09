@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -236,10 +237,15 @@ public class EtlPipeline {
       }
 
       // Phase 2: Bulk filter to find unprocessed combinations
+      // Use TTL-aware filtering to requery empty results after configured interval
       LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
       long filterStartMs = System.currentTimeMillis();
+      long emptyResultTtlMillis = materializeConfig != null && materializeConfig.getOptions() != null
+          ? materializeConfig.getOptions().getEmptyResultTtlMillis()
+          : MaterializeOptionsConfig.defaults().getEmptyResultTtlMillis();
       Set<Integer> unprocessedIndices =
-          incrementalTracker.filterUnprocessed(pipelineName, pipelineName, combinations);
+          incrementalTracker.filterUnprocessedWithEmptyTtl(
+              pipelineName, pipelineName, combinations, emptyResultTtlMillis);
       long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
       int neededCount = unprocessedIndices.size();
@@ -367,26 +373,39 @@ public class EtlPipeline {
             data = dataSource.fetch(variables);
           }
 
-          // Write batch - use custom writer if available, otherwise built-in MaterializationWriter
+          // Check if response partitioning is enabled
+          HttpSourceConfig sourceConfig = config.getSource();
+          boolean hasResponsePartitioning = sourceConfig != null
+              && sourceConfig.hasResponsePartitioning();
+
           long batchRows;
-          if (dataWriter != null) {
-            batchRows = dataWriter.write(config, data, variables);
-            if (batchRows >= 0) {
-              LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+          if (hasResponsePartitioning) {
+            // Response partitioning: group rows by partition fields and write each group
+            batchRows = writeWithResponsePartitioning(
+                data, variables, sourceConfig.getResponsePartitioning(),
+                writer, dataWriter, incrementalTracker, pipelineName);
+          } else {
+            // Standard path: write all rows with the URL dimension variables
+            if (dataWriter != null) {
+              batchRows = dataWriter.write(config, data, variables);
+              if (batchRows >= 0) {
+                LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+              } else {
+                // Custom writer returned -1, use built-in writer
+                batchRows = writer.writeBatch(data, variables);
+              }
             } else {
-              // Custom writer returned -1, use built-in writer
+              // Use built-in MaterializationWriter
               batchRows = writer.writeBatch(data, variables);
             }
-          } else {
-            // Use built-in MaterializationWriter
-            batchRows = writer.writeBatch(data, variables);
+            // Mark batch as successfully processed for incremental tracking
+            // Track row count so empty results can be requeried after TTL
+            incrementalTracker.markProcessedWithRowCount(
+                pipelineName, pipelineName, variables, null, batchRows);
           }
           totalRows += batchRows;
 
           LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
-
-          // Mark batch as successfully processed for incremental tracking
-          incrementalTracker.markProcessed(pipelineName, pipelineName, variables, null);
 
           successfulBatches++;
 
@@ -496,6 +515,91 @@ public class EtlPipeline {
         }
       }
     }
+  }
+
+  /**
+   * Writes data with response partitioning.
+   *
+   * <p>Groups rows by partition field values extracted from the response,
+   * then writes each group separately with merged partition variables.
+   *
+   * @param data Iterator of rows from the API response
+   * @param urlVariables Variables from URL dimension expansion
+   * @param partitionConfig Response partitioning configuration
+   * @param writer Materialization writer
+   * @param dataWriter Optional custom data writer
+   * @param tracker Incremental tracker for marking processed partitions
+   * @param pipelineName Name of the pipeline
+   * @return Total rows written across all partitions
+   * @throws IOException If writing fails
+   */
+  private long writeWithResponsePartitioning(
+      Iterator<Map<String, Object>> data,
+      Map<String, String> urlVariables,
+      HttpSourceConfig.ResponsePartitioningConfig partitionConfig,
+      MaterializationWriter writer,
+      DataWriter dataWriter,
+      IncrementalTracker tracker,
+      String pipelineName) throws IOException {
+
+    Map<String, String> fieldMappings = partitionConfig.getFields();
+    LOGGER.info("Response partitioning enabled with fields: {}", fieldMappings);
+
+    // Check for year filtering
+    boolean hasYearFilter = partitionConfig.hasYearFilter();
+    String yearField = partitionConfig.getYearField();
+    if (hasYearFilter) {
+      LOGGER.info("Year filter enabled: field={}, range={}-{}",
+          yearField, partitionConfig.getYearStart(), partitionConfig.getYearEnd());
+    }
+
+    // Collect all rows (with year filtering), let DuckDB PARTITION_BY handle partitioning
+    List<Map<String, Object>> allRows = new ArrayList<Map<String, Object>>();
+    int totalRows = 0;
+    int filteredRows = 0;
+
+    while (data.hasNext()) {
+      Map<String, Object> row = data.next();
+      totalRows++;
+
+      // Apply year filter if configured
+      if (hasYearFilter) {
+        Object yearValue = row.get(yearField);
+        if (!partitionConfig.isYearInRange(yearValue)) {
+          filteredRows++;
+          continue;  // Skip rows outside year range
+        }
+      }
+
+      allRows.add(row);
+    }
+
+    if (filteredRows > 0) {
+      LOGGER.info("Filtered {} of {} rows by year range, writing {} rows in single batch",
+          filteredRows, totalRows, allRows.size());
+    } else {
+      LOGGER.info("Writing {} rows in single batch (DuckDB PARTITION_BY handles partitioning)",
+          allRows.size());
+    }
+
+    if (allRows.isEmpty()) {
+      LOGGER.info("No rows to write after filtering");
+      // Mark as empty (0 rows) - will be requeried after TTL
+      tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, 0);
+      return 0;
+    }
+
+    // Write ALL rows in ONE batch - DuckDB's PARTITION_BY handles the physical partitioning
+    // This is O(1) COPY operations instead of O(partitions)
+    long writtenRows = writer.writeBatch(allRows.iterator(), urlVariables);
+
+    // Track at URL dimension level (e.g., indicator), not every partition combination
+    tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, writtenRows);
+
+    LOGGER.info("Response partitioning complete: {} rows written in single batch",
+        writtenRows);
+
+    return writtenRows;
   }
 
   /**
@@ -705,7 +809,9 @@ public class EtlPipeline {
 
     int rebuilt = 0;
     for (Map<String, String> partition : existingPartitions) {
-      incrementalTracker.markProcessed(pipelineName, pipelineName, partition, null);
+      // Mark with -1 (unknown row count but has data) to indicate non-empty
+      incrementalTracker.markProcessedWithRowCount(
+          pipelineName, pipelineName, partition, null, -1);
       rebuilt++;
     }
 
