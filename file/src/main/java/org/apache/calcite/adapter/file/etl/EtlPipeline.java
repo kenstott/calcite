@@ -795,20 +795,41 @@ public class EtlPipeline {
       }
     }
 
+    // Find partitions that ARE in expected set (can be rebuilt)
+    java.util.Set<Map<String, String>> rebuildable =
+        new java.util.HashSet<Map<String, String>>();
+    for (Map<String, String> existing : existingPartitions) {
+      Map<String, String> partitionOnly = new java.util.LinkedHashMap<String, String>();
+      for (String col : partitionColumns) {
+        String val = existing.get(col);
+        if (val != null) {
+          partitionOnly.put(col, val);
+        }
+      }
+      if (expectedSet.contains(partitionOnly)) {
+        rebuildable.add(partitionOnly);
+      }
+    }
+
     if (!stalePartitions.isEmpty()) {
-      LOGGER.warn("Found {} stale partitions in Iceberg table '{}' not in current dimensions. "
-          + "Example: {}. Skipping cache rebuild - data will be re-downloaded.",
+      LOGGER.info("Found {} stale partitions in Iceberg table '{}' not in current dimensions "
+          + "(Example: {}). These will be ignored - only {} current partitions will be rebuilt.",
           stalePartitions.size(), targetTableId,
-          stalePartitions.iterator().next());
+          stalePartitions.iterator().next(), rebuildable.size());
+    }
+
+    if (rebuildable.isEmpty()) {
+      LOGGER.debug("No rebuildable partitions found for table '{}', skipping cache rebuild",
+          targetTableId);
       return;
     }
 
-    // Iceberg data is valid - rebuild cache from existing partitions
+    // Rebuild cache from existing partitions that match current dimensions
     LOGGER.info("Self-healing: Rebuilding cache from {} existing Iceberg partitions for table '{}'",
-        existingPartitions.size(), targetTableId);
+        rebuildable.size(), targetTableId);
 
     int rebuilt = 0;
-    for (Map<String, String> partition : existingPartitions) {
+    for (Map<String, String> partition : rebuildable) {
       // Mark with -1 (unknown row count but has data) to indicate non-empty
       incrementalTracker.markProcessedWithRowCount(
           pipelineName, pipelineName, partition, null, -1);
