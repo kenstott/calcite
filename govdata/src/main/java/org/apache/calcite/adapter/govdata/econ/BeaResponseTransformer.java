@@ -114,11 +114,27 @@ public class BeaResponseTransformer implements ResponseTransformer {
         throw new RuntimeException("BEA API error " + errorCode + ": " + errorDesc);
       }
 
-      // Extract data array
-      JsonNode data = results.path("Data");
+      // Extract data array - handle both dict and array Results structures
+      // Some BEA APIs return Results as a dict: Results.Data
+      // Others (like GDPbyIndustry) return Results as an array: Results[0].Data
+      JsonNode dataSource = results;
+      if (results.isArray() && results.size() > 0) {
+        // Results is an array, get first element
+        dataSource = results.get(0);
+        LOGGER.debug("BEA: Results is an array, using first element");
+      }
+
+      JsonNode data = dataSource.path("Data");
+
+      // Handle single object Data (ITA API returns single object for single-year queries)
+      if (!data.isMissingNode() && data.isObject()) {
+        LOGGER.debug("BEA: Data is single object, wrapping in array");
+        return "[" + data.toString() + "]";
+      }
+
       if (data.isMissingNode() || !data.isArray()) {
         // Check for ParamValue (used by GetParameterValues API calls)
-        JsonNode paramValue = results.path("ParamValue");
+        JsonNode paramValue = dataSource.path("ParamValue");
         if (!paramValue.isMissingNode() && paramValue.isArray()) {
           LOGGER.debug("BEA: Returning ParamValue array with {} elements", paramValue.size());
           return paramValue.toString();
@@ -127,7 +143,7 @@ public class BeaResponseTransformer implements ResponseTransformer {
         // Log what IS in the Results to help debug missing data issues
         if (LOGGER.isDebugEnabled()) {
           StringBuilder fields = new StringBuilder();
-          java.util.Iterator<String> fieldNames = results.fieldNames();
+          java.util.Iterator<String> fieldNames = dataSource.fieldNames();
           while (fieldNames.hasNext()) {
             if (fields.length() > 0) {
               fields.append(", ");

@@ -1010,7 +1010,7 @@ partitionedTables:
         envVar: BLS_API_KEY  # Set BLS API key in environment
 
     # HTTP Source configuration for EtlPipeline
-    # Uses json_catalog to batch 1,122 series into requests of 50 (BLS API limit)
+    # Uses batching to split 1,122 series into requests of 50 (BLS API limit)
     source:
       type: http
       enabled: true
@@ -1019,14 +1019,16 @@ partitionedTables:
       headers:
         Content-Type: "application/json"
       body:
-        seriesid:
-          type: json_catalog
-          source: "/bls/state-industry-series.json"
-          path: "seriesIds"
-          batchSize: 50  # BLS API limit
+        seriesid: []  # Placeholder - replaced by batching
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
+      batching:
+        field: seriesid
+        source: "/bls/state-industry-series.json"
+        path: "seriesIds"
+        size: 50  # BLS API limit
+        delayMs: 1100  # Rate limit between batches
       response:
         format: json
         # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
@@ -1284,7 +1286,7 @@ partitionedTables:
         maxRetries: 3
 
     # HTTP Source configuration for EtlPipeline
-    # Uses json_catalog to batch 594 series into requests of 50 (BLS API limit)
+    # Uses batching to split 594 series into requests of 50 (BLS API limit)
     source:
       type: http
       enabled: true
@@ -1293,14 +1295,16 @@ partitionedTables:
       headers:
         Content-Type: "application/json"
       body:
-        seriesid:
-          type: json_catalog
-          source: "/bls/metro-industry-series.json"
-          path: "seriesIds"
-          batchSize: 50  # BLS API limit
+        seriesid: []  # Placeholder - replaced by batching
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
+      batching:
+        field: seriesid
+        source: "/bls/metro-industry-series.json"
+        path: "seriesIds"
+        size: 50  # BLS API limit
+        delayMs: 1100  # Rate limit between batches
       response:
         format: json
         # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
@@ -1796,6 +1800,11 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
         targetFileSizeBytes: 134217728
+        # Test automatic compaction
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 1048576  # 1MB
 
   # --- JOLTS STATE ---
   - name: jolts_state
@@ -2074,7 +2083,7 @@ partitionedTables:
         envVar: BLS_API_KEY  # Set API key in environment
 
     # HTTP Source configuration for EtlPipeline
-    # Uses json_catalog to batch 204 series into requests of 50 (BLS API limit)
+    # Uses batching to split 204 series into requests of 50 (BLS API limit)
     source:
       type: http
       enabled: true
@@ -2083,14 +2092,16 @@ partitionedTables:
       headers:
         Content-Type: "application/json"
       body:
-        seriesid:
-          type: json_catalog
-          source: "/bls/regional-employment-series.json"
-          path: "seriesIds"
-          batchSize: 50  # BLS API limit
+        seriesid: []  # Placeholder - replaced by batching
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
+      batching:
+        field: seriesid
+        source: "/bls/regional-employment-series.json"
+        path: "seriesIds"
+        size: 50  # BLS API limit
+        delayMs: 1100  # Rate limit between batches
       response:
         format: json
         # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
@@ -3520,11 +3531,13 @@ partitionedTables:
       dimensionResolver: "org.apache.calcite.adapter.govdata.econ.BeaDimensionResolver"
 
     # Materialization configuration
+    # Consolidates ~26K small parquet files into ~25-175 larger Iceberg files
+    # partitioned by (type, year) for optimal query performance.
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=*/year=*/"
+        pattern: "type=regional_income/year=*/"
       partition:
         columns: [type, year]
       options:
@@ -3534,10 +3547,18 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
-        batchPartitionColumns: [year]
+        # Process in batches by year AND geo_fips_set to avoid OOM on the
+        # high cardinality dimension cross-product (7 geo_fips × 63 tables × many linecodes)
+        batchPartitionColumns: [year, geo_fips_set]
         incrementalKeys: [year]
         runMaintenance: true
         snapshotRetentionDays: 7
+        # Automatic compaction - consolidates ~4,000 small files per year into ~1-2 large files
+        # This runs after commit to convert source dimension files into materialization dimension files
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728  # 128MB
+        compactionMinFiles: 10  # Only compact if partition has 10+ small files
+        compactionSmallFileSizeBytes: 10485760  # 10MB - files under this are "small"
 
     # Alternate partition layouts for optimized query patterns
     # Consolidated files use different partition keys within type=regional_income.
