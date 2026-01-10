@@ -2029,11 +2029,1171 @@ partitionedTables:
         catalogType: hadoop
 
 # ============================================================================
+# POPULATION ESTIMATES PROGRAM (PEP)
+# Annual population estimates between decennial censuses
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # PEP POPULATION - Annual population estimates by state/county
+  # ---------------------------------------------------------------------------
+  - name: pep_population
+    pattern: "type=pep/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Population Estimates Program (PEP) annual population estimates for states
+      and counties. Provides estimates between decennial censuses.
+
+    dimensions:
+      type:
+        - pep
+      year:
+        - '2020'
+        - '2021'
+        - '2022'
+        - '2023'
+        - '2024'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."POP" AS BIGINT)'
+        comment: Total population estimate
+      - name: density
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DENSITY" AS DOUBLE)'
+        comment: Population density per square mile
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/pep/population?get=NAME,POP,DENSITY&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pep/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: pep_population
+        catalogType: hadoop
+
+# ============================================================================
+# COUNTY BUSINESS PATTERNS (CBP)
+# Annual business establishment and employment data by industry
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # CBP ESTABLISHMENTS - Business counts by industry and geography
+  # ---------------------------------------------------------------------------
+  - name: cbp_establishments
+    pattern: "type=cbp/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      County Business Patterns provides annual data on business establishments,
+      employment, and payroll by industry (NAICS) at state and county levels.
+
+    dimensions:
+      type:
+        - cbp
+      year:
+        - '2020'
+        - '2021'
+        - '2022'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: naics_code
+        type: string
+        nullable: true
+        expression: 'src."NAICS2017"'
+        comment: 2017 NAICS industry code
+      - name: establishments
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ESTAB" AS BIGINT)'
+        comment: Number of establishments
+      - name: employees
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EMP" AS BIGINT)'
+        comment: Number of employees (mid-March)
+      - name: annual_payroll
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PAYANN" AS BIGINT)'
+        comment: Annual payroll ($1,000)
+      - name: first_quarter_payroll
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PAYQTR1" AS BIGINT)'
+        comment: First quarter payroll ($1,000)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=00"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cbp/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: cbp_establishments
+        catalogType: hadoop
+
+# ============================================================================
+# ACS 1-YEAR ESTIMATES
+# More current data for areas with 65,000+ population
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # ACS 1-YEAR POPULATION - Current year population estimates
+  # ---------------------------------------------------------------------------
+  - name: acs1_population
+    pattern: "type=acs1/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      ACS 1-Year population estimates. More current than 5-year but only
+      available for areas with 65,000+ population.
+
+    dimensions:
+      type:
+        - acs1
+      year:
+        - '2022'
+        - '2023'
+        - '2024'
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B01001_001E" AS BIGINT)'
+        comment: Total population
+      - name: male_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B01001_002E" AS BIGINT)'
+        comment: Male population
+      - name: female_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B01001_026E" AS BIGINT)'
+        comment: Female population
+      - name: median_age
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."B01002_001E" AS DOUBLE)'
+        comment: Median age
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B01001_001E,B01001_002E,B01001_026E,B01002_001E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs1/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs1_population
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS 1-YEAR INCOME - Current year income statistics
+  # ---------------------------------------------------------------------------
+  - name: acs1_income
+    pattern: "type=acs1/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      ACS 1-Year income statistics for areas with 65,000+ population.
+
+    dimensions:
+      type:
+        - acs1
+      year:
+        - '2022'
+        - '2023'
+        - '2024'
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: median_household_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19013_001E" AS BIGINT)'
+        comment: Median household income
+      - name: per_capita_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19301_001E" AS BIGINT)'
+        comment: Per capita income
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs1?get=NAME,B19013_001E,B19301_001E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs1/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs1_income
+        catalogType: hadoop
+
+# ============================================================================
+# ECONOMIC CENSUS
+# Comprehensive business statistics (every 5 years)
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # ECONOMIC CENSUS BASIC - Core business statistics
+  # ---------------------------------------------------------------------------
+  - name: economic_census
+    pattern: "type=ecn/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Economic Census provides comprehensive business statistics including
+      establishments, employment, payroll, and sales by industry.
+
+    dimensions:
+      type:
+        - ecn
+      year:
+        - '2017'
+        - '2022'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: naics_code
+        type: string
+        nullable: true
+        expression: 'src."NAICS2017"'
+        comment: NAICS industry code
+      - name: establishments
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ESTAB" AS BIGINT)'
+        comment: Number of establishments
+      - name: employees
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EMP" AS BIGINT)'
+        comment: Number of employees
+      - name: payroll
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PAYANN" AS BIGINT)'
+        comment: Annual payroll ($1,000)
+      - name: sales
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."RCPTOT" AS BIGINT)'
+        comment: Total sales/receipts ($1,000)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/ecnbasic?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,RCPTOT&for={geography}:*&NAICS2017=00"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ecn/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: economic_census
+        catalogType: hadoop
+
+# ============================================================================
+# SAIPE - SMALL AREA INCOME AND POVERTY ESTIMATES
+# County and school district level poverty statistics
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # SAIPE POVERTY - County-level poverty estimates
+  # ---------------------------------------------------------------------------
+  - name: saipe_poverty
+    pattern: "type=saipe/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Small Area Income and Poverty Estimates (SAIPE) provides annual county-level
+      estimates of income and poverty including median household income and
+      poverty rates by age group.
+
+    dimensions:
+      type:
+        - saipe
+      year:
+        - '2020'
+        - '2021'
+        - '2022'
+        - '2023'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: all_ages_poverty_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."SAEPOVALL_PT" AS BIGINT)'
+        comment: All ages in poverty count estimate
+      - name: all_ages_poverty_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SAEPOVRTALL_PT" AS DOUBLE)'
+        comment: All ages poverty rate estimate
+      - name: child_poverty_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."SAEPOV0_17_PT" AS BIGINT)'
+        comment: Ages 0-17 in poverty count estimate
+      - name: child_poverty_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SAEPOVRT0_17_PT" AS DOUBLE)'
+        comment: Ages 0-17 poverty rate estimate
+      - name: median_household_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."SAEMHI_PT" AS BIGINT)'
+        comment: Median household income estimate
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/poverty/saipe?get=NAME,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEPOV0_17_PT,SAEPOVRT0_17_PT,SAEMHI_PT&for={geography}:*&YEAR={year}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=saipe/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: saipe_poverty
+        catalogType: hadoop
+
+# ============================================================================
+# SAHIE - SMALL AREA HEALTH INSURANCE ESTIMATES
+# County-level health insurance coverage statistics
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # SAHIE INSURANCE - Health insurance coverage estimates
+  # ---------------------------------------------------------------------------
+  - name: sahie_insurance
+    pattern: "type=sahie/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Small Area Health Insurance Estimates (SAHIE) provides county-level
+      estimates of health insurance coverage rates.
+
+    dimensions:
+      type:
+        - sahie
+      year:
+        - '2020'
+        - '2021'
+        - '2022'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: insured_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."NIC_PT" AS BIGINT)'
+        comment: Number insured estimate
+      - name: uninsured_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."NUI_PT" AS BIGINT)'
+        comment: Number uninsured estimate
+      - name: insured_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PCTIC_PT" AS DOUBLE)'
+        comment: Percent insured estimate
+      - name: uninsured_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PCTUI_PT" AS DOUBLE)'
+        comment: Percent uninsured estimate
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/healthins/sahie?get=NAME,NIC_PT,NUI_PT,PCTIC_PT,PCTUI_PT&for={geography}:*&time={year}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=sahie/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: sahie_insurance
+        catalogType: hadoop
+
+# ============================================================================
+# BUSINESS DYNAMICS STATISTICS (BDS)
+# Firm-level job creation and destruction
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # BDS DYNAMICS - Job creation and destruction by state
+  # ---------------------------------------------------------------------------
+  - name: bds_dynamics
+    pattern: "type=bds/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Business Dynamics Statistics tracks job creation, destruction, firm
+      births and deaths at state level by industry and firm characteristics.
+
+    dimensions:
+      type:
+        - bds
+      year:
+        - '2020'
+        - '2021'
+        - '2022'
+        - '2023'
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: job_creation
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."JOB_CREATION" AS BIGINT)'
+        comment: Number of jobs created
+      - name: job_destruction
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."JOB_DESTRUCTION" AS BIGINT)'
+        comment: Number of jobs destroyed
+      - name: net_job_creation
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."NET_JOB_CREATION" AS BIGINT)'
+        comment: Net job creation (creation - destruction)
+      - name: establishments
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ESTABS" AS BIGINT)'
+        comment: Number of establishments
+      - name: firm_births
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."FIRMDEATH_FIRMS" AS BIGINT)'
+        comment: Number of new firms
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/bds?get=JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTABS,FIRMDEATH_FIRMS&for={geography}:*&YEAR={year}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bds/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: bds_dynamics
+        catalogType: hadoop
+
+# ============================================================================
+# ANNUAL BUSINESS SURVEY (ABS)
+# Business owner characteristics
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # ABS CHARACTERISTICS - Business owner demographics
+  # ---------------------------------------------------------------------------
+  - name: abs_characteristics
+    pattern: "type=abs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Annual Business Survey provides data on business owner characteristics
+      including demographics, education, and veteran status.
+
+    dimensions:
+      type:
+        - abs
+      year:
+        - '2021'
+        - '2022'
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: firms
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."FIRMPDEMP" AS BIGINT)'
+        comment: Number of employer firms
+      - name: receipts
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."RCPPDEMP" AS BIGINT)'
+        comment: Sales receipts ($1,000)
+      - name: employees
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EMP" AS BIGINT)'
+        comment: Number of employees
+      - name: payroll
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PAYANN" AS BIGINT)'
+        comment: Annual payroll ($1,000)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/abscs?get=NAME,FIRMPDEMP,RCPPDEMP,EMP,PAYANN&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=abs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: abs_characteristics
+        catalogType: hadoop
+
+# ============================================================================
+# NONEMPLOYER STATISTICS
+# Self-employed businesses without paid employees
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # NONEMPLOYER STATISTICS - Self-employed business counts
+  # ---------------------------------------------------------------------------
+  - name: nonemployer_statistics
+    pattern: "type=nonemp/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Nonemployer Statistics covers businesses with no paid employees,
+      typically self-employed individuals operating unincorporated businesses.
+
+    dimensions:
+      type:
+        - nonemp
+      year:
+        - '2019'
+        - '2020'
+        - '2021'
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - name: naics_code
+        type: string
+        nullable: true
+        expression: 'src."NAICS2017"'
+        comment: NAICS industry code
+      - name: establishments
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ESTAB" AS BIGINT)'
+        comment: Number of nonemployer establishments
+      - name: receipts
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."RCPTOT" AS BIGINT)'
+        comment: Total receipts ($1,000)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,ESTAB,RCPTOT&for={geography}:*&NAICS2017=00"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nonemp/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: nonemployer_statistics
+        catalogType: hadoop
+
+# ============================================================================
+# BUILDING PERMITS SURVEY
+# New residential construction permits
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # BUILDING PERMITS - Residential construction activity
+  # ---------------------------------------------------------------------------
+  - name: building_permits
+    pattern: "type=bps/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Building Permits Survey tracks new privately-owned residential
+      construction permits by state and metropolitan area.
+
+    dimensions:
+      type:
+        - bps
+      year:
+        - '2022'
+        - '2023'
+        - '2024'
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: total_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."UNITS" AS BIGINT)'
+        comment: Total housing units authorized
+      - name: total_value
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VALUATION" AS BIGINT)'
+        comment: Total valuation ($1,000)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/eits/bps?get=data_type_code,time_slot_id,cell_value,error_data&for={geography}:*&time={year}&category_code=TOTAL"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bps/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: building_permits
+        catalogType: hadoop
+
+# ============================================================================
+# QUARTERLY WORKFORCE INDICATORS (QWI)
+# Employment dynamics by demographics
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # QWI EMPLOYMENT - Quarterly employment by sex and age
+  # ---------------------------------------------------------------------------
+  - name: qwi_employment
+    pattern: "type=qwi/year=*/quarter=*/geography=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: string
+        - name: quarter
+          type: string
+        - name: geography
+          type: string
+    comment: >
+      Quarterly Workforce Indicators tracks employment, earnings, job creation,
+      and worker turnover by demographics (age, sex) and industry.
+
+    dimensions:
+      type:
+        - qwi
+      year:
+        - '2022'
+        - '2023'
+      quarter:
+        - '1'
+        - '2'
+        - '3'
+        - '4'
+      geography:
+        - state
+
+    columns:
+      - *state_column
+      - name: employment
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."Emp" AS BIGINT)'
+        comment: Beginning-of-quarter employment
+      - name: stable_employment
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EmpS" AS BIGINT)'
+        comment: Stable employment (employed full quarter)
+      - name: hires
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."HirA" AS BIGINT)'
+        comment: All hires
+      - name: separations
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."Sep" AS BIGINT)'
+        comment: All separations
+      - name: earnings
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EarnS" AS BIGINT)'
+        comment: Average monthly earnings of stable workers
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for={geography}:*&year={year}&quarter={quarter}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=qwi/year=*/quarter=*/geography=*/"
+      partition:
+        columns: [type, year, quarter, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: qwi_employment
+        catalogType: hadoop
+
+# ============================================================================
+# LEHD/LODES - Origin-Destination Employment Statistics
+# Commuting patterns (file-based, not API)
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # LODES WAC - Workplace Area Characteristics
+  # ---------------------------------------------------------------------------
+  - name: lodes_workplace
+    pattern: "type=lodes/year=*/state=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: string
+        - name: state
+          type: string
+    comment: >
+      LEHD Origin-Destination Employment Statistics (LODES) Workplace Area
+      Characteristics (WAC). Downloaded from lehd.ces.census.gov/data/lodes/.
+
+    dimensions:
+      type:
+        - lodes
+      year:
+        - '2021'
+        - '2022'
+      state:
+        - 'al'
+        - 'ak'
+        - 'az'
+        - 'ar'
+        - 'ca'
+        - 'co'
+        - 'ct'
+        - 'de'
+        - 'fl'
+        - 'ga'
+
+    columns:
+      - name: block_id
+        type: string
+        nullable: false
+        expression: 'src."w_geocode"'
+        comment: Workplace census block code
+      - name: total_jobs
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."C000" AS BIGINT)'
+        comment: Total number of jobs
+      - name: jobs_age_29_or_younger
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CA01" AS BIGINT)'
+        comment: Jobs for workers age 29 or younger
+      - name: jobs_age_30_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CA02" AS BIGINT)'
+        comment: Jobs for workers age 30 to 54
+      - name: jobs_age_55_or_older
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CA03" AS BIGINT)'
+        comment: Jobs for workers age 55 or older
+      - name: jobs_earning_1250_or_less
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CE01" AS BIGINT)'
+        comment: Jobs with monthly earnings $1,250 or less
+      - name: jobs_earning_1251_to_3333
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CE02" AS BIGINT)'
+        comment: Jobs with monthly earnings $1,251 to $3,333
+      - name: jobs_earning_3333_or_more
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CE03" AS BIGINT)'
+        comment: Jobs with monthly earnings $3,333 or more
+
+    source:
+      type: file
+      url: "https://lehd.ces.census.gov/data/lodes/LODES8/{state}/wac/{state}_wac_S000_JT00_{year}.csv.gz"
+      response:
+        format: csv
+        compressed: gzip
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lodes/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: lodes_workplace
+        catalogType: hadoop
+
+# ============================================================================
+# INTERNATIONAL TRADE
+# Import and export statistics
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # TRADE EXPORTS - Annual exports by country
+  # ---------------------------------------------------------------------------
+  - name: trade_exports
+    pattern: "type=trade/direction=exports/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: direction
+          type: string
+        - name: year
+          type: string
+    comment: >
+      International trade exports by destination country and commodity.
+
+    dimensions:
+      type:
+        - trade
+      direction:
+        - exports
+      year:
+        - '2022'
+        - '2023'
+        - '2024'
+
+    columns:
+      - name: country_code
+        type: string
+        nullable: true
+        expression: 'src."CTY_CODE"'
+        comment: Destination country code
+      - name: country_name
+        type: string
+        nullable: true
+        expression: 'src."CTY_NAME"'
+        comment: Destination country name
+      - name: total_value
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ALL_VAL_YR" AS BIGINT)'
+        comment: Total export value year-to-date ($)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/enduse?get=CTY_CODE,CTY_NAME,ALL_VAL_YR&YEAR={year}&MONTH=12&ENDUSE=0"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trade/direction=exports/year=*/"
+      partition:
+        columns: [type, direction, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: trade_exports
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # TRADE IMPORTS - Annual imports by country
+  # ---------------------------------------------------------------------------
+  - name: trade_imports
+    pattern: "type=trade/direction=imports/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: direction
+          type: string
+        - name: year
+          type: string
+    comment: >
+      International trade imports by origin country and commodity.
+
+    dimensions:
+      type:
+        - trade
+      direction:
+        - imports
+      year:
+        - '2022'
+        - '2023'
+        - '2024'
+
+    columns:
+      - name: country_code
+        type: string
+        nullable: true
+        expression: 'src."CTY_CODE"'
+        comment: Origin country code
+      - name: country_name
+        type: string
+        nullable: true
+        expression: 'src."CTY_NAME"'
+        comment: Origin country name
+      - name: total_value
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."GEN_VAL_YR" AS BIGINT)'
+        comment: Total import value year-to-date ($)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/intltrade/imports/enduse?get=CTY_CODE,CTY_NAME,GEN_VAL_YR&YEAR={year}&MONTH=12&ENDUSE=0"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trade/direction=imports/year=*/"
+      partition:
+        columns: [type, direction, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: trade_imports
+        catalogType: hadoop
+
+# ============================================================================
 # END OF SCHEMA
 # ============================================================================
 # STATISTICS:
-#   - 20 ACS partitioned tables
+#   - 22 ACS 5-Year partitioned tables
 #   - 2 Decennial Census unified tables (population, housing)
+#   - 1 PEP table (population estimates)
+#   - 1 CBP table (county business patterns)
+#   - 2 ACS 1-Year tables (population, income)
+#   - 1 Economic Census table
+#   - 1 SAIPE table (poverty estimates)
+#   - 1 SAHIE table (health insurance)
+#   - 1 BDS table (business dynamics)
+#   - 1 ABS table (annual business survey)
+#   - 1 Nonemployer table
+#   - 1 Building Permits table
+#   - 1 QWI table (workforce indicators)
+#   - 1 LODES table (commuting patterns)
+#   - 2 Trade tables (exports, imports)
+#   - Total: 39 tables
 #   - Iceberg materialization with Hive partitioning
 #   - Support for state and county level geographies
 #   - Schema evolution: MappingFileVariableNormalizer + dimension resolvers
