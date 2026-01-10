@@ -328,11 +328,13 @@ public class FileSchemaBuilder {
       for (Map.Entry<String, org.apache.calcite.adapter.file.etl.EtlResult> entry
           : result.getTableResults().entrySet()) {
         org.apache.calcite.adapter.file.etl.EtlResult etlResult = entry.getValue();
-        if (etlResult.isSkipped()) {
+        if (etlResult.isSkipped() && etlResult.getTableLocation() == null) {
+          // Table was skipped by isEnabled hook (not a completed Iceberg table)
           excludedTables.add(entry.getKey());
           LOGGER.debug("Table '{}' excluded from schema (skipped during ETL)", entry.getKey());
         } else if (!etlResult.isFailed() && etlResult.getTableLocation() != null) {
           // Store materialization info for updating ConversionMetadata later
+          // This includes both newly materialized tables AND skipped tables that are already complete
           Map<String, String> info = new HashMap<>();
           info.put("tableLocation", etlResult.getTableLocation());
           if (etlResult.getMaterializeFormat() != null) {
@@ -346,9 +348,9 @@ public class FileSchemaBuilder {
             info.put("rowCount", String.valueOf(etlResult.getTotalRows()));
           }
           materializationInfo.put(entry.getKey(), info);
-          LOGGER.debug("Table '{}' materialized: location={}, format={}, rows={}",
+          LOGGER.debug("Table '{}' materialized: location={}, format={}, rows={}, skipped={}",
               entry.getKey(), etlResult.getTableLocation(), etlResult.getMaterializeFormat(),
-              etlResult.getTotalRows());
+              etlResult.getTotalRows(), etlResult.isSkipped());
         }
       }
 
