@@ -97,8 +97,7 @@ public class AlphaVantageResponseTransformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(AlphaVantageResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Override
-  public String transform(String response, RequestContext context) {
+  @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("AlphaVantage: Empty response received for {}", context.getUrl());
       return "[]";

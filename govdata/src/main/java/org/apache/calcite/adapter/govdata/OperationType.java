@@ -17,34 +17,14 @@
 package org.apache.calcite.adapter.govdata;
 
 /**
- * Defines the types of operations supported by the government data downloader infrastructure.
- *
- * <p>These operation types control cache manifest checking behavior:
- * <ul>
- *   <li>{@link #DOWNLOAD} - Downloads raw data (checks {@code cachedAt} timestamp)</li>
- *   <li>{@link #CONVERSION} - Converts cached data to Parquet (checks {@code parquetConvertedAt} timestamp)</li>
- *   <li>{@link #DOWNLOAD_AND_CONVERT} - Downloads and converts in single operation
- *       (checks both timestamps, updates both)</li>
- * </ul>
+ * Type of cache operation for government data downloads.
  */
 public enum OperationType {
-  /**
-   * Download operation - fetches raw data from remote source and caches it.
-   * Cache manifest checks {@code cachedAt} timestamp.
-   */
+  /** Downloading raw data from source API. */
   DOWNLOAD("download"),
 
-  /**
-   * Conversion operation - converts cached raw data to Parquet format.
-   * Cache manifest checks {@code parquetConvertedAt} timestamp.
-   */
-  CONVERSION("conversion"),
-
-  /**
-   * Combined download and conversion operation - fetches data and immediately converts to Parquet.
-   * Cache manifest checks both {@code cachedAt} and {@code parquetConvertedAt} timestamps.
-   */
-  DOWNLOAD_AND_CONVERT("download_and_convert");
+  /** Converting raw data to Parquet format. */
+  CONVERSION("conversion");
 
   private final String value;
 
@@ -53,28 +33,9 @@ public enum OperationType {
   }
 
   /**
-   * Returns the string representation of this operation type.
-   * Used for logging and backward compatibility.
-   *
-   * @return the operation type string
+   * Get the string value for logging/display.
    */
   public String getValue() {
     return value;
-  }
-
-  /**
-   * Parses a string into an OperationType enum value.
-   *
-   * @param value the string value to parse
-   * @return the corresponding OperationType
-   * @throws IllegalArgumentException if the value doesn't match any operation type
-   */
-  public static OperationType fromValue(String value) {
-    for (OperationType type : values()) {
-      if (type.value.equals(value)) {
-        return type;
-      }
-    }
-    throw new IllegalArgumentException("Unknown operation type: " + value);
   }
 }

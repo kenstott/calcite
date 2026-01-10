@@ -3025,7 +3025,7 @@
           "columns": [
             "state_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3045,7 +3045,7 @@
           "columns": [
             "state_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3110,7 +3110,7 @@
           "columns": [
             "state_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3137,7 +3137,7 @@
           "columns": [
             "state_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3164,7 +3164,7 @@
           "columns": [
             "area_code"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3205,8 +3205,8 @@
           "columns": [
             "series"
           ],
-          "targetSchema": "econ",
-          "targetTable": "reference_fred_series",
+          "targetSchema": "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}",
+          "targetTable": "fred_series",
           "targetColumns": [
             "series"
           ]
@@ -3225,8 +3225,8 @@
           "columns": [
             "table_id"
           ],
-          "targetSchema": "econ",
-          "targetTable": "reference_nipa_tables",
+          "targetSchema": "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}",
+          "targetTable": "nipa_tables",
           "targetColumns": [
             "TableName"
           ],
@@ -3252,7 +3252,7 @@
           "columns": [
             "geo_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"
@@ -3264,8 +3264,8 @@
             "tablename",
             "line_code"
           ],
-          "targetSchema": "econ",
-          "targetTable": "reference_regional_linecodes",
+          "targetSchema": "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}",
+          "targetTable": "regional_linecodes",
           "targetColumns": [
             "TableName",
             "LineCode"
@@ -3285,7 +3285,7 @@
           "columns": [
             "geo_fips"
           ],
-          "targetSchema": "geo",
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
           "targetTable": "states",
           "targetColumns": [
             "state_fips"

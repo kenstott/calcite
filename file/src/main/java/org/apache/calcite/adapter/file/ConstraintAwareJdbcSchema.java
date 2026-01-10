@@ -264,6 +264,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
           Double rowCount = baseStatistic != null ? baseStatistic.getRowCount() : null;
 
           // Create statistic with actual column names and row count from base
+          // Note: FK validation happens at schema level in FileSchema.validateForeignKeyConstraints()
+          // which removes invalid FKs from constraint metadata before tables read it
           statistic = TableConstraints.fromConfig(tableConfig, columnNames, rowCount);
           LOGGER.info("Created statistic with {} keys, {} referential constraints, rowCount={}",
                       statistic.getKeys() != null ? statistic.getKeys().size() : 0,
@@ -274,11 +276,9 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
           // Log detailed FK information
           if (statistic.getReferentialConstraints() != null && !statistic.getReferentialConstraints().isEmpty()) {
             for (org.apache.calcite.rel.RelReferentialConstraint fk : statistic.getReferentialConstraints()) {
-              LOGGER.info("FK found: {} -> {}", fk.getSourceQualifiedName(),
+              LOGGER.info("FK: {} -> {}", fk.getSourceQualifiedName(),
                           fk.getTargetQualifiedName());
             }
-          } else {
-            LOGGER.warn("No referential constraints found in statistic!");
           }
         } catch (Exception e) {
           LOGGER.error("Error creating statistic: {}", e.getMessage(), e);

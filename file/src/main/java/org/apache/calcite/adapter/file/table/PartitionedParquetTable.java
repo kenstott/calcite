@@ -496,12 +496,15 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     }
 
     // Create statistic with constraints AND row count, passing schema and table names
+    // Note: FK validation happens at schema level in FileSchema.validateForeignKeyConstraints()
+    // which removes invalid FKs from constraint metadata before tables read it
     Statistic constraintStatistic =
         TableConstraints.fromConfig(tableConfig, columnNames, null, schemaName, tableName);
 
     // Enhance with row count if we have an estimate
     if (rowCountEstimate > 0) {
-      return Statistics.of(rowCountEstimate, constraintStatistic.getKeys());
+      return Statistics.of(rowCountEstimate, constraintStatistic.getKeys(),
+          constraintStatistic.getReferentialConstraints(), constraintStatistic.getCollations());
     }
 
     return constraintStatistic;
@@ -1221,8 +1224,8 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
       // Compute row count
       long rowCount = 0;
-      try (java.sql.ResultSet rs = stmt.executeQuery(
-          "SELECT COUNT(*) FROM read_parquet('" + pattern + "', hive_partitioning=true)")) {
+      try (java.sql.ResultSet rs =
+          stmt.executeQuery("SELECT COUNT(*) FROM read_parquet('" + pattern + "', hive_partitioning=true)")) {
         if (rs.next()) {
           rowCount = rs.getLong(1);
         }
@@ -1386,23 +1389,23 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
     if (java.nio.file.Files.exists(base) && java.nio.file.Files.isDirectory(base)) {
       java.nio.file.Files.walkFileTree(base, new java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
-        @Override
-        public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file,
+        @Override public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file,
             java.nio.file.attribute.BasicFileAttributes attrs) {
           String filePath = file.toString();
           String fileName = file.getFileName().toString();
-          entries.add(new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
+          entries.add(
+              new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
               filePath, fileName, false, attrs.size(), attrs.lastModifiedTime().toMillis()));
           return java.nio.file.FileVisitResult.CONTINUE;
         }
 
-        @Override
-        public java.nio.file.FileVisitResult preVisitDirectory(java.nio.file.Path dir,
+        @Override public java.nio.file.FileVisitResult preVisitDirectory(java.nio.file.Path dir,
             java.nio.file.attribute.BasicFileAttributes attrs) {
           // Also capture directories for partition value extraction
           String dirPath = dir.toString();
           String dirName = dir.getFileName() != null ? dir.getFileName().toString() : "";
-          entries.add(new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
+          entries.add(
+              new org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry(
               dirPath, dirName, true, 0, attrs.lastModifiedTime().toMillis()));
           return java.nio.file.FileVisitResult.CONTINUE;
         }

@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * thread-safe concurrent access. Replaces the previous JSON-based implementation.
  *
  * <p>Extends {@link AbstractCacheManifest} to benefit from common caching infrastructure
- * including ETag support, TTL-based expiration, and parquet conversion tracking.
+ * including ETag support, TTL-based expiration, and materialization tracking.
  */
 public class GeoCacheManifest extends AbstractCacheManifest {
   private static final Logger LOGGER = LoggerFactory.getLogger(GeoCacheManifest.class);
@@ -65,8 +64,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * Check if data is cached and fresh for the given cache key.
    * Uses ETag-based caching when available, falling back to time-based TTL.
    */
-  @Override
-  public boolean isCached(CacheKey cacheKey) {
+  @Override public boolean isCached(CacheKey cacheKey) {
     return store.isCached(cacheKey.asString());
   }
 
@@ -103,8 +101,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
    * @param refreshReason Human-readable reason for the refresh policy
    */
-  @Override
-  public void markCached(CacheKey cacheKey, String filePath, long fileSize,
+  @Override public void markCached(CacheKey cacheKey, String filePath, long fileSize,
       long refreshAfter, String refreshReason) {
     String parametersJson = null;
     try {
@@ -120,8 +117,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
         filePath,
         fileSize,
         refreshAfter,
-        refreshReason
-    );
+        refreshReason);
 
     long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - System.currentTimeMillis());
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
@@ -166,11 +162,10 @@ public class GeoCacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Check if parquet conversion is complete for the given data.
+   * Check if materialization is complete for the given data.
    */
-  @Override
-  public boolean isParquetConverted(CacheKey cacheKey) {
-    boolean converted = store.isParquetConverted(cacheKey.asString());
+  @Override public boolean isMaterialized(CacheKey cacheKey) {
+    boolean converted = store.isMaterialized(cacheKey.asString());
     // Use TRACE for per-item logging to avoid flooding DEBUG logs in high-cardinality loops
     if (converted && LOGGER.isTraceEnabled()) {
       LOGGER.trace("Parquet already converted for {}", cacheKey.asString());
@@ -179,34 +174,33 @@ public class GeoCacheManifest extends AbstractCacheManifest {
   }
 
   /**
-   * Check if parquet conversion is complete for the given data.
-   * @deprecated Use {@link #isParquetConverted(CacheKey)} instead
+   * Check if materialization is complete for the given data.
+   * @deprecated Use {@link #isMaterialized(CacheKey)} instead
    */
   @Deprecated
-  public boolean isParquetConverted(String dataType, int year, Map<String, String> parameters) {
+  public boolean isMaterialized(String dataType, int year, Map<String, String> parameters) {
     String key = buildKey(dataType, year, parameters);
-    return store.isParquetConverted(key);
+    return store.isMaterialized(key);
   }
 
   /**
-   * Mark parquet conversion as complete for cached data.
+   * Mark materialization as complete for cached data.
    */
-  @Override
-  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
-    store.markParquetConverted(cacheKey.asString(), parquetPath);
-    LOGGER.debug("Marked parquet converted: {} -> {}", cacheKey.asString(), parquetPath);
+  @Override public void markMaterialized(CacheKey cacheKey, String outputPath) {
+    store.markMaterialized(cacheKey.asString(), outputPath);
+    LOGGER.debug("Marked parquet converted: {} -> {}", cacheKey.asString(), outputPath);
   }
 
   /**
-   * Mark parquet conversion as complete for cached data.
-   * @deprecated Use {@link #markParquetConverted(CacheKey, String)} instead
+   * Mark materialization as complete for cached data.
+   * @deprecated Use {@link #markMaterialized(CacheKey, String)} instead
    */
   @Deprecated
-  public void markParquetConverted(String dataType, int year, Map<String, String> parameters,
-      String parquetPath) {
+  public void markMaterialized(String dataType, int year, Map<String, String> parameters,
+      String outputPath) {
     String key = buildKey(dataType, year, parameters);
-    store.markParquetConverted(key, parquetPath);
-    LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, parquetPath);
+    store.markMaterialized(key, outputPath);
+    LOGGER.debug("Marked parquet converted: {} year={} -> {}", dataType, year, outputPath);
   }
 
   /**
@@ -215,15 +209,15 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * If file exists but not in manifest, updates manifest automatically.
    *
    * @param cacheKey Cache key to check
-   * @param parquetPath Path to parquet file
+   * @param outputPath Path to output file
    * @param rawFilePath Path to raw source file (for timestamp comparison), or null
    * @param fileChecker Function to check file existence and get modification time
    * @return true if parquet is converted (either in manifest or self-healed)
    */
-  public boolean isParquetConvertedWithSelfHealing(CacheKey cacheKey, String parquetPath,
+  public boolean isMaterializedWithSelfHealing(CacheKey cacheKey, String outputPath,
       String rawFilePath, DuckDBCacheStore.FileChecker fileChecker) {
-    return store.isParquetConvertedWithSelfHealing(
-        cacheKey.asString(), parquetPath, rawFilePath, fileChecker);
+    return store.isMaterializedWithSelfHealing(
+        cacheKey.asString(), outputPath, rawFilePath, fileChecker);
   }
 
   /**
@@ -234,8 +228,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * @param errorMessage Full error message from API
    * @param retryAfterDays Number of days before retrying
    */
-  @Override
-  public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
+  @Override public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
     store.markApiError(cacheKey.asString(), cacheKey.getTableName(), errorMessage, retryAfterDays);
     String truncatedMsg = errorMessage.length() > 100
         ? errorMessage.substring(0, 100) + "..."
@@ -261,8 +254,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
         null,  // No file path
         0,     // No file size
         refreshAfter,
-        reason
-    );
+        reason);
     LOGGER.info("Marked {} as unavailable (retry in {} days): {}",
         cacheKey.asString(), retryAfterDays, reason);
   }
@@ -331,11 +323,10 @@ public class GeoCacheManifest extends AbstractCacheManifest {
               cacheEntry.filePath,
               cacheEntry.fileSize,
               cacheEntry.refreshAfter,
-              cacheEntry.refreshReason
-          );
+              cacheEntry.refreshReason);
 
-          if (cacheEntry.parquetConvertedAt > 0) {
-            store.markParquetConverted(cacheKey, cacheEntry.parquetPath);
+          if (cacheEntry.materializedAt > 0) {
+            store.markMaterialized(cacheKey, cacheEntry.outputPath);
           }
 
           migratedEntries++;
@@ -358,8 +349,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
    * Save manifest to DuckDB.
    * This is now a no-op as DuckDB persists changes immediately.
    */
-  @Override
-  public void save(String directory) {
+  @Override public void save(String directory) {
     store.touchLastUpdated();
     LOGGER.debug("Cache manifest changes persisted to DuckDB");
   }
@@ -398,7 +388,7 @@ public class GeoCacheManifest extends AbstractCacheManifest {
     public long refreshAfter;
     public String refreshReason;
     public String etag;
-    public String parquetPath;
-    public long parquetConvertedAt;
+    public String outputPath;
+    public long materializedAt;
   }
 }

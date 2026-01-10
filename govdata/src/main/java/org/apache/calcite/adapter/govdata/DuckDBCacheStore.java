@@ -34,7 +34,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -176,8 +175,8 @@ public class DuckDBCacheStore implements AutoCloseable {
       if (is == null) {
         throw new RuntimeException("SQL resource not found: " + resourcePath);
       }
-      try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
         return reader.lines().collect(Collectors.joining("\n"));
       }
     } catch (IOException e) {
@@ -432,77 +431,77 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
-   * Check if parquet conversion has been completed.
+   * Check if materialization has been completed.
    *
    * @param cacheKey Cache key
-   * @return true if parquet_converted_at > 0 and parquet is up-to-date
+   * @return true if materialized_at > 0 and output is up-to-date
    */
-  public boolean isParquetConverted(String cacheKey) {
-    // Note: Don't check file_size here. This method answers "is parquet converted?"
-    // not "is source JSON valid?". Parquet-only entries (from self-healing) have
+  public boolean isMaterialized(String cacheKey) {
+    // Note: Don't check file_size here. This method answers "is data materialized?"
+    // not "is source JSON valid?". Materialized-only entries (from self-healing) have
     // file_size=0 but are legitimately converted.
-    String sql = "SELECT parquet_converted_at, cached_at FROM cache_entries WHERE cache_key = ?";
+    String sql = "SELECT materialized_at, cached_at FROM cache_entries WHERE cache_key = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, cacheKey);
       try (ResultSet rs = stmt.executeQuery()) {
         if (!rs.next()) {
           return false;
         }
-        long parquetConvertedAt = rs.getLong("parquet_converted_at");
+        long materializedAt = rs.getLong("materialized_at");
         long cachedAt = rs.getLong("cached_at");
 
-        // Not converted if timestamp is 0
-        if (parquetConvertedAt == 0) {
+        // Not materialized if timestamp is 0
+        if (materializedAt == 0) {
           return false;
         }
 
-        // Raw file updated after conversion - needs reconversion
-        if (cachedAt > parquetConvertedAt) {
+        // Raw file updated after materialization - needs re-materialization
+        if (cachedAt > materializedAt) {
           return false;
         }
 
         return true;
       }
     } catch (SQLException e) {
-      LOGGER.warn("Error checking parquet status for {}: {}", cacheKey, e.getMessage());
+      LOGGER.warn("Error checking materialization status for {}: {}", cacheKey, e.getMessage());
       return false;
     }
   }
 
   /**
-   * Reset parquet conversion status to trigger re-conversion to iceberg format.
-   * This clears parquet_converted_at so isParquetConverted() returns false.
+   * Reset materialization status to trigger re-materialization to target format.
+   * This clears materialized_at so isMaterialized() returns false.
    *
    * @return Number of entries reset
    */
-  public int resetAllParquetConversions() {
-    String sql = "UPDATE cache_entries SET parquet_converted_at = 0, parquet_path = NULL";
+  public int resetAllMaterializations() {
+    String sql = "UPDATE cache_entries SET materialized_at = 0, output_path = NULL";
     try (Statement stmt = getConnection().createStatement()) {
       int updated = stmt.executeUpdate(sql);
-      LOGGER.info("Reset parquet conversion status for {} cache entries", updated);
+      LOGGER.info("Reset materialization status for {} cache entries", updated);
       return updated;
     } catch (SQLException e) {
-      LOGGER.error("Error resetting parquet conversions: {}", e.getMessage());
+      LOGGER.error("Error resetting materializations: {}", e.getMessage());
       return 0;
     }
   }
 
   /**
-   * Reset parquet conversion status for entries matching a table name pattern.
+   * Reset materialization status for entries matching a table name pattern.
    *
    * @param tableName Table name prefix to match
    * @return Number of entries reset
    */
-  public int resetParquetConversionsForTable(String tableName) {
-    String sql = "UPDATE cache_entries SET parquet_converted_at = 0, parquet_path = NULL "
+  public int resetMaterializationsForTable(String tableName) {
+    String sql = "UPDATE cache_entries SET materialized_at = 0, output_path = NULL "
         + "WHERE cache_key LIKE ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, tableName + ":%");
       int updated = stmt.executeUpdate();
-      LOGGER.info("Reset parquet conversion status for {} entries matching {}", updated, tableName);
+      LOGGER.info("Reset materialization status for {} entries matching {}", updated, tableName);
       return updated;
     } catch (SQLException e) {
-      LOGGER.error("Error resetting parquet conversions for {}: {}", tableName, e.getMessage());
+      LOGGER.error("Error resetting materializations for {}: {}", tableName, e.getMessage());
       return 0;
     }
   }
@@ -522,7 +521,7 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
-   * Self-healing check for parquet conversion status.
+   * Self-healing check for materialization status.
    * First checks manifest, then falls back to file existence check.
    * If file exists but not in manifest, updates manifest automatically.
    *
@@ -530,68 +529,68 @@ public class DuckDBCacheStore implements AutoCloseable {
    * AbstractEconDataDownloader and BlsDataDownloader.
    *
    * @param cacheKey Cache key to check
-   * @param parquetPath Path to parquet file
+   * @param outputPath Path to materialized output file
    * @param rawFilePath Path to raw source file (for timestamp comparison), or null
    * @param fileChecker Function to check file existence and get modification time
-   * @return true if parquet is converted (either in manifest or self-healed)
+   * @return true if data is materialized (either in manifest or self-healed)
    */
-  public boolean isParquetConvertedWithSelfHealing(String cacheKey, String parquetPath,
+  public boolean isMaterializedWithSelfHealing(String cacheKey, String outputPath,
       String rawFilePath, FileChecker fileChecker) {
 
     // 1. Check manifest first - trust it as source of truth
-    if (isParquetConverted(cacheKey)) {
+    if (isMaterialized(cacheKey)) {
       return true;
     }
 
-    // 2. Self-healing: check if parquet file exists but manifest is missing/corrupted
-    long parquetModTime = fileChecker.getModificationTime(parquetPath);
-    if (parquetModTime < 0) {
-      return false;  // Parquet doesn't exist
+    // 2. Self-healing: check if output file exists but manifest is missing/corrupted
+    long outputModTime = fileChecker.getModificationTime(outputPath);
+    if (outputModTime < 0) {
+      return false;  // Output doesn't exist
     }
 
     // 3. If raw file path provided, compare timestamps
     if (rawFilePath != null) {
       long rawModTime = fileChecker.getModificationTime(rawFilePath);
-      if (rawModTime > 0 && rawModTime > parquetModTime) {
-        // Raw file is newer - needs reconversion
-        LOGGER.debug("Self-healing: Raw file newer than parquet for {}, needs reconversion", cacheKey);
+      if (rawModTime > 0 && rawModTime > outputModTime) {
+        // Raw file is newer - needs re-materialization
+        LOGGER.debug("Self-healing: Raw file newer than output for {}, needs re-materialization", cacheKey);
         return false;
       }
     }
 
-    // 4. Parquet exists and is valid - update manifest
-    LOGGER.info("Self-healing: Found existing parquet for {}, updating manifest", cacheKey);
-    markParquetConverted(cacheKey, parquetPath);
+    // 4. Output exists and is valid - update manifest
+    LOGGER.info("Self-healing: Found existing output for {}, updating manifest", cacheKey);
+    markMaterialized(cacheKey, outputPath);
     return true;
   }
 
   /**
-   * Mark parquet as converted.
+   * Mark data as materialized.
    *
    * @param cacheKey Cache key
-   * @param parquetPath Path to parquet file
+   * @param outputPath Path to materialized output file
    */
-  public void markParquetConverted(String cacheKey, String parquetPath) {
+  public void markMaterialized(String cacheKey, String outputPath) {
     String sql = ""
-        + "UPDATE cache_entries SET parquet_path = ?, parquet_converted_at = ? "
+        + "UPDATE cache_entries SET output_path = ?, materialized_at = ? "
         + "WHERE cache_key = ?";
 
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, parquetPath);
+      stmt.setString(1, outputPath);
       stmt.setLong(2, System.currentTimeMillis());
       stmt.setString(3, cacheKey);
       int updated = stmt.executeUpdate();
 
       // If entry doesn't exist, create it
       if (updated == 0) {
-        upsertEntry(cacheKey, "unknown", null, null, 0, Long.MAX_VALUE, "parquet_only");
-        stmt.setString(1, parquetPath);
+        upsertEntry(cacheKey, "unknown", null, null, 0, Long.MAX_VALUE, "materialized_only");
+        stmt.setString(1, outputPath);
         stmt.setLong(2, System.currentTimeMillis());
         stmt.setString(3, cacheKey);
         stmt.executeUpdate();
       }
     } catch (SQLException e) {
-      LOGGER.error("Error marking parquet converted for {}: {}", cacheKey, e.getMessage());
+      LOGGER.error("Error marking materialized for {}: {}", cacheKey, e.getMessage());
     }
   }
 
@@ -1014,53 +1013,53 @@ public class DuckDBCacheStore implements AutoCloseable {
   }
 
   /**
-   * Check if all entries for a table have been converted to parquet.
-   * This is a faster check than areAllEntriesFresh for conversion operations -
-   * if parquet exists, we don't need to re-convert regardless of refresh_after.
+   * Check if all entries for a table have been materialized.
+   * This is a faster check than areAllEntriesFresh for materialization operations -
+   * if output exists, we don't need to re-materialize regardless of refresh_after.
    *
    * <p>Also checks for invalid entries (file_size=0 from failed downloads, but NOT
-   * parquet_only entries which are legitimate). Returns false if any invalid entries exist.
+   * materialized_only entries which are legitimate). Returns false if any invalid entries exist.
    *
    * @param tableName The table name prefix to check
-   * @return true if all entries for this table have parquet_converted_at > 0 and no invalid entries
+   * @return true if all entries for this table have materialized_at > 0 and no invalid entries
    */
-  public boolean areAllParquetConverted(String tableName) {
+  public boolean areAllMaterialized(String tableName) {
     // Single query to get counts efficiently
     // An entry is considered "invalid" (needs re-download) only if ALL of:
     // 1. file_size=0 (no source JSON)
-    // 2. Not a parquet_only entry (those are legitimate - parquet found via self-healing)
-    // 3. parquet_converted_at=0 (no parquet exists either)
-    // If parquet exists (parquet_converted_at > 0), entry is usable regardless of file_size
+    // 2. Not a materialized_only entry (those are legitimate - output found via self-healing)
+    // 3. materialized_at=0 (no output exists either)
+    // If output exists (materialized_at > 0), entry is usable regardless of file_size
     String sql = "SELECT "
         + "COUNT(*) as total, "
-        + "SUM(CASE WHEN parquet_converted_at IS NULL OR parquet_converted_at = 0 THEN 1 ELSE 0 END) as unconverted, "
+        + "SUM(CASE WHEN materialized_at IS NULL OR materialized_at = 0 THEN 1 ELSE 0 END) as unmaterialized, "
         + "SUM(CASE WHEN (file_size IS NULL OR file_size = 0) "
-        + "AND (refresh_reason IS NULL OR refresh_reason != 'parquet_only') "
-        + "AND (parquet_converted_at IS NULL OR parquet_converted_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
+        + "AND (refresh_reason IS NULL OR refresh_reason != 'materialized_only') "
+        + "AND (materialized_at IS NULL OR materialized_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
         + "FROM cache_entries WHERE cache_key LIKE ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, tableName + ":%");
       try (ResultSet rs = stmt.executeQuery()) {
         if (rs.next()) {
           int total = rs.getInt("total");
-          int unconverted = rs.getInt("unconverted");
+          int unmaterialized = rs.getInt("unmaterialized");
           int invalidEntries = rs.getInt("invalid_entries");
 
           if (total == 0) {
             return false;  // No entries at all
           }
           if (invalidEntries > 0) {
-            LOGGER.debug("Table {} has {} invalid entries (no source and no parquet), cannot skip",
+            LOGGER.debug("Table {} has {} invalid entries (no source and no output), cannot skip",
                 tableName, invalidEntries);
             return false;  // Invalid entries need re-download
           }
-          return unconverted == 0;  // All converted if no unconverted entries
+          return unmaterialized == 0;  // All materialized if no unmaterialized entries
         }
       }
     } catch (SQLException e) {
-      LOGGER.warn("Error checking parquet conversion for {}: {}", tableName, e.getMessage());
+      LOGGER.warn("Error checking materialization for {}: {}", tableName, e.getMessage());
     }
-    return false;  // Assume not converted on error
+    return false;  // Assume not materialized on error
   }
 
   /**
@@ -1070,7 +1069,7 @@ public class DuckDBCacheStore implements AutoCloseable {
    * <p>Returns true if:
    * <ul>
    *   <li>We have at least expectedCount entries for this table</li>
-   *   <li>All entries have been converted to parquet (parquet_converted_at > 0)</li>
+   *   <li>All entries have been materialized (materialized_at > 0)</li>
    *   <li>No entries need raw file refresh (all have cachedAt > 0 and no raw refresh needed)</li>
    * </ul>
    *
@@ -1082,24 +1081,24 @@ public class DuckDBCacheStore implements AutoCloseable {
     // Single query to get all relevant counts efficiently
     // An entry is considered "invalid" (needs re-download) only if ALL of:
     // 1. file_size=0 (no source JSON)
-    // 2. Not a parquet_only entry (those are legitimate - parquet found via self-healing)
-    // 3. parquet_converted_at=0 (no parquet exists either)
-    // If parquet exists (parquet_converted_at > 0), entry is usable regardless of file_size
+    // 2. Not a materialized_only entry (those are legitimate - output found via self-healing)
+    // 3. materialized_at=0 (no output exists either)
+    // If output exists (materialized_at > 0), entry is usable regardless of file_size
     String sql = "SELECT "
         + "COUNT(*) as total, "
-        + "SUM(CASE WHEN parquet_converted_at IS NULL OR parquet_converted_at = 0 THEN 1 ELSE 0 END) as unconverted, "
-        + "SUM(CASE WHEN cached_at > parquet_converted_at THEN 1 ELSE 0 END) as needs_reconversion, "
+        + "SUM(CASE WHEN materialized_at IS NULL OR materialized_at = 0 THEN 1 ELSE 0 END) as unmaterialized, "
+        + "SUM(CASE WHEN cached_at > materialized_at THEN 1 ELSE 0 END) as needs_rematerialization, "
         + "SUM(CASE WHEN (file_size IS NULL OR file_size = 0) "
-        + "AND (refresh_reason IS NULL OR refresh_reason != 'parquet_only') "
-        + "AND (parquet_converted_at IS NULL OR parquet_converted_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
+        + "AND (refresh_reason IS NULL OR refresh_reason != 'materialized_only') "
+        + "AND (materialized_at IS NULL OR materialized_at = 0) THEN 1 ELSE 0 END) as invalid_entries "
         + "FROM cache_entries WHERE cache_key LIKE ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, tableName + ":%");
       try (ResultSet rs = stmt.executeQuery()) {
         if (rs.next()) {
           int total = rs.getInt("total");
-          int unconverted = rs.getInt("unconverted");
-          int needsReconversion = rs.getInt("needs_reconversion");
+          int unmaterialized = rs.getInt("unmaterialized");
+          int needsRematerialization = rs.getInt("needs_rematerialization");
           int invalidEntries = rs.getInt("invalid_entries");
 
           // Must have at least expected entries
@@ -1109,24 +1108,24 @@ public class DuckDBCacheStore implements AutoCloseable {
             return false;
           }
 
-          // No entries should be invalid (no source JSON AND no parquet)
+          // No entries should be invalid (no source JSON AND no output)
           if (invalidEntries > 0) {
-            LOGGER.debug("Table {} has {} invalid entries (no source and no parquet), needs re-download",
+            LOGGER.debug("Table {} has {} invalid entries (no source and no output), needs re-download",
                 tableName, invalidEntries);
             return false;
           }
 
-          // All entries must be converted to parquet
-          if (unconverted > 0) {
-            LOGGER.debug("Table {} has {} unconverted entries, needs processing",
-                tableName, unconverted);
+          // All entries must be materialized
+          if (unmaterialized > 0) {
+            LOGGER.debug("Table {} has {} unmaterialized entries, needs processing",
+                tableName, unmaterialized);
             return false;
           }
 
-          // No entries should need reconversion (raw file newer than parquet)
-          if (needsReconversion > 0) {
-            LOGGER.debug("Table {} has {} entries needing reconversion",
-                tableName, needsReconversion);
+          // No entries should need re-materialization (raw file newer than output)
+          if (needsRematerialization > 0) {
+            LOGGER.debug("Table {} has {} entries needing re-materialization",
+                tableName, needsRematerialization);
             return false;
           }
 
@@ -1411,8 +1410,7 @@ public class DuckDBCacheStore implements AutoCloseable {
               rs.getBoolean("supports_mic"),
               rs.getBoolean("supports_port"),
               rs.getBoolean("supports_div"),
-              rs.getBoolean("supports_csa")
-          );
+              rs.getBoolean("supports_csa"));
         }
       }
     } catch (SQLException e) {
@@ -1469,8 +1467,7 @@ public class DuckDBCacheStore implements AutoCloseable {
     }
   }
 
-  @Override
-  public void close() {
+  @Override public void close() {
     synchronized (connectionLock) {
       if (connection != null) {
         try {

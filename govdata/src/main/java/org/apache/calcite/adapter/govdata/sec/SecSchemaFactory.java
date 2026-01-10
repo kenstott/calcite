@@ -16,9 +16,11 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -108,19 +110,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private RSSRefreshMonitor rssMonitor; // RSS monitor for automatic refresh
 
   /**
-   * Override to use stored operand from buildOperand().
-   * This allows helper methods to access directory configuration without passing operand around.
+   * Helper to get cache directory using stored operand.
    */
-  @Override public String getGovDataCacheDir() {
-    return getGovDataCacheDir(this.currentOperand);
+  public String getGovDataCacheDir() {
+    return GovDataUtils.getCacheDir(this.currentOperand);
   }
 
   /**
-   * Override to use stored operand from buildOperand().
-   * This allows helper methods to access directory configuration without passing operand around.
+   * Helper to get parquet directory using stored operand.
    */
-  @Override public String getGovDataParquetDir() {
-    return getGovDataParquetDir(this.currentOperand);
+  public String getGovDataParquetDir() {
+    return GovDataUtils.getParquetDir(this.currentOperand);
   }
 
   public static final SecSchemaFactory INSTANCE = new SecSchemaFactory();
@@ -130,6 +130,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public String getSchemaResourceName() {
     return "/sec/sec-schema.json";
+  }
+
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for SEC schema");
+    // SEC schema uses custom download logic in buildOperand() rather than standard ETL hooks
+    // No additional hooks needed - enablement is controlled via operand parameters
   }
 
   private synchronized void initializeExecutors() {
@@ -502,8 +508,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Get cache directories from operand or environment variables
       LOGGER.info("Getting cache directories...");
-      String govdataCacheDir = getGovDataCacheDir(mutableOperand);
-      String govdataParquetDir = getGovDataParquetDir(mutableOperand);
+      String govdataCacheDir = GovDataUtils.getCacheDir(mutableOperand);
+      String govdataParquetDir = GovDataUtils.getParquetDir(mutableOperand);
       LOGGER.info("Cache directories obtained: cache={}, parquet={}", govdataCacheDir, govdataParquetDir);
 
     // Check required directories are configured
@@ -866,9 +872,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Disabled cache priming for SEC schema (too many files, DuckDB handles stats on-demand)");
 
       // Add schema-level comment from JSON metadata
-      String schemaComment = loadSchemaComment();
+      String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
       if (schemaComment != null) {
         mutableOperand.put("comment", schemaComment);
+      }
+
+      // Pass storage provider instance through operand (for FileSchema to reuse)
+      if (this.storageProvider != null) {
+        mutableOperand.put("_storageProvider", this.storageProvider);
       }
 
       // Return the configured operand for GovDataSchemaFactory to use

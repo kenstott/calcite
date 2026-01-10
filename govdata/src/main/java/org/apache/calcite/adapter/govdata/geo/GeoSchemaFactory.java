@@ -16,10 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 import org.apache.calcite.model.JsonTable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -93,6 +95,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     return "/geo/geo-schema.json";
   }
 
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for GEO schema");
+    // GEO schema uses custom download logic in buildOperand() rather than standard ETL hooks
+    // No additional hooks needed - enablement is controlled via operand parameters
+  }
+
   /**
    * Builds the operand configuration for GEO schema.
    * This method is called by GovDataSchemaFactory to build a unified FileSchema configuration.
@@ -103,9 +111,9 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     // Access shared services from parent
     org.apache.calcite.adapter.file.storage.StorageProvider storageProvider = parent.getStorageProvider();
 
-    // Get cache directories from interface methods
-    String govdataCacheDir = getGovDataCacheDir(operand);
-    String govdataParquetDir = getGovDataParquetDir(operand);
+    // Get cache directories from operand
+    String govdataCacheDir = GovDataUtils.getCacheDir(operand);
+    String govdataParquetDir = GovDataUtils.getParquetDir(operand);
 
     // Check required environment variables
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -259,7 +267,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Load table definitions from geo-schema.json
-    List<Map<String, Object>> geoTables = loadTableDefinitions();
+    List<Map<String, Object>> geoTables =
+        GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
     if (!geoTables.isEmpty()) {
       // Update patterns with the actual parquet directory
       for (Map<String, Object> table : geoTables) {
@@ -284,7 +293,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
 
     if (enableConstraints) {
       // Load constraints from geo-schema.json
-      geoConstraints.putAll(loadTableConstraints());
+      geoConstraints.putAll(GovDataUtils.loadTableConstraints(getClass(), getSchemaResourceName()));
     }
 
     // Merge with any constraints from model file
@@ -297,7 +306,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Add schema-level comment from JSON metadata
-    String schemaComment = loadSchemaComment();
+    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
     if (schemaComment != null) {
       mutableOperand.put("comment", schemaComment);
     }
@@ -306,6 +315,11 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     if (!votingYears.isEmpty()) {
       mutableOperand.put("votingYears", votingYears);
       LOGGER.info("Added voting years to GEO operand: {}", votingYears);
+    }
+
+    // Pass storage provider instance through operand (for FileSchema to reuse)
+    if (storageProvider != null) {
+      mutableOperand.put("_storageProvider", storageProvider);
     }
 
     // Return the configured operand for GovDataSchemaFactory to use
@@ -401,7 +415,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
     };
 
     // Use centralized self-healing check
-    if (tigerDownloader.getCacheManifest().isParquetConvertedWithSelfHealing(
+    if (tigerDownloader.getCacheManifest().isMaterializedWithSelfHealing(
         cacheKey, parquetPath, null, fileChecker)) {
       LOGGER.debug("Table {} year {} already converted (manifest or self-healed)", tableName, year);
       return;
@@ -509,15 +523,15 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           String dataType = filename.replace(".parquet", "");
 
           // Check manifest first - if parquet is marked as converted, skip
-          boolean parquetConverted = false;
+          boolean materialized = false;
           if (cacheManifest != null) {
             java.util.Map<String, String> params = new java.util.HashMap<>();
             params.put("year", String.valueOf(year));
             CacheKey cacheKey = new CacheKey(dataType, params);
-            parquetConverted = cacheManifest.isParquetConverted(cacheKey);
+            materialized = cacheManifest.isMaterialized(cacheKey);
           }
 
-          if (parquetConverted) {
+          if (materialized) {
             // Manifest says it's converted (may be zero-row marker)
             LOGGER.debug("Dataset {} year {} already converted per manifest", dataType, year);
             continue;
@@ -578,7 +592,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             java.util.Map<String, String> statesParams = new java.util.HashMap<>();
 
             // Check if parquet exists and is up-to-date (with fallback to file existence check)
-            if (!tigerDownloader.isParquetConvertedOrExists("states", year, statesParams, statesShapefilePath, statesParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("states", year, statesParams, statesShapefilePath, statesParquetPath)) {
               File statesDir = tigerDownloader.downloadStatesForYear(year);
               if (statesDir != null) {
                 tigerDownloader.convertToParquet(statesDir, statesParquetPath);
@@ -589,7 +603,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             String countiesShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/counties");
             java.util.Map<String, String> countiesParams = new java.util.HashMap<>();
 
-            if (!tigerDownloader.isParquetConvertedOrExists("counties", year, countiesParams, countiesShapefilePath, countiesParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("counties", year, countiesParams, countiesShapefilePath, countiesParquetPath)) {
               File countiesDir = tigerDownloader.downloadCountiesForYear(year);
               if (countiesDir != null) {
                 tigerDownloader.convertToParquet(countiesDir, countiesParquetPath);
@@ -601,7 +615,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             String placesShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/places/06");
             java.util.Map<String, String> placesParams = new java.util.HashMap<>();
 
-            if (!tigerDownloader.isParquetConvertedOrExists("places", year, placesParams, placesShapefilePath, placesParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("places", year, placesParams, placesShapefilePath, placesParquetPath)) {
               tigerDownloader.downloadPlacesForYear(year, "06"); // California
               tigerDownloader.downloadPlacesForYear(year, "48"); // Texas
               tigerDownloader.downloadPlacesForYear(year, "36"); // New York
@@ -615,7 +629,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             String zctasShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/zctas");
             java.util.Map<String, String> zctasParams = new java.util.HashMap<>();
 
-            if (!tigerDownloader.isParquetConvertedOrExists("zctas", year, zctasParams, zctasShapefilePath, zctasParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("zctas", year, zctasParams, zctasShapefilePath, zctasParquetPath)) {
               File zctasDir = tigerDownloader.downloadZctasForYear(year);
               if (zctasDir != null) {
                 tigerDownloader.convertToParquet(zctasDir, zctasParquetPath);
@@ -628,7 +642,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                   java.util.Map<String, String> allParams = new java.util.HashMap<>(zctasParams);
                   allParams.put("year", String.valueOf(year));
                   CacheKey cacheKey = new CacheKey("zctas", allParams);
-                  cacheManifest.markParquetConverted(cacheKey, zctasParquetPath);
+                  cacheManifest.markMaterialized(cacheKey, zctasParquetPath);
                   cacheManifest.save(geoOperatingDirectory);
                 }
               }
@@ -642,14 +656,14 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               File tractsDir = tigerDownloader.downloadCensusTractsForYear(year);
               if (tractsDir != null) {
                 tigerDownloader.convertToParquet(tractsDir, tractsParquetPath);
-                // Mark each state as converted in manifest after successful parquet conversion
+                // Mark each state as converted in manifest after successful materialization
                 if (cacheManifest != null) {
                   for (String stateFips : tractStates) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("state", stateFips);
                     params.put("year", String.valueOf(year));
                     CacheKey cacheKey = new CacheKey("census_tracts", params);
-                    cacheManifest.markParquetConverted(cacheKey, tractsParquetPath);
+                    cacheManifest.markMaterialized(cacheKey, tractsParquetPath);
                   }
                   cacheManifest.save(geoOperatingDirectory);
                 }
@@ -664,14 +678,14 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               File blockGroupsDir = tigerDownloader.downloadBlockGroupsForYear(year);
               if (blockGroupsDir != null) {
                 tigerDownloader.convertToParquet(blockGroupsDir, blockGroupsParquetPath);
-                // Mark each state as converted in manifest after successful parquet conversion
+                // Mark each state as converted in manifest after successful materialization
                 if (cacheManifest != null) {
                   for (String stateFips : blockGroupStates) {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("state", stateFips);
                     params.put("year", String.valueOf(year));
                     CacheKey cacheKey = new CacheKey("block_groups", params);
-                    cacheManifest.markParquetConverted(cacheKey, blockGroupsParquetPath);
+                    cacheManifest.markMaterialized(cacheKey, blockGroupsParquetPath);
                   }
                   cacheManifest.save(geoOperatingDirectory);
                 }
@@ -682,7 +696,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             String cbsaShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/cbsa");
             java.util.Map<String, String> cbsaParams = new java.util.HashMap<>();
 
-            if (!tigerDownloader.isParquetConvertedOrExists("cbsa", year, cbsaParams, cbsaShapefilePath, cbsaParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("cbsa", year, cbsaParams, cbsaShapefilePath, cbsaParquetPath)) {
               try {
                 File cbsaDir = tigerDownloader.downloadCbsasForYear(year);
                 if (cbsaDir != null) {
@@ -696,7 +710,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("year", String.valueOf(year));
                     CacheKey cacheKey = new CacheKey("cbsa", params);
-                    cacheManifest.markParquetConverted(cacheKey, cbsaParquetPath);
+                    cacheManifest.markMaterialized(cacheKey, cbsaParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 }
@@ -710,7 +724,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("year", String.valueOf(year));
                     CacheKey cacheKey = new CacheKey("cbsa", params);
-                    cacheManifest.markParquetConverted(cacheKey, cbsaParquetPath);
+                    cacheManifest.markMaterialized(cacheKey, cbsaParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 } catch (IOException markerEx) {
@@ -723,7 +737,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
             String congressionalShapefilePath = storageProvider.resolvePath(tigerCacheDir, "year=" + year + "/congressional_districts");
             java.util.Map<String, String> congressionalParams = new java.util.HashMap<>();
 
-            if (!tigerDownloader.isParquetConvertedOrExists("congressional_districts", year, congressionalParams, congressionalShapefilePath, congressionalParquetPath)) {
+            if (!tigerDownloader.isMaterializedOrExists("congressional_districts", year, congressionalParams, congressionalShapefilePath, congressionalParquetPath)) {
               try {
                 File cdDir = tigerDownloader.downloadCongressionalDistrictsForYear(year);
                 if (cdDir != null) {
@@ -737,7 +751,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                     java.util.Map<String, String> params = new java.util.HashMap<>();
                     params.put("year", String.valueOf(year));
                     CacheKey cacheKey = new CacheKey("congressional_districts", params);
-                    cacheManifest.markParquetConverted(cacheKey, congressionalParquetPath);
+                    cacheManifest.markMaterialized(cacheKey, congressionalParquetPath);
                     cacheManifest.save(geoOperatingDirectory);
                   }
                 }
@@ -755,14 +769,14 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                 File schoolDir = tigerDownloader.downloadSchoolDistrictsForYear(year, schoolParquetPath);
                 if (schoolDir != null) {
                   tigerDownloader.convertToParquet(schoolDir, schoolParquetPath);
-                  // Mark each state as converted in manifest after successful parquet conversion
+                  // Mark each state as converted in manifest after successful materialization
                   if (cacheManifest != null) {
                     for (String stateFips : schoolStates) {
                       java.util.Map<String, String> params = new java.util.HashMap<>();
                       params.put("state", stateFips);
                       params.put("year", String.valueOf(year));
                       CacheKey cacheKey = new CacheKey("school_districts", params);
-                      cacheManifest.markParquetConverted(cacheKey, schoolParquetPath);
+                      cacheManifest.markMaterialized(cacheKey, schoolParquetPath);
                     }
                     cacheManifest.save(geoOperatingDirectory);
                   }
@@ -777,7 +791,7 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
                       params.put("state", stateFips);
                       params.put("year", String.valueOf(year));
                       CacheKey cacheKey = new CacheKey("school_districts", params);
-                      cacheManifest.markParquetConverted(cacheKey, schoolParquetPath);
+                      cacheManifest.markMaterialized(cacheKey, schoolParquetPath);
                     }
                     cacheManifest.save(geoOperatingDirectory);
                   }
@@ -1013,12 +1027,12 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
   }
 
 
-  @Override public boolean supportsConstraints() {
+  public boolean supportsConstraints() {
     // Enable constraint support for geographic data
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
