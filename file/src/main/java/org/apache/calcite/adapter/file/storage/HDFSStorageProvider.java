@@ -424,10 +424,13 @@ public class HDFSStorageProvider implements StorageProvider {
 
   /**
    * Creates a FileEntry from a Hadoop FileStatus.
+   *
+   * <p>Uses toUri().toString() instead of Path.toString() to avoid malformed URIs.
+   * Hadoop's Path.toString() can return "s3a:/bucket" instead of "s3a://bucket".
    */
   private FileEntry createFileEntry(FileStatus status) {
     return new FileEntry(
-        status.getPath().toString(),
+        status.getPath().toUri().toString(),
         status.getPath().getName(),
         status.isDirectory(),
         status.getLen(),

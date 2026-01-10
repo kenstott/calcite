@@ -27,6 +27,7 @@ import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
@@ -43,7 +44,6 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.UploadPartRequest;
-import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
 import com.amazonaws.services.s3.model.lifecycle.LifecycleFilter;
 import com.amazonaws.services.s3.model.lifecycle.LifecyclePrefixPredicate;
 
@@ -102,9 +102,12 @@ public class S3StorageProvider implements StorageProvider {
       // Configure client with longer timeouts for large file uploads (e.g., 100MB+ parquet files)
       // Socket timeout: 15 minutes (sufficient for large files over slow connections)
       // Connection timeout: 60 seconds (DNS + TCP handshake)
+      // Max connections: 200 (default 50 is too low for heavy ETL with many concurrent requests)
       ClientConfiguration clientConfig = new ClientConfiguration();
-      clientConfig.setSocketTimeout(15 * 60 * 1000); // 15 minutes
-      clientConfig.setConnectionTimeout(60 * 1000);   // 60 seconds
+      clientConfig.setSocketTimeout(15 * 60 * 1000);    // 15 minutes for data transfer
+      clientConfig.setConnectionTimeout(60 * 1000);     // 60 seconds for TCP handshake
+      clientConfig.setConnectionMaxIdleMillis(60_000);  // Close idle connections after 1 minute
+      clientConfig.setMaxConnections(200);              // Support heavy ETL workloads
 
       AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
           .withClientConfiguration(clientConfig);
@@ -199,21 +202,40 @@ public class S3StorageProvider implements StorageProvider {
 
     // Store S3 config for DuckDB access
     if (config != null) {
+      LOGGER.info("S3StorageProvider: Initializing with config containing {} keys: {}",
+          config.size(), config.keySet());
+
       java.util.Map<String, String> s3ConfigMap = new java.util.HashMap<>();
       if (config.get("accessKeyId") != null) {
         s3ConfigMap.put("accessKeyId", (String) config.get("accessKeyId"));
+        LOGGER.debug("S3StorageProvider: Found accessKeyId (length={})",
+            ((String) config.get("accessKeyId")).length());
       }
       if (config.get("secretAccessKey") != null) {
         s3ConfigMap.put("secretAccessKey", (String) config.get("secretAccessKey"));
+        LOGGER.debug("S3StorageProvider: Found secretAccessKey (length={})",
+            ((String) config.get("secretAccessKey")).length());
       }
       if (config.get("region") != null) {
         s3ConfigMap.put("region", (String) config.get("region"));
+        LOGGER.debug("S3StorageProvider: Found region={}", config.get("region"));
       }
       if (config.get("endpoint") != null) {
         s3ConfigMap.put("endpoint", (String) config.get("endpoint"));
+        LOGGER.debug("S3StorageProvider: Found endpoint={}", config.get("endpoint"));
       }
       this.s3Config = s3ConfigMap.isEmpty() ? null : s3ConfigMap;
+
+      if (s3ConfigMap.isEmpty()) {
+        LOGGER.warn("S3StorageProvider: Config was provided but no recognized keys found. "
+            + "Expected keys: accessKeyId, secretAccessKey, region, endpoint. "
+            + "Provided keys: {}", config.keySet());
+      } else {
+        LOGGER.info("S3StorageProvider: Stored {} credentials for DuckDB/Iceberg access",
+            s3ConfigMap.size());
+      }
     } else {
+      LOGGER.info("S3StorageProvider: No config provided, credentials will be null");
       this.s3Config = null;
     }
   }
@@ -247,7 +269,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
     List<FileEntry> entries = new ArrayList<>();
 
     ListObjectsV2Request request = new ListObjectsV2Request()
@@ -295,7 +319,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public FileMetadata getMetadata(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     com.amazonaws.services.s3.model.ObjectMetadata metadata =
         s3Client.getObjectMetadata(s3Uri.bucket, s3Uri.key);
@@ -310,6 +336,7 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public InputStream openInputStream(String path) throws IOException {
     // Check persistent cache first if available
+    // Use original path as cache key for consistency
     if (persistentCache != null) {
       byte[] cachedData = persistentCache.getCachedData(path);
       FileMetadata cachedMetadata = persistentCache.getCachedMetadata(path);
@@ -327,7 +354,9 @@ public class S3StorageProvider implements StorageProvider {
       }
     }
 
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
     GetObjectRequest request = new GetObjectRequest(s3Uri.bucket, s3Uri.key);
     S3Object object = s3Client.getObject(request);
 
@@ -337,6 +366,7 @@ public class S3StorageProvider implements StorageProvider {
       object.close();
 
       // Get file metadata for caching (use S3 object metadata)
+      // Use original path as cache key for consistency
       FileMetadata metadata =
           new FileMetadata(path, object.getObjectMetadata().getContentLength(),
           object.getObjectMetadata().getLastModified().getTime(),
@@ -356,7 +386,9 @@ public class S3StorageProvider implements StorageProvider {
 
   @Override public boolean exists(String path) throws IOException {
     try {
-      S3Uri s3Uri = parseS3Uri(path);
+      // Convert relative path to full S3 URI if needed
+      String fullPath = toFullPath(path);
+      S3Uri s3Uri = parseS3Uri(fullPath);
       boolean exists = s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
       LOGGER.debug("S3 exists check: {} -> {}", path, exists);
       return exists;
@@ -367,7 +399,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public boolean isDirectory(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     // In S3, directories are conceptual. Check if there are objects with this prefix
     ListObjectsV2Request request = new ListObjectsV2Request()
@@ -388,7 +422,8 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public String resolvePath(String basePath, String relativePath) {
-    if (relativePath.startsWith("s3://")) {
+    // If relativePath is already a full S3 URI, return it unchanged
+    if (relativePath.startsWith("s3://") || relativePath.startsWith("s3a://")) {
       return relativePath;
     }
 
@@ -415,7 +450,8 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   private S3Uri parseS3Uri(String uri) throws IOException {
-    if (!uri.startsWith("s3://")) {
+    // Accept both s3:// and s3a:// (Hadoop S3A FileSystem) URI schemes
+    if (!uri.startsWith("s3://") && !uri.startsWith("s3a://")) {
       throw new IOException("Invalid S3 URI: " + uri);
     }
 
@@ -458,10 +494,10 @@ public class S3StorageProvider implements StorageProvider {
 
   /**
    * Converts a relative path to a full S3 URI using the base S3 path.
-   * If the path is already a full S3 URI, returns it unchanged.
+   * If the path is already a full S3 URI (s3:// or s3a://), returns it unchanged.
    */
   private String toFullPath(String path) throws IOException {
-    if (path.startsWith("s3://")) {
+    if (path.startsWith("s3://") || path.startsWith("s3a://")) {
       return path;
     }
 
@@ -587,11 +623,14 @@ public class S3StorageProvider implements StorageProvider {
     // S3 doesn't have real directories, they're just prefixes
     // We can create a marker object if needed, but it's often not necessary
     // For compatibility, we'll create an empty object with a trailing slash
-    if (!path.endsWith("/")) {
-      path = path + "/";
+
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    if (!fullPath.endsWith("/")) {
+      fullPath = fullPath + "/";
     }
 
-    S3Uri s3Uri = parseS3Uri(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     // Create an empty marker object
     ObjectMetadata metadata = new ObjectMetadata();
@@ -609,7 +648,9 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public boolean delete(String path) throws IOException {
-    S3Uri s3Uri = parseS3Uri(path);
+    // Convert relative path to full S3 URI if needed
+    String fullPath = toFullPath(path);
+    S3Uri s3Uri = parseS3Uri(fullPath);
 
     try {
       // Check if an object exists first
@@ -642,7 +683,9 @@ public class S3StorageProvider implements StorageProvider {
         new java.util.HashMap<>();
 
     for (String path : paths) {
-      S3Uri s3Uri = parseS3Uri(path);
+      // Convert relative path to full S3 URI if needed
+      String fullPath = toFullPath(path);
+      S3Uri s3Uri = parseS3Uri(fullPath);
       bucketKeys.computeIfAbsent(s3Uri.bucket, k -> new ArrayList<>())
           .add(new DeleteObjectsRequest.KeyVersion(s3Uri.key));
     }
@@ -737,9 +780,46 @@ public class S3StorageProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Gets a staging directory for temporary files with automatic cleanup via S3 lifecycle rules.
+   *
+   * <p>For S3 storage, this returns a .staging/ prefix under the base path and ensures
+   * a lifecycle rule exists to auto-expire objects after 1 day. This provides a safety
+   * net for orphaned staging files.
+   *
+   * @param purpose Subdirectory name to isolate different staging uses (e.g., "iceberg", "etl")
+   * @return S3 path to staging directory with auto-cleanup guarantee
+   * @throws IOException If an I/O error occurs
+   */
+  @Override public String getStagingDirectory(String purpose) throws IOException {
+    if (baseS3Path == null || baseS3Path.isEmpty()) {
+      // Fall back to default (system temp directory) if no S3 path configured
+      String tempDir = System.getProperty("java.io.tmpdir");
+      String stagingPath = tempDir + "/.staging/" + purpose;
+      createDirectories(stagingPath);
+      return stagingPath;
+    }
+
+    // Build staging path under .staging/ prefix
+    String stagingPrefix = ".staging/" + purpose;
+    String stagingPath = resolvePath(baseS3Path, stagingPrefix);
+
+    // Ensure lifecycle rule exists for auto-cleanup (1 day expiration)
+    ensureLifecycleRule(".staging/", 1);
+
+    // Create the staging directory marker
+    createDirectories(stagingPath);
+
+    LOGGER.debug("S3 staging directory: {} (auto-expires in 1 day)", stagingPath);
+    return stagingPath;
+  }
+
   @Override public void copyFile(String source, String destination) throws IOException {
-    S3Uri sourceUri = parseS3Uri(source);
-    S3Uri destUri = parseS3Uri(destination);
+    // Convert relative paths to full S3 URIs if needed
+    String fullSource = toFullPath(source);
+    String fullDest = toFullPath(destination);
+    S3Uri sourceUri = parseS3Uri(fullSource);
+    S3Uri destUri = parseS3Uri(fullDest);
 
     try {
       // Check if source exists
