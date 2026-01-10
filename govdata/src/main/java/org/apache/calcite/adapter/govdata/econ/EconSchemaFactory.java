@@ -16,17 +16,18 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.govdata.BulkDownloadConfig;
-import org.apache.calcite.adapter.govdata.GovDataSchemaFactory;
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
-import org.apache.calcite.model.JsonTable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Schema factory for U.S. economic data sources.
@@ -37,658 +38,195 @@ import java.util.*;
  *   <li>Federal Reserve (FRED) - Interest rates, GDP, economic indicators</li>
  *   <li>U.S. Treasury - Treasury yields, auction results, debt statistics</li>
  *   <li>Bureau of Economic Analysis (BEA) - GDP components, trade data</li>
+ *   <li>World Bank - International economic indicators</li>
  * </ul>
  *
- * <p>Example configuration:
- * <pre>
- * {
- *   "schemas": [{
- *     "name": "ECON",
- *     "type": "custom",
- *     "factory": "org.apache.calcite.adapter.govdata.econ.EconSchemaFactory",
- *     "operand": {
- *       "blsApiKey": "${BLS_API_KEY}",
- *       "fredApiKey": "${FRED_API_KEY}",
- *       "updateFrequency": "daily",
- *       "historicalDepth": "10 years",
- *       "enabledSources": ["bls", "fred", "treasury"],
- *       "cacheDirectory": "${ECON_CACHE_DIR:/tmp/econ-cache}"
- *     }
- *   }]
- * }
- * </pre>
+ * <p>Implements {@link GovDataSubSchemaFactory} to configure ETL hooks via
+ * {@link #configureHooks(FileSchemaBuilder, Map)}.
  */
 public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
-  /** BEA regional data is typically 2 years behind current year. */
-  private static final int DATA_LAG_YEARS = 2;
+  // Data source mappings for tables
+  private static final Set<String> BLS_TABLES = new HashSet<>(Arrays.asList(
+      "employment_statistics", "inflation_metrics", "regional_cpi", "metro_cpi",
+      "state_industry", "state_wages", "metro_industry", "metro_wages",
+      "county_qcew", "county_wages", "jolts_regional", "jolts_state",
+      "wage_growth", "regional_employment"
+  ));
 
-  private Map<String, Map<String, Object>> tableConstraints;
-  private Set<String> enabledBlsTables;
+  private static final Set<String> TREASURY_TABLES = new HashSet<>(Arrays.asList(
+      "treasury_yields", "federal_debt"
+  ));
+
+  private static final Set<String> WORLDBANK_TABLES = new HashSet<>(Arrays.asList(
+      "world_indicators"
+  ));
+
+  private static final Set<String> FRED_TABLES = new HashSet<>(Arrays.asList(
+      "fred_indicators"
+  ));
+
+  private static final Set<String> BEA_TABLES = new HashSet<>(Arrays.asList(
+      "national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp",
+      // Bulk download tables (using ZIP files instead of per-API-call approach)
+      "state_personal_income", "state_gdp", "state_quarterly_income",
+      "state_quarterly_gdp", "state_consumption"
+  ));
 
   @Override
-  public int getDataLagYears() {
-    return DATA_LAG_YEARS;
-  }
-
-/**
-   * Build the operand configuration for ECON schema without creating the FileSchema.
-   * This method is called by GovDataSchemaFactory to collect table definitions.
-   */
-  public Map<String, Object> buildOperand(Map<String, Object> operand, GovDataSchemaFactory parent) {
-    LOGGER.debug("Building ECON schema operand configuration");
-
-    // Access shared services from parent
-    StorageProvider storageProvider = parent.getStorageProvider();
-    StorageProvider cacheStorageProvider = parent.getCacheStorageProvider();
-
-    // Use directory from operand if provided (contains full S3 URI or local path)
-    // Otherwise fall back to environment variables
-    String baseDirectory = (String) operand.get("directory");
-    String cacheDirectory = (String) operand.get("cacheDirectory");
-
-    if (baseDirectory == null) {
-      // Fallback to environment variables
-      String govdataParquetDir = getGovDataParquetDir(operand);
-      if (govdataParquetDir == null || govdataParquetDir.isEmpty()) {
-        throw new IllegalStateException("GOVDATA_PARQUET_DIR environment variable must be set");
-      }
-      baseDirectory = govdataParquetDir;
-    }
-
-    if (cacheDirectory == null) {
-      String govdataCacheDir = getGovDataCacheDir(operand);
-      if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
-        throw new IllegalStateException("GOVDATA_CACHE_DIR environment variable must be set");
-      }
-      cacheDirectory = govdataCacheDir;
-    }
-
-    // ECON data directories
-    // Add source=econ prefix ONCE here when reading from operand
-    // All downstream code uses these variables with relative paths (e.g., "type=indicators/year=2020")
-    // Final paths: baseDirectory/source=econ + type=indicators/year=2020 = baseDirectory/source=econ/type=indicators/year=2020
-    String econRawDir = cacheStorageProvider.resolvePath(cacheDirectory, "source=econ");
-    String econParquetDir = storageProvider.resolvePath(baseDirectory, "source=econ");
-
-    // Use unified govdata directory structure (matching GEO pattern)
-    LOGGER.debug("Using unified govdata directories - cache: {}, parquet: {}",
-        econRawDir, econParquetDir);
-
-    // Get year range from unified environment variables
-    Integer startYear = getConfiguredStartYear(operand);
-    Integer endYear = getConfiguredEndYear(operand);
-
-    LOGGER.debug("Economic data configuration:");
-    LOGGER.debug("  Cache directory: {}", econRawDir);
-    LOGGER.debug("  Parquet directory: {}", econParquetDir);
-    LOGGER.debug("  Year range: {} - {}", startYear, endYear);
-
-    // Get API keys: try operand first (allows model.json to specify key directly),
-    // then fall back to environment variable (supports ${ENV_VAR} syntax in model.json)
-    // If key comes from operand, set it as system property so metadata-driven downloaders can access it
-    String blsApiKey = (String) operand.get("blsApiKey");
-    if (blsApiKey == null) {
-      blsApiKey = System.getenv("BLS_API_KEY");
-    } else {
-      // Set as system property for metadata-driven downloaders to access
-      System.setProperty("BLS_API_KEY", blsApiKey);
-    }
-
-    String fredApiKey = (String) operand.get("fredApiKey");
-    if (fredApiKey == null) {
-      fredApiKey = System.getenv("FRED_API_KEY");
-    } else {
-      // Set as system property for metadata-driven downloaders to access
-      System.setProperty("FRED_API_KEY", fredApiKey);
-    }
-
-    String beaApiKey = (String) operand.get("beaApiKey");
-    if (beaApiKey == null) {
-      beaApiKey = System.getenv("BEA_API_KEY");
-    } else {
-      // Set as system property for metadata-driven downloaders to access
-      System.setProperty("BEA_API_KEY", beaApiKey);
-    }
-
-    // Get enabled sources
-    @SuppressWarnings("unchecked")
-    List<String> enabledSources = (List<String>) operand.get("enabledSources");
-    if (enabledSources == null) {
-      enabledSources = Arrays.asList("bls", "fred", "treasury", "bea", "worldbank");
-    }
-
-    LOGGER.debug("  Enabled sources: {}", enabledSources);
-    LOGGER.debug("  BLS API key: {}", blsApiKey != null ? "configured" : "not configured");
-    LOGGER.debug("  FRED API key: {}", fredApiKey != null ? "configured" : "not configured");
-    LOGGER.debug("  BEA API key: {}", beaApiKey != null ? "configured" : "not configured");
-
-    // Parse custom FRED series configuration
-    @SuppressWarnings("unchecked")
-    List<String> customFredSeries = (List<String>) operand.get("customFredSeries");
-
-    // Parse BLS table filtering configuration (needed for both download and schema filtering)
-    this.enabledBlsTables = parseBlsTableFilter(operand);
-
-    if (LOGGER.isDebugEnabled()) {
-      LOGGER.debug("  Custom FRED series: {}", customFredSeries != null ? customFredSeries.size() + " series configured" : "none");
-    }
-
-    // Parse FRED minimum popularity threshold for catalog-based series filtering
-    Integer fredMinPopularity = (Integer) operand.get("fredMinPopularity");
-    if (fredMinPopularity == null) {
-      fredMinPopularity = 50;  // Default: only moderately popular series
-    }
-    LOGGER.debug("  FRED minimum popularity threshold: {}", fredMinPopularity);
-
-    // Parse FRED catalog cache force refresh flag (default false)
-    Boolean fredCatalogForceRefresh = (Boolean) operand.get("fredCatalogForceRefresh");
-    if (fredCatalogForceRefresh == null) {
-      fredCatalogForceRefresh = false;
-    }
-
-    // Check auto-download setting (default true like GEO)
-    Boolean autoDownload = (Boolean) operand.get("autoDownload");
-    if (autoDownload == null) {
-      autoDownload = true;
-    }
-
-    // Create mutable operand for modifications
-    Map<String, Object> mutableOperand = new HashMap<>(operand);
-
-    // Download data if auto-download is enabled
-    if (autoDownload) {
-      LOGGER.debug("Auto-download enabled for ECON data");
-      try {
-        downloadEconData(mutableOperand, econRawDir, econParquetDir,
-            blsApiKey, fredApiKey, beaApiKey, enabledSources, startYear, endYear, storageProvider,
-            customFredSeries, cacheStorageProvider, fredMinPopularity, fredCatalogForceRefresh);
-      } catch (Exception e) {
-        LOGGER.error("Error downloading ECON data", e);
-        // Continue even if download fails - existing data may be available
-      }
-    }
-
-    // Set the directory for FileSchemaFactory to use
-    mutableOperand.put("directory", econParquetDir);
-
-    // Separate table definitions into partitioned tables and views
-    List<Map<String, Object>> allTables = loadTableDefinitions();
-
-    // Rewrite FK schema names if actual schema name is different from declared name
-    String actualSchemaName = (String) operand.get("actualSchemaName");
-    if (actualSchemaName != null) {
-      rewriteForeignKeySchemaNames(allTables, actualSchemaName);
-    }
-
-    // Add declared schema name to operand for view SQL rewriting in DuckDB
-    // This allows DuckDB to rewrite view definitions from "econ.table" to "ECON.table"
-    String declaredSchemaName = loadDeclaredSchemaName();
-    mutableOperand.put("declaredSchemaName", declaredSchemaName);
-    LOGGER.debug("Added declaredSchemaName='{}' to operand for view rewriting", declaredSchemaName);
-
-    List<Map<String, Object>> partitionedTables = new ArrayList<>();
-    List<Map<String, Object>> regularTables = new ArrayList<>();
-
-    for (Map<String, Object> table : allTables) {
-      String tableType = (String) table.get("type");
-      if ("view".equals(tableType)) {
-        // This is a view definition - add to regular tables
-        regularTables.add(table);
-        LOGGER.debug("Adding view to tables array: {}", table.get("name"));
-      } else {
-        // This is a partitioned table - add to partitioned tables
-        partitionedTables.add(table);
-      }
-    }
-
-    mutableOperand.put("partitionedTables", partitionedTables);
-    if (!regularTables.isEmpty()) {
-      mutableOperand.put("tables", regularTables);
-      LOGGER.info("Added {} views to 'tables' operand for FileSchema", regularTables.size());
-    }
-
-    // Generate materializations from alternate partition tables for automatic optimizer substitution
-    List<Map<String, Object>> materializations = generateMaterializations(allTables);
-    if (!materializations.isEmpty()) {
-      mutableOperand.put("materializations", materializations);
-      LOGGER.info("Generated {} materializations from alternate partitions for automatic substitution",
-          materializations.size());
-    }
-
-    // Pass through executionEngine if specified (critical for DuckDB vs PARQUET)
-    if (operand.containsKey("executionEngine")) {
-      mutableOperand.put("executionEngine", operand.get("executionEngine"));
-    }
-    Map<String, Map<String, Object>> econConstraints = loadTableConstraints();
-
-    // Rewrite FK schema names in constraints if actual schema name is different from declared name
-    if (actualSchemaName != null) {
-      rewriteConstraintForeignKeySchemaNames(econConstraints, actualSchemaName);
-    }
-
-    if (tableConstraints != null) {
-      econConstraints.putAll(tableConstraints);
-    }
-
-    // Add constraint metadata to operand so FileSchemaFactory can pass it to FileSchema
-    mutableOperand.put("tableConstraints", econConstraints);
-
-    // NOTE: We cannot create and register the RawToParquetConverter here because:
-    // 1. EconSchemaFactory only builds operand configuration, doesn't create FileSchema
-    // 2. The downloaders are created inside downloadEconData() which already finished
-    // 3. GovDataSchemaFactory creates the FileSchema after this method returns
-    //
-    // SOLUTION: GovDataSchemaFactory will need to create the converter and downloaders
-    // after schema creation, then cast FileSchema and call registerRawToParquetConverter()
-    // This requires downloaders to be recreated in GovDataSchemaFactory.buildEconOperand()
-
-    // Add schema-level comment from JSON metadata
-    String schemaComment = loadSchemaComment();
-    if (schemaComment != null) {
-      mutableOperand.put("comment", schemaComment);
-    }
-
-    return mutableOperand;
-  }
-
-  @Override public String getSchemaResourceName() {
+  public String getSchemaResourceName() {
     return "/econ/econ-schema.yaml";
   }
 
-  /**
-   * Loads bulk download configurations from the econ-schema.yaml resource file.
-   * Bulk downloads are large source files that feed multiple tables (e.g., QCEW ZIP file).
-   *
-   * @return Map of bulk download name to BulkDownloadConfig
-   */
-  protected Map<String, BulkDownloadConfig> loadBulkDownloads() {
-    try (InputStream is = getClass().getResourceAsStream(getSchemaResourceName())) {
-      if (is == null) {
-        throw new IllegalStateException(
-            "Could not find " + getSchemaResourceName() + " resource file");
-      }
+  @Override
+  public List<String> getDependencies() {
+    // The econ schema depends on econ_reference for dimension lookup tables
+    // (e.g., regional_linecodes needed by BeaDimensionResolver)
+    return Collections.singletonList("econ_reference");
+  }
 
-      com.fasterxml.jackson.databind.ObjectMapper mapper = getMapperForSchema(getSchemaResourceName());
-      Map<String, Object> schema = mapper.readValue(is, Map.class);
+  @Override
+  public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for ECON schema");
 
-      Map<String, Map<String, Object>> bulkDownloadsJson =
-          (Map<String, Map<String, Object>>) schema.get("bulkDownloads");
-      if (bulkDownloadsJson == null) {
-        LOGGER.debug("No 'bulkDownloads' section found in schema, returning empty map");
-        return new HashMap<>();
-      }
+    // Parse filtering configuration
+    Set<String> enabledSources = parseEnabledSources(operand);
+    Set<String> enabledBlsTables = parseBlsTableFilter(operand);
 
-      Map<String, BulkDownloadConfig> bulkDownloads = new HashMap<>();
-      for (Map.Entry<String, Map<String, Object>> entry : bulkDownloadsJson.entrySet()) {
-        String name = entry.getKey();
-        Map<String, Object> config = entry.getValue();
+    // WorldBank dimensions are now declarative in YAML using json_catalog type
+    // No need for Java hooks - dimensions are resolved automatically by DimensionIterator
 
-        String cachePattern = (String) config.get("cachePattern");
-        String url = (String) config.get("url");
-        List<String> variables = (List<String>) config.get("variables");
-        String comment = (String) config.get("comment");
+    // Add isEnabled hooks for all tables based on enabledSources and blsConfig
+    addIsEnabledHooks(builder, enabledSources, enabledBlsTables);
 
-        BulkDownloadConfig bulkDownload =
-            new BulkDownloadConfig(name, cachePattern, url, variables, comment);
-        bulkDownloads.put(name, bulkDownload);
-
-        LOGGER.debug("Loaded bulk download config: {}", bulkDownload);
-      }
-
-      LOGGER.info("Loaded {} bulk download configurations from {}", bulkDownloads.size(), getSchemaResourceName());
-      return bulkDownloads;
-
-    } catch (Exception e) {
-      throw new RuntimeException("Error loading bulk downloads from " + getSchemaResourceName(), e);
-    }
+    LOGGER.debug("Configured hooks for ECON schema: enabledSources={}, blsTables={}",
+        enabledSources, enabledBlsTables != null ? enabledBlsTables.size() : "all");
   }
 
   /**
-   * Download economic data from various sources using unified downloader pattern.
-   * This method creates all downloaders and orchestrates the standard 3-phase download pattern:
-   * Phase 0: Download reference data
-   * Phase 1: Download all time-series data
-   * Phase 2: Convert all data to Parquet
+   * Add isEnabled hooks for all tables based on enabledSources and blsConfig filtering.
    */
-  private void downloadEconData(Map<String, Object> operand, String cacheDir, String parquetDir,
-      String blsApiKey, String fredApiKey, String beaApiKey, List<String> enabledSources,
-      int startYear, int endYear, StorageProvider storageProvider,
-      List<String> customFredSeries, StorageProvider cacheStorageProvider, int fredMinPopularity,
-      boolean fredCatalogForceRefresh) {
-
-    // Operating directory for metadata (.aperio/econ/)
-    // This is passed from GovDataSchemaFactory which establishes it centrally
-    // The .aperio directory is ALWAYS on local filesystem (working directory), even if parquet data is on S3
-    String econOperatingDirectory = (String) operand.get("operatingDirectory");
-    if (econOperatingDirectory == null) {
-      throw new IllegalStateException("Operating directory must be established by GovDataSchemaFactory");
-    }
-    LOGGER.debug("Received operating directory from parent: {}", econOperatingDirectory);
-
-    // Directory creation handled automatically by StorageProvider when writing files
-    // No need to create cache or parquet directories explicitly
-
-    // Load or create cache manifest for tracking parquet conversions from operating directory
-    CacheManifest cacheManifest = CacheManifest.load(econOperatingDirectory);
-    LOGGER.debug("Loaded ECON cache manifest from {}", econOperatingDirectory);
-
-    // cacheStorageProvider is passed as parameter (created by GovDataSchemaFactory)
-    LOGGER.debug("Using shared cache storage provider for cache directory: {}", cacheDir);
-
-    // Create list of all downloaders (only for enabled sources)
-    List<AbstractEconDataDownloader> downloaders = new ArrayList<>();
-
-    // Create BLS downloader if enabled
-    if (enabledSources.contains("bls") && blsApiKey != null && !blsApiKey.isEmpty()) {
-      BlsDataDownloader blsDownloader =
-          new BlsDataDownloader(blsApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-          cacheManifest, enabledBlsTables, startYear, endYear);
-      downloaders.add(blsDownloader);
-      LOGGER.debug("Added BLS downloader to orchestration list");
+  private void addIsEnabledHooks(FileSchemaBuilder builder,
+      Set<String> enabledSources, Set<String> enabledBlsTables) {
+    // Add hooks for BLS tables
+    for (String tableName : BLS_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "bls", enabledSources, enabledBlsTables));
     }
 
-    // Create FRED downloader if enabled
-    if (enabledSources.contains("fred") && fredApiKey != null && !fredApiKey.isEmpty()) {
-      try {
-        // Get catalog cache TTL from operand (default 365 days)
-        Integer catalogCacheTtlDays = (Integer) operand.get("fredCatalogCacheTtlDays");
-
-        // FredDataDownloader handles all FRED-specific initialization internally
-        FredDataDownloader fredDownloader =
-            new FredDataDownloader(fredApiKey, cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider,
-            cacheManifest, customFredSeries, fredMinPopularity, fredCatalogForceRefresh,
-            catalogCacheTtlDays, startYear, endYear);
-        downloaders.add(fredDownloader);
-        LOGGER.debug("Added FRED downloader to orchestration list");
-      } catch (Exception e) {
-        LOGGER.error("Error creating FRED downloader", e);
-      }
+    // Add hooks for Treasury tables
+    for (String tableName : TREASURY_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "treasury", enabledSources, null));
     }
 
-    // Create Treasury downloader if enabled (no API key required)
-    if (enabledSources.contains("treasury")) {
-      TreasuryDataDownloader treasuryDownloader =
-          new TreasuryDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
-      downloaders.add(treasuryDownloader);
-      LOGGER.debug("Added Treasury downloader to orchestration list");
+    // Add hooks for WorldBank tables
+    for (String tableName : WORLDBANK_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "worldbank", enabledSources, null));
     }
 
-    // Create BEA downloader if enabled
-    if (enabledSources.contains("bea") && beaApiKey != null && !beaApiKey.isEmpty()) {
-      try {
-        // BeaDataDownloader handles all BEA-specific initialization internally
-        BeaDataDownloader beaDownloader =
-            new BeaDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
-        downloaders.add(beaDownloader);
-        LOGGER.debug("Added BEA downloader to orchestration list");
-      } catch (Exception e) {
-        LOGGER.error("Error creating BEA downloader", e);
-      }
+    // Add hooks for FRED tables
+    for (String tableName : FRED_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "fred", enabledSources, null));
     }
 
-    // Create WorldBank downloader if enabled (no API key required)
-    if (enabledSources.contains("worldbank")) {
-      WorldBankDataDownloader worldBankDownloader =
-          new WorldBankDataDownloader(cacheDir, econOperatingDirectory, parquetDir, cacheStorageProvider, storageProvider, cacheManifest, startYear, endYear);
-      downloaders.add(worldBankDownloader);
-      LOGGER.debug("Added WorldBank downloader to orchestration list");
+    // Add hooks for BEA tables
+    for (String tableName : BEA_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "bea", enabledSources, null));
     }
 
-    // PHASE 0: Process all reference data (download if not cached)
-    LOGGER.info("=== PHASE 0: Processing reference data ===");
-    for (AbstractEconDataDownloader downloader : downloaders) {
-      try {
-        String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.debug("Processing reference data using {}", downloaderName);
-        downloader.downloadReferenceData();
-      } catch (Exception e) {
-        LOGGER.error("Error during reference data download for {}: {}",
-            downloader.getClass().getSimpleName(), e.getMessage(), e);
-      }
-    }
-
-    // PHASE 1: Process all time-series data (download if not cached)
-    LOGGER.info("=== PHASE 1: Processing time-series data ===");
-    for (AbstractEconDataDownloader downloader : downloaders) {
-      try {
-        String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.debug("Processing data using {}", downloaderName);
-        downloader.downloadAll(startYear, endYear);
-      } catch (Exception e) {
-        LOGGER.error("Error during download phase for {}: {}",
-            downloader.getClass().getSimpleName(), e.getMessage(), e);
-      }
-    }
-
-    // PHASE 2: Convert all data to Parquet (convert if not cached)
-    LOGGER.info("=== PHASE 2: Converting data to Parquet ===");
-    for (AbstractEconDataDownloader downloader : downloaders) {
-      try {
-        String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.debug("Converting data using {}", downloaderName);
-        downloader.convertAll(startYear, endYear);
-      } catch (Exception e) {
-        LOGGER.error("Error during conversion phase for {}: {}",
-            downloader.getClass().getSimpleName(), e.getMessage(), e);
-      }
-    }
-
-    // PHASE 3: Reorganize alternate partition tables
-    LOGGER.info("=== PHASE 3: Reorganizing alternate partition tables ===");
-    for (AbstractEconDataDownloader downloader : downloaders) {
-      try {
-        String downloaderName = downloader.getClass().getSimpleName();
-        LOGGER.info("Reorganizing partitions using {}", downloaderName);
-        downloader.reorganizeAll();
-      } catch (Exception e) {
-        LOGGER.error("Error during partition reorganization for {}: {}",
-            downloader.getClass().getSimpleName(), e.getMessage(), e);
-      }
-    }
-
-    // Save cache manifest after all downloads to operating directory
-    cacheManifest.save(econOperatingDirectory);
-    LOGGER.info("=== All ECON data download, conversion, and partition reorganization complete ===");
+    LOGGER.debug("Added isEnabled hooks for {} BLS, {} Treasury, {} WorldBank, {} FRED, {} BEA tables",
+        BLS_TABLES.size(), TREASURY_TABLES.size(), WORLDBANK_TABLES.size(),
+        FRED_TABLES.size(), BEA_TABLES.size());
   }
 
   /**
-   * Override loadTableDefinitions to add custom FRED table definitions dynamically.
-   * This combines static table definitions from econ-schema.yaml with dynamically
-   * generated table definitions for custom FRED series.
+   * Check if a table is enabled based on enabledSources and blsConfig.
    */
-  @Override public List<Map<String, Object>> loadTableDefinitions() {
-    // Start with base table definitions from econ-schema.yaml
-    List<Map<String, Object>> baseTables = GovDataSubSchemaFactory.super.loadTableDefinitions();
-    List<Map<String, Object>> tables = new ArrayList<>();
+  private boolean isTableEnabled(String tableName, String dataSource,
+      Set<String> enabledSources, Set<String> enabledBlsTables) {
+    // Check if data source is enabled
+    if (enabledSources != null && !enabledSources.contains(dataSource.toLowerCase())) {
+      LOGGER.debug("Table '{}' disabled: source '{}' not in enabledSources", tableName, dataSource);
+      return false;
+    }
 
-    LOGGER.info("[DEBUG] Loaded {} base table definitions from econ-schema.yaml", baseTables.size());
+    // For BLS tables, also check blsConfig filtering
+    if ("bls".equals(dataSource) && enabledBlsTables != null) {
+      if (!enabledBlsTables.contains(tableName)) {
+        LOGGER.debug("Table '{}' disabled: not in blsConfig enabled tables", tableName);
+        return false;
+      }
+    }
 
-    // Filter BLS tables based on enabledBlsTables configuration
-    for (Map<String, Object> table : baseTables) {
-      String tableName = (String) table.get("name");
+    return true;
+  }
 
-      // Check if this is a BLS table
-      boolean isBlsTable = tableName.equals(BlsDataDownloader.BLS.tableNames.employmentStatistics)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.inflationMetrics)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.regionalCpi)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroCpi)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.stateIndustry)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.stateWages)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.countyWages)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.countyQcew)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroIndustry)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.metroWages)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.joltsRegional)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.wageGrowth)
-          || tableName.equals(BlsDataDownloader.BLS.tableNames.regionalEmployment);
+  /**
+   * Parse enabledSources configuration from operand.
+   */
+  private Set<String> parseEnabledSources(Map<String, Object> operand) {
+    Object sourcesObj = operand.get("enabledSources");
+    if (sourcesObj == null) {
+      return null; // No filtering - all sources enabled
+    }
 
-      if (isBlsTable) {
-        // Check if table is enabled (null means all tables enabled)
-        if (enabledBlsTables == null || enabledBlsTables.contains(tableName)) {
-          tables.add(table);
-          LOGGER.debug("[DEBUG] Including BLS table: {} with pattern: {}", tableName, table.get("pattern"));
-        } else {
-          LOGGER.info("Filtering out BLS table '{}' from schema (not in enabled tables)", tableName);
+    Set<String> sources = new HashSet<>();
+    if (sourcesObj instanceof List) {
+      for (Object source : (List<?>) sourcesObj) {
+        if (source instanceof String) {
+          sources.add(((String) source).toLowerCase());
         }
-      } else {
-        // Non-BLS table, always include
-        tables.add(table);
-        LOGGER.debug("[DEBUG] Including non-BLS table: {} with pattern: {}", tableName, table.get("pattern"));
+      }
+    } else if (sourcesObj instanceof String[]) {
+      for (String source : (String[]) sourcesObj) {
+        sources.add(source.toLowerCase());
       }
     }
 
-    // Expand alternate_partitions into additional table definitions
-    expandAlternatePartitions(tables);
-
-    LOGGER.info("[DEBUG] Total ECON table definitions: {}", tables.size());
-    return tables;
+    LOGGER.info("Enabled data sources: {}", sources);
+    return sources;
   }
 
   /**
-   * Generalized include/exclude filter parser for any data source.
-   * Supports whitelist (include) or blacklist (exclude) patterns, but not both.
-   *
-   * @param operand  Schema configuration operand
-   * @param allItems Complete set of all available items
-   * @return Filtered set of items, or null for no filtering
+   * Parse BLS table filtering configuration from operand.
    */
-  private Set<String> parseIncludeExcludeFilter(
-      Map<String, Object> operand,
-      Set<String> allItems) {
-
+  private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
     @SuppressWarnings("unchecked")
     Map<String, Object> config = (Map<String, Object>) operand.get("blsConfig");
     if (config == null) {
-      return null; // No filtering
+      return null; // No filtering - include all tables
     }
 
     @SuppressWarnings("unchecked")
-    List<String> includeItems = (List<String>) config.get("includeTables");
+    List<String> includeTables = (List<String>) config.get("includeTables");
     @SuppressWarnings("unchecked")
-    List<String> excludeItems = (List<String>) config.get("excludeTables");
+    List<String> excludeTables = (List<String>) config.get("excludeTables");
 
     // Validate mutual exclusivity
-    if (includeItems != null && excludeItems != null) {
+    if (includeTables != null && excludeTables != null) {
       throw new IllegalArgumentException(
-          String.format("Cannot specify both '%s' and '%s' in %s. " +
-              "Use %s for whitelist or %s for blacklist, but not both.",
-              "includeTables", "excludeTables", "blsConfig", "includeTables", "excludeTables"));
+          "Cannot specify both 'includeTables' and 'excludeTables' in blsConfig.");
     }
 
-    if (includeItems != null) {
-      Set<String> filtered = new HashSet<>(includeItems);
-      LOGGER.info("{} filter: including {} {}: {}", "BLS", filtered.size(), "tables", includeItems);
+    if (includeTables != null) {
+      Set<String> filtered = new HashSet<>(includeTables);
+      LOGGER.info("BLS table filter: including {} tables", filtered.size());
       return filtered;
     }
 
-    if (excludeItems != null) {
-      Set<String> filtered = new HashSet<>(allItems);
-      excludeItems.forEach(filtered::remove);
-      LOGGER.info("{} filter: excluding {} {}, downloading {} {}",
-          "BLS", excludeItems.size(), "tables", filtered.size(), "tables");
+    if (excludeTables != null) {
+      Set<String> filtered = new HashSet<>(BLS_TABLES);
+      excludeTables.forEach(filtered::remove);
+      LOGGER.info("BLS table filter: excluding {} tables, keeping {} tables",
+          excludeTables.size(), filtered.size());
       return filtered;
     }
 
     return null; // No filtering
   }
-
-  /**
-   * Parse BLS table filtering configuration from operand.
-   * Delegates to generalized parseIncludeExcludeFilter method.
-   *
-   * @param operand Schema configuration operand
-   * @return Set of enabled table names, or null to download all tables
-   */
-  private Set<String> parseBlsTableFilter(Map<String, Object> operand) {
-    Set<String> allBlsTables =
-        new HashSet<>(
-            Arrays.asList(
-            BlsDataDownloader.BLS.tableNames.employmentStatistics,
-            BlsDataDownloader.BLS.tableNames.inflationMetrics,
-            BlsDataDownloader.BLS.tableNames.regionalCpi,
-            BlsDataDownloader.BLS.tableNames.metroCpi,
-            BlsDataDownloader.BLS.tableNames.stateIndustry,
-            BlsDataDownloader.BLS.tableNames.stateWages,
-            BlsDataDownloader.BLS.tableNames.metroIndustry,
-            BlsDataDownloader.BLS.tableNames.metroWages,
-            BlsDataDownloader.BLS.tableNames.joltsRegional,
-            BlsDataDownloader.BLS.tableNames.wageGrowth,
-            BlsDataDownloader.BLS.tableNames.regionalEmployment));
-
-    return parseIncludeExcludeFilter(operand,
-        allBlsTables);
-  }
-
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
-      List<JsonTable> tableDefinitions) {
-    this.tableConstraints = tableConstraints;
-    // EconSchemaFactory doesn't use tableDefinitions
-    LOGGER.debug("Received constraint metadata for {} tables",
-        tableConstraints != null ? tableConstraints.size() : 0);
-  }
-
-  /**
-   * Generate materialization definitions from alternate partition tables.
-   *
-   * <p>For each alternate partition table (marked with _isAlternatePartition=true),
-   * creates a materialization that tells Calcite's optimizer that the alternate table
-   * is equivalent to: SELECT * FROM source_table
-   *
-   * <p>This allows the optimizer to automatically substitute alternate partition tables
-   * based on query predicates, selecting the layout with the most partition keys.
-   *
-   * @param tables List of all table definitions (including alternate partition tables)
-   * @return List of materialization definitions for FileSchema
-   */
-  private List<Map<String, Object>> generateMaterializations(List<Map<String, Object>> tables) {
-    List<Map<String, Object>> materializations = new ArrayList<>();
-
-    for (Map<String, Object> table : tables) {
-      Boolean isAlternatePartition = (Boolean) table.get("_isAlternatePartition");
-      if (isAlternatePartition != null && isAlternatePartition) {
-        String alternateTableName = (String) table.get("name");
-        String sourceTableName = (String) table.get("_sourceTableName");
-
-        if (alternateTableName == null || sourceTableName == null) {
-          LOGGER.warn("Skipping materialization for alternate partition with missing metadata");
-          continue;
-        }
-
-        // Create materialization definition
-        // Format expected by FileSchema:
-        // {
-        //   "table": "alternate_table_name",
-        //   "sql": "SELECT * FROM source_table",
-        //   "viewSchemaPath": ["ECON"],
-        //   "existing": true,
-        //   "_partitionKeyCount": N
-        // }
-        Map<String, Object> materialization = new HashMap<>();
-        materialization.put("table", alternateTableName);
-        materialization.put("sql", "SELECT * FROM " + sourceTableName);
-
-        // Set the schema path for the materialized view (ECON schema)
-        materialization.put("viewSchemaPath", Collections.singletonList("ECON"));
-
-        // Mark as existing (alternate partition data files already exist)
-        materialization.put("existing", true);
-
-        // Include partition key count for optimizer selection heuristic
-        Integer partitionKeyCount = (Integer) table.get("_partitionKeyCount");
-        if (partitionKeyCount != null) {
-          materialization.put("_partitionKeyCount", partitionKeyCount);
-        }
-
-        materializations.add(materialization);
-        LOGGER.debug("Created materialization: alternate partition '{}' for source table '{}' "
-            + "(partition keys: {})",
-            alternateTableName, sourceTableName, partitionKeyCount);
-      }
-    }
-
-    return materializations;
-  }
-
 }

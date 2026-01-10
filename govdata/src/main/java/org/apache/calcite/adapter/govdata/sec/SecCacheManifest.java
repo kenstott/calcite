@@ -27,8 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -253,8 +251,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
    * Save manifest to DuckDB.
    * This is now a no-op as DuckDB persists changes immediately.
    */
-  @Override
-  public void save(String directory) {
+  @Override public void save(String directory) {
     store.touchLastUpdated();
     LOGGER.debug("Cache manifest changes persisted to DuckDB");
   }
@@ -262,33 +259,28 @@ public class SecCacheManifest extends AbstractCacheManifest {
   // ===== Abstract method implementations from AbstractCacheManifest =====
   // SEC schema uses CIK-based caching (different paradigm than ECON/GEO)
 
-  @Override
-  public boolean isCached(CacheKey cacheKey) {
+  @Override public boolean isCached(CacheKey cacheKey) {
     throw new UnsupportedOperationException(
         "SEC schema uses CIK-based caching. Use isCached(String cik) instead.");
   }
 
-  @Override
-  public void markCached(CacheKey cacheKey, String filePath, long fileSize,
+  @Override public void markCached(CacheKey cacheKey, String filePath, long fileSize,
       long refreshAfter, String refreshReason) {
     throw new UnsupportedOperationException(
         "SEC schema uses CIK-based caching. Use markCached(String cik, ...) instead.");
   }
 
-  @Override
-  public boolean isParquetConverted(CacheKey cacheKey) {
+  @Override public boolean isMaterialized(CacheKey cacheKey) {
     throw new UnsupportedOperationException(
-        "SEC schema tracks parquet conversion via filing-level state.");
+        "SEC schema tracks materialization via filing-level state.");
   }
 
-  @Override
-  public void markParquetConverted(CacheKey cacheKey, String parquetPath) {
+  @Override public void markMaterialized(CacheKey cacheKey, String outputPath) {
     throw new UnsupportedOperationException(
-        "SEC schema tracks parquet conversion via filing-level state.");
+        "SEC schema tracks materialization via filing-level state.");
   }
 
-  @Override
-  public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
+  @Override public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
     LOGGER.warn("markApiError called on SecCacheManifest - not implemented for SEC adapter");
   }
 
@@ -384,8 +376,7 @@ public class SecCacheManifest extends AbstractCacheManifest {
     public int totalFilings;
     public int notFoundFilings;
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format(
           "SEC Cache stats: %d submissions (%d with ETag, %d without ETag, %d expired), %d filings (%d not found)",
           totalEntries, entriesWithETag, entriesWithoutETag, expiredEntries, totalFilings, notFoundFilings);

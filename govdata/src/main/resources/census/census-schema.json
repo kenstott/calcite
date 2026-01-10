@@ -1,5 +1,6 @@
 {
   "comment": "U.S. Census Bureau demographic and population data including decennial census results, American Community Survey (ACS) estimates, population projections, and economic indicators. Provides comprehensive demographic profiles, household characteristics, income distributions, educational attainment, housing statistics, and migration patterns at national, state, county, and census tract levels. Supports demographic analysis, population trend research, social policy planning, and market segmentation studies.",
+  "dataLagYears": 1,
   "dataAvailability": {
     "_comment": "Defines data availability rules by census type to avoid making requests for data we know will not exist",
     "acs": {

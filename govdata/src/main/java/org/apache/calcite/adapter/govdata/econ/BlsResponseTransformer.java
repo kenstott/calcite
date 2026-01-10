@@ -21,6 +21,8 @@ import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,11 +113,14 @@ public class BlsResponseTransformer implements ResponseTransformer {
   }
 
   /**
-   * Extracts the series data from a successful BLS response.
+   * Extracts and flattens the series data from a successful BLS response.
+   *
+   * <p>BLS returns nested structure where each series has a data array.
+   * This method flattens it to individual rows with seriesID included.
    *
    * @param root The parsed JSON root node
    * @param context Request context for logging
-   * @return JSON string of the series array
+   * @return JSON string of flattened data array
    */
   private String extractSuccessData(JsonNode root, RequestContext context) {
     JsonNode results = root.path("Results");
@@ -131,8 +136,33 @@ public class BlsResponseTransformer implements ResponseTransformer {
       return "[]";
     }
 
-    LOGGER.debug("BLS: Extracted {} series records", series.size());
-    return series.toString();
+    // Flatten: each series has data[] array, merge into single flat array
+    ArrayNode flatData = MAPPER.createArrayNode();
+    int totalRecords = 0;
+
+    for (JsonNode seriesNode : series) {
+      String seriesId = seriesNode.path("seriesID").asText();
+      JsonNode dataArray = seriesNode.path("data");
+
+      if (dataArray.isArray()) {
+        for (JsonNode dataPoint : dataArray) {
+          // Create flattened record with seriesID added
+          ObjectNode record = MAPPER.createObjectNode();
+          record.put("series", seriesId);
+
+          // Copy all fields from the data point
+          dataPoint.fields().forEachRemaining(field ->
+              record.set(field.getKey(), field.getValue()));
+
+          flatData.add(record);
+          totalRecords++;
+        }
+      }
+    }
+
+    LOGGER.debug("BLS: Flattened {} series into {} data records",
+        series.size(), totalRecords);
+    return flatData.toString();
   }
 
   /**
@@ -180,6 +210,14 @@ public class BlsResponseTransformer implements ResponseTransformer {
     // No data available - return empty
     if (lowerMessage.contains("no data") || lowerMessage.contains("data not available")) {
       LOGGER.debug("BLS: No data available for {} - {}", context.getUrl(), message);
+      return "[]";
+    }
+
+    // Generic "request failed" - often means quota exhausted or temporary API issue
+    // Return empty results to let pipeline continue with other tables
+    if (lowerMessage.contains("request has failed") || lowerMessage.contains("check your input")) {
+      LOGGER.info("BLS: Request failed (likely quota/rate limit) - skipping batch. Message: {}",
+          message);
       return "[]";
     }
 

@@ -1,0 +1,960 @@
+# ============================================================================
+# Economic Reference Data Schema (ECON_REFERENCE)
+# ============================================================================
+# Reference/dimension tables for economic data:
+#   - JOLTS industry and data element codes (BLS)
+#   - BLS geography mappings (states, metros, regions)
+#   - BLS NAICS sector codes
+#   - NIPA table catalog (BEA)
+#   - Regional LineCode catalog (BEA)
+#   - FRED series catalog (Federal Reserve)
+#
+# This schema should be processed BEFORE the main econ schema since
+# fact tables in econ depend on these reference tables for lookups.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:econ_reference}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=econ"
+
+comment: >
+  Reference and dimension tables for U.S. economic data. Contains lookup tables
+  for BLS series codes, geographic mappings, industry classifications, and
+  metadata catalogs for FRED, NIPA, and BEA Regional datasets. These tables
+  should be loaded before the main econ schema as they provide dimension data
+  for enriched views and semantic queries.
+
+column_templates:
+
+  # --- Time Series Common Columns ---
+
+  date_column: &date_column
+    name: date
+    type: string
+    nullable: true
+    comment: Observation date (ISO 8601 format)
+
+  series_column: &series_column
+    name: series
+    type: string
+    nullable: true
+    comment: BLS series identifier
+
+  value_column: &value_column
+    name: value
+    type: double
+    nullable: true
+    comment: Numeric value for the metric
+
+  # --- Percentage Change Columns ---
+
+  percent_change_month_column: &percent_change_month
+    name: percent_change_month
+    type: double
+    nullable: true
+    comment: Month-over-month percentage change
+
+  percent_change_year_column: &percent_change_year
+    name: percent_change_year
+    type: double
+    nullable: true
+    comment: Year-over-year percentage change
+
+  # --- Geographic Columns ---
+
+  state_name_column: &state_name
+    name: state_name
+    type: string
+    nullable: true
+    comment: State name
+
+  state_fips_column: &state_fips
+    name: state_fips
+    type: string
+    nullable: true
+    comment: State FIPS code
+
+  # --- Industry Columns ---
+
+  industry_name_column: &industry_name
+    name: industry_name
+    type: string
+    nullable: true
+    comment: Industry name
+
+  # --- Partition Column Definitions ---
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_frequency: &partition_frequency
+    name: frequency
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  # --- Standard Hive Partition Set ---
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_frequency
+      - *partition_year
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+# Reusable dimension value lists using YAML anchors
+# These can be referenced in table dimension definitions using *anchor_name
+# ============================================================================
+
+
+partitionedTables:
+
+  # --- REFERENCE JOLTS INDUSTRIES ---
+  - name: jolts_industries
+    pattern: "type=jolts_industries.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    sourcePaths:
+      ftpFiles:
+        - cachePath: "type=jolts_ftp/jt.industry"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
+          comment: JOLTS industry code reference file
+    comment: >
+      JOLTS industry code reference table from BLS. Maps industry codes to human-readable industry names for JOLTS data (jolts_regional, jolts_state tables). Essential dimension table for decoding JOLTS industry classifications.
+    columns:
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: JOLTS industry code
+      - name: industry_name
+        type: string
+        nullable: true
+        comment: Industry name
+        source: industry_text
+
+    # HTTP Source configuration for EtlPipeline (FTP file)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.industry"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        Accept: "text/plain, text/tab-separated-values, */*"
+        Accept-Language: "en-US,en;q=0.9"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Dimension for partition variable
+    dimensions:
+      type:
+        - jolts_industries
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE JOLTS DATAELEMENTS ---
+  - name: jolts_dataelements
+    pattern: "type=jolts_dataelements.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    sourcePaths:
+      ftpFiles:
+        - cachePath: "type=jolts_ftp/jt.dataelement"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
+          comment: JOLTS data element code reference file
+    comment: >
+      JOLTS data element code reference table from BLS. Maps metric codes (JOR, HIR, QUR, TSR, LDR) to descriptions (Job Openings Rate, Hires Rate, etc.). Essential dimension table for understanding JOLTS metrics in jolts_regional and jolts_state tables.
+    columns:
+      - name: dataelement_code
+        type: string
+        nullable: true
+        comment: JOLTS data element code
+      - name: dataelement_text
+        type: string
+        nullable: true
+        comment: Data element description
+
+    # HTTP Source configuration for EtlPipeline (FTP file)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.dataelement"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        Accept: "text/plain, text/tab-separated-values, */*"
+        Accept-Language: "en-US,en;q=0.9"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Dimension for partition variable
+    dimensions:
+      type:
+        - jolts_dataelements
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE BLS GEOGRAPHIES ---
+  - name: bls_geographies
+    pattern: "type=bls_geographies.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      BLS geography reference table mapping state abbreviations to FIPS codes, census regions, metro areas, and BLS-specific area codes. Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES into a single catalog-driven table. Enables dynamic geography lookups without hardcoded maps.
+    columns:
+      - name: geo_code
+        type: string
+        nullable: false
+        comment: Primary geography code (state abbreviation, metro code like 'A100', or region code)
+      - name: geo_name
+        type: string
+        nullable: true
+        comment: Geography name (e.g., 'California', 'New York-Newark-Jersey City, NY-NJ-PA', 'Northeast')
+      - name: geo_type
+        type: string
+        nullable: false
+        comment: "Geography type: 'state', 'metro', 'region'"
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS code (e.g., '06' for CA, '36' for NY). NULL for regions.
+      - name: region_code
+        type: string
+        nullable: true
+        comment: 4-digit census region code for regions (e.g., '0100' for Northeast). NULL for states/metros.
+      - name: metro_publication_code
+        type: string
+        nullable: true
+        comment: BLS publication code for metro areas (e.g., 'A100' for NYC). NULL for states/regions.
+      - name: metro_cpi_area_code
+        type: string
+        nullable: true
+        comment: CPI area code for metro CPI series (e.g., 'S35D' for NYC). NULL if metro lacks CPI data or for states/regions.
+      - name: metro_bls_area_code
+        type: string
+        nullable: true
+        comment: 7-digit BLS area code for metro employment series (state FIPS + 5-digit area code, e.g., '3693561' for NYC). NULL for states/regions.
+
+    # Source configuration - reads from YAML constants file
+    source:
+      type: constants
+      file: "/bls/bls-geographies.yaml"
+      path: "geographies"
+
+    # Dimension definitions for ETL iteration (single batch for all reference data)
+    dimensions:
+      type:
+        - bls_geographies
+
+    # Materialization configuration (reference data)
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE BLS NAICS SECTORS ---
+  - name: naics_sectors
+    pattern: "naics_sectors.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      BLS NAICS supersector reference table mapping supersector codes to industry names. Consolidates NAICS_SUPERSECTORS hardcoded map. Used for state_industry_employment, metro_industry_employment, and other industry-based BLS series.
+    columns:
+      - name: supersector_code
+        type: string
+        nullable: false
+        comment: 8-digit NAICS supersector code (e.g., '00000000' for total nonfarm, '05000000' for construction)
+      - name: supersector_name
+        type: string
+        nullable: false
+        comment: Industry supersector name (e.g., 'Total Nonfarm', 'Construction', 'Manufacturing')
+
+    # API Configuration (empty - this is reference data from constants)
+    download:
+
+    # Source configuration - reads from YAML constants file
+    source:
+      type: constants
+      file: "/bls/bls-constants.yaml"
+      path: "naicsSupersectors"
+      keyColumn: "supersector_code"
+      valueColumn: "supersector_name"
+
+    # Dimension definitions for ETL iteration (single batch for reference data)
+    dimensions:
+      type:
+        - naics_sectors
+
+    # Materialization configuration (reference data)
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE NIPA TABLES ---
+  - name: nipa_tables
+    pattern: "section=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: section
+          type: VARCHAR
+    comment: >
+      BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.
+    columns:
+      - name: TableName
+        type: string
+        nullable: true
+        comment: NIPA table code (e.g., 'T10105', 'T20100')
+      - name: Description
+        type: string
+        nullable: true
+        comment: Full table description from BEA including frequency indicators
+      - name: type
+        type: string
+        nullable: false
+        comment: Reference table type identifier for partitioning
+        expression: "'nipa_tables'"
+      - name: section
+        type: string
+        nullable: false
+        comment: Section number (1-8) extracted from TableName for partitioning
+        expression: "SUBSTR(TableName, 2, 1)"
+      - name: section_name
+        type: string
+        nullable: true
+        comment: Descriptive section name (e.g., 'domestic_product_income', 'foreign_transactions')
+        expression: "CASE SUBSTR(TableName, 2, 1) WHEN '1' THEN 'domestic_product_income' WHEN '2' THEN 'personal_income_outlays' WHEN '3' THEN 'government' WHEN '4' THEN 'foreign_transactions' WHEN '5' THEN 'saving_investment' WHEN '6' THEN 'income_employment_industry' WHEN '7' THEN 'supplemental' WHEN '8' THEN 'not_seasonally_adjusted' ELSE 'unknown' END"
+      - name: family
+        type: string
+        nullable: true
+        comment: Table family code within section (e.g., '01' for section 1.1.x series)
+        expression: "SUBSTR(TableName, 3, 2)"
+      - name: metric
+        type: string
+        nullable: true
+        comment: Metric code (e.g., '05' for current dollars, '06' for chained dollars)
+        expression: "SUBSTR(TableName, 5, 2)"
+      - name: table_number
+        type: string
+        nullable: true
+        comment: Standard BEA table number format (e.g., '1.1.5', '4.2.5B')
+        expression: "SUBSTR(TableName, 2, 1) || '.' || REGEXP_REPLACE(SUBSTR(TableName, 3, 2), '^0*(.+)$', '\\1') || '.' || REGEXP_REPLACE(SUBSTR(TableName, 5, 2), '^0*(.+)$', '\\1')"
+      - name: annual
+        type: boolean
+        nullable: true
+        comment: True if table has annual (A) frequency data available. Parsed from Description field during conversion.
+        expression: "Description LIKE '%(A%' OR Description LIKE '%A)%'"
+      - name: quarterly
+        type: boolean
+        nullable: true
+        comment: True if table has quarterly (Q) frequency data available. Parsed from Description field during conversion.
+        expression: "Description LIKE '%(Q%' OR Description LIKE '%Q)%'"
+
+    # API Configuration
+    download:
+      enabled: true
+      method: GET
+      baseUrl: "https://apps.bea.gov/api/data"
+      authentication:
+        type: query_param
+        paramName: UserID
+        envVar: BEA_API_KEY  # Set API key in environment
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetParameterValues
+        datasetname:
+          type: constant
+          value: NIPA
+        ParameterName:
+          type: constant
+          value: TableName
+        ResultFormat:
+          type: constant
+          value: JSON
+      cachePattern: "type=reference/nipa_tables.json"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 3
+        retryDelayMs: 5000
+      earlyDownload: true
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetParameterValues"
+        DataSetName: "NIPA"
+        ParameterName: "TableName"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        # Note: dataPath removed because responseTransformer already extracts the data
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "section=*/"
+      partition:
+        columns: [type, section]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE REGIONAL LINECODES ---
+  - name: regional_linecodes
+    pattern: "tablename=*/reference_regional_linecodes.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: tablename
+          type: VARCHAR
+    comment: >
+      BEA Regional dataset LineCode catalog. Maps table-specific line codes to their descriptions for all 67 Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP*, etc.). Each BEA Regional table has its own set of valid LineCodes - this catalog is downloaded first to enable complete regional data collection without hardcoded limitations.
+    columns:
+      # Source columns mapped from BEA API response fields
+      - name: Key
+        type: string
+        nullable: false
+        comment: Line code identifier from BEA API (e.g., '10', '20', '30')
+      - name: Desc
+        type: string
+        nullable: false
+        comment: Line code description from BEA API
+      # Derived columns with user-friendly names
+      - name: LineCode
+        type: string
+        nullable: false
+        comment: Line code identifier for this table (e.g., '10', '20', '30'). Different tables use different LineCode numbering schemes.
+        expression: "Key"
+      - name: Description
+        type: string
+        nullable: false
+        comment: Full line code description from BEA API (e.g., 'Personal income', 'Compensation of employees')
+        expression: "Desc"
+      # Note: TableName is available via the 'tablename' partition column - no need to duplicate
+      - name: table_prefix
+        type: string
+        nullable: true
+        comment: "Parsed table prefix indicating geography and frequency: SA=State Annual, SQ=State Quarterly, CA=County/MSA Annual, etc."
+        expression: "SUBSTR('{tablename}', 1, 2)"
+      - name: data_category
+        type: string
+        nullable: true
+        comment: "Parsed data category from table name: INC=Income, GDP=Gross Domestic Product, ACE=Arts/Culture/Entertainment, etc."
+        expression: "REGEXP_EXTRACT('{tablename}', '[A-Z]{2}([A-Z]+)[0-9]', 1)"
+      - name: geography_level
+        type: string
+        nullable: true
+        comment: "Geographic aggregation level: state, county, msa, micropolitan, etc."
+        expression: "CASE WHEN SUBSTR('{tablename}', 1, 2) IN ('SA', 'SQ') THEN 'state' WHEN SUBSTR('{tablename}', 1, 2) = 'CA' THEN 'county' ELSE 'unknown' END"
+      - name: frequency
+        type: string
+        nullable: true
+        comment: "Data frequency: annual, quarterly"
+        expression: "CASE WHEN SUBSTR('{tablename}', 2, 1) = 'A' THEN 'annual' WHEN SUBSTR('{tablename}', 2, 1) = 'Q' THEN 'quarterly' ELSE 'unknown' END"
+
+    # API Configuration
+    download:
+      enabled: true
+      method: GET
+      baseUrl: "https://apps.bea.gov/api/data"
+      authentication:
+        type: query_param
+        paramName: UserID
+        envVar: BEA_API_KEY  # Set API key in environment
+      queryParams:
+        UserID:
+          type: auth
+        method:
+          type: constant
+          value: GetParameterValuesFiltered
+        datasetname:
+          type: constant
+          value: Regional
+        TargetParameter:
+          type: constant
+          value: LineCode
+        TableName:
+          type: expression
+          value: "{tablename}"
+        ResultFormat:
+          type: constant
+          value: JSON
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+        errorPath: "BEAAPI.Results.Error"
+      tableNamesList:
+        - "SAINC1"
+        - "SAINC30"
+        - "SAINC35"
+        - "SAINC4"
+        - "SAINC40"
+        - "SAINC50"
+        - "SAINC51"
+        - "SAINC5H"
+        - "SAINC5N"
+        - "SAINC5S"
+        - "SAINC6N"
+        - "SAINC6S"
+        - "SAINC70"
+        - "SAINC7H"
+        - "SAINC7N"
+        - "SAINC7S"
+        - "SAINC91"
+        - "SQINC1"
+        - "SQINC35"
+        - "SQINC4"
+        - "SQINC5H"
+        - "SQINC5N"
+        - "SQINC5S"
+        - "SQINC6N"
+        - "SQINC6S"
+        - "SQINC7H"
+        - "SQINC7N"
+        - "SQINC7S"
+        - "CAINC1"
+        - "CAINC30"
+        - "CAINC4"
+        - "CAINC5N"
+        - "CAINC5S"
+        - "CAINC6N"
+        - "CAINC6S"
+        - "CAINC91"
+        - "SAGDP1"
+        - "SAGDP2"
+        - "SAGDP3"
+        - "SAGDP4"
+        - "SAGDP5"
+        - "SAGDP6"
+        - "SAGDP7"
+        - "SAGDP8"
+        - "SAGDP9"
+        - "SAGDP11"
+        - "SQGDP1"
+        - "SQGDP2"
+        - "SQGDP8"
+        - "SQGDP9"
+        - "SQGDP11"
+        - "CAGDP1"
+        - "CAGDP2"
+        - "CAGDP8"
+        - "CAGDP9"
+        - "CAGDP11"
+      response:
+        format: json
+        dataPath: "BEAAPI.Results.ParamValue"
+      rateLimit:  # API rate limiting
+        minIntervalMs: 500  # Milliseconds between requests
+        maxRetries: 3
+        retryDelayMs: 5000
+      earlyDownload: true
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetParameterValuesFiltered"
+        DataSetName: "Regional"
+        TargetParameter: "LineCode"
+        TableName: "{tablename}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        # Note: dataPath removed because responseTransformer already extracts the data.
+        # BeaResponseTransformer returns the ParamValue array directly.
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Dimensions for batch processing - one API call per table
+    dimensions:
+      type:
+        - regional_linecodes
+      tablename:
+        - SAINC1
+        - SAINC30
+        - SAINC35
+        - SAINC4
+        - SAINC40
+        - SAINC50
+        - SAINC51
+        - SAINC5H
+        - SAINC5N
+        - SAINC5S
+        - SAINC6N
+        - SAINC6S
+        - SAINC70
+        - SAINC7H
+        - SAINC7N
+        - SAINC7S
+        - SAINC91
+        - SQINC1
+        - SQINC35
+        - SQINC4
+        - SQINC5H
+        - SQINC5N
+        - SQINC5S
+        - SQINC6N
+        - SQINC6S
+        - SQINC7H
+        - SQINC7N
+        - SQINC7S
+        - CAINC1
+        - CAINC30
+        - CAINC4
+        - CAINC5N
+        - CAINC5S
+        - CAINC6N
+        - CAINC6S
+        - CAINC91
+        - SAGDP1
+        - SAGDP2
+        - SAGDP3
+        - SAGDP4
+        - SAGDP5
+        - SAGDP6
+        - SAGDP7
+        - SAGDP8
+        - SAGDP9
+        - SAGDP11
+        - SQGDP1
+        - SQGDP2
+        - SQGDP8
+        - SQGDP9
+        - SQGDP11
+        - CAGDP1
+        - CAGDP2
+        - CAGDP8
+        - CAGDP9
+        - CAGDP11
+
+    # Custom hooks for BEA response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "tablename=*/"
+      partition:
+        columns: [type, tablename]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [tablename]
+        incrementalKeys: [tablename]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- REFERENCE FRED SERIES ---
+  - name: fred_series
+    pattern: "type=*/category=*/reference_fred_series.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: category
+          type: INTEGER
+    comment: >
+      Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        source: id
+        comment: Unique FRED series identifier (e.g., 'UNRATE', 'GDP')
+      - name: title
+        type: string
+        nullable: true
+        comment: Full descriptive title of the economic data series
+      - name: observation_start
+        type: string
+        nullable: true
+        comment: Date of first available observation (ISO 8601 format)
+      - name: observation_end
+        type: string
+        nullable: true
+        comment: Date of most recent observation (ISO 8601 format)
+      - name: frequency
+        type: string
+        nullable: true
+        comment: Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')
+      - name: frequency_short
+        type: string
+        nullable: true
+        comment: Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')
+      - name: units
+        type: string
+        nullable: true
+        comment: Units of measurement (e.g., 'Percent', 'Billions of Dollars')
+      - name: units_short
+        type: string
+        nullable: true
+        comment: Abbreviated units code
+      - name: seasonal_adjustment
+        type: string
+        nullable: true
+        comment: Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')
+      - name: seasonal_adjustment_short
+        type: string
+        nullable: true
+        comment: Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')
+      - name: last_updated
+        type: string
+        nullable: true
+        comment: Timestamp of last data update (ISO 8601 format)
+      - name: popularity
+        type: int
+        nullable: true
+        comment: FRED popularity score indicating usage/interest level
+      - name: group_popularity
+        type: int
+        nullable: true
+        comment: Popularity score within category group
+      - name: notes
+        type: string
+        nullable: true
+        comment: Detailed description, methodology, and source information
+      # Note: category_id is the partition column 'category' (from dimension)
+      # Note: Removed fields not in /fred/category/series response:
+      #   category_name, source_id, source_name, series_status, title_embedding
+
+    # HTTP Source configuration for EtlPipeline
+    # Uses FRED /fred/category/series endpoint to get all series in a category
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/category/series"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        category_id: "{category}"
+        limit: "1000"
+      response:
+        format: json
+        # Note: dataPath removed because FredResponseTransformer already extracts the data
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Dimension definitions for ETL iteration
+    # FRED category IDs from fred-catalog-config.json majorCategories
+    dimensions:
+      type:
+        - fred_series
+      category:
+        - 1        # National Accounts
+        - 10       # Population, Employment, & Labor Markets
+        - 32992    # Money, Banking, & Finance
+        - 32455    # International Data
+        - 3        # Production & Business Activity
+        - 32991    # Prices
+        - 32263    # Academic Data
+
+    # Custom hooks for FRED response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "category=*/"
+      partition:
+        columns: [type, category]
+        columnDefinitions:
+          - name: type
+            type: VARCHAR
+          - name: category
+            type: INTEGER
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [category]
+        incrementalKeys: [category]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+  jolts_industries:
+    primaryKey:
+      - type
+    comment: Reference dimension table for JOLTS industry classifications
+
+  jolts_dataelements:
+    primaryKey:
+      - type
+    comment: Reference dimension table for JOLTS metric codes and descriptions
+
+  nipa_tables:
+    primaryKey:
+      - type
+    comment: Reference dimension table for NIPA table classifications and descriptions
+
+  regional_linecodes:
+    primaryKey:
+      - type
+      - tablename
+      - LineCode
+    comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and LineCode data column.
+
+  fred_series:
+    primaryKey:
+      - type
+      - category
+      - series
+    indexes:
+      - - title
+      - - units
+      - - frequency_short
+      - - seasonal_adjustment
+
+# ============================================================================
+# TABLES (SQL VIEWS)
+# ============================================================================
+# SQL views built on top of the partitioned tables to provide enriched data
+# and pre-computed analytics. Views join fact tables with reference/dimension
+# tables to add semantic metadata, calculate derived metrics, and simplify
+# common query patterns.
+# ============================================================================
+

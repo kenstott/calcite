@@ -21,6 +21,9 @@ import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,14 +31,11 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -238,7 +238,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param operatingDirectory Operating directory for metadata (.aperio/geo/)
    * @param parquetDir Parquet output directory
    * @param cacheStorageProvider Provider for cache file operations
-   * @param storageProvider Provider for parquet file operations
+   * @param storageProvider Provider for output file operations
    * @param sharedManifest Shared cache manifest
    * @param startYear First year for downloads
    * @param endYear Last year for downloads
@@ -367,8 +367,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param endYear Last year to download
    * @throws IOException If download or file I/O fails
    */
-  @Override
-  public void downloadAll(int startYear, int endYear) throws IOException {
+  @Override public void downloadAll(int startYear, int endYear) throws IOException {
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download states
@@ -421,8 +420,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param endYear Last year to convert
    * @throws IOException If conversion or file I/O fails
    */
-  @Override
-  public void convertAll(int startYear, int endYear) throws IOException {
+  @Override public void convertAll(int startYear, int endYear) throws IOException {
     LOGGER.info("TIGER conversion phase: {} years ({}-{}), {} tables",
         endYear - startYear + 1, startYear, endYear, TIGER_TABLES.length);
 
@@ -481,8 +479,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Build parquet target path
-    String parquetPath = storageProvider.resolvePath(parquetDirectory,
-        "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
+    String outputPath =
+        storageProvider.resolvePath(parquetDirectory, "source=census/type=boundary/" + yearPath + "/" + tableName + ".parquet");
 
     // Build cache key params
     java.util.Map<String, String> params = new java.util.HashMap<>();
@@ -492,7 +490,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     // Check if already converted
-    if (isParquetConvertedOrExists(tableName, year, params, cachePath, parquetPath)) {
+    if (isMaterializedOrExists(tableName, year, params, cachePath, outputPath)) {
       LOGGER.debug("Parquet already exists or converted: {} year={} state={}",
           tableName, year, stateFips);
       return;
@@ -507,7 +505,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Convert using existing method
     LOGGER.info("Converting {} to Parquet: year={} state={}", tableName, year, stateFips);
-    convertToParquet(cacheFile, parquetPath);
+    convertToParquet(cacheFile, outputPath);
   }
 
   /**
@@ -564,8 +562,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     cachePath = storageProvider.resolvePath(cachePath, "states");
     String zipCachePath = storageProvider.resolvePath(cachePath, filename);
 
-    // Note: parquetPath check moved to GeoSchemaFactory for better control flow
-    // GeoSchemaFactory will call isParquetConvertedOrExists() before calling this method
+    // Note: outputPath check moved to GeoSchemaFactory for better control flow
+    // GeoSchemaFactory will call isMaterializedOrExists() before calling this method
 
     // Check manifest for cached raw shapefiles
     if (cacheManifest != null) {
@@ -679,7 +677,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("counties", params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Counties parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -771,7 +769,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       params.put("state", stateFips);
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("places", params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Places parquet already converted per manifest for state {} year {} - skipping raw download", stateFips, year);
         return null; // No need to download raw files if parquet exists
       }
@@ -876,7 +874,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("zctas", params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("ZCTAs parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -959,7 +957,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("congressional_districts", params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Congressional districts parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -1227,7 +1225,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         params.put("state", fips);
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey("census_tracts", params);
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("Census tracts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           continue;
         }
@@ -1343,7 +1341,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         params.put("state", fips);
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey("block_groups", params);
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("Block groups parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           continue;
         }
@@ -1461,7 +1459,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey("cbsa", params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("CBSA parquet already converted per manifest for year {} - skipping raw download", year);
         return null; // No need to download raw files if parquet exists
       }
@@ -1539,9 +1537,9 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   /**
    * Download school districts shapefile for a specific year.
    * @param year The year to download
-   * @param parquetPath Optional parquet path - if provided and file exists, skip download
+   * @param outputPath Optional parquet path - if provided and file exists, skip download
    */
-  public File downloadSchoolDistrictsForYear(int year, String parquetPath) throws IOException {
+  public File downloadSchoolDistrictsForYear(int year, String outputPath) throws IOException {
     // Download school districts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
     File tempDir = Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
@@ -1560,7 +1558,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         params.put("state", fips);
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey("school_districts", params);
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("School districts parquet already converted per manifest for state {} year {} - skipping raw download", fips, year);
           // Still need to copy to temp dir if we have cached data
           File stateTemp = downloadCacheToTemp(cachePath, "school_districts_" + fips + "_" + year);
@@ -1663,7 +1661,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Helper to check if we should skip downloading raw file (manifest says already converted).
    * Does NOT check parquet existence - that happens later during conversion.
    */
-  private boolean shouldSkipDownload(String dataType, int year, String parquetPath) {
+  private boolean shouldSkipDownload(String dataType, int year, String outputPath) {
     // Only check manifest - if it says converted, we can skip download
     // We don't check parquet existence here because we want the raw file regardless
     // (for potential re-processing, debugging, etc.)
@@ -1672,7 +1670,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       params.put("type", dataType);
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey(dataType, params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Manifest indicates parquet already converted, skipping download");
         return true;
       }
@@ -1698,7 +1696,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       java.util.Map<String, String> params = new java.util.HashMap<>();
       params.put("year", String.valueOf(year));
       CacheKey cacheKey = new CacheKey(dataType, params);
-      if (cacheManifest.isParquetConverted(cacheKey)) {
+      if (cacheManifest.isMaterialized(cacheKey)) {
         LOGGER.debug("Parquet already converted per manifest: {}", targetFilePath);
         return;
       }
@@ -1706,13 +1704,13 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     // Defensive check if file already exists (for backfill/legacy data)
     if (storageProvider != null && storageProvider.exists(targetFilePath)) {
-      LOGGER.debug("Target parquet file already exists, skipping: {}", targetFilePath);
+      LOGGER.debug("Target output file already exists, skipping: {}", targetFilePath);
       // Update manifest since file exists but wasn't tracked
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey(dataType, params);
-        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
+        cacheManifest.markMaterialized(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
       return;
@@ -1753,12 +1751,12 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       // Convert based on the table type
       converter.convertSingleShapefileType(sourceDir, targetFilePath, dataType);
 
-      // Mark parquet conversion complete in manifest
+      // Mark materialization complete in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey(dataType, params);
-        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
+        cacheManifest.markMaterialized(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
     } catch (Exception e) {
@@ -1774,7 +1772,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * directly from ZIP archives without extraction, then writes to Parquet in a single operation.
    *
    * @param zipFilePath Path to the downloaded TIGER ZIP file
-   * @param targetFilePath Target Parquet file path
+   * @param targetFilePath Target Output file path
    * @param dataType Table type (e.g., "states", "counties")
    * @param year Year of the data
    * @throws Exception if DuckDB conversion fails
@@ -1816,19 +1814,19 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         LOGGER.info("DuckDB conversion completed in {}ms: {}", elapsedMs, targetFilePath);
       }
 
-      // Mark parquet conversion complete in manifest
+      // Mark materialization complete in manifest
       if (cacheManifest != null) {
         java.util.Map<String, String> params = new java.util.HashMap<>();
         params.put("year", String.valueOf(year));
         CacheKey cacheKey = new CacheKey(dataType, params);
-        cacheManifest.markParquetConverted(cacheKey, targetFilePath);
+        cacheManifest.markMaterialized(cacheKey, targetFilePath);
         cacheManifest.save(this.operatingDirectory);
       }
     }
   }
 
   /**
-   * Build DuckDB SQL query for shapefile to Parquet conversion.
+   * Build DuckDB SQL query for shapefile to Materialization.
    * Uses field mappings from GeoConceptualMapper to extract correct fields for the year.
    */
   private String buildDuckDBConversionSQL(String zipFilePath, String shapefileName,
@@ -1945,7 +1943,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
-   * Check if parquet file has been converted, with self-healing fallback to file existence.
+   * Check if output file has been converted, with self-healing fallback to file existence.
    * Uses centralized self-healing in DuckDBCacheStore to avoid code duplication.
    *
    * <p>For GEO data, we compare parquet timestamps against shapefile timestamps instead of JSON.
@@ -1954,11 +1952,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @param year Year of data
    * @param params Additional parameters for cache key
    * @param shapefileCachePath Path to shapefile directory in cache
-   * @param parquetPath Full path to parquet file
+   * @param outputPath Full path to output file
    * @return true if parquet exists and is newer than shapefiles, false if conversion needed
    */
-  public boolean isParquetConvertedOrExists(String dataType, int year,
-      java.util.Map<String, String> params, String shapefileCachePath, String parquetPath) {
+  public boolean isMaterializedOrExists(String dataType, int year,
+      java.util.Map<String, String> params, String shapefileCachePath, String outputPath) {
 
     if (cacheManifest == null) {
       return false;
@@ -1971,8 +1969,8 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     // Create FileChecker that handles shapefile directory lookup for raw file timestamp
     DuckDBCacheStore.FileChecker fileChecker = path -> {
       try {
-        if (path.equals(parquetPath)) {
-          // Parquet file - use storageProvider
+        if (path.equals(outputPath)) {
+          // Output file - use storageProvider
           if (storageProvider.exists(path)) {
             return storageProvider.getMetadata(path).getLastModified();
           }
@@ -1995,32 +1993,32 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     };
 
     // Use centralized self-healing
-    return ((GeoCacheManifest) cacheManifest).isParquetConvertedWithSelfHealing(
-        cacheKey, parquetPath, shapefileCachePath, fileChecker);
+    return ((GeoCacheManifest) cacheManifest).isMaterializedWithSelfHealing(
+        cacheKey, outputPath, shapefileCachePath, fileChecker);
   }
 
   /**
    * Check if a multi-state dataset needs processing (for census_tracts, block_groups, school_districts).
-   * Returns true if ANY state needs processing OR if parquet file doesn't exist/is outdated.
+   * Returns true if ANY state needs processing OR if output file doesn't exist/is outdated.
    *
    * @param dataType Data type identifier
    * @param year Year of the data
    * @param states Array of state FIPS codes to check
    * @param shapefileCacheBasePath Base cache path where state-specific shapefiles would be stored
-   * @param parquetPath Path to the combined parquet file
+   * @param outputPath Path to the combined output file
    * @return true if processing is needed, false if parquet is up-to-date
    */
   public boolean needsProcessingMultiState(String dataType, int year, String[] states,
-      String shapefileCacheBasePath, String parquetPath) {
+      String shapefileCacheBasePath, String outputPath) {
 
     // 1. Check if parquet exists and get its timestamp
     try {
-      if (!storageProvider.exists(parquetPath)) {
-        LOGGER.debug("Parquet does not exist, processing needed: {}", parquetPath);
+      if (!storageProvider.exists(outputPath)) {
+        LOGGER.debug("Parquet does not exist, processing needed: {}", outputPath);
         return true; // Parquet doesn't exist - needs processing
       }
 
-      long parquetModTime = storageProvider.getMetadata(parquetPath).getLastModified();
+      long parquetModTime = storageProvider.getMetadata(outputPath).getLastModified();
 
       // 2. Check manifest for each state
       if (cacheManifest != null) {
@@ -2030,7 +2028,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
           params.put("state", stateFips);
           params.put("year", String.valueOf(year));
           CacheKey cacheKey = new CacheKey(dataType, params);
-          if (!cacheManifest.isParquetConverted(cacheKey)) {
+          if (!cacheManifest.isMaterialized(cacheKey)) {
             anyStateMissingInManifest = true;
             LOGGER.debug("{} needs processing for state {} year {} (not in manifest)",
                 dataType, stateFips, year);
@@ -2080,7 +2078,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
           params.put("state", stateFips);
           params.put("year", String.valueOf(year));
           CacheKey cacheKey = new CacheKey(dataType, params);
-          cacheManifest.markParquetConverted(cacheKey, parquetPath);
+          cacheManifest.markMaterialized(cacheKey, outputPath);
         }
         cacheManifest.save(this.operatingDirectory);
       }
@@ -2088,7 +2086,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       return false; // Parquet is up-to-date, no processing needed
 
     } catch (IOException e) {
-      LOGGER.warn("Failed to check parquet file for {} year {}: {}", dataType, year, e.getMessage());
+      LOGGER.warn("Failed to check output file for {} year {}: {}", dataType, year, e.getMessage());
       return true; // Error checking - process to be safe
     }
   }

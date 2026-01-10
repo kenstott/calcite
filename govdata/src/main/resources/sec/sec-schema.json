@@ -870,6 +870,15 @@
           "filing_date",
           "period_end_date"
         ]
+      ],
+      "foreignKeys": [
+        {
+          "columns": ["state_of_incorporation"],
+          "targetSchema": "${GEO_SCHEMA_NAME:geo}",
+          "targetTable": "tiger_states",
+          "targetColumns": ["state_code"],
+          "comment": "Links filing state of incorporation to geographic state data"
+        }
       ]
     },
     "filing_contexts": {

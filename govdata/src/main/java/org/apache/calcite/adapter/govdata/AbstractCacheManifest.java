@@ -30,7 +30,7 @@ import java.util.Map;
  * <ul>
  *   <li>HTTP ETag conditional GET support</li>
  *   <li>Time-based TTL with explicit refresh policies</li>
- *   <li>Parquet conversion tracking to avoid redundant S3 exists checks</li>
+ *   <li>Materialization tracking to avoid redundant S3 exists checks</li>
  * </ul>
  *
  * <p>Subclasses must provide schema-specific key building logic and
@@ -94,12 +94,12 @@ public abstract class AbstractCacheManifest {
     @JsonProperty("etag")
     public String etag;  // HTTP ETag for conditional GET requests
 
-    @JsonProperty("parquetPath")
-    public String parquetPath;  // Path to converted parquet file (avoids S3 exists checks)
+    @JsonProperty("outputPath")
+    public String outputPath;  // Path to materialized output file (avoids S3 exists checks)
 
-    @JsonProperty("parquetConvertedAt")
+    @JsonProperty("materializedAt")
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
-    public long parquetConvertedAt;  // Timestamp when parquet was created
+    public long materializedAt;  // Timestamp when data was materialized to output format
 
     // API error tracking fields (for HTTP 200 responses with error content)
     @JsonProperty("lastError")
@@ -158,20 +158,22 @@ public abstract class AbstractCacheManifest {
   public abstract void save(String directory);
 
   /**
-   * Check if parquet conversion has been completed for the given cache key.
+   * Check if materialization has been completed for the given cache key.
+   * This is the format-agnostic check for whether data has been written
+   * to the target output format (Iceberg, Parquet, Delta, etc.).
    *
    * @param cacheKey The cache key identifying the data
-   * @return true if parquet exists and is current, false otherwise
+   * @return true if materialized output exists and is current, false otherwise
    */
-  public abstract boolean isParquetConverted(CacheKey cacheKey);
+  public abstract boolean isMaterialized(CacheKey cacheKey);
 
   /**
-   * Mark parquet file as converted in the manifest.
+   * Mark data as materialized in the manifest.
    *
    * @param cacheKey The cache key identifying the data
-   * @param parquetPath Path to parquet file
+   * @param outputPath Path to materialized output file/table
    */
-  public abstract void markParquetConverted(CacheKey cacheKey, String parquetPath);
+  public abstract void markMaterialized(CacheKey cacheKey, String outputPath);
 
   /**
    * Mark data as having API error (HTTP 200 with error content) with configurable retry cadence.

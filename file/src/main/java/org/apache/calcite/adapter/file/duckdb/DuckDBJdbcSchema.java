@@ -16,12 +16,14 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
+import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
+import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlDialect;
 
@@ -227,12 +229,37 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   /**
+   * Override snapshot() to return this instance.
+   *
+   * <p>The parent JdbcSchema.snapshot() creates a plain JdbcSchema, which loses
+   * the DuckDBJdbcSchema type. This breaks rules like DuckDBIcebergCountStarRule
+   * that need to access the FileSchema via the DuckDBJdbcSchema.
+   *
+   * <p>For DuckDB, we return 'this' because:
+   * <ul>
+   *   <li>Tables are already registered as views in DuckDB's catalog</li>
+   *   <li>The persistentConnection and fileSchema must be shared</li>
+   *   <li>Schema mutations are handled via view recreation, not tableMap updates</li>
+   * </ul>
+   */
+  @Override public org.apache.calcite.schema.Schema snapshot(
+      org.apache.calcite.schema.SchemaVersion version) {
+    LOGGER.debug("DuckDBJdbcSchema.snapshot() called - returning this instance to preserve type");
+    return this;
+  }
+
+  /**
    * Wrapper that delegates CommentableTable methods to the original FileSchema table
    * while maintaining JdbcTable behavior for query execution.
    * This allows INFORMATION_SCHEMA queries to see table/column comments
    * while still pushing all query execution to DuckDB for performance.
+   *
+   * <p>IMPORTANT: Must implement TranslatableTable to delegate toRel() to the
+   * wrapped JdbcTable. Without this, Calcite creates LogicalTableScan instead of
+   * JdbcTableScan, and the JDBC convention rules won't be registered.
    */
-  private static class CommentableJdbcTableWrapper implements Table, CommentableTable {
+  private static class CommentableJdbcTableWrapper
+      implements Table, CommentableTable, org.apache.calcite.schema.TranslatableTable {
     private final Table jdbcTable;           // For query execution
     private final CommentableTable commentableTable;  // For metadata
 
@@ -241,11 +268,28 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       this.commentableTable = commentableTable;
     }
 
+    @Override public org.apache.calcite.rel.RelNode toRel(
+        org.apache.calcite.plan.RelOptTable.ToRelContext context,
+        org.apache.calcite.plan.RelOptTable relOptTable) {
+      // Delegate to the wrapped JdbcTable to create JdbcTableScan with proper convention
+      if (jdbcTable instanceof org.apache.calcite.schema.TranslatableTable) {
+        return ((org.apache.calcite.schema.TranslatableTable) jdbcTable).toRel(context, relOptTable);
+      }
+      throw new IllegalStateException("Wrapped table is not TranslatableTable: " + jdbcTable.getClass());
+    }
+
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return jdbcTable.getRowType(typeFactory);
     }
 
-    @Override public org.apache.calcite.schema.Statistic getStatistic() {
+    @Override public Statistic getStatistic() {
+      // Use IcebergTable statistics if available (for row count optimization)
+      if (commentableTable instanceof IcebergTable) {
+        Statistic icebergStats = ((IcebergTable) commentableTable).getStatistic();
+        LOGGER.info("CommentableJdbcTableWrapper.getStatistic() using IcebergTable stats: rowCount={}",
+                    icebergStats.getRowCount());
+        return icebergStats;
+      }
       return jdbcTable.getStatistic();
     }
 

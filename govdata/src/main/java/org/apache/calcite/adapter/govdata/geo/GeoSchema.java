@@ -16,7 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.geo;
 
-import org.apache.calcite.adapter.govdata.TableCommentDefinitions;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.CommentableSchema;
@@ -297,6 +297,10 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
   }
 
   @Override protected Map<String, Table> getTableMap() {
+    // Load comments from schema file
+    Map<String, String> tableComments = GovDataUtils.loadTableComments(
+        GeoSchemaFactory.class, "/geo/geo-schema.json");
+
     // Wrap tables with comment support for known GEO tables
     Map<String, Table> commentableTableMap = new HashMap<>();
     for (Map.Entry<String, Table> entry : tableMap.entrySet()) {
@@ -304,8 +308,9 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
       Table originalTable = entry.getValue();
 
       // Check if we have comments for this table
-      String tableComment = TableCommentDefinitions.getGeoTableComment(tableName);
-      Map<String, String> columnComments = TableCommentDefinitions.getGeoColumnComments(tableName);
+      String tableComment = tableComments.get(tableName);
+      Map<String, String> columnComments = GovDataUtils.loadColumnComments(
+          GeoSchemaFactory.class, "/geo/geo-schema.json", tableName);
 
       if (tableComment != null || !columnComments.isEmpty()) {
         // Wrap with comment support

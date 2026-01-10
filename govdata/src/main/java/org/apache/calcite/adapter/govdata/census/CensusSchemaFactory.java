@@ -16,10 +16,12 @@
  */
 package org.apache.calcite.adapter.govdata.census;
 
+import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.CacheKey;
 import org.apache.calcite.adapter.govdata.DuckDBCacheStore;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 import org.apache.calcite.adapter.govdata.SchemaConfigReader;
 import org.apache.calcite.adapter.govdata.geo.CensusApiClient;
 import org.apache.calcite.model.JsonTable;
@@ -88,9 +90,6 @@ import java.util.Map;
 public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusSchemaFactory.class);
 
-  /** Census ACS data is typically 1 year behind current year. */
-  private static final int DATA_LAG_YEARS = 1;
-
   /** Schema file containing data availability rules. */
   private static final String SCHEMA_FILE = "census/census-schema.json";
 
@@ -104,11 +103,6 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
   // Hive-partitioned structure for Census data
   private static final String CENSUS_SOURCE_PARTITION = "source=census";
-
-  @Override
-  public int getDataLagYears() {
-    return DATA_LAG_YEARS;
-  }
   private static final String ACS_TYPE = "type=acs";  // American Community Survey
   private static final String DECENNIAL_TYPE = "type=decennial";  // Decennial Census
   private static final String ECONOMIC_TYPE = "type=economic";  // Economic Census
@@ -116,6 +110,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public String getSchemaResourceName() {
     return "/census/census-schema.json";
+  }
+
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    LOGGER.debug("Configuring hooks for CENSUS schema");
+    // CENSUS schema uses custom download logic in buildOperand() rather than standard ETL hooks
+    // No additional hooks needed - enablement is controlled via operand parameters
   }
 
   /**
@@ -129,8 +129,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     StorageProvider storageProvider = parent.getStorageProvider();
 
     // Get cache directories from operand
-    String govdataCacheDir = getGovDataCacheDir(operand);
-    String govdataParquetDir = getGovDataParquetDir(operand);
+    String govdataCacheDir = GovDataUtils.getCacheDir(operand);
+    String govdataParquetDir = GovDataUtils.getParquetDir(operand);
 
     // Check required configuration
     if (govdataCacheDir == null || govdataCacheDir.isEmpty()) {
@@ -149,8 +149,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     Map<String, Object> mutableOperand = new HashMap<>(operand);
 
     // Extract configuration parameters
-    Integer startYear = getConfiguredStartYear(mutableOperand);
-    Integer endYear = getConfiguredEndYear(mutableOperand);
+    Integer startYear = GovDataUtils.getStartYear(mutableOperand);
+    Integer endYear = GovDataUtils.getEndYear(mutableOperand);
     Boolean autoDownload = shouldAutoDownload(mutableOperand);
 
     // Default to recent 5-year period for ACS data
@@ -249,7 +249,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Load table definitions from census-schema.json
-    List<Map<String, Object>> censusTables = loadTableDefinitions();
+    List<Map<String, Object>> censusTables =
+        GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
     if (!censusTables.isEmpty()) {
       mutableOperand.put("partitionedTables", censusTables);
       LOGGER.info("Built {} CENSUS table definitions from census-schema.json", censusTables.size());
@@ -266,7 +267,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     if (enableConstraints) {
       // Load constraints from census-schema.json
-      censusConstraints.putAll(loadTableConstraints());
+      censusConstraints.putAll(GovDataUtils.loadTableConstraints(getClass(), getSchemaResourceName()));
     }
 
     // Merge with any constraints from model file
@@ -279,9 +280,14 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     // Add schema-level comment from JSON metadata
-    String schemaComment = loadSchemaComment();
+    String schemaComment = GovDataUtils.loadSchemaComment(getClass(), getSchemaResourceName());
     if (schemaComment != null) {
       mutableOperand.put("comment", schemaComment);
+    }
+
+    // Pass storage provider instance through operand (for FileSchema to reuse)
+    if (storageProvider != null) {
+      mutableOperand.put("_storageProvider", storageProvider);
     }
 
     // Return the configured operand for GovDataSchemaFactory to use
@@ -338,7 +344,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
 
         // Fast path: Check manifest first (local DuckDB query)
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           // Check TTL expiry from manifest
           if (!cacheManifest.isCached(cacheKey)) {
             needsAcsUpdate = true;
@@ -350,7 +356,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
         // Self-healing: Manifest says not converted, check if file exists with centralized self-healing
         String filename = tableName + ".parquet";
-        String parquetPath =
+        String outputPath =
             storageProvider.resolvePath(censusParquetDir, ACS_TYPE + "/year=" + year + "/" + filename);
 
         // Create FileChecker for self-healing
@@ -367,10 +373,10 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         };
 
         // Use centralized self-healing - returns true if converted or self-healed
-        if (!cacheManifest.isParquetConvertedWithSelfHealing(cacheKey, parquetPath, null, fileChecker)) {
+        if (!cacheManifest.isMaterializedWithSelfHealing(cacheKey, outputPath, null, fileChecker)) {
           // File truly missing
           needsAcsUpdate = true;
-          LOGGER.info("Missing ACS parquet file: {}", parquetPath);
+          LOGGER.info("Missing ACS output file: {}", outputPath);
           break;
         }
       }
@@ -412,17 +418,17 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         };
 
         for (String filename : decennialFiles) {
-          String parquetPath =
+          String outputPath =
               storageProvider.resolvePath(censusParquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + filename);
           try {
-            if (!storageProvider.exists(parquetPath)) {
+            if (!storageProvider.exists(outputPath)) {
               needsDecennialUpdate = true;
-              LOGGER.info("Missing Decennial parquet file: {}", parquetPath);
+              LOGGER.info("Missing Decennial output file: {}", outputPath);
               break;
             }
           } catch (IOException e) {
             needsDecennialUpdate = true;
-            LOGGER.info("Cannot access Decennial parquet file: {}", parquetPath);
+            LOGGER.info("Cannot access Decennial output file: {}", outputPath);
             break;
           }
         }
@@ -473,15 +479,15 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
             if (isNoDataError) {
               LOGGER.warn("No data available for Economic Census year {}: {}", year, errorMsg);
-              LOGGER.info("Creating zero-row Parquet files for Economic Census year {} (data not available)", year);
+              LOGGER.info("Creating zero-row Output files for Economic Census year {} (data not available)", year);
 
               // Create zero-row files so tables still exist in schema
               String[] economicTables = {"economic_census", "county_business_patterns"};
               for (String tableName : economicTables) {
                 try {
-                  String parquetPath =
+                  String outputPath =
                       storageProvider.resolvePath(censusParquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-                  createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "economic");
+                  createZeroRowParquetFile(outputPath, tableName, year, storageProvider, "economic");
                 } catch (IOException ex) {
                   LOGGER.error("Failed to create zero-row file for {} year {}: {}",
                       tableName, year, ex.getMessage());
@@ -520,13 +526,13 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
           if (isNoDataError) {
             LOGGER.warn("No data available for Population Estimates year {}: {}", year, errorMsg);
-            LOGGER.info("Creating zero-row Parquet file for Population Estimates year {} (data not available)", year);
+            LOGGER.info("Creating zero-row Output file for Population Estimates year {} (data not available)", year);
 
             // Create zero-row file so table still exists in schema
             try {
-              String parquetPath =
+              String outputPath =
                   storageProvider.resolvePath(censusParquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
-              createZeroRowParquetFile(parquetPath, "population_estimates", year, storageProvider, "population");
+              createZeroRowParquetFile(outputPath, "population_estimates", year, storageProvider, "population");
             } catch (IOException ex) {
               LOGGER.error("Failed to create zero-row file for population_estimates year {}: {}",
                   year, ex.getMessage());
@@ -655,9 +661,9 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         // Create zero-row marker so we don't keep retrying
         try {
           String typeDir = censusType;
-          String parquetPath =
+          String outputPath =
               storageProvider.resolvePath(censusParquetDir, "type=" + typeDir + "/year=" + year + "/" + tableName + ".parquet");
-          createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, censusType);
+          createZeroRowParquetFile(outputPath, tableName, year, storageProvider, censusType);
           LOGGER.info("Created zero-row marker for {} year {} (will recheck in 7 days)", tableName, year);
         } catch (Exception markerEx) {
           LOGGER.error("Failed to create zero-row marker for {} year {}: {}",
@@ -704,8 +710,8 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     int currentYear = java.time.Year.now().getValue();
 
     // Load availability rule from schema (cached)
-    SchemaConfigReader.DataAvailabilityRule rule = availabilityRules.computeIfAbsent(
-        censusType,
+    SchemaConfigReader.DataAvailabilityRule rule =
+        availabilityRules.computeIfAbsent(censusType,
         key -> SchemaConfigReader.getDataAvailabilityRule(SCHEMA_FILE, key));
 
     if (rule == null) {
@@ -788,15 +794,15 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       try {
         // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
         CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
           continue;
         }
 
-        String parquetPath =
+        String outputPath =
             storageProvider.resolvePath(parquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "acs", cacheManifest);
+        convertTableDataToParquet(cacheDir, outputPath, tableName, year, storageProvider, "acs", cacheManifest);
 
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
@@ -820,9 +826,9 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         if (isNoDataError) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
-            String parquetPath =
+            String outputPath =
                 storageProvider.resolvePath(parquetDir, ACS_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-            createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "acs");
+            createZeroRowParquetFile(outputPath, tableName, year, storageProvider, "acs");
           } catch (Exception zeroRowException) {
             LOGGER.error("Failed to create zero-row file for {} year {}: {}",
                 tableName, year, zeroRowException.getMessage());
@@ -852,15 +858,15 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       try {
         // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
         CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
           continue;
         }
 
-        String parquetPath =
+        String outputPath =
             storageProvider.resolvePath(parquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
 
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "decennial", cacheManifest);
+        convertTableDataToParquet(cacheDir, outputPath, tableName, year, storageProvider, "decennial", cacheManifest);
 
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
@@ -884,9 +890,9 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         if (isNoDataError) {
           LOGGER.info("Creating zero-row file for {} year {} (API indicates no data available)", tableName, year);
           try {
-            String parquetPath =
+            String outputPath =
                 storageProvider.resolvePath(parquetDir, DECENNIAL_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-            createZeroRowParquetFile(parquetPath, tableName, year, storageProvider, "decennial");
+            createZeroRowParquetFile(outputPath, tableName, year, storageProvider, "decennial");
           } catch (Exception zeroRowException) {
             LOGGER.error("Failed to create zero-row file for {} year {}: {}",
                 tableName, year, zeroRowException.getMessage());
@@ -996,7 +1002,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
       String relativePath = censusType.equals("acs") ? ACS_TYPE : (censusType.equals("decennial") ? DECENNIAL_TYPE : censusType);
       relativePath = relativePath + "/year=" + year + "/" + tableName + ".parquet";
-      cacheManifest.markParquetConverted(cacheKey, relativePath);
+      cacheManifest.markMaterialized(cacheKey, relativePath);
       LOGGER.debug("Marked {} year {} as converted in manifest", tableName, year);
 
     } catch (Exception e) {
@@ -1023,12 +1029,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
     return decennialYears;
   }
 
-  @Override public boolean supportsConstraints() {
+  public boolean supportsConstraints() {
     // Enable constraint support for census data
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
+  public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
       List<JsonTable> tableDefinitions) {
     this.tableConstraints = tableConstraints;
     this.tableDefinitions = tableDefinitions;
@@ -1063,25 +1069,25 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       String[] economicFiles = {"economic_census.parquet", "county_business_patterns.parquet"};
 
       for (String filename : economicFiles) {
-        String parquetPath =
+        String outputPath =
             storageProvider.resolvePath(censusParquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + filename);
         try {
-          if (!storageProvider.exists(parquetPath)) {
-            LOGGER.info("Missing Economic parquet file: {}", parquetPath);
+          if (!storageProvider.exists(outputPath)) {
+            LOGGER.info("Missing Economic output file: {}", outputPath);
             return true;
           }
-          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(outputPath);
           if (metadata.getSize() == 0) {
-            LOGGER.info("Empty Economic parquet file: {}", parquetPath);
+            LOGGER.info("Empty Economic output file: {}", outputPath);
             return true;
           }
           long fileAge = currentTime - metadata.getLastModified();
           if (fileAge > censusDataTtlMillis) {
-            LOGGER.info("Expired Economic parquet file: {}", parquetPath);
+            LOGGER.info("Expired Economic output file: {}", outputPath);
             return true;
           }
         } catch (IOException e) {
-          LOGGER.info("Cannot access Economic parquet file: {}", parquetPath);
+          LOGGER.info("Cannot access Economic output file: {}", outputPath);
           return true;
         }
       }
@@ -1095,14 +1101,14 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private boolean checkPopulationEstimatesNeeds(List<Integer> years, String censusParquetDir,
       StorageProvider storageProvider, long currentTime, long censusDataTtlMillis) {
     for (int year : years) {
-      String parquetPath =
+      String outputPath =
           storageProvider.resolvePath(censusParquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
       try {
-        if (!storageProvider.exists(parquetPath)) {
-          LOGGER.info("Missing Population Estimates parquet file: {}", parquetPath);
+        if (!storageProvider.exists(outputPath)) {
+          LOGGER.info("Missing Population Estimates output file: {}", outputPath);
           return true;
         }
-        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(parquetPath);
+        StorageProvider.FileMetadata metadata = storageProvider.getMetadata(outputPath);
         long fileAge = currentTime - metadata.getLastModified();
 
         if (metadata.getSize() == 0) {
@@ -1116,7 +1122,7 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
             long oneWeekMillis = 7 * 24 * 60 * 60 * 1000L;
             if (fileAge > oneWeekMillis) {
               LOGGER.info("Expired zero-row Population Estimates marker (age: {} days, rechecking for year {}): {}",
-                  fileAge / (24 * 60 * 60 * 1000), year, parquetPath);
+                  fileAge / (24 * 60 * 60 * 1000), year, outputPath);
               return true;
             }
           }
@@ -1126,12 +1132,12 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
         } else {
           // Real data - use normal TTL
           if (fileAge > censusDataTtlMillis) {
-            LOGGER.info("Expired Population Estimates parquet file: {}", parquetPath);
+            LOGGER.info("Expired Population Estimates output file: {}", outputPath);
             return true;
           }
         }
       } catch (IOException e) {
-        LOGGER.info("Cannot access Population Estimates parquet file: {}", parquetPath);
+        LOGGER.info("Cannot access Population Estimates output file: {}", outputPath);
         return true;
       }
     }
@@ -1265,14 +1271,14 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
       try {
         // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
         CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
-        if (cacheManifest.isParquetConverted(cacheKey)) {
+        if (cacheManifest.isMaterialized(cacheKey)) {
           LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
           continue;
         }
 
-        String parquetPath =
+        String outputPath =
             storageProvider.resolvePath(parquetDir, ECONOMIC_TYPE + "/year=" + year + "/" + tableName + ".parquet");
-        convertTableDataToParquet(cacheDir, parquetPath, tableName, year, storageProvider, "economic", cacheManifest);
+        convertTableDataToParquet(cacheDir, outputPath, tableName, year, storageProvider, "economic", cacheManifest);
         LOGGER.info("Successfully converted {} to Parquet for year {}", tableName, year);
       } catch (Exception e) {
         LOGGER.error("Error converting {} to Parquet for year {} (requires investigation): {}",
@@ -1293,15 +1299,15 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
 
     // Fast path: Check cache manifest first (local DuckDB query, avoids S3)
     CacheKey cacheKey = new CacheKey(tableName, ImmutableMap.of("year", String.valueOf(year)));
-    if (cacheManifest.isParquetConverted(cacheKey)) {
+    if (cacheManifest.isMaterialized(cacheKey)) {
       LOGGER.debug("Skipping {} year {} - already converted (manifest)", tableName, year);
       return;
     }
 
     try {
-      String parquetPath =
+      String outputPath =
           storageProvider.resolvePath(parquetDir, POPULATION_TYPE + "/year=" + year + "/population_estimates.parquet");
-      convertTableDataToParquet(cacheDir, parquetPath, "population_estimates", year, storageProvider, "population", cacheManifest);
+      convertTableDataToParquet(cacheDir, outputPath, "population_estimates", year, storageProvider, "population", cacheManifest);
       LOGGER.info("Successfully converted population_estimates to Parquet for year {}", year);
     } catch (Exception e) {
       LOGGER.error("Error converting population_estimates to Parquet for year {}: {}",
@@ -1310,11 +1316,11 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Create a zero-row parquet file for legitimately missing data.
+   * Create a zero-row output file for legitimately missing data.
    */
   private void createZeroRowParquetFile(String targetPath, String tableName, int year,
       StorageProvider storageProvider, String censusType) throws IOException {
-    LOGGER.info("Creating zero-row parquet file: {}", targetPath);
+    LOGGER.info("Creating zero-row output file: {}", targetPath);
 
     // Get variable mappings using ConceptualMapper interface
     ConceptualVariableMapper mapper = ConceptualVariableMapper.getInstance();

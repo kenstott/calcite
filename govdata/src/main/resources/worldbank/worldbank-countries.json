@@ -43,7 +43,7 @@
     "ADDITIONAL_COUNTRIES": {
       "name": "Additional Major Economies",
       "description": "Important economies beyond G20",
-      "countries": [
+      "countryInfos": [
         {"code": "NGA", "name": "Nigeria", "description": "Largest African economy"},
         {"code": "EGY", "name": "Egypt", "description": "Major MENA economy"},
         {"code": "PAK", "name": "Pakistan", "description": "South Asian economy"},
