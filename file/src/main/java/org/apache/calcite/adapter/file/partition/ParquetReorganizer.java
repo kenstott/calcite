@@ -54,11 +54,16 @@ import java.util.Map;
  *     Collections.singletonMap("geo", "GeoFips"), // column mappings
  *     Arrays.asList("year", "geo_fips_set"),      // batch columns
  *     2020, 2024                                   // year range
- * );
+ *);
  * </pre>
  */
 public class ParquetReorganizer {
   private static final Logger LOGGER = LoggerFactory.getLogger(ParquetReorganizer.class);
+
+  /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
+  private static final String DUCKDB_MEMORY_LIMIT =
+      System.getenv("DUCKDB_MEMORY_LIMIT") != null
+          ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
   private final StorageProvider storageProvider;
   private final String baseDirectory;
@@ -73,6 +78,7 @@ public class ParquetReorganizer {
    */
   public static class ReorgConfig {
     private static final int DEFAULT_THREADS = 2;
+    private static final int DEFAULT_CURRENT_YEAR_TTL_DAYS = 1;
 
     private final String sourcePattern;
     private final String targetBase;
@@ -86,6 +92,9 @@ public class ParquetReorganizer {
     private final List<String> incrementalKeys;
     private final IncrementalTracker incrementalTracker;
     private final String sourceTable;
+    private final boolean sourceIsIceberg;
+    private final String icebergWarehousePath;
+    private final int currentYearTtlDays;
 
     private ReorgConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -105,6 +114,10 @@ public class ParquetReorganizer {
       this.incrementalTracker = builder.incrementalTracker != null
           ? builder.incrementalTracker : IncrementalTracker.NOOP;
       this.sourceTable = builder.sourceTable;
+      this.sourceIsIceberg = builder.sourceIsIceberg;
+      this.icebergWarehousePath = builder.icebergWarehousePath;
+      this.currentYearTtlDays = builder.currentYearTtlDays > 0
+          ? builder.currentYearTtlDays : DEFAULT_CURRENT_YEAR_TTL_DAYS;
     }
 
     public String getSourcePattern() {
@@ -155,6 +168,22 @@ public class ParquetReorganizer {
       return sourceTable;
     }
 
+    public boolean isSourceIsIceberg() {
+      return sourceIsIceberg;
+    }
+
+    public String getIcebergWarehousePath() {
+      return icebergWarehousePath;
+    }
+
+    public int getCurrentYearTtlDays() {
+      return currentYearTtlDays;
+    }
+
+    public long getCurrentYearTtlMillis() {
+      return currentYearTtlDays * 24L * 60 * 60 * 1000;
+    }
+
     public boolean supportsIncremental() {
       return !incrementalKeys.isEmpty() && incrementalTracker != IncrementalTracker.NOOP;
     }
@@ -179,6 +208,9 @@ public class ParquetReorganizer {
       private List<String> incrementalKeys;
       private IncrementalTracker incrementalTracker;
       private String sourceTable;
+      private boolean sourceIsIceberg;
+      private String icebergWarehousePath;
+      private int currentYearTtlDays;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -236,6 +268,21 @@ public class ParquetReorganizer {
         return this;
       }
 
+      public Builder sourceIsIceberg(boolean sourceIsIceberg) {
+        this.sourceIsIceberg = sourceIsIceberg;
+        return this;
+      }
+
+      public Builder icebergWarehousePath(String icebergWarehousePath) {
+        this.icebergWarehousePath = icebergWarehousePath;
+        return this;
+      }
+
+      public Builder currentYearTtlDays(int currentYearTtlDays) {
+        this.currentYearTtlDays = currentYearTtlDays;
+        return this;
+      }
+
       public ReorgConfig build() {
         if (sourcePattern == null || sourcePattern.isEmpty()) {
           throw new IllegalArgumentException("sourcePattern is required");
@@ -267,30 +314,58 @@ public class ParquetReorganizer {
         displayName, config.getSourcePattern(), fullTargetBase, tempBase);
 
     try (Connection conn = getDuckDBConnection()) {
+      // Load Iceberg extension if reading from Iceberg source
+      if (config.isSourceIsIceberg()) {
+        try (Statement icebergStmt = conn.createStatement()) {
+          icebergStmt.execute("INSTALL iceberg");
+          icebergStmt.execute("LOAD iceberg");
+          // Enable version guessing for tables without version-hint file
+          icebergStmt.execute("SET unsafe_enable_version_guessing = true");
+          LOGGER.debug("Loaded DuckDB Iceberg extension for Iceberg source");
+        }
+      }
+
       // Apply memory-optimizing settings to avoid OOM on large datasets
       try (Statement setupStmt = conn.createStatement()) {
         setupStmt.execute("SET threads=" + config.getThreads());
         setupStmt.execute("SET preserve_insertion_order=false");
-        LOGGER.debug("Applied DuckDB settings: threads={}, preserve_insertion_order=false",
-            config.getThreads());
+        // Limit DuckDB native memory to avoid OOM on memory-constrained systems
+        setupStmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+        setupStmt.execute("SET temp_directory='" + baseDirectory + "/.duckdb_tmp'");
+        LOGGER.debug("Applied DuckDB settings: threads={}, preserve_insertion_order=false, "
+            + "memory_limit={}", config.getThreads(), DUCKDB_MEMORY_LIMIT);
       }
 
       // Phase 1: Process data in batches
-      List<Map<String, String>> batchCombinations = buildBatchCombinations(
-          conn, config.getSourcePattern(), config.getBatchPartitionColumns(),
-          config.getStartYear(), config.getEndYear());
+      List<Map<String, String>> batchCombinations = buildBatchCombinations(conn, config);
 
+      int processedCount;
       if (batchCombinations.isEmpty()) {
-        // No batching configured - fall back to year-only batching
-        processYearBatches(conn, config, tempBase);
+        if (config.isSourceIsIceberg()) {
+          // Iceberg source with no batching - write directly to final location
+          processAllDataDirect(conn, config, fullTargetBase);
+          // No Phase 2/3 needed - data written directly
+          LOGGER.info("Successfully reorganized: {}", displayName);
+          return;
+        } else {
+          // Parquet source with no batching - fall back to year-only batching
+          processedCount = processYearBatches(conn, config, tempBase);
+        }
       } else {
-        processBatchCombinations(conn, config, batchCombinations, tempBase);
+        processedCount = processBatchCombinations(conn, config, batchCombinations, tempBase);
+      }
+
+      // Skip Phase 2 if no batches were processed (all skipped via incremental)
+      if (processedCount == 0) {
+        LOGGER.info("No new data to consolidate - all batches were skipped (incremental)");
+        LOGGER.info("Successfully reorganized: {}", displayName);
+        return;
       }
 
       // Phase 2: Consolidate temp files into final location
       LOGGER.info("Phase 2: Consolidating temp files to final location...");
-      String consolidateSql = buildConsolidationSql(tempBase, fullTargetBase,
-          config.getPartitionColumns());
+      String consolidateSql =
+          buildConsolidationSql(tempBase, fullTargetBase, config.getPartitionColumns());
       LOGGER.debug("Phase 2 SQL:\n{}", consolidateSql);
 
       try (Statement stmt = conn.createStatement()) {
@@ -310,8 +385,8 @@ public class ParquetReorganizer {
       LOGGER.info("Successfully reorganized: {}", displayName);
 
     } catch (java.sql.SQLException e) {
-      String errorMsg = String.format("DuckDB batched reorganization failed for '%s': %s",
-          displayName, e.getMessage());
+      String errorMsg =
+          String.format("DuckDB batched reorganization failed for '%s': %s", displayName, e.getMessage());
       LOGGER.error(errorMsg, e);
       throw new IOException(errorMsg, e);
     }
@@ -319,21 +394,34 @@ public class ParquetReorganizer {
 
   /**
    * Process data year by year when no batch columns are configured.
+   * @return number of years successfully processed
    */
-  private void processYearBatches(Connection conn, ReorgConfig config, String tempBase)
+  private int processYearBatches(Connection conn, ReorgConfig config, String tempBase)
       throws java.sql.SQLException {
     int startYear = config.getStartYear();
     int endYear = config.getEndYear();
+    int processed = 0;
 
     LOGGER.info("Phase 1: Processing {} years individually (no batch_partition_columns)...",
         (endYear - startYear + 1));
 
     for (int year = startYear; year <= endYear; year++) {
-      String yearSourceGlob = config.getSourcePattern().replace("year=*", "year=" + year);
-      String fullYearSourceGlob = storageProvider.resolvePath(baseDirectory, yearSourceGlob);
+      String sql;
 
-      String sql = buildReorganizationSql(fullYearSourceGlob, tempBase,
-          config.getPartitionColumns(), config.getColumnMappings(), "year_" + year + "_{i}");
+      if (config.isSourceIsIceberg() && config.getIcebergWarehousePath() != null) {
+        // Use iceberg_scan with year filter
+        Map<String, String> filters = new LinkedHashMap<String, String>();
+        filters.put("year", String.valueOf(year));
+        sql = buildReorganizationSql(null, tempBase, config.getPartitionColumns(),
+            config.getColumnMappings(), "year_" + year + "_{i}",
+            true, config.getIcebergWarehousePath(), config.getSourceTable(), filters);
+      } else {
+        // Use read_parquet with glob pattern
+        String yearSourceGlob = config.getSourcePattern().replace("year=*", "year=" + year);
+        String fullYearSourceGlob = storageProvider.resolvePath(baseDirectory, yearSourceGlob);
+        sql = buildReorganizationSql(fullYearSourceGlob, tempBase, config.getPartitionColumns(),
+            config.getColumnMappings(), "year_" + year + "_{i}");
+      }
 
       LOGGER.debug("Phase 1 SQL (year={}):\n{}", year, sql);
       LOGGER.info("  Starting year {}/{}: {}", year - startYear + 1, endYear - startYear + 1, year);
@@ -343,17 +431,42 @@ public class ParquetReorganizer {
         stmt.execute(sql);
         long elapsed = System.currentTimeMillis() - startTime;
         LOGGER.info("    Completed year {} in {}ms for {}", year, elapsed, config.getName());
+        processed++;
       } catch (java.sql.SQLException e) {
         LOGGER.warn("  Skipped year {} (no data or error): {}", year, e.getMessage());
       }
+    }
+    return processed;
+  }
+
+  /**
+   * Process all data from Iceberg source directly to final location (no temp files).
+   * Used when no batch_partition_columns are configured for Iceberg sources.
+   */
+  private void processAllDataDirect(Connection conn, ReorgConfig config, String targetBase)
+      throws java.sql.SQLException {
+    LOGGER.info("Processing all data from Iceberg source directly to final location...");
+
+    String sql = buildReorganizationSql(null, targetBase, config.getPartitionColumns(),
+        config.getColumnMappings(), "data_{i}",
+        true, config.getIcebergWarehousePath(), config.getSourceTable(), null);
+
+    LOGGER.debug("Direct write SQL:\n{}", sql);
+
+    try (Statement stmt = conn.createStatement()) {
+      long startTime = System.currentTimeMillis();
+      stmt.execute(sql);
+      long elapsed = System.currentTimeMillis() - startTime;
+      LOGGER.info("  Completed direct write in {}ms for {}", elapsed, config.getName());
     }
   }
 
   /**
    * Process data using configured batch combinations.
    * Supports incremental processing - skips batches whose incremental keys are already processed.
+   * @return number of batches successfully processed
    */
-  private void processBatchCombinations(Connection conn, ReorgConfig config,
+  private int processBatchCombinations(Connection conn, ReorgConfig config,
       List<Map<String, String>> batchCombinations, String tempBase) throws java.sql.SQLException {
 
     // Group batches by incremental key values for tracking
@@ -379,8 +492,21 @@ public class ParquetReorganizer {
 
       // Check if this incremental key combination is already processed
       if (config.supportsIncremental() && !incrementalKeyValues.isEmpty()) {
-        if (config.getIncrementalTracker().isProcessed(
-            config.getName(), config.getSourceTable(), incrementalKeyValues)) {
+        boolean alreadyProcessed;
+        // Use TTL-based check for current year so it gets reprocessed periodically
+        if (isCurrentYear(incrementalKeyValues)) {
+          long ttlMillis = config.getCurrentYearTtlMillis();
+          alreadyProcessed = config.getIncrementalTracker().isProcessedWithTtl(
+              config.getName(), config.getSourceTable(), incrementalKeyValues, ttlMillis);
+          if (!alreadyProcessed) {
+            LOGGER.info("  Current year {} - TTL expired or never processed (TTL: {} days)",
+                incrementalKeyValues, config.getCurrentYearTtlDays());
+          }
+        } else {
+          alreadyProcessed = config.getIncrementalTracker().isProcessed(
+              config.getName(), config.getSourceTable(), incrementalKeyValues);
+        }
+        if (alreadyProcessed) {
           LOGGER.info("  Skipping {} batches for incremental key {} (already processed)",
               batchesForKey.size(), incrementalKeyValues);
           skippedGroups++;
@@ -391,8 +517,8 @@ public class ParquetReorganizer {
       // Process all batches for this incremental key
       boolean allSuccessful = true;
       for (Map<String, String> batch : batchesForKey) {
-        boolean success = processSingleBatch(conn, config, batch, tempBase,
-            processedBatches + 1, totalBatches);
+        boolean success =
+            processSingleBatch(conn, config, batch, tempBase, processedBatches + 1, totalBatches);
         if (success) {
           processedBatches++;
         } else {
@@ -410,6 +536,7 @@ public class ParquetReorganizer {
 
     LOGGER.info("  Completed {} batches for {} ({} incremental groups skipped)",
         processedBatches, config.getName(), skippedGroups);
+    return processedBatches;
   }
 
   /**
@@ -418,14 +545,11 @@ public class ParquetReorganizer {
    */
   private boolean processSingleBatch(Connection conn, ReorgConfig config, Map<String, String> batch,
       String tempBase, int batchNum, int totalBatches) {
-    // Build source glob with batch filters applied
-    String batchSourceGlob = config.getSourcePattern();
+    // Build filename pattern from batch values
     StringBuilder filenamePattern = new StringBuilder();
-
     for (Map.Entry<String, String> entry : batch.entrySet()) {
       String col = entry.getKey();
       String val = entry.getValue();
-      batchSourceGlob = batchSourceGlob.replace(col + "=*", col + "=" + val);
       if (filenamePattern.length() > 0) {
         filenamePattern.append("_");
       }
@@ -433,10 +557,25 @@ public class ParquetReorganizer {
     }
     filenamePattern.append("_{i}");
 
-    String fullBatchSourceGlob = storageProvider.resolvePath(baseDirectory, batchSourceGlob);
+    String sql;
 
-    String sql = buildReorganizationSql(fullBatchSourceGlob, tempBase,
-        config.getPartitionColumns(), config.getColumnMappings(), filenamePattern.toString());
+    if (config.isSourceIsIceberg() && config.getIcebergWarehousePath() != null) {
+      // Use iceberg_scan with filters from batch
+      sql = buildReorganizationSql(null, tempBase, config.getPartitionColumns(),
+          config.getColumnMappings(), filenamePattern.toString(),
+          true, config.getIcebergWarehousePath(), config.getSourceTable(), batch);
+    } else {
+      // Use read_parquet with glob pattern (batch values replace wildcards)
+      String batchSourceGlob = config.getSourcePattern();
+      for (Map.Entry<String, String> entry : batch.entrySet()) {
+        String col = entry.getKey();
+        String val = entry.getValue();
+        batchSourceGlob = batchSourceGlob.replace(col + "=*", col + "=" + val);
+      }
+      String fullBatchSourceGlob = storageProvider.resolvePath(baseDirectory, batchSourceGlob);
+      sql = buildReorganizationSql(fullBatchSourceGlob, tempBase, config.getPartitionColumns(),
+          config.getColumnMappings(), filenamePattern.toString());
+    }
 
     LOGGER.debug("Phase 1 SQL (batch={}):\n{}", batch, sql);
     LOGGER.info("  Starting batch {}/{}: {}", batchNum, totalBatches, batch);
@@ -487,14 +626,17 @@ public class ParquetReorganizer {
    * all combinations like [{year=2020, geo_fips_set=STATE}, {year=2020, geo_fips_set=COUNTY}, ...].
    *
    * <p>Special handling for 'year': uses startYear/endYear range instead of querying data.
+   * <p>For Iceberg sources, queries distinct values via iceberg_scan() when column not in path.
    */
-  private List<Map<String, String>> buildBatchCombinations(Connection conn,
-      String sourceGlobTemplate, List<String> batchPartitionColumns,
-      int startYear, int endYear) {
-
+  private List<Map<String, String>> buildBatchCombinations(Connection conn, ReorgConfig config) {
+    List<String> batchPartitionColumns = config.getBatchPartitionColumns();
     if (batchPartitionColumns == null || batchPartitionColumns.isEmpty()) {
       return Collections.emptyList();
     }
+
+    String sourceGlobTemplate = config.getSourcePattern();
+    int startYear = config.getStartYear();
+    int endYear = config.getEndYear();
 
     // Build values for each batch column
     List<List<String>> columnValues = new ArrayList<List<String>>();
@@ -509,8 +651,8 @@ public class ParquetReorganizer {
           values.add(String.valueOf(y));
         }
       } else {
-        // Query distinct values from data
-        values = getDistinctPartitionValues(conn, sourceGlobTemplate, col);
+        // Query distinct values from data (supports both Parquet and Iceberg sources)
+        values = getDistinctPartitionValues(conn, config, col);
       }
 
       if (values.isEmpty()) {
@@ -551,14 +693,19 @@ public class ParquetReorganizer {
   }
 
   /**
-   * Gets distinct values for a partition column by listing directories.
-   * This is much faster than querying parquet files since values are in directory names.
+   * Gets distinct values for a batch column by listing directories or querying data.
    *
-   * <p>For pattern "type=income/year=STAR/geo_fips_set=STAR/STAR.parquet" and column "geo_fips_set",
-   * lists directories and extracts values like STATE, COUNTY from "geo_fips_set=STATE".
+   * <p>For Parquet sources with Hive-style partitioning, extracts values from directory names.
+   * For Iceberg sources or columns not in the path pattern, queries distinct values via SQL.
+   *
+   * @param conn DuckDB connection
+   * @param config Reorganization config with source info
+   * @param partitionColumn The column to get distinct values for
+   * @return List of distinct values, or empty list if not found
    */
-  private List<String> getDistinctPartitionValues(Connection conn, String sourceGlobTemplate,
+  private List<String> getDistinctPartitionValues(Connection conn, ReorgConfig config,
       String partitionColumn) {
+    String sourceGlobTemplate = config.getSourcePattern();
     java.util.Set<String> values = new java.util.TreeSet<String>();
 
     // Build directory pattern to list
@@ -568,6 +715,11 @@ public class ParquetReorganizer {
     // Find where this partition column appears in the pattern
     int colIdx = sourceGlobTemplate.indexOf(columnPattern);
     if (colIdx < 0) {
+      // Column not in path pattern - for Iceberg sources, query via iceberg_scan
+      if (config.isSourceIsIceberg()) {
+        LOGGER.debug("Batch column '{}' not in path pattern, querying Iceberg table", partitionColumn);
+        return getDistinctValuesFromIceberg(conn, config, partitionColumn);
+      }
       LOGGER.warn("Partition column '{}' not found in pattern '{}'", partitionColumn, sourceGlobTemplate);
       return new ArrayList<String>(values);
     }
@@ -622,10 +774,45 @@ public class ParquetReorganizer {
     } catch (java.io.IOException e) {
       LOGGER.warn("Failed to list directories for {}: {}", partitionColumn, e.getMessage());
       // Fall back to SQL query if listing fails
+      if (config.isSourceIsIceberg()) {
+        return getDistinctValuesFromIceberg(conn, config, partitionColumn);
+      }
       return getDistinctPartitionValuesViaSql(conn, sourceGlobTemplate, partitionColumn);
     }
 
     return new ArrayList<String>(values);
+  }
+
+  /**
+   * Gets distinct values for a column from an Iceberg table via iceberg_scan().
+   *
+   * <p>Used when batch columns are data columns (not partition columns) in an Iceberg source.
+   */
+  private List<String> getDistinctValuesFromIceberg(Connection conn, ReorgConfig config,
+      String columnName) {
+    List<String> values = new ArrayList<String>();
+
+    String icebergPath = config.getIcebergWarehousePath() + "/" + config.getSourceTable();
+    String sql = "SELECT DISTINCT \"" + columnName + "\" FROM iceberg_scan("
+        + quoteLiteral(icebergPath) + ") WHERE \"" + columnName + "\" IS NOT NULL ORDER BY \""
+        + columnName + "\"";
+
+    LOGGER.debug("Getting distinct {} values from Iceberg: {}", columnName, sql);
+
+    try (Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        String value = rs.getString(1);
+        if (value != null) {
+          values.add(value);
+        }
+      }
+      LOGGER.info("Found {} distinct {} values from Iceberg table", values.size(), columnName);
+    } catch (java.sql.SQLException e) {
+      LOGGER.warn("Failed to get distinct {} values from Iceberg: {}", columnName, e.getMessage());
+    }
+
+    return values;
   }
 
   /**
@@ -663,24 +850,75 @@ public class ParquetReorganizer {
   private String buildReorganizationSql(String sourceGlob, String targetBase,
       List<String> partitionColumns, Map<String, String> columnMappings,
       String filenamePattern) {
+    return buildReorganizationSql(sourceGlob, targetBase, partitionColumns, columnMappings,
+        filenamePattern, false, null, null, null);
+  }
+
+  /**
+   * Builds DuckDB SQL for reorganizing data into partitioned files.
+   * Supports both Parquet (via glob pattern) and Iceberg (via iceberg_scan) sources.
+   */
+  private String buildReorganizationSql(String sourceGlob, String targetBase,
+      List<String> partitionColumns, Map<String, String> columnMappings,
+      String filenamePattern, boolean sourceIsIceberg, String icebergTablePath,
+      String sourceTable, Map<String, String> filters) {
     StringBuilder sql = new StringBuilder();
     sql.append("COPY (\n");
 
     // Build SELECT clause with column aliases if mappings exist
-    if (columnMappings != null && !columnMappings.isEmpty()) {
-      StringBuilder selectClause = new StringBuilder("  SELECT *");
+    // When mappings exist, wrap in subquery so PARTITION_BY sees aliased columns
+    boolean hasColumnMappings = columnMappings != null && !columnMappings.isEmpty();
+    StringBuilder selectClause = new StringBuilder("  SELECT *");
+    if (hasColumnMappings) {
       for (Map.Entry<String, String> mapping : columnMappings.entrySet()) {
         String targetCol = mapping.getKey();
         String sourceCol = mapping.getValue();
         selectClause.append(", \"").append(sourceCol).append("\" AS ").append(targetCol);
       }
-      sql.append(selectClause).append(" FROM read_parquet(");
-    } else {
-      sql.append("  SELECT * FROM read_parquet(");
     }
 
-    sql.append(quoteLiteral(sourceGlob))
-       .append(", hive_partitioning=true, union_by_name=true)\n");
+    if (sourceIsIceberg && icebergTablePath != null && sourceTable != null) {
+      // Use iceberg_scan for Iceberg source
+      String fullIcebergPath = icebergTablePath + "/" + sourceTable;
+
+      // Wrap in subquery when column mappings exist so PARTITION_BY sees aliased columns
+      if (hasColumnMappings) {
+        sql.append("  SELECT * FROM (\n  ");
+      }
+
+      sql.append(selectClause).append(" FROM iceberg_scan(").append(quoteLiteral(fullIcebergPath)).append(")");
+
+      // Add WHERE clause for filters (replaces glob pattern filtering)
+      if (filters != null && !filters.isEmpty()) {
+        sql.append("\n  WHERE ");
+        boolean first = true;
+        for (Map.Entry<String, String> filter : filters.entrySet()) {
+          if (!first) {
+            sql.append(" AND ");
+          }
+          first = false;
+          String col = filter.getKey();
+          String val = filter.getValue();
+          // Handle numeric values (like year) vs string values
+          if (isNumeric(val)) {
+            sql.append(col).append(" = ").append(val);
+          } else {
+            sql.append(col).append(" = ").append(quoteLiteral(val));
+          }
+        }
+      }
+
+      if (hasColumnMappings) {
+        sql.append("\n  ) AS _aliased");
+      }
+      sql.append("\n");
+    } else {
+      // Use read_parquet for Parquet source
+      sql.append(selectClause).append(" FROM read_parquet(");
+      sql.append(quoteLiteral(sourceGlob))
+         .append(", hive_partitioning=true, union_by_name=true)\n");
+    }
+
     sql.append(") TO ").append(quoteLiteral(targetBase));
 
     // Add format and partition options
@@ -704,6 +942,21 @@ public class ParquetReorganizer {
     sql.append(");");
 
     return sql.toString();
+  }
+
+  /**
+   * Check if a string value is numeric.
+   */
+  private boolean isNumeric(String str) {
+    if (str == null || str.isEmpty()) {
+      return false;
+    }
+    try {
+      Long.parseLong(str);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
   }
 
   /**
@@ -742,6 +995,11 @@ public class ParquetReorganizer {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     loadExtensions(conn);
     configureS3Access(conn);
+    // Limit memory to avoid OOM on memory-constrained systems
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      stmt.execute("SET temp_directory='" + baseDirectory + "/.duckdb_tmp'");
+    }
     return conn;
   }
 
@@ -791,6 +1049,21 @@ public class ParquetReorganizer {
     } catch (java.sql.SQLException e) {
       LOGGER.debug("S3 configuration skipped: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Checks if the incremental key values contain the current year.
+   * Used to apply TTL-based processing for the current year's data.
+   */
+  private boolean isCurrentYear(Map<String, String> incrementalKeyValues) {
+    if (incrementalKeyValues == null || incrementalKeyValues.isEmpty()) {
+      return false;
+    }
+    int currentYear = java.time.Year.now().getValue();
+    String currentYearStr = String.valueOf(currentYear);
+    // Check if any key named "year" has the current year value
+    String yearValue = incrementalKeyValues.get("year");
+    return currentYearStr.equals(yearValue);
   }
 
   /**

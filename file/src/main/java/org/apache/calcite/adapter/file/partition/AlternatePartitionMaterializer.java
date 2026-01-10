@@ -45,49 +45,51 @@ import java.util.Map;
 public class AlternatePartitionMaterializer {
   private static final Logger LOGGER = LoggerFactory.getLogger(AlternatePartitionMaterializer.class);
 
+  /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
+  private static final String DUCKDB_MEMORY_LIMIT =
+      System.getenv("DUCKDB_MEMORY_LIMIT") != null
+          ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
+
   private final StorageProvider storageProvider;
   private final String baseDirectory;
+  private final String operatingDirectory;
   private final int startYear;
   private final int endYear;
+  private final boolean sourceIsIceberg;
 
   /** Lazy-initialized incremental tracker for partition status tracking. */
   private IncrementalTracker incrementalTracker;
 
   /**
-   * Creates a materializer for local file system with default year range.
-   *
-   * @param baseDirectory Base directory for parquet files
-   */
-  public AlternatePartitionMaterializer(String baseDirectory) {
-    this(null, baseDirectory, 2020, java.time.Year.now().getValue());
-  }
-
-  /**
-   * Creates a materializer with storage provider and year range.
+   * Creates a materializer with all required parameters.
    *
    * @param storageProvider Storage provider for S3/cloud storage (null for local)
-   * @param baseDirectory Base directory for parquet files
+   * @param baseDirectory Directory where data files live (read/write)
+   * @param operatingDirectory Directory for status tracking DBs
    * @param startYear Start year for batching
    * @param endYear End year for batching
+   * @param sourceIsIceberg Whether source tables are in Iceberg format
    */
   public AlternatePartitionMaterializer(StorageProvider storageProvider, String baseDirectory,
-      int startYear, int endYear) {
+      String operatingDirectory, int startYear, int endYear, boolean sourceIsIceberg) {
     this.storageProvider = storageProvider;
     this.baseDirectory = baseDirectory;
+    this.operatingDirectory = operatingDirectory;
     this.startYear = startYear;
     this.endYear = endYear;
+    this.sourceIsIceberg = sourceIsIceberg;
   }
 
   /**
    * Get or create the incremental tracker for partition status tracking.
-   * Uses DuckDB-based storage in the base directory.
+   * Uses DuckDB-based storage in the operating directory.
    *
    * @return IncrementalTracker instance
    */
   private IncrementalTracker getOrCreateTracker() {
     if (incrementalTracker == null) {
-      incrementalTracker = DuckDBPartitionStatusStore.getInstance(baseDirectory);
-      LOGGER.debug("Created incremental tracker for base directory: {}", baseDirectory);
+      incrementalTracker = DuckDBPartitionStatusStore.getInstance(operatingDirectory);
+      LOGGER.debug("Created incremental tracker in operating directory: {}", operatingDirectory);
     }
     return incrementalTracker;
   }
@@ -112,6 +114,12 @@ public class AlternatePartitionMaterializer {
 
     int materialized = 0;
     for (PartitionedTableConfig.AlternatePartitionConfig alternate : alternates) {
+      // Skip disabled alternates
+      if (!alternate.isEnabled()) {
+        LOGGER.info("Skipping disabled alternate '{}' for table '{}'",
+            alternate.getName(), tableName);
+        continue;
+      }
       try {
         if (materializeAlternate(tableName, sourcePattern, alternate)) {
           materialized++;
@@ -151,7 +159,11 @@ public class AlternatePartitionMaterializer {
     }
 
     // Build target base directory from alternate pattern
+    // If no base in pattern, use alternate name to avoid conflicts
     String targetBase = extractTargetBase(alternatePattern);
+    if (targetBase.isEmpty()) {
+      targetBase = alternateName;
+    }
 
     // Build source glob pattern
     String sourceGlob = buildSourceGlob(sourcePattern);
@@ -166,11 +178,11 @@ public class AlternatePartitionMaterializer {
 
     // Use ParquetReorganizer for batched processing
     if (needsBatching || storageProvider != null) {
-      ParquetReorganizer reorganizer = new ParquetReorganizer(
-          storageProvider != null ? storageProvider : createLocalStorageProvider(),
+      ParquetReorganizer reorganizer =
+          new ParquetReorganizer(storageProvider != null ? storageProvider : createLocalStorageProvider(),
           baseDirectory);
 
-      ParquetReorganizer.ReorgConfig reorgConfig = ParquetReorganizer.ReorgConfig.builder()
+      ParquetReorganizer.ReorgConfig.Builder configBuilder = ParquetReorganizer.ReorgConfig.builder()
           .name(alternateName)
           .sourcePattern(sourceGlob)
           .sourceTable(sourceTableName)
@@ -182,31 +194,53 @@ public class AlternatePartitionMaterializer {
           .threads(alternate.getThreads())
           .incrementalKeys(alternate.getIncrementalKeys())
           .incrementalTracker(getOrCreateTracker())
-          .build();
+          .currentYearTtlDays(alternate.getCurrentYearTtlDays());
 
-      reorganizer.reorganize(reorgConfig);
+      // Add Iceberg config if source is Iceberg
+      if (sourceIsIceberg) {
+        configBuilder.sourceIsIceberg(true);
+        configBuilder.icebergWarehousePath(baseDirectory);
+        LOGGER.info("ParquetReorganizer using Iceberg source: {}/{}", baseDirectory, sourceTableName);
+      }
+
+      reorganizer.reorganize(configBuilder.build());
       LOGGER.info("Successfully materialized alternate '{}' using ParquetReorganizer", alternateName);
       return true;
     }
 
     // Fall back to simple DuckDB for local, non-batched cases
-    return materializeSimple(sourceGlob, targetBase, partitionColumns, alternateName);
+    return materializeSimple(sourceTableName, sourceGlob, targetBase, partitionColumns, alternateName);
   }
 
   /**
    * Simple materialization for local files without batching.
+   *
+   * <p>When sourceIsIceberg is true, reads from Iceberg table using iceberg_scan().
+   * Otherwise reads from hive-partitioned Parquet files using read_parquet().
    */
-  private boolean materializeSimple(String sourceGlob, String targetBase,
+  private boolean materializeSimple(String sourceTableName, String sourceGlob, String targetBase,
       List<String> partitionColumns, String alternateName) {
     try {
       java.nio.file.Path targetPath = java.nio.file.Paths.get(baseDirectory, targetBase);
       java.nio.file.Files.createDirectories(targetPath);
 
-      String fullSourcePattern = java.nio.file.Paths.get(baseDirectory, sourceGlob).toString();
       String targetDir = targetPath.toString();
 
       try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:duckdb:")) {
         java.sql.Statement stmt = conn.createStatement();
+
+        // Limit memory to avoid OOM on memory-constrained systems
+        stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+        stmt.execute("SET temp_directory='" + baseDirectory + "/.duckdb_tmp'");
+        stmt.execute("SET threads=2");
+
+        // Load Iceberg extension if needed
+        if (sourceIsIceberg) {
+          stmt.execute("INSTALL iceberg");
+          stmt.execute("LOAD iceberg");
+          // Enable version guessing for tables without version-hint file
+          stmt.execute("SET unsafe_enable_version_guessing = true");
+        }
 
         StringBuilder partitionByClause = new StringBuilder();
         for (String col : partitionColumns) {
@@ -216,10 +250,23 @@ public class AlternatePartitionMaterializer {
           partitionByClause.append(col);
         }
 
-        String sql = String.format(
-            "COPY (SELECT * FROM read_parquet('%s', hive_partitioning=true)) "
+        // Build source clause based on format
+        String sourceClause;
+        if (sourceIsIceberg) {
+          // Read from Iceberg table using iceberg_scan
+          String icebergTablePath = baseDirectory + "/" + sourceTableName;
+          sourceClause = String.format("iceberg_scan('%s')", icebergTablePath);
+          LOGGER.info("Reading from Iceberg table: {}", icebergTablePath);
+        } else {
+          // Read from hive-partitioned Parquet files
+          String fullSourcePattern = java.nio.file.Paths.get(baseDirectory, sourceGlob).toString();
+          sourceClause = String.format("read_parquet('%s', hive_partitioning=true)", fullSourcePattern);
+          LOGGER.info("Reading from Parquet files: {}", fullSourcePattern);
+        }
+
+        String sql = String.format("COPY (SELECT * FROM %s) "
                 + "TO '%s' (FORMAT PARQUET, PARTITION_BY (%s), OVERWRITE_OR_IGNORE)",
-            fullSourcePattern, targetDir, partitionByClause.toString());
+            sourceClause, targetDir, partitionByClause.toString());
 
         LOGGER.debug("Executing: {}", sql);
         stmt.execute(sql);
@@ -260,6 +307,7 @@ public class AlternatePartitionMaterializer {
   /**
    * Extract the target base directory from alternate pattern.
    * "type=foo_by_geo/geo=*\/data.parquet" -> "type=foo_by_geo"
+   * "frequency=*\/*.parquet" -> "" (no base before partition)
    */
   private String extractTargetBase(String pattern) {
     // Find first partition wildcard
@@ -267,12 +315,17 @@ public class AlternatePartitionMaterializer {
     if (starIndex > 0) {
       int slashIndex = pattern.lastIndexOf('/', starIndex);
       if (slashIndex > 0) {
-        return pattern.substring(0, slashIndex);
+        // Check if this base contains a wildcard (e.g., "frequency=*/...")
+        String base = pattern.substring(0, slashIndex);
+        if (base.contains("*")) {
+          // Pattern starts with partition column, no concrete base
+          return "";
+        }
+        return base;
       }
     }
-    // Fallback: return everything up to the filename
-    int lastSlash = pattern.lastIndexOf('/');
-    return lastSlash > 0 ? pattern.substring(0, lastSlash) : pattern;
+    // No valid base found
+    return "";
   }
 
   /**
@@ -290,17 +343,20 @@ public class AlternatePartitionMaterializer {
   }
 
   /**
-   * Create a materializer for a given base directory (local file system).
+   * Create a materializer for parquet sources.
    */
-  public static AlternatePartitionMaterializer create(String baseDirectory) {
-    return new AlternatePartitionMaterializer(baseDirectory);
+  public static AlternatePartitionMaterializer create(StorageProvider storageProvider,
+      String baseDirectory, String operatingDirectory, int startYear, int endYear) {
+    return new AlternatePartitionMaterializer(storageProvider, baseDirectory, operatingDirectory,
+        startYear, endYear, false);
   }
 
   /**
-   * Create a materializer with storage provider and year range.
+   * Create a materializer for Iceberg sources.
    */
-  public static AlternatePartitionMaterializer create(StorageProvider storageProvider,
-      String baseDirectory, int startYear, int endYear) {
-    return new AlternatePartitionMaterializer(storageProvider, baseDirectory, startYear, endYear);
+  public static AlternatePartitionMaterializer createWithIceberg(StorageProvider storageProvider,
+      String baseDirectory, String operatingDirectory, int startYear, int endYear) {
+    return new AlternatePartitionMaterializer(storageProvider, baseDirectory, operatingDirectory,
+        startYear, endYear, true);
   }
 }

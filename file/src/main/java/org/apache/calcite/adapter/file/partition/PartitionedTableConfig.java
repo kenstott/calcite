@@ -34,6 +34,7 @@ public class PartitionedTableConfig {
   private final Map<String, String> columnComments;
   private final List<TableColumn> columns;
   private final List<AlternatePartitionConfig> alternatePartitions;
+  private final Map<String, Object> materialize;
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionedTableConfig.class);
 
   public PartitionedTableConfig(String name, String pattern, String type,
@@ -57,6 +58,14 @@ public class PartitionedTableConfig {
                                 PartitionConfig partitions, String comment,
                                 Map<String, String> columnComments, List<TableColumn> columns,
                                 List<AlternatePartitionConfig> alternatePartitions) {
+    this(name, pattern, type, partitions, comment, columnComments, columns, alternatePartitions, null);
+  }
+
+  public PartitionedTableConfig(String name, String pattern, String type,
+                                PartitionConfig partitions, String comment,
+                                Map<String, String> columnComments, List<TableColumn> columns,
+                                List<AlternatePartitionConfig> alternatePartitions,
+                                Map<String, Object> materialize) {
     this.name = name;
     this.pattern = pattern;
     this.type = type != null ? type : "partitioned";
@@ -65,6 +74,7 @@ public class PartitionedTableConfig {
     this.columnComments = columnComments;
     this.columns = columns;
     this.alternatePartitions = alternatePartitions;
+    this.materialize = materialize;
   }
 
   public String getName() {
@@ -97,6 +107,10 @@ public class PartitionedTableConfig {
 
   public List<AlternatePartitionConfig> getAlternatePartitions() {
     return alternatePartitions;
+  }
+
+  public Map<String, Object> getMaterialize() {
+    return materialize;
   }
 
   /**
@@ -141,15 +155,21 @@ public class PartitionedTableConfig {
   }
 
   /**
-   * Definition of a partition column with name and type.
+   * Definition of a partition column with name, type, and optional source column mapping.
    */
   public static class ColumnDefinition {
     private final String name;
     private final String type;
+    private final String sourceColumn;
 
     public ColumnDefinition(String name, String type) {
+      this(name, type, null);
+    }
+
+    public ColumnDefinition(String name, String type, String sourceColumn) {
       this.name = name;
       this.type = type != null ? type : "VARCHAR";
+      this.sourceColumn = sourceColumn;
     }
 
     public String getName() {
@@ -158,6 +178,20 @@ public class PartitionedTableConfig {
 
     public String getType() {
       return type;
+    }
+
+    /**
+     * Returns the source column name for mapping, or null if same as name.
+     */
+    public String getSourceColumn() {
+      return sourceColumn;
+    }
+
+    /**
+     * Returns true if this column has a source column mapping.
+     */
+    public boolean hasSourceMapping() {
+      return sourceColumn != null && !sourceColumn.equals(name);
     }
   }
 
@@ -202,26 +236,40 @@ public class PartitionedTableConfig {
     private final Map<String, String> columnMappings;
     private final int threads;
     private final List<String> incrementalKeys;
+    private final int currentYearTtlDays;
+    private final boolean enabled;
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment) {
-      this(name, pattern, partition, comment, null, null, 0, null);
+      this(name, pattern, partition, comment, null, null, 0, null, 0, true);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings) {
-      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, 0, null);
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, 0, null, 0, true);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
         int threads) {
-      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, threads, null);
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, threads, null, 0, true);
     }
 
     public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
         String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
         int threads, List<String> incrementalKeys) {
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, threads, incrementalKeys, 0, true);
+    }
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
+        int threads, List<String> incrementalKeys, int currentYearTtlDays) {
+      this(name, pattern, partition, comment, batchPartitionColumns, columnMappings, threads, incrementalKeys, currentYearTtlDays, true);
+    }
+
+    public AlternatePartitionConfig(String name, String pattern, PartitionConfig partition,
+        String comment, List<String> batchPartitionColumns, Map<String, String> columnMappings,
+        int threads, List<String> incrementalKeys, int currentYearTtlDays, boolean enabled) {
       this.name = name;
       this.pattern = pattern;
       this.partition = partition;
@@ -230,6 +278,8 @@ public class PartitionedTableConfig {
       this.columnMappings = columnMappings;
       this.threads = threads;
       this.incrementalKeys = incrementalKeys;
+      this.currentYearTtlDays = currentYearTtlDays;
+      this.enabled = enabled;
     }
 
     public String getName() {
@@ -283,6 +333,24 @@ public class PartitionedTableConfig {
      */
     public List<String> getIncrementalKeys() {
       return incrementalKeys;
+    }
+
+    /**
+     * Returns the TTL in days for current year data reprocessing.
+     * When set, current year data will be reprocessed after this many days.
+     * Default 0 means use the system default (1 day).
+     */
+    public int getCurrentYearTtlDays() {
+      return currentYearTtlDays;
+    }
+
+    /**
+     * Returns whether this alternate partition is enabled.
+     * Disabled alternates are skipped during materialization.
+     * Defaults to true if not specified.
+     */
+    public boolean isEnabled() {
+      return enabled;
     }
 
     /**
@@ -458,12 +526,14 @@ public class PartitionedTableConfig {
                 .map(colName -> new ColumnDefinition(colName, "VARCHAR"))
                 .collect(java.util.stream.Collectors.toList());
           } else if (firstElem instanceof Map) {
-            // Full definition with types: [{"name": "year", "type": "INTEGER"}, ...]
+            // Full definition with types and optional sourceColumn:
+            // [{"name": "geo_fips", "type": "VARCHAR", "sourceColumn": "GeoFips"}, ...]
             columnDefinitions = ((List<Map<String, Object>>) defsList).stream()
                 .map(
                     m -> new ColumnDefinition(
                     (String) m.get("name"),
-                    (String) m.get("type")))
+                    (String) m.get("type"),
+                    (String) m.get("sourceColumn")))
                 .collect(java.util.stream.Collectors.toList());
             // Extract column names for APIs that need them
             simpleColumns = columnDefinitions.stream()
@@ -494,11 +564,15 @@ public class PartitionedTableConfig {
     }
 
     // Parse alternate_partitions
-    List<AlternatePartitionConfig> alternatePartitions = parseAlternatePartitions(
-        map.get("alternate_partitions"));
+    List<AlternatePartitionConfig> alternatePartitions =
+        parseAlternatePartitions(map.get("alternate_partitions"));
+
+    // Parse materialize config
+    @SuppressWarnings("unchecked")
+    Map<String, Object> materialize = (Map<String, Object>) map.get("materialize");
 
     return new PartitionedTableConfig(name, pattern, type, partitionConfig, comment,
-        columnComments, columns, alternatePartitions);
+        columnComments, columns, alternatePartitions, materialize);
   }
 
   /**
@@ -543,9 +617,11 @@ public class PartitionedTableConfig {
             Object firstElem = defsList.get(0);
             if (firstElem instanceof Map) {
               columnDefs = ((List<Map<String, Object>>) defsList).stream()
-                  .map(cm -> new ColumnDefinition(
+                  .map(
+                      cm -> new ColumnDefinition(
                       (String) cm.get("name"),
-                      (String) cm.get("type")))
+                      (String) cm.get("type"),
+                      (String) cm.get("sourceColumn")))
                   .collect(java.util.stream.Collectors.toList());
               simpleColumns = columnDefs.stream()
                   .map(ColumnDefinition::getName)
@@ -555,6 +631,20 @@ public class PartitionedTableConfig {
         }
 
         altPartition = new PartitionConfig(style, simpleColumns, columnDefs, null, null);
+      }
+
+      // Extract column mappings from columnDefinitions (sourceColumn -> name)
+      Map<String, String> columnMappingsFromDefs = null;
+      if (altPartition != null && altPartition.getColumnDefinitions() != null) {
+        for (ColumnDefinition colDef : altPartition.getColumnDefinitions()) {
+          if (colDef.hasSourceMapping()) {
+            if (columnMappingsFromDefs == null) {
+              columnMappingsFromDefs = new java.util.LinkedHashMap<>();
+            }
+            // Map: targetColumn -> sourceColumn
+            columnMappingsFromDefs.put(colDef.getName(), colDef.getSourceColumn());
+          }
+        }
       }
 
       // Parse batch_partition_columns
@@ -582,6 +672,21 @@ public class PartitionedTableConfig {
         }
       }
 
+      // Merge column mappings from columnDefinitions.sourceColumn
+      // (explicit column_mappings takes precedence if both specified)
+      if (columnMappingsFromDefs != null) {
+        if (columnMappings == null) {
+          columnMappings = columnMappingsFromDefs;
+        } else {
+          // Add mappings from defs that aren't already in explicit mappings
+          for (Map.Entry<String, String> entry : columnMappingsFromDefs.entrySet()) {
+            if (!columnMappings.containsKey(entry.getKey())) {
+              columnMappings.put(entry.getKey(), entry.getValue());
+            }
+          }
+        }
+      }
+
       // Parse threads (optional, defaults to 2)
       int threads = 0;
       Object threadsObj = m.get("threads");
@@ -604,8 +709,23 @@ public class PartitionedTableConfig {
         }
       }
 
-      result.add(new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
-          batchPartitionColumns, columnMappings, threads, incrementalKeys));
+      // Parse current_year_ttl_days (optional, defaults to 1 day)
+      int currentYearTtlDays = 0;
+      Object ttlObj = m.get("current_year_ttl_days");
+      if (ttlObj instanceof Number) {
+        currentYearTtlDays = ((Number) ttlObj).intValue();
+      }
+
+      // Parse enabled (optional, defaults to true)
+      boolean enabled = true;
+      Object enabledObj = m.get("enabled");
+      if (enabledObj instanceof Boolean) {
+        enabled = (Boolean) enabledObj;
+      }
+
+      result.add(
+          new AlternatePartitionConfig(altName, altPattern, altPartition, altComment,
+          batchPartitionColumns, columnMappings, threads, incrementalKeys, currentYearTtlDays, enabled));
     }
 
     return result.isEmpty() ? null : result;
