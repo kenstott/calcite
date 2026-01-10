@@ -1,0 +1,682 @@
+# ============================================================================
+# U.S. Census Bureau Data Schema
+# ============================================================================
+# Data Sources:
+#   - American Community Survey (ACS) 5-year estimates
+#   - Decennial Census (2010, 2020)
+#   - Population Estimates Program (PEP)
+#
+# Features:
+#   - Hive-style partitioning for efficient querying
+#   - Rate-limited API integration
+#   - Iceberg materialization support
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:census}"
+dataLagYears: 1
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=census"
+
+comment: >
+  U.S. Census Bureau demographic and population data including American Community Survey (ACS)
+  estimates, decennial census results, and population estimates. Provides comprehensive demographic
+  profiles, household characteristics, income distributions, educational attainment, housing
+  statistics, and migration patterns at national, state, and county levels.
+
+# ============================================================================
+# HOOKS CONFIGURATION
+# ============================================================================
+# Response transformer for Census API's 2D array format
+# ============================================================================
+
+hooks:
+  responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+# Reusable column definitions using YAML anchors
+# ============================================================================
+
+column_templates:
+
+  # --- Geographic Identifier Columns ---
+
+  geoid_column: &geoid_column
+    name: geoid
+    type: string
+    nullable: true
+    comment: Geographic identifier (FIPS code)
+
+  name_column: &name_column
+    name: geo_name
+    type: string
+    nullable: true
+    expression: 'src."NAME"'
+    comment: Geographic area name
+
+  state_column: &state_column
+    name: state
+    type: string
+    nullable: true
+    comment: State FIPS code (2 digits)
+
+  county_column: &county_column
+    name: county
+    type: string
+    nullable: true
+    comment: County FIPS code (3 digits)
+
+  # --- Partition Column Definitions ---
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_geography: &partition_geography
+    name: geography
+    type: VARCHAR
+
+  # --- Standard Partition Set ---
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_geography
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+# Reusable dimension value lists
+# ============================================================================
+
+dimension_values:
+
+  # --- Year Range for ACS (starts 2009) ---
+  # ACS 5-year estimates available from 2009 onwards
+  # Default to 2010 for broader coverage; use GOVDATA_START_YEAR to override
+  # lagYears: 3 because ACS 5-year data is released ~2 years after the survey year
+  # (e.g., 2023 ACS data released in late 2024)
+  acs_year_range: &acs_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    lagYears: 3
+
+  # --- Year Values for Decennial Census ---
+  decennial_years: &decennial_years
+    - '2020'
+    - '2010'
+    - '2000'
+
+  # --- Geography Levels ---
+  state_geography: &state_geography
+    - state
+
+  county_geography: &county_geography
+    - county
+
+  all_geographies: &all_geographies
+    - state
+    - county
+
+# ============================================================================
+# MATERIALIZATION OPTIONS
+# ============================================================================
+# Default materialization settings for all tables
+# ============================================================================
+
+materializationDefaults:
+  format: iceberg
+  options:
+    warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+    icebergTableName: "${TABLE_NAME}"
+    catalogType: hadoop
+    # Iceberg-specific options
+    partitionBy:
+      - type
+      - year
+      - geography
+    # Self-healing for empty results (requery after 7 days)
+    emptyResultTtlDays: 7
+    # Error retry after 1 day
+    errorTtlDays: 1
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # ACS POPULATION - Total population and demographics
+  # ---------------------------------------------------------------------------
+  - name: acs_population
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      American Community Survey population demographics including total population,
+      age, sex, race, and ethnicity. Provides population counts at state and county levels.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Column expressions use conceptual names that are
+      # normalized by CensusVariableNormalizer from API-specific variable codes
+      # (e.g., B01001_001E for ACS, P1_001N for Decennial 2020)
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."total_population" AS BIGINT)'
+        comment: Total population
+      - name: male_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."male_population" AS BIGINT)'
+        comment: Male population
+      - name: female_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."female_population" AS BIGINT)'
+        comment: Female population
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B01001_001E,B01001_002E,B01001_026E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+        # Census returns 2D array - CensusResponseTransformer handles conversion
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_population
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS INCOME - Household income statistics
+  # ---------------------------------------------------------------------------
+  - name: acs_income
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Household and family income statistics from ACS including median household income
+      and per capita income at state and county levels.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Uses canonical name from CensusVariableNormalizer
+      - name: median_household_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."median_household_income" AS BIGINT)'
+        comment: Median household income in the past 12 months
+      - name: per_capita_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."per_capita_income" AS BIGINT)'
+        comment: Per capita income in the past 12 months
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B19013_001E,B19301_001E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_income
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS HOUSING - Housing unit statistics
+  # ---------------------------------------------------------------------------
+  - name: acs_housing
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Housing characteristics from ACS including total housing units, occupancy status,
+      median home value, and median rent.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Uses canonical names from CensusVariableNormalizer
+      - name: total_housing_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."total_housing_units" AS BIGINT)'
+        comment: Total housing units
+      - name: occupied_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."occupied_housing_units" AS BIGINT)'
+        comment: Occupied housing units
+      - name: vacant_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."vacant_housing_units" AS BIGINT)'
+        comment: Vacant housing units
+      - name: median_home_value
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."median_home_value" AS BIGINT)'
+        comment: Median value of owner-occupied housing units
+      - name: median_rent
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."median_gross_rent" AS BIGINT)'
+        comment: Median gross rent
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B25001_001E,B25002_002E,B25002_003E,B25077_001E,B25064_001E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_housing
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS EDUCATION - Educational attainment
+  # ---------------------------------------------------------------------------
+  - name: acs_education
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Educational attainment from ACS including high school graduation rates
+      and bachelor's degree attainment for population 25 years and over.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Uses canonical names from CensusVariableNormalizer
+      - name: pop_25_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."population_25_and_over" AS BIGINT)'
+        comment: Total population 25 years and over
+      - name: hs_graduate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."high_school_graduate" AS BIGINT)'
+        comment: High school graduate (includes equivalency)
+      - name: bachelors
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."bachelor_degree_or_higher" AS BIGINT)'
+        comment: Bachelor's degree
+      - name: masters
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."masters_degree" AS BIGINT)'
+        comment: Master's degree
+      - name: doctorate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."doctorate_degree" AS BIGINT)'
+        comment: Doctorate degree
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B15003_001E,B15003_017E,B15003_022E,B15003_023E,B15003_025E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_education
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS EMPLOYMENT - Employment and labor force statistics
+  # ---------------------------------------------------------------------------
+  - name: acs_employment
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Employment status and labor force participation from ACS including
+      employed, unemployed, and labor force participation rates.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Uses canonical names from CensusVariableNormalizer
+      - name: labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."labor_force_participation" AS BIGINT)'
+        comment: In labor force (population 16 years and over)
+      - name: employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."employed_population" AS BIGINT)'
+        comment: Employed (civilian labor force)
+      - name: unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."unemployed_population" AS BIGINT)'
+        comment: Unemployed (civilian labor force)
+      - name: not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."not_in_labor_force" AS BIGINT)'
+        comment: Not in labor force
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B23025_002E,B23025_004E,B23025_005E,B23025_007E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_employment
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # ACS POVERTY - Poverty statistics
+  # ---------------------------------------------------------------------------
+  - name: acs_poverty
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Poverty statistics from ACS including population below poverty level
+      and poverty rates by demographic groups.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: Uses canonical names from CensusVariableNormalizer
+      - name: poverty_universe
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."total_population_poverty_determined" AS BIGINT)'
+        comment: Total population for poverty status determination
+      - name: below_poverty
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."below_poverty_level" AS BIGINT)'
+        comment: Income below poverty level in past 12 months
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/acs/acs5?get=NAME,B17001_001E,B17001_002E&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    # Custom hooks for Census response transformation and schema evolution
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "acs"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: acs_poverty
+        catalogType: hadoop
+
+  # ---------------------------------------------------------------------------
+  # DECENNIAL POPULATION - Unified table for 2000, 2010, 2020
+  # ---------------------------------------------------------------------------
+  # Single table with conformed schema across all census years.
+  # Uses CensusDecennialDimensionResolver to provide year-specific:
+  #   - dataset: sf1 (2000/2010) vs pl (2020)
+  #   - variables: P001001,... (2000/2010) vs P1_001N,... (2020)
+  # CensusVariableNormalizer maps all variants to canonical column names.
+  # ---------------------------------------------------------------------------
+  - name: decennial_population
+    pattern: "type=decennial/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Decennial Census population from 2000, 2010, and 2020. Unified schema
+      across all years with columns normalized to canonical names regardless
+      of year-specific API variable codes (P001001 vs P1_001N, etc.).
+
+    dimensions:
+      type:
+        - decennial
+      year: *decennial_years
+      dataset:
+        type: custom
+      variables:
+        type: custom
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      # Schema Evolution: CensusVariableNormalizer maps year-specific variables
+      # (P001001/P1_001N) to canonical names (total_population)
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."total_population" AS BIGINT)'
+        comment: Total population
+      - name: white_alone
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."white_alone" AS BIGINT)'
+        comment: Population identifying as White alone
+      - name: black_alone
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."black_african_american_alone" AS BIGINT)'
+        comment: Population identifying as Black or African American alone
+      - name: asian_alone
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."asian_alone" AS BIGINT)'
+        comment: Population identifying as Asian alone
+
+    source:
+      type: http
+      # URL uses resolved {dataset} and {variables} based on year
+      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{variables}&for={geography}:*"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "decennial"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.census.CensusDecennialDimensionResolver"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=decennial/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
+        tableName: decennial_population
+        catalogType: hadoop
+
+# ============================================================================
+# END OF SCHEMA
+# ============================================================================
+# STATISTICS:
+#   - 6 ACS partitioned tables (population, income, housing, education, employment, poverty)
+#   - 1 Decennial Census unified table (2000, 2010, 2020 with schema evolution)
+#   - Iceberg materialization with Hive partitioning
+#   - Support for state and county level geographies
+#   - Schema evolution: CensusVariableNormalizer + CensusDecennialDimensionResolver
+# ============================================================================

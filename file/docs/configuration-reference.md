@@ -883,6 +883,170 @@ iceberg:
   incrementalKeys: [year]    # Track completion by year
 ```
 
+### Schema Evolution with Variable Normalization
+
+When working with APIs that change variable names over time (e.g., Census Bureau's variable codes differ between 2010 and 2020), you can configure a **Variable Normalizer** to map API-specific column names to consistent canonical names.
+
+#### The Problem
+
+Many government and data APIs use internal codes that change between versions:
+
+| Data Source | 2010 Variable | 2020 Variable | Meaning |
+|-------------|---------------|---------------|---------|
+| Census | `P001001` | `P1_001N` | Total population |
+| Census | `P003002` | `P1_003N` | White alone |
+| BEA | `A191RX1` | `DPCERC` | Real GDP |
+
+Without normalization, your schema would need different column names for each year, making queries complex and time-series analysis difficult.
+
+#### Solution: MappingFileVariableNormalizer
+
+The `MappingFileVariableNormalizer` is a generic, config-driven normalizer that reads mappings from a JSON file:
+
+```yaml
+hooks:
+  variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+  variableNormalizerConfig:
+    mappingFile: "census/census-variable-mappings.json"
+    defaultType: "acs"
+```
+
+#### Mapping File Format
+
+Create a JSON file with conceptual variable definitions:
+
+```json
+{
+  "conceptualVariables": {
+    "total_population": {
+      "description": "Total population count",
+      "acs": {
+        "allYears": { "variable": "B01001_001E" }
+      },
+      "decennial": {
+        "2010": { "variable": "P001001" },
+        "2020": { "variable": "P1_001N" }
+      }
+    },
+    "white_alone": {
+      "description": "Population identifying as White alone",
+      "acs": {
+        "allYears": { "variable": "B02001_002E" }
+      },
+      "decennial": {
+        "2010": { "variable": "P003002" },
+        "2020": { "variable": "P1_003N" }
+      }
+    },
+    "median_household_income": {
+      "description": "Median household income",
+      "acs": {
+        "allYears": { "variable": "B19013_001E" }
+      }
+    }
+  }
+}
+```
+
+#### Mapping File Structure
+
+| Field | Description |
+|-------|-------------|
+| `conceptualVariables` | Top-level object containing all mappings |
+| `<canonical_name>` | The output column name (e.g., `total_population`) |
+| `description` | Human-readable description of the variable |
+| `<type>` | Data type grouping (e.g., `acs`, `decennial`, `economic`) |
+| `allYears` | Mapping that applies to all years for this type |
+| `<year>` | Year-specific mapping (overrides `allYears`) |
+| `variable` | The API variable code to match |
+
+#### Configuration Options
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `mappingFile` | String | Yes | - | Path to JSON mapping file (classpath resource) |
+| `defaultType` | String | No | `acs` | Default data type for lookups when not specified in context |
+
+#### How It Works
+
+1. When the ETL pipeline parses API responses, it passes each column name through the normalizer
+2. The normalizer receives the column name and context (year, type)
+3. It searches the mapping file for a matching variable code
+4. If found, it returns the canonical name; otherwise, the original name is preserved
+
+**Example transformation:**
+```
+API Response (2010):  NAME, P001001, P003002, state
+Normalized Output:    NAME, total_population, white_alone, state
+
+API Response (2020):  NAME, P1_001N, P1_003N, state
+Normalized Output:    NAME, total_population, white_alone, state
+```
+
+#### Complete Schema Example
+
+```yaml
+tables:
+  - name: decennial_population
+    dimensions:
+      type: [decennial]
+      year: [2020, 2010, 2000]
+      geography: [state, county]
+
+    columns:
+      - name: name
+        type: varchar
+      - name: total_population
+        type: long
+        expression: 'TRY_CAST(src."total_population" AS BIGINT)'
+      - name: white_alone
+        type: long
+        expression: 'TRY_CAST(src."white_alone" AS BIGINT)'
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/dec/{dataset}?get=NAME,{variables}&for={geography}:*"
+
+    hooks:
+      variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"
+      variableNormalizerConfig:
+        mappingFile: "census/census-variable-mappings.json"
+        defaultType: "decennial"
+
+    materialize:
+      enabled: true
+      format: iceberg
+```
+
+#### Custom Variable Normalizers
+
+You can implement custom normalizers by implementing the `VariableNormalizer` interface:
+
+```java
+public interface VariableNormalizer {
+  /**
+   * Normalizes an API variable name to a canonical column name.
+   *
+   * @param apiVariable The variable name from the API response
+   * @param context Context map with keys like "year", "type", "geography"
+   * @return The canonical column name, or the original if no mapping exists
+   */
+  String normalize(String apiVariable, Map<String, String> context);
+}
+```
+
+**Constructor options:**
+- `YourNormalizer()` - No-arg constructor
+- `YourNormalizer(Map<String, Object> config)` - Receives `variableNormalizerConfig` map
+
+#### Best Practices
+
+1. **Use canonical names that are descriptive**: `total_population` not `pop_tot`
+2. **Document all mappings**: Include descriptions in the mapping file
+3. **Group by data type**: Organize mappings by source type (acs, decennial, etc.)
+4. **Handle missing mappings gracefully**: Columns without mappings keep their API names
+5. **Version your mapping files**: Track changes as APIs evolve
+
 ### Complete ETL Example
 
 ```yaml
