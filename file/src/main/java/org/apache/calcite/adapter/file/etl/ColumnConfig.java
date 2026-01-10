@@ -134,6 +134,107 @@ public class ColumnConfig {
   }
 
   /**
+   * Builds the SELECT clause fragment for this column with a table alias prefix.
+   * This is used to avoid DuckDB's column reference ambiguity when computed columns
+   * reference source columns that are also being selected.
+   *
+   * <p>For source columns, returns: tableAlias."sourceName" AS targetName
+   * <p>For computed columns with source column references, qualifies those references
+   *
+   * @param tableAlias The table alias to prefix source columns with (e.g., "src")
+   * @param sourceColumns List of source column names that should be qualified in expressions
+   * @return SELECT clause fragment
+   */
+  public String buildSelectExpression(String tableAlias, java.util.Set<String> sourceColumns) {
+    return buildSelectExpression(tableAlias, sourceColumns, null);
+  }
+
+  /**
+   * Builds the SELECT clause fragment for this column with a table alias prefix
+   * and partition variable substitution.
+   *
+   * <p>For source columns, returns: tableAlias."sourceName" AS targetName
+   * <p>For computed columns, qualifies column references and substitutes partition variables
+   *
+   * @param tableAlias The table alias to prefix source columns with (e.g., "src")
+   * @param sourceColumns List of source column names that should be qualified in expressions
+   * @param partitionVariables Map of partition variable names to values for substitution
+   * @return SELECT clause fragment
+   */
+  public String buildSelectExpression(String tableAlias, java.util.Set<String> sourceColumns,
+      Map<String, String> partitionVariables) {
+    if (isComputed()) {
+      String expr = expression;
+      // First, substitute partition variables (e.g., {tablename} -> 'SAINC1')
+      if (partitionVariables != null && !partitionVariables.isEmpty()) {
+        expr = substitutePartitionVariables(expr, partitionVariables);
+      }
+      // Then qualify column references in the expression
+      String qualifiedExpr = qualifyColumnReferences(expr, tableAlias, sourceColumns);
+      return qualifiedExpr + " AS " + name;
+    } else {
+      // Qualify source column with table alias
+      String sourceName = source != null && !source.isEmpty() ? source : name;
+
+      // If source doesn't have this column but it's available as a partition variable,
+      // use the partition variable value as a literal. This handles the case where
+      // dimension values (e.g., year from query params) aren't echoed back in API responses.
+      if (sourceColumns != null && !sourceColumns.contains(sourceName)
+          && partitionVariables != null && partitionVariables.containsKey(name)) {
+        String value = partitionVariables.get(name);
+        // Escape single quotes in value
+        value = value.replace("'", "''");
+        return "'" + value + "' AS " + name;
+      }
+
+      return tableAlias + ".\"" + sourceName + "\" AS " + name;
+    }
+  }
+
+  /**
+   * Substitutes partition variable placeholders in an expression.
+   * Placeholders are in the format {variableName} and are replaced with the literal value.
+   *
+   * @param expr The SQL expression containing placeholders
+   * @param variables Map of variable names to values
+   * @return Expression with placeholders replaced
+   */
+  private String substitutePartitionVariables(String expr, Map<String, String> variables) {
+    String result = expr;
+    for (Map.Entry<String, String> entry : variables.entrySet()) {
+      String placeholder = "{" + entry.getKey() + "}";
+      result = result.replace(placeholder, entry.getValue());
+    }
+    return result;
+  }
+
+  /**
+   * Qualifies column references in an expression by prefixing them with a table alias.
+   * Uses word boundary matching to avoid replacing column names inside strings or identifiers.
+   *
+   * @param expr The SQL expression
+   * @param tableAlias The table alias to prefix columns with
+   * @param columnNames Set of column names to qualify
+   * @return Expression with qualified column references
+   */
+  private String qualifyColumnReferences(String expr, String tableAlias,
+      java.util.Set<String> columnNames) {
+    if (columnNames == null || columnNames.isEmpty()) {
+      return expr;
+    }
+
+    String result = expr;
+    for (String colName : columnNames) {
+      // Use word boundary regex to match column names not already qualified
+      // This pattern matches the column name when it's not preceded by a dot or quote
+      // and followed by word boundary (not alphanumeric or underscore)
+      String pattern = "(?<![.\"a-zA-Z0-9_])" + java.util.regex.Pattern.quote(colName) + "(?![a-zA-Z0-9_])";
+      result = result.replaceAll(pattern, tableAlias + ".\"" + colName + "\"");
+    }
+    return result;
+  }
+
+  /**
    * Creates a new builder for ColumnConfig.
    */
   public static Builder builder() {

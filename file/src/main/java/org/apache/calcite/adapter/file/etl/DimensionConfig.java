@@ -72,8 +72,13 @@ public class DimensionConfig {
   private final Integer start;
   private final Integer end;
   private final Integer step;
+  private final Integer dataLag;
+  private final Integer releaseMonth;
   private final List<String> values;
   private final String sql;
+  private final String source;
+  private final String path;
+  private final Map<String, String> properties;
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -81,10 +86,17 @@ public class DimensionConfig {
     this.start = builder.start;
     this.end = builder.end;
     this.step = builder.step != null ? builder.step : 1;
+    this.dataLag = builder.dataLag != null ? builder.dataLag : 0;
+    this.releaseMonth = builder.releaseMonth;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
     this.sql = builder.sql;
+    this.source = builder.source;
+    this.path = builder.path;
+    this.properties = builder.properties != null
+        ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.properties))
+        : Collections.<String, String>emptyMap();
   }
 
   /**
@@ -124,6 +136,35 @@ public class DimensionConfig {
   }
 
   /**
+   * Returns the data lag in years for YEAR_RANGE dimensions.
+   * When set, the end year is reduced by this amount (e.g., dataLag=1
+   * means data ends at current year - 1). Defaults to 0.
+   */
+  public Integer getDataLag() {
+    return dataLag;
+  }
+
+  /**
+   * Returns the release month for YEAR_RANGE dimensions (1=January, 12=December).
+   *
+   * <p>When set along with dataLag, adds an extra year of lag if the current
+   * month is before the release month. This handles cases where data for year Y
+   * is released mid-year in year Y+1.
+   *
+   * <p>Example: BLS QCEW annual data is released in September.
+   * With dataLag=1 and releaseMonth=9:
+   * <ul>
+   *   <li>In January 2026 (before Sept): end = 2026 - 1 - 1 = 2024</li>
+   *   <li>In October 2026 (after Sept): end = 2026 - 1 = 2025</li>
+   * </ul>
+   *
+   * @return Release month (1-12), or null if not configured
+   */
+  public Integer getReleaseMonth() {
+    return releaseMonth;
+  }
+
+  /**
    * Returns the explicit value list for LIST type dimensions.
    */
   public List<String> getValues() {
@@ -135,6 +176,82 @@ public class DimensionConfig {
    */
   public String getSql() {
     return sql;
+  }
+
+  /**
+   * Returns the JSON resource file path for JSON_CATALOG type dimensions.
+   * The path should be a classpath resource (e.g., "/worldbank/worldbank-countries.json").
+   */
+  public String getSource() {
+    return source;
+  }
+
+  /**
+   * Returns the JSONPath-like expression for extracting values from the JSON catalog.
+   * Supports dot notation for nested objects and [*] for array iteration.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code countryGroups.G20.countries} - direct path to array</li>
+   *   <li>{@code indicators[*].items[*].code} - iterate nested arrays</li>
+   * </ul>
+   */
+  public String getPath() {
+    return path;
+  }
+
+  /**
+   * Returns custom properties for this dimension.
+   *
+   * <p>Properties allow passing arbitrary configuration to custom dimension resolvers.
+   * Common properties include:
+   * <ul>
+   *   <li>{@code referenceDirectory} - Base directory for reference data lookup</li>
+   *   <li>{@code pattern} - File pattern for locating dimension source data</li>
+   * </ul>
+   *
+   * @return Immutable map of property name to value, never null
+   */
+  public Map<String, String> getProperties() {
+    return properties;
+  }
+
+  /**
+   * Returns a specific property value with variable resolution.
+   *
+   * <p>Property values containing {@code ${VAR}} or {@code ${VAR:-default}} patterns
+   * are resolved using environment variables and system properties.
+   *
+   * @param key Property name
+   * @return Resolved property value, or null if not set or resolves to empty
+   */
+  public String getProperty(String key) {
+    String value = properties.get(key);
+    if (value == null) {
+      return null;
+    }
+    // Resolve ${VAR} patterns using VariableResolver
+    String resolved = VariableResolver.resolveEnvVars(value);
+    // If resolution resulted in the original placeholder (unresolved), treat as null
+    if (resolved.equals(value) && value.contains("${")) {
+      return null;
+    }
+    return resolved.isEmpty() ? null : resolved;
+  }
+
+  /**
+   * Returns a specific property value with a default and variable resolution.
+   *
+   * <p>Property values containing {@code ${VAR}} or {@code ${VAR:-default}} patterns
+   * are resolved using environment variables and system properties.
+   *
+   * @param key Property name
+   * @param defaultValue Value to return if property is not set or resolves to empty
+   * @return Resolved property value, or defaultValue if not set
+   */
+  public String getProperty(String key, String defaultValue) {
+    String value = getProperty(key);
+    return value != null ? value : defaultValue;
   }
 
   /**
@@ -165,23 +282,62 @@ public class DimensionConfig {
       builder.type(DimensionType.fromString((String) typeObj));
     }
 
-    // Parse range parameters
+    // Parse range parameters (supports numbers, env vars like {env:VAR}, or {env:VAR:default})
     Object startObj = map.get("start");
     if (startObj instanceof Number) {
       builder.start(((Number) startObj).intValue());
+    } else if (startObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) startObj);
+      if (resolved != null) {
+        builder.start(resolved);
+      }
     }
 
     Object endObj = map.get("end");
     if (endObj instanceof Number) {
       builder.end(((Number) endObj).intValue());
-    } else if (endObj instanceof String && "current".equalsIgnoreCase((String) endObj)) {
-      // For yearRange, "current" means resolve at runtime
-      builder.end(null);
+    } else if (endObj instanceof String) {
+      String endStr = (String) endObj;
+      if ("current".equalsIgnoreCase(endStr)) {
+        // For yearRange, "current" means resolve at runtime
+        builder.end(null);
+      } else {
+        Integer resolved = VariableResolver.resolveInteger(endStr);
+        if (resolved != null) {
+          builder.end(resolved);
+        }
+      }
     }
 
     Object stepObj = map.get("step");
     if (stepObj instanceof Number) {
       builder.step(((Number) stepObj).intValue());
+    } else if (stepObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) stepObj);
+      if (resolved != null) {
+        builder.step(resolved);
+      }
+    }
+
+    Object dataLagObj = map.get("dataLag");
+    if (dataLagObj instanceof Number) {
+      builder.dataLag(((Number) dataLagObj).intValue());
+    } else if (dataLagObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) dataLagObj);
+      if (resolved != null) {
+        builder.dataLag(resolved);
+      }
+    }
+
+    // Parse release month (1-12, month when data for previous year becomes available)
+    Object releaseMonthObj = map.get("releaseMonth");
+    if (releaseMonthObj instanceof Number) {
+      builder.releaseMonth(((Number) releaseMonthObj).intValue());
+    } else if (releaseMonthObj instanceof String) {
+      Integer resolved = VariableResolver.resolveInteger((String) releaseMonthObj);
+      if (resolved != null) {
+        builder.releaseMonth(resolved);
+      }
     }
 
     // Parse list values
@@ -198,6 +354,32 @@ public class DimensionConfig {
     Object sqlObj = map.get("sql");
     if (sqlObj instanceof String) {
       builder.sql((String) sqlObj);
+    }
+
+    // Parse JSON catalog source and path
+    Object sourceObj = map.get("source");
+    if (sourceObj instanceof String) {
+      builder.source((String) sourceObj);
+    }
+
+    Object pathObj = map.get("path");
+    if (pathObj instanceof String) {
+      builder.path((String) pathObj);
+    }
+
+    // Parse custom properties (for CUSTOM type dimensions)
+    // Properties are stored as-is; variable resolution happens at runtime
+    Object propsObj = map.get("properties");
+    if (propsObj instanceof Map) {
+      Map<String, String> props = new LinkedHashMap<String, String>();
+      for (Map.Entry<?, ?> propEntry : ((Map<?, ?>) propsObj).entrySet()) {
+        String key = String.valueOf(propEntry.getKey());
+        Object val = propEntry.getValue();
+        if (val != null) {
+          props.put(key, String.valueOf(val));
+        }
+      }
+      builder.properties(props);
     }
 
     return builder.build();
@@ -219,18 +401,39 @@ public class DimensionConfig {
     for (Map.Entry<String, Object> entry : dimensionsMap.entrySet()) {
       String name = entry.getKey();
       Object value = entry.getValue();
+
+      DimensionConfig config = null;
       if (value instanceof Map) {
-        DimensionConfig config = fromMap(name, (Map<String, Object>) value);
-        if (config != null) {
-          result.put(name, config);
+        // Standard map-based config (type, start, end, values, etc.)
+        config = fromMap(name, (Map<String, Object>) value);
+      } else if (value instanceof List) {
+        // Shorthand: list values directly as dimension value (LIST type)
+        List<String> stringValues = new ArrayList<String>();
+        for (Object v : (List<?>) value) {
+          stringValues.add(String.valueOf(v));
         }
+        config = builder()
+            .name(name)
+            .type(DimensionType.LIST)
+            .values(stringValues)
+            .build();
+      } else if (value instanceof String) {
+        // Single value shorthand
+        config = builder()
+            .name(name)
+            .type(DimensionType.LIST)
+            .values(Collections.singletonList((String) value))
+            .build();
+      }
+
+      if (config != null) {
+        result.put(name, config);
       }
     }
     return result;
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("DimensionConfig{name='").append(name).append("'");
     sb.append(", type=").append(type);
@@ -247,6 +450,12 @@ public class DimensionConfig {
       case QUERY:
         sb.append(", sql='").append(sql).append("'");
         break;
+      case JSON_CATALOG:
+        sb.append(", source='").append(source).append("'");
+        sb.append(", path='").append(path).append("'");
+        break;
+      default:
+        break;
     }
     sb.append("}");
     return sb.toString();
@@ -261,8 +470,13 @@ public class DimensionConfig {
     private Integer start;
     private Integer end;
     private Integer step;
+    private Integer dataLag;
+    private Integer releaseMonth;
     private List<String> values;
     private String sql;
+    private String source;
+    private String path;
+    private Map<String, String> properties;
 
     public Builder name(String name) {
       this.name = name;
@@ -289,6 +503,16 @@ public class DimensionConfig {
       return this;
     }
 
+    public Builder dataLag(Integer dataLag) {
+      this.dataLag = dataLag;
+      return this;
+    }
+
+    public Builder releaseMonth(Integer releaseMonth) {
+      this.releaseMonth = releaseMonth;
+      return this;
+    }
+
     public Builder values(List<String> values) {
       this.values = values;
       return this;
@@ -296,6 +520,29 @@ public class DimensionConfig {
 
     public Builder sql(String sql) {
       this.sql = sql;
+      return this;
+    }
+
+    public Builder source(String source) {
+      this.source = source;
+      return this;
+    }
+
+    public Builder path(String path) {
+      this.path = path;
+      return this;
+    }
+
+    public Builder properties(Map<String, String> properties) {
+      this.properties = properties;
+      return this;
+    }
+
+    public Builder property(String key, String value) {
+      if (this.properties == null) {
+        this.properties = new LinkedHashMap<String, String>();
+      }
+      this.properties.put(key, value);
       return this;
     }
 

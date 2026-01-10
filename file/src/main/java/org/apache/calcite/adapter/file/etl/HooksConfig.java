@@ -73,13 +73,17 @@ import java.util.Map;
  */
 public class HooksConfig {
 
+  private final boolean enabled;
   private final String responseTransformerClass;
   private final List<TransformerConfig> rowTransformers;
   private final List<ValidatorConfig> validators;
   private final String dimensionResolverClass;
+  private final String dataProviderClass;
+  private final String tableLifecycleListenerClass;
   private final HookErrorHandling errorHandling;
 
   private HooksConfig(Builder builder) {
+    this.enabled = builder.enabled;
     this.responseTransformerClass = builder.responseTransformerClass;
     this.rowTransformers = builder.rowTransformers != null
         ? Collections.unmodifiableList(new ArrayList<TransformerConfig>(builder.rowTransformers))
@@ -88,9 +92,26 @@ public class HooksConfig {
         ? Collections.unmodifiableList(new ArrayList<ValidatorConfig>(builder.validators))
         : Collections.<ValidatorConfig>emptyList();
     this.dimensionResolverClass = builder.dimensionResolverClass;
+    this.dataProviderClass = builder.dataProviderClass;
+    this.tableLifecycleListenerClass = builder.tableLifecycleListenerClass;
     this.errorHandling = builder.errorHandling != null
         ? builder.errorHandling
         : HookErrorHandling.defaults();
+  }
+
+  /**
+   * Returns whether this table is enabled for processing.
+   *
+   * <p>When false, the table is:
+   * <ul>
+   *   <li>Skipped during ETL (no source download or materialization)</li>
+   *   <li>Excluded from the final schema metadata</li>
+   * </ul>
+   *
+   * @return true if table is enabled (default), false to disable
+   */
+  public boolean isEnabled() {
+    return enabled;
   }
 
   /**
@@ -130,6 +151,32 @@ public class HooksConfig {
   }
 
   /**
+   * Returns the fully qualified class name of the DataProvider.
+   *
+   * <p>When configured, the pipeline will use this provider to fetch data
+   * instead of the built-in HttpSource. This is useful for:
+   * <ul>
+   *   <li>APIs that require batching (e.g., BLS with 50 series limit)</li>
+   *   <li>Custom data sources (FTP, databases, etc.)</li>
+   *   <li>Complex request/response handling</li>
+   * </ul>
+   *
+   * @return Class name, or null if not configured
+   */
+  public String getDataProviderClass() {
+    return dataProviderClass;
+  }
+
+  /**
+   * Returns the fully qualified class name of the TableLifecycleListener.
+   *
+   * @return Class name, or null if not configured
+   */
+  public String getTableLifecycleListenerClass() {
+    return tableLifecycleListenerClass;
+  }
+
+  /**
    * Returns the error handling configuration for hooks.
    *
    * @return Error handling configuration
@@ -147,7 +194,8 @@ public class HooksConfig {
     return responseTransformerClass != null
         || !rowTransformers.isEmpty()
         || !validators.isEmpty()
-        || dimensionResolverClass != null;
+        || dimensionResolverClass != null
+        || tableLifecycleListenerClass != null;
   }
 
   /**
@@ -182,6 +230,14 @@ public class HooksConfig {
 
     Builder builder = builder();
 
+    // Parse enabled flag (defaults to true)
+    Object enabledObj = map.get("enabled");
+    if (enabledObj instanceof Boolean) {
+      builder.enabled((Boolean) enabledObj);
+    } else if (enabledObj instanceof String) {
+      builder.enabled(Boolean.parseBoolean((String) enabledObj));
+    }
+
     Object responseTransformerObj = map.get("responseTransformer");
     if (responseTransformerObj instanceof String) {
       builder.responseTransformerClass((String) responseTransformerObj);
@@ -214,6 +270,16 @@ public class HooksConfig {
       builder.dimensionResolverClass((String) dimensionResolverObj);
     }
 
+    Object dataProviderObj = map.get("dataProvider");
+    if (dataProviderObj instanceof String) {
+      builder.dataProviderClass((String) dataProviderObj);
+    }
+
+    Object tableListenerObj = map.get("tableLifecycleListener");
+    if (tableListenerObj instanceof String) {
+      builder.tableLifecycleListenerClass((String) tableListenerObj);
+    }
+
     Object errorHandlingObj = map.get("errorHandling");
     if (errorHandlingObj instanceof Map) {
       builder.errorHandling(HookErrorHandling.fromMap((Map<String, Object>) errorHandlingObj));
@@ -222,8 +288,7 @@ public class HooksConfig {
     return builder.build();
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("HooksConfig{");
     boolean first = true;
@@ -315,8 +380,7 @@ public class HooksConfig {
       return new TransformerConfig(type, className, column, expression);
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       if (isClassBased()) {
         return "TransformerConfig{class='" + className + "'}";
       } else {
@@ -385,8 +449,7 @@ public class HooksConfig {
       return new ValidatorConfig(type, className, condition, action);
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       if (isClassBased()) {
         return "ValidatorConfig{class='" + className + "'}";
       } else {
@@ -479,11 +542,25 @@ public class HooksConfig {
    * Builder for HooksConfig.
    */
   public static class Builder {
+    private boolean enabled = true; // Enabled by default
     private String responseTransformerClass;
     private List<TransformerConfig> rowTransformers;
     private List<ValidatorConfig> validators;
     private String dimensionResolverClass;
+    private String dataProviderClass;
+    private String tableLifecycleListenerClass;
     private HookErrorHandling errorHandling;
+
+    /**
+     * Sets whether this table is enabled for processing.
+     *
+     * @param enabled true to enable (default), false to disable
+     * @return This builder
+     */
+    public Builder enabled(boolean enabled) {
+      this.enabled = enabled;
+      return this;
+    }
 
     /**
      * Sets the ResponseTransformer class name.
@@ -526,6 +603,31 @@ public class HooksConfig {
      */
     public Builder dimensionResolverClass(String className) {
       this.dimensionResolverClass = className;
+      return this;
+    }
+
+    /**
+     * Sets the DataProvider class name.
+     *
+     * <p>When configured, the pipeline uses this provider to fetch data
+     * instead of the built-in HttpSource.
+     *
+     * @param className Fully qualified class name implementing DataProvider
+     * @return This builder
+     */
+    public Builder dataProviderClass(String className) {
+      this.dataProviderClass = className;
+      return this;
+    }
+
+    /**
+     * Sets the TableLifecycleListener class name.
+     *
+     * @param className Fully qualified class name
+     * @return This builder
+     */
+    public Builder tableLifecycleListenerClass(String className) {
+      this.tableLifecycleListenerClass = className;
       return this;
     }
 
