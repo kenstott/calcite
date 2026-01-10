@@ -3337,7 +3337,7 @@ partitionedTables:
         properties:
           # Reference directory containing regional_linecodes Iceberg table
           # Must point to the econ_reference schema output directory
-          referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/source=econ/econ_reference}"
+          referenceDirectory: "${ECON_REFERENCE_CACHE_DIR:-${GOVDATA_PARQUET_DIR}/source=econ/ECON_REFERENCE}"
 
     columns:
       - name: GeoFips

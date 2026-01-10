@@ -216,10 +216,31 @@ public class EtlPipeline {
 
       // Fast-path: Check if entire pipeline was already completed with same dimensions
       if (incrementalTracker.isTableComplete(pipelineName, dimensionSignature)) {
-        long elapsed = System.currentTimeMillis() - startTime;
-        LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
-            pipelineName, totalBatches, dimensionSignature, elapsed);
-        return EtlResult.skipped(pipelineName, elapsed);
+        // Verify data actually exists - completion marker may be stale if bucket was cleared
+        if (verifyDataExists(pipelineName, config)) {
+          long elapsed = System.currentTimeMillis() - startTime;
+          LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
+              pipelineName, totalBatches, dimensionSignature, elapsed);
+          // Include materialization info for skipped tables so DuckDB knows it's Iceberg
+          MaterializeConfig materializeConfig = config.getMaterialize();
+          if (materializeConfig != null && materializeConfig.isEnabled()) {
+            String tableLocation = baseDirectory + "/" + pipelineName;
+            return EtlResult.builder()
+                .pipelineName(pipelineName)
+                .skippedEntirePipeline(true)
+                .elapsedMs(elapsed)
+                .tableLocation(tableLocation)
+                .materializeFormat(materializeConfig.getFormat())
+                .build();
+          }
+          return EtlResult.skipped(pipelineName, elapsed);
+        } else {
+          // Data doesn't exist despite completion marker - invalidate and reprocess
+          LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating stale marker",
+              pipelineName);
+          incrementalTracker.invalidateTableCompletion(pipelineName);
+          incrementalTracker.invalidateAll(pipelineName);
+        }
       }
 
       if (progressListener != null) {
@@ -913,6 +934,58 @@ public class EtlPipeline {
     }
 
     return catalogConfig;
+  }
+
+  /**
+   * Verify that data files actually exist for a pipeline.
+   *
+   * <p>This prevents stale completion markers from causing skipped processing
+   * when the underlying data has been deleted (e.g., bucket cleared).
+   *
+   * @param pipelineName Pipeline name (also table name)
+   * @param config Pipeline configuration
+   * @return true if data files exist, false otherwise
+   */
+  private boolean verifyDataExists(String pipelineName, EtlPipelineConfig config) {
+    MaterializeConfig materializeConfig = config.getMaterialize();
+    if (materializeConfig == null || !materializeConfig.isEnabled()) {
+      // No materialization configured - can't verify data exists
+      return true;
+    }
+
+    try {
+      if (storageProvider == null) {
+        // No storage provider - can't verify, assume exists
+        return true;
+      }
+
+      if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
+        // For Iceberg, check if metadata directory has files (indicates table was created)
+        // Use isDirectory which does a list check - works for S3 where directories don't exist as objects
+        String metadataPath = baseDirectory + "/" + pipelineName + "/metadata";
+        if (storageProvider.isDirectory(metadataPath)) {
+          LOGGER.debug("Verified Iceberg metadata exists at {}", metadataPath);
+          return true;
+        }
+      } else {
+        // For Parquet format, check if data directory has files
+        String dataPath = baseDirectory + "/" + pipelineName;
+        if (storageProvider.isDirectory(dataPath)) {
+          LOGGER.debug("Verified data exists at {}", dataPath);
+          return true;
+        }
+      }
+
+      LOGGER.debug("No data found for pipeline '{}' at base directory '{}'",
+          pipelineName, baseDirectory);
+      return false;
+
+    } catch (IOException e) {
+      // If we can't verify, assume data exists to avoid unnecessary reprocessing
+      LOGGER.warn("Could not verify data existence for '{}': {} - assuming exists",
+          pipelineName, e.getMessage());
+      return true;
+    }
   }
 
   /**
