@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.file.etl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -80,6 +81,8 @@ public class HooksConfig {
   private final String dimensionResolverClass;
   private final String dataProviderClass;
   private final String tableLifecycleListenerClass;
+  private final String variableNormalizerClass;
+  private final Map<String, Object> variableNormalizerConfig;
   private final HookErrorHandling errorHandling;
 
   private HooksConfig(Builder builder) {
@@ -94,6 +97,10 @@ public class HooksConfig {
     this.dimensionResolverClass = builder.dimensionResolverClass;
     this.dataProviderClass = builder.dataProviderClass;
     this.tableLifecycleListenerClass = builder.tableLifecycleListenerClass;
+    this.variableNormalizerClass = builder.variableNormalizerClass;
+    this.variableNormalizerConfig = builder.variableNormalizerConfig != null
+        ? Collections.unmodifiableMap(new HashMap<String, Object>(builder.variableNormalizerConfig))
+        : Collections.<String, Object>emptyMap();
     this.errorHandling = builder.errorHandling != null
         ? builder.errorHandling
         : HookErrorHandling.defaults();
@@ -177,6 +184,31 @@ public class HooksConfig {
   }
 
   /**
+   * Returns the fully qualified class name of the VariableNormalizer.
+   *
+   * <p>When configured, the ETL pipeline will normalize API-specific variable
+   * names to conceptual names for schema evolution support.
+   *
+   * @return Class name, or null if not configured
+   * @see VariableNormalizer
+   */
+  public String getVariableNormalizerClass() {
+    return variableNormalizerClass;
+  }
+
+  /**
+   * Returns the configuration map for the VariableNormalizer.
+   *
+   * <p>This allows passing additional configuration to the normalizer,
+   * such as the mapping file path for {@link MappingFileVariableNormalizer}.
+   *
+   * @return Configuration map, never null (may be empty)
+   */
+  public Map<String, Object> getVariableNormalizerConfig() {
+    return variableNormalizerConfig;
+  }
+
+  /**
    * Returns the error handling configuration for hooks.
    *
    * @return Error handling configuration
@@ -195,7 +227,8 @@ public class HooksConfig {
         || !rowTransformers.isEmpty()
         || !validators.isEmpty()
         || dimensionResolverClass != null
-        || tableLifecycleListenerClass != null;
+        || tableLifecycleListenerClass != null
+        || variableNormalizerClass != null;
   }
 
   /**
@@ -278,6 +311,16 @@ public class HooksConfig {
     Object tableListenerObj = map.get("tableLifecycleListener");
     if (tableListenerObj instanceof String) {
       builder.tableLifecycleListenerClass((String) tableListenerObj);
+    }
+
+    Object variableNormalizerObj = map.get("variableNormalizer");
+    if (variableNormalizerObj instanceof String) {
+      builder.variableNormalizerClass((String) variableNormalizerObj);
+    }
+
+    Object variableNormalizerConfigObj = map.get("variableNormalizerConfig");
+    if (variableNormalizerConfigObj instanceof Map) {
+      builder.variableNormalizerConfig((Map<String, Object>) variableNormalizerConfigObj);
     }
 
     Object errorHandlingObj = map.get("errorHandling");
@@ -549,6 +592,8 @@ public class HooksConfig {
     private String dimensionResolverClass;
     private String dataProviderClass;
     private String tableLifecycleListenerClass;
+    private String variableNormalizerClass;
+    private Map<String, Object> variableNormalizerConfig;
     private HookErrorHandling errorHandling;
 
     /**
@@ -628,6 +673,35 @@ public class HooksConfig {
      */
     public Builder tableLifecycleListenerClass(String className) {
       this.tableLifecycleListenerClass = className;
+      return this;
+    }
+
+    /**
+     * Sets the VariableNormalizer class name.
+     *
+     * <p>When configured, the ETL pipeline will normalize API-specific variable
+     * names to conceptual names for schema evolution support.
+     *
+     * @param className Fully qualified class name implementing VariableNormalizer
+     * @return This builder
+     * @see VariableNormalizer
+     */
+    public Builder variableNormalizerClass(String className) {
+      this.variableNormalizerClass = className;
+      return this;
+    }
+
+    /**
+     * Sets the VariableNormalizer configuration map.
+     *
+     * <p>This allows passing additional configuration to the normalizer,
+     * such as the mapping file path for MappingFileVariableNormalizer.
+     *
+     * @param config Configuration map
+     * @return This builder
+     */
+    public Builder variableNormalizerConfig(Map<String, Object> config) {
+      this.variableNormalizerConfig = config;
       return this;
     }
 

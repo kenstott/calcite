@@ -115,6 +115,13 @@
         "allYears": {"variable": "B19013_001E"}
       }
     },
+    "per_capita_income": {
+      "description": "Per capita income in the past 12 months",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B19301_001E"}
+      }
+    },
     "median_home_value": {
       "description": "Median value of owner-occupied housing units",
       "dataType": "LONG",
@@ -139,6 +146,20 @@
         "2007-2011": {"variable": "B15002_015E"},
         "2012": {"variable": "B15003_022E"},
         "allYears": {"variable": "B15003_022E"}
+      }
+    },
+    "masters_degree": {
+      "description": "Population 25 years and over with master's degree",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_023E"}
+      }
+    },
+    "doctorate_degree": {
+      "description": "Population 25 years and over with doctorate degree",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_025E"}
       }
     },
     "high_school_graduate": {
@@ -183,6 +204,13 @@
       "dataType": "LONG",
       "acs": {
         "allYears": {"variable": "B23025_004E"}
+      }
+    },
+    "not_in_labor_force": {
+      "description": "Population 16 years and over not in labor force",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_007E"}
       }
     },
     "poverty_rate": {

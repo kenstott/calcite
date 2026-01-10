@@ -90,6 +90,7 @@ public class HttpSource implements DataSource {
   private final HttpSourceConfig config;
   private final Map<String, CacheEntry> cache;
   private final ResponseTransformer responseTransformer;
+  private final VariableNormalizer variableNormalizer;
   private final StorageProvider storageProvider;
   private final String rawCachePath;
   private long lastRequestTime;
@@ -129,6 +130,7 @@ public class HttpSource implements DataSource {
         : null;
     this.lastRequestTime = 0;
     this.responseTransformer = loadResponseTransformer(hooksConfig);
+    this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
   }
@@ -146,6 +148,7 @@ public class HttpSource implements DataSource {
         : null;
     this.lastRequestTime = 0;
     this.responseTransformer = responseTransformer;
+    this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
   }
@@ -172,6 +175,95 @@ public class HttpSource implements DataSource {
       throw new IllegalArgumentException(
           "Failed to instantiate ResponseTransformer: " + className, e);
     }
+  }
+
+  /**
+   * Loads a VariableNormalizer from HooksConfig.
+   *
+   * <p>Tries to instantiate using a Map constructor if config is provided,
+   * otherwise falls back to the default constructor.
+   */
+  private VariableNormalizer loadVariableNormalizer(HooksConfig hooksConfig) {
+    if (hooksConfig == null || hooksConfig.getVariableNormalizerClass() == null) {
+      return null;
+    }
+
+    String className = hooksConfig.getVariableNormalizerClass();
+    Map<String, Object> config = hooksConfig.getVariableNormalizerConfig();
+
+    try {
+      Class<?> clazz = Class.forName(className);
+      if (!VariableNormalizer.class.isAssignableFrom(clazz)) {
+        throw new IllegalArgumentException(
+            "Class " + className + " does not implement VariableNormalizer");
+      }
+
+      // Try constructor with Map config first if config is provided
+      if (config != null && !config.isEmpty()) {
+        try {
+          return (VariableNormalizer) clazz
+              .getDeclaredConstructor(Map.class)
+              .newInstance(config);
+        } catch (NoSuchMethodException e) {
+          // Fall through to default constructor
+          LOGGER.debug("No Map constructor for {}, using default", className);
+        }
+      }
+
+      // Fall back to default constructor
+      return (VariableNormalizer) clazz.getDeclaredConstructor().newInstance();
+    } catch (ClassNotFoundException e) {
+      throw new IllegalArgumentException("VariableNormalizer class not found: " + className, e);
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          "Failed to instantiate VariableNormalizer: " + className, e);
+    }
+  }
+
+  /**
+   * Normalizes field names in parsed records using the configured VariableNormalizer.
+   *
+   * <p>This method is called after parsing the API response but before returning
+   * records. It enables schema evolution by mapping API-specific field names
+   * to consistent conceptual names.
+   *
+   * @param records Parsed records with original field names
+   * @param context Dimension values providing context for normalization
+   * @return Records with normalized field names
+   */
+  private List<Map<String, Object>> normalizeRecords(
+      List<Map<String, Object>> records, Map<String, String> context) {
+    if (variableNormalizer == null || records.isEmpty()) {
+      return records;
+    }
+
+    List<Map<String, Object>> normalized = new ArrayList<Map<String, Object>>(records.size());
+    for (Map<String, Object> record : records) {
+      Map<String, Object> normalizedRecord = new LinkedHashMap<String, Object>();
+      for (Map.Entry<String, Object> entry : record.entrySet()) {
+        String fieldName = entry.getKey();
+        String normalizedName;
+
+        if (variableNormalizer.shouldPreserve(fieldName)) {
+          normalizedName = fieldName;
+        } else {
+          normalizedName = variableNormalizer.normalize(fieldName, context);
+          if (normalizedName == null) {
+            normalizedName = fieldName; // Fall back to original if no mapping
+          }
+        }
+
+        normalizedRecord.put(normalizedName, entry.getValue());
+      }
+      normalized.add(normalizedRecord);
+    }
+
+    if (LOGGER.isDebugEnabled() && !records.isEmpty()) {
+      LOGGER.debug("Normalized {} records using {}", records.size(),
+          variableNormalizer.getClass().getSimpleName());
+    }
+
+    return normalized;
   }
 
   @Override public Iterator<Map<String, Object>> fetch(Map<String, String> variables) throws IOException {
@@ -206,6 +298,7 @@ public class HttpSource implements DataSource {
         String cachedResponse = readRawCache(rawCacheFilePath);
         cachedResponse = transformResponse(cachedResponse, url, params, variables);
         List<Map<String, Object>> data = parseResponse(cachedResponse);
+        data = normalizeRecords(data, variables);
         LOGGER.info("Fetched {} records from raw cache", data.size());
         return data.iterator();
       }
@@ -284,6 +377,9 @@ public class HttpSource implements DataSource {
         }
       }
     }
+
+    // Normalize field names for schema evolution
+    allData = normalizeRecords(allData, variables);
 
     // Store in cache if enabled
     if (cache != null) {
@@ -367,6 +463,9 @@ public class HttpSource implements DataSource {
         // Continue with remaining batches
       }
     }
+
+    // Normalize field names for schema evolution
+    allData = normalizeRecords(allData, variables);
 
     LOGGER.info("Batched fetch complete: {} total records from {} batches",
         allData.size(), batches.size());
