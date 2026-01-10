@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -133,8 +132,7 @@ public class AlternatePartitionRegistry {
       return true;
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("AlternateInfo{name=%s, source=%s, partitionKeys=%s, materialized=%s}",
           alternateName, sourceTableName, partitionKeys, materialized);
     }
@@ -152,8 +150,8 @@ public class AlternatePartitionRegistry {
    */
   public void register(String sourceTableName, String alternateName, String pattern,
       List<String> partitionKeys, String icebergTableId, AlternatePartitionConfig config) {
-    AlternateInfo info = new AlternateInfo(alternateName, sourceTableName, pattern,
-        partitionKeys, icebergTableId, config);
+    AlternateInfo info =
+        new AlternateInfo(alternateName, sourceTableName, pattern, partitionKeys, icebergTableId, config);
 
     alternateByName.put(alternateName, info);
 
@@ -341,8 +339,7 @@ public class AlternatePartitionRegistry {
     return alternateByName.size();
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     return String.format("AlternatePartitionRegistry{sources=%d, alternates=%d}",
         sourceToAlternates.size(), alternateByName.size());
   }
