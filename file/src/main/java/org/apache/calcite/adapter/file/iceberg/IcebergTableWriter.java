@@ -16,35 +16,43 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
-import org.apache.iceberg.DataFile;
-import org.apache.iceberg.DataFiles;
-import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.Metrics;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.data.GenericAppenderFactory;
-import org.apache.iceberg.data.GenericRecord;
-import org.apache.iceberg.data.Record;
-import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.io.FileAppender;
-import org.apache.iceberg.io.OutputFile;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.PartitionKey;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.RewriteFiles;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.StructLike;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.data.GenericRecord;
+import org.apache.iceberg.data.Record;
+import org.apache.iceberg.data.parquet.GenericParquetWriter;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.io.DataWriter;
+import org.apache.iceberg.hadoop.HadoopInputFile;
+import org.apache.iceberg.io.InputFile;
+import org.apache.iceberg.io.OutputFile;
+import org.apache.iceberg.parquet.Parquet;
+import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -63,16 +71,30 @@ public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
   private final Table table;
+  private final StorageProvider storageProvider;
   private final Configuration hadoopConf;
 
   /**
    * Creates a writer for the specified Iceberg table.
    *
    * @param table The Iceberg table to write to
+   * @param storageProvider Storage provider for file operations (local/S3)
    */
-  public IcebergTableWriter(Table table) {
+  public IcebergTableWriter(Table table, StorageProvider storageProvider) {
+    this(table, storageProvider, new Configuration());
+  }
+
+  /**
+   * Creates a writer for the specified Iceberg table with custom Hadoop configuration.
+   *
+   * @param table The Iceberg table to write to
+   * @param storageProvider Storage provider for file operations (local/S3)
+   * @param hadoopConf Hadoop configuration with S3 credentials
+   */
+  public IcebergTableWriter(Table table, StorageProvider storageProvider, Configuration hadoopConf) {
     this.table = table;
-    this.hadoopConf = new Configuration();
+    this.storageProvider = storageProvider;
+    this.hadoopConf = hadoopConf;
   }
 
   /**
@@ -89,20 +111,55 @@ public class IcebergTableWriter {
    * @param partitionFilter Optional filter for partition overwrite (null for append)
    * @throws IOException if file operations fail
    */
-  public void commitFromStaging(java.nio.file.Path stagingPath,
+  public void commitFromStaging(String stagingPath,
       Map<String, Object> partitionFilter) throws IOException {
+    List<DataFile> dataFiles = stageFiles(stagingPath);
+
+    if (dataFiles.isEmpty()) {
+      return;
+    }
+
+    commitDataFiles(dataFiles, partitionFilter);
+  }
+
+  /**
+   * Stages files from a staging directory without committing.
+   *
+   * <p>This method moves files from staging to Iceberg data location and
+   * returns DataFile objects that can be accumulated for bulk commit.
+   * Use with {@link #bulkCommitDataFiles(List)} for reduced metadata operations.
+   *
+   * @param stagingPath The staging directory containing Parquet files
+   * @return List of DataFile objects ready for commit
+   * @throws IOException if file operations fail
+   */
+  public List<DataFile> stageFiles(String stagingPath) throws IOException {
     String dataLocation = table.location() + "/data";
-    java.nio.file.Path dataPath = java.nio.file.Paths.get(dataLocation.replace("file:", ""));
 
-    // Ensure data directory exists
-    Files.createDirectories(dataPath);
+    // Ensure data directory exists using StorageProvider
+    storageProvider.createDirectories(dataLocation);
 
-    // Walk staging directory and move files
+    // Walk staging directory and move files using StorageProvider
     List<DataFile> dataFiles = new ArrayList<DataFile>();
-    moveFilesAndBuildDataFiles(stagingPath, dataPath, dataFiles);
+    moveFilesAndBuildDataFiles(stagingPath, dataLocation, dataFiles);
 
     if (dataFiles.isEmpty()) {
       LOGGER.warn("No data files found in staging directory: {}", stagingPath);
+    } else {
+      LOGGER.debug("Staged {} data files from {}", dataFiles.size(), stagingPath);
+    }
+
+    return dataFiles;
+  }
+
+  /**
+   * Commits data files to Iceberg with optional partition filter.
+   *
+   * @param dataFiles The data files to commit
+   * @param partitionFilter Optional filter for partition overwrite (null for append)
+   */
+  public void commitDataFiles(List<DataFile> dataFiles, Map<String, Object> partitionFilter) {
+    if (dataFiles.isEmpty()) {
       return;
     }
 
@@ -115,8 +172,8 @@ public class IcebergTableWriter {
       // Build filter expression from partition values
       org.apache.iceberg.expressions.Expression filter = Expressions.alwaysTrue();
       for (Map.Entry<String, Object> entry : partitionFilter.entrySet()) {
-        filter = Expressions.and(filter,
-            Expressions.equal(entry.getKey(), entry.getValue()));
+        filter =
+            Expressions.and(filter, Expressions.equal(entry.getKey(), entry.getValue()));
       }
       overwrite.overwriteByRowFilter(filter);
 
@@ -138,60 +195,134 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Moves files from staging to data location and builds DataFile metadata.
+   * Bulk commits multiple data files in a single Iceberg append operation.
+   *
+   * <p>This is more efficient than individual commits for batch operations
+   * as it reduces the number of metadata updates to S3/R2 from O(n) to O(1).
+   *
+   * <p>Note: This uses append mode, not overwrite. For idempotent writes,
+   * consider using partition-level deduplication or calling
+   * {@link #commitDataFiles(List, Map)} per partition group.
+   *
+   * @param allDataFiles All data files to commit in a single transaction
    */
-  private void moveFilesAndBuildDataFiles(java.nio.file.Path stagingPath,
-      java.nio.file.Path dataPath, List<DataFile> dataFiles) throws IOException {
+  public void bulkCommitDataFiles(List<DataFile> allDataFiles) {
+    if (allDataFiles.isEmpty()) {
+      LOGGER.debug("No data files to bulk commit");
+      return;
+    }
 
-    Files.walkFileTree(stagingPath, new SimpleFileVisitor<java.nio.file.Path>() {
-      @Override
-      public FileVisitResult visitFile(java.nio.file.Path file,
-          BasicFileAttributes attrs) throws IOException {
-        if (file.toString().endsWith(".parquet")) {
-          // Preserve partition path: staging/year=2020/data.parquet -> data/year=2020/data.parquet
-          java.nio.file.Path relativePath = stagingPath.relativize(file);
-          java.nio.file.Path finalPath = dataPath.resolve(relativePath);
+    LOGGER.info("Bulk committing {} data files to Iceberg table {}",
+        allDataFiles.size(), table.name());
+    long startTime = System.currentTimeMillis();
 
-          // Create parent directories
-          Files.createDirectories(finalPath.getParent());
+    org.apache.iceberg.AppendFiles append = table.newAppend();
+    for (DataFile dataFile : allDataFiles) {
+      append.appendFile(dataFile);
+    }
+    append.commit();
 
-          // Move file (atomic on same filesystem)
-          Files.move(file, finalPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-          LOGGER.debug("Moved {} to {}", file, finalPath);
+    long elapsed = System.currentTimeMillis() - startTime;
+    LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
+  }
 
-          // Build DataFile for the moved file
-          DataFile dataFile = buildDataFile(finalPath, attrs.size());
-          dataFiles.add(dataFile);
-        }
-        return FileVisitResult.CONTINUE;
+  /**
+   * Moves files from staging to data location and builds DataFile metadata.
+   * Uses StorageProvider for all file operations, supporting both local and S3.
+   */
+  private void moveFilesAndBuildDataFiles(String stagingPath,
+      String dataPath, List<DataFile> dataFiles) throws IOException {
+
+    // List all files in staging directory
+    List<StorageProvider.FileEntry> stagingFiles = storageProvider.listFiles(stagingPath, true);
+
+    for (StorageProvider.FileEntry entry : stagingFiles) {
+      if (entry.isDirectory()) {
+        continue;
       }
 
-      @Override
-      public FileVisitResult postVisitDirectory(java.nio.file.Path dir,
-          IOException exc) throws IOException {
-        // Clean up empty directories in staging
-        if (!dir.equals(stagingPath)) {
-          try {
-            Files.deleteIfExists(dir);
-          } catch (IOException e) {
-            // Directory not empty, ignore
-          }
+      String filePath = entry.getPath();
+      if (filePath.endsWith(".parquet")) {
+        // Compute relative path from staging
+        String relativePath = computeRelativePath(stagingPath, filePath);
+
+        // Compute final path in data directory
+        String finalPath = storageProvider.resolvePath(dataPath, relativePath);
+
+        // Create parent directories
+        String parentPath = getParentPath(finalPath);
+        if (parentPath != null) {
+          storageProvider.createDirectories(parentPath);
         }
-        return FileVisitResult.CONTINUE;
+
+        // Copy file from staging to data location
+        try (InputStream in = storageProvider.openInputStream(filePath)) {
+          storageProvider.writeFile(finalPath, in);
+        }
+        LOGGER.debug("Copied {} to {}", filePath, finalPath);
+
+        // Delete the source file from staging
+        storageProvider.delete(filePath);
+
+        // Build DataFile for the final file
+        DataFile dataFile = buildDataFile(finalPath, entry.getSize());
+        dataFiles.add(dataFile);
       }
-    });
+    }
+  }
+
+  /**
+   * Computes the relative path from a base path.
+   */
+  private String computeRelativePath(String basePath, String fullPath) {
+    // Normalize paths - ensure base ends with /
+    String normalizedBase = basePath.endsWith("/") ? basePath : basePath + "/";
+
+    if (fullPath.startsWith(normalizedBase)) {
+      return fullPath.substring(normalizedBase.length());
+    }
+
+    // Handle case where paths differ in trailing slash
+    if (fullPath.startsWith(basePath)) {
+      String remainder = fullPath.substring(basePath.length());
+      return remainder.startsWith("/") ? remainder.substring(1) : remainder;
+    }
+
+    // Fallback - return just the filename
+    int lastSlash = fullPath.lastIndexOf('/');
+    return lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
+  }
+
+  /**
+   * Gets the parent path of a file path.
+   */
+  private String getParentPath(String path) {
+    int lastSlash = path.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return null;
+    }
+    // Handle s3:// prefix
+    if (path.startsWith("s3://") && lastSlash <= 5) {
+      return null;
+    }
+    if (path.startsWith("s3a://") && lastSlash <= 6) {
+      return null;
+    }
+    return path.substring(0, lastSlash);
   }
 
   /**
    * Builds a DataFile for a Parquet file with partition information extracted from path.
    */
-  private DataFile buildDataFile(java.nio.file.Path filePath, long fileSize) {
-    String pathStr = filePath.toString();
+  private DataFile buildDataFile(String pathStr, long fileSize) {
+    // Normalize path - fix Hadoop's s3a:/ to s3a://
+    pathStr = normalizeS3Path(pathStr);
     PartitionSpec spec = table.spec();
 
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData = new org.apache.iceberg.PartitionData(spec.partitionType());
-    String relativePath = pathStr.substring(pathStr.indexOf("/data/") + 6);
+    int dataIdx = pathStr.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
@@ -228,27 +359,37 @@ public class IcebergTableWriter {
 
   /**
    * Coerces a string partition value to the appropriate type.
+   * Handles null indicators like "-" (used by BLS for missing values).
    */
   private Object coercePartitionValue(String value, org.apache.iceberg.PartitionField field) {
+    // Handle null/missing value indicators
+    if (value == null || value.isEmpty() || "-".equals(value.trim())) {
+      return null;
+    }
+
     // For identity transforms, look at the source field type
     org.apache.iceberg.types.Type sourceType = table.schema().findType(field.sourceId());
     if (sourceType == null) {
       return value;
     }
 
-    switch (sourceType.typeId()) {
-      case INTEGER:
-        return Integer.parseInt(value);
-      case LONG:
-        return Long.parseLong(value);
-      case FLOAT:
-        return Float.parseFloat(value);
-      case DOUBLE:
-        return Double.parseDouble(value);
-      case BOOLEAN:
-        return Boolean.parseBoolean(value);
-      default:
-        return value;
+    try {
+      switch (sourceType.typeId()) {
+        case INTEGER:
+          return Integer.parseInt(value);
+        case LONG:
+          return Long.parseLong(value);
+        case FLOAT:
+          return Float.parseFloat(value);
+        case DOUBLE:
+          return Double.parseDouble(value);
+        case BOOLEAN:
+          return Boolean.parseBoolean(value);
+        default:
+          return value;
+      }
+    } catch (NumberFormatException e) {
+      return null;
     }
   }
 
@@ -275,14 +416,242 @@ public class IcebergTableWriter {
 
     org.apache.iceberg.expressions.Expression filter = Expressions.alwaysTrue();
     for (Map.Entry<String, Object> entry : partitionFilter.entrySet()) {
-      filter = Expressions.and(filter,
-          Expressions.equal(entry.getKey(), entry.getValue()));
+      filter =
+          Expressions.and(filter, Expressions.equal(entry.getKey(), entry.getValue()));
     }
 
     LOGGER.info("Deleting partition with filter: {}", partitionFilter);
     table.newDelete()
         .deleteFromRowFilter(filter)
         .commit();
+  }
+
+  /**
+   * Writes records to Iceberg using the native Parquet writer with proper field IDs.
+   *
+   * <p>This method creates Parquet files with Iceberg field IDs embedded in the schema,
+   * which is required for Iceberg readers (including DuckDB's iceberg_scan) to properly
+   * map columns. Using DuckDB's COPY TO PARQUET does not include these field IDs.
+   *
+   * @param records The records to write (as Map objects)
+   * @param partitionValues The partition values for these records
+   * @return DataFile object ready for commit
+   * @throws IOException if writing fails
+   */
+  public DataFile writeRecords(List<Map<String, Object>> records,
+      Map<String, String> partitionValues) throws IOException {
+    if (records == null || records.isEmpty()) {
+      return null;
+    }
+
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+
+    // Generate unique file path in data location
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPath(partitionValues);
+    String filePath = dataLocation + "/" + partitionPath + "/data_"
+        + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+
+    // Normalize to s3a:// for Iceberg/Hadoop compatibility
+    if (filePath.startsWith("s3://")) {
+      filePath = "s3a://" + filePath.substring(5);
+    }
+
+    LOGGER.debug("Writing {} records to {} with partition {}", records.size(), filePath, partitionValues);
+
+    // Create output file using table's FileIO
+    OutputFile outputFile = table.io().newOutputFile(filePath);
+
+    // Build partition key
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    setPartitionKeyValues(partitionKey, spec, schema, partitionValues);
+
+    // Convert Map records to GenericRecord
+    List<Record> icebergRecords = new ArrayList<Record>(records.size());
+    for (Map<String, Object> row : records) {
+      GenericRecord record = GenericRecord.create(schema);
+      for (Types.NestedField field : schema.columns()) {
+        String fieldName = field.name();
+        Object value = getFieldValue(row, fieldName, partitionValues);
+        if (value != null) {
+          record.setField(fieldName, coerceValue(value, field.type()));
+        }
+      }
+      icebergRecords.add(record);
+    }
+
+    // Write using Iceberg's Parquet writer which includes field IDs
+    DataWriter<Record> writer = null;
+    try {
+      writer = Parquet.writeData(outputFile)
+          .schema(schema)
+          .withSpec(spec)
+          .withPartition(partitionKey)
+          .createWriterFunc(GenericParquetWriter::buildWriter)
+          .overwrite()
+          .build();
+
+      for (Record record : icebergRecords) {
+        writer.write(record);
+      }
+    } finally {
+      if (writer != null) {
+        writer.close();
+      }
+    }
+
+    // Build and return DataFile
+    DataFile dataFile = writer.toDataFile();
+    LOGGER.debug("Created data file: {} ({} records, {} bytes)",
+        dataFile.path(), dataFile.recordCount(), dataFile.fileSizeInBytes());
+
+    return dataFile;
+  }
+
+  /**
+   * Builds a Hive-style partition path from partition values.
+   */
+  private String buildPartitionPath(Map<String, String> partitionValues) {
+    if (partitionValues == null || partitionValues.isEmpty()) {
+      return "";
+    }
+    StringBuilder path = new StringBuilder();
+    PartitionSpec spec = table.spec();
+    for (org.apache.iceberg.PartitionField field : spec.fields()) {
+      String value = partitionValues.get(field.name());
+      if (value != null) {
+        if (path.length() > 0) {
+          path.append("/");
+        }
+        path.append(field.name()).append("=").append(value);
+      }
+    }
+    return path.toString();
+  }
+
+  /**
+   * Sets partition key values from the partition variables map.
+   */
+  private void setPartitionKeyValues(PartitionKey partitionKey, PartitionSpec spec,
+      Schema schema, Map<String, String> partitionValues) {
+    if (partitionValues == null) {
+      return;
+    }
+    for (int i = 0; i < spec.fields().size(); i++) {
+      org.apache.iceberg.PartitionField field = spec.fields().get(i);
+      String stringValue = partitionValues.get(field.name());
+      if (stringValue != null) {
+        Object value = coercePartitionValue(stringValue, field);
+        partitionKey.set(i, value);
+      }
+    }
+  }
+
+  /**
+   * Gets field value from row map, falling back to partition values for partition columns.
+   */
+  private Object getFieldValue(Map<String, Object> row, String fieldName,
+      Map<String, String> partitionValues) {
+    // First check the row data (case-insensitive lookup)
+    for (Map.Entry<String, Object> entry : row.entrySet()) {
+      if (entry.getKey().equalsIgnoreCase(fieldName)) {
+        return entry.getValue();
+      }
+    }
+    // Fall back to partition values for partition columns
+    if (partitionValues != null) {
+      for (Map.Entry<String, String> entry : partitionValues.entrySet()) {
+        if (entry.getKey().equalsIgnoreCase(fieldName)) {
+          return entry.getValue();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Coerces a value to the appropriate Iceberg type.
+   */
+  private Object coerceValue(Object value, org.apache.iceberg.types.Type type) {
+    if (value == null) {
+      return null;
+    }
+
+    // Handle null indicators like "-" (used by BLS for missing values)
+    if (value instanceof String) {
+      String strVal = ((String) value).trim();
+      if (strVal.isEmpty() || "-".equals(strVal)) {
+        return null;
+      }
+    }
+
+    switch (type.typeId()) {
+      case INTEGER:
+        if (value instanceof Number) {
+          return ((Number) value).intValue();
+        }
+        try {
+          return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+          return null;  // Return null for unparseable values
+        }
+      case LONG:
+        if (value instanceof Number) {
+          return ((Number) value).longValue();
+        }
+        try {
+          return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
+      case FLOAT:
+        if (value instanceof Number) {
+          return ((Number) value).floatValue();
+        }
+        try {
+          return Float.parseFloat(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
+      case DOUBLE:
+        if (value instanceof Number) {
+          return ((Number) value).doubleValue();
+        }
+        try {
+          return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+          return null;
+        }
+      case BOOLEAN:
+        if (value instanceof Boolean) {
+          return value;
+        }
+        return Boolean.parseBoolean(value.toString());
+      case STRING:
+        return value.toString();
+      case DATE:
+        if (value instanceof java.time.LocalDate) {
+          return (int) ((java.time.LocalDate) value).toEpochDay();
+        }
+        if (value instanceof java.sql.Date) {
+          return (int) ((java.sql.Date) value).toLocalDate().toEpochDay();
+        }
+        if (value instanceof String) {
+          return (int) java.time.LocalDate.parse((String) value).toEpochDay();
+        }
+        return value;
+      case TIMESTAMP:
+        if (value instanceof java.time.Instant) {
+          return ((java.time.Instant) value).toEpochMilli() * 1000;
+        }
+        if (value instanceof java.sql.Timestamp) {
+          return ((java.sql.Timestamp) value).getTime() * 1000;
+        }
+        return value;
+      default:
+        return value;
+    }
   }
 
   /**
@@ -310,9 +679,349 @@ public class IcebergTableWriter {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
     }
 
-    // Note: removeOrphanFiles requires iceberg-spark or iceberg-flink
-    // For the core API, we rely on staging directory lifecycle rules
-    LOGGER.debug("Orphan file cleanup is handled by staging directory lifecycle rules");
+    // Remove orphan files using core Iceberg API
+    // Orphans are data files not referenced by any snapshot
+    try {
+      int orphansRemoved = removeOrphanFiles(orphanFilesMillis);
+      if (orphansRemoved > 0) {
+        LOGGER.info("Removed {} orphan files older than {} days", orphansRemoved, orphanFilesDays);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to remove orphan files: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Removes orphan data files not referenced by any snapshot.
+   *
+   * <p>This implements orphan file cleanup using the core Iceberg API:
+   * <ol>
+   *   <li>Collect all data file paths referenced by any snapshot</li>
+   *   <li>List all parquet files in the table's data directory</li>
+   *   <li>Delete files that are not referenced and older than the threshold</li>
+   * </ol>
+   *
+   * @param olderThanMillis Only delete orphans older than this timestamp
+   * @return Number of orphan files removed
+   */
+  private int removeOrphanFiles(long olderThanMillis) {
+    // Collect all data files referenced by ANY snapshot (including ancestors)
+    Set<String> referencedFiles = new HashSet<>();
+
+    for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
+      try (CloseableIterable<FileScanTask> tasks =
+          table.newScan().useSnapshot(snapshot.snapshotId()).planFiles()) {
+        for (FileScanTask task : tasks) {
+          referencedFiles.add(task.file().path().toString());
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to scan snapshot {}: {}", snapshot.snapshotId(), e.getMessage());
+      }
+    }
+
+    LOGGER.debug("Found {} files referenced by snapshots", referencedFiles.size());
+
+    // Get the data directory path
+    String tableLocation = table.location();
+    String dataDir = tableLocation + "/data";
+
+    // List all parquet files in data directory
+    List<String> allDataFiles = new ArrayList<>();
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(dataDir, true);
+      for (StorageProvider.FileEntry entry : entries) {
+        if (entry.getPath().endsWith(".parquet")) {
+          allDataFiles.add(entry.getPath());
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Failed to list data files in {}: {}", dataDir, e.getMessage());
+      return 0;
+    }
+
+    // Build set of referenced file names for fast lookup
+    // Use just the filename (last path component) to avoid s3:// vs s3a:// issues
+    Set<String> referencedFileNames = new HashSet<>();
+    for (String refPath : referencedFiles) {
+      int lastSlash = refPath.lastIndexOf('/');
+      String fileName = lastSlash >= 0 ? refPath.substring(lastSlash + 1) : refPath;
+      referencedFileNames.add(fileName);
+    }
+
+    // Find orphans (files not referenced by any snapshot)
+    List<String> orphanFiles = new ArrayList<>();
+    for (String filePath : allDataFiles) {
+      int lastSlash = filePath.lastIndexOf('/');
+      String fileName = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+      boolean isReferenced = referencedFileNames.contains(fileName);
+
+      if (!isReferenced) {
+        // Check file age before adding to orphan list
+        try {
+          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(filePath);
+          if (metadata.getLastModified() < olderThanMillis) {
+            orphanFiles.add(filePath);
+          }
+        } catch (IOException e) {
+          // If we can't get metadata, assume it's old enough to delete
+          orphanFiles.add(filePath);
+        }
+      }
+    }
+
+    if (orphanFiles.isEmpty()) {
+      LOGGER.debug("No orphan files found");
+      return 0;
+    }
+
+    LOGGER.info("Found {} orphan files to remove", orphanFiles.size());
+
+    // Delete orphan files in batches
+    int deleted = 0;
+    try {
+      storageProvider.deleteBatch(orphanFiles);
+      deleted = orphanFiles.size();
+    } catch (IOException e) {
+      LOGGER.warn("Failed to delete orphan files: {}", e.getMessage());
+    }
+
+    return deleted;
+  }
+
+  /**
+   * Compacts small files in the table into larger files.
+   *
+   * <p>This method scans all data files, groups them by partition, and rewrites
+   * partitions that have many small files into fewer larger files targeting the
+   * specified file size.
+   *
+   * @param targetFileSizeBytes Target size for compacted files (default: 128MB)
+   * @param minFilesToCompact Minimum number of small files to trigger compaction (default: 10)
+   * @param smallFileSizeBytes Files smaller than this are considered "small" (default: 10MB)
+   * @return Number of partitions compacted
+   */
+  public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
+      long smallFileSizeBytes) throws IOException {
+    LOGGER.info("Starting compaction for table {} (target={}MB, minFiles={}, smallSize={}MB)",
+        table.name(), targetFileSizeBytes / (1024 * 1024), minFilesToCompact,
+        smallFileSizeBytes / (1024 * 1024));
+
+    if (table.currentSnapshot() == null) {
+      LOGGER.info("Table has no snapshots, nothing to compact");
+      return 0;
+    }
+
+    // Group files by partition
+    Map<String, List<FileScanTask>> partitionFiles = new HashMap<>();
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        String partitionKey = task.file().partition().toString();
+        partitionFiles.computeIfAbsent(partitionKey, k -> new ArrayList<>()).add(task);
+      }
+    }
+
+    int compactedPartitions = 0;
+    for (Map.Entry<String, List<FileScanTask>> entry : partitionFiles.entrySet()) {
+      String partitionKey = entry.getKey();
+      List<FileScanTask> tasks = entry.getValue();
+
+      // Count small files in this partition
+      List<FileScanTask> smallFiles = new ArrayList<>();
+      for (FileScanTask task : tasks) {
+        if (task.file().fileSizeInBytes() < smallFileSizeBytes) {
+          smallFiles.add(task);
+        }
+      }
+
+      if (smallFiles.size() >= minFilesToCompact) {
+        LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
+        try {
+          compactPartition(smallFiles, targetFileSizeBytes);
+          compactedPartitions++;
+        } catch (Exception e) {
+          LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
+        }
+      }
+    }
+
+    if (compactedPartitions > 0) {
+      LOGGER.info("Compaction complete: {} partitions compacted, cleaning up old files",
+          compactedPartitions);
+      // Expire all snapshots except the current one to make old files orphans
+      // This is safe because compaction creates a new snapshot with all data
+      try {
+        long currentSnapshotId = table.currentSnapshot().snapshotId();
+        int expiredCount = 0;
+        for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
+          if (snapshot.snapshotId() != currentSnapshotId) {
+            expiredCount++;
+          }
+        }
+        if (expiredCount > 0) {
+          // Expire all snapshots older than now (keeps only current)
+          table.expireSnapshots()
+              .expireOlderThan(System.currentTimeMillis())
+              .retainLast(1)
+              .commit();
+          LOGGER.info("Expired {} old snapshots after compaction", expiredCount);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to expire snapshots after compaction: {}", e.getMessage());
+      }
+
+      // Remove orphan files (the old pre-compaction files)
+      try {
+        // Use 0ms threshold to delete all orphans immediately after compaction
+        int orphansRemoved = removeOrphanFiles(System.currentTimeMillis());
+        if (orphansRemoved > 0) {
+          LOGGER.info("Removed {} orphan files after compaction", orphansRemoved);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to remove orphan files after compaction: {}", e.getMessage());
+      }
+    } else {
+      LOGGER.info("Compaction complete: no partitions needed compaction");
+    }
+    return compactedPartitions;
+  }
+
+  /**
+   * Compacts files within a single partition.
+   */
+  private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes)
+      throws IOException {
+    if (smallFiles.isEmpty()) {
+      return;
+    }
+
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+
+    // Read all records from small files
+    List<Record> allRecords = new ArrayList<>();
+    Set<DataFile> filesToDelete = new HashSet<>();
+
+    // Read records from each small file individually using Parquet reader
+    for (FileScanTask task : smallFiles) {
+      DataFile dataFile = task.file();
+      filesToDelete.add(dataFile);
+
+      String filePath = normalizeS3Path(dataFile.path().toString());
+      // Use HadoopInputFile with configured hadoopConf for S3 credentials
+      InputFile inputFile = HadoopInputFile.fromPath(new Path(filePath), hadoopConf);
+
+      try (CloseableIterable<Record> records = Parquet.read(inputFile)
+          .project(schema)
+          .createReaderFunc(fileSchema ->
+              org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                  schema, fileSchema))
+          .build()) {
+        for (Record record : records) {
+          allRecords.add(record);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
+      }
+    }
+
+    if (allRecords.isEmpty()) {
+      return;
+    }
+
+    LOGGER.info("Read {} records from {} small files, writing compacted files",
+        allRecords.size(), smallFiles.size());
+
+    // Write compacted files
+    List<DataFile> newFiles = new ArrayList<>();
+    int recordsPerFile = Math.max(1, (int) (targetFileSizeBytes / estimateRecordSize(allRecords)));
+
+    // Get partition values from first file (all files in partition have same values)
+    StructLike partitionData = smallFiles.get(0).file().partition();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    copyPartitionValues(partitionKey, partitionData, spec);
+
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
+
+    for (int i = 0; i < allRecords.size(); i += recordsPerFile) {
+      int end = Math.min(i + recordsPerFile, allRecords.size());
+      List<Record> chunk = allRecords.subList(i, end);
+
+      String filePath = dataLocation + "/" + partitionPath + "/compacted_"
+          + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+      if (filePath.startsWith("s3://")) {
+        filePath = "s3a://" + filePath.substring(5);
+      }
+
+      OutputFile outputFile = table.io().newOutputFile(filePath);
+      DataWriter<Record> writer = Parquet.writeData(outputFile)
+          .schema(schema)
+          .withSpec(spec)
+          .withPartition(partitionKey)
+          .createWriterFunc(GenericParquetWriter::buildWriter)
+          .overwrite()
+          .build();
+
+      try {
+        for (Record record : chunk) {
+          writer.write(record);
+        }
+      } finally {
+        writer.close();
+      }
+
+      newFiles.add(writer.toDataFile());
+    }
+
+    // Commit the rewrite: delete old files, add new files
+    RewriteFiles rewrite = table.newRewrite();
+    for (DataFile oldFile : filesToDelete) {
+      rewrite.deleteFile(oldFile);
+    }
+    for (DataFile newFile : newFiles) {
+      rewrite.addFile(newFile);
+    }
+    rewrite.commit();
+
+    LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
+  }
+
+  /**
+   * Estimates average record size from a sample of records.
+   */
+  private long estimateRecordSize(List<Record> records) {
+    if (records.isEmpty()) {
+      return 100; // Default estimate
+    }
+    // Simple estimate: count fields and estimate bytes per field
+    Record sample = records.get(0);
+    int fieldCount = table.schema().columns().size();
+    return fieldCount * 50L; // Rough estimate of 50 bytes per field
+  }
+
+  /**
+   * Copies partition values from StructLike to PartitionKey.
+   */
+  private void copyPartitionValues(PartitionKey key, StructLike source, PartitionSpec spec) {
+    for (int i = 0; i < spec.fields().size(); i++) {
+      Object value = source.get(i, Object.class);
+      key.set(i, value);
+    }
+  }
+
+  /**
+   * Builds partition path from PartitionKey.
+   */
+  private String buildPartitionPathFromKey(PartitionKey key, PartitionSpec spec) {
+    StringBuilder path = new StringBuilder();
+    List<org.apache.iceberg.PartitionField> fields = spec.fields();
+    for (int i = 0; i < fields.size(); i++) {
+      if (path.length() > 0) {
+        path.append("/");
+      }
+      path.append(fields.get(i).name()).append("=").append(key.get(i, Object.class));
+    }
+    return path.toString();
   }
 
   /**
@@ -322,5 +1031,24 @@ public class IcebergTableWriter {
    */
   public Table getTable() {
     return table;
+  }
+
+  /**
+   * Normalizes S3 paths to fix Hadoop's malformed URIs.
+   * Hadoop's Path.toString() can return "s3a:/bucket" instead of "s3a://bucket".
+   */
+  private String normalizeS3Path(String path) {
+    if (path == null) {
+      return null;
+    }
+    // Fix s3a:/ (single slash) to s3a:// (double slashes)
+    if (path.startsWith("s3a:/") && !path.startsWith("s3a://")) {
+      return "s3a://" + path.substring(5);
+    }
+    // Fix s3:/ (single slash) to s3:// (double slashes)
+    if (path.startsWith("s3:/") && !path.startsWith("s3://")) {
+      return "s3://" + path.substring(4);
+    }
+    return path;
   }
 }

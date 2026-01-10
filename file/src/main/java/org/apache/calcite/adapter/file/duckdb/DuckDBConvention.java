@@ -91,6 +91,8 @@ public class DuckDBConvention extends JdbcConvention {
     // This avoids expensive S3 file listing for hive-partitioned tables
     if (!"false".equals(System.getProperty("calcite.file.statistics.count.star.enabled"))) {
       planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
+      // Also add DuckDB-specific Iceberg COUNT(*) rule that works with JDBC convention
+      planner.addRule(DuckDBIcebergCountStarRule.INSTANCE);
     }
 
     // 5. DISTINCT on partition columns optimization using directory listing

@@ -190,6 +190,9 @@ public class ConversionMetadata {
     // === CONFIGURATION ===
     public java.util.Map<String, Object> tableConfig; // Original table definition from model.json
 
+    // === STATISTICS ===
+    public Long rowCount;                 // Total row count from Iceberg metadata
+
     // === PARTITION BASELINE (for DuckDB+Hive optimization) ===
     public PartitionBaseline baseline;   // Cached partition snapshot for fast change detection
     public Long lastChangeCheck;         // When we last checked for changes
@@ -278,6 +281,29 @@ public class ConversionMetadata {
 
     public String getConvertedFile() {
       return convertedFile;
+    }
+
+    /**
+     * Checks if this table uses Iceberg format for materialization.
+     * Looks for materialize.format = "iceberg" in the table config.
+     *
+     * @return true if table is materialized to Iceberg format
+     */
+    @SuppressWarnings("unchecked")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isIcebergFormat() {
+      if (tableConfig == null) {
+        return false;
+      }
+
+      Object materializeObj = tableConfig.get("materialize");
+      if (!(materializeObj instanceof java.util.Map)) {
+        return false;
+      }
+
+      java.util.Map<String, Object> materializeMap = (java.util.Map<String, Object>) materializeObj;
+      Object formatObj = materializeMap.get("format");
+      return "iceberg".equalsIgnoreCase(String.valueOf(formatObj));
     }
 
     /**
@@ -1483,6 +1509,62 @@ public class ConversionMetadata {
   public void putConversionRecord(String tableName, ConversionRecord record) {
     conversions.put(tableName, record);
     // Note: Caller is responsible for calling saveMetadata() after batch updates
+  }
+
+  /**
+   * Updates a table's materialization info after ETL completes.
+   * This is called when ETL materializes data to Iceberg or Parquet format,
+   * enabling DuckDB to use the appropriate scan function (iceberg_scan vs parquet_scan).
+   *
+   * @param tableName The table name
+   * @param tableLocation The location of the materialized table (Iceberg table location or Parquet directory)
+   * @param conversionType The conversion type (e.g., "ICEBERG_PARQUET" or "PARQUET")
+   */
+  public void updateMaterializationInfo(String tableName, String tableLocation, String conversionType) {
+    updateMaterializationInfo(tableName, tableLocation, conversionType, null);
+  }
+
+  /**
+   * Updates a table's materialization info after ETL completes, including row count.
+   * This is called when ETL materializes data to Iceberg or Parquet format,
+   * enabling DuckDB to use the appropriate scan function (iceberg_scan vs parquet_scan).
+   *
+   * @param tableName The table name
+   * @param tableLocation The location of the materialized table (Iceberg table location or Parquet directory)
+   * @param conversionType The conversion type (e.g., "ICEBERG_PARQUET" or "PARQUET")
+   * @param rowCount The total row count from Iceberg metadata (null if unknown)
+   */
+  public void updateMaterializationInfo(String tableName, String tableLocation, String conversionType, Long rowCount) {
+    ConversionRecord record = conversions.get(tableName);
+    if (record != null) {
+      LOGGER.info("Updating materialization info for table '{}': conversionType='{}' -> '{}', sourceFile='{}' -> '{}', rowCount={}",
+          tableName, record.conversionType, conversionType, record.sourceFile, tableLocation, rowCount);
+      record.conversionType = conversionType;
+      record.sourceFile = tableLocation;
+      record.tableType = "ICEBERG_PARQUET".equals(conversionType) ? "IcebergTable" : "ParquetTable";
+      record.rowCount = rowCount;
+      // Clear parquet-related fields when switching to Iceberg to avoid DuckDB using stale parquet paths
+      if ("ICEBERG_PARQUET".equals(conversionType)) {
+        record.viewScanPattern = null;
+        record.convertedFile = null;
+        record.parquetCacheFile = null;
+      }
+      saveMetadata();
+    } else {
+      // Create a new record for newly materialized tables (e.g., first ETL run)
+      // This ensures DuckDB can use iceberg_scan for Iceberg tables
+      LOGGER.info("Creating new materialization record for table '{}': tableLocation='{}', conversionType='{}', rowCount={}",
+          tableName, tableLocation, conversionType, rowCount);
+      ConversionRecord newRecord = new ConversionRecord();
+      newRecord.tableName = tableName;
+      newRecord.sourceFile = tableLocation;
+      newRecord.conversionType = conversionType;
+      newRecord.tableType = "ICEBERG_PARQUET".equals(conversionType) ? "IcebergTable" : "ParquetTable";
+      newRecord.rowCount = rowCount;
+      newRecord.timestamp = System.currentTimeMillis();
+      conversions.put(tableName, newRecord);
+      saveMetadata();
+    }
   }
 
   /**
