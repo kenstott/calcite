@@ -844,7 +844,44 @@ public class IcebergTableWriter {
       }
     }
 
-    LOGGER.info("Compaction complete: {} partitions compacted", compactedPartitions);
+    if (compactedPartitions > 0) {
+      LOGGER.info("Compaction complete: {} partitions compacted, cleaning up old files",
+          compactedPartitions);
+      // Expire all snapshots except the current one to make old files orphans
+      // This is safe because compaction creates a new snapshot with all data
+      try {
+        long currentSnapshotId = table.currentSnapshot().snapshotId();
+        int expiredCount = 0;
+        for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
+          if (snapshot.snapshotId() != currentSnapshotId) {
+            expiredCount++;
+          }
+        }
+        if (expiredCount > 0) {
+          // Expire all snapshots older than now (keeps only current)
+          table.expireSnapshots()
+              .expireOlderThan(System.currentTimeMillis())
+              .retainLast(1)
+              .commit();
+          LOGGER.info("Expired {} old snapshots after compaction", expiredCount);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to expire snapshots after compaction: {}", e.getMessage());
+      }
+
+      // Remove orphan files (the old pre-compaction files)
+      try {
+        // Use 0ms threshold to delete all orphans immediately after compaction
+        int orphansRemoved = removeOrphanFiles(System.currentTimeMillis());
+        if (orphansRemoved > 0) {
+          LOGGER.info("Removed {} orphan files after compaction", orphansRemoved);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to remove orphan files after compaction: {}", e.getMessage());
+      }
+    } else {
+      LOGGER.info("Compaction complete: no partitions needed compaction");
+    }
     return compactedPartitions;
   }
 
