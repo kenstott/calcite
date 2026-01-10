@@ -185,6 +185,31 @@ public interface StorageProvider {
   }
 
   /**
+   * Gets a staging directory for temporary files with automatic cleanup guarantee.
+   *
+   * <p>This method returns a directory path suitable for temporary/staging files
+   * that will be automatically cleaned up:
+   * <ul>
+   *   <li>Local storage: Uses system temp directory (OS handles cleanup)</li>
+   *   <li>S3 storage: Uses a .staging/ prefix with lifecycle rule for auto-expiration</li>
+   * </ul>
+   *
+   * <p>Callers should still attempt to clean up staging files when done, but
+   * this provides a safety net for failed cleanups.
+   *
+   * @param purpose Subdirectory name to isolate different staging uses (e.g., "iceberg", "etl")
+   * @return Path to staging directory that will be auto-cleaned
+   * @throws IOException If an I/O error occurs
+   */
+  default String getStagingDirectory(String purpose) throws IOException {
+    // Default implementation uses system temp directory
+    String tempDir = System.getProperty("java.io.tmpdir");
+    String stagingPath = tempDir + "/.staging/" + purpose;
+    createDirectories(stagingPath);
+    return stagingPath;
+  }
+
+  /**
    * Copies a file from source to destination.
    *
    * @param source The source file path
@@ -637,6 +662,35 @@ public interface StorageProvider {
    */
   default java.util.Map<String, String> getS3Config() {
     return null;
+  }
+
+  /**
+   * Normalizes a path to ensure proper S3/S3A URI format.
+   *
+   * <p>Hadoop's Path.toString() can return malformed URIs like "s3a:/bucket"
+   * (single slash) instead of "s3a://bucket" (double slashes). This method
+   * fixes such malformed paths.
+   *
+   * @param path Path to normalize
+   * @return Normalized path with proper URI format
+   */
+  static String normalizePath(String path) {
+    if (path == null) {
+      return null;
+    }
+    // Fix s3a:/ (single slash) to s3a:// (double slashes)
+    if (path.startsWith("s3a:/") && !path.startsWith("s3a://")) {
+      return "s3a://" + path.substring(5);
+    }
+    // Fix s3:/ (single slash) to s3:// (double slashes)
+    if (path.startsWith("s3:/") && !path.startsWith("s3://")) {
+      return "s3://" + path.substring(4);
+    }
+    // Fix hdfs:/ (single slash) to hdfs:// (double slashes)
+    if (path.startsWith("hdfs:/") && !path.startsWith("hdfs://")) {
+      return "hdfs://" + path.substring(6);
+    }
+    return path;
   }
 
   /**
