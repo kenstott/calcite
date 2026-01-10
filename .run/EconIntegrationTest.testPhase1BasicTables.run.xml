@@ -13,7 +13,7 @@
         <list>
           <option value=":govdata:test" />
           <option value="-tests" />
-          <option value="&quot;org.apache.calcite.adapter.govdata.econ.EconIntegrationTest.*&quot;" />
+          <option value="&quot;org.apache.calcite.adapter.govdata.econ.EconIntegrationTest.testPhase4AdvancedTables&quot;" />
         </list>
       </option>
       <option name="vmOptions" value="-Xmx8g" />

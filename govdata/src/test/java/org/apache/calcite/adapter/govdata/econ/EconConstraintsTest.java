@@ -36,11 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class EconConstraintsTest {
 
   @Test public void testPrimaryKeyConstraints() {
-    // Create factory and get constraints
-    EconSchemaFactory factory = new EconSchemaFactory();
-    assertTrue(factory.supportsConstraints(), "Factory should support constraints");
-
-    // Test that defineEconTableConstraints returns proper primary keys
+    // Verify expected primary key structure for ECON tables
+    // Constraints are defined in the YAML schema file
     // We'll verify the expected structure for each table
     Map<String, List<String>> expectedPrimaryKeys = new HashMap<>();
 

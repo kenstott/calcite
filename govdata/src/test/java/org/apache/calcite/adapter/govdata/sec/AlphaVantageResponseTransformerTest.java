@@ -46,8 +46,7 @@ class AlphaVantageResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testDailyTimeSeriesResponse() {
+  @Test void testDailyTimeSeriesResponse() {
     String response = "{"
         + "\"Meta Data\": {"
         + "  \"1. Information\": \"Daily Prices (open, high, low, close) and Volumes\","
@@ -87,8 +86,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(result.contains("2024-12-13"));
   }
 
-  @Test
-  void testFieldNameNormalization() {
+  @Test void testFieldNameNormalization() {
     String response = "{"
         + "\"Time Series (Daily)\": {"
         + "  \"2024-12-16\": {"
@@ -107,8 +105,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(!result.contains("2. high"));
   }
 
-  @Test
-  void testErrorMessageResponse() {
+  @Test void testErrorMessageResponse() {
     String response = "{"
         + "\"Error Message\": \"Invalid API call. Please retry or visit the documentation.\""
         + "}";
@@ -118,8 +115,7 @@ class AlphaVantageResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testRateLimitNote() {
+  @Test void testRateLimitNote() {
     String response = "{"
         + "\"Note\": \"Thank you for using Alpha Vantage! Our standard API call frequency "
         + "is 5 calls per minute and 500 calls per day.\""
@@ -131,8 +127,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testDemoKeyInformation() {
+  @Test void testDemoKeyInformation() {
     String response = "{"
         + "\"Information\": \"The **demo** API key is for demo purposes only. "
         + "Please claim your free API key at https://www.alphavantage.co/support/#api-key\""
@@ -144,8 +139,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(ex.getMessage().contains("demo key"));
   }
 
-  @Test
-  void testDailyLimitExceeded() {
+  @Test void testDailyLimitExceeded() {
     String response = "{"
         + "\"Note\": \"You have exceeded the 25 requests per day limit for free API keys.\""
         + "}";
@@ -156,8 +150,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testGlobalQuoteResponse() {
+  @Test void testGlobalQuoteResponse() {
     String response = "{"
         + "\"Global Quote\": {"
         + "  \"01. symbol\": \"AAPL\","
@@ -176,8 +169,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(result.contains("250.00"));
   }
 
-  @Test
-  void testSearchResultsResponse() {
+  @Test void testSearchResultsResponse() {
     String response = "{"
         + "\"bestMatches\": ["
         + "  {\"1. symbol\": \"AAPL\", \"2. name\": \"Apple Inc.\", \"3. type\": \"Equity\"},"
@@ -192,8 +184,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(result.contains("Apple Inc."));
   }
 
-  @Test
-  void testWeeklyTimeSeriesResponse() {
+  @Test void testWeeklyTimeSeriesResponse() {
     String response = "{"
         + "\"Meta Data\": {\"2. Symbol\": \"AAPL\"},"
         + "\"Time Series (Weekly)\": {"
@@ -209,8 +200,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(result.contains("248.00"));
   }
 
-  @Test
-  void testInvalidSymbolReturnsEmpty() {
+  @Test void testInvalidSymbolReturnsEmpty() {
     String response = "{"
         + "\"Error Message\": \"Invalid symbol XXYZZ123.\""
         + "}";
@@ -220,22 +210,19 @@ class AlphaVantageResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNoRecognizedDataStructure() {
+  @Test void testNoRecognizedDataStructure() {
     String response = "{"
         + "\"Meta Data\": {\"Symbol\": \"AAPL\"},"
         + "\"unknownField\": {}"
@@ -246,8 +233,7 @@ class AlphaVantageResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testContextDimensionsForDebugging() {
+  @Test void testContextDimensionsForDebugging() {
     Map<String, String> dimensions = new HashMap<String, String>();
     dimensions.put("symbol", "AAPL");
     dimensions.put("function", "TIME_SERIES_DAILY");
@@ -267,8 +253,7 @@ class AlphaVantageResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testIntradayTimeSeriesResponse() {
+  @Test void testIntradayTimeSeriesResponse() {
     String response = "{"
         + "\"Meta Data\": {\"2. Symbol\": \"AAPL\"},"
         + "\"Time Series (5min)\": {"

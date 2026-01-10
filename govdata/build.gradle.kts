@@ -71,12 +71,27 @@ dependencies {
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
+tasks.register<Delete>("cleanTestLogs") {
+    delete(layout.buildDirectory.dir("test-logs"))
+}
+
 tasks.test {
+    dependsOn("cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
+    // Run tests serially to avoid DuckDB file lock conflicts
+    maxParallelForks = 1
+
+    // Disable JUnit5 parallel execution (overrides root build.gradle.kts setting)
+    // DuckDB requires exclusive file locks, so tests must run sequentially
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
+    systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
+
     // Increase heap size for tests that process large CSV files
-    minHeapSize = "2g"
-    maxHeapSize = "8g"
+    // BLS QCEW bulk downloads can have 250k+ rows per year, each with 20+ columns
+    // Note: Keep maxHeapSize below system RAM to avoid OOM kills (exit code 137)
+    minHeapSize = "1g"
+    maxHeapSize = "4g"
 
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")

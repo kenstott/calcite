@@ -65,8 +65,7 @@ class StooqDownloaderIntegrationTest {
     }
   }
 
-  @Test
-  void testDownloadAppleStockPrices() throws Exception {
+  @Test void testDownloadAppleStockPrices() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -89,8 +88,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("File size: " + metadata.getSize() + " bytes");
   }
 
-  @Test
-  void testDownloadMicrosoftStockPrices() throws Exception {
+  @Test void testDownloadMicrosoftStockPrices() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("MSFT", "0000789019"));
@@ -107,8 +105,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("Successfully downloaded MSFT stock prices for " + year);
   }
 
-  @Test
-  void testDownloadMultipleYears() throws Exception {
+  @Test void testDownloadMultipleYears() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -129,8 +126,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("Successfully downloaded AAPL stock prices for " + startYear + "-" + endYear);
   }
 
-  @Test
-  void testDownloadMultipleTickers() throws Exception {
+  @Test void testDownloadMultipleTickers() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -151,8 +147,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("Successfully downloaded stock prices for 2 tickers");
   }
 
-  @Test
-  void testRateLimitingTiming() throws Exception {
+  @Test void testRateLimitingTiming() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -174,8 +169,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("3 downloads completed in " + elapsed + "ms (rate limited)");
   }
 
-  @Test
-  void testFetchWithRateLimitingSuccess() throws Exception {
+  @Test void testFetchWithRateLimitingSuccess() throws Exception {
     // Test direct fetch method
     List<StooqDownloader.StockPriceRecord> records =
         downloader.fetchWithRateLimiting("AAPL", 2023);
@@ -192,8 +186,7 @@ class StooqDownloaderIntegrationTest {
     assertTrue(firstRecord.date.startsWith("2023"));
   }
 
-  @Test
-  void testInvalidTickerReturnsEmptyList() throws Exception {
+  @Test void testInvalidTickerReturnsEmptyList() throws Exception {
     // Invalid tickers should return empty list, not throw
     List<StooqDownloader.StockPriceRecord> records =
         downloader.fetchWithRateLimiting("XXYZZ123456", 2023);
@@ -204,8 +197,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("Invalid ticker returned " + records.size() + " records");
   }
 
-  @Test
-  void testCachingHistoricalData() throws Exception {
+  @Test void testCachingHistoricalData() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -250,8 +242,7 @@ class StooqDownloaderIntegrationTest {
     }
   }
 
-  @Test
-  void testFailedTickersTracking() throws Exception {
+  @Test void testFailedTickersTracking() throws Exception {
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
     pairs.add(new AlphaVantageDownloader.TickerCikPair("AAPL", "0000320193"));
@@ -271,8 +262,7 @@ class StooqDownloaderIntegrationTest {
     System.out.println("Failed tickers: " + downloader.getFailedTickers());
   }
 
-  @Test
-  void testHistoricalDataDownload() throws Exception {
+  @Test void testHistoricalDataDownload() throws Exception {
     // Test downloading very old data (split-adjusted)
     List<AlphaVantageDownloader.TickerCikPair> pairs =
         new ArrayList<AlphaVantageDownloader.TickerCikPair>();
