@@ -321,6 +321,21 @@ public class EconIntegrationTest {
         "      \"endYear\": " + endYear + "," +
         "      \"autoDownload\": false" +
         "    }" +
+        "  },{" +
+        "    \"name\": \"ECON_REFERENCE\"," +
+        "    \"type\": \"custom\"," +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "    \"operand\": {" +
+        "      \"dataSource\": \"econ_reference\"," +
+        "      \"refreshInterval\": \"PT1H\"," +
+        "      \"executionEngine\": \"" + executionEngine + "\"," +
+        "      \"database_filename\": \"shared.duckdb\"," +
+        "      \"ephemeralCache\": false," +
+        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
+        "      \"directory\": \"" + parquetDir + "\"," +
+        "      " + s3ConfigJson +
+        "      \"autoDownload\": false" +
+        "    }" +
         "  }]" +
         "}";
 
@@ -1619,6 +1634,41 @@ public class EconIntegrationTest {
       LOGGER.info("\n--------------------------------------------------------------------------------");
       LOGGER.info(String.format("ECON: %d tables, %d ok, %d errors, %,d total rows",
           econTables.length, successCount, errorCount, totalRows));
+
+      // ECON_REFERENCE tables
+      LOGGER.info("\n=== ECON_REFERENCE Tables ===\n");
+      LOGGER.info(String.format("%-25s %15s %10s", "TABLE", "ROWS", "TIME(ms)"));
+      LOGGER.info(String.format("%-25s %15s %10s", "-------------------------", "---------------", "----------"));
+
+      String[] refTables = {"bls_geographies", "fred_series", "jolts_dataelements",
+          "jolts_industries", "naics_sectors", "nipa_tables", "regional_linecodes"};
+
+      long refTotalRows = 0;
+      int refSuccessCount = 0;
+      int refErrorCount = 0;
+
+      for (String table : refTables) {
+        try {
+          long start = System.currentTimeMillis();
+          ResultSet rs = stmt.executeQuery(
+              "SELECT COUNT(*) FROM \"ECON_REFERENCE\".\"" + table + "\"");
+          rs.next();
+          long count = rs.getLong(1);
+          long elapsed = System.currentTimeMillis() - start;
+          LOGGER.info(String.format("%-25s %,15d %10d", table, count, elapsed));
+          refTotalRows += count;
+          refSuccessCount++;
+        } catch (Exception e) {
+          String msg = e.getMessage();
+          LOGGER.info(String.format("%-25s %15s %s", table, "ERROR",
+              msg.substring(0, Math.min(60, msg.length()))));
+          refErrorCount++;
+        }
+      }
+
+      LOGGER.info("\n--------------------------------------------------------------------------------");
+      LOGGER.info(String.format("ECON_REFERENCE: %d tables, %d ok, %d errors, %,d total rows",
+          refTables.length, refSuccessCount, refErrorCount, refTotalRows));
       LOGGER.info("================================================================================");
     }
   }
