@@ -4887,6 +4887,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
   }
 
   /**
+   * Get the storage provider.
+   * @return Storage provider, or null if not configured
+   */
+  public StorageProvider getStorageProvider() {
+    return storageProvider;
+  }
+
+  /**
    * Get the operating cache directory (.aperio/schema) for operational metadata.
    * This directory is always on the local filesystem for file locking support,
    * even when parquet data is stored remotely (e.g., S3).

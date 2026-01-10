@@ -250,6 +250,88 @@ public class EconIntegrationTest {
     return DriverManager.getConnection("jdbc:calcite:", props);
   }
 
+  /**
+   * Creates a connection with autoDownload: false.
+   * Use this to query existing cached data without making API calls.
+   */
+  private Connection createConnectionNoDownload() throws SQLException {
+    String cacheDir = TestEnvironmentLoader.getEnv("GOVDATA_CACHE_DIR");
+    String parquetDir = TestEnvironmentLoader.getEnv("GOVDATA_PARQUET_DIR");
+    String executionEngine = TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE");
+
+    String startYear = TestEnvironmentLoader.getEnv("GOVDATA_START_YEAR");
+    if (startYear == null || startYear.isEmpty()) {
+      startYear = "2020";
+    }
+
+    String endYear = TestEnvironmentLoader.getEnv("GOVDATA_END_YEAR");
+    if (endYear == null || endYear.isEmpty()) {
+      endYear = "2024";
+    }
+
+    // S3 configuration for MinIO or AWS S3
+    String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");
+    String awsSecretAccessKey = TestEnvironmentLoader.getEnv("AWS_SECRET_ACCESS_KEY");
+    String awsEndpointOverride = TestEnvironmentLoader.getEnv("AWS_ENDPOINT_OVERRIDE");
+    String awsRegion = TestEnvironmentLoader.getEnv("AWS_REGION");
+
+    // Build s3Config JSON if directory uses S3
+    String s3ConfigJson = "";
+    if (parquetDir != null && parquetDir.startsWith("s3://")) {
+      StringBuilder s3Config = new StringBuilder();
+      s3Config.append("\"s3Config\": {");
+      if (awsEndpointOverride != null) {
+        s3Config.append("\"endpoint\": \"").append(awsEndpointOverride).append("\",");
+      }
+      if (awsAccessKeyId != null) {
+        s3Config.append("\"accessKeyId\": \"").append(awsAccessKeyId).append("\",");
+      }
+      if (awsSecretAccessKey != null) {
+        s3Config.append("\"secretAccessKey\": \"").append(awsSecretAccessKey).append("\",");
+      }
+      if (awsRegion != null) {
+        s3Config.append("\"region\": \"").append(awsRegion).append("\",");
+      }
+      // Remove trailing comma
+      if (s3Config.charAt(s3Config.length() - 1) == ',') {
+        s3Config.setLength(s3Config.length() - 1);
+      }
+      s3Config.append("},");
+      s3ConfigJson = s3Config.toString();
+    }
+
+    String modelJson =
+        "{" +
+        "  \"version\": \"1.0\"," +
+        "  \"defaultSchema\": \"ECON\"," +
+        "  \"schemas\": [{" +
+        "    \"name\": \"ECON\"," +
+        "    \"type\": \"custom\"," +
+        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\"," +
+        "    \"operand\": {" +
+        "      \"dataSource\": \"econ\"," +
+        "      \"refreshInterval\": \"PT1H\"," +
+        "      \"executionEngine\": \"" + executionEngine + "\"," +
+        "      \"database_filename\": \"shared.duckdb\"," +
+        "      \"ephemeralCache\": false," +
+        "      \"cacheDirectory\": \"" + cacheDir + "\"," +
+        "      \"directory\": \"" + parquetDir + "\"," +
+        "      " + s3ConfigJson +
+        "      \"startYear\": " + startYear + "," +
+        "      \"endYear\": " + endYear + "," +
+        "      \"autoDownload\": false" +
+        "    }" +
+        "  }]" +
+        "}";
+
+    Properties props = new Properties();
+    props.setProperty("lex", "ORACLE");
+    props.setProperty("unquotedCasing", "TO_LOWER");
+    props.setProperty("model", "inline:" + modelJson);
+
+    return DriverManager.getConnection("jdbc:calcite:", props);
+  }
+
   @Test public void testPhase1BasicTables() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" PHASE 1: Metadata Cache Bug Fix Validation");
@@ -1485,6 +1567,58 @@ public class EconIntegrationTest {
 
       LOGGER.info("\n================================================================================");
       LOGGER.info(" ✅ TREND TABLE SUBSTITUTION TEST COMPLETE!");
+      LOGGER.info("================================================================================");
+    }
+  }
+
+  @Test public void testAllTableStatus() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" ALL TABLE STATUS - Row counts (autoDownload=false, no API calls)");
+    LOGGER.info("================================================================================\n");
+
+    // Use autoDownload: false to just read existing data without API calls
+    try (Connection conn = createConnectionNoDownload();
+         Statement stmt = conn.createStatement()) {
+
+      LOGGER.info("=== ECON Tables ===\n");
+      LOGGER.info(String.format("%-25s %15s %10s", "TABLE", "ROWS", "TIME(ms)"));
+      LOGGER.info(String.format("%-25s %15s %10s", "-------------------------", "---------------", "----------"));
+
+      String[] econTables = {"county_qcew", "county_wages", "employment_statistics",
+          "federal_debt", "fred_indicators", "gdp_statistics", "industry_gdp",
+          "inflation_metrics", "ita_data", "jolts_regional", "jolts_state",
+          "metro_cpi", "metro_industry", "metro_wages", "national_accounts",
+          "regional_cpi", "regional_employment", "regional_income",
+          "state_consumption", "state_gdp", "state_industry", "state_personal_income",
+          "state_quarterly_gdp", "state_quarterly_income", "state_wages",
+          "treasury_yields", "wage_growth", "world_indicators"};
+
+      long totalRows = 0;
+      int successCount = 0;
+      int errorCount = 0;
+
+      for (String table : econTables) {
+        try {
+          long start = System.currentTimeMillis();
+          ResultSet rs = stmt.executeQuery(
+              "SELECT COUNT(*) FROM \"ECON\".\"" + table + "\"");
+          rs.next();
+          long count = rs.getLong(1);
+          long elapsed = System.currentTimeMillis() - start;
+          LOGGER.info(String.format("%-25s %,15d %10d", table, count, elapsed));
+          totalRows += count;
+          successCount++;
+        } catch (Exception e) {
+          String msg = e.getMessage();
+          LOGGER.info(String.format("%-25s %15s %s", table, "ERROR",
+              msg.substring(0, Math.min(60, msg.length()))));
+          errorCount++;
+        }
+      }
+
+      LOGGER.info("\n--------------------------------------------------------------------------------");
+      LOGGER.info(String.format("ECON: %d tables, %d ok, %d errors, %,d total rows",
+          econTables.length, successCount, errorCount, totalRows));
       LOGGER.info("================================================================================");
     }
   }

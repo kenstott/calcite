@@ -225,12 +225,18 @@ public class EtlPipeline {
           MaterializeConfig materializeConfig = config.getMaterialize();
           if (materializeConfig != null && materializeConfig.isEnabled()) {
             String tableLocation = baseDirectory + "/" + pipelineName;
+            // Read row count from Iceberg metadata for COUNT(*) optimization
+            long rowCount = 0;
+            if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
+              rowCount = readRowCountFromIceberg(tableLocation);
+            }
             return EtlResult.builder()
                 .pipelineName(pipelineName)
                 .skippedEntirePipeline(true)
                 .elapsedMs(elapsed)
                 .tableLocation(tableLocation)
                 .materializeFormat(materializeConfig.getFormat())
+                .totalRows(rowCount)
                 .build();
           }
           return EtlResult.skipped(pipelineName, elapsed);
@@ -985,6 +991,94 @@ public class EtlPipeline {
       LOGGER.warn("Could not verify data existence for '{}': {} - assuming exists",
           pipelineName, e.getMessage());
       return true;
+    }
+  }
+
+  /**
+   * Read row count from Iceberg metadata for COUNT(*) optimization.
+   * This is called for skipped tables that are already materialized.
+   *
+   * @param tableLocation The Iceberg table location
+   * @return Row count from metadata, or 0 if unable to read
+   */
+  private long readRowCountFromIceberg(String tableLocation) {
+    try {
+      org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+
+      // Configure S3 filesystem if using S3 storage
+      if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
+        org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
+            (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
+        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
+        if (s3Config != null) {
+          // S3A FileSystem implementation - required for Hadoop to find the FS
+          hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+          hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+          String endpoint = s3Config.get("endpoint");
+          String accessKey = s3Config.get("accessKeyId");
+          String secretKey = s3Config.get("secretAccessKey");
+          String region = s3Config.get("region");
+
+          if (endpoint != null) {
+            hadoopConf.set("fs.s3a.endpoint", endpoint);
+            hadoopConf.set("fs.s3a.path.style.access", "true");
+          }
+          if (accessKey != null) {
+            hadoopConf.set("fs.s3a.access.key", accessKey);
+          }
+          if (secretKey != null) {
+            hadoopConf.set("fs.s3a.secret.key", secretKey);
+          }
+          if (region != null) {
+            hadoopConf.set("fs.s3a.endpoint.region", region);
+          }
+        }
+      }
+
+      // Extract warehouse path from table location
+      String warehousePath = tableLocation;
+      int lastSlash = warehousePath.lastIndexOf('/');
+      if (lastSlash > 0) {
+        warehousePath = warehousePath.substring(0, lastSlash);
+      }
+
+      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
+      try {
+        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+
+        String tableName = tableLocation.substring(lastSlash + 1);
+        org.apache.iceberg.catalog.TableIdentifier tableId =
+            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+
+        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+        org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
+
+        if (snapshot == null) {
+          LOGGER.debug("Iceberg table '{}' has no snapshot, returning 0 row count", tableLocation);
+          return 0;
+        }
+
+        long totalRecords = 0;
+        for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+          Long addedRows = manifest.addedRowsCount();
+          if (addedRows != null) {
+            totalRecords += addedRows;
+          }
+        }
+
+        LOGGER.info("Read row count {} from Iceberg metadata for skipped table: {}",
+            totalRecords, tableLocation);
+        return totalRecords;
+
+      } finally {
+        if (catalog != null) {
+          catalog.close();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read row count from Iceberg for '{}': {}", tableLocation, e.getMessage());
+      return 0;
     }
   }
 
