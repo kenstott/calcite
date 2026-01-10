@@ -761,6 +761,178 @@ GROUP BY product_id
 HAVING COUNT(DISTINCT snapshot_time) > 1;
 ```
 
+## ETL Pipeline Configuration
+
+The File Adapter includes a powerful ETL pipeline for extracting data from HTTP APIs, transforming it, and materializing to Iceberg or Parquet format. This enables incremental data ingestion with automatic retry and error handling.
+
+### Materialization Configuration
+
+Configure how data is materialized to storage:
+
+```yaml
+materialize:
+  enabled: true
+  format: iceberg              # iceberg (default) or parquet
+  trigger: auto                # auto, manual, or onFirstQuery
+  output:
+    pattern: "type=${type}/year=${year}/"
+    compression: snappy
+  partition:
+    columns: [type, year]
+    batchBy: [year]           # Process one year at a time to prevent OOM
+  options:
+    threads: 4                # DuckDB threads for parallel processing
+    rowGroupSize: 100000      # Rows per Parquet row group
+    batchSize: 50000          # Rows per processing batch
+    stagingMode: local        # local (faster) or remote (safer)
+    preserveInsertionOrder: false
+    emptyResultTtlDays: 7     # Retry empty results after N days
+  iceberg:
+    catalogType: hadoop       # hadoop, rest, or hive
+    runMaintenance: true      # Expire snapshots, remove orphans
+    snapshotRetentionDays: 7
+    runCompaction: true       # Merge small files
+    compactionMinFiles: 10
+    compactionTargetFileSizeBytes: 134217728  # 128MB
+```
+
+### Materialization Options
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `threads` | Integer | 2 | DuckDB threads for parallel I/O |
+| `rowGroupSize` | Integer | 100000 | Rows per Parquet row group |
+| `batchSize` | Integer | 10000 | Rows per processing batch |
+| `stagingMode` | String | `remote` | `local` (faster, needs temp disk) or `remote` (safer) |
+| `preserveInsertionOrder` | Boolean | false | Maintain row order (slower if true) |
+| `emptyResultTtlDays` | Integer | 7 | Retry queries returning 0 rows after N days |
+
+### Iceberg-Specific Options
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `catalogType` | String | `hadoop` | Catalog type: `hadoop`, `rest`, or `hive` |
+| `warehousePath` | String | - | Iceberg warehouse root path |
+| `namespace` | String | `default` | Iceberg namespace |
+| `runMaintenance` | Boolean | false | Run snapshot expiration and orphan cleanup |
+| `snapshotRetentionDays` | Integer | 7 | Days to retain old snapshots |
+| `runCompaction` | Boolean | false | Merge small files after writes |
+| `compactionMinFiles` | Integer | 10 | Minimum files to trigger compaction |
+| `compactionTargetFileSizeBytes` | Long | 128MB | Target file size after compaction |
+| `compactionSmallFileSizeBytes` | Long | 10MB | Files smaller than this are candidates |
+| `incrementalKeys` | List | [] | Columns for incremental tracking (e.g., `[year]`) |
+| `maxRetries` | Integer | 3 | Max retry attempts on failure |
+| `retryDelayMs` | Long | 1000 | Delay between retries |
+
+### Error and Retry Handling
+
+The ETL pipeline automatically tracks processed batches and handles failures with TTL-based retry:
+
+```yaml
+options:
+  emptyResultTtlDays: 7    # Retry queries that returned 0 rows after 7 days
+```
+
+**Behavior:**
+- **Successful batches** (rows > 0): Permanently cached, never requeried
+- **Empty results** (rows = 0): Requeried after `emptyResultTtlDays`
+- **Failed requests** (errors): Requeried after error TTL (typically 1 day)
+
+This handles scenarios where:
+- API data isn't available yet but will be later (e.g., current year data)
+- Transient API failures that should be retried
+- Rate limiting or quota exceeded errors
+
+### Dimension Configuration
+
+Dimensions define the parameter space for API queries. The ETL pipeline expands dimensions into all combinations and processes each incrementally:
+
+```yaml
+dimensions:
+  type: [sales]                    # Static values
+  frequency: [M, Q, A]             # Monthly, Quarterly, Annual
+  year:
+    type: yearRange
+    start: 2020
+    end: ${CURRENT_YEAR}           # Environment variable
+    lag: 1                         # Don't query current year
+  region:
+    type: reference
+    table: regions                 # Lookup from reference table
+    column: region_code
+```
+
+#### Dimension Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| Static list | Explicit values | `type: [A, B, C]` |
+| `yearRange` | Range of years | `start: 2020, end: 2025, lag: 1` |
+| `reference` | Lookup from table | `table: regions, column: code` |
+| `constants` | From YAML constants file | `file: constants.yaml, path: codes` |
+
+#### Incremental Processing
+
+With `incrementalKeys: [year]`, the pipeline:
+1. Tracks which year values have been processed
+2. Only processes new/unprocessed years on subsequent runs
+3. Supports TTL-based reprocessing for recent years
+
+```yaml
+iceberg:
+  incrementalKeys: [year]    # Track completion by year
+```
+
+### Complete ETL Example
+
+```yaml
+tables:
+  - name: sales_data
+    source:
+      type: http
+      baseUrl: "https://api.example.com/v1"
+      endpoint: "/sales"
+      queryParams:
+        year: "${year}"
+        region: "${region}"
+      authentication:
+        type: apiKey
+        header: X-API-Key
+        value: "${API_KEY}"
+      rateLimiting:
+        requestsPerSecond: 10
+        burstLimit: 20
+
+    dimensions:
+      type: [sales]
+      year:
+        type: yearRange
+        start: 2020
+        end: 2026
+        lag: 1
+      region:
+        type: reference
+        table: regions
+        column: region_code
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=${type}/year=${year}/region=${region}/"
+      partition:
+        columns: [type, year, region]
+        batchBy: [year, region]
+      options:
+        batchSize: 50000
+        emptyResultTtlDays: 7
+      iceberg:
+        catalogType: hadoop
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+```
+
 ## HTML Crawler Configuration
 
 The HTML crawler provides sophisticated control over what generates tables from web pages:
