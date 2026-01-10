@@ -25,6 +25,8 @@ import java.util.Map;
  * <ul>
  *   <li>threads - Number of DuckDB threads for parallel processing</li>
  *   <li>rowGroupSize - Number of rows per Parquet row group</li>
+ *   <li>batchSize - Number of rows per processing batch (default: 10000)</li>
+ *   <li>stagingMode - Where to stage intermediate files: local or remote (default: remote)</li>
  *   <li>preserveInsertionOrder - Whether to maintain row order (default: false for performance)</li>
  * </ul>
  *
@@ -33,6 +35,8 @@ import java.util.Map;
  * options:
  *   threads: 4
  *   rowGroupSize: 100000
+ *   batchSize: 50000
+ *   stagingMode: local
  *   preserveInsertionOrder: false
  * }</pre>
  *
@@ -40,23 +44,45 @@ import java.util.Map;
  * <ul>
  *   <li>Higher thread count speeds up I/O-bound operations but uses more memory</li>
  *   <li>Larger row groups improve compression but require more memory to buffer</li>
+ *   <li>Larger batch sizes reduce S3 overhead but use more memory per batch</li>
+ *   <li>Local staging mode is faster but requires temp disk space (~2x batch data size)</li>
  *   <li>Disabling insertion order preservation improves performance significantly</li>
  * </ul>
  */
 public class MaterializeOptionsConfig {
   private static final int DEFAULT_THREADS = 2;
   private static final int DEFAULT_ROW_GROUP_SIZE = 100000;
+  private static final int DEFAULT_BATCH_SIZE = 10000;
+  private static final StagingMode DEFAULT_STAGING_MODE = StagingMode.REMOTE;
   private static final boolean DEFAULT_PRESERVE_INSERTION_ORDER = false;
+  private static final int DEFAULT_EMPTY_RESULT_TTL_DAYS = 7;
+
+  /**
+   * Staging mode for intermediate files during transformation.
+   */
+  public enum StagingMode {
+    /** Stage files locally then upload final Parquet to remote storage. Faster but needs temp disk. */
+    LOCAL,
+    /** Stage files directly on remote storage. Safer but slower due to S3 round-trips. */
+    REMOTE
+  }
 
   private final int threads;
   private final int rowGroupSize;
+  private final int batchSize;
+  private final StagingMode stagingMode;
   private final boolean preserveInsertionOrder;
+  private final int emptyResultTtlDays;
 
   private MaterializeOptionsConfig(Builder builder) {
     this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
     this.rowGroupSize = builder.rowGroupSize > 0 ? builder.rowGroupSize : DEFAULT_ROW_GROUP_SIZE;
+    this.batchSize = builder.batchSize > 0 ? builder.batchSize : DEFAULT_BATCH_SIZE;
+    this.stagingMode = builder.stagingMode != null ? builder.stagingMode : DEFAULT_STAGING_MODE;
     this.preserveInsertionOrder = builder.preserveInsertionOrder != null
         ? builder.preserveInsertionOrder : DEFAULT_PRESERVE_INSERTION_ORDER;
+    this.emptyResultTtlDays = builder.emptyResultTtlDays > 0
+        ? builder.emptyResultTtlDays : DEFAULT_EMPTY_RESULT_TTL_DAYS;
   }
 
   /**
@@ -76,11 +102,43 @@ public class MaterializeOptionsConfig {
   }
 
   /**
+   * Returns the number of rows per processing batch.
+   * Larger batches reduce S3 overhead but use more memory.
+   */
+  public int getBatchSize() {
+    return batchSize;
+  }
+
+  /**
+   * Returns the staging mode for intermediate files.
+   * LOCAL is faster but requires temp disk space; REMOTE is safer but slower.
+   */
+  public StagingMode getStagingMode() {
+    return stagingMode;
+  }
+
+  /**
    * Returns whether to preserve insertion order.
    * Setting this to false improves performance but rows may be reordered.
    */
   public boolean isPreserveInsertionOrder() {
     return preserveInsertionOrder;
+  }
+
+  /**
+   * Returns the TTL in days for empty results.
+   * Empty results (0 rows returned from API) will be requeried after this many days.
+   * This handles cases where data may not be available initially but becomes available later.
+   */
+  public int getEmptyResultTtlDays() {
+    return emptyResultTtlDays;
+  }
+
+  /**
+   * Returns the TTL in milliseconds for empty results.
+   */
+  public long getEmptyResultTtlMillis() {
+    return emptyResultTtlDays * 24L * 60L * 60L * 1000L;
   }
 
   /**
@@ -100,7 +158,8 @@ public class MaterializeOptionsConfig {
   /**
    * Creates a MaterializeOptionsConfig from a YAML/JSON map.
    *
-   * @param map Configuration map with keys: threads, rowGroupSize, preserveInsertionOrder
+   * @param map Configuration map with keys: threads, rowGroupSize, batchSize, stagingMode,
+   *            preserveInsertionOrder
    * @return MaterializeOptionsConfig instance
    */
   public static MaterializeOptionsConfig fromMap(Map<String, Object> map) {
@@ -120,9 +179,29 @@ public class MaterializeOptionsConfig {
       builder.rowGroupSize(((Number) rowGroupSizeObj).intValue());
     }
 
+    Object batchSizeObj = map.get("batchSize");
+    if (batchSizeObj instanceof Number) {
+      builder.batchSize(((Number) batchSizeObj).intValue());
+    }
+
+    Object stagingModeObj = map.get("stagingMode");
+    if (stagingModeObj instanceof String) {
+      String modeStr = ((String) stagingModeObj).toUpperCase();
+      try {
+        builder.stagingMode(StagingMode.valueOf(modeStr));
+      } catch (IllegalArgumentException e) {
+        // Invalid staging mode, use default
+      }
+    }
+
     Object preserveOrderObj = map.get("preserveInsertionOrder");
     if (preserveOrderObj instanceof Boolean) {
       builder.preserveInsertionOrder((Boolean) preserveOrderObj);
+    }
+
+    Object emptyResultTtlObj = map.get("emptyResultTtlDays");
+    if (emptyResultTtlObj instanceof Number) {
+      builder.emptyResultTtlDays(((Number) emptyResultTtlObj).intValue());
     }
 
     return builder.build();
@@ -134,7 +213,10 @@ public class MaterializeOptionsConfig {
   public static class Builder {
     private int threads;
     private int rowGroupSize;
+    private int batchSize;
+    private StagingMode stagingMode;
     private Boolean preserveInsertionOrder;
+    private int emptyResultTtlDays;
 
     public Builder threads(int threads) {
       this.threads = threads;
@@ -146,8 +228,23 @@ public class MaterializeOptionsConfig {
       return this;
     }
 
+    public Builder batchSize(int batchSize) {
+      this.batchSize = batchSize;
+      return this;
+    }
+
+    public Builder stagingMode(StagingMode stagingMode) {
+      this.stagingMode = stagingMode;
+      return this;
+    }
+
     public Builder preserveInsertionOrder(boolean preserveInsertionOrder) {
       this.preserveInsertionOrder = preserveInsertionOrder;
+      return this;
+    }
+
+    public Builder emptyResultTtlDays(int emptyResultTtlDays) {
+      this.emptyResultTtlDays = emptyResultTtlDays;
       return this;
     }
 

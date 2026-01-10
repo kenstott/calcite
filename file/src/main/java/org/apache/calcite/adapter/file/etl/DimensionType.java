@@ -73,7 +73,53 @@ public enum DimensionType {
    *   end: current  # resolves to current year
    * }</pre>
    */
-  YEAR_RANGE;
+  YEAR_RANGE,
+
+  /**
+   * Custom dimension resolved by a {@link DimensionResolver} implementation.
+   *
+   * <p>Use this type when dimension values need to be loaded from:
+   * <ul>
+   *   <li>External catalog APIs (e.g., FRED series catalog)</li>
+   *   <li>Dynamic runtime computation</li>
+   *   <li>Complex business rules</li>
+   * </ul>
+   *
+   * <pre>{@code
+   * series_id:
+   *   type: custom
+   *   catalog: fred_series
+   *   filters:
+   *     popularity: 100  # minimum popularity score
+   * }</pre>
+   *
+   * <p>The hooks.dimensionResolver class is responsible for resolving these values.
+   *
+   * @see DimensionResolver
+   */
+  CUSTOM,
+
+  /**
+   * JSON catalog dimension - loads values from a JSON resource file.
+   *
+   * <p>Use this type when dimension values are defined in a JSON file
+   * that can be loaded from the classpath. Supports JSONPath-like expressions
+   * to extract specific values from the JSON structure.
+   *
+   * <pre>{@code
+   * country:
+   *   type: json_catalog
+   *   source: "/worldbank/worldbank-countries.json"
+   *   path: "countryGroups.G20.countries"
+   * }</pre>
+   *
+   * <p>The path supports dot notation for nested objects and [*] for array iteration:
+   * <ul>
+   *   <li>{@code countryGroups.G20.countries} - direct path to array</li>
+   *   <li>{@code indicators[*].items[*].code} - iterate nested arrays</li>
+   * </ul>
+   */
+  JSON_CATALOG;
 
   /**
    * Parses a dimension type from a string value.
@@ -95,6 +141,12 @@ public enum DimensionType {
       case "yearrange":
       case "year_range":
         return YEAR_RANGE;
+      case "custom":
+      case "catalog":
+        return CUSTOM;
+      case "json_catalog":
+      case "jsoncatalog":
+        return JSON_CATALOG;
       default:
         return LIST;
     }

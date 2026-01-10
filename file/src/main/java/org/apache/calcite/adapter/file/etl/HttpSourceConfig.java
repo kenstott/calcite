@@ -24,10 +24,10 @@ import java.util.Map;
  * Configuration for HTTP data source.
  *
  * <p>HttpSourceConfig defines how to fetch data from HTTP/REST APIs,
- * including URL, method, parameters, headers, authentication, response
- * parsing, pagination, rate limiting, and caching.
+ * including URL, method, parameters, headers, request body, authentication,
+ * response parsing, pagination, rate limiting, and caching.
  *
- * <h3>YAML Configuration Example</h3>
+ * <h3>GET Request Example</h3>
  * <pre>{@code
  * source:
  *   type: http
@@ -36,31 +36,32 @@ import java.util.Map;
  *   parameters:
  *     apiKey: "{env:API_KEY}"
  *     year: "{year}"
- *     region: "{region}"
- *   headers:
- *     Accept: "application/json"
- *     Authorization: "Bearer {env:AUTH_TOKEN}"
- *   auth:
- *     type: apiKey
- *     location: header
- *     name: "X-Api-Key"
- *     value: "{env:API_KEY}"
  *   response:
  *     format: json
  *     dataPath: "$.results.data"
- *     pagination:
- *       type: offset
- *       limitParam: "limit"
- *       offsetParam: "offset"
- *       pageSize: 1000
- *   rateLimit:
- *     requestsPerSecond: 10
- *     retryOn: [429, 503]
- *     maxRetries: 3
- *   cache:
- *     enabled: true
- *     ttlSeconds: 86400
  * }</pre>
+ *
+ * <h3>POST Request with JSON Body</h3>
+ * <pre>{@code
+ * source:
+ *   type: http
+ *   url: "https://api.example.com/data"
+ *   method: POST
+ *   headers:
+ *     Content-Type: "application/json"
+ *   body:
+ *     seriesid: "{seriesList}"
+ *     startyear: "{year}"
+ *     endyear: "{year}"
+ *     registrationkey: "{env:API_KEY}"
+ *   bodyFormat: json  # optional, defaults to json
+ *   response:
+ *     format: json
+ *     dataPath: "Results.series"
+ * }</pre>
+ *
+ * <p>Body values support variable substitution using {@code {varName}} syntax
+ * for dimension variables and {@code {env:VAR_NAME}} for environment variables.
  *
  * @see HttpSource
  */
@@ -77,7 +78,7 @@ public class HttpSourceConfig {
    * Response format types.
    */
   public enum ResponseFormat {
-    JSON, CSV, XML
+    JSON, CSV, XML, TSV
   }
 
   /**
@@ -101,28 +102,63 @@ public class HttpSourceConfig {
     NONE, OFFSET, CURSOR, PAGE
   }
 
+  /**
+   * Request body format types.
+   */
+  public enum BodyFormat {
+    JSON, FORM_URLENCODED
+  }
+
   private final String url;
   private final HttpMethod method;
   private final Map<String, String> parameters;
   private final Map<String, String> headers;
+  private final Map<String, Object> body;
+  private final BodyFormat bodyFormat;
+  private final BatchConfig batching;
   private final AuthConfig auth;
   private final ResponseConfig response;
   private final RateLimitConfig rateLimit;
   private final CacheConfig cache;
+  private final RawCacheConfig rawCache;
+
+  // Bulk download reference (alternative to direct HTTP)
+  private final String bulkDownload;
+  private final String extractPattern;
+
+  // Row filtering for CSV parsing (to avoid loading entire file into memory)
+  private final RowFilterConfig rowFilter;
+
+  // Response partitioning for bulk API responses
+  private final ResponsePartitioningConfig responsePartitioning;
+
+  // Wide-to-narrow transformation for CSV files with years as columns
+  private final WideToNarrowConfig wideToNarrow;
 
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
+    this.bulkDownload = builder.bulkDownload;
+    this.extractPattern = builder.extractPattern;
     this.parameters = builder.parameters != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.parameters))
         : Collections.<String, String>emptyMap();
     this.headers = builder.headers != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.headers))
         : Collections.<String, String>emptyMap();
+    this.body = builder.body != null
+        ? Collections.unmodifiableMap(new LinkedHashMap<String, Object>(builder.body))
+        : Collections.<String, Object>emptyMap();
+    this.bodyFormat = builder.bodyFormat != null ? builder.bodyFormat : BodyFormat.JSON;
+    this.batching = builder.batching;
     this.auth = builder.auth != null ? builder.auth : AuthConfig.none();
     this.response = builder.response != null ? builder.response : ResponseConfig.defaults();
     this.rateLimit = builder.rateLimit != null ? builder.rateLimit : RateLimitConfig.defaults();
     this.cache = builder.cache != null ? builder.cache : CacheConfig.defaults();
+    this.rawCache = builder.rawCache != null ? builder.rawCache : RawCacheConfig.defaults();
+    this.rowFilter = builder.rowFilter;
+    this.responsePartitioning = builder.responsePartitioning;
+    this.wideToNarrow = builder.wideToNarrow;
   }
 
   public String getUrl() {
@@ -141,6 +177,60 @@ public class HttpSourceConfig {
     return headers;
   }
 
+  /**
+   * Returns the request body template.
+   *
+   * <p>The body is a map of key-value pairs that will be serialized according
+   * to the {@link #getBodyFormat()} setting. Values may contain variable
+   * placeholders like {@code {year}} or {@code {env:API_KEY}} that are
+   * substituted at request time.
+   *
+   * @return Body template map, never null (may be empty)
+   */
+  public Map<String, Object> getBody() {
+    return body;
+  }
+
+  /**
+   * Returns the format for serializing the request body.
+   *
+   * @return Body format (JSON or FORM_URLENCODED), defaults to JSON
+   */
+  public BodyFormat getBodyFormat() {
+    return bodyFormat;
+  }
+
+  /**
+   * Returns true if this source has a request body configured.
+   */
+  public boolean hasBody() {
+    return body != null && !body.isEmpty();
+  }
+
+  /**
+   * Returns the batching configuration for splitting large requests.
+   *
+   * <p>When configured, the HTTP source will:
+   * <ol>
+   *   <li>Load values from the specified JSON catalog</li>
+   *   <li>Split them into batches of the specified size</li>
+   *   <li>Make multiple requests, one per batch</li>
+   *   <li>Aggregate all results</li>
+   * </ol>
+   *
+   * @return Batching config, or null if not configured
+   */
+  public BatchConfig getBatching() {
+    return batching;
+  }
+
+  /**
+   * Returns true if batching is configured.
+   */
+  public boolean hasBatching() {
+    return batching != null && batching.isEnabled();
+  }
+
   public AuthConfig getAuth() {
     return auth;
   }
@@ -157,6 +247,100 @@ public class HttpSourceConfig {
     return cache;
   }
 
+  public RawCacheConfig getRawCache() {
+    return rawCache;
+  }
+
+  /**
+   * Returns the bulk download reference name.
+   *
+   * <p>When set, this source references a pre-downloaded bulk file
+   * instead of making HTTP requests. The bulk file is downloaded
+   * during the bulk download phase of the ETL lifecycle.
+   *
+   * @return Bulk download name, or null for direct HTTP source
+   */
+  public String getBulkDownload() {
+    return bulkDownload;
+  }
+
+  /**
+   * Returns true if this source references a bulk download.
+   */
+  public boolean isBulkDownloadSource() {
+    return bulkDownload != null && !bulkDownload.isEmpty();
+  }
+
+  /**
+   * Returns the pattern for extracting files from a bulk download.
+   *
+   * <p>For ZIP files, this is a glob pattern to match files inside the archive.
+   * For example, "*.csv" extracts all CSV files.
+   *
+   * @return Extract pattern, or null to use the entire bulk file
+   */
+  public String getExtractPattern() {
+    return extractPattern;
+  }
+
+  /**
+   * Returns the row filter configuration for CSV parsing.
+   *
+   * <p>When set, only rows matching the filter are kept during parsing.
+   * This allows processing large CSV files without loading everything into memory.
+   *
+   * @return Row filter config, or null if no filtering
+   */
+  public RowFilterConfig getRowFilter() {
+    return rowFilter;
+  }
+
+  /**
+   * Returns the response partitioning configuration.
+   *
+   * <p>When enabled, rows from the response are grouped by the specified fields
+   * and written to separate partitions. This allows a single bulk API call to
+   * produce multiple output partitions.
+   *
+   * @return Response partitioning config, or null if not configured
+   */
+  public ResponsePartitioningConfig getResponsePartitioning() {
+    return responsePartitioning;
+  }
+
+  /**
+   * Returns true if response partitioning is configured.
+   */
+  public boolean hasResponsePartitioning() {
+    return responsePartitioning != null && responsePartitioning.isEnabled();
+  }
+
+  /**
+   * Returns true if row filtering is configured.
+   */
+  public boolean hasRowFilter() {
+    return rowFilter != null && rowFilter.isEnabled();
+  }
+
+  /**
+   * Returns the wide-to-narrow transformation configuration.
+   *
+   * <p>When configured, CSV data in wide format (time periods as columns) is
+   * transformed to narrow format (time period as a row value) during parsing.
+   *
+   * @return Wide-to-narrow config, or null if not configured
+   */
+  public WideToNarrowConfig getWideToNarrow() {
+    return wideToNarrow;
+  }
+
+  /**
+   * Returns true if wide-to-narrow transformation is configured.
+   */
+  public boolean hasWideToNarrow() {
+    return wideToNarrow != null && wideToNarrow.isEnabled();
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -169,6 +353,16 @@ public class HttpSourceConfig {
 
     Builder builder = builder();
     builder.url((String) map.get("url"));
+
+    // Bulk download reference
+    Object bulkDownloadObj = map.get("bulkDownload");
+    if (bulkDownloadObj instanceof String) {
+      builder.bulkDownload((String) bulkDownloadObj);
+    }
+    Object extractPatternObj = map.get("extractPattern");
+    if (extractPatternObj instanceof String) {
+      builder.extractPattern((String) extractPatternObj);
+    }
 
     Object methodObj = map.get("method");
     if (methodObj instanceof String) {
@@ -193,6 +387,34 @@ public class HttpSourceConfig {
       builder.headers(hdrs);
     }
 
+    // Parse request body (preserves nested structure for JSON serialization)
+    Object bodyObj = map.get("body");
+    if (bodyObj instanceof Map) {
+      Map<String, Object> bodyMap = new LinkedHashMap<String, Object>();
+      for (Map.Entry<?, ?> e : ((Map<?, ?>) bodyObj).entrySet()) {
+        bodyMap.put(String.valueOf(e.getKey()), e.getValue());
+      }
+      builder.body(bodyMap);
+    }
+
+    // Parse body format (defaults to JSON)
+    Object bodyFormatObj = map.get("bodyFormat");
+    if (bodyFormatObj instanceof String) {
+      builder.bodyFormat(BodyFormat.valueOf(((String) bodyFormatObj).toUpperCase()));
+    }
+
+    // Parse batching configuration
+    Object batchingObj = map.get("batching");
+    if (batchingObj instanceof Map) {
+      builder.batching(BatchConfig.fromMap((Map<String, Object>) batchingObj));
+    }
+
+    // Parse row filter configuration
+    Object rowFilterObj = map.get("rowFilter");
+    if (rowFilterObj instanceof Map) {
+      builder.rowFilter(RowFilterConfig.fromMap((Map<String, Object>) rowFilterObj));
+    }
+
     Object authObj = map.get("auth");
     if (authObj instanceof Map) {
       builder.auth(AuthConfig.fromMap((Map<String, Object>) authObj));
@@ -213,7 +435,228 @@ public class HttpSourceConfig {
       builder.cache(CacheConfig.fromMap((Map<String, Object>) cacheObj));
     }
 
+    Object rawCacheObj = map.get("rawCache");
+    if (rawCacheObj instanceof Map) {
+      builder.rawCache(RawCacheConfig.fromMap((Map<String, Object>) rawCacheObj));
+    }
+
+    Object responsePartitioningObj = map.get("responsePartitioning");
+    if (responsePartitioningObj instanceof Map) {
+      builder.responsePartitioning(
+          ResponsePartitioningConfig.fromMap((Map<String, Object>) responsePartitioningObj));
+    }
+
+    Object wideToNarrowObj = map.get("wideToNarrow");
+    if (wideToNarrowObj instanceof Map) {
+      builder.wideToNarrow(WideToNarrowConfig.fromMap((Map<String, Object>) wideToNarrowObj));
+    }
+
     return builder.build();
+  }
+
+  /**
+   * Batching configuration for splitting large requests into smaller batches.
+   *
+   * <p>Use this when an API has limits on array sizes (e.g., BLS allows max 50 series).
+   * The HTTP source will automatically:
+   * <ol>
+   *   <li>Load all values from a JSON catalog file</li>
+   *   <li>Split into batches of the configured size</li>
+   *   <li>Make sequential API calls for each batch</li>
+   *   <li>Aggregate results from all batches</li>
+   * </ol>
+   *
+   * <h3>YAML Configuration Example</h3>
+   * <pre>{@code
+   * source:
+   *   type: http
+   *   url: "https://api.example.com/data"
+   *   method: POST
+   *   batching:
+   *     field: seriesid          # Body field to populate with batch values
+   *     source: "/catalog.json"  # JSON catalog resource path
+   *     path: "items"            # JSONPath to array of values
+   *     size: 50                 # Max items per batch
+   *     delayMs: 1000            # Delay between batch requests (rate limiting)
+   *   body:
+   *     seriesid: []             # Will be populated by batching
+   *     year: "{year}"
+   * }</pre>
+   */
+  public static class BatchConfig {
+    private final String field;
+    private final String source;
+    private final String path;
+    private final int size;
+    private final long delayMs;
+
+    private BatchConfig(String field, String source, String path, int size, long delayMs) {
+      this.field = field;
+      this.source = source;
+      this.path = path;
+      this.size = size > 0 ? size : 50;
+      this.delayMs = delayMs > 0 ? delayMs : 0;
+    }
+
+    /**
+     * Creates a BatchConfig from a map.
+     */
+    @SuppressWarnings("unchecked")
+    public static BatchConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String field = (String) map.get("field");
+      String source = (String) map.get("source");
+      String path = (String) map.get("path");
+
+      int size = 50;
+      Object sizeObj = map.get("size");
+      if (sizeObj instanceof Number) {
+        size = ((Number) sizeObj).intValue();
+      }
+
+      long delayMs = 0;
+      Object delayObj = map.get("delayMs");
+      if (delayObj instanceof Number) {
+        delayMs = ((Number) delayObj).longValue();
+      }
+
+      return new BatchConfig(field, source, path, size, delayMs);
+    }
+
+    /**
+     * Returns the body field name to populate with batch values.
+     */
+    public String getField() {
+      return field;
+    }
+
+    /**
+     * Returns the JSON catalog resource path.
+     */
+    public String getSource() {
+      return source;
+    }
+
+    /**
+     * Returns the JSONPath expression to extract values from the catalog.
+     */
+    public String getPath() {
+      return path;
+    }
+
+    /**
+     * Returns the maximum number of items per batch.
+     */
+    public int getSize() {
+      return size;
+    }
+
+    /**
+     * Returns the delay in milliseconds between batch requests.
+     */
+    public long getDelayMs() {
+      return delayMs;
+    }
+
+    /**
+     * Returns true if this batching config is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return field != null && !field.isEmpty()
+          && source != null && !source.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+      return "BatchConfig{field='" + field + "', source='" + source
+          + "', path='" + path + "', size=" + size + ", delayMs=" + delayMs + "}";
+    }
+  }
+
+  /**
+   * Row filter configuration for CSV parsing.
+   *
+   * <p>Filters rows during CSV parsing to avoid loading entire large files into memory.
+   * Only rows where the specified column matches the pattern are kept.
+   *
+   * <h3>YAML Configuration Example</h3>
+   * <pre>{@code
+   * source:
+   *   type: http
+   *   url: "https://example.com/data.zip"
+   *   extractPattern: "*.csv"
+   *   rowFilter:
+   *     column: area_fips       # Column name to filter on
+   *     pattern: "^C.*"         # Regex pattern (metro areas start with C)
+   *     maxRows: 100000         # Optional: stop after this many matching rows
+   * }</pre>
+   */
+  public static class RowFilterConfig {
+    private final String column;
+    private final String pattern;
+    private final int maxRows;
+
+    private RowFilterConfig(String column, String pattern, int maxRows) {
+      this.column = column;
+      this.pattern = pattern;
+      this.maxRows = maxRows;
+    }
+
+    /**
+     * Creates a RowFilterConfig from a map.
+     */
+    public static RowFilterConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+      String column = (String) map.get("column");
+      String pattern = (String) map.get("pattern");
+
+      int maxRows = 0;
+      Object maxRowsObj = map.get("maxRows");
+      if (maxRowsObj instanceof Number) {
+        maxRows = ((Number) maxRowsObj).intValue();
+      }
+
+      return new RowFilterConfig(column, pattern, maxRows);
+    }
+
+    /**
+     * Returns the column name to filter on.
+     */
+    public String getColumn() {
+      return column;
+    }
+
+    /**
+     * Returns the regex pattern to match column values.
+     */
+    public String getPattern() {
+      return pattern;
+    }
+
+    /**
+     * Returns the maximum number of matching rows to keep (0 = unlimited).
+     */
+    public int getMaxRows() {
+      return maxRows;
+    }
+
+    /**
+     * Returns true if this filter is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return column != null && !column.isEmpty()
+          && pattern != null && !pattern.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+      return "RowFilterConfig{column='" + column + "', pattern='" + pattern
+          + "', maxRows=" + maxRows + "}";
+    }
   }
 
   /**
@@ -311,8 +754,7 @@ public class HttpSourceConfig {
           (String) map.get("name"),
           (String) map.get("value"),
           (String) map.get("username"),
-          (String) map.get("password")
-      );
+          (String) map.get("password"));
     }
   }
 
@@ -322,16 +764,19 @@ public class HttpSourceConfig {
   public static class ResponseConfig {
     private final ResponseFormat format;
     private final String dataPath;
+    private final String errorPath;
     private final PaginationConfig pagination;
 
-    private ResponseConfig(ResponseFormat format, String dataPath, PaginationConfig pagination) {
+    private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
+        PaginationConfig pagination) {
       this.format = format;
       this.dataPath = dataPath;
+      this.errorPath = errorPath;
       this.pagination = pagination;
     }
 
     public static ResponseConfig defaults() {
-      return new ResponseConfig(ResponseFormat.JSON, null, PaginationConfig.none());
+      return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none());
     }
 
     public ResponseFormat getFormat() {
@@ -340,6 +785,16 @@ public class HttpSourceConfig {
 
     public String getDataPath() {
       return dataPath;
+    }
+
+    /**
+     * Returns the JSON path to check for API errors.
+     * If this path exists and is non-null in the response, it indicates an error.
+     *
+     * @return Error path (e.g., "BEAAPI.Results.Error"), or null if not configured
+     */
+    public String getErrorPath() {
+      return errorPath;
     }
 
     public PaginationConfig getPagination() {
@@ -358,13 +813,14 @@ public class HttpSourceConfig {
           : ResponseFormat.JSON;
 
       String dataPath = (String) map.get("dataPath");
+      String errorPath = (String) map.get("errorPath");
 
       Object paginationObj = map.get("pagination");
       PaginationConfig pagination = paginationObj instanceof Map
           ? PaginationConfig.fromMap((Map<String, Object>) paginationObj)
           : PaginationConfig.none();
 
-      return new ResponseConfig(format, dataPath, pagination);
+      return new ResponseConfig(format, dataPath, errorPath, pagination);
     }
   }
 
@@ -444,8 +900,7 @@ public class HttpSourceConfig {
           (String) map.get("offsetParam"),
           (String) map.get("cursorParam"),
           (String) map.get("pageParam"),
-          pageSize
-      );
+          pageSize);
     }
   }
 
@@ -570,6 +1025,415 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Raw response cache configuration for persistent storage.
+   *
+   * <p>Unlike the in-memory cache ({@link CacheConfig}), raw cache stores
+   * API responses in the storage provider (S3, local filesystem) for:
+   * <ul>
+   *   <li>Persistence across runs - no re-download if cache exists</li>
+   *   <li>Self-healing - re-process from raw data without API calls</li>
+   *   <li>Data lineage - preserve original API responses</li>
+   * </ul>
+   *
+   * <h3>Cache Path Structure</h3>
+   * <pre>
+   * {basePath}/.raw/{tableName}/{partitionKey}/response.json
+   * </pre>
+   */
+  public static class RawCacheConfig {
+    private final boolean enabled;
+
+    private RawCacheConfig(boolean enabled) {
+      this.enabled = enabled;
+    }
+
+    public static RawCacheConfig defaults() {
+      return new RawCacheConfig(false);
+    }
+
+    public static RawCacheConfig enabled() {
+      return new RawCacheConfig(true);
+    }
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static RawCacheConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return defaults();
+      }
+
+      boolean enabled = false;
+      Object enabledObj = map.get("enabled");
+      if (enabledObj instanceof Boolean) {
+        enabled = (Boolean) enabledObj;
+      } else if (enabledObj instanceof String) {
+        enabled = "true".equalsIgnoreCase((String) enabledObj);
+      }
+
+      return new RawCacheConfig(enabled);
+    }
+  }
+
+  /**
+   * Configuration for partitioning response data by fields extracted from the response.
+   *
+   * <p>Response partitioning allows a single bulk API call to be split into multiple
+   * output partitions based on values in the response data. This is useful when an API
+   * returns data for multiple dimensions (e.g., all countries, all years) in a single
+   * response, but you want to partition the output by those dimensions.
+   *
+   * <h3>Example: World Bank API</h3>
+   * <pre>{@code
+   * source:
+   *   url: "https://api.worldbank.org/v2/country/all/indicator/{indicator}"
+   *   parameters:
+   *     per_page: "20000"
+   *     date: "{startYear}:{endYear}"
+   *   responsePartitioning:
+   *     fields:
+   *       country_code: "countryiso3code"   # Extract country from response
+   *       year: "date"                       # Extract year from response
+   * }</pre>
+   *
+   * <p>When response partitioning is enabled:
+   * <ol>
+   *   <li>The API is called once with URL dimensions (e.g., just indicator)</li>
+   *   <li>Response rows are grouped by the extracted partition field values</li>
+   *   <li>Each group is written separately with partition variables set</li>
+   * </ol>
+   */
+  public static class ResponsePartitioningConfig {
+    private final Map<String, String> fields;
+    private final String yearField;
+    private final int yearStart;
+    private final int yearEnd;
+
+    private ResponsePartitioningConfig(Map<String, String> fields,
+        String yearField, int yearStart, int yearEnd) {
+      this.fields = fields != null
+          ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(fields))
+          : Collections.<String, String>emptyMap();
+      this.yearField = yearField;
+      this.yearStart = yearStart;
+      this.yearEnd = yearEnd;
+    }
+
+    /**
+     * Creates a ResponsePartitioningConfig from a map.
+     *
+     * <p>Expected structure:
+     * <pre>{@code
+     * responsePartitioning:
+     *   fields:
+     *     partition_column: "source_field"
+     *   yearFilter:
+     *     field: "date"
+     *     start: 2000
+     *     end: 2025
+     * }</pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static ResponsePartitioningConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+
+      Map<String, String> fields = new LinkedHashMap<String, String>();
+      Object fieldsObj = map.get("fields");
+      if (fieldsObj instanceof Map) {
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) fieldsObj).entrySet()) {
+          fields.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+        }
+      }
+
+      if (fields.isEmpty()) {
+        return null;
+      }
+
+      // Parse year filter if present
+      String yearField = null;
+      int yearStart = 0;
+      int yearEnd = Integer.MAX_VALUE;
+
+      Object yearFilterObj = map.get("yearFilter");
+      if (yearFilterObj instanceof Map) {
+        Map<?, ?> yearFilter = (Map<?, ?>) yearFilterObj;
+        yearField = (String) yearFilter.get("field");
+        Object startObj = yearFilter.get("start");
+        Object endObj = yearFilter.get("end");
+
+        if (startObj instanceof Number) {
+          yearStart = ((Number) startObj).intValue();
+        } else if (startObj instanceof String) {
+          yearStart = VariableResolver.resolveInteger((String) startObj);
+        }
+
+        if (endObj instanceof Number) {
+          yearEnd = ((Number) endObj).intValue();
+        } else if (endObj instanceof String) {
+          String endStr = (String) endObj;
+          if ("current".equalsIgnoreCase(endStr)) {
+            yearEnd = java.time.Year.now().getValue();
+          } else {
+            yearEnd = VariableResolver.resolveInteger(endStr);
+          }
+        }
+      }
+
+      return new ResponsePartitioningConfig(fields, yearField, yearStart, yearEnd);
+    }
+
+    /**
+     * Returns the mapping from partition column names to source field names.
+     *
+     * <p>Keys are the output partition column names (e.g., "country_code").
+     * Values are the source field names in the response data (e.g., "countryiso3code").
+     *
+     * @return Partition field mappings, never null
+     */
+    public Map<String, String> getFields() {
+      return fields;
+    }
+
+    /**
+     * Returns true if response partitioning is enabled.
+     */
+    public boolean isEnabled() {
+      return !fields.isEmpty();
+    }
+
+    /**
+     * Returns true if year filtering is enabled.
+     */
+    public boolean hasYearFilter() {
+      return yearField != null && !yearField.isEmpty();
+    }
+
+    /**
+     * Returns the source field name for year filtering.
+     */
+    public String getYearField() {
+      return yearField;
+    }
+
+    /**
+     * Returns the minimum year to include (inclusive).
+     */
+    public int getYearStart() {
+      return yearStart;
+    }
+
+    /**
+     * Returns the maximum year to include (inclusive).
+     */
+    public int getYearEnd() {
+      return yearEnd;
+    }
+
+    /**
+     * Checks if a year value is within the configured range.
+     *
+     * @param yearValue The year value from the response (as string)
+     * @return true if within range or no filter configured
+     */
+    public boolean isYearInRange(Object yearValue) {
+      if (!hasYearFilter() || yearValue == null) {
+        return true;
+      }
+      try {
+        int year;
+        if (yearValue instanceof Number) {
+          year = ((Number) yearValue).intValue();
+        } else {
+          year = Integer.parseInt(String.valueOf(yearValue).trim());
+        }
+        return year >= yearStart && year <= yearEnd;
+      } catch (NumberFormatException e) {
+        return false;  // Skip rows with invalid year values
+      }
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("ResponsePartitioningConfig{fields=");
+      sb.append(fields);
+      if (hasYearFilter()) {
+        sb.append(", yearFilter={field=").append(yearField)
+            .append(", range=").append(yearStart).append("-").append(yearEnd).append("}");
+      }
+      sb.append("}");
+      return sb.toString();
+    }
+  }
+
+  /**
+   * Configuration for transforming wide-format CSV to narrow format.
+   *
+   * <p>Many bulk data files (like BEA Regional data) use wide format where time periods
+   * (years, quarters) are stored as column headers. This config transforms such data
+   * into a normalized narrow format with separate rows for each time period.
+   *
+   * <h3>BEA Example</h3>
+   * <pre>
+   * Wide format (input):
+   * GeoFIPS,GeoName,TableName,LineCode,Description,Unit,1929,1930,...,2024
+   * 00000,United States,SAINC1,1,Personal income,Millions,85151.0,76394.0,...,12345.0
+   *
+   * Narrow format (output):
+   * GeoFIPS,GeoName,TableName,LineCode,Description,Unit,Year,DataValue
+   * 00000,United States,SAINC1,1,Personal income,Millions,1929,85151.0
+   * 00000,United States,SAINC1,1,Personal income,Millions,1930,76394.0
+   * ...
+   * </pre>
+   *
+   * <h3>YAML Configuration</h3>
+   * <pre>{@code
+   * wideToNarrow:
+   *   keyColumns: [GeoFIPS, GeoName, TableName, LineCode, Description, Unit]
+   *   valueColumnPattern: "^\\d{4}$"  # Match 4-digit year columns
+   *   keyColumnName: Year             # Name for unpivoted key column
+   *   valueColumnName: DataValue      # Name for unpivoted value column
+   *   skipValues: ["(NA)", "(D)", ""]  # Values to skip during unpivot
+   * }</pre>
+   */
+  public static class WideToNarrowConfig {
+    private final java.util.List<String> keyColumns;
+    private final String valueColumnPattern;
+    private final String keyColumnName;
+    private final String valueColumnName;
+    private final java.util.Set<String> skipValues;
+
+    private WideToNarrowConfig(java.util.List<String> keyColumns, String valueColumnPattern,
+        String keyColumnName, String valueColumnName, java.util.Set<String> skipValues) {
+      this.keyColumns = keyColumns != null
+          ? Collections.unmodifiableList(new java.util.ArrayList<String>(keyColumns))
+          : Collections.<String>emptyList();
+      this.valueColumnPattern = valueColumnPattern;
+      this.keyColumnName = keyColumnName != null ? keyColumnName : "Key";
+      this.valueColumnName = valueColumnName != null ? valueColumnName : "Value";
+      this.skipValues = skipValues != null
+          ? Collections.unmodifiableSet(new java.util.HashSet<String>(skipValues))
+          : Collections.<String>emptySet();
+    }
+
+    /**
+     * Creates a WideToNarrowConfig from a map.
+     */
+    @SuppressWarnings("unchecked")
+    public static WideToNarrowConfig fromMap(Map<String, Object> map) {
+      if (map == null) {
+        return null;
+      }
+
+      java.util.List<String> keyColumns = new java.util.ArrayList<String>();
+      Object keyColumnsObj = map.get("keyColumns");
+      if (keyColumnsObj instanceof java.util.List) {
+        for (Object item : (java.util.List<?>) keyColumnsObj) {
+          keyColumns.add(String.valueOf(item));
+        }
+      }
+
+      if (keyColumns.isEmpty()) {
+        return null;  // keyColumns is required
+      }
+
+      String valueColumnPattern = (String) map.get("valueColumnPattern");
+      String keyColumnName = (String) map.get("keyColumnName");
+      String valueColumnName = (String) map.get("valueColumnName");
+
+      java.util.Set<String> skipValues = new java.util.HashSet<String>();
+      Object skipValuesObj = map.get("skipValues");
+      if (skipValuesObj instanceof java.util.List) {
+        for (Object item : (java.util.List<?>) skipValuesObj) {
+          skipValues.add(String.valueOf(item));
+        }
+      }
+
+      return new WideToNarrowConfig(keyColumns, valueColumnPattern, keyColumnName,
+          valueColumnName, skipValues);
+    }
+
+    /**
+     * Returns the list of columns to keep as-is (not unpivoted).
+     */
+    public java.util.List<String> getKeyColumns() {
+      return keyColumns;
+    }
+
+    /**
+     * Returns the regex pattern to identify value columns (columns to unpivot).
+     * If null, all columns not in keyColumns are treated as value columns.
+     */
+    public String getValueColumnPattern() {
+      return valueColumnPattern;
+    }
+
+    /**
+     * Returns the name for the new key column (e.g., "Year").
+     */
+    public String getKeyColumnName() {
+      return keyColumnName;
+    }
+
+    /**
+     * Returns the name for the new value column (e.g., "DataValue").
+     */
+    public String getValueColumnName() {
+      return valueColumnName;
+    }
+
+    /**
+     * Returns true if this config is valid and enabled.
+     */
+    public boolean isEnabled() {
+      return !keyColumns.isEmpty();
+    }
+
+    /**
+     * Returns the set of values to skip during unpivot.
+     * Empty values are always skipped regardless of this setting.
+     */
+    public java.util.Set<String> getSkipValues() {
+      return skipValues;
+    }
+
+    /**
+     * Checks if a value should be skipped during unpivot.
+     *
+     * @param value The value to check
+     * @return true if the value is empty or in the skipValues set
+     */
+    public boolean shouldSkipValue(String value) {
+      return value == null || value.isEmpty() || skipValues.contains(value);
+    }
+
+    /**
+     * Checks if a column name matches the value column pattern.
+     *
+     * @param columnName The column name to check
+     * @return true if this column should be unpivoted as a value column
+     */
+    public boolean isValueColumn(String columnName) {
+      if (valueColumnPattern == null || valueColumnPattern.isEmpty()) {
+        // If no pattern, all non-key columns are value columns
+        return !keyColumns.contains(columnName);
+      }
+      return columnName.matches(valueColumnPattern);
+    }
+
+    @Override
+    public String toString() {
+      return "WideToNarrowConfig{keyColumns=" + keyColumns
+          + ", valueColumnPattern='" + valueColumnPattern + "'"
+          + ", keyColumnName='" + keyColumnName + "'"
+          + ", valueColumnName='" + valueColumnName + "'}";
+    }
+  }
+
+  /**
    * Builder for HttpSourceConfig.
    */
   public static class Builder {
@@ -577,10 +1441,19 @@ public class HttpSourceConfig {
     private HttpMethod method;
     private Map<String, String> parameters;
     private Map<String, String> headers;
+    private Map<String, Object> body;
+    private BodyFormat bodyFormat;
+    private BatchConfig batching;
     private AuthConfig auth;
     private ResponseConfig response;
     private RateLimitConfig rateLimit;
     private CacheConfig cache;
+    private RawCacheConfig rawCache;
+    private String bulkDownload;
+    private String extractPattern;
+    private RowFilterConfig rowFilter;
+    private ResponsePartitioningConfig responsePartitioning;
+    private WideToNarrowConfig wideToNarrow;
 
     public Builder url(String url) {
       this.url = url;
@@ -599,6 +1472,21 @@ public class HttpSourceConfig {
 
     public Builder headers(Map<String, String> headers) {
       this.headers = headers;
+      return this;
+    }
+
+    public Builder body(Map<String, Object> body) {
+      this.body = body;
+      return this;
+    }
+
+    public Builder bodyFormat(BodyFormat bodyFormat) {
+      this.bodyFormat = bodyFormat;
+      return this;
+    }
+
+    public Builder batching(BatchConfig batching) {
+      this.batching = batching;
       return this;
     }
 
@@ -622,9 +1510,42 @@ public class HttpSourceConfig {
       return this;
     }
 
+    public Builder rawCache(RawCacheConfig rawCache) {
+      this.rawCache = rawCache;
+      return this;
+    }
+
+    public Builder bulkDownload(String bulkDownload) {
+      this.bulkDownload = bulkDownload;
+      return this;
+    }
+
+    public Builder extractPattern(String extractPattern) {
+      this.extractPattern = extractPattern;
+      return this;
+    }
+
+    public Builder rowFilter(RowFilterConfig rowFilter) {
+      this.rowFilter = rowFilter;
+      return this;
+    }
+
+    public Builder responsePartitioning(ResponsePartitioningConfig responsePartitioning) {
+      this.responsePartitioning = responsePartitioning;
+      return this;
+    }
+
+    public Builder wideToNarrow(WideToNarrowConfig wideToNarrow) {
+      this.wideToNarrow = wideToNarrow;
+      return this;
+    }
+
     public HttpSourceConfig build() {
-      if (url == null || url.isEmpty()) {
-        throw new IllegalArgumentException("URL is required");
+      // Either url or bulkDownload must be set
+      boolean hasUrl = url != null && !url.isEmpty();
+      boolean hasBulkDownload = bulkDownload != null && !bulkDownload.isEmpty();
+      if (!hasUrl && !hasBulkDownload) {
+        throw new IllegalArgumentException("Either URL or bulkDownload is required");
       }
       return new HttpSourceConfig(this);
     }

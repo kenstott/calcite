@@ -16,10 +16,13 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import java.util.List;
+import java.util.Map;
 
 /**
- * Custom dimension value resolution.
+ * Custom dimension value resolution with context support.
  *
  * <p>DimensionResolver allows adapters to implement custom logic for resolving
  * dimension values beyond the built-in types (range, list, query, yearRange).
@@ -29,14 +32,23 @@ import java.util.List;
  *   <li>Computing dimension values based on runtime state</li>
  *   <li>Filtering dimension values based on availability</li>
  *   <li>Generating dimension values from complex business rules</li>
+ *   <li><b>Dependent dimensions</b> - values that depend on other dimension values</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h3>Context-Aware Resolution</h3>
+ * <p>The resolver receives a context map containing the current values of
+ * previously-resolved dimensions. This enables dependent dimension patterns:
+ *
  * <pre>{@code
- * public class ActiveRegionResolver implements DimensionResolver {
- *     public List<String> resolve(String dimensionName, DimensionConfig config) {
- *         // Fetch active regions from an API or database
- *         return fetchActiveRegions();
+ * public class BeaDimensionResolver implements DimensionResolver {
+ *     public List<String> resolve(String dimensionName, DimensionConfig config,
+ *             Map<String, String> context) {
+ *         if ("line_code".equals(dimensionName)) {
+ *             // Get valid line codes for the current tablename
+ *             String tablename = context.get("tablename");
+ *             return fetchValidLineCodes(tablename);
+ *         }
+ *         return Collections.emptyList();
  *     }
  * }
  * }</pre>
@@ -44,13 +56,14 @@ import java.util.List;
  * <h3>Schema Configuration</h3>
  * <pre>{@code
  * hooks:
- *   dimensionResolver: "org.apache.calcite.adapter.govdata.ActiveRegionResolver"
+ *   dimensionResolver: "org.apache.calcite.adapter.govdata.econ.BeaDimensionResolver"
  *
  * dimensions:
- *   region:
- *     type: custom  # triggers custom resolver
- *     resolverConfig:
- *       apiEndpoint: "https://api.example.com/regions"
+ *   tablename:
+ *     - SAINC1
+ *     - SAINC30
+ *   line_code:
+ *     type: custom  # resolved per tablename using context
  * }</pre>
  *
  * @see DimensionConfig
@@ -60,15 +73,22 @@ import java.util.List;
 public interface DimensionResolver {
 
   /**
-   * Resolves dimension values.
+   * Resolves dimension values with context from other dimensions.
    *
    * <p>This method is called by {@link DimensionIterator} when expanding
    * dimensions. The implementation should return a list of string values
    * that will be used to generate batch combinations.
    *
+   * <p>The context map contains the current values of dimensions that were
+   * resolved before this one. This enables dependent dimension patterns where
+   * valid values depend on previously selected values.
+   *
    * @param dimensionName Name of the dimension being resolved
    * @param config Dimension configuration from schema (may contain custom properties)
+   * @param context Map of already-resolved dimension names to their current values
+   * @param storageProvider Storage provider for accessing files (local or S3)
    * @return List of dimension values to iterate, never null (may be empty)
    */
-  List<String> resolve(String dimensionName, DimensionConfig config);
+  List<String> resolve(String dimensionName, DimensionConfig config,
+      Map<String, String> context, StorageProvider storageProvider);
 }

@@ -32,11 +32,12 @@ import java.util.Map;
  * <h3>YAML Configuration</h3>
  * <pre>
  * output:
- *   location: "s3://bucket/data/"
  *   pattern: "type=sales/year=STAR/region=STAR/"
- *   format: parquet
  *   compression: snappy
  * </pre>
+ *
+ * <p>Note: location is optional. If not specified, the materializedDirectory
+ * configured at the schema level is used directly.
  */
 public class MaterializeOutputConfig {
   private static final String DEFAULT_FORMAT = "parquet";
@@ -140,9 +141,7 @@ public class MaterializeOutputConfig {
     }
 
     public MaterializeOutputConfig build() {
-      if (location == null || location.isEmpty()) {
-        throw new IllegalArgumentException("Output location is required");
-      }
+      // Location is now optional - if not specified, baseDirectory is used directly
       return new MaterializeOutputConfig(this);
     }
   }

@@ -157,8 +157,7 @@ public class ValidationResult {
     return action == Action.VALID || action == Action.WARN;
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     if (action == Action.VALID) {
       return "ValidationResult{VALID}";
     }

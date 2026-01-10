@@ -57,7 +57,6 @@ import java.util.Map;
  *     materialize:
  *       enabled: true
  *       output:
- *         location: "{baseDirectory}"
  *         pattern: "type=sales/year=STAR/region=STAR/"
  *       partition:
  *         columns: [year, region]
@@ -71,8 +70,19 @@ import java.util.Map;
  */
 public class EtlPipelineConfig {
 
+  /** Source type identifier for HTTP/REST API sources. */
+  public static final String SOURCE_TYPE_HTTP = "http";
+
+  /** Source type identifier for file-based sources (xlsx, csv, json, parquet). */
+  public static final String SOURCE_TYPE_FILE = "file";
+
+  /** Source type identifier for YAML constants sources. */
+  public static final String SOURCE_TYPE_CONSTANTS = "constants";
+
   private final String name;
+  private final String sourceType;
   private final HttpSourceConfig source;
+  private final Map<String, Object> rawSourceConfig;
   private final Map<String, DimensionConfig> dimensions;
   private final List<ColumnConfig> columns;
   private final MaterializeConfig materialize;
@@ -81,7 +91,9 @@ public class EtlPipelineConfig {
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
+    this.sourceType = builder.sourceType != null ? builder.sourceType : SOURCE_TYPE_HTTP;
     this.source = builder.source;
+    this.rawSourceConfig = builder.rawSourceConfig;
     this.dimensions = builder.dimensions != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, DimensionConfig>(builder.dimensions))
         : Collections.<String, DimensionConfig>emptyMap();
@@ -105,10 +117,26 @@ public class EtlPipelineConfig {
   }
 
   /**
-   * Returns the data source configuration.
+   * Returns the source type identifier ("http" or "constants").
+   */
+  public String getSourceType() {
+    return sourceType;
+  }
+
+  /**
+   * Returns the HTTP data source configuration.
+   * Only valid when sourceType is "http".
    */
   public HttpSourceConfig getSource() {
     return source;
+  }
+
+  /**
+   * Returns the raw source configuration map.
+   * Used for non-HTTP source types like "constants".
+   */
+  public Map<String, Object> getRawSourceConfig() {
+    return rawSourceConfig;
   }
 
   /**
@@ -155,6 +183,9 @@ public class EtlPipelineConfig {
 
   /**
    * Creates an EtlPipelineConfig from a YAML/JSON map.
+   *
+   * <p>Handles both Map and JsonNode values in the metadata. This allows schema
+   * parsers to pass metadata directly without manual conversion.
    */
   @SuppressWarnings("unchecked")
   public static EtlPipelineConfig fromMap(Map<String, Object> map) {
@@ -165,14 +196,25 @@ public class EtlPipelineConfig {
     Builder builder = builder();
     builder.name((String) map.get("name"));
 
-    Object sourceObj = map.get("source");
-    if (sourceObj instanceof Map) {
-      builder.source(HttpSourceConfig.fromMap((Map<String, Object>) sourceObj));
+    Map<String, Object> sourceMap = toMap(map.get("source"));
+    if (sourceMap != null) {
+      // Detect source type - default to "http" if not specified
+      String sourceType = (String) sourceMap.get("type");
+      if (sourceType == null || sourceType.isEmpty()) {
+        sourceType = SOURCE_TYPE_HTTP;
+      }
+      builder.sourceType(sourceType);
+      builder.rawSourceConfig(sourceMap);
+
+      // Only parse as HttpSourceConfig for HTTP sources
+      if (SOURCE_TYPE_HTTP.equals(sourceType)) {
+        builder.source(HttpSourceConfig.fromMap(sourceMap));
+      }
     }
 
-    Object dimensionsObj = map.get("dimensions");
-    if (dimensionsObj instanceof Map) {
-      builder.dimensions(DimensionConfig.fromDimensionsMap((Map<String, Object>) dimensionsObj));
+    Map<String, Object> dimensionsMap = toMap(map.get("dimensions"));
+    if (dimensionsMap != null) {
+      builder.dimensions(DimensionConfig.fromDimensionsMap(dimensionsMap));
     }
 
     Object columnsObj = map.get("columns");
@@ -180,22 +222,53 @@ public class EtlPipelineConfig {
       builder.columns(ColumnConfig.fromList((List<?>) columnsObj));
     }
 
-    Object materializeObj = map.get("materialize");
-    if (materializeObj instanceof Map) {
-      builder.materialize(MaterializeConfig.fromMap((Map<String, Object>) materializeObj));
+    Map<String, Object> materializeMap = toMap(map.get("materialize"));
+    if (materializeMap != null) {
+      builder.materialize(MaterializeConfig.fromMap(materializeMap));
     }
 
-    Object errorHandlingObj = map.get("errorHandling");
-    if (errorHandlingObj instanceof Map) {
-      builder.errorHandling(ErrorHandlingConfig.fromMap((Map<String, Object>) errorHandlingObj));
+    Map<String, Object> errorHandlingMap = toMap(map.get("errorHandling"));
+    if (errorHandlingMap != null) {
+      builder.errorHandling(ErrorHandlingConfig.fromMap(errorHandlingMap));
     }
 
-    Object hooksObj = map.get("hooks");
-    if (hooksObj instanceof Map) {
-      builder.hooks(HooksConfig.fromMap((Map<String, Object>) hooksObj));
+    Map<String, Object> hooksMap = toMap(map.get("hooks"));
+    if (hooksMap != null) {
+      builder.hooks(HooksConfig.fromMap(hooksMap));
     }
 
     return builder.build();
+  }
+
+  /**
+   * Converts an object to a Map, handling both Map and JsonNode types.
+   *
+   * @param obj Object that may be a Map or JsonNode
+   * @return Map representation, or null if not convertible
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> toMap(Object obj) {
+    if (obj == null) {
+      return null;
+    }
+    if (obj instanceof Map) {
+      return (Map<String, Object>) obj;
+    }
+    // Handle JsonNode without direct dependency - use reflection or ObjectMapper
+    if (obj.getClass().getName().contains("JsonNode")) {
+      try {
+        // Use Jackson ObjectMapper to convert JsonNode to Map
+        Class<?> objectMapperClass = Class.forName("com.fasterxml.jackson.databind.ObjectMapper");
+        Object mapper = objectMapperClass.getDeclaredConstructor().newInstance();
+        java.lang.reflect.Method convertMethod = objectMapperClass.getMethod(
+            "convertValue", Object.class, Class.class);
+        return (Map<String, Object>) convertMethod.invoke(mapper, obj, Map.class);
+      } catch (Exception e) {
+        // If reflection fails, return null
+        return null;
+      }
+    }
+    return null;
   }
 
   /**
@@ -382,7 +455,9 @@ public class EtlPipelineConfig {
    */
   public static class Builder {
     private String name;
+    private String sourceType;
     private HttpSourceConfig source;
+    private Map<String, Object> rawSourceConfig;
     private Map<String, DimensionConfig> dimensions;
     private List<ColumnConfig> columns;
     private MaterializeConfig materialize;
@@ -394,8 +469,18 @@ public class EtlPipelineConfig {
       return this;
     }
 
+    public Builder sourceType(String sourceType) {
+      this.sourceType = sourceType;
+      return this;
+    }
+
     public Builder source(HttpSourceConfig source) {
       this.source = source;
+      return this;
+    }
+
+    public Builder rawSourceConfig(Map<String, Object> rawSourceConfig) {
+      this.rawSourceConfig = rawSourceConfig;
       return this;
     }
 
@@ -428,7 +513,8 @@ public class EtlPipelineConfig {
       if (name == null || name.isEmpty()) {
         throw new IllegalArgumentException("Pipeline name is required");
       }
-      if (source == null) {
+      // For HTTP sources, require HttpSourceConfig; for other types, require rawSourceConfig
+      if (source == null && rawSourceConfig == null) {
         throw new IllegalArgumentException("Source configuration is required");
       }
       if (materialize == null) {
