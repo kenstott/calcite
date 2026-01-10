@@ -20,19 +20,13 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.CommitFailedException;
-import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -74,6 +68,11 @@ public class IcebergMaterializer {
   private static final int DEFAULT_MAX_RETRIES = 3;
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
   private static final int DEFAULT_THREADS = 2;
+
+  /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
+  private static final String DUCKDB_MEMORY_LIMIT =
+      System.getenv("DUCKDB_MEMORY_LIMIT") != null
+          ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
   private final String warehousePath;
   private final Map<String, Object> catalogConfig;
@@ -340,8 +339,7 @@ public class IcebergMaterializer {
       return failedCount == 0;
     }
 
-    @Override
-    public String toString() {
+    @Override public String toString() {
       return String.format("MaterializationResult{table=%s, success=%d, failed=%d, skipped=%d, duration=%dms}",
           tableId, successCount, failedCount, skippedCount, durationMs);
     }
@@ -361,7 +359,7 @@ public class IcebergMaterializer {
 
     // Ensure Iceberg table exists
     Table table = ensureTableExists(config);
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Build batch combinations
     List<Map<String, String>> batches = buildBatchCombinations(config);
@@ -416,8 +414,8 @@ public class IcebergMaterializer {
     }
 
     long durationMs = System.currentTimeMillis() - startTime;
-    MaterializationResult result = new MaterializationResult(
-        config.getTargetTableId(), successCount, failedCount, skippedCount, durationMs);
+    MaterializationResult result =
+        new MaterializationResult(config.getTargetTableId(), successCount, failedCount, skippedCount, durationMs);
 
     LOGGER.info("Materialization complete: {}", result);
 
@@ -477,14 +475,14 @@ public class IcebergMaterializer {
     LOGGER.info("Processing batch: {}", batch.isEmpty() ? "(all)" : batch);
 
     // Create staging path
-    Path stagingPath = createStagingPath();
+    String stagingPath = createStagingPath();
 
     try (Connection conn = getDuckDBConnection(config.getThreads())) {
       // Build source pattern with batch filters applied
       String sourcePattern = config.getSourcePattern();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
-        sourcePattern = sourcePattern.replace(entry.getKey() + "=*",
-            entry.getKey() + "=" + entry.getValue());
+        sourcePattern =
+            sourcePattern.replace(entry.getKey() + "=*", entry.getKey() + "=" + entry.getValue());
       }
 
       // Build DuckDB SQL
@@ -499,12 +497,13 @@ public class IcebergMaterializer {
       LOGGER.info("DuckDB transformation completed in {}ms", elapsed);
 
       // Commit from staging to Iceberg
-      IcebergTableWriter writer = new IcebergTableWriter(table);
+      IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
       Map<String, Object> partitionFilter = new HashMap<String, Object>();
       for (Map.Entry<String, String> entry : batch.entrySet()) {
         // Only add to filter if it's a partition column
         if (config.getPartitionColumnNames().contains(entry.getKey())) {
-          partitionFilter.put(entry.getKey(), coerceValue(entry.getValue(),
+          partitionFilter.put(
+              entry.getKey(), coerceValue(entry.getValue(),
               findColumnType(config.getPartitionColumns(), entry.getKey())));
         }
       }
@@ -624,37 +623,57 @@ public class IcebergMaterializer {
 
   /**
    * Creates a staging path with timestamp and random suffix.
+   *
+   * <p>Staging happens under warehousePath/.staging/ to ensure it uses the same
+   * storage type (local or S3) as the warehouse. For S3, a lifecycle rule is
+   * set up to auto-expire orphaned staging files after 1 day.
    */
-  private Path createStagingPath() throws IOException {
+  private String createStagingPath() throws IOException {
     String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
-    Path stagingPath = Paths.get(warehousePath, ".staging", timestamp + "_" + random);
-    Files.createDirectories(stagingPath);
+    String stagingSubpath = ".staging/" + timestamp + "_" + random;
+    String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
+
+    // Set up lifecycle rule for auto-cleanup (S3 only, no-op for local)
+    storageProvider.ensureLifecycleRule(".staging/", 1);
+
+    storageProvider.createDirectories(stagingPath);
     LOGGER.debug("Created staging directory: {}", stagingPath);
     return stagingPath;
   }
 
   /**
-   * Cleans up the staging directory.
+   * Cleans up the staging directory using StorageProvider.
+   * Works for both local and S3 storage.
+   *
+   * <p>For S3: After stageFiles() moves files to the data location, the staging
+   * directory is empty. We skip cleanup entirely and rely on the lifecycle rule
+   * to expire orphaned staging files after 1 day. This saves N API calls per commit.
+   *
+   * <p>For local: We attempt cleanup to free disk space immediately.
    */
-  private void cleanupStagingDirectory(Path stagingPath) {
-    try {
-      if (Files.exists(stagingPath)) {
-        Files.walkFileTree(stagingPath, new java.nio.file.SimpleFileVisitor<Path>() {
-          @Override
-          public java.nio.file.FileVisitResult visitFile(Path file,
-              java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
-            Files.deleteIfExists(file);
-            return java.nio.file.FileVisitResult.CONTINUE;
-          }
+  private void cleanupStagingDirectory(String stagingPath) {
+    // For S3 paths, skip cleanup - lifecycle rule handles orphaned staging
+    if (stagingPath.startsWith("s3://") || stagingPath.startsWith("s3a://")) {
+      LOGGER.debug("Skipping S3 staging cleanup (lifecycle rule handles expiration): {}",
+          stagingPath);
+      return;
+    }
 
-          @Override
-          public java.nio.file.FileVisitResult postVisitDirectory(Path dir,
-              IOException exc) throws IOException {
-            Files.deleteIfExists(dir);
-            return java.nio.file.FileVisitResult.CONTINUE;
-          }
-        });
+    // For local storage, clean up immediately
+    try {
+      List<StorageProvider.FileEntry> files = storageProvider.listFiles(stagingPath, true);
+      if (!files.isEmpty()) {
+        List<String> paths = new ArrayList<String>();
+        for (StorageProvider.FileEntry entry : files) {
+          paths.add(entry.getPath());
+        }
+        storageProvider.deleteBatch(paths);
+      }
+      try {
+        storageProvider.delete(stagingPath);
+      } catch (IOException ignored) {
+        // Directory may not exist, which is fine
       }
     } catch (IOException e) {
       LOGGER.warn("Failed to cleanup staging directory {}: {}", stagingPath, e.getMessage());
@@ -731,8 +750,8 @@ public class IcebergMaterializer {
          Statement stmt = conn.createStatement()) {
       String reader = format == SourceFormat.JSON ? "read_json" : "read_parquet";
       String options = format == SourceFormat.JSON ? "union_by_name=true" : "hive_partitioning=true, union_by_name=true";
-      String sql = String.format("SELECT DISTINCT %s FROM %s('%s', %s) WHERE %s IS NOT NULL ORDER BY %s",
-          column, reader, sourcePattern, options, column, column);
+      String sql =
+          String.format("SELECT DISTINCT %s FROM %s('%s', %s) WHERE %s IS NOT NULL ORDER BY %s", column, reader, sourcePattern, options, column, column);
 
       try (ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {
@@ -824,6 +843,11 @@ public class IcebergMaterializer {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=" + threads);
       stmt.execute("SET preserve_insertion_order=false");
+      // Limit memory to avoid OOM on memory-constrained systems
+      stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
+      if (warehousePath != null) {
+        stmt.execute("SET temp_directory='" + warehousePath + "/.duckdb_tmp'");
+      }
 
       // Load extensions
       try {

@@ -339,8 +339,8 @@ public class IcebergCatalogManager {
     List<Types.NestedField> fields = new ArrayList<Types.NestedField>();
     int fieldId = 1;
     for (ColumnDef col : columns) {
-      Types.NestedField field = Types.NestedField.optional(
-          fieldId++,
+      Types.NestedField field =
+          Types.NestedField.optional(fieldId++,
           col.getName(),
           mapToIcebergType(col.getType()));
       fields.add(field);
