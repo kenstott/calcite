@@ -163,6 +163,49 @@ public interface IncrementalTracker {
     return filterUnprocessed(alternateName, sourceTable, allCombinations);
   }
 
+  // ===== Error Tracking Methods =====
+
+  /**
+   * Marks a combination as processed with an error.
+   *
+   * <p>Error entries are subject to a separate (typically shorter) TTL than empty results,
+   * allowing the system to retry failed requests periodically.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param keyValues Map of incremental key names to values
+   * @param targetPattern The target pattern used for this combination
+   * @param errorMessage Optional error message for debugging
+   */
+  default void markProcessedWithError(String alternateName, String sourceTable,
+      Map<String, String> keyValues, String targetPattern, String errorMessage) {
+    // Default implementation treats errors same as empty results
+    markProcessedWithRowCount(alternateName, sourceTable, keyValues, targetPattern, 0);
+  }
+
+  /**
+   * Filters combinations considering both empty result TTL and error TTL.
+   *
+   * <p>A combination is considered "needing processing" if:
+   * <ul>
+   *   <li>It was never processed, OR</li>
+   *   <li>It was processed with an error AND the error TTL has expired, OR</li>
+   *   <li>It was processed with 0 rows AND the empty result TTL has expired</li>
+   * </ul>
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param allCombinations All dimension combinations to check
+   * @param emptyResultTtlMillis TTL for empty results - requery after this interval
+   * @param errorTtlMillis TTL for errors - retry after this interval (typically shorter)
+   * @return Set of combination indices that need processing
+   */
+  default Set<Integer> filterUnprocessedWithTtl(String alternateName, String sourceTable,
+      List<Map<String, String>> allCombinations, long emptyResultTtlMillis, long errorTtlMillis) {
+    // Default: fall back to empty TTL filter (ignores error TTL)
+    return filterUnprocessedWithEmptyTtl(alternateName, sourceTable, allCombinations, emptyResultTtlMillis);
+  }
+
   // ===== Table Completion Tracking =====
 
   /**

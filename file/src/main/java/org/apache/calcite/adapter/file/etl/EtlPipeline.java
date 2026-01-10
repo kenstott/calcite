@@ -219,8 +219,6 @@ public class EtlPipeline {
         // Verify data actually exists - completion marker may be stale if bucket was cleared
         if (verifyDataExists(pipelineName, config)) {
           long elapsed = System.currentTimeMillis() - startTime;
-          LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
-              pipelineName, totalBatches, dimensionSignature, elapsed);
           // Include materialization info for skipped tables so DuckDB knows it's Iceberg
           MaterializeConfig materializeConfig = config.getMaterialize();
           if (materializeConfig != null && materializeConfig.isEnabled()) {
@@ -230,16 +228,43 @@ public class EtlPipeline {
             if (materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
               rowCount = readRowCountFromIceberg(tableLocation);
             }
-            return EtlResult.builder()
-                .pipelineName(pipelineName)
-                .skippedEntirePipeline(true)
-                .elapsedMs(elapsed)
-                .tableLocation(tableLocation)
-                .materializeFormat(materializeConfig.getFormat())
-                .totalRows(rowCount)
-                .build();
+            // If table has 0 rows and empty result TTL is configured, check if we should retry
+            if (rowCount == 0 && materializeConfig.getOptions() != null) {
+              long emptyResultTtlMillis = materializeConfig.getOptions().getEmptyResultTtlMillis();
+              if (emptyResultTtlMillis > 0) {
+                LOGGER.info("Pipeline '{}' complete but has 0 rows - invalidating to retry after TTL ({}ms)",
+                    pipelineName, emptyResultTtlMillis);
+                incrementalTracker.invalidateTableCompletion(pipelineName);
+                // Continue to Phase 2 to check individual partition TTLs
+              } else {
+                LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms, 0 rows)",
+                    pipelineName, totalBatches, dimensionSignature, elapsed);
+                return EtlResult.builder()
+                    .pipelineName(pipelineName)
+                    .skippedEntirePipeline(true)
+                    .elapsedMs(elapsed)
+                    .tableLocation(tableLocation)
+                    .materializeFormat(materializeConfig.getFormat())
+                    .totalRows(rowCount)
+                    .build();
+              }
+            } else {
+              LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
+                  pipelineName, totalBatches, dimensionSignature, elapsed);
+              return EtlResult.builder()
+                  .pipelineName(pipelineName)
+                  .skippedEntirePipeline(true)
+                  .elapsedMs(elapsed)
+                  .tableLocation(tableLocation)
+                  .materializeFormat(materializeConfig.getFormat())
+                  .totalRows(rowCount)
+                  .build();
+            }
+          } else {
+            LOGGER.info("Pipeline '{}' is complete with {} combinations - skipping (signature: {}, {}ms)",
+                pipelineName, totalBatches, dimensionSignature, elapsed);
+            return EtlResult.skipped(pipelineName, elapsed);
           }
-          return EtlResult.skipped(pipelineName, elapsed);
         } else {
           // Data doesn't exist despite completion marker - invalidate and reprocess
           LOGGER.warn("Pipeline '{}' marked complete but no data found - invalidating stale marker",
@@ -455,17 +480,28 @@ public class EtlPipeline {
 
           switch (action) {
             case FAIL:
+              // Mark as error before failing - allows TTL-based retry on next run
+              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                  variables, null, e.getMessage());
               throw new IOException("Pipeline failed at batch " + processedCount, e);
             case SKIP:
               skippedBatches++;
-              LOGGER.warn("Skipping batch {} due to error: {}", processedCount, e.getMessage());
+              // Mark as error so it will be retried after error TTL expires
+              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                  variables, null, e.getMessage());
+              LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}", processedCount, e.getMessage());
               break;
             case WARN:
               failedBatches++;
-              LOGGER.warn("Batch {} failed (continuing): {}", processedCount, e.getMessage());
+              // Mark as error so it will be retried after error TTL expires
+              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                  variables, null, e.getMessage());
+              LOGGER.warn("Batch {} failed (will retry after TTL): {}", processedCount, e.getMessage());
               break;
             default:
               failedBatches++;
+              incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                  variables, null, e.getMessage());
           }
 
           if (progressListener != null) {
