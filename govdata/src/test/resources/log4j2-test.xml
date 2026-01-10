@@ -84,5 +84,9 @@
     <logger name="org.apache.calcite.adapter.file.etl" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.etl.EtlPipeline" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.etl.HttpSource" level="DEBUG"/>
+    <!-- Enable debug logging for ModelLifecycleProcessor to see schema loading -->
+    <logger name="org.apache.calcite.adapter.file.ModelLifecycleProcessor" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.FileSchemaBuilder" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.govdata.census" level="DEBUG"/>
   </Loggers>
 </Configuration>

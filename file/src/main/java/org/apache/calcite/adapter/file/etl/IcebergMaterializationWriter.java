@@ -652,20 +652,25 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         Object value = null;
 
         if (col.isComputed()) {
-          // For computed columns, check if it's a simple partition variable reference
+          // For computed columns, evaluate expressions that reference source columns
           String expr = col.getExpression();
-          if (partitionVariables != null && expr != null) {
-            // Handle simple {varname} substitution
-            for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
-              String placeholder = "{" + pv.getKey() + "}";
-              if (expr.equals(placeholder) || expr.equals("'" + placeholder + "'")) {
-                value = pv.getValue();
-                break;
+          if (expr != null) {
+            // First check for partition variable substitution
+            if (partitionVariables != null) {
+              for (Map.Entry<String, String> pv : partitionVariables.entrySet()) {
+                String placeholder = "{" + pv.getKey() + "}";
+                if (expr.equals(placeholder) || expr.equals("'" + placeholder + "'")) {
+                  value = pv.getValue();
+                  break;
+                }
               }
             }
+
+            // If not a partition variable, try to evaluate the expression
+            if (value == null) {
+              value = evaluateExpression(expr, row);
+            }
           }
-          // Complex computed expressions are not supported in the native writer
-          // They would need DuckDB for evaluation
         } else {
           // Direct column: look up by source name
           String sourceName = col.getEffectiveSource();
@@ -718,6 +723,133 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
     return null;
+  }
+
+  /**
+   * Evaluates a simple SQL expression against a source row.
+   *
+   * <p>Supports expressions like:
+   * <ul>
+   *   <li>{@code src."FIELDNAME"} - simple column reference</li>
+   *   <li>{@code TRY_CAST(src."FIELDNAME" AS BIGINT)} - type conversion</li>
+   *   <li>{@code TRY_CAST(src."FIELDNAME" AS DOUBLE)} - numeric conversion</li>
+   * </ul>
+   *
+   * @param expr The SQL expression to evaluate
+   * @param row The source data row
+   * @return The evaluated value, or null if expression cannot be evaluated
+   */
+  private Object evaluateExpression(String expr, Map<String, Object> row) {
+    if (expr == null || expr.isEmpty()) {
+      return null;
+    }
+
+    // Pattern: src."FIELDNAME" or src.FIELDNAME
+    java.util.regex.Pattern srcFieldPattern = java.util.regex.Pattern.compile(
+        "^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
+    java.util.regex.Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
+    if (srcFieldMatcher.matches()) {
+      String fieldName = srcFieldMatcher.group(1);
+      return getValueCaseInsensitive(row, fieldName);
+    }
+
+    // Pattern: TRY_CAST(src."FIELDNAME" AS TYPE) or CAST(src."FIELDNAME" AS TYPE)
+    java.util.regex.Pattern castPattern = java.util.regex.Pattern.compile(
+        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher castMatcher = castPattern.matcher(expr);
+    if (castMatcher.matches()) {
+      String fieldName = castMatcher.group(1);
+      String targetType = castMatcher.group(2).toUpperCase(java.util.Locale.ROOT);
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      return castValue(sourceValue, targetType);
+    }
+
+    // Pattern: REPLACE(src."FIELDNAME", 'old', 'new') - for comma handling in numbers
+    java.util.regex.Pattern replacePattern = java.util.regex.Pattern.compile(
+        "^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher replaceMatcher = replacePattern.matcher(expr);
+    if (replaceMatcher.matches()) {
+      String fieldName = replaceMatcher.group(1);
+      String oldStr = replaceMatcher.group(2);
+      String newStr = replaceMatcher.group(3);
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      if (sourceValue != null) {
+        return sourceValue.toString().replace(oldStr, newStr);
+      }
+      return null;
+    }
+
+    // Pattern: TRY_CAST(REPLACE(src."FIELDNAME", 'old', 'new') AS TYPE)
+    java.util.regex.Pattern castReplacePattern = java.util.regex.Pattern.compile(
+        "^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher castReplaceMatcher = castReplacePattern.matcher(expr);
+    if (castReplaceMatcher.matches()) {
+      String fieldName = castReplaceMatcher.group(1);
+      String oldStr = castReplaceMatcher.group(2);
+      String newStr = castReplaceMatcher.group(3);
+      String targetType = castReplaceMatcher.group(4).toUpperCase(java.util.Locale.ROOT);
+      Object sourceValue = getValueCaseInsensitive(row, fieldName);
+      if (sourceValue != null) {
+        String replaced = sourceValue.toString().replace(oldStr, newStr);
+        return castValue(replaced, targetType);
+      }
+      return null;
+    }
+
+    // If expression cannot be evaluated, return null (like TRY_CAST behavior)
+    LOGGER.debug("Cannot evaluate expression locally: {}", expr);
+    return null;
+  }
+
+  /**
+   * Casts a value to the specified target type.
+   * Returns null on conversion failure (like TRY_CAST behavior).
+   */
+  private Object castValue(Object value, String targetType) {
+    if (value == null) {
+      return null;
+    }
+    String strValue = value.toString().trim();
+    if (strValue.isEmpty()) {
+      return null;
+    }
+
+    try {
+      switch (targetType) {
+        case "BIGINT":
+        case "INT64":
+        case "LONG":
+          return Long.parseLong(strValue);
+        case "INTEGER":
+        case "INT":
+        case "INT32":
+          return Integer.parseInt(strValue);
+        case "DOUBLE":
+        case "FLOAT8":
+          return Double.parseDouble(strValue);
+        case "FLOAT":
+        case "FLOAT4":
+        case "REAL":
+          return Float.parseFloat(strValue);
+        case "VARCHAR":
+        case "STRING":
+        case "TEXT":
+          return strValue;
+        case "BOOLEAN":
+        case "BOOL":
+          return Boolean.parseBoolean(strValue);
+        default:
+          // Unknown type - return as string
+          return strValue;
+      }
+    } catch (NumberFormatException e) {
+      // Like TRY_CAST - return null on parse failure
+      LOGGER.debug("Failed to cast '{}' to {}: {}", strValue, targetType, e.getMessage());
+      return null;
+    }
   }
 
   /**

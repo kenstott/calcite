@@ -65,6 +65,17 @@ public class ConceptualVariableMapper extends AbstractConceptualMapper {
   }
 
   /**
+   * Get the raw mappings configuration JSON.
+   *
+   * <p>Used by CensusVariableNormalizer for reverse lookups.
+   *
+   * @return The mappings configuration JsonNode
+   */
+  public JsonNode getMappingsConfig() {
+    return mappingsConfig;
+  }
+
+  /**
    * Result of variable mapping for a specific year and census type.
    */
   public static class VariableMapping {
