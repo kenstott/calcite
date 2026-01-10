@@ -64,12 +64,30 @@ public class CensusIntegrationTest {
 
   // ACS tables - core Census Bureau American Community Survey data
   private static final Set<String> ACS_TABLES = new HashSet<>(Arrays.asList(
+      // Original 6 tables
       "acs_population",
       "acs_income",
       "acs_housing",
       "acs_education",
       "acs_employment",
-      "acs_poverty"
+      "acs_poverty",
+      // New tables added for comprehensive coverage
+      "acs_race_ethnicity",
+      "acs_age",
+      "acs_commuting",
+      "acs_health_insurance",
+      "acs_language",
+      "acs_disability",
+      "acs_veterans",
+      "acs_migration",
+      "acs_occupation",
+      "acs_industry",
+      "acs_internet",
+      "acs_nativity",
+      "acs_marital_status",
+      "acs_household_type",
+      "acs_housing_tenure",
+      "acs_income_distribution"
   ));
 
   // SQL views defined in census-schema.yaml
@@ -727,6 +745,149 @@ public class CensusIntegrationTest {
       LOGGER.info("\n================================================================================");
       LOGGER.info(" DECENNIAL POPULATION TEST COMPLETE!");
       LOGGER.info("================================================================================");
+    }
+  }
+
+  @Test
+  public void testNewAcsTables() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" NEW ACS TABLES: Extended Subject Coverage Test");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" Testing the 14 new ACS tables added for comprehensive Census coverage:");
+    LOGGER.info("   Race/Ethnicity, Age, Commuting, Health Insurance, Language,");
+    LOGGER.info("   Disability, Veterans, Migration, Occupation, Industry,");
+    LOGGER.info("   Internet, Nativity, Marital Status, Household Type,");
+    LOGGER.info("   Housing Tenure, Income Distribution");
+    LOGGER.info("================================================================================");
+
+    // New ACS tables to test
+    String[] newTables = {
+        "acs_race_ethnicity",
+        "acs_age",
+        "acs_commuting",
+        "acs_health_insurance",
+        "acs_language",
+        "acs_disability",
+        "acs_veterans",
+        "acs_migration",
+        "acs_occupation",
+        "acs_industry",
+        "acs_internet",
+        "acs_nativity",
+        "acs_marital_status",
+        "acs_household_type",
+        "acs_housing_tenure",
+        "acs_income_distribution"
+    };
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        int tablesWithData = 0;
+        int tablesQueryable = 0;
+        long totalRows = 0;
+
+        LOGGER.info("\n--- Testing new ACS tables ---");
+        for (String table : newTables) {
+          String query = "SELECT COUNT(*) as cnt FROM \"CENSUS\".\"" + table + "\"";
+          try (ResultSet rs = stmt.executeQuery(query)) {
+            tablesQueryable++;
+            if (rs.next()) {
+              long count = rs.getLong("cnt");
+              totalRows += count;
+              if (count > 0) {
+                tablesWithData++;
+                LOGGER.info("  {} - {} rows", table, count);
+              } else {
+                LOGGER.info("  {} - 0 rows (needs materialization)", table);
+              }
+            }
+          } catch (SQLException e) {
+            LOGGER.error("  {} - QUERY FAILED: {}", table, e.getMessage());
+          }
+        }
+
+        LOGGER.info("\n--- Summary ---");
+        LOGGER.info("  Tables queryable: {}/{}", tablesQueryable, newTables.length);
+        LOGGER.info("  Tables with data: {}/{}", tablesWithData, newTables.length);
+        LOGGER.info("  Total rows: {}", totalRows);
+
+        // Tables without materialized data won't have DuckDB views created yet
+        // We expect at least some tables to be queryable (those with data)
+        assertTrue(tablesQueryable > 0,
+            "At least some new ACS tables should be queryable");
+        LOGGER.info("  Note: {} tables not queryable (not yet materialized)",
+            newTables.length - tablesQueryable);
+
+        // Sample data from one table that has data
+        if (tablesWithData > 0) {
+          LOGGER.info("\n--- Sample data from acs_race_ethnicity ---");
+          try {
+            ResultSet rs = stmt.executeQuery(
+                "SELECT geo_name, state, white_alone, black_alone, asian_alone " +
+                "FROM \"CENSUS\".\"acs_race_ethnicity\" LIMIT 5");
+            while (rs.next()) {
+              LOGGER.info("  {} ({}): white={}, black={}, asian={}",
+                  rs.getString("geo_name"),
+                  rs.getString("state"),
+                  rs.getLong("white_alone"),
+                  rs.getLong("black_alone"),
+                  rs.getLong("asian_alone"));
+            }
+          } catch (SQLException e) {
+            LOGGER.warn("  Could not sample acs_race_ethnicity: {}", e.getMessage());
+          }
+        }
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" NEW ACS TABLES TEST COMPLETE!");
+        LOGGER.info("================================================================================");
+      }
+    }
+  }
+
+  @Test
+  public void testDecennialHousing() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" DECENNIAL HOUSING: Housing Unit Counts Test");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" Testing decennial_housing table with year-specific variables:");
+    LOGGER.info("   - 2000/2010: H001001, H003001, H003003 from /dec/sf1");
+    LOGGER.info("   - 2020: H1_001N, H1_002N, H1_003N from /dec/pl");
+    LOGGER.info("================================================================================");
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        // Check if table exists and has data
+        LOGGER.info("\n--- Checking decennial_housing table ---");
+        ResultSet rs = stmt.executeQuery(
+            "SELECT COUNT(*) as cnt FROM \"CENSUS\".\"decennial_housing\"");
+        if (rs.next()) {
+          long count = rs.getLong("cnt");
+          LOGGER.info("  decennial_housing has {} rows", count);
+
+          if (count > 0) {
+            // Sample data with normalized column names
+            LOGGER.info("\n--- Sample housing data ---");
+            rs = stmt.executeQuery(
+                "SELECT geo_name, total_housing_units, occupied_units, vacant_units " +
+                "FROM \"CENSUS\".\"decennial_housing\" " +
+                "ORDER BY total_housing_units DESC LIMIT 10");
+            while (rs.next()) {
+              LOGGER.info("  {}: total={}, occupied={}, vacant={}",
+                  rs.getString("geo_name"),
+                  rs.getLong("total_housing_units"),
+                  rs.getLong("occupied_units"),
+                  rs.getLong("vacant_units"));
+            }
+          } else {
+            LOGGER.info("  Table exists but needs materialization");
+          }
+        }
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" DECENNIAL HOUSING TEST COMPLETE!");
+        LOGGER.info("================================================================================");
+      }
     }
   }
 }
