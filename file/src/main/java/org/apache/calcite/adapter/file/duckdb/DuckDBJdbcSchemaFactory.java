@@ -379,10 +379,11 @@ public class DuckDBJdbcSchemaFactory {
 
             // Load extensions - these are required for S3 access and advanced query features
             // httpfs: Required for S3/HTTP parquet access
+            // iceberg: Required for iceberg_scan views (metadata resolution needs this loaded)
             // vss: Vector similarity search for embeddings
             // fts: Full-text search
             // spatial: Geospatial functions
-            String[] extensions = {"httpfs", "vss", "fts", "spatial"};
+            String[] extensions = {"httpfs", "iceberg", "vss", "fts", "spatial"};
             for (String ext : extensions) {
               try {
                 stmt.execute("LOAD " + ext);
