@@ -3012,11 +3012,13 @@ partitionedTables:
         comment: Jobs with monthly earnings $3,333 or more
 
     source:
-      type: file
+      type: http
       url: "https://lehd.ces.census.gov/data/lodes/LODES8/{state}/wac/{state}_wac_S000_JT00_{year}.csv.gz"
       response:
         format: csv
         compressed: gzip
+      rawCache:
+        enabled: true
 
     materialize:
       format: iceberg
