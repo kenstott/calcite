@@ -224,10 +224,12 @@ public class BeaDimensionResolver implements DimensionResolver {
       // Read parquet files with hive partitioning. The 'tablename' column comes from
       // the partition path (e.g., tablename=SAINC1/), and LineCode/geography_level
       // are data columns in the parquet files.
-      String sql = "SELECT DISTINCT tablename, LineCode, geography_level "
+      // Use COALESCE to handle both 'Key' (raw BEA column) and 'LineCode' (derived column)
+      // since the expression mapping may not have been applied during ETL.
+      String sql = "SELECT DISTINCT tablename, COALESCE(LineCode, Key) AS LineCode, geography_level "
           + "FROM read_parquet('" + linecodeTablePath + "/data/**/*.parquet', "
           + "hive_partitioning=true, union_by_name=true) "
-          + "WHERE tablename IS NOT NULL AND LineCode IS NOT NULL "
+          + "WHERE tablename IS NOT NULL AND COALESCE(LineCode, Key) IS NOT NULL "
           + "ORDER BY 1, 3, 2";
 
       LOGGER.debug("BeaDimensionResolver: Executing SQL: {}", sql);
@@ -269,20 +271,51 @@ public class BeaDimensionResolver implements DimensionResolver {
       String geoLevel = rs.getString(3);
 
       if (tableName != null && lineCode != null) {
-        // Default to all geo levels if geography_level is null/empty
+        // Infer geography_level from table prefix if not provided in data
         if (geoLevel == null || geoLevel.isEmpty()) {
-          // Add to all known geo levels
-          for (String level : new String[]{"state", "county", "msa"}) {
-            addToCache(tableName, level, lineCode);
-            totalCount++;
-          }
-        } else {
+          geoLevel = inferGeographyLevelFromTableName(tableName);
+        }
+        if (geoLevel != null) {
           addToCache(tableName, geoLevel.toLowerCase(), lineCode);
           totalCount++;
         }
       }
     }
     return totalCount;
+  }
+
+  /**
+   * Infers geography_level from BEA Regional table name prefix.
+   *
+   * <p>BEA Regional tables follow naming conventions:
+   * <ul>
+   *   <li>CA* (e.g., CAINC1, CAGDP5) - County level data</li>
+   *   <li>SA* (e.g., SAINC1, SAGDP5) - State annual data</li>
+   *   <li>SQ* (e.g., SQINC1) - State quarterly data</li>
+   *   <li>MA* (e.g., MARPP) - Metropolitan area data</li>
+   * </ul>
+   *
+   * @param tableName BEA table name
+   * @return geography level (county, state, msa) or null if unknown
+   */
+  private String inferGeographyLevelFromTableName(String tableName) {
+    if (tableName == null || tableName.length() < 2) {
+      return null;
+    }
+    String prefix = tableName.substring(0, 2).toUpperCase();
+    switch (prefix) {
+    case "CA":
+      return "county";
+    case "SA":
+    case "SQ":
+      return "state";
+    case "MA":
+      return "msa";
+    default:
+      LOGGER.debug("Unknown table prefix '{}' for table '{}', cannot infer geography level",
+          prefix, tableName);
+      return null;
+    }
   }
 
   /**
