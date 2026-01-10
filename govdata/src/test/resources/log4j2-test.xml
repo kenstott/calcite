@@ -70,6 +70,9 @@
     <!-- Enable debug logging for alternate partition selection and HLL optimization rules -->
     <logger name="org.apache.calcite.adapter.file.rules.AlternatePartitionSelectionRule" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.file.duckdb.DuckDBHLLCountDistinctRule" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.duckdb.DuckDBIcebergCountStarRule" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.duckdb.DuckDBConvention" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.rules.CountStarStatisticsRule" level="DEBUG"/>
     <!-- Enable debug logging for BeaDataDownloader to see API responses -->
     <logger name="org.apache.calcite.adapter.govdata.econ.BeaDataDownloader" level="DEBUG"/>
     <!-- Enable debug logging for S3 storage to see exists() checks -->
@@ -77,5 +80,9 @@
     <!-- Enable debug logging for govdata package (includes AbstractGovDataDownloader) -->
     <logger name="org.apache.calcite.adapter.govdata" level="DEBUG"/>
     <logger name="org.apache.calcite.adapter.govdata.econ" level="DEBUG"/>
+    <!-- Enable debug logging for ETL pipeline to see rawCache config -->
+    <logger name="org.apache.calcite.adapter.file.etl" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.etl.EtlPipeline" level="DEBUG"/>
+    <logger name="org.apache.calcite.adapter.file.etl.HttpSource" level="DEBUG"/>
   </Loggers>
 </Configuration>

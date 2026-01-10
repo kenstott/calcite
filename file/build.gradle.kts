@@ -59,6 +59,8 @@ dependencies {
     // Hadoop dependencies for Parquet
     implementation("org.apache.hadoop:hadoop-common:3.3.6")
     implementation("org.apache.hadoop:hadoop-client:3.3.6")
+    // Hadoop AWS for S3A FileSystem (required for Iceberg S3 support)
+    implementation("org.apache.hadoop:hadoop-aws:3.3.6")
 
     // Storage provider dependencies
     implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")

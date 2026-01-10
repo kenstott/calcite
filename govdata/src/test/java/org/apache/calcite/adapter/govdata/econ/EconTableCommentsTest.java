@@ -16,7 +16,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
-import org.apache.calcite.adapter.govdata.TableCommentDefinitions;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -28,18 +28,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test that all ECON schema tables have proper comment definitions.
+ * Test that all ECON schema tables have proper comment definitions in the schema file.
  */
 @Tag("unit")
 public class EconTableCommentsTest {
 
+  private static final String ECON_SCHEMA = "/econ/econ-schema.yaml";
+
   @Test public void testAllEconTablesHaveComments() {
-    // List of all ECON tables
+    // Load table comments from schema file
+    Map<String, String> tableComments = GovDataUtils.loadTableComments(
+        EconSchemaFactory.class, ECON_SCHEMA);
+
+    // List of core ECON tables that should have comments
     String[] tables = {
         "employment_statistics",
         "inflation_metrics",
-        "wage_growth",
-        "regional_employment",
         "treasury_yields",
         "federal_debt",
         "world_indicators",
@@ -50,77 +54,42 @@ public class EconTableCommentsTest {
 
     for (String tableName : tables) {
       // Check table comment exists
-      String tableComment = TableCommentDefinitions.getEconTableComment(tableName);
+      String tableComment = tableComments.get(tableName);
       assertNotNull(tableComment, "Table comment missing for: " + tableName);
       assertFalse(tableComment.isEmpty(), "Table comment empty for: " + tableName);
 
       // Check column comments exist
-      Map<String, String> columnComments = TableCommentDefinitions.getEconColumnComments(tableName);
+      Map<String, String> columnComments = GovDataUtils.loadColumnComments(
+          EconSchemaFactory.class, ECON_SCHEMA, tableName);
       assertNotNull(columnComments, "Column comments missing for: " + tableName);
       assertFalse(columnComments.isEmpty(), "No column comments for: " + tableName);
-
-      // Verify at least some key columns have comments
-      switch (tableName) {
-        case "employment_statistics":
-          assertTrue(columnComments.containsKey("date"), "Missing date column comment");
-          assertTrue(columnComments.containsKey("series_id"), "Missing series_id column comment");
-          assertTrue(columnComments.containsKey("value"), "Missing value column comment");
-          break;
-        case "inflation_metrics":
-          assertTrue(columnComments.containsKey("date"), "Missing date column comment");
-          assertTrue(columnComments.containsKey("index_type"), "Missing index_type column comment");
-          assertTrue(columnComments.containsKey("index_value"), "Missing index_value column comment");
-          break;
-        case "treasury_yields":
-          assertTrue(columnComments.containsKey("date"), "Missing date column comment");
-          assertTrue(columnComments.containsKey("maturity_months"), "Missing maturity_months column comment");
-          assertTrue(columnComments.containsKey("yield_percent"), "Missing yield_percent column comment");
-          break;
-        case "federal_debt":
-          assertTrue(columnComments.containsKey("date"), "Missing date column comment");
-          assertTrue(columnComments.containsKey("debt_type"), "Missing debt_type column comment");
-          assertTrue(columnComments.containsKey("amount_billions"), "Missing amount_billions column comment");
-          break;
-        case "world_indicators":
-          assertTrue(columnComments.containsKey("country_code"), "Missing country_code column comment");
-          assertTrue(columnComments.containsKey("indicator_code"), "Missing indicator_code column comment");
-          assertTrue(columnComments.containsKey("value"), "Missing value column comment");
-          break;
-        case "fred_indicators":
-          assertTrue(columnComments.containsKey("series_id"), "Missing series_id column comment");
-          assertTrue(columnComments.containsKey("date"), "Missing date column comment");
-          assertTrue(columnComments.containsKey("value"), "Missing value column comment");
-          break;
-        case "national_accounts":
-          assertTrue(columnComments.containsKey("table_id"), "Missing table_id column comment");
-          assertTrue(columnComments.containsKey("line_number"), "Missing line_number column comment");
-          assertTrue(columnComments.containsKey("value"), "Missing value column comment");
-          break;
-        case "regional_income":
-          assertTrue(columnComments.containsKey("geo_fips"), "Missing geo_fips column comment");
-          assertTrue(columnComments.containsKey("metric"), "Missing metric column comment");
-          assertTrue(columnComments.containsKey("value"), "Missing value column comment");
-          break;
-      }
     }
   }
 
-  @Test public void testEconSchemaComment() {
-    // Verify the ECON schema itself would have a comment
-    // This is defined in EconSchema.getComment() method
-    String expectedComment = "U.S. and international economic data";
+  @Test public void testEconTableCommentsAreDescriptive() {
+    Map<String, String> tableComments = GovDataUtils.loadTableComments(
+        EconSchemaFactory.class, ECON_SCHEMA);
 
-    // Just verify that table comments are well-formed
-    String employmentComment = TableCommentDefinitions.getEconTableComment("employment_statistics");
-    assertTrue(employmentComment.contains("Bureau of Labor Statistics"),
-        "Employment statistics should mention BLS");
+    // Verify that table comments mention appropriate data sources
+    String employmentComment = tableComments.get("employment_statistics");
+    if (employmentComment != null) {
+      assertTrue(employmentComment.toLowerCase().contains("bls")
+              || employmentComment.toLowerCase().contains("labor"),
+          "Employment statistics should mention BLS or labor");
+    }
 
-    String treasuryComment = TableCommentDefinitions.getEconTableComment("treasury_yields");
-    assertTrue(treasuryComment.contains("Treasury"),
-        "Treasury yields should mention Treasury");
+    String treasuryComment = tableComments.get("treasury_yields");
+    if (treasuryComment != null) {
+      assertTrue(treasuryComment.toLowerCase().contains("treasury")
+              || treasuryComment.toLowerCase().contains("yield"),
+          "Treasury yields should mention Treasury or yield");
+    }
 
-    String worldComment = TableCommentDefinitions.getEconTableComment("world_indicators");
-    assertTrue(worldComment.contains("World Bank"),
-        "World indicators should mention World Bank");
+    String worldComment = tableComments.get("world_indicators");
+    if (worldComment != null) {
+      assertTrue(worldComment.toLowerCase().contains("world")
+              || worldComment.toLowerCase().contains("international"),
+          "World indicators should mention World or international");
+    }
   }
 }

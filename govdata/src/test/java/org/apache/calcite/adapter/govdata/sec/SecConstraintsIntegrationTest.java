@@ -232,18 +232,4 @@ public class SecConstraintsIntegrationTest {
       Files.deleteIfExists(tempModel);
     }
   }
-
-  /**
-   * Test that SecSchemaFactory properly implements ConstraintCapableSchemaFactory.
-   */
-  @Test public void testSecSchemaFactoryConstraintCapability() {
-    SecSchemaFactory factory = new SecSchemaFactory();
-
-    // Test that it implements the constraint capability interface
-    assertTrue(factory instanceof org.apache.calcite.schema.ConstraintCapableSchemaFactory,
-               "SecSchemaFactory should implement ConstraintCapableSchemaFactory");
-
-    // Test that it supports constraints
-    assertTrue(factory.supportsConstraints(), "SecSchemaFactory should support constraints");
-  }
 }

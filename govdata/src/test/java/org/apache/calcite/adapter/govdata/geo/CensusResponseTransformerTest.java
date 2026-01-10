@@ -46,8 +46,7 @@ class CensusResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testTableFormatResponse() {
+  @Test void testTableFormatResponse() {
     // Census Data API returns 2D array with headers in first row
     String response = "["
         + "[\"NAME\", \"B01001_001E\", \"state\", \"county\"],"
@@ -70,8 +69,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("06"));
   }
 
-  @Test
-  void testTableFormatMultipleRows() {
+  @Test void testTableFormatMultipleRows() {
     String response = "["
         + "[\"NAME\", \"POP\", \"state\"],"
         + "[\"California\", \"39538223\", \"06\"],"
@@ -89,8 +87,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("39538223"));
   }
 
-  @Test
-  void testTableFormatHeadersOnly() {
+  @Test void testTableFormatHeadersOnly() {
     // Only headers, no data rows
     String response = "["
         + "[\"NAME\", \"POP\", \"state\"]"
@@ -101,8 +98,7 @@ class CensusResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testErrorObjectResponse() {
+  @Test void testErrorObjectResponse() {
     String response = "{"
         + "\"error\": \"Your request did not return any results. Check your variables and geographies.\""
         + "}";
@@ -112,8 +108,7 @@ class CensusResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testArrayErrorResponse() {
+  @Test void testArrayErrorResponse() {
     // Census sometimes returns errors as an array with a single string
     String response = "[\"error: unknown variable 'INVALID_VAR'\"]";
 
@@ -123,8 +118,7 @@ class CensusResponseTransformerTest {
     assertTrue(ex.getMessage().contains("unknown variable"));
   }
 
-  @Test
-  void testUnknownVariableError() {
+  @Test void testUnknownVariableError() {
     String response = "{"
         + "\"error\": \"error: unknown variable 'B99999_001E'\""
         + "}";
@@ -135,8 +129,7 @@ class CensusResponseTransformerTest {
     assertTrue(ex.getMessage().contains("unknown variable"));
   }
 
-  @Test
-  void testInvalidGeographyReturnsEmpty() {
+  @Test void testInvalidGeographyReturnsEmpty() {
     String response = "{"
         + "\"error\": \"Invalid geography XYZZY requested\""
         + "}";
@@ -146,8 +139,7 @@ class CensusResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testRateLimitError() {
+  @Test void testRateLimitError() {
     String response = "{"
         + "\"error\": \"Rate limit exceeded. Please slow down your requests.\""
         + "}";
@@ -158,8 +150,7 @@ class CensusResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testGeographyApiResponse() {
+  @Test void testGeographyApiResponse() {
     String response = "{"
         + "\"geos\": ["
         + "  {\"name\": \"California\", \"geoId\": \"0400000US06\", \"state\": \"06\"},"
@@ -175,8 +166,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("Texas"));
   }
 
-  @Test
-  void testVariablesApiResponse() {
+  @Test void testVariablesApiResponse() {
     String response = "{"
         + "\"variables\": ["
         + "  {\"name\": \"B01001_001E\", \"label\": \"Total Population\"},"
@@ -190,8 +180,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("Male Population"));
   }
 
-  @Test
-  void testSingleRecordWrappedInArray() {
+  @Test void testSingleRecordWrappedInArray() {
     String response = "{"
         + "\"geoId\": \"0400000US06\","
         + "\"name\": \"California\","
@@ -206,8 +195,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("0400000US06"));
   }
 
-  @Test
-  void testEmptyArrayResponse() {
+  @Test void testEmptyArrayResponse() {
     String response = "[]";
 
     String result = transformer.transform(response, context);
@@ -215,22 +203,19 @@ class CensusResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testArrayOfObjects() {
+  @Test void testArrayOfObjects() {
     // Already in the expected format - should pass through unchanged
     String response = "["
         + "{\"NAME\": \"California\", \"POP\": \"39538223\"},"
@@ -247,8 +232,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("39538223"));
   }
 
-  @Test
-  void testContextDimensionsIncludedInError() {
+  @Test void testContextDimensionsIncludedInError() {
     Map<String, String> dimensions = new HashMap<String, String>();
     dimensions.put("year", "2020");
     dimensions.put("for", "state:06");
@@ -268,8 +252,7 @@ class CensusResponseTransformerTest {
     assertTrue(ex.getMessage().contains("Census API error"));
   }
 
-  @Test
-  void testDataFieldWrapper() {
+  @Test void testDataFieldWrapper() {
     String response = "{"
         + "\"data\": ["
         + "  {\"id\": 1, \"value\": \"test1\"},"
@@ -282,8 +265,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("test2"));
   }
 
-  @Test
-  void testResultsFieldWrapper() {
+  @Test void testResultsFieldWrapper() {
     String response = "{"
         + "\"results\": ["
         + "  {\"name\": \"California\"},"
@@ -296,8 +278,7 @@ class CensusResponseTransformerTest {
     assertTrue(result.contains("Texas"));
   }
 
-  @Test
-  void testNoDataErrorMessage() {
+  @Test void testNoDataErrorMessage() {
     String response = "{"
         + "\"error\": \"No data found for the specified query parameters.\""
         + "}";

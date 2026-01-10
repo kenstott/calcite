@@ -46,8 +46,7 @@ class BeaResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testSuccessfulResponse() {
+  @Test void testSuccessfulResponse() {
     String response = "{"
         + "\"BEAAPI\": {"
         + "  \"Request\": {\"RequestParam\": []},"
@@ -61,8 +60,7 @@ class BeaResponseTransformerTest {
     assertEquals("[{\"TableName\":\"T10101\",\"Value\":\"1234.5\"}]", result);
   }
 
-  @Test
-  void testEmptyDataArray() {
+  @Test void testEmptyDataArray() {
     String response = "{"
         + "\"BEAAPI\": {"
         + "  \"Results\": {"
@@ -75,8 +73,7 @@ class BeaResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testMissingDataArray() {
+  @Test void testMissingDataArray() {
     String response = "{"
         + "\"BEAAPI\": {"
         + "  \"Results\": {}"
@@ -87,8 +84,7 @@ class BeaResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testParamValueResponse() {
+  @Test void testParamValueResponse() {
     // GetParameterValues returns ParamValue instead of Data
     String response = "{"
         + "\"BEAAPI\": {"
@@ -102,8 +98,7 @@ class BeaResponseTransformerTest {
     assertEquals("[{\"Key\":\"2020\"},{\"Key\":\"2021\"}]", result);
   }
 
-  @Test
-  void testApiError() {
+  @Test void testApiError() {
     String response = "{"
         + "\"BEAAPI\": {"
         + "  \"Results\": {"
@@ -121,8 +116,7 @@ class BeaResponseTransformerTest {
     assertTrue(ex.getMessage().contains("Invalid TableName parameter"));
   }
 
-  @Test
-  void testNoDataError() {
+  @Test void testNoDataError() {
     // NO_DATA is a soft error - returns empty array
     String response = "{"
         + "\"BEAAPI\": {"
@@ -139,22 +133,19 @@ class BeaResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNonBeaStructure() {
+  @Test void testNonBeaStructure() {
     // Non-BEA JSON should be returned as-is
     String response = "{\"data\": [1, 2, 3]}";
 
@@ -163,8 +154,7 @@ class BeaResponseTransformerTest {
     assertEquals(response, result);
   }
 
-  @Test
-  void testContextDimensionsIncludedInErrorMessage() {
+  @Test void testContextDimensionsIncludedInErrorMessage() {
     Map<String, String> dimensions = new HashMap<>();
     dimensions.put("year", "2024");
     dimensions.put("tablename", "T10101");
@@ -190,8 +180,7 @@ class BeaResponseTransformerTest {
     assertTrue(ex.getMessage().contains("SERVER_ERROR"));
   }
 
-  @Test
-  void testMultipleDataRecords() {
+  @Test void testMultipleDataRecords() {
     String response = "{"
         + "\"BEAAPI\": {"
         + "  \"Results\": {"

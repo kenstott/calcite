@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
@@ -45,9 +48,11 @@ public class IcebergTableWriterTest {
 
   private Map<String, Object> catalogConfig;
   private Table table;
+  private StorageProvider storageProvider;
 
   @BeforeEach
   void setUp() {
+    storageProvider = new LocalFileStorageProvider();
     String warehousePath = tempDir.resolve("warehouse").toString();
     catalogConfig = new HashMap<>();
     catalogConfig.put("catalogType", "hadoop");
@@ -74,27 +79,27 @@ public class IcebergTableWriterTest {
 
   @Test
   void testWriterCreation() {
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertNotNull(writer);
     assertNotNull(writer.getTable());
   }
 
   @Test
   void testMaintenanceDoesNotThrow() {
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw even on empty table
     writer.runMaintenance(7, 1);
   }
 
   @Test
   void testCommitFromStagingEmptyDirectory() throws Exception {
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
     // Create an empty staging directory
     Path stagingPath = tempDir.resolve("staging");
     Files.createDirectories(stagingPath);
 
     // Should not throw, just log warning
-    writer.commitFromStaging(stagingPath, null);
+    writer.commitFromStaging(stagingPath.toString(), null);
   }
 }

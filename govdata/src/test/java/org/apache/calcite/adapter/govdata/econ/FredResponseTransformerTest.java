@@ -46,8 +46,7 @@ class FredResponseTransformerTest {
         .build();
   }
 
-  @Test
-  void testObservationsResponse() {
+  @Test void testObservationsResponse() {
     String response = "{"
         + "\"realtime_start\": \"2024-01-01\","
         + "\"realtime_end\": \"2024-12-31\","
@@ -65,8 +64,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("101.5"));
   }
 
-  @Test
-  void testSeriessResponse() {
+  @Test void testSeriessResponse() {
     // Note: FRED uses "seriess" (double s) not "series"
     String response = "{"
         + "\"count\": 2,"
@@ -82,8 +80,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("UNRATE"));
   }
 
-  @Test
-  void testCategoriesResponse() {
+  @Test void testCategoriesResponse() {
     String response = "{"
         + "\"categories\": ["
         + "  {\"id\": 1, \"name\": \"Production & Business Activity\"},"
@@ -96,8 +93,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("Prices"));
   }
 
-  @Test
-  void testEmptyObservationsArray() {
+  @Test void testEmptyObservationsArray() {
     String response = "{"
         + "\"count\": 0,"
         + "\"observations\": []"
@@ -108,8 +104,7 @@ class FredResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testZeroCountResponse() {
+  @Test void testZeroCountResponse() {
     String response = "{"
         + "\"count\": 0,"
         + "\"limit\": 1000,"
@@ -121,8 +116,7 @@ class FredResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testApiKeyError() {
+  @Test void testApiKeyError() {
     String response = "{"
         + "\"error_code\": 400,"
         + "\"error_message\": \"Bad Request. Variable api_key is not set.\""
@@ -135,8 +129,7 @@ class FredResponseTransformerTest {
     assertTrue(ex.getMessage().contains("API key"));
   }
 
-  @Test
-  void testRateLimitError() {
+  @Test void testRateLimitError() {
     String response = "{"
         + "\"error_code\": 429,"
         + "\"error_message\": \"Too Many Requests. Limit exceeded.\""
@@ -148,8 +141,7 @@ class FredResponseTransformerTest {
     assertTrue(ex.getMessage().toLowerCase().contains("rate limit"));
   }
 
-  @Test
-  void testNotFoundError() {
+  @Test void testNotFoundError() {
     String response = "{"
         + "\"error_code\": 404,"
         + "\"error_message\": \"Not Found\""
@@ -160,8 +152,7 @@ class FredResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testSeriesNotFoundReturnsEmpty() {
+  @Test void testSeriesNotFoundReturnsEmpty() {
     String response = "{"
         + "\"error_code\": 400,"
         + "\"error_message\": \"Bad Request. The series ID provided is not valid.\""
@@ -172,8 +163,7 @@ class FredResponseTransformerTest {
     assertEquals("[]", result);
   }
 
-  @Test
-  void testServerError() {
+  @Test void testServerError() {
     String response = "{"
         + "\"error_code\": 500,"
         + "\"error_message\": \"Internal Server Error\""
@@ -186,22 +176,19 @@ class FredResponseTransformerTest {
     assertTrue(ex.getMessage().contains("server error"));
   }
 
-  @Test
-  void testEmptyResponse() {
+  @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testNullResponse() {
+  @Test void testNullResponse() {
     String result = transformer.transform(null, context);
 
     assertEquals("[]", result);
   }
 
-  @Test
-  void testSingleSeriesObjectWrappedInArray() {
+  @Test void testSingleSeriesObjectWrappedInArray() {
     // Some endpoints return a single object instead of an array
     String response = "{"
         + "\"id\": \"GDP\","
@@ -216,8 +203,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("GDP"));
   }
 
-  @Test
-  void testContextDimensionsForDebugging() {
+  @Test void testContextDimensionsForDebugging() {
     Map<String, String> dimensions = new HashMap<>();
     dimensions.put("series", "GDP");
     dimensions.put("year", "2024");
@@ -238,8 +224,7 @@ class FredResponseTransformerTest {
     assertTrue(ex.getMessage().contains("502"));
   }
 
-  @Test
-  void testReleasesResponse() {
+  @Test void testReleasesResponse() {
     String response = "{"
         + "\"releases\": ["
         + "  {\"id\": 10, \"name\": \"Consumer Price Index\"},"
@@ -252,8 +237,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("Gross Domestic Product"));
   }
 
-  @Test
-  void testTagsResponse() {
+  @Test void testTagsResponse() {
     String response = "{"
         + "\"tags\": ["
         + "  {\"name\": \"gdp\", \"group_id\": \"freq\"},"
@@ -266,8 +250,7 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("monthly"));
   }
 
-  @Test
-  void testMultipleObservations() {
+  @Test void testMultipleObservations() {
     String response = "{"
         + "\"count\": 12,"
         + "\"observations\": ["

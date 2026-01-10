@@ -197,7 +197,7 @@ public class PartitionAlternatesIntegrationTest {
     Table table = IcebergCatalogManager.createTable(
         catalogConfig, "default.writer_test", schema, spec);
 
-    IcebergTableWriter writer = new IcebergTableWriter(table);
+    IcebergTableWriter writer = new IcebergTableWriter(table, new LocalFileStorageProvider());
     assertNotNull(writer);
     assertNotNull(writer.getTable());
 

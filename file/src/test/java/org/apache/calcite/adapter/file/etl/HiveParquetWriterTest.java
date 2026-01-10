@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -129,7 +127,8 @@ public class HiveParquetWriterTest {
             .location(outputDir.toString())
             .compression("snappy")
             .build())
-        .columns(Arrays.asList(
+        .columns(
+            Arrays.asList(
             ColumnConfig.builder()
                 .name("name")
                 .type("VARCHAR")
@@ -144,8 +143,7 @@ public class HiveParquetWriterTest {
                 .name("quarter_num")
                 .type("INTEGER")
                 .expression("CAST(SUBSTR(period, 2, 1) AS INTEGER)")
-                .build()
-        ))
+                .build()))
         .build();
 
     MaterializeResult result = writer.materializeFromJson(config, jsonFile.toString());
@@ -270,14 +268,12 @@ public class HiveParquetWriterTest {
    * Simple test data source implementation.
    */
   private static class SimpleDataSource implements DataSource {
-    @Override
-    public java.util.Iterator<java.util.Map<String, Object>> fetch(
+    @Override public java.util.Iterator<java.util.Map<String, Object>> fetch(
         java.util.Map<String, String> variables) {
       return java.util.Collections.emptyIterator();
     }
 
-    @Override
-    public String getType() {
+    @Override public String getType() {
       return "test";
     }
   }
