@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.json.JsonMultiTableFactory;
 import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
+import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMetadataTables;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.materialized.MaterializedViewTable;
@@ -3993,6 +3994,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
           if (conversionMetadata != null) {
             conversionMetadata.recordTable(config.getName(), table, partitionSource, partTableConfig);
             LOGGER.info("Successfully recorded partitioned table '{}' in conversion metadata", config.getName());
+
+            // Check if existing Iceberg table should be discovered
+            // This enables self-healing when .conversions.json is deleted but data exists in S3
+            discoverExistingIcebergTable(config.getName(), partTableConfig);
           } else {
             LOGGER.error("ConversionMetadata is null - cannot record partitioned table '{}'", config.getName());
           }
@@ -4004,6 +4009,109 @@ public class FileSchema extends AbstractSchema implements CommentableSchema {
         LOGGER.error("Failed to process partitioned table: {}", e.getMessage());
         e.printStackTrace();
       }
+    }
+  }
+
+  /**
+   * Discovers existing Iceberg tables in S3 and updates conversion metadata.
+   * This enables self-healing when the local .conversions.json cache is deleted
+   * but the materialized Iceberg data still exists in S3.
+   *
+   * @param tableName The table name
+   * @param partTableConfig The partitioned table configuration containing materialize settings
+   */
+  @SuppressWarnings("unchecked")
+  private void discoverExistingIcebergTable(String tableName, Map<String, Object> partTableConfig) {
+    if (conversionMetadata == null) {
+      return;
+    }
+
+    // Check if this table has Iceberg materialize configuration
+    Map<String, Object> materializeConfig = (Map<String, Object>) partTableConfig.get("materialize");
+    if (materializeConfig == null) {
+      return;
+    }
+
+    String format = (String) materializeConfig.get("format");
+    if (!"iceberg".equals(format)) {
+      return;
+    }
+
+    // Get Iceberg configuration
+    Map<String, Object> icebergConfig = (Map<String, Object>) materializeConfig.get("iceberg");
+    if (icebergConfig == null) {
+      return;
+    }
+
+    String warehousePath = (String) icebergConfig.get("warehousePath");
+    // If warehousePath not specified at table level, build from baseDirectory + schemaName
+    // This is the default convention used by the ETL pipeline
+    if (warehousePath == null && baseDirectory != null) {
+      warehousePath = baseDirectory + "/" + name;
+      LOGGER.debug("Using default warehouse path for table '{}': {}", tableName, warehousePath);
+    }
+    if (warehousePath == null) {
+      LOGGER.debug("No warehouse path available for table '{}', skipping Iceberg discovery", tableName);
+      return;
+    }
+    String icebergTableName = (String) icebergConfig.get("tableName");
+    if (icebergTableName == null) {
+      icebergTableName = tableName;
+    }
+
+    // Build the config map for IcebergCatalogManager
+    // Convert s3:// to s3a:// for Hadoop compatibility
+    String normalizedWarehouse = warehousePath;
+    if (normalizedWarehouse != null && normalizedWarehouse.startsWith("s3://")) {
+      normalizedWarehouse = "s3a://" + normalizedWarehouse.substring(5);
+    }
+
+    Map<String, Object> catalogConfig = new HashMap<>();
+    catalogConfig.put("catalog", icebergConfig.getOrDefault("catalogType", "hadoop"));
+    catalogConfig.put("warehousePath", normalizedWarehouse);
+
+    // Add S3 credentials as Hadoop configuration if available from storage provider
+    if (storageProvider != null) {
+      Map<String, String> s3Config = storageProvider.getS3Config();
+      if (s3Config != null) {
+        Map<String, String> hadoopConfig = new HashMap<>();
+        if (s3Config.containsKey("accessKeyId")) {
+          hadoopConfig.put("fs.s3a.access.key", s3Config.get("accessKeyId"));
+        }
+        if (s3Config.containsKey("secretAccessKey")) {
+          hadoopConfig.put("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
+        }
+        if (s3Config.containsKey("endpoint")) {
+          hadoopConfig.put("fs.s3a.endpoint", s3Config.get("endpoint"));
+          // For custom endpoints like R2, we need path-style access
+          hadoopConfig.put("fs.s3a.path.style.access", "true");
+        }
+        if (!hadoopConfig.isEmpty()) {
+          catalogConfig.put("hadoopConfig", hadoopConfig);
+        }
+      }
+    }
+
+    try {
+      // Check if the Iceberg table exists
+      if (IcebergCatalogManager.tableExists(catalogConfig, icebergTableName)) {
+        // Build the full table location path using original s3:// format for consistency
+        String tableLocation = warehousePath;
+        if (!tableLocation.endsWith("/")) {
+          tableLocation = tableLocation + "/";
+        }
+        tableLocation = tableLocation + icebergTableName;
+
+        LOGGER.info("Discovered existing Iceberg table '{}' at: {}", tableName, tableLocation);
+
+        // Update the conversion record to ICEBERG_PARQUET
+        conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET");
+        LOGGER.info("Updated conversion record for '{}' to ICEBERG_PARQUET", tableName);
+      } else {
+        LOGGER.debug("Iceberg table '{}' does not exist at warehouse: {}", icebergTableName, warehousePath);
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Could not check for existing Iceberg table '{}': {}", tableName, e.getMessage());
     }
   }
 
