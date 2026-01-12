@@ -1218,7 +1218,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1295,7 +1295,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1372,7 +1372,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1450,7 +1450,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1527,7 +1527,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1601,7 +1601,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
@@ -1678,7 +1678,7 @@ partitionedTables:
       response:
         format: json
       headers:
-        Authorization: "Bearer {env:HUD_API_KEY}"
+        Authorization: "Bearer {env:HUD_TOKEN}"
       rawCache:
         enabled: true
 
