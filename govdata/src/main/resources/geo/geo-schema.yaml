@@ -1,0 +1,988 @@
+# ============================================================================
+# U.S. Government Geographic Data Schema
+# ============================================================================
+# Data Sources:
+#   - Census TIGER/Line shapefiles (boundaries)
+#   - HUD USPS ZIP Code Crosswalk (crosswalks)
+#   - Census API (demographics)
+#
+# Features:
+#   - Hive-style partitioning for efficient querying
+#   - Shapefile-to-Parquet conversion via DuckDB spatial
+#   - Iceberg materialization support
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:geo}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/source=geo"
+refreshInterval: "PT1H"
+
+comment: >
+  U.S. government geographic data including Census TIGER boundaries, HUD USPS ZIP code
+  crosswalks, and demographic statistics. Enables spatial analysis, geographic aggregation,
+  and crosswalk between ZIP codes, counties, census tracts, congressional districts, and
+  metropolitan areas.
+
+# ============================================================================
+# HOOKS CONFIGURATION
+# ============================================================================
+# Response transformers for different data sources
+# ============================================================================
+
+hooks:
+  # Shapefile conversion uses DuckDB spatial extension
+  responseTransformer: "org.apache.calcite.adapter.govdata.geo.TigerResponseTransformer"
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+# Reusable column definitions using YAML anchors
+# ============================================================================
+
+column_templates:
+
+  # --- Geographic Identifier Columns ---
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: false
+    comment: 2-digit FIPS code identifying the state (e.g., '06' for California)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: false
+    comment: 5-digit FIPS code for county (state + county, e.g., '06037' for Los Angeles County)
+
+  geometry_column: &geometry_column
+    name: geometry
+    type: string
+    nullable: true
+    comment: WKT representation of boundary polygon
+
+  land_area_column: &land_area_column
+    name: land_area
+    type: double
+    nullable: true
+    comment: Land area in square meters
+
+  water_area_column: &water_area_column
+    name: water_area
+    type: double
+    nullable: true
+    comment: Water area in square meters
+
+  # --- Partition Column Definitions ---
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  # --- Standard Partition Set ---
+
+  boundary_partitions: &boundary_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  crosswalk_partitions: &crosswalk_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  demographic_partitions: &demographic_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+# Reusable dimension value lists
+# ============================================================================
+
+dimension_values:
+
+  # --- Year Range for TIGER data ---
+  tiger_year_range: &tiger_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2020}"
+    lagYears: 0
+
+  # --- Year Range for HUD crosswalk data ---
+  hud_year_range: &hud_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2020}"
+    lagYears: 0
+
+  # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
+  all_state_fips: &all_state_fips
+    - '01'
+    - '02'
+    - '04'
+    - '05'
+    - '06'
+    - '08'
+    - '09'
+    - '10'
+    - '11'
+    - '12'
+    - '13'
+    - '15'
+    - '16'
+    - '17'
+    - '18'
+    - '19'
+    - '20'
+    - '21'
+    - '22'
+    - '23'
+    - '24'
+    - '25'
+    - '26'
+    - '27'
+    - '28'
+    - '29'
+    - '30'
+    - '31'
+    - '32'
+    - '33'
+    - '34'
+    - '35'
+    - '36'
+    - '37'
+    - '38'
+    - '39'
+    - '40'
+    - '41'
+    - '42'
+    - '44'
+    - '45'
+    - '46'
+    - '47'
+    - '48'
+    - '49'
+    - '50'
+    - '51'
+    - '53'
+    - '54'
+    - '55'
+    - '56'
+
+# ============================================================================
+# MATERIALIZATION OPTIONS
+# ============================================================================
+# Default materialization settings for all tables
+# ============================================================================
+
+materializationDefaults:
+  format: iceberg
+  options:
+    warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+    icebergTableName: "${TABLE_NAME}"
+    catalogType: hadoop
+    partitionBy:
+      - type
+      - year
+    emptyResultTtlDays: 7
+    errorRetryDays: 1
+
+# ============================================================================
+# TIGER BOUNDARY TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # --------------------------------------------------------------------------
+  # States - U.S. state boundaries
+  # --------------------------------------------------------------------------
+  - name: states
+    pattern: "type=boundary/year=*/states.parquet"
+    comment: >
+      U.S. state boundaries and attributes from TIGER/Line shapefiles. Includes state
+      FIPS codes, names, areas, and geographic boundaries. Updated annually with official
+      Census Bureau boundaries.
+
+    columns:
+      - <<: *state_fips_column
+      - name: state_code
+        type: string
+        nullable: false
+        comment: Geographic identifier (GEOID) for the state, matches state_fips
+      - name: state_name
+        type: string
+        nullable: false
+        comment: Full state name (e.g., 'California')
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter postal abbreviation (e.g., 'CA')
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [state_fips, year]
+      unique:
+        - [state_code, year]
+        - [state_name, year]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/STATE/"
+      filePattern: "tl_{year}_us_state.zip"
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Counties - U.S. county boundaries
+  # --------------------------------------------------------------------------
+  - name: counties
+    pattern: "type=boundary/year=*/counties.parquet"
+    comment: >
+      U.S. county boundaries and attributes including FIPS codes, names, metropolitan
+      statistical areas, and geographic boundaries. Contains all 3,000+ counties and
+      county equivalents.
+
+    columns:
+      - <<: *county_fips_column
+      - <<: *state_fips_column
+      - name: county_name
+        type: string
+        nullable: false
+        comment: Full county name (e.g., 'Los Angeles County')
+      - name: county_code
+        type: string
+        nullable: false
+        comment: Geographic identifier (GEOID) for the county
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [county_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/"
+      filePattern: "tl_{year}_us_county.zip"
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Places - Census designated places (cities, towns)
+  # --------------------------------------------------------------------------
+  - name: places
+    pattern: "type=boundary/year=*/places.parquet"
+    comment: >
+      Census designated places including cities, towns, and villages. Contains place
+      boundaries, population classifications, and geographic identifiers for incorporated
+      and census-designated places.
+
+    columns:
+      - name: place_fips
+        type: string
+        nullable: false
+        comment: 7-digit FIPS code for place (state + place code)
+      - <<: *state_fips_column
+      - name: place_name
+        type: string
+        nullable: false
+        comment: Name of incorporated place or census-designated place
+      - name: place_type
+        type: string
+        nullable: true
+        comment: Classification of place (e.g., 'city', 'town', 'CDP')
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [place_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/PLACE/"
+      filePattern: "tl_{year}_{state_fips}_place.zip"
+      perState: true
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+      - name: state_fips
+        values: *all_state_fips
+
+  # --------------------------------------------------------------------------
+  # ZCTAs - ZIP Code Tabulation Areas
+  # --------------------------------------------------------------------------
+  - name: zctas
+    pattern: "type=boundary/year=*/zctas.parquet"
+    comment: >
+      ZIP Code Tabulation Areas (ZCTAs) approximating USPS ZIP Code delivery areas.
+      Includes ZCTA boundaries and relationships to other geographic entities.
+
+    columns:
+      - name: zcta
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code Tabulation Area code
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [zcta, year]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA520/"
+      filePattern: "tl_{year}_us_zcta520.zip"
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Census Tracts - Statistical subdivisions of counties
+  # --------------------------------------------------------------------------
+  - name: census_tracts
+    pattern: "type=boundary/year=*/census_tracts.parquet"
+    comment: >
+      Census tract boundaries - small statistical subdivisions of counties averaging
+      4,000 inhabitants. Key geography for demographic analysis and census data reporting.
+
+    columns:
+      - name: tract_fips
+        type: string
+        nullable: false
+        comment: 11-digit FIPS code for census tract (state + county + tract)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: tract_name
+        type: string
+        nullable: true
+        comment: Census tract number (e.g., '4201.02')
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [tract_fips, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/TRACT/"
+      filePattern: "tl_{year}_{state_fips}_tract.zip"
+      perState: true
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+      - name: state_fips
+        values: *all_state_fips
+
+  # --------------------------------------------------------------------------
+  # Block Groups - Smallest census geography with sample data
+  # --------------------------------------------------------------------------
+  - name: block_groups
+    pattern: "type=boundary/year=*/block_groups.parquet"
+    comment: >
+      Census block groups - statistical divisions of census tracts, generally containing
+      600-3,000 people. Smallest geography for which census sample data is published.
+
+    columns:
+      - name: block_group_fips
+        type: string
+        nullable: false
+        comment: 12-digit FIPS code for block group (state + county + tract + block group)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: tract_fips
+        type: string
+        nullable: false
+        comment: 11-digit FIPS code of the parent census tract
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [block_group_fips, year]
+      foreignKeys:
+        - columns: [tract_fips]
+          targetTable: census_tracts
+          targetColumns: [tract_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/BG/"
+      filePattern: "tl_{year}_{state_fips}_bg.zip"
+      perState: true
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+      - name: state_fips
+        values: *all_state_fips
+
+  # --------------------------------------------------------------------------
+  # CBSAs - Core Based Statistical Areas (metros/micros)
+  # --------------------------------------------------------------------------
+  - name: cbsa
+    pattern: "type=boundary/year=*/cbsa.parquet"
+    comment: >
+      Core Based Statistical Areas including Metropolitan and Micropolitan Statistical
+      Areas. Defines urban cores and surrounding counties with social and economic ties.
+
+    columns:
+      - name: cbsa_fips
+        type: string
+        nullable: false
+        comment: 5-digit CBSA code for Core Based Statistical Area
+      - name: cbsa_name
+        type: string
+        nullable: false
+        comment: Name of metropolitan or micropolitan statistical area
+      - name: metro_micro
+        type: string
+        nullable: true
+        comment: LSAD code indicating Metropolitan or Micropolitan designation
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [cbsa_fips, year]
+      unique:
+        - [cbsa_name, year]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/CBSA/"
+      filePattern: "tl_{year}_us_cbsa.zip"
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Congressional Districts
+  # --------------------------------------------------------------------------
+  - name: congressional_districts
+    pattern: "type=boundary/year=*/congressional_districts.parquet"
+    comment: >
+      U.S. Congressional district boundaries for the House of Representatives.
+      Updated after each decennial census reapportionment and subsequent redistricting.
+
+    columns:
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: 4-digit congressional district code (state + district number)
+      - <<: *state_fips_column
+      - name: cd_name
+        type: string
+        nullable: true
+        comment: Congressional district name or number
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [cd_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/"
+      filePattern: "tl_{year}_us_cd{congress}.zip"
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # School Districts
+  # --------------------------------------------------------------------------
+  - name: school_districts
+    pattern: "type=boundary/year=*/school_districts.parquet"
+    comment: >
+      Elementary, secondary, and unified school district boundaries. Includes district
+      codes, names, and relationships to other geographic entities.
+
+    columns:
+      - name: sd_lea
+        type: string
+        nullable: false
+        comment: Local Education Agency (LEA) code identifying the school district
+      - <<: *state_fips_column
+      - name: sd_name
+        type: string
+        nullable: true
+        comment: School district name
+      - name: sd_type
+        type: string
+        nullable: true
+        comment: School district type (elementary, secondary, or unified)
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [sd_lea, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    source:
+      type: tiger_shapefile
+      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/UNSD/"
+      filePattern: "tl_{year}_{state_fips}_unsd.zip"
+      perState: true
+      conversion:
+        type: shapefile_to_parquet
+        method: duckdb_spatial
+        geometryColumn: geometry
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+      - name: state_fips
+        values: *all_state_fips
+
+# ============================================================================
+# HUD CROSSWALK TABLES
+# ============================================================================
+
+  # --------------------------------------------------------------------------
+  # ZIP to County Crosswalk
+  # --------------------------------------------------------------------------
+  - name: zip_county_crosswalk
+    pattern: "type=crosswalk/year=*/zip_county_crosswalk.parquet"
+    comment: >
+      ZIP Code to County crosswalk file mapping ZIP codes to counties with residential
+      and business address ratios. Source: HUD USPS ZIP Code Crosswalk.
+
+    columns:
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - <<: *county_fips_column
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this ZIP that are in this county
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this ZIP that are in this county
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this ZIP that are in this county
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this ZIP that are in this county
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [zip, county_fips, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+      indexes:
+        - [zip]
+        - [county_fips]
+
+    source:
+      type: hud_api
+      endpoint: "https://www.huduser.gov/hudapi/public/usps"
+      query: "type=1"
+      responseFormat: json
+
+    dimensions:
+      - name: year
+        values: *hud_year_range
+
+  # --------------------------------------------------------------------------
+  # ZIP to CBSA Crosswalk
+  # --------------------------------------------------------------------------
+  - name: zip_cbsa_crosswalk
+    pattern: "type=crosswalk/year=*/zip_cbsa_crosswalk.parquet"
+    comment: >
+      ZIP Code to Core Based Statistical Area crosswalk mapping ZIP codes to
+      metropolitan and micropolitan areas.
+
+    columns:
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: cbsa_code
+        type: string
+        nullable: false
+        comment: 5-digit CBSA code for Core Based Statistical Area
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this ZIP that are in this CBSA
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this ZIP that are in this CBSA
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this ZIP that are in this CBSA
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this ZIP that are in this CBSA
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [zip, cbsa_code, year]
+      foreignKeys:
+        - columns: [cbsa_code]
+          targetTable: cbsa
+          targetColumns: [cbsa_fips]
+      indexes:
+        - [zip]
+        - [cbsa_code]
+
+    source:
+      type: hud_api
+      endpoint: "https://www.huduser.gov/hudapi/public/usps"
+      query: "type=4"
+      responseFormat: json
+
+    dimensions:
+      - name: year
+        values: *hud_year_range
+
+  # --------------------------------------------------------------------------
+  # Tract to ZIP Crosswalk
+  # --------------------------------------------------------------------------
+  - name: tract_zip_crosswalk
+    pattern: "type=crosswalk/year=*/tract_zip_crosswalk.parquet"
+    comment: >
+      Census tract to ZIP Code crosswalk for relating census geography to postal
+      geography. Includes residential and business address ratios.
+
+    columns:
+      - name: tract_fips
+        type: string
+        nullable: false
+        comment: 11-digit census tract FIPS code
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this tract that are in this ZIP
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this tract that are in this ZIP
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this tract that are in this ZIP
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this tract that are in this ZIP
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [tract_fips, zip, year]
+      foreignKeys:
+        - columns: [tract_fips]
+          targetTable: census_tracts
+          targetColumns: [tract_fips]
+      indexes:
+        - [tract_fips]
+        - [zip]
+
+    source:
+      type: hud_api
+      endpoint: "https://www.huduser.gov/hudapi/public/usps"
+      query: "type=3"
+      responseFormat: json
+
+    dimensions:
+      - name: year
+        values: *hud_year_range
+
+# ============================================================================
+# DEMOGRAPHIC TABLES (Census API)
+# ============================================================================
+
+  # --------------------------------------------------------------------------
+  # Population Demographics
+  # --------------------------------------------------------------------------
+  - name: population_demographics
+    pattern: "type=demographic/year=*/population_demographics.parquet"
+    comment: >
+      Population counts and demographic characteristics by geography from Census
+      and American Community Survey. Includes age, sex, race, ethnicity distributions.
+
+    columns:
+      - name: geo_id
+        type: string
+        nullable: false
+        comment: Census geographic identifier (state or county FIPS code)
+      - name: year
+        type: int
+        nullable: false
+        comment: Census survey year
+      - name: total_population
+        type: int
+        nullable: true
+        comment: Total population count
+      - name: male_population
+        type: int
+        nullable: true
+        comment: Male population count
+      - name: female_population
+        type: int
+        nullable: true
+        comment: Female population count
+      - <<: *state_fips_column
+        nullable: true
+      - <<: *county_fips_column
+        nullable: true
+
+    partitions: *demographic_partitions
+
+    constraints:
+      primaryKey: [geo_id, year]
+      indexes:
+        - [state_fips]
+        - [county_fips]
+        - [year]
+
+    source:
+      type: census_api
+      dataset: acs/acs5
+      variables:
+        - B01001_001E  # Total population
+        - B01001_002E  # Male population
+        - B01001_026E  # Female population
+      geography: "state:*"
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Housing Characteristics
+  # --------------------------------------------------------------------------
+  - name: housing_characteristics
+    pattern: "type=demographic/year=*/housing_characteristics.parquet"
+    comment: >
+      Housing unit counts, occupancy status, tenure, and structural characteristics
+      by geography. Source: American Community Survey 5-year estimates.
+
+    columns:
+      - name: geo_id
+        type: string
+        nullable: false
+        comment: Census geographic identifier (state or county FIPS code)
+      - name: year
+        type: int
+        nullable: false
+        comment: Census survey year
+      - name: total_housing_units
+        type: int
+        nullable: true
+        comment: Total number of housing units
+      - name: occupied_units
+        type: int
+        nullable: true
+        comment: Number of occupied housing units
+      - name: vacant_units
+        type: int
+        nullable: true
+        comment: Number of vacant housing units
+      - name: median_home_value
+        type: double
+        nullable: true
+        comment: Median home value in dollars
+      - <<: *state_fips_column
+        nullable: true
+      - <<: *county_fips_column
+        nullable: true
+
+    partitions: *demographic_partitions
+
+    constraints:
+      primaryKey: [geo_id, year]
+      indexes:
+        - [state_fips]
+        - [county_fips]
+        - [year]
+
+    source:
+      type: census_api
+      dataset: acs/acs5
+      variables:
+        - B25001_001E  # Total housing units
+        - B25002_002E  # Occupied housing units
+        - B25002_003E  # Vacant housing units
+        - B25077_001E  # Median home value
+      geography: "state:*"
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
+
+  # --------------------------------------------------------------------------
+  # Economic Indicators
+  # --------------------------------------------------------------------------
+  - name: economic_indicators
+    pattern: "type=demographic/year=*/economic_indicators.parquet"
+    comment: >
+      Income, poverty, employment, and economic characteristics by geography.
+      Includes median household income, poverty rates, and employment statistics.
+
+    columns:
+      - name: geo_id
+        type: string
+        nullable: false
+        comment: Census geographic identifier (state or county FIPS code)
+      - name: year
+        type: int
+        nullable: false
+        comment: Census survey year
+      - name: median_household_income
+        type: double
+        nullable: true
+        comment: Median household income in dollars
+      - name: per_capita_income
+        type: double
+        nullable: true
+        comment: Per capita income in dollars
+      - name: labor_force
+        type: int
+        nullable: true
+        comment: Total civilian labor force count
+      - name: employed
+        type: int
+        nullable: true
+        comment: Number of employed persons
+      - name: unemployed
+        type: int
+        nullable: true
+        comment: Number of unemployed persons
+      - <<: *state_fips_column
+        nullable: true
+      - <<: *county_fips_column
+        nullable: true
+
+    partitions: *demographic_partitions
+
+    constraints:
+      primaryKey: [geo_id, year]
+      indexes:
+        - [state_fips]
+        - [county_fips]
+        - [year]
+
+    source:
+      type: census_api
+      dataset: acs/acs5
+      variables:
+        - B19013_001E  # Median household income
+        - B19301_001E  # Per capita income
+        - B23025_003E  # Labor force
+        - B23025_004E  # Employed
+        - B23025_005E  # Unemployed
+      geography: "state:*"
+
+    dimensions:
+      - name: year
+        values: *tiger_year_range
