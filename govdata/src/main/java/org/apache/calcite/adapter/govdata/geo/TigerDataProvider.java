@@ -222,6 +222,9 @@ public class TigerDataProvider implements DataProvider {
     conn.setRequestMethod("GET");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000); // 5 minutes for large shapefiles (block_groups can be 10+ MB)
+    // Required headers - Census Bureau uses Cloudflare which may throttle/reject bare requests
+    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData-Adapter/1.0");
+    conn.setRequestProperty("Accept", "application/zip, application/octet-stream, */*");
 
     int responseCode = conn.getResponseCode();
     if (responseCode != HttpURLConnection.HTTP_OK) {
