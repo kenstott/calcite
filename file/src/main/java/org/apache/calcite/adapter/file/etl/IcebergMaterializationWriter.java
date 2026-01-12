@@ -799,6 +799,27 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return null;
     }
 
+    // Pattern: COALESCE(src."FIELD1", src."FIELD2", ...) - returns first non-null value
+    java.util.regex.Pattern coalescePattern = java.util.regex.Pattern.compile(
+        "^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    java.util.regex.Matcher coalesceMatcher = coalescePattern.matcher(expr);
+    if (coalesceMatcher.matches()) {
+      String argsStr = coalesceMatcher.group(1);
+      // Split by comma, but handle quoted field names
+      java.util.regex.Pattern argPattern = java.util.regex.Pattern.compile(
+          "src\\.\"?([A-Za-z0-9_]+)\"?");
+      java.util.regex.Matcher argMatcher = argPattern.matcher(argsStr);
+      while (argMatcher.find()) {
+        String fieldName = argMatcher.group(1);
+        Object value = getValueCaseInsensitive(row, fieldName);
+        if (value != null) {
+          return value;
+        }
+      }
+      return null;
+    }
+
     // If expression cannot be evaluated, return null (like TRY_CAST behavior)
     LOGGER.debug("Cannot evaluate expression locally: {}", expr);
     return null;

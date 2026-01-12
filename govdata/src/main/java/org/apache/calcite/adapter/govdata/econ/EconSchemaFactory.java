@@ -48,46 +48,40 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconSchemaFactory.class);
 
   // Data source mappings for tables
-  private static final Set<String> BLS_TABLES = new HashSet<>(Arrays.asList(
-      "employment_statistics", "inflation_metrics", "regional_cpi", "metro_cpi",
+  private static final Set<String> BLS_TABLES =
+      new HashSet<>(
+          Arrays.asList("employment_statistics", "inflation_metrics", "regional_cpi", "metro_cpi",
       "state_industry", "state_wages", "metro_industry", "metro_wages",
       "county_qcew", "county_wages", "jolts_regional", "jolts_state",
-      "wage_growth", "regional_employment"
-  ));
+      "wage_growth", "regional_employment"));
 
-  private static final Set<String> TREASURY_TABLES = new HashSet<>(Arrays.asList(
-      "treasury_yields", "federal_debt"
-  ));
+  private static final Set<String> TREASURY_TABLES =
+      new HashSet<>(Arrays.asList("treasury_yields", "federal_debt"));
 
-  private static final Set<String> WORLDBANK_TABLES = new HashSet<>(Arrays.asList(
-      "world_indicators"
-  ));
+  private static final Set<String> WORLDBANK_TABLES =
+      new HashSet<>(Arrays.asList("world_indicators"));
 
-  private static final Set<String> FRED_TABLES = new HashSet<>(Arrays.asList(
-      "fred_indicators"
-  ));
+  private static final Set<String> FRED_TABLES =
+      new HashSet<>(Arrays.asList("fred_indicators"));
 
-  private static final Set<String> BEA_TABLES = new HashSet<>(Arrays.asList(
-      "national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp",
+  private static final Set<String> BEA_TABLES =
+      new HashSet<>(
+          Arrays.asList("national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp",
       // Bulk download tables (using ZIP files instead of per-API-call approach)
       "state_personal_income", "state_gdp", "state_quarterly_income",
-      "state_quarterly_gdp", "state_consumption"
-  ));
+      "state_quarterly_gdp", "state_consumption"));
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/econ/econ-schema.yaml";
   }
 
-  @Override
-  public List<String> getDependencies() {
+  @Override public List<String> getDependencies() {
     // The econ schema depends on econ_reference for dimension lookup tables
     // (e.g., regional_linecodes needed by BeaDimensionResolver)
     return Collections.singletonList("econ_reference");
   }
 
-  @Override
-  public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for ECON schema");
 
     // Parse filtering configuration

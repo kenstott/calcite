@@ -83,37 +83,63 @@ public class CensusConstraintValidationTest {
   private static void createTestModel() throws Exception {
     modelFile = tempDir.resolve("census-constraint-validation-model.json").toFile();
 
+    String executionEngine = TestEnvironmentLoader.getEnv("CALCITE_EXECUTION_ENGINE");
+    if (executionEngine == null) {
+      executionEngine = "duckdb";
+    }
+    String censusApiKey = TestEnvironmentLoader.getEnv("CENSUS_API_KEY");
+
+    // S3 configuration for MinIO or AWS S3
+    String awsAccessKeyId = TestEnvironmentLoader.getEnv("AWS_ACCESS_KEY_ID");
+    String awsSecretAccessKey = TestEnvironmentLoader.getEnv("AWS_SECRET_ACCESS_KEY");
+    String awsEndpointOverride = TestEnvironmentLoader.getEnv("AWS_ENDPOINT_OVERRIDE");
+    String awsRegion = TestEnvironmentLoader.getEnv("AWS_REGION");
+
+    // Build s3Config JSON if directory uses S3
+    String s3ConfigJson = "";
+    if (parquetDir != null && parquetDir.startsWith("s3://")) {
+      StringBuilder s3Config = new StringBuilder();
+      s3Config.append("\"s3Config\": {");
+      if (awsEndpointOverride != null) {
+        s3Config.append("\"endpoint\": \"").append(awsEndpointOverride).append("\",");
+      }
+      if (awsAccessKeyId != null) {
+        s3Config.append("\"accessKeyId\": \"").append(awsAccessKeyId).append("\",");
+      }
+      if (awsSecretAccessKey != null) {
+        s3Config.append("\"secretAccessKey\": \"").append(awsSecretAccessKey).append("\",");
+      }
+      if (awsRegion != null) {
+        s3Config.append("\"region\": \"").append(awsRegion).append("\",");
+      }
+      // Remove trailing comma
+      if (s3Config.charAt(s3Config.length() - 1) == ',') {
+        s3Config.setLength(s3Config.length() - 1);
+      }
+      s3Config.append("},");
+      s3ConfigJson = s3Config.toString();
+    }
+
     String modelJson = "{\n"
-  +
-        "  \"version\": \"1.0\",\n"
-  +
-        "  \"defaultSchema\": \"CENSUS\",\n"
-  +
-        "  \"schemas\": [{\n"
-  +
-        "    \"name\": \"CENSUS\",\n"
-  +
-        "    \"type\": \"custom\",\n"
-  +
-        "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
-  +
-        "    \"operand\": {\n"
-  +
-        "      \"dataSource\": \"census\",\n"
-  +
-        "      \"autoDownload\": true,\n"
-  +
-        "      \"startYear\": 2022,\n"
-  +
-        "      \"endYear\": 2023,\n"
-  +
-        "      \"censusCacheTtlDays\": 365\n"
-  +
-        "    }\n"
-  +
-        "  }]\n"
-  +
-        "}";
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"CENSUS\",\n"
+        + "  \"schemas\": [{\n"
+        + "    \"name\": \"CENSUS\",\n"
+        + "    \"type\": \"custom\",\n"
+        + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
+        + "    \"operand\": {\n"
+        + "      \"dataSource\": \"census\",\n"
+        + "      \"executionEngine\": \"" + executionEngine + "\",\n"
+        + "      \"cacheDirectory\": \"" + cacheDir + "\",\n"
+        + "      \"directory\": \"" + parquetDir + "\",\n"
+        + "      " + s3ConfigJson + "\n"
+        + "      \"autoDownload\": false,\n"
+        + "      \"startYear\": 2020,\n"
+        + "      \"endYear\": 2023"
+        + (censusApiKey != null ? ",\n      \"censusApiKey\": \"" + censusApiKey + "\"\n" : "\n")
+        + "    }\n"
+        + "  }]\n"
+        + "}";
 
     try (FileWriter writer = new FileWriter(modelFile)) {
       writer.write(modelJson);
@@ -126,14 +152,13 @@ public class CensusConstraintValidationTest {
   @Test public void testPrimaryKeyConstraints() throws Exception {
     // Define expected primary keys for each table
     Map<String, List<String>> expectedPrimaryKeys = new HashMap<>();
+    // Core ACS tables
     expectedPrimaryKeys.put("acs_population", List.of("geoid", "year"));
-    expectedPrimaryKeys.put("acs_demographics", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_income", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_poverty", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_employment", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_education", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_housing", List.of("geoid", "year"));
-    expectedPrimaryKeys.put("acs_housing_costs", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_commuting", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_health_insurance", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_language", List.of("geoid", "year"));
@@ -141,14 +166,17 @@ public class CensusConstraintValidationTest {
     expectedPrimaryKeys.put("acs_veterans", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_migration", List.of("geoid", "year"));
     expectedPrimaryKeys.put("acs_occupation", List.of("geoid", "year"));
+    expectedPrimaryKeys.put("acs_race_ethnicity", List.of("geoid", "year"));
+    expectedPrimaryKeys.put("acs_age", List.of("geoid", "year"));
 
+    // Decennial Census
     expectedPrimaryKeys.put("decennial_population", List.of("geoid", "year"));
-    expectedPrimaryKeys.put("decennial_demographics", List.of("geoid", "year"));
     expectedPrimaryKeys.put("decennial_housing", List.of("geoid", "year"));
 
+    // Economic data
     expectedPrimaryKeys.put("economic_census", List.of("geoid", "year", "naics_code"));
-    expectedPrimaryKeys.put("county_business_patterns", List.of("geoid", "year", "naics_code"));
-    expectedPrimaryKeys.put("population_estimates", List.of("geoid", "year"));
+    expectedPrimaryKeys.put("cbp_establishments", List.of("geoid", "year", "naics_code"));
+    expectedPrimaryKeys.put("pep_population", List.of("geoid", "year"));
 
     try (Connection connection = createConnection()) {
       Statement stmt = connection.createStatement();
@@ -208,12 +236,12 @@ public class CensusConstraintValidationTest {
   private void testGeoidForeignKeys(Statement stmt) {
     // List of Census tables that should have geoid foreign keys to GEO schema
     List<String> tablesWithGeoidFK =
-        List.of("acs_population", "acs_demographics", "acs_income", "acs_poverty",
-        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs",
+        List.of("acs_population", "acs_income", "acs_poverty",
+        "acs_employment", "acs_education", "acs_housing",
         "acs_commuting", "acs_health_insurance", "acs_language", "acs_disability",
-        "acs_veterans", "acs_migration", "acs_occupation",
-        "decennial_population", "decennial_demographics", "decennial_housing",
-        "economic_census", "county_business_patterns", "population_estimates");
+        "acs_veterans", "acs_migration", "acs_occupation", "acs_race_ethnicity", "acs_age",
+        "decennial_population", "decennial_housing",
+        "economic_census", "cbp_establishments", "pep_population");
 
     for (String tableName : tablesWithGeoidFK) {
       try {
@@ -251,8 +279,8 @@ public class CensusConstraintValidationTest {
   private void testIntraCensusForeignKeys(Statement stmt) {
     // Test if state_fips/county_fips columns in Census data are consistent
     List<String> tablesWithStateCounty =
-        List.of("acs_population", "acs_demographics", "acs_income", "acs_poverty",
-        "acs_employment", "acs_education", "acs_housing", "acs_housing_costs");
+        List.of("acs_population", "acs_income", "acs_poverty",
+        "acs_employment", "acs_education", "acs_housing");
 
     for (String tableName : tablesWithStateCounty) {
       try {

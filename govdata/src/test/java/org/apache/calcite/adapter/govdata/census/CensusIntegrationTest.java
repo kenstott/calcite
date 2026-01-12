@@ -63,8 +63,9 @@ public class CensusIntegrationTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusIntegrationTest.class);
 
   // ACS tables - core Census Bureau American Community Survey data
-  private static final Set<String> ACS_TABLES = new HashSet<>(Arrays.asList(
-      // Original 6 tables
+  private static final Set<String> ACS_TABLES =
+      new HashSet<>(
+          Arrays.asList(// Original 6 tables
       "acs_population",
       "acs_income",
       "acs_housing",
@@ -87,17 +88,16 @@ public class CensusIntegrationTest {
       "acs_marital_status",
       "acs_household_type",
       "acs_housing_tenure",
-      "acs_income_distribution"
-  ));
+      "acs_income_distribution"));
 
   // SQL views defined in census-schema.yaml
-  private static final Set<String> CENSUS_VIEWS = new HashSet<>(Arrays.asList(
-      "population_summary",
+  private static final Set<String> CENSUS_VIEWS =
+      new HashSet<>(
+          Arrays.asList("population_summary",
       "income_summary",
       "poverty_rate",
       "education_attainment",
-      "unemployment_rate"
-  ));
+      "unemployment_rate"));
 
   @BeforeAll
   public static void setup() {
@@ -277,8 +277,7 @@ public class CensusIntegrationTest {
     return DriverManager.getConnection("jdbc:calcite:", props);
   }
 
-  @Test
-  public void testAcsTables() throws Exception {
+  @Test public void testAcsTables() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" CENSUS ACS TABLES: American Community Survey 5-Year Estimates");
     LOGGER.info("================================================================================");
@@ -351,8 +350,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testCensusViews() throws Exception {
+  @Test public void testCensusViews() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" CENSUS SQL VIEWS: Analytical Views Test");
     LOGGER.info("================================================================================");
@@ -388,8 +386,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testGeographyPartitioning() throws Exception {
+  @Test public void testGeographyPartitioning() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" CENSUS GEOGRAPHY PARTITIONING: State and County Coverage");
     LOGGER.info("================================================================================");
@@ -456,8 +453,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testIcebergMaterialization() throws Exception {
+  @Test public void testIcebergMaterialization() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" CENSUS ICEBERG MATERIALIZATION: Verify Iceberg Table Format");
     LOGGER.info("================================================================================");
@@ -508,8 +504,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testAllTableStatus() throws Exception {
+  @Test public void testAllTableStatus() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" ALL CENSUS TABLE STATUS - Row counts (autoDownload=false, no API calls)");
     LOGGER.info("================================================================================\n");
@@ -520,7 +515,8 @@ public class CensusIntegrationTest {
 
       LOGGER.info("=== CENSUS Tables ===\n");
       LOGGER.info(String.format("%-25s %15s %10s", "TABLE", "ROWS", "TIME(ms)"));
-      LOGGER.info(String.format("%-25s %15s %10s",
+      LOGGER.info(
+          String.format("%-25s %15s %10s",
           "-------------------------", "---------------", "----------"));
 
       String[] censusTables = {"acs_population", "acs_income", "acs_housing",
@@ -533,8 +529,8 @@ public class CensusIntegrationTest {
       for (String table : censusTables) {
         try {
           long start = System.currentTimeMillis();
-          ResultSet rs = stmt.executeQuery(
-              "SELECT COUNT(*) FROM \"CENSUS\".\"" + table + "\"");
+          ResultSet rs =
+              stmt.executeQuery("SELECT COUNT(*) FROM \"CENSUS\".\"" + table + "\"");
           rs.next();
           long count = rs.getLong(1);
           long elapsed = System.currentTimeMillis() - start;
@@ -543,21 +539,22 @@ public class CensusIntegrationTest {
           successCount++;
         } catch (Exception e) {
           String msg = e.getMessage();
-          LOGGER.info(String.format("%-25s %15s %s", table, "ERROR",
+          LOGGER.info(
+              String.format("%-25s %15s %s", table, "ERROR",
               msg.substring(0, Math.min(60, msg.length()))));
           errorCount++;
         }
       }
 
       LOGGER.info("\n--------------------------------------------------------------------------------");
-      LOGGER.info(String.format("CENSUS: %d tables, %d ok, %d errors, %,d total rows",
+      LOGGER.info(
+          String.format("CENSUS: %d tables, %d ok, %d errors, %,d total rows",
           censusTables.length, successCount, errorCount, totalRows));
       LOGGER.info("================================================================================");
     }
   }
 
-  @Test
-  public void testCrossSchemaJoin() throws Exception {
+  @Test public void testCrossSchemaJoin() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" CROSS-SCHEMA JOIN: CENSUS + ECON Integration");
     LOGGER.info("================================================================================");
@@ -680,8 +677,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testDecennialPopulation() throws Exception {
+  @Test public void testDecennialPopulation() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" DECENNIAL POPULATION: Schema Evolution Test");
     LOGGER.info("================================================================================");
@@ -695,8 +691,8 @@ public class CensusIntegrationTest {
       // First check if decennial_population table exists
       LOGGER.info("\n--- Checking decennial_population table availability ---");
       try (Statement stmt = conn.createStatement()) {
-        ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) as cnt FROM \"CENSUS\".\"decennial_population\"");
+        ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"CENSUS\".\"decennial_population\"");
         if (rs.next()) {
           long count = rs.getLong("cnt");
           LOGGER.info("  decennial_population has {} rows", count);
@@ -704,8 +700,8 @@ public class CensusIntegrationTest {
           if (count > 0) {
             // Query sample data to verify schema evolution worked
             LOGGER.info("\n--- Querying decennial_population with normalized columns ---");
-            rs = stmt.executeQuery(
-                "SELECT \"geo_name\", " +
+            rs =
+                stmt.executeQuery("SELECT \"geo_name\", " +
                 "\"total_population\", \"white_alone\", \"black_alone\", \"asian_alone\" " +
                 "FROM \"CENSUS\".\"decennial_population\" " +
                 "ORDER BY \"geo_name\" " +
@@ -726,8 +722,8 @@ public class CensusIntegrationTest {
 
             // Verify data across multiple years (year is a partition column)
             LOGGER.info("\n--- Checking data summary ---");
-            rs = stmt.executeQuery(
-                "SELECT COUNT(*) as cnt, SUM(\"total_population\") as total_pop " +
+            rs =
+                stmt.executeQuery("SELECT COUNT(*) as cnt, SUM(\"total_population\") as total_pop " +
                 "FROM \"CENSUS\".\"decennial_population\"");
 
             if (rs.next()) {
@@ -748,8 +744,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testNewAcsTables() throws Exception {
+  @Test public void testNewAcsTables() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" NEW ACS TABLES: Extended Subject Coverage Test");
     LOGGER.info("================================================================================");
@@ -822,8 +817,8 @@ public class CensusIntegrationTest {
         if (tablesWithData > 0) {
           LOGGER.info("\n--- Sample data from acs_race_ethnicity ---");
           try {
-            ResultSet rs = stmt.executeQuery(
-                "SELECT geo_name, state, white_alone, black_alone, asian_alone " +
+            ResultSet rs =
+                stmt.executeQuery("SELECT geo_name, state, white_alone, black_alone, asian_alone " +
                 "FROM \"CENSUS\".\"acs_race_ethnicity\" LIMIT 5");
             while (rs.next()) {
               LOGGER.info("  {} ({}): white={}, black={}, asian={}",
@@ -845,8 +840,7 @@ public class CensusIntegrationTest {
     }
   }
 
-  @Test
-  public void testDecennialHousing() throws Exception {
+  @Test public void testDecennialHousing() throws Exception {
     LOGGER.info("\n================================================================================");
     LOGGER.info(" DECENNIAL HOUSING: Housing Unit Counts Test");
     LOGGER.info("================================================================================");
@@ -859,8 +853,8 @@ public class CensusIntegrationTest {
       try (Statement stmt = conn.createStatement()) {
         // Check if table exists and has data
         LOGGER.info("\n--- Checking decennial_housing table ---");
-        ResultSet rs = stmt.executeQuery(
-            "SELECT COUNT(*) as cnt FROM \"CENSUS\".\"decennial_housing\"");
+        ResultSet rs =
+            stmt.executeQuery("SELECT COUNT(*) as cnt FROM \"CENSUS\".\"decennial_housing\"");
         if (rs.next()) {
           long count = rs.getLong("cnt");
           LOGGER.info("  decennial_housing has {} rows", count);
@@ -868,8 +862,8 @@ public class CensusIntegrationTest {
           if (count > 0) {
             // Sample data with normalized column names
             LOGGER.info("\n--- Sample housing data ---");
-            rs = stmt.executeQuery(
-                "SELECT geo_name, total_housing_units, occupied_units, vacant_units " +
+            rs =
+                stmt.executeQuery("SELECT geo_name, total_housing_units, occupied_units, vacant_units " +
                 "FROM \"CENSUS\".\"decennial_housing\" " +
                 "ORDER BY total_housing_units DESC LIMIT 10");
             while (rs.next()) {
@@ -886,6 +880,80 @@ public class CensusIntegrationTest {
 
         LOGGER.info("\n================================================================================");
         LOGGER.info(" DECENNIAL HOUSING TEST COMPLETE!");
+        LOGGER.info("================================================================================");
+      }
+    }
+  }
+
+  @Test public void testNewDatasetTables() throws Exception {
+    LOGGER.info("\n================================================================================");
+    LOGGER.info(" NEW CENSUS DATASET TABLES: Comprehensive Coverage Test");
+    LOGGER.info("================================================================================");
+    LOGGER.info(" Testing 17 new tables across multiple Census Bureau programs:");
+    LOGGER.info("   PEP, CBP, ACS 1-Year, Economic Census, SAIPE, SAHIE,");
+    LOGGER.info("   BDS, ABS, Nonemployer, Building Permits, QWI, LODES, Trade");
+    LOGGER.info("================================================================================");
+
+    // New dataset tables to test
+    String[] newTables = {
+        // High Priority
+        "pep_population",
+        "cbp_establishments",
+        "acs1_population",
+        "acs1_income",
+        "economic_census",
+        "saipe_poverty",
+        "sahie_insurance",
+        // Medium Priority
+        "bds_dynamics",
+        "abs_characteristics",
+        "nonemployer_statistics",
+        "building_permits",
+        "qwi_employment",
+        // Specialized
+        "lodes_workplace",
+        "trade_exports",
+        "trade_imports"
+    };
+
+    try (Connection conn = createConnection()) {
+      try (Statement stmt = conn.createStatement()) {
+        int tablesQueryable = 0;
+        int tablesWithData = 0;
+        long totalRows = 0;
+
+        LOGGER.info("\n--- Testing new dataset tables ---");
+        for (String table : newTables) {
+          String query = "SELECT COUNT(*) as cnt FROM \"CENSUS\".\"" + table + "\"";
+          try (ResultSet rs = stmt.executeQuery(query)) {
+            tablesQueryable++;
+            if (rs.next()) {
+              long count = rs.getLong("cnt");
+              totalRows += count;
+              if (count > 0) {
+                tablesWithData++;
+                LOGGER.info("  {} - {} rows", table, count);
+              } else {
+                LOGGER.info("  {} - 0 rows (needs materialization)", table);
+              }
+            }
+          } catch (SQLException e) {
+            LOGGER.warn("  {} - NOT QUERYABLE: {}", table, e.getMessage().split("\n")[0]);
+          }
+        }
+
+        LOGGER.info("\n--- Summary ---");
+        LOGGER.info("  Tables queryable: {}/{}", tablesQueryable, newTables.length);
+        LOGGER.info("  Tables with data: {}/{}", tablesWithData, newTables.length);
+        LOGGER.info("  Total rows: {}", totalRows);
+        LOGGER.info("  Note: Tables without data need materialization via ETL pipeline");
+
+        // At least some tables should be queryable (schema is valid)
+        assertTrue(tablesQueryable > 0,
+            "At least some new dataset tables should be queryable");
+
+        LOGGER.info("\n================================================================================");
+        LOGGER.info(" NEW DATASET TABLES TEST COMPLETE!");
         LOGGER.info("================================================================================");
       }
     }

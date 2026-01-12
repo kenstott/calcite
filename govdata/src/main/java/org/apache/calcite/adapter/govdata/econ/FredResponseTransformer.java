@@ -91,8 +91,7 @@ public class FredResponseTransformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(FredResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Override
-  public String transform(String response, RequestContext context) {
+  @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("FRED: Empty response received for {}", context.getUrl());
       return "[]";

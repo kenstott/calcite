@@ -298,8 +298,8 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
 
   @Override protected Map<String, Table> getTableMap() {
     // Load comments from schema file
-    Map<String, String> tableComments = GovDataUtils.loadTableComments(
-        GeoSchemaFactory.class, "/geo/geo-schema.json");
+    Map<String, String> tableComments =
+        GovDataUtils.loadTableComments(GeoSchemaFactory.class, "/geo/geo-schema.json");
 
     // Wrap tables with comment support for known GEO tables
     Map<String, Table> commentableTableMap = new HashMap<>();
@@ -309,8 +309,8 @@ public class GeoSchema extends AbstractSchema implements CommentableSchema {
 
       // Check if we have comments for this table
       String tableComment = tableComments.get(tableName);
-      Map<String, String> columnComments = GovDataUtils.loadColumnComments(
-          GeoSchemaFactory.class, "/geo/geo-schema.json", tableName);
+      Map<String, String> columnComments =
+          GovDataUtils.loadColumnComments(GeoSchemaFactory.class, "/geo/geo-schema.json", tableName);
 
       if (tableComment != null || !columnComments.isEmpty()) {
         // Wrap with comment support

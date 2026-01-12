@@ -79,24 +79,21 @@ public class CensusSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(CensusSchemaFactory.class);
 
   // ACS tables
-  private static final Set<String> ACS_TABLES = new HashSet<>(Arrays.asList(
-      "acs_population", "acs_income", "acs_housing",
-      "acs_education", "acs_employment", "acs_poverty"
-  ));
+  private static final Set<String> ACS_TABLES =
+      new HashSet<>(
+          Arrays.asList("acs_population", "acs_income", "acs_housing",
+      "acs_education", "acs_employment", "acs_poverty"));
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/census/census-schema.yaml";
   }
 
-  @Override
-  public List<String> getDependencies() {
+  @Override public List<String> getDependencies() {
     // Census schema has no dependencies on other schemas
     return Collections.emptyList();
   }
 
-  @Override
-  public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for CENSUS schema");
 
     // Parse filtering configuration

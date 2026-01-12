@@ -16,8 +16,6 @@
  */
 package org.apache.calcite.adapter.govdata;
 
-import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
-
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
