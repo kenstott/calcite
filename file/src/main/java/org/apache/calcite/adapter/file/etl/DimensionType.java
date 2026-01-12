@@ -143,6 +143,7 @@ public enum DimensionType {
         return YEAR_RANGE;
       case "custom":
       case "catalog":
+      case "resolver":
         return CUSTOM;
       case "json_catalog":
       case "jsoncatalog":

@@ -79,8 +79,7 @@ public class BlsResponseTransformer implements ResponseTransformer {
   /** BLS status indicating failed request. */
   private static final String STATUS_FAILED = "REQUEST_FAILED";
 
-  @Override
-  public String transform(String response, RequestContext context) {
+  @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("BLS: Empty response received for {}", context.getUrl());
       return "[]";

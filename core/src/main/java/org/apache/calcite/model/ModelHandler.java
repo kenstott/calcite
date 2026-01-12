@@ -386,9 +386,13 @@ public class ModelHandler {
           builder.put(extraOperand.camelName, f);
           break;
         case TABLES:
+          // Only add tables to operand if explicitly defined in model JSON
+          // Empty tables list would overwrite YAML schema's views definitions
           if (jsonSchema instanceof JsonCustomSchema) {
-            builder.put(extraOperand.camelName,
-                ((JsonCustomSchema) jsonSchema).tables);
+            List<JsonTable> tables = ((JsonCustomSchema) jsonSchema).tables;
+            if (!tables.isEmpty()) {
+              builder.put(extraOperand.camelName, tables);
+            }
           }
           break;
         default:

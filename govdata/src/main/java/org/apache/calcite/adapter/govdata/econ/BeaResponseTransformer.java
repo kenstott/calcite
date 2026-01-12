@@ -69,8 +69,7 @@ public class BeaResponseTransformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(BeaResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Override
-  public String transform(String response, RequestContext context) {
+  @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
       LOGGER.warn("BEA: Empty response received for {}", context.getUrl());
       return "[]";

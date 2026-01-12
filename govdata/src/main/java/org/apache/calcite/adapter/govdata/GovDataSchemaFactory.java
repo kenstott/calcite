@@ -18,8 +18,8 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.ModelLifecycleProcessor;
 import org.apache.calcite.adapter.file.SubSchemaFactory;
-import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.DuckDBPartitionStatusStore;
+import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
@@ -236,7 +236,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Materialized storage (parquet/iceberg output)
     String directory = resolveDirectory(operand, "directory");
     if (directory != null) {
-      if (directory.startsWith("s3://") && s3Config != null && !s3Config.isEmpty()) {
+      if (directory.startsWith("s3://")) {
+        // S3 storage requires explicit credentials - fail fast if missing
+        if (s3Config == null || s3Config.isEmpty()) {
+          throw new IllegalArgumentException(
+              "S3 storage configured (directory=" + directory + ") but s3Config is missing. "
+              + "Provide s3Config with accessKeyId, secretAccessKey, and endpoint (for S3-compatible) "
+              + "or region (for AWS S3). Will not fall back to AWS credential chain.");
+        }
         LOGGER.debug("Creating S3StorageProvider with explicit config for {}", directory);
         // Add directory to config so S3StorageProvider sets baseS3Path for lifecycle rules
         Map<String, Object> storageConfig = new HashMap<>(s3Config);
@@ -254,7 +261,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       cacheDirectory = System.getenv("GOVDATA_CACHE_DIR");
     }
     if (cacheDirectory != null) {
-      if (cacheDirectory.startsWith("s3://") && s3Config != null && !s3Config.isEmpty()) {
+      if (cacheDirectory.startsWith("s3://")) {
+        // S3 storage requires explicit credentials - fail fast if missing
+        if (s3Config == null || s3Config.isEmpty()) {
+          throw new IllegalArgumentException(
+              "S3 storage configured (cacheDirectory=" + cacheDirectory + ") but s3Config is missing. "
+              + "Provide s3Config with accessKeyId, secretAccessKey, and endpoint (for S3-compatible) "
+              + "or region (for AWS S3). Will not fall back to AWS credential chain.");
+        }
         // Add directory to config so S3StorageProvider sets baseS3Path for lifecycle rules
         Map<String, Object> cacheStorageConfig = new HashMap<>(s3Config);
         cacheStorageConfig.put("directory", cacheDirectory);

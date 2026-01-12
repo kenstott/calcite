@@ -32,13 +32,11 @@ import java.util.Map;
  * <pre>{@code
  * public class EconSchemaFactory implements GovDataSubSchemaFactory {
  *
- *   @Override
- *   public String getSchemaResourceName() {
+ *   @Override *   public String getSchemaResourceName() {
  *     return "/econ/econ-schema.yaml";
  *   }
  *
- *   @Override
- *   public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+ *   @Override *   public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
  *     builder.resolveDimensions("world_indicators", (ctx, dims) ->
  *         resolveWorldBankDimensions(ctx, dims));
  *
@@ -101,6 +99,5 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
    * @param builder The schema builder to configure
    * @param operand Configuration operand from model file
    */
-  @Override
-  void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand);
+  @Override void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand);
 }
