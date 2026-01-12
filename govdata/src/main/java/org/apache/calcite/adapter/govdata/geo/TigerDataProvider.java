@@ -228,13 +228,24 @@ public class TigerDataProvider implements DataProvider {
       throw new IOException("HTTP " + responseCode + " for URL: " + urlString);
     }
 
+    long expectedLength = conn.getContentLengthLong();
+    long totalBytesRead = 0;
+
     try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
          FileOutputStream out = new FileOutputStream(outputFile)) {
       byte[] buffer = new byte[8192];
       int bytesRead;
       while ((bytesRead = in.read(buffer)) != -1) {
         out.write(buffer, 0, bytesRead);
+        totalBytesRead += bytesRead;
       }
+    }
+
+    // Verify download completeness if Content-Length was provided
+    if (expectedLength > 0 && totalBytesRead != expectedLength) {
+      outputFile.delete();
+      throw new IOException("Incomplete download: expected " + expectedLength
+          + " bytes but got " + totalBytesRead + " for URL: " + urlString);
     }
   }
 
