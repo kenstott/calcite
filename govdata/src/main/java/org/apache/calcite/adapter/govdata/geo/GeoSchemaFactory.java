@@ -89,13 +89,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
               "zip_cbsa_crosswalk",
               "tract_zip_crosswalk"));
 
-  // Census demographic tables
-  private static final Set<String> CENSUS_TABLES =
-      new HashSet<>(
-          Arrays.asList(
-              "population_demographics",
-              "housing_characteristics",
-              "economic_indicators"));
+  // Note: Census demographic tables removed - use CENSUS schema for demographics
+  // Join GEO.states/counties with CENSUS.acs_population for demographic data
 
   @Override public String getSchemaResourceName() {
     return "/geo/geo-schema.yaml";
@@ -135,14 +130,8 @@ public class GeoSchemaFactory implements GovDataSubSchemaFactory {
           isTableEnabled(tableName, "hud", enabledSources));
     }
 
-    // Add hooks for Census demographic tables
-    for (String tableName : CENSUS_TABLES) {
-      builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "census", enabledSources));
-    }
-
-    LOGGER.debug("Added isEnabled hooks for {} TIGER, {} HUD, {} Census tables",
-        TIGER_TABLES.size(), HUD_TABLES.size(), CENSUS_TABLES.size());
+    LOGGER.debug("Added isEnabled hooks for {} TIGER, {} HUD tables",
+        TIGER_TABLES.size(), HUD_TABLES.size());
   }
 
   /**
