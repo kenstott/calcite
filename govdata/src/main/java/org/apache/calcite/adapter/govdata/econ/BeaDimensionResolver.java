@@ -118,8 +118,7 @@ public class BeaDimensionResolver implements DimensionResolver {
     // No-op - cache populated lazily on first resolve call
   }
 
-  @Override
-  public List<String> resolve(String dimensionName, DimensionConfig config,
+  @Override public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
     // Only handle line_code dimension with context-aware resolution
     if (!"line_code".equals(dimensionName)) {
@@ -213,8 +212,8 @@ public class BeaDimensionResolver implements DimensionResolver {
       String referenceDir) throws Exception {
     // Build path to regional_linecodes Iceberg table
     // Normalize path to fix malformed S3A URIs (s3a:/ -> s3a://)
-    String linecodeTablePath = StorageProvider.normalizePath(
-        config.getProperty("linecodeTablePath", referenceDir + "/regional_linecodes"));
+    String linecodeTablePath =
+        StorageProvider.normalizePath(config.getProperty("linecodeTablePath", referenceDir + "/regional_linecodes"));
 
     LOGGER.info("BeaDimensionResolver: Loading regional_linecodes from: {}", linecodeTablePath);
 

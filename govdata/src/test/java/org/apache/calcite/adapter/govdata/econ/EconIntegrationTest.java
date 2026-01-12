@@ -1615,8 +1615,8 @@ public class EconIntegrationTest {
       for (String table : econTables) {
         try {
           long start = System.currentTimeMillis();
-          ResultSet rs = stmt.executeQuery(
-              "SELECT COUNT(*) FROM \"ECON\".\"" + table + "\"");
+          ResultSet rs =
+              stmt.executeQuery("SELECT COUNT(*) FROM \"ECON\".\"" + table + "\"");
           rs.next();
           long count = rs.getLong(1);
           long elapsed = System.currentTimeMillis() - start;
@@ -1625,14 +1625,16 @@ public class EconIntegrationTest {
           successCount++;
         } catch (Exception e) {
           String msg = e.getMessage();
-          LOGGER.info(String.format("%-25s %15s %s", table, "ERROR",
+          LOGGER.info(
+              String.format("%-25s %15s %s", table, "ERROR",
               msg.substring(0, Math.min(60, msg.length()))));
           errorCount++;
         }
       }
 
       LOGGER.info("\n--------------------------------------------------------------------------------");
-      LOGGER.info(String.format("ECON: %d tables, %d ok, %d errors, %,d total rows",
+      LOGGER.info(
+          String.format("ECON: %d tables, %d ok, %d errors, %,d total rows",
           econTables.length, successCount, errorCount, totalRows));
 
       // ECON_REFERENCE tables
@@ -1650,8 +1652,8 @@ public class EconIntegrationTest {
       for (String table : refTables) {
         try {
           long start = System.currentTimeMillis();
-          ResultSet rs = stmt.executeQuery(
-              "SELECT COUNT(*) FROM \"ECON_REFERENCE\".\"" + table + "\"");
+          ResultSet rs =
+              stmt.executeQuery("SELECT COUNT(*) FROM \"ECON_REFERENCE\".\"" + table + "\"");
           rs.next();
           long count = rs.getLong(1);
           long elapsed = System.currentTimeMillis() - start;
@@ -1660,14 +1662,16 @@ public class EconIntegrationTest {
           refSuccessCount++;
         } catch (Exception e) {
           String msg = e.getMessage();
-          LOGGER.info(String.format("%-25s %15s %s", table, "ERROR",
+          LOGGER.info(
+              String.format("%-25s %15s %s", table, "ERROR",
               msg.substring(0, Math.min(60, msg.length()))));
           refErrorCount++;
         }
       }
 
       LOGGER.info("\n--------------------------------------------------------------------------------");
-      LOGGER.info(String.format("ECON_REFERENCE: %d tables, %d ok, %d errors, %,d total rows",
+      LOGGER.info(
+          String.format("ECON_REFERENCE: %d tables, %d ok, %d errors, %,d total rows",
           refTables.length, refSuccessCount, refErrorCount, refTotalRows));
       LOGGER.info("================================================================================");
     }

@@ -47,13 +47,11 @@ import java.util.Map;
 public class EconReferenceSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(EconReferenceSchemaFactory.class);
 
-  @Override
-  public String getSchemaResourceName() {
+  @Override public String getSchemaResourceName() {
     return "/econ/econ-reference-schema.yaml";
   }
 
-  @Override
-  public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for ECON_REFERENCE schema");
     // Reference tables have no special hooks - enablement is controlled via YAML
     // The 'enabled' field in the schema uses variable substitution for API key checks

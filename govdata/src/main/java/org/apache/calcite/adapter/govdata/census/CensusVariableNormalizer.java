@@ -17,7 +17,6 @@
 package org.apache.calcite.adapter.govdata.census;
 
 import org.apache.calcite.adapter.file.etl.VariableNormalizer;
-import org.apache.calcite.adapter.govdata.AbstractConceptualMapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -73,8 +72,7 @@ public class CensusVariableNormalizer implements VariableNormalizer {
     this.mapper = ConceptualVariableMapper.getInstance();
   }
 
-  @Override
-  public String normalize(String apiVariable, Map<String, String> context) {
+  @Override public String normalize(String apiVariable, Map<String, String> context) {
     if (apiVariable == null || apiVariable.isEmpty()) {
       return apiVariable;
     }

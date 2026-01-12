@@ -99,8 +99,7 @@ public class CensusDecennialDimensionResolver implements DimensionResolver {
     HOUSING_VARS_BY_YEAR.put("2020", "H1_001N,H1_002N,H1_003N");
   }
 
-  @Override
-  public List<String> resolve(String dimensionName, DimensionConfig config,
+  @Override public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
 
     String year = context.getOrDefault("year", "2020");
@@ -114,15 +113,15 @@ public class CensusDecennialDimensionResolver implements DimensionResolver {
     } else if ("population_variables".equals(dimensionName)
         || "variables".equals(dimensionName)) {
       // Return population variables based on year
-      String vars = POPULATION_VARS_BY_YEAR.getOrDefault(year,
-          POPULATION_VARS_BY_YEAR.get("2020"));
+      String vars =
+          POPULATION_VARS_BY_YEAR.getOrDefault(year, POPULATION_VARS_BY_YEAR.get("2020"));
       LOGGER.debug("Census Decennial: year={} -> variables={}", year, vars);
       return Collections.singletonList(vars);
 
     } else if ("housing_variables".equals(dimensionName)) {
       // Return housing variables based on year
-      String vars = HOUSING_VARS_BY_YEAR.getOrDefault(year,
-          HOUSING_VARS_BY_YEAR.get("2020"));
+      String vars =
+          HOUSING_VARS_BY_YEAR.getOrDefault(year, HOUSING_VARS_BY_YEAR.get("2020"));
       LOGGER.debug("Census Decennial: year={} -> housing_variables={}", year, vars);
       return Collections.singletonList(vars);
     }

@@ -124,6 +124,60 @@ dimension_values:
     - state
     - county
 
+  # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
+  all_state_fips: &all_state_fips
+    - '01'  # Alabama
+    - '02'  # Alaska
+    - '04'  # Arizona
+    - '05'  # Arkansas
+    - '06'  # California
+    - '08'  # Colorado
+    - '09'  # Connecticut
+    - '10'  # Delaware
+    - '11'  # District of Columbia
+    - '12'  # Florida
+    - '13'  # Georgia
+    - '15'  # Hawaii
+    - '16'  # Idaho
+    - '17'  # Illinois
+    - '18'  # Indiana
+    - '19'  # Iowa
+    - '20'  # Kansas
+    - '21'  # Kentucky
+    - '22'  # Louisiana
+    - '23'  # Maine
+    - '24'  # Maryland
+    - '25'  # Massachusetts
+    - '26'  # Michigan
+    - '27'  # Minnesota
+    - '28'  # Mississippi
+    - '29'  # Missouri
+    - '30'  # Montana
+    - '31'  # Nebraska
+    - '32'  # Nevada
+    - '33'  # New Hampshire
+    - '34'  # New Jersey
+    - '35'  # New Mexico
+    - '36'  # New York
+    - '37'  # North Carolina
+    - '38'  # North Dakota
+    - '39'  # Ohio
+    - '40'  # Oklahoma
+    - '41'  # Oregon
+    - '42'  # Pennsylvania
+    - '44'  # Rhode Island
+    - '45'  # South Carolina
+    - '46'  # South Dakota
+    - '47'  # Tennessee
+    - '48'  # Texas
+    - '49'  # Utah
+    - '50'  # Vermont
+    - '51'  # Virginia
+    - '53'  # Washington
+    - '54'  # West Virginia
+    - '55'  # Wisconsin
+    - '56'  # Wyoming
+
 # ============================================================================
 # MATERIALIZATION OPTIONS
 # ============================================================================
@@ -2040,19 +2094,30 @@ partitionedTables:
     pattern: "type=pep/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Population Estimates Program (PEP) annual population estimates for states
-      and counties. Provides estimates between decennial censuses.
+      Population Estimates Program (PEP) annual population estimates.
+      Uses dimension resolver to handle API differences:
+      - 2019 and earlier: pep/population endpoint with POP, DENSITY
+      - 2020+: pep/charv endpoint with POP and YEAR filter
 
     dimensions:
       type:
         - pep
       year:
+        - '2019'
         - '2020'
         - '2021'
         - '2022'
         - '2023'
-        - '2024'
       geography: *all_geographies
+      # Dynamic dimensions resolved based on year - uses hooks.dimensionResolver
+      endpoint:
+        type: custom
+      variables:
+        type: custom
+      vintage:
+        type: custom
+      year_filter:
+        type: custom
 
     columns:
       - *name_column
@@ -2067,11 +2132,11 @@ partitionedTables:
         type: double
         nullable: true
         expression: 'TRY_CAST(src."DENSITY" AS DOUBLE)'
-        comment: Population density per square mile
+        comment: Population density (only for 2019 vintage)
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/pep/population?get=NAME,POP,DENSITY&for={geography}:*"
+      url: "https://api.census.gov/data/{vintage}/{endpoint}?get=NAME,{variables}&for={geography}:*{year_filter}"
       method: GET
       response:
         format: json
@@ -2083,6 +2148,7 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.census.CensusPepDimensionResolver"
 
     materialize:
       format: iceberg
@@ -2318,11 +2384,21 @@ partitionedTables:
   # ECONOMIC CENSUS BASIC - Core business statistics
   # ---------------------------------------------------------------------------
   - name: economic_census
-    pattern: "type=ecn/year=*/geography=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=ecn/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
     comment: >
       Economic Census provides comprehensive business statistics including
       establishments, employment, payroll, and sales by industry.
+      Uses dimension resolver to handle NAICS version differences:
+      - 2017: Uses NAICS2017 variable
+      - 2022: Uses NAICS2022 variable
+      Partitioned by year only (not geography) to reduce file count.
 
     dimensions:
       type:
@@ -2331,6 +2407,9 @@ partitionedTables:
         - '2017'
         - '2022'
       geography: *all_geographies
+      # Dynamic NAICS variable resolved based on year - uses hooks.dimensionResolver
+      naics_var:
+        type: custom
 
     columns:
       - *name_column
@@ -2339,8 +2418,8 @@ partitionedTables:
       - name: naics_code
         type: string
         nullable: true
-        expression: 'src."NAICS2017"'
-        comment: NAICS industry code
+        expression: 'COALESCE(src."NAICS2017", src."NAICS2022")'
+        comment: NAICS industry code (version depends on census year)
       - name: establishments
         type: long
         nullable: true
@@ -2364,7 +2443,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/ecnbasic?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,RCPTOT&for={geography}:*&NAICS2017=00"
+      url: "https://api.census.gov/data/{year}/ecnbasic?get=NAME,{naics_var},ESTAB,EMP,PAYANN,RCPTOT&for={geography}:*"
       method: GET
       response:
         format: json
@@ -2376,13 +2455,14 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.census.CensusEconomicDimensionResolver"
 
     materialize:
       format: iceberg
       output:
-        pattern: "type=ecn/year=*/geography=*/"
+        pattern: "type=ecn/year=*/"
       partition:
-        columns: [type, year, geography]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: economic_census
@@ -2592,17 +2672,22 @@ partitionedTables:
       - name: establishments
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."ESTABS" AS BIGINT)'
+        expression: 'TRY_CAST(src."ESTAB" AS BIGINT)'
         comment: Number of establishments
-      - name: firm_births
+      - name: firms
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."FIRMDEATH_FIRMS" AS BIGINT)'
-        comment: Number of new firms
+        expression: 'TRY_CAST(src."FIRM" AS BIGINT)'
+        comment: Number of firms
+      - name: employees
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."EMP" AS BIGINT)'
+        comment: Number of employees
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/bds?get=JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTABS,FIRMDEATH_FIRMS&for={geography}:*&YEAR={year}"
+      url: "https://api.census.gov/data/timeseries/bds?get=NAME,JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTAB,FIRM,EMP&for={geography}:*&YEAR={year}"
       method: GET
       response:
         format: json
@@ -2709,11 +2794,18 @@ partitionedTables:
   # NONEMPLOYER STATISTICS - Self-employed business counts
   # ---------------------------------------------------------------------------
   - name: nonemployer_statistics
-    pattern: "type=nonemp/year=*/geography=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=nonemp/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
     comment: >
       Nonemployer Statistics covers businesses with no paid employees,
       typically self-employed individuals operating unincorporated businesses.
+      Partitioned by year only (not geography) to reduce file count.
 
     dimensions:
       type:
@@ -2736,17 +2828,18 @@ partitionedTables:
       - name: establishments
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."ESTAB" AS BIGINT)'
+        expression: 'TRY_CAST(src."NESTAB" AS BIGINT)'
         comment: Number of nonemployer establishments
       - name: receipts
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."RCPTOT" AS BIGINT)'
+        expression: 'TRY_CAST(src."NRCPTOT" AS BIGINT)'
         comment: Total receipts ($1,000)
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,ESTAB,RCPTOT&for={geography}:*&NAICS2017=00"
+      # Uses NESTAB and NRCPTOT (N prefix for nonemployer)
+      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*"
       method: GET
       response:
         format: json
@@ -2762,9 +2855,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=nonemp/year=*/geography=*/"
+        pattern: "type=nonemp/year=*/"
       partition:
-        columns: [type, year, geography]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: nonemployer_statistics
@@ -2779,57 +2872,99 @@ partitionedTables:
   # BUILDING PERMITS - Residential construction activity
   # ---------------------------------------------------------------------------
   - name: building_permits
-    pattern: "type=bps/year=*/geography=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=bps/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: VARCHAR
     comment: >
       Building Permits Survey tracks new privately-owned residential
-      construction permits by state and metropolitan area.
+      construction permits by state. Uses December cumulative (YTD) totals.
+      Data from https://www2.census.gov/econ/bps/State/
+      URL format is stYYMMy.txt where YYMM is year-month code (e.g., 2212 = Dec 2022).
+      Partition 'year' stores the YYMM code for URL compatibility; actual year derived from survey_date.
 
     dimensions:
       type:
         - bps
+      # URL code in YYMM format - serves as both partition key and URL parameter
+      # December (12) cumulative data for each year
       year:
-        - '2022'
-        - '2023'
-        - '2024'
-      geography:
-        - state
+        - '2012'  # December 2020
+        - '2112'  # December 2021
+        - '2212'  # December 2022
+        - '2312'  # December 2023
+        - '2412'  # December 2024
 
     columns:
-      - *name_column
-      - *state_column
-      - name: total_units
+      - name: survey_date
+        type: string
+        nullable: false
+        expression: 'src."column0"'
+        comment: Survey date in YYYYMM format
+      - name: state_fips
+        type: string
+        nullable: false
+        expression: 'src."column1"'
+        comment: State FIPS code (2-digit)
+      - name: state_name
+        type: string
+        nullable: true
+        expression: 'src."column4"'
+        comment: State name
+      - name: units_1unit
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."UNITS" AS BIGINT)'
-        comment: Total housing units authorized
-      - name: total_value
+        expression: 'TRY_CAST(src."column6" AS BIGINT)'
+        comment: Single-family housing units authorized
+      - name: units_2unit
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."VALUATION" AS BIGINT)'
-        comment: Total valuation ($1,000)
+        expression: 'TRY_CAST(src."column9" AS BIGINT)'
+        comment: Duplex housing units authorized
+      - name: units_3_4unit
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."column12" AS BIGINT)'
+        comment: 3-4 unit housing units authorized
+      - name: units_5plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."column15" AS BIGINT)'
+        comment: 5+ unit housing units authorized
+      - name: value_1unit
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."column7" AS BIGINT)'
+        comment: Value of single-family permits ($1000)
+      - name: value_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."column7" AS BIGINT) + TRY_CAST(src."column10" AS BIGINT) + TRY_CAST(src."column13" AS BIGINT) + TRY_CAST(src."column16" AS BIGINT)'
+        comment: Total value of all permits ($1000)
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/eits/bps?get=data_type_code,time_slot_id,cell_value,error_data&for={geography}:*&time={year}&category_code=TOTAL"
-      method: GET
+      url: "https://www2.census.gov/econ/bps/State/st{year}y.txt"
       response:
-        format: json
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503]
+        format: csv
       rawCache:
         enabled: true
-
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      # Filter to only include data rows (6-digit survey_date in first column)
+      # and state-level data (2-digit FIPS, not US/R1-R4/D1-D9)
+      rowFilter:
+        column: column0
+        pattern: '^\d{6}$'
 
     materialize:
       format: iceberg
       output:
-        pattern: "type=bps/year=*/geography=*/"
+        pattern: "type=bps/year=*/"
       partition:
-        columns: [type, year, geography]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: building_permits
@@ -2844,38 +2979,48 @@ partitionedTables:
   # QWI EMPLOYMENT - Quarterly employment by sex and age
   # ---------------------------------------------------------------------------
   - name: qwi_employment
-    pattern: "type=qwi/year=*/quarter=*/geography=*/*.parquet"
+    pattern: "type=qwi/time=*/*.parquet"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
-        - name: year
-          type: string
-        - name: quarter
-          type: string
-        - name: geography
-          type: string
+          type: VARCHAR
+        - name: time
+          type: VARCHAR
     comment: >
       Quarterly Workforce Indicators tracks employment, earnings, job creation,
       and worker turnover by demographics (age, sex) and industry.
+      Note: QWI API doesn't support wildcard states - must iterate per state.
+      Partitioned by time (YYYY-QN format) to reduce file count vs per-state.
 
     dimensions:
       type:
         - qwi
-      year:
-        - '2022'
-        - '2023'
-      quarter:
-        - '1'
-        - '2'
-        - '3'
-        - '4'
-      geography:
-        - state
+      # QWI API uses time parameter in format "YYYY-QN"
+      time:
+        - '2022-Q1'
+        - '2022-Q2'
+        - '2022-Q3'
+        - '2022-Q4'
+        - '2023-Q1'
+        - '2023-Q2'
+        - '2023-Q3'
+        - '2023-Q4'
+        - '2024-Q1'
+        - '2024-Q2'
+        - '2024-Q3'
+        - '2024-Q4'
+      # QWI doesn't support wildcard - need explicit state FIPS codes
+      # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
+      state: *all_state_fips
 
     columns:
       - *state_column
+      - name: quarter
+        type: string
+        nullable: true
+        expression: 'src."time"'
+        comment: Quarter in YYYY-QN format
       - name: employment
         type: long
         nullable: true
@@ -2904,7 +3049,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for={geography}:*&year={year}&quarter={quarter}"
+      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for=state:{state}&time={time}"
       method: GET
       response:
         format: json
@@ -2920,9 +3065,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=qwi/year=*/quarter=*/geography=*/"
+        pattern: "type=qwi/time=*/"
       partition:
-        columns: [type, year, quarter, geography]
+        columns: [type, time]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: qwi_employment
@@ -3012,11 +3157,13 @@ partitionedTables:
         comment: Jobs with monthly earnings $3,333 or more
 
     source:
-      type: file
+      type: http
       url: "https://lehd.ces.census.gov/data/lodes/LODES8/{state}/wac/{state}_wac_S000_JT00_{year}.csv.gz"
       response:
         format: csv
         compressed: gzip
+      rawCache:
+        enabled: true
 
     materialize:
       format: iceberg
@@ -3038,7 +3185,7 @@ partitionedTables:
   # TRADE EXPORTS - Annual exports by country
   # ---------------------------------------------------------------------------
   - name: trade_exports
-    pattern: "type=trade/direction=exports/year=*/*.parquet"
+    pattern: "type=trade/direction=exports/time=*/*.parquet"
     partitions:
       style: hive
       columns:
@@ -3046,7 +3193,7 @@ partitionedTables:
           type: string
         - name: direction
           type: string
-        - name: year
+        - name: time
           type: string
     comment: >
       International trade exports by destination country and commodity.
@@ -3056,10 +3203,11 @@ partitionedTables:
         - trade
       direction:
         - exports
-      year:
-        - '2022'
-        - '2023'
-        - '2024'
+      # Trade API uses time=YYYY-MM format for December year-end totals
+      time:
+        - '2021-12'
+        - '2022-12'
+        - '2023-12'
 
     columns:
       - name: country_code
@@ -3080,7 +3228,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/intltrade/exports/enduse?get=CTY_CODE,CTY_NAME,ALL_VAL_YR&YEAR={year}&MONTH=12&ENDUSE=0"
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/enduse?get=CTY_CODE,CTY_NAME,ALL_VAL_YR&time={time}&E_ENDUSE=0"
       method: GET
       response:
         format: json
@@ -3096,9 +3244,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=trade/direction=exports/year=*/"
+        pattern: "type=trade/direction=exports/time=*/"
       partition:
-        columns: [type, direction, year]
+        columns: [type, direction, time]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: trade_exports
@@ -3108,7 +3256,7 @@ partitionedTables:
   # TRADE IMPORTS - Annual imports by country
   # ---------------------------------------------------------------------------
   - name: trade_imports
-    pattern: "type=trade/direction=imports/year=*/*.parquet"
+    pattern: "type=trade/direction=imports/time=*/*.parquet"
     partitions:
       style: hive
       columns:
@@ -3116,7 +3264,7 @@ partitionedTables:
           type: string
         - name: direction
           type: string
-        - name: year
+        - name: time
           type: string
     comment: >
       International trade imports by origin country and commodity.
@@ -3126,10 +3274,11 @@ partitionedTables:
         - trade
       direction:
         - imports
-      year:
-        - '2022'
-        - '2023'
-        - '2024'
+      # Trade API uses time=YYYY-MM format for December year-end totals
+      time:
+        - '2021-12'
+        - '2022-12'
+        - '2023-12'
 
     columns:
       - name: country_code
@@ -3150,7 +3299,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/intltrade/imports/enduse?get=CTY_CODE,CTY_NAME,GEN_VAL_YR&YEAR={year}&MONTH=12&ENDUSE=0"
+      url: "https://api.census.gov/data/timeseries/intltrade/imports/enduse?get=CTY_CODE,CTY_NAME,GEN_VAL_YR&time={time}&I_ENDUSE=0"
       method: GET
       response:
         format: json
@@ -3166,13 +3315,125 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=trade/direction=imports/year=*/"
+        pattern: "type=trade/direction=imports/time=*/"
       partition:
-        columns: [type, direction, year]
+        columns: [type, direction, time]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/source=census/CENSUS"
         tableName: trade_imports
         catalogType: hadoop
+
+# ============================================================================
+# SQL VIEWS
+# ============================================================================
+# Analytical views for aggregated Census data queries.
+# These views reference the partitioned tables above.
+# ============================================================================
+
+tables:
+  # ---------------------------------------------------------------------------
+  # POPULATION_SUMMARY - State-level population trends
+  # ---------------------------------------------------------------------------
+  - name: population_summary
+    type: view
+    comment: >
+      State-level population summary showing total, male, and female population
+      by year. Aggregates data from acs_population table.
+    sql: >
+      SELECT
+        state,
+        geo_name,
+        "year",
+        total_population,
+        male_population,
+        female_population,
+        ROUND(100.0 * male_population / NULLIF(total_population, 0), 2) AS male_pct,
+        ROUND(100.0 * female_population / NULLIF(total_population, 0), 2) AS female_pct
+      FROM acs_population
+      WHERE geography = 'state'
+
+  # ---------------------------------------------------------------------------
+  # INCOME_SUMMARY - State-level income metrics
+  # ---------------------------------------------------------------------------
+  - name: income_summary
+    type: view
+    comment: >
+      State-level income summary showing median household income and per capita
+      income by year. Aggregates data from acs_income table.
+    sql: >
+      SELECT
+        state,
+        geo_name,
+        "year",
+        median_household_income,
+        per_capita_income
+      FROM acs_income
+      WHERE geography = 'state'
+
+  # ---------------------------------------------------------------------------
+  # POVERTY_RATE - Poverty rate calculations
+  # ---------------------------------------------------------------------------
+  - name: poverty_rate
+    type: view
+    comment: >
+      State-level poverty rates calculated from poverty universe and below poverty
+      level counts. Shows percentage of population below poverty level.
+    sql: >
+      SELECT
+        state,
+        geo_name,
+        "year",
+        poverty_universe,
+        below_poverty,
+        ROUND(100.0 * below_poverty / NULLIF(poverty_universe, 0), 2) AS poverty_rate_pct
+      FROM acs_poverty
+      WHERE geography = 'state'
+
+  # ---------------------------------------------------------------------------
+  # EDUCATION_ATTAINMENT - Educational achievement metrics
+  # ---------------------------------------------------------------------------
+  - name: education_attainment
+    type: view
+    comment: >
+      State-level educational attainment showing population with high school diploma,
+      bachelor's degree, master's degree, and doctorate. Includes percentages.
+    sql: >
+      SELECT
+        state,
+        geo_name,
+        "year",
+        pop_25_plus,
+        hs_graduate,
+        bachelors,
+        masters,
+        doctorate,
+        ROUND(100.0 * hs_graduate / NULLIF(pop_25_plus, 0), 2) AS hs_rate_pct,
+        ROUND(100.0 * bachelors / NULLIF(pop_25_plus, 0), 2) AS bachelors_rate_pct,
+        ROUND(100.0 * (masters + doctorate) / NULLIF(pop_25_plus, 0), 2) AS advanced_degree_pct
+      FROM acs_education
+      WHERE geography = 'state'
+
+  # ---------------------------------------------------------------------------
+  # UNEMPLOYMENT_RATE - Unemployment calculations
+  # ---------------------------------------------------------------------------
+  - name: unemployment_rate
+    type: view
+    comment: >
+      State-level unemployment rates calculated from labor force and unemployed
+      population. Shows labor force participation and unemployment percentages.
+    sql: >
+      SELECT
+        state,
+        geo_name,
+        "year",
+        labor_force,
+        employed,
+        unemployed,
+        not_in_labor_force,
+        ROUND(100.0 * unemployed / NULLIF(labor_force, 0), 2) AS unemployment_rate_pct,
+        ROUND(100.0 * labor_force / NULLIF(labor_force + not_in_labor_force, 0), 2) AS labor_force_participation_pct
+      FROM acs_employment
+      WHERE geography = 'state'
 
 # ============================================================================
 # END OF SCHEMA
@@ -3193,7 +3454,8 @@ partitionedTables:
 #   - 1 QWI table (workforce indicators)
 #   - 1 LODES table (commuting patterns)
 #   - 2 Trade tables (exports, imports)
-#   - Total: 39 tables
+#   - 5 SQL views (analytical aggregations)
+#   - Total: 39 tables + 5 views
 #   - Iceberg materialization with Hive partitioning
 #   - Support for state and county level geographies
 #   - Schema evolution: MappingFileVariableNormalizer + dimension resolvers

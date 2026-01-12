@@ -29,7 +29,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -80,8 +79,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if cached and fresh, false otherwise
    */
-  @Override
-  public boolean isCached(CacheKey cacheKey) {
+  @Override public boolean isCached(CacheKey cacheKey) {
     return store.isCached(cacheKey.asString());
   }
 
@@ -94,8 +92,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param refreshAfter Timestamp (millis since epoch) when this entry should be refreshed
    * @param refreshReason Human-readable reason for the refresh policy (e.g., "daily", "immutable")
    */
-  @Override
-  public void markCached(CacheKey cacheKey,
+  @Override public void markCached(CacheKey cacheKey,
                         String filePath, long fileSize, long refreshAfter, String refreshReason) {
     String parametersJson = null;
     try {
@@ -111,8 +108,7 @@ public class CacheManifest extends AbstractCacheManifest {
         filePath,
         fileSize,
         refreshAfter,
-        refreshReason
-    );
+        refreshReason);
 
     long hoursUntilRefresh = TimeUnit.MILLISECONDS.toHours(refreshAfter - System.currentTimeMillis());
     LOGGER.debug("Marked as cached: {} (size={}, refresh in {} hours, policy: {})",
@@ -126,8 +122,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @return true if output file exists and is up-to-date, false otherwise
    */
-  @Override
-  public boolean isMaterialized(CacheKey cacheKey) {
+  @Override public boolean isMaterialized(CacheKey cacheKey) {
     boolean converted = store.isMaterialized(cacheKey.asString());
     // Use TRACE for per-item logging to avoid flooding DEBUG logs with 700K+ entries
     if (converted && LOGGER.isTraceEnabled()) {
@@ -143,8 +138,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param cacheKey The cache key identifying the data
    * @param outputPath Path to the converted output file
    */
-  @Override
-  public void markMaterialized(CacheKey cacheKey, String outputPath) {
+  @Override public void markMaterialized(CacheKey cacheKey, String outputPath) {
     store.markMaterialized(cacheKey.asString(), outputPath);
     LOGGER.debug("Marked parquet as converted: {} (path={})", cacheKey.asString(), outputPath);
   }
@@ -183,8 +177,7 @@ public class CacheManifest extends AbstractCacheManifest {
         null,  // No file path
         0,     // No file size
         refreshAfter,
-        reason
-    );
+        reason);
     LOGGER.info("Marked {} as unavailable (retry in {} days): {}",
         cacheKey.asString(), retryAfterDays, reason);
   }
@@ -196,8 +189,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * @param errorMessage Full error message from API (e.g., JSON error object)
    * @param retryAfterDays Number of days before retrying (default: 7 for weekly retry)
    */
-  @Override
-  public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
+  @Override public void markApiError(CacheKey cacheKey, String errorMessage, int retryAfterDays) {
     store.markApiError(cacheKey.asString(), cacheKey.getTableName(), errorMessage, retryAfterDays);
     String truncatedMsg = errorMessage.length() > 100
         ? errorMessage.substring(0, 100) + "..."
@@ -264,8 +256,7 @@ public class CacheManifest extends AbstractCacheManifest {
               cacheEntry.filePath,
               cacheEntry.fileSize,
               cacheEntry.refreshAfter,
-              cacheEntry.refreshReason
-          );
+              cacheEntry.refreshReason);
 
           // Migrate materialization status
           if (cacheEntry.materializedAt > 0) {
@@ -283,8 +274,8 @@ public class CacheManifest extends AbstractCacheManifest {
           LegacyCatalogSeriesCache seriesCache = entry.getValue();
           if (seriesCache.seriesIds != null && !seriesCache.seriesIds.isEmpty()) {
             String seriesIdsStr = String.join(",", seriesCache.seriesIds);
-            int ttlDays = (int) TimeUnit.MILLISECONDS.toDays(
-                seriesCache.refreshAfter - seriesCache.cachedAt);
+            int ttlDays =
+                (int) TimeUnit.MILLISECONDS.toDays(seriesCache.refreshAfter - seriesCache.cachedAt);
             store.cacheCatalogSeries(seriesCache.minPopularity, seriesIdsStr, ttlDays);
             migratedSeries++;
           }
@@ -313,8 +304,7 @@ public class CacheManifest extends AbstractCacheManifest {
    * This is now a no-op as DuckDB persists changes immediately.
    * Kept for API compatibility.
    */
-  @Override
-  public void save(String directory) {
+  @Override public void save(String directory) {
     // DuckDB persists changes immediately, no explicit save needed
     store.touchLastUpdated();
     LOGGER.debug("Cache manifest changes persisted to DuckDB");
