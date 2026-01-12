@@ -198,7 +198,7 @@ public class GeoIntegrationTest {
         "      " + s3ConfigJson +
         "      \"startYear\": " + startYear + "," +
         "      \"endYear\": " + endYear + "," +
-        "      \"autoDownload\": false," +
+        "      \"autoDownload\": true," +
         "      " + apiKeysJson +
         "      \"enabledSources\": [\"tiger\", \"hud\", \"census\"]" +
         "    }" +

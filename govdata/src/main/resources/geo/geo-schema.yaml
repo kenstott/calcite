@@ -26,12 +26,12 @@ comment: >
 # ============================================================================
 # HOOKS CONFIGURATION
 # ============================================================================
-# Response transformers for different data sources
+# Response transformers for different data sources:
+# - TIGER tables: Use TigerDataDownloader directly (binary shapefiles)
+# - HUD tables: Use HudCrosswalkTransformer via HTTP source (JSON APIs)
 # ============================================================================
 
-hooks:
-  # Shapefile conversion uses DuckDB spatial extension
-  responseTransformer: "org.apache.calcite.adapter.govdata.geo.TigerResponseTransformer"
+# Note: Global hooks removed - each table specifies its own hooks
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -92,12 +92,6 @@ column_templates:
       - *partition_year
 
   crosswalk_partitions: &crosswalk_partitions
-    style: hive
-    columnDefinitions:
-      - *partition_type
-      - *partition_year
-
-  demographic_partitions: &demographic_partitions
     style: hive
     columnDefinitions:
       - *partition_type
@@ -237,18 +231,32 @@ partitionedTables:
         - [state_code, year]
         - [state_name, year]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/STATE/"
-      filePattern: "tl_{year}_us_state.zip"
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/STATE/tl_{year}_us_state.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: states
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Counties - U.S. county boundaries
@@ -284,18 +292,32 @@ partitionedTables:
           targetTable: states
           targetColumns: [state_fips]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/"
-      filePattern: "tl_{year}_us_county.zip"
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/tl_{year}_us_county.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: counties
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Places - Census designated places (cities, towns)
@@ -332,21 +354,32 @@ partitionedTables:
           targetTable: states
           targetColumns: [state_fips]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/PLACE/"
-      filePattern: "tl_{year}_{state_fips}_place.zip"
-      perState: true
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
-      - name: state_fips
-        values: *all_state_fips
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/PLACE/tl_{year}_{state_fips}_place.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: places
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # ZCTAs - ZIP Code Tabulation Areas
@@ -371,18 +404,32 @@ partitionedTables:
     constraints:
       primaryKey: [zcta, year]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA520/"
-      filePattern: "tl_{year}_us_zcta520.zip"
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/ZCTA520/tl_{year}_us_zcta520.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: zctas
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Census Tracts - Statistical subdivisions of counties
@@ -417,21 +464,33 @@ partitionedTables:
           targetTable: counties
           targetColumns: [county_fips]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/TRACT/"
-      filePattern: "tl_{year}_{state_fips}_tract.zip"
-      perState: true
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
-      - name: state_fips
-        values: *all_state_fips
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/TRACT/tl_{year}_{state_fips}_tract.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: census_tracts
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Block Groups - Smallest census geography with sample data
@@ -466,21 +525,33 @@ partitionedTables:
           targetTable: census_tracts
           targetColumns: [tract_fips]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/BG/"
-      filePattern: "tl_{year}_{state_fips}_bg.zip"
-      perState: true
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
-      - name: state_fips
-        values: *all_state_fips
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/BG/tl_{year}_{state_fips}_bg.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: block_groups
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # CBSAs - Core Based Statistical Areas (metros/micros)
@@ -515,18 +586,32 @@ partitionedTables:
       unique:
         - [cbsa_name, year]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/CBSA/"
-      filePattern: "tl_{year}_us_cbsa.zip"
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CBSA/tl_{year}_us_cbsa.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: cbsa
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Congressional Districts
@@ -560,18 +645,32 @@ partitionedTables:
           targetTable: states
           targetColumns: [state_fips]
 
-    source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/"
-      filePattern: "tl_{year}_us_cd{congress}.zip"
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
-
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_us_cd118.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: congressional_districts
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # School Districts
@@ -609,21 +708,453 @@ partitionedTables:
           targetTable: states
           targetColumns: [state_fips]
 
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    # TIGER tables use TigerDataProvider for binary shapefile handling
     source:
-      type: tiger_shapefile
-      baseUrl: "https://www2.census.gov/geo/tiger/TIGER{year}/UNSD/"
-      filePattern: "tl_{year}_{state_fips}_unsd.zip"
-      perState: true
-      conversion:
-        type: shapefile_to_parquet
-        method: duckdb_spatial
-        geometryColumn: geometry
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/UNSD/tl_{year}_{state_fips}_unsd.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: school_districts
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # State Legislative Districts - Lower Chamber
+  # --------------------------------------------------------------------------
+  - name: state_legislative_lower
+    pattern: "type=boundary/year=*/state_legislative_lower.parquet"
+    comment: >
+      State legislative district boundaries for lower chambers (State House/Assembly).
+      Used for political analysis and representation mapping.
+
+    columns:
+      - name: sldl_fips
+        type: string
+        nullable: false
+        comment: State legislative district lower chamber code (state + district)
+      - <<: *state_fips_column
+      - name: district_name
+        type: string
+        nullable: true
+        comment: District name or number
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [sldl_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
 
     dimensions:
-      - name: year
-        values: *tiger_year_range
-      - name: state_fips
-        values: *all_state_fips
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/SLDL/tl_{year}_{state_fips}_sldl.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: state_legislative_lower
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # State Legislative Districts - Upper Chamber
+  # --------------------------------------------------------------------------
+  - name: state_legislative_upper
+    pattern: "type=boundary/year=*/state_legislative_upper.parquet"
+    comment: >
+      State legislative district boundaries for upper chambers (State Senate).
+      Used for political analysis and representation mapping.
+
+    columns:
+      - name: sldu_fips
+        type: string
+        nullable: false
+        comment: State legislative district upper chamber code (state + district)
+      - <<: *state_fips_column
+      - name: district_name
+        type: string
+        nullable: true
+        comment: District name or number
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [sldu_fips, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/SLDU/tl_{year}_{state_fips}_sldu.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: state_legislative_upper
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # County Subdivisions (Minor Civil Divisions)
+  # --------------------------------------------------------------------------
+  - name: county_subdivisions
+    pattern: "type=boundary/year=*/county_subdivisions.parquet"
+    comment: >
+      County subdivisions including Minor Civil Divisions (MCDs), census county divisions,
+      and unorganized territories. Represents administrative or statistical subdivisions
+      of counties.
+
+    columns:
+      - name: cousub_fips
+        type: string
+        nullable: false
+        comment: County subdivision FIPS code (state + county + subdivision)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: cousub_name
+        type: string
+        nullable: true
+        comment: County subdivision name
+      - name: cousub_type
+        type: string
+        nullable: true
+        comment: Legal/statistical area description code
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [cousub_fips, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/COUSUB/tl_{year}_{state_fips}_cousub.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: county_subdivisions
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # American Indian/Alaska Native/Native Hawaiian Areas
+  # --------------------------------------------------------------------------
+  - name: tribal_areas
+    pattern: "type=boundary/year=*/tribal_areas.parquet"
+    comment: >
+      American Indian reservations, Alaska Native villages, and Native Hawaiian home lands.
+      Includes federal and state recognized tribal boundaries and trust lands.
+
+    columns:
+      - name: aiannhce
+        type: string
+        nullable: false
+        comment: American Indian/Alaska Native/Native Hawaiian area code
+      - name: name
+        type: string
+        nullable: true
+        comment: Area name
+      - name: namelsad
+        type: string
+        nullable: true
+        comment: Name and legal/statistical area description
+      - name: area_type
+        type: string
+        nullable: true
+        comment: Area type (federal reservation, state reservation, TDSA, etc.)
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [aiannhce, year]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/AIANNH/tl_{year}_us_aiannh.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: tribal_areas
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Urban Areas
+  # --------------------------------------------------------------------------
+  - name: urban_areas
+    pattern: "type=boundary/year=*/urban_areas.parquet"
+    comment: >
+      Census Bureau urban area boundaries including Urbanized Areas (50,000+ population)
+      and Urban Clusters (2,500-50,000 population). Based on decennial census data.
+
+    columns:
+      - name: uace
+        type: string
+        nullable: false
+        comment: Urban area code
+      - name: name
+        type: string
+        nullable: true
+        comment: Urban area name
+      - name: urban_type
+        type: string
+        nullable: true
+        comment: Urban type (U=Urbanized Area, C=Urban Cluster)
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [uace, year]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/UAC/tl_{year}_us_uac20.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: urban_areas
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Public Use Microdata Areas (PUMAs)
+  # --------------------------------------------------------------------------
+  - name: pumas
+    pattern: "type=boundary/year=*/pumas.parquet"
+    comment: >
+      Public Use Microdata Areas for Census microdata products. Each PUMA contains
+      at least 100,000 people and is built from census tracts and counties.
+
+    columns:
+      - name: puma_code
+        type: string
+        nullable: false
+        comment: 5-digit PUMA code (unique within state)
+      - <<: *state_fips_column
+      - name: puma_name
+        type: string
+        nullable: true
+        comment: PUMA name
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [state_fips, puma_code, year]
+      foreignKeys:
+        - columns: [state_fips]
+          targetTable: states
+          targetColumns: [state_fips]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/PUMA20/tl_{year}_{state_fips}_puma20.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: pumas
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Voting Districts (VTDs)
+  # --------------------------------------------------------------------------
+  - name: voting_districts
+    pattern: "type=boundary/year=*/voting_districts.parquet"
+    comment: >
+      Voting district boundaries (precincts, wards, election districts) as reported
+      by states for redistricting. Updated after each decennial census.
+
+    columns:
+      - name: vtd_code
+        type: string
+        nullable: false
+        comment: Voting district code (state + county + VTD)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: vtd_name
+        type: string
+        nullable: true
+        comment: Voting district name
+      - <<: *land_area_column
+      - <<: *water_area_column
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [vtd_code, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+
+    dimensions:
+      type:
+        - boundary
+      year: *tiger_year_range
+      state_fips: *all_state_fips
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/VTD20/tl_{year}_{state_fips}_vtd20.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=boundary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: voting_districts
+        catalogType: hadoop
 
 # ============================================================================
 # HUD CROSSWALK TABLES
@@ -673,15 +1204,35 @@ partitionedTables:
         - [zip]
         - [county_fips]
 
-    source:
-      type: hud_api
-      endpoint: "https://www.huduser.gov/hudapi/public/usps"
-      query: "type=1"
-      responseFormat: json
-
     dimensions:
-      - name: year
-        values: *hud_year_range
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: zip_county_crosswalk
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # ZIP to CBSA Crosswalk
@@ -730,15 +1281,35 @@ partitionedTables:
         - [zip]
         - [cbsa_code]
 
-    source:
-      type: hud_api
-      endpoint: "https://www.huduser.gov/hudapi/public/usps"
-      query: "type=4"
-      responseFormat: json
-
     dimensions:
-      - name: year
-        values: *hud_year_range
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=4"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: zip_cbsa_crosswalk
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
   # Tract to ZIP Crosswalk
@@ -787,202 +1358,966 @@ partitionedTables:
         - [tract_fips]
         - [zip]
 
+    dimensions:
+      type:
+        - crosswalk
+      year: *hud_year_range
+
     source:
-      type: hud_api
-      endpoint: "https://www.huduser.gov/hudapi/public/usps"
-      query: "type=3"
-      responseFormat: json
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=3"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: tract_zip_crosswalk
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # ZIP to Tract Crosswalk
+  # --------------------------------------------------------------------------
+  - name: zip_tract_crosswalk
+    pattern: "type=crosswalk/year=*/zip_tract_crosswalk.parquet"
+    comment: >
+      ZIP Code to Census Tract crosswalk mapping ZIP codes to census tracts
+      with residential and business address ratios. Source: HUD USPS ZIP Code Crosswalk.
+
+    columns:
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: tract_fips
+        type: string
+        nullable: false
+        comment: 11-digit census tract FIPS code
+      - <<: *state_fips_column
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this ZIP that are in this tract
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this ZIP that are in this tract
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this ZIP that are in this tract
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this ZIP that are in this tract
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [zip, tract_fips, year]
+      foreignKeys:
+        - columns: [tract_fips]
+          targetTable: census_tracts
+          targetColumns: [tract_fips]
+      indexes:
+        - [zip]
+        - [tract_fips]
 
     dimensions:
-      - name: year
-        values: *hud_year_range
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=1"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: zip_tract_crosswalk
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # ZIP to Congressional District Crosswalk
+  # --------------------------------------------------------------------------
+  - name: zip_cd_crosswalk
+    pattern: "type=crosswalk/year=*/zip_cd_crosswalk.parquet"
+    comment: >
+      ZIP Code to Congressional District crosswalk mapping ZIP codes to congressional
+      districts with address ratios. Source: HUD USPS ZIP Code Crosswalk.
+
+    columns:
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: Congressional district code (state + district number)
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this ZIP that are in this CD
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this ZIP that are in this CD
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this ZIP that are in this CD
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this ZIP that are in this CD
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [zip, cd_fips, year]
+      foreignKeys:
+        - columns: [cd_fips]
+          targetTable: congressional_districts
+          targetColumns: [cd_fips]
+      indexes:
+        - [zip]
+        - [cd_fips]
+
+    dimensions:
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=5"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: zip_cd_crosswalk
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # County to ZIP Crosswalk (Reverse)
+  # --------------------------------------------------------------------------
+  - name: county_zip_crosswalk
+    pattern: "type=crosswalk/year=*/county_zip_crosswalk.parquet"
+    comment: >
+      County to ZIP Code crosswalk for allocating county-level data to ZIP codes.
+      Reverse mapping of zip_county_crosswalk. Source: HUD USPS ZIP Code Crosswalk.
+
+    columns:
+      - <<: *county_fips_column
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this county that are in this ZIP
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this county that are in this ZIP
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this county that are in this ZIP
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this county that are in this ZIP
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [county_fips, zip, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
+      indexes:
+        - [county_fips]
+        - [zip]
+
+    dimensions:
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=7"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: county_zip_crosswalk
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Congressional District to ZIP Crosswalk (Reverse)
+  # --------------------------------------------------------------------------
+  - name: cd_zip_crosswalk
+    pattern: "type=crosswalk/year=*/cd_zip_crosswalk.parquet"
+    comment: >
+      Congressional District to ZIP Code crosswalk for allocating district-level
+      data to ZIP codes. Reverse mapping of zip_cd_crosswalk. Source: HUD USPS Crosswalk.
+
+    columns:
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: Congressional district code (state + district number)
+      - name: zip
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code
+      - name: res_ratio
+        type: double
+        nullable: true
+        comment: Ratio of residential addresses in this CD that are in this ZIP
+      - name: bus_ratio
+        type: double
+        nullable: true
+        comment: Ratio of business addresses in this CD that are in this ZIP
+      - name: oth_ratio
+        type: double
+        nullable: true
+        comment: Ratio of other addresses in this CD that are in this ZIP
+      - name: tot_ratio
+        type: double
+        nullable: true
+        comment: Ratio of total addresses in this CD that are in this ZIP
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [cd_fips, zip, year]
+      foreignKeys:
+        - columns: [cd_fips]
+          targetTable: congressional_districts
+          targetColumns: [cd_fips]
+      indexes:
+        - [cd_fips]
+        - [zip]
+
+    dimensions:
+      type:
+        - crosswalk
+      year: *hud_year_range
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/usps?type=10"
+      method: GET
+      response:
+        format: json
+      headers:
+        Authorization: "Bearer {env:HUD_API_KEY}"
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.HudCrosswalkTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=crosswalk/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: cd_zip_crosswalk
+        catalogType: hadoop
 
 # ============================================================================
-# DEMOGRAPHIC TABLES (Census API)
+# USDA RURAL-URBAN CLASSIFICATION TABLES
 # ============================================================================
 
   # --------------------------------------------------------------------------
-  # Population Demographics
+  # Rural-Urban Continuum Codes (County-level)
   # --------------------------------------------------------------------------
-  - name: population_demographics
-    pattern: "type=demographic/year=*/population_demographics.parquet"
+  - name: rural_urban_continuum
+    pattern: "type=classification/year=*/rural_urban_continuum.parquet"
     comment: >
-      Population counts and demographic characteristics by geography from Census
-      and American Community Survey. Includes age, sex, race, ethnicity distributions.
+      USDA Economic Research Service Rural-Urban Continuum Codes classifying counties
+      by degree of urbanization and adjacency to metro areas. 9-category classification
+      updated decennially.
 
     columns:
-      - name: geo_id
-        type: string
-        nullable: false
-        comment: Census geographic identifier (state or county FIPS code)
-      - name: year
-        type: int
-        nullable: false
-        comment: Census survey year
-      - name: total_population
-        type: int
-        nullable: true
-        comment: Total population count
-      - name: male_population
-        type: int
-        nullable: true
-        comment: Male population count
-      - name: female_population
-        type: int
-        nullable: true
-        comment: Female population count
-      - <<: *state_fips_column
-        nullable: true
       - <<: *county_fips_column
+      - <<: *state_fips_column
+      - name: county_name
+        type: string
         nullable: true
+        comment: County name
+      - name: rucc_code
+        type: int
+        nullable: false
+        comment: Rural-Urban Continuum Code (1-9)
+      - name: rucc_description
+        type: string
+        nullable: true
+        comment: Description of the RUCC category
+      - name: population
+        type: int
+        nullable: true
+        comment: County population from Census
+      - name: metro_nonmetro
+        type: string
+        nullable: true
+        comment: Metro (1-3) or Nonmetro (4-9) designation
 
-    partitions: *demographic_partitions
+    partitions: *crosswalk_partitions
 
     constraints:
-      primaryKey: [geo_id, year]
+      primaryKey: [county_fips, year]
+      foreignKeys:
+        - columns: [county_fips]
+          targetTable: counties
+          targetColumns: [county_fips]
       indexes:
-        - [state_fips]
-        - [county_fips]
-        - [year]
-
-    source:
-      type: census_api
-      dataset: acs/acs5
-      variables:
-        - B01001_001E  # Total population
-        - B01001_002E  # Male population
-        - B01001_026E  # Female population
-      geography: "state:*"
+        - [rucc_code]
+        - [metro_nonmetro]
 
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - classification
+      year:
+        type: yearRange
+        start: "2023"
+        lagYears: 0
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/webdocs/DataFiles/53251/ruralurbancodes2023.csv"
+      method: GET
+      response:
+        format: csv
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRuralUrbanTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=classification/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: rural_urban_continuum
+        catalogType: hadoop
 
   # --------------------------------------------------------------------------
-  # Housing Characteristics
+  # RUCA Codes (Census Tract-level)
   # --------------------------------------------------------------------------
-  - name: housing_characteristics
-    pattern: "type=demographic/year=*/housing_characteristics.parquet"
+  - name: ruca_codes
+    pattern: "type=classification/year=*/ruca_codes.parquet"
     comment: >
-      Housing unit counts, occupancy status, tenure, and structural characteristics
-      by geography. Source: American Community Survey 5-year estimates.
+      USDA Rural-Urban Commuting Area codes at census tract level. More granular
+      than county-level RUCC, based on population density and commuting patterns.
+      Primary codes (1-10) with secondary subdivision codes.
 
     columns:
-      - name: geo_id
+      - name: tract_fips
         type: string
         nullable: false
-        comment: Census geographic identifier (state or county FIPS code)
-      - name: year
+        comment: 11-digit census tract FIPS code
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: ruca_primary
         type: int
         nullable: false
-        comment: Census survey year
-      - name: total_housing_units
-        type: int
-        nullable: true
-        comment: Total number of housing units
-      - name: occupied_units
-        type: int
-        nullable: true
-        comment: Number of occupied housing units
-      - name: vacant_units
-        type: int
-        nullable: true
-        comment: Number of vacant housing units
-      - name: median_home_value
+        comment: Primary RUCA code (1-10)
+      - name: ruca_secondary
         type: double
         nullable: true
-        comment: Median home value in dollars
-      - <<: *state_fips_column
+        comment: Secondary RUCA code for subdivision
+      - name: ruca_description
+        type: string
         nullable: true
-      - <<: *county_fips_column
+        comment: Description of the RUCA category
+      - name: population
+        type: int
         nullable: true
+        comment: Tract population from Census
 
-    partitions: *demographic_partitions
+    partitions: *crosswalk_partitions
 
     constraints:
-      primaryKey: [geo_id, year]
+      primaryKey: [tract_fips, year]
+      foreignKeys:
+        - columns: [tract_fips]
+          targetTable: census_tracts
+          targetColumns: [tract_fips]
       indexes:
-        - [state_fips]
+        - [ruca_primary]
         - [county_fips]
-        - [year]
-
-    source:
-      type: census_api
-      dataset: acs/acs5
-      variables:
-        - B25001_001E  # Total housing units
-        - B25002_002E  # Occupied housing units
-        - B25002_003E  # Vacant housing units
-        - B25077_001E  # Median home value
-      geography: "state:*"
 
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - classification
+      year:
+        type: yearRange
+        start: "2023"
+        lagYears: 0
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/webdocs/DataFiles/53241/RUCA2023.csv"
+      method: GET
+      response:
+        format: csv
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.UsdaRucaTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=classification/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: ruca_codes
+        catalogType: hadoop
+
+# ============================================================================
+# CENSUS GAZETTEER REFERENCE TABLES
+# ============================================================================
 
   # --------------------------------------------------------------------------
-  # Economic Indicators
+  # Gazetteer - Counties
   # --------------------------------------------------------------------------
-  - name: economic_indicators
-    pattern: "type=demographic/year=*/economic_indicators.parquet"
+  - name: gazetteer_counties
+    pattern: "type=gazetteer/year=*/gazetteer_counties.parquet"
     comment: >
-      Income, poverty, employment, and economic characteristics by geography.
-      Includes median household income, poverty rates, and employment statistics.
+      Census Bureau Gazetteer file for counties with authoritative names, codes,
+      area measurements, and representative coordinates. Official reference for
+      county identifiers and centroids.
 
     columns:
-      - name: geo_id
+      - <<: *county_fips_column
+      - <<: *state_fips_column
+      - name: county_name
         type: string
         nullable: false
-        comment: Census geographic identifier (state or county FIPS code)
-      - name: year
-        type: int
-        nullable: false
-        comment: Census survey year
-      - name: median_household_income
+        comment: Official county name
+      - name: land_area_sqmi
         type: double
         nullable: true
-        comment: Median household income in dollars
-      - name: per_capita_income
+        comment: Land area in square miles
+      - name: water_area_sqmi
         type: double
         nullable: true
-        comment: Per capita income in dollars
-      - name: labor_force
-        type: int
+        comment: Water area in square miles
+      - name: latitude
+        type: double
         nullable: true
-        comment: Total civilian labor force count
-      - name: employed
-        type: int
+        comment: Internal point latitude (centroid)
+      - name: longitude
+        type: double
         nullable: true
-        comment: Number of employed persons
-      - name: unemployed
-        type: int
-        nullable: true
-        comment: Number of unemployed persons
-      - <<: *state_fips_column
-        nullable: true
-      - <<: *county_fips_column
-        nullable: true
+        comment: Internal point longitude (centroid)
 
-    partitions: *demographic_partitions
+    partitions: *crosswalk_partitions
 
     constraints:
-      primaryKey: [geo_id, year]
+      primaryKey: [county_fips, year]
       indexes:
         - [state_fips]
-        - [county_fips]
-        - [year]
-
-    source:
-      type: census_api
-      dataset: acs/acs5
-      variables:
-        - B19013_001E  # Median household income
-        - B19301_001E  # Per capita income
-        - B23025_003E  # Labor force
-        - B23025_004E  # Employed
-        - B23025_005E  # Unemployed
-      geography: "state:*"
+        - [county_name]
 
     dimensions:
-      - name: year
-        values: *tiger_year_range
+      type:
+        - gazetteer
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_counties_national.txt"
+      method: GET
+      response:
+        format: tsv
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=gazetteer/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: gazetteer_counties
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Gazetteer - Places
+  # --------------------------------------------------------------------------
+  - name: gazetteer_places
+    pattern: "type=gazetteer/year=*/gazetteer_places.parquet"
+    comment: >
+      Census Bureau Gazetteer file for incorporated places and CDPs with authoritative
+      names, codes, area measurements, and representative coordinates.
+
+    columns:
+      - name: place_fips
+        type: string
+        nullable: false
+        comment: Place FIPS code (state + place)
+      - <<: *state_fips_column
+      - name: place_name
+        type: string
+        nullable: false
+        comment: Official place name
+      - name: place_type
+        type: string
+        nullable: true
+        comment: Place type (city, town, CDP, etc.)
+      - name: land_area_sqmi
+        type: double
+        nullable: true
+        comment: Land area in square miles
+      - name: water_area_sqmi
+        type: double
+        nullable: true
+        comment: Water area in square miles
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Internal point latitude (centroid)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Internal point longitude (centroid)
+      - name: population
+        type: int
+        nullable: true
+        comment: Population estimate
+      - name: housing_units
+        type: int
+        nullable: true
+        comment: Housing unit count
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [place_fips, year]
+      indexes:
+        - [state_fips]
+        - [place_name]
+
+    dimensions:
+      type:
+        - gazetteer
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_place_national.txt"
+      method: GET
+      response:
+        format: tsv
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=gazetteer/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: gazetteer_places
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Gazetteer - ZCTAs
+  # --------------------------------------------------------------------------
+  - name: gazetteer_zctas
+    pattern: "type=gazetteer/year=*/gazetteer_zctas.parquet"
+    comment: >
+      Census Bureau Gazetteer file for ZIP Code Tabulation Areas with area
+      measurements and representative coordinates.
+
+    columns:
+      - name: zcta
+        type: string
+        nullable: false
+        comment: 5-digit ZCTA code
+      - name: land_area_sqmi
+        type: double
+        nullable: true
+        comment: Land area in square miles
+      - name: water_area_sqmi
+        type: double
+        nullable: true
+        comment: Water area in square miles
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Internal point latitude (centroid)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Internal point longitude (centroid)
+      - name: population
+        type: int
+        nullable: true
+        comment: Population estimate
+      - name: housing_units
+        type: int
+        nullable: true
+        comment: Housing unit count
+
+    partitions: *crosswalk_partitions
+
+    constraints:
+      primaryKey: [zcta, year]
+      indexes:
+        - [zcta]
+
+    dimensions:
+      type:
+        - gazetteer
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_zcta_national.txt"
+      method: GET
+      response:
+        format: tsv
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.GazetteerTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=gazetteer/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: gazetteer_zctas
+        catalogType: hadoop
+
+# ============================================================================
+# USGS WATERSHED BOUNDARY TABLES
+# ============================================================================
+
+  # --------------------------------------------------------------------------
+  # Watersheds - HUC2 (Regions)
+  # --------------------------------------------------------------------------
+  - name: watersheds_huc2
+    pattern: "type=watershed/year=*/watersheds_huc2.parquet"
+    comment: >
+      USGS Watershed Boundary Dataset HUC2 regions - the largest hydrologic units
+      dividing the country into 22 major drainage basins.
+
+    columns:
+      - name: huc2
+        type: string
+        nullable: false
+        comment: 2-digit Hydrologic Unit Code
+      - name: name
+        type: string
+        nullable: true
+        comment: Watershed region name
+      - name: area_sq_km
+        type: double
+        nullable: true
+        comment: Total area in square kilometers
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [huc2, year]
+
+    dimensions:
+      type:
+        - watershed
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
+      method: GET
+      response:
+        format: gdb
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=watershed/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: watersheds_huc2
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Watersheds - HUC4 (Subregions)
+  # --------------------------------------------------------------------------
+  - name: watersheds_huc4
+    pattern: "type=watershed/year=*/watersheds_huc4.parquet"
+    comment: >
+      USGS Watershed Boundary Dataset HUC4 subregions - subdivisions of HUC2
+      regions into approximately 223 subregions.
+
+    columns:
+      - name: huc4
+        type: string
+        nullable: false
+        comment: 4-digit Hydrologic Unit Code
+      - name: huc2
+        type: string
+        nullable: false
+        comment: Parent HUC2 region code
+      - name: name
+        type: string
+        nullable: true
+        comment: Watershed subregion name
+      - name: area_sq_km
+        type: double
+        nullable: true
+        comment: Total area in square kilometers
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [huc4, year]
+      foreignKeys:
+        - columns: [huc2]
+          targetTable: watersheds_huc2
+          targetColumns: [huc2]
+
+    dimensions:
+      type:
+        - watershed
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
+      method: GET
+      response:
+        format: gdb
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=watershed/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: watersheds_huc4
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Watersheds - HUC8 (Subbasins)
+  # --------------------------------------------------------------------------
+  - name: watersheds_huc8
+    pattern: "type=watershed/year=*/watersheds_huc8.parquet"
+    comment: >
+      USGS Watershed Boundary Dataset HUC8 subbasins - commonly used watershed
+      level for water quality and resource management with ~2,300 units.
+
+    columns:
+      - name: huc8
+        type: string
+        nullable: false
+        comment: 8-digit Hydrologic Unit Code
+      - name: huc4
+        type: string
+        nullable: false
+        comment: Parent HUC4 subregion code
+      - name: name
+        type: string
+        nullable: true
+        comment: Watershed subbasin name
+      - name: area_sq_km
+        type: double
+        nullable: true
+        comment: Total area in square kilometers
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [huc8, year]
+      foreignKeys:
+        - columns: [huc4]
+          targetTable: watersheds_huc4
+          targetColumns: [huc4]
+
+    dimensions:
+      type:
+        - watershed
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
+      method: GET
+      response:
+        format: gdb
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=watershed/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: watersheds_huc8
+        catalogType: hadoop
+
+  # --------------------------------------------------------------------------
+  # Watersheds - HUC12 (Subwatersheds)
+  # --------------------------------------------------------------------------
+  - name: watersheds_huc12
+    pattern: "type=watershed/year=*/watersheds_huc12.parquet"
+    comment: >
+      USGS Watershed Boundary Dataset HUC12 subwatersheds - the smallest standard
+      hydrologic units with approximately 100,000 units nationally.
+
+    columns:
+      - name: huc12
+        type: string
+        nullable: false
+        comment: 12-digit Hydrologic Unit Code
+      - name: huc8
+        type: string
+        nullable: false
+        comment: Parent HUC8 subbasin code
+      - name: name
+        type: string
+        nullable: true
+        comment: Subwatershed name
+      - name: area_sq_km
+        type: double
+        nullable: true
+        comment: Total area in square kilometers
+      - <<: *geometry_column
+
+    partitions: *boundary_partitions
+
+    constraints:
+      primaryKey: [huc12, year]
+      foreignKeys:
+        - columns: [huc8]
+          targetTable: watersheds_huc8
+          targetColumns: [huc8]
+
+    dimensions:
+      type:
+        - watershed
+      year: *tiger_year_range
+
+    source:
+      type: http
+      url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
+      method: GET
+      response:
+        format: gdb
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=watershed/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/source=geo/GEO"
+        tableName: watersheds_huc12
+        catalogType: hadoop
