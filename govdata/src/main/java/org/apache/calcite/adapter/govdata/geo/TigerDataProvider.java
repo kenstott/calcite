@@ -221,7 +221,7 @@ public class TigerDataProvider implements DataProvider {
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("GET");
     conn.setConnectTimeout(30000);
-    conn.setReadTimeout(120000);
+    conn.setReadTimeout(300000); // 5 minutes for large shapefiles (block_groups can be 10+ MB)
 
     int responseCode = conn.getResponseCode();
     if (responseCode != HttpURLConnection.HTTP_OK) {
