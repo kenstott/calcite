@@ -1756,7 +1756,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ers.usda.gov/webdocs/DataFiles/53251/ruralurbancodes2023.csv"
+      url: "https://www.ers.usda.gov/media/5768/2023-rural-urban-continuum-codes.csv"
       method: GET
       response:
         format: csv
@@ -1831,7 +1831,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ers.usda.gov/webdocs/DataFiles/53241/RUCA2023.csv"
+      url: "https://www.ers.usda.gov/media/5443/2020-rural-urban-commuting-area-codes-census-tracts.csv"
       method: GET
       response:
         format: csv
@@ -1903,7 +1903,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_counties_national.txt"
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_counties_national.zip"
       method: GET
       response:
         format: tsv
@@ -1985,7 +1985,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_place_national.txt"
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_place_national.zip"
       method: GET
       response:
         format: tsv
@@ -2057,7 +2057,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_gaz_zcta_national.txt"
+      url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_zcta_national.zip"
       method: GET
       response:
         format: tsv
