@@ -106,16 +106,18 @@ column_templates:
 dimension_values:
 
   # --- Year Range for TIGER data ---
+  # TIGER data has ~1 year lag - 2025 data released in late 2025
   tiger_year_range: &tiger_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2020}"
-    lagYears: 0
+    dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
+  # HUD crosswalk updates quarterly with ~1 year lag
   hud_year_range: &hud_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2020}"
-    lagYears: 0
+    dataLag: 1
 
   # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
   all_state_fips: &all_state_fips
@@ -2117,7 +2119,7 @@ partitionedTables:
       url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
       method: GET
       response:
-        format: gdb
+        format: json
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
@@ -2180,7 +2182,7 @@ partitionedTables:
       url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
       method: GET
       response:
-        format: gdb
+        format: json
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
@@ -2243,7 +2245,7 @@ partitionedTables:
       url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
       method: GET
       response:
-        format: gdb
+        format: json
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
@@ -2306,7 +2308,7 @@ partitionedTables:
       url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/WBD/National/GDB/WBD_National_GDB.zip"
       method: GET
       response:
-        format: gdb
+        format: json
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.WatershedDataProvider"
